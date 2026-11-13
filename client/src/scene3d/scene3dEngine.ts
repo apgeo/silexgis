@@ -29,7 +29,8 @@ import type { Scene3DContextLossState } from './contextLoss.ts';
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
 // `Scene3DCore` names the groups something really provides, and today that is all of them:
 // lifecycle, imagery, camera, coordinates, picking, vector sources, the ground surface, its
-// elevation, loaded models, and a picture of what is drawn.
+// elevation, how much taller than true the scene is drawn, loaded models, and a picture of what
+// is drawn.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -669,6 +670,39 @@ export interface Scene3DTerrain {
   groundHeight(longitude: number, latitude: number): number;
 }
 
+// ---- vertical exaggeration ------------------------------------------------------
+
+/**
+ * How much taller than it is the whole scene is drawn.
+ *
+ * Every height is stretched together, about the ellipsoid: the ground, the walls of caves, survey
+ * lines, scans, markers placed at a height, the opening cut over a cave, the limit on how deep the
+ * camera goes, and the camera itself. The picture is what the world would look like if it were
+ * that much taller — an entrance still on the ground, a survey line still inside its walls, a cave
+ * in the same proportion to the mountain over it.
+ *
+ * None of that is visible through the rest of this contract. Every height that crosses it, in
+ * either direction and at every factor, is in true metres: a camera written down at one factor is
+ * the same camera at any other, a marker handed over at 1000 m is read back at 1000 m, and an
+ * altitude shown to a person is the altitude of the place. The stretching happens behind the seam
+ * and nowhere else, so nothing that places, reads or writes down a position has to know a factor
+ * exists.
+ */
+export interface Scene3DVerticalExaggeration {
+  /**
+   * Draws the scene at this factor, clamped to the range the setting allows; a value that is not a
+   * number is ignored. Asks for a frame.
+   *
+   * It may be called on every frame — a flyby ramps it over time — so setting the factor already
+   * in force does nothing and costs nothing. A change redraws everything that carries a height,
+   * without anything being handed over again; the camera keeps its place over the ground and its
+   * true height, and so stands as high above the stretched ground as the ground is stretched.
+   */
+  setVerticalExaggeration(factor: number): void;
+  /** The factor the scene is drawn at; 1 is true height. */
+  getVerticalExaggeration(): number;
+}
+
 // ---- models -------------------------------------------------------------------
 
 /**
@@ -1056,6 +1090,7 @@ export interface Scene3DEngine
     Scene3DVectorSources,
     Scene3DSurface,
     Scene3DTerrain,
+    Scene3DVerticalExaggeration,
     Scene3DModels,
     Scene3DPointClouds,
     Scene3DCapture {}
@@ -1078,6 +1113,7 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DVectorSources &
   Scene3DSurface &
   Scene3DTerrain &
+  Scene3DVerticalExaggeration &
   Scene3DModels &
   Scene3DPointClouds &
   Scene3DCapture;

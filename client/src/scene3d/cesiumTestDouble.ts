@@ -999,6 +999,13 @@ class FakeCamera {
     return undefined;
   }
 
+  /** How many flights were called off; the destination of one is applied at once here anyway. */
+  flightsCancelled = 0;
+
+  cancelFlight() {
+    this.flightsCancelled += 1;
+  }
+
   private apply(options: FakeViewOptions) {
     const destination = options.destination as Partial<FakeCartesian3>;
     if (typeof destination?.longitudeDegrees === 'number') {
@@ -1125,15 +1132,34 @@ export interface FakeMatrix4 {
   headingDegrees?: number;
   pitchDegrees?: number;
   rollDegrees?: number;
+  /**
+   * How many metres one metre of the frame's own up is drawn as, when the frame was stretched
+   * along it; absent for an unstretched frame. The one scale the scene ever applies is that one,
+   * so it is the only one modelled.
+   */
+  verticalScale?: number;
 }
 
+/** What the real library calls to build the frame a turn is applied in; see `headingPitchRollToFixedFrame`. */
+type FakeLocalFrame = (origin: FakeCartesian3, ellipsoid?: unknown, result?: FakeMatrix4) => FakeMatrix4;
+
 export const Transforms = {
-  eastNorthUpToFixedFrame(origin: FakeCartesian3): FakeMatrix4 {
+  eastNorthUpToFixedFrame(origin: FakeCartesian3, _ellipsoid?: unknown, _result?: FakeMatrix4): FakeMatrix4 {
     return { origin };
   },
-  headingPitchRollToFixedFrame(origin: FakeCartesian3, orientation: HeadingPitchRoll): FakeMatrix4 {
+  /**
+   * As the real one: the frame at the origin — the east-north-up one unless a function is given
+   * to build another — followed by the turn. Whatever that function did to the frame is kept.
+   */
+  headingPitchRollToFixedFrame(
+    origin: FakeCartesian3,
+    orientation: HeadingPitchRoll,
+    ellipsoid?: unknown,
+    localFrame?: FakeLocalFrame,
+  ): FakeMatrix4 {
+    const frame = localFrame ? localFrame(origin, ellipsoid) : { origin };
     return {
-      origin,
+      ...frame,
       headingDegrees: CesiumMath.toDegrees(orientation.heading),
       pitchDegrees: CesiumMath.toDegrees(orientation.pitch),
       rollDegrees: CesiumMath.toDegrees(orientation.roll),
@@ -1175,6 +1201,11 @@ export class Matrix4 {
     result.y = point.y;
     result.z = point.z;
     return result;
+  }
+
+  /** A frame with its own axes scaled; only the up axis's scale is kept, see `verticalScale`. */
+  static multiplyByScale(matrix: FakeMatrix4, scale: Cartesian3, _result: unknown): FakeMatrix4 {
+    return { ...matrix, verticalScale: (matrix.verticalScale ?? 1) * scale.z };
   }
 }
 
@@ -1346,6 +1377,12 @@ export class Model {
   color: Color | undefined;
   colorBlendMode: number = ColorBlendMode.HIGHLIGHT;
   colorBlendAmount = 0.5;
+  /**
+   * The library's own flag for whether a model may be left out of a frame for being off the screen
+   * — not on its published surface, read when it builds the model's draw commands. On, as in the
+   * library, until the scene says otherwise.
+   */
+  _cull = true;
   readonly readyEvent = {
     listeners: [] as (() => void)[],
     addEventListener(listener: () => void) {
@@ -1565,11 +1602,23 @@ class FakeGlobe {
     this.outlines = value;
   }
 
+  /**
+   * The vertical exaggeration the surface tiles were last drawn at. The real globe re-stretches
+   * every tile it holds while it draws a frame, not when the scene's factor is set, so between the
+   * two its answers are still in the old factor. `FakeScene.render` brings this up to date.
+   */
+  drawnExaggeration = 1;
+
+  /**
+   * Height of the ground as drawn: what a test arranged in `terrainHeight` or `terrainHeightAt` is
+   * the ground's true height, and the real globe answers from its stretched surface.
+   */
   getHeight(cartographic: { longitudeDegrees: number; latitudeDegrees: number } | undefined) {
-    if (this.terrainHeightAt && cartographic) {
-      return this.terrainHeightAt(cartographic.longitudeDegrees, cartographic.latitudeDegrees);
-    }
-    return this.terrainHeight;
+    const height =
+      this.terrainHeightAt && cartographic
+        ? this.terrainHeightAt(cartographic.longitudeDegrees, cartographic.latitudeDegrees)
+        : this.terrainHeight;
+    return height === undefined ? undefined : height * this.drawnExaggeration;
   }
 }
 
@@ -1594,8 +1643,15 @@ export interface FakePickCall {
 class FakeScene {
   readonly globe = new FakeGlobe();
   // The camera is given the ground rather than the scene: sizing a box frustum is the one thing it
-  // does that depends on anything outside itself.
-  readonly camera = new FakeCamera(() => this.globe.terrainHeight ?? 0);
+  // does that depends on anything outside itself. The ground as drawn, which is what it measures.
+  readonly camera = new FakeCamera(() => (this.globe.terrainHeight ?? 0) * this.globe.drawnExaggeration);
+  /**
+   * How many times taller than true the library draws what it stretches itself — the ground, models
+   * and the tiles of point clouds — about the ellipsoid. What it draws at a position it is given,
+   * lines, markers, primitives and the camera, it leaves where it was given.
+   */
+  verticalExaggeration = 1;
+  verticalExaggerationRelativeHeight = 0;
   readonly imageryLayers = new FakeImageryLayerCollection();
   readonly primitives = new FakePrimitiveCollection();
   /** Where anything drawn against the ground rather than in the air goes; a separate list. */
@@ -1604,6 +1660,8 @@ class FakeScene {
   readonly screenSpaceCameraController = new FakeScreenSpaceCameraController();
   /** Raised before each drawn frame; a test raises it to stand in for the scene drawing one. */
   readonly preRender = new FakeEvent();
+  /** Raised once a frame has been drawn, after the globe has been drawn in it. */
+  readonly postRender = new FakeEvent();
   /** What the graphics context admits to, fixed when the scene is built, as the real one is. */
   readonly context = { webgl2: engineState.webgl2, depthTexture: engineState.depthTexture };
   /**
@@ -1658,9 +1716,12 @@ class FakeScene {
       this.surfaceHoldsFrame = false;
     });
     this.preRender.raise();
+    // Drawing the globe is what re-stretches its tiles, between the two events, as in the library.
+    this.globe.drawnExaggeration = this.verticalExaggeration;
     if (this.globe.clippingPolygons?.enabled) {
       this.globe.clippingPolygons.update();
     }
+    this.postRender.raise();
   }
 
   /**
@@ -1674,10 +1735,16 @@ class FakeScene {
    */
   pickedPositionAt: ((x: number, y: number) => FakeCartesian3 | undefined) | undefined = undefined;
 
+  /**
+   * The point the depth of the last frame shows at a pixel. What a test arranges is the true
+   * point; the depth is of a drawn frame, so the answer is stretched by the factor that frame was
+   * drawn at — which is the globe's.
+   */
   pickPosition(windowPosition: Cartesian2) {
-    return this.pickedPositionAt
+    const found = this.pickedPositionAt
       ? this.pickedPositionAt(windowPosition.x, windowPosition.y)
       : this.pickedPosition;
+    return found && { ...found, height: found.height * this.globe.drawnExaggeration };
   }
 
   pick(windowPosition: Cartesian2, width?: number, height?: number) {

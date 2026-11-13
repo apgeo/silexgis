@@ -3757,3 +3757,539 @@ describe('a scan on its own', () => {
     expect(local.status()).toBeUndefined();
   });
 });
+
+describe('vertical exaggeration', () => {
+  // Every height that crosses the engine contract is in true metres at every factor; the scene
+  // stretches what it draws and unstretches what it reads back, at its boundary and nowhere else.
+  // These cases go through each way in and each way out, at a factor above one and one below it,
+  // and check both what the library was handed and what a caller is told.
+  const scene = () => engine.engineState.widgets[0].scene;
+  const drawFrame = () => scene().render();
+  const FACTORS = [2, 0.5] as const;
+  /** Decimal places for a height: the round trips are arithmetic, exact to well inside a millimetre. */
+  const MM = 3;
+
+  const camera = { longitude: 25.3, latitude: 45.7, height: 1800, heading: 30, pitch: -45, roll: 0 };
+
+  const flatLines = () =>
+    scene().primitives.items.find(
+      (item): item is InstanceType<typeof engine.PolylineCollection> =>
+        item instanceof engine.PolylineCollection,
+    )!;
+  const markerBatch = () =>
+    scene().primitives.items.find(
+      (item): item is InstanceType<typeof engine.BillboardCollection> =>
+        item instanceof engine.BillboardCollection,
+    )!;
+  const leg = (height: number) => ({
+    positions: [
+      { longitude: 25.44, latitude: 45.53, height },
+      { longitude: 25.441, latitude: 45.53, height: height - 10 },
+    ],
+    widthPixels: 2,
+    color: '#7a1f1f',
+    id: 'leg',
+  });
+
+  it('starts at true height, and hands the library its own factor about the ellipsoid', () => {
+    const session = acquire();
+    expect(session.engine.getVerticalExaggeration()).toBe(1);
+    expect(scene().verticalExaggeration).toBe(1);
+
+    session.engine.setVerticalExaggeration(2);
+
+    expect(session.engine.getVerticalExaggeration()).toBe(2);
+    // The ground, models and the tiles of scans are stretched by the library itself, by the same
+    // number, and about the ellipsoid rather than about some height of its own choosing.
+    expect(scene().verticalExaggeration).toBe(2);
+    expect(scene().verticalExaggerationRelativeHeight).toBe(0);
+    session.release();
+  });
+
+  it('keeps the factor in its range, ignores what is not a number, and asks for a frame only on a change', () => {
+    const session = acquire();
+    const before = scene().renderRequests;
+
+    session.engine.setVerticalExaggeration(1);
+    // The factor in force again is what a flyby holding it steady asks every frame: nothing.
+    expect(scene().renderRequests).toBe(before);
+
+    session.engine.setVerticalExaggeration(12);
+    expect(session.engine.getVerticalExaggeration()).toBe(5);
+    expect(scene().renderRequests).toBeGreaterThan(before);
+
+    session.engine.setVerticalExaggeration(0.1);
+    expect(session.engine.getVerticalExaggeration()).toBe(0.5);
+
+    session.engine.setVerticalExaggeration(Number.NaN);
+    expect(session.engine.getVerticalExaggeration()).toBe(0.5);
+    session.release();
+  });
+
+  it('costs nothing when the factor has not changed, so a flyby can set it on every frame', () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('centerlines');
+    source.replace([leg(700)]);
+    session.engine.setVerticalExaggeration(2);
+    const drawn = flatLines().polylines[0];
+    const before = scene().renderRequests;
+
+    session.engine.setVerticalExaggeration(2);
+
+    // The same line object: nothing was rebuilt, and no frame was asked for.
+    expect(flatLines().polylines[0]).toBe(drawn);
+    expect(scene().renderRequests).toBe(before);
+    session.release();
+  });
+
+  for (const factor of FACTORS) {
+    describe(`at ×${factor}`, () => {
+      it('places the camera at the stretched height and reads it back true', () => {
+        const session = acquire();
+        session.engine.setVerticalExaggeration(factor);
+
+        session.engine.setCamera(camera);
+
+        expect(scene().camera.positionWC.height).toBeCloseTo(1800 * factor, MM);
+        const read = session.engine.getCamera();
+        for (const key of Object.keys(camera) as (keyof typeof camera)[]) {
+          expect(read[key]).toBeCloseTo(camera[key], key === 'height' ? MM : 9);
+        }
+        session.release();
+      });
+
+      it('keeps the camera over the same ground at the same true height when the factor changes', () => {
+        const session = acquire();
+        session.engine.setCamera(camera);
+
+        session.engine.setVerticalExaggeration(factor);
+
+        const read = session.engine.getCamera();
+        expect(read.longitude).toBeCloseTo(camera.longitude, 9);
+        expect(read.latitude).toBeCloseTo(camera.latitude, 9);
+        expect(read.height).toBeCloseTo(camera.height, MM);
+        expect(read.heading).toBeCloseTo(camera.heading, 9);
+        expect(read.pitch).toBeCloseTo(camera.pitch, 9);
+        // Stretched with everything else: as many times higher over the stretched ground.
+        expect(scene().camera.positionWC.height).toBeCloseTo(camera.height * factor, MM);
+        // A flight under way was aimed under the old factor, and is called off rather than landed.
+        expect(scene().camera.flightsCancelled).toBe(1);
+        session.release();
+      });
+
+      it('draws a marker at a height that many times higher, and puts it on screen from its true height', () => {
+        const session = acquire();
+        // A camera only a hundred metres over the marker: drawn at the wrong height, the marker
+        // lands on the wrong side of the camera and has no pixel at all.
+        session.engine.setCamera({ ...camera, height: 1100, heading: 0, pitch: -90 });
+        session.engine.setVerticalExaggeration(factor);
+        const source = session.engine.createMarkerSource('entrances');
+
+        source.replace([
+          { position: { longitude: 25.3, latitude: 45.7, height: 1000 }, image: 'a.png', id: 'raised' },
+        ]);
+
+        const billboard = markerBatch().billboards[0];
+        expect(billboard.position.height).toBeCloseTo(1000 * factor, MM);
+        expect(billboard.heightReference).toBe(engine.HeightReference.NONE);
+        const asked = session.engine.positionToScreen({ longitude: 25.3, latitude: 45.7, height: 1000 });
+        const drawn = engine.SceneTransforms.worldToWindowCoordinates(scene(), billboard.position);
+        expect(asked).toBeDefined();
+        expect(asked).toEqual({ x: drawn!.x, y: drawn!.y });
+        session.release();
+      });
+
+      it('reads the ground under a pixel back in true metres, before and after the next frame', () => {
+        const session = acquire();
+        scene().pickedPosition = { longitudeDegrees: 25.44, latitudeDegrees: 45.53, height: 1000 };
+
+        session.engine.setVerticalExaggeration(factor);
+        // The depth still on hand is the last frame's, drawn at the old factor.
+        expect(session.engine.screenToPosition({ x: 600, y: 400 })!.height).toBeCloseTo(1000, MM);
+        drawFrame();
+        // And after a frame at the new factor, from depth drawn at the new one.
+        expect(session.engine.screenToPosition({ x: 600, y: 400 })!.height).toBeCloseTo(1000, MM);
+        expect(session.engine.getCameraTarget()!.height).toBeCloseTo(1000, MM);
+        session.release();
+      });
+
+      it('reports where a click landed on the ground in true metres', () => {
+        const session = acquire();
+        scene().pickResult = undefined;
+        scene().pickedPosition = { longitudeDegrees: 25, latitudeDegrees: 45, height: 900 };
+        session.engine.setVerticalExaggeration(factor);
+        drawFrame();
+        const picks: ({ position?: { height: number } } | null)[] = [];
+
+        session.engine.onClick((pick) => picks.push(pick));
+        engine.engineState.eventHandlers[0].raise('leftClick', { position: new engine.Cartesian2(10, 20) });
+
+        expect(picks[0]!.position!.height).toBeCloseTo(900, MM);
+        session.release();
+      });
+
+      it('reports the height of the ground in true metres, before and after the next frame', () => {
+        const session = acquire();
+        scene().globe.terrainHeight = 1500;
+
+        session.engine.setVerticalExaggeration(factor);
+        expect(session.engine.groundHeight(25.3, 45.7)).toBeCloseTo(1500, MM);
+        drawFrame();
+        expect(scene().globe.getHeight({ longitudeDegrees: 25.3, latitudeDegrees: 45.7 })).toBeCloseTo(
+          1500 * factor,
+          MM,
+        );
+        expect(session.engine.groundHeight(25.3, 45.7)).toBeCloseTo(1500, MM);
+        session.release();
+      });
+
+      it('draws lines at the stretched heights', () => {
+        const session = acquire();
+        session.engine.setVerticalExaggeration(factor);
+        const source = session.engine.createPolylineSource('lines');
+
+        source.replace([leg(700)]);
+
+        expect(flatLines().polylines[0].positions.map((position) => position.height)).toEqual([
+          700 * factor,
+          690 * factor,
+        ]);
+        session.release();
+      });
+
+      it('puts the floor of the descent as deep as the data it follows is drawn', () => {
+        const session = acquire();
+        session.engine.setVerticalExaggeration(factor);
+        scene().camera.positionWC = { longitudeDegrees: 25.3, latitudeDegrees: 45.7, height: -40000 };
+
+        drawFrame();
+
+        // The standing floor of two kilometres down, drawn that many times deeper, reported true.
+        expect(scene().camera.positionWC.height).toBeCloseTo(-2000 * factor, MM);
+        expect(session.engine.getCamera().height).toBeCloseTo(-2000, MM);
+        session.release();
+      });
+
+      it('says how high to be for a map zoom, which is still the inverse of the zoom it reports', () => {
+        const session = acquire();
+        session.engine.setVerticalExaggeration(factor);
+
+        session.engine.flyToZoom(25.3, 45.7, 14);
+
+        expect(session.engine.getPseudoZoom()).toBeCloseTo(14, 6);
+        // A true height that is drawn at the distance the zoom needs.
+        expect(scene().camera.positionWC.height).toBeCloseTo(
+          session.engine.cameraHeightForZoom(14, 45.7) * factor,
+          MM,
+        );
+        session.release();
+      });
+
+      it('frames an orthographic view by the width on the screen', () => {
+        const session = acquire();
+        session.engine.setVerticalExaggeration(factor);
+
+        session.engine.setProjection('orthographic', 640);
+
+        expect(session.engine.getOrthoHalfWidth()).toBeCloseTo(640, MM);
+        session.release();
+      });
+    });
+  }
+
+  it('shows more ground from the same true height when the scene is stretched', () => {
+    // The camera stands as many times higher over the stretched ground, so it sees that much more
+    // of it: one zoom level out at twice the height.
+    const session = acquire();
+    session.engine.flyToZoom(25.3, 45.7, 14);
+
+    session.engine.setVerticalExaggeration(2);
+
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(13, 6);
+    session.release();
+  });
+
+  it('believes a stretched ground height as long as its true height is one the earth has', () => {
+    const session = acquire();
+    scene().globe.terrainHeight = 2500;
+    session.engine.setVerticalExaggeration(5);
+    drawFrame();
+
+    // Drawn at twelve and a half kilometres, which is no height the earth has; true, it is a
+    // Carpathian summit.
+    expect(session.engine.groundHeight(25.3, 45.7)).toBeCloseTo(2500, MM);
+    session.release();
+  });
+
+  it('redraws every batch from what it was handed when the factor changes, without asking for it again', () => {
+    const session = acquire();
+    const lines = session.engine.createPolylineSource('lines');
+    const markers = session.engine.createMarkerSource('markers');
+    lines.replace([leg(700)]);
+    markers.replace([
+      { position: { longitude: 25.3, latitude: 45.7, height: 1000 }, image: 'a.png', id: 'raised' },
+      { position: { longitude: 25.4, latitude: 45.7, height: 0 }, clampToGround: true, image: 'b.png', id: 'ground' },
+    ]);
+    lines.setOpacity(0.5);
+
+    session.engine.setVerticalExaggeration(2);
+
+    expect(flatLines().polylines.map((line) => line.positions.map((position) => position.height))).toEqual([
+      [1400, 1380],
+    ]);
+    // What the viewer set on the batch survives its being rebuilt.
+    expect((flatLines().polylines[0].material.uniforms.color as { alpha: number }).alpha).toBe(0.5);
+    expect(markerBatch().billboards.map((billboard) => billboard.position.height)).toEqual([2000, 0]);
+    // A marker on the ground is put on the stretched ground by the library, not by its own height.
+    expect(markerBatch().billboards[1].heightReference).toBe(engine.HeightReference.CLAMP_TO_GROUND);
+
+    session.engine.setVerticalExaggeration(0.5);
+    expect(flatLines().polylines[0].positions.map((position) => position.height)).toEqual([350, 345]);
+    expect(markerBatch().billboards[0].position.height).toBe(500);
+    session.release();
+  });
+
+  it('lays lines on the ground of an elevation model at every factor', async () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('surface');
+    source.replace([{ ...leg(0), clampToGround: true }]);
+    await session.engine.setTerrainSource({ url: '/terrain/' });
+
+    session.engine.setVerticalExaggeration(3);
+
+    // Still laid on the ground, which the library draws stretched, rather than flat at a height.
+    expect(scene().groundPrimitives.items).toHaveLength(1);
+    expect(flatLines().polylines).toHaveLength(0);
+    session.release();
+  });
+
+  it('does not put a removed batch back when the factor changes', () => {
+    const session = acquire();
+    const source = session.engine.createPolylineSource('lines');
+    source.replace([leg(700)]);
+    source.remove();
+
+    session.engine.setVerticalExaggeration(2);
+
+    expect(scene().primitives.items.some((item) => item instanceof engine.PolylineCollection)).toBe(false);
+    session.release();
+  });
+
+  describe('models and scans', () => {
+    const MESH_URL = '/api/v1/files/mesh.glb?token=abc';
+    const TILES_URL = '/api/v1/scans/one/tiles/tileset.json?token=abc';
+    const overRelief = { absolute: true, offsetM: 43 };
+    const detail = { maximumScreenSpaceError: 16, cacheBytes: 512 * 1024 * 1024 };
+    const models = () =>
+      scene().primitives.items.filter(
+        (item): item is InstanceType<typeof engine.Model> => item instanceof engine.Model,
+      );
+    const clouds = () =>
+      scene().primitives.items.filter(
+        (item): item is InstanceType<typeof engine.Cesium3DTileset> => item instanceof engine.Cesium3DTileset,
+      );
+    const centreline = () =>
+      scene().primitives.items.find(
+        (item): item is InstanceType<typeof engine.PolylineCollection> =>
+          item instanceof engine.PolylineCollection && item.polylines.some((line) => line.id === 'scan-centreline'),
+      )!;
+
+    it('hands a model over at its true height for the library to stretch, and lets it be culled only at true height', async () => {
+      const session = acquire();
+      const loading = session.engine.loadModel('mesh', {
+        url: MESH_URL,
+        anchor: { longitude: 25.2, latitude: 45.5, altitudeM: 1100, surveyTopAltitudeM: 1150 },
+        placement: overRelief,
+      });
+      engine.Model.deliver(MESH_URL);
+      await loading;
+      const [model] = models();
+      expect(model._cull).toBe(true);
+
+      session.engine.setVerticalExaggeration(2);
+
+      // Not stretched here as well: the library stretches every vertex of it, its origin
+      // included, and a model placed at twice its height would be drawn at four times.
+      expect(model.modelMatrix.origin.height).toBe(1143);
+      // The library decides a model is off the screen from a sphere it does not stretch; drawn a
+      // kilometre above that sphere, the walls would vanish exactly when they are looked at.
+      expect(model._cull).toBe(false);
+
+      session.engine.setVerticalExaggeration(1);
+      expect(model._cull).toBe(true);
+      session.release();
+    });
+
+    it('loads a model into a stretched scene already unculled', async () => {
+      const session = acquire();
+      session.engine.setVerticalExaggeration(3);
+      const loading = session.engine.loadModel('mesh', {
+        url: MESH_URL,
+        anchor: { longitude: 25.2, latitude: 45.5, altitudeM: 1100 },
+        placement: overRelief,
+      });
+      engine.Model.deliver(MESH_URL);
+      await loading;
+
+      expect(models()[0]._cull).toBe(false);
+      expect(models()[0].modelMatrix.origin.height).toBe(1143);
+      session.release();
+    });
+
+    it('places a scan at its true height for the library, and draws its centreline and height ramp stretched', async () => {
+      const session = acquire();
+      const anchor = { longitude: 25.2, latitude: 45.5, altitudeM: 1100, surveyTopAltitudeM: 1150, headingDeg: 30 };
+      const loading = session.engine.loadPointCloud('scan', {
+        url: TILES_URL,
+        anchor,
+        placement: overRelief,
+        detail,
+        style: { colorBy: 'height', heightRangeM: [-20, 20] },
+        centreline: [
+          { x: 0, y: 0, z: 0 },
+          { x: 4, y: 3, z: -1 },
+        ],
+      });
+      engine.Cesium3DTileset.deliver(TILES_URL);
+      await loading;
+      const rampAtTrueHeight = clouds()[0].style!.style.color!;
+
+      session.engine.setVerticalExaggeration(2);
+
+      const [cloud] = clouds();
+      expect(cloud.modelMatrix.origin.height).toBe(1143);
+      expect(cloud.modelMatrix.verticalScale).toBeUndefined();
+      // The line is drawn by the scene, not by the library: under the frame the tiles are drawn
+      // in, at the stretched origin, every metre of its own up drawn as two.
+      const frame = centreline().modelMatrix!;
+      expect(frame.origin.height).toBe(2286);
+      expect(frame.verticalScale).toBe(2);
+      expect(frame.headingDegrees).toBeCloseTo(30);
+      // The ramp colours stretched positions: its origin and its range are the stretched ones.
+      const ramp = cloud.style!.style.color!;
+      expect(ramp).toContain(`${2286 - 40}) / 80`);
+      expect(rampAtTrueHeight).toContain(`${1143 - 20}) / 40`);
+
+      session.engine.setVerticalExaggeration(1);
+      expect(centreline().modelMatrix).toEqual(cloud.modelMatrix);
+      expect(cloud.style!.style.color).toBe(rampAtTrueHeight);
+      session.release();
+    });
+  });
+
+  describe('the opening cut over a cave', () => {
+    const footprint = () => ({
+      ring: [
+        { longitude: 25.3, latitude: 45.7, height: 0 },
+        { longitude: 25.4, latitude: 45.7, height: 0 },
+        { longitude: 25.4, latitude: 45.8, height: 0 },
+        { longitude: 25.3, latitude: 45.8, height: 0 },
+      ],
+      floorHeight: -600,
+    });
+    const fill = () =>
+      scene().primitives.items.find(
+        (item): item is InstanceType<typeof engine.Primitive> => item instanceof engine.Primitive,
+      )!;
+    const wall = () => fill().geometryInstances[0].geometry as InstanceType<typeof engine.WallGeometry>;
+    const floor = () => fill().geometryInstances[1].geometry as InstanceType<typeof engine.PolygonGeometry>;
+    const lookDownFrom = (height: number, pitchDegrees: number) => {
+      scene().camera.positionWC = { longitudeDegrees: 25.35, latitudeDegrees: 45.75, height };
+      scene().camera.pitch = (pitchDegrees * Math.PI) / 180;
+    };
+
+    it('digs it from the stretched ground to the stretched floor, and follows a change of factor', () => {
+      const session = acquire();
+      scene().globe.terrainHeight = 900;
+      lookDownFrom(6000, -45);
+      session.engine.setCutawayFootprint(footprint());
+      session.engine.setSurfaceMode('cutaway');
+      expect(wall().options.maximumHeights.every((height) => height === 902)).toBe(true);
+      expect(wall().options.minimumHeights.every((height) => height === -600)).toBe(true);
+
+      session.engine.setVerticalExaggeration(2);
+
+      // The rim is the ground as drawn; the overlap that closes the hairline is a drawn distance.
+      expect(wall().options.maximumHeights.every((height) => height === 1802)).toBe(true);
+      expect(wall().options.minimumHeights.every((height) => height === -1200)).toBe(true);
+      expect(floor().options.height).toBe(-1200);
+      expect(fill().show).toBe(true);
+
+      session.engine.setVerticalExaggeration(1);
+      expect(wall().options.maximumHeights.every((height) => height === 902)).toBe(true);
+      expect(floor().options.height).toBe(-600);
+      session.release();
+    });
+
+    it('asks for a steeper look into a shaft that is drawn deeper', () => {
+      // A slant that sees into the opening at true height sees the near wall of the same opening
+      // drawn five times as deep for the same width.
+      const session = acquire();
+      session.engine.setCutawayFootprint({ ...footprint(), floorHeight: -9000 });
+      session.engine.setSurfaceMode('cutaway');
+      const pitches = [-35, -45, -55, -65, -75, -85];
+      const seeingIn = (height: number) =>
+        pitches.filter((pitch) => {
+          lookDownFrom(height, pitch);
+          drawFrame();
+          return session.engine.getSurfaceState().effective === 'cutaway';
+        });
+      const atTrueHeight = seeingIn(6000);
+
+      session.engine.setVerticalExaggeration(5);
+
+      expect(seeingIn(6000 * 5).length).toBeLessThan(atTrueHeight.length);
+      session.release();
+    });
+  });
+
+  it('puts everything back exactly as it was at true height', () => {
+    // The first thing to prove and the last to check: back at one, every number the scene handed
+    // the library, and every number it hands a caller, is the one from before a factor was set.
+    const session = acquire();
+    scene().globe.terrainHeight = 700;
+    session.engine.setCamera(camera);
+    const lines = session.engine.createPolylineSource('lines');
+    const markers = session.engine.createMarkerSource('markers');
+    lines.replace([leg(700)]);
+    markers.replace([{ position: { longitude: 25.3, latitude: 45.7, height: 1000 }, image: 'a.png', id: 'm' }]);
+    const before = {
+      camera: { ...scene().camera.positionWC },
+      lines: structuredClone(flatLines().polylines.map((line) => line.positions)),
+      markers: structuredClone(markerBatch().billboards.map((billboard) => billboard.position)),
+      read: session.engine.getCamera(),
+      ground: session.engine.groundHeight(25.3, 45.7),
+      zoom: session.engine.getPseudoZoom(),
+    };
+
+    for (const factor of [2, 0.5, 5, 1]) {
+      session.engine.setVerticalExaggeration(factor);
+      drawFrame();
+    }
+
+    // The camera was re-placed at each change, read and written through the same degree and
+    // radian conversions every placement goes through, which is a few units in the fifteenth
+    // place and no distance at all. Everything else is rebuilt from what it was handed: exact.
+    const { longitudeDegrees, latitudeDegrees, height } = scene().camera.positionWC;
+    expect(longitudeDegrees).toBeCloseTo(before.camera.longitudeDegrees, 12);
+    expect(latitudeDegrees).toBeCloseTo(before.camera.latitudeDegrees, 12);
+    expect(height).toBe(before.camera.height);
+    expect(flatLines().polylines.map((line) => line.positions)).toEqual(before.lines);
+    expect(markerBatch().billboards.map((billboard) => billboard.position)).toEqual(before.markers);
+    expect(session.engine.groundHeight(25.3, 45.7)).toBe(before.ground);
+    const read = session.engine.getCamera();
+    for (const key of Object.keys(before.read) as (keyof typeof before.read)[]) {
+      expect(read[key]).toBeCloseTo(before.read[key], 9);
+    }
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(before.zoom, 9);
+    expect(scene().verticalExaggeration).toBe(1);
+    session.release();
+  });
+
+  it('takes a factor handed over after the scene has gone, rather than throwing', () => {
+    const session = acquire();
+    session.release();
+
+    expect(() => session.engine.setVerticalExaggeration(2)).not.toThrow();
+  });
+});

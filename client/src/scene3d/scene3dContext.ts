@@ -77,6 +77,7 @@ import {
   footprintCenter,
 } from './caveFootprint3d.ts';
 import { createContextLossPolicy } from './contextLoss.ts';
+import { clampExaggeration } from './exaggeration3d.ts';
 import type { ContextLossPolicy } from './contextLoss.ts';
 import type { Scene3DContextLossState } from './contextLoss.ts';
 import {
@@ -615,6 +616,7 @@ class CesiumScene3D implements Scene3DCore {
   /** The one load of the height reference draping is projected against, once anything needs it. */
   private drapingReference: Promise<void> | undefined;
   private readonly removePreRenderHandler: () => void;
+  private readonly removePostRenderHandler: () => void;
   private readonly beforeRenderListeners = new Set<() => void>();
 
   /**
@@ -623,6 +625,27 @@ class CesiumScene3D implements Scene3DCore {
    * ground-clamped line without anything having replaced it.
    */
   private readonly groundLineLayouts = new Set<() => void>();
+  /**
+   * One per vector batch in the scene, lines and markers alike: puts that batch back into the
+   * scene from what it was last handed. Called when the vertical exaggeration changes, which moves
+   * every height the batch was drawn at without anything having replaced it.
+   */
+  private readonly drawnHeightLayouts = new Set<() => void>();
+
+  /**
+   * How many times taller than true the scene is drawn. Read only through `drawnHeight` and
+   * `trueHeight`, the one place a height crosses between what the contract speaks — true metres —
+   * and what is drawn.
+   */
+  private exaggeration = 1;
+  /**
+   * The factor the last drawn frame was drawn at, which is not the factor in force for the moment
+   * between a change and the next frame. Whatever the scene reads back out of a drawn picture —
+   * the ground's height from the surface tiles the globe holds, a point from the depth of the last
+   * frame — was stretched by this one: the globe re-stretches its tiles while it draws, not when
+   * the factor is set.
+   */
+  private lastFrameExaggeration = 1;
 
   /** The elevation model in force, by the URL it was asked for, or undefined for the ellipsoid. */
   private terrainUrl: string | undefined;
@@ -801,6 +824,15 @@ class CesiumScene3D implements Scene3DCore {
     scene.preRender.addEventListener(onPreRender);
     this.removePreRenderHandler = () => scene.preRender.removeEventListener(onPreRender);
 
+    // By the end of a drawn frame the globe has re-stretched every surface tile it holds to the
+    // factor that frame was drawn at, and the depth it leaves behind is of that frame. From here
+    // on, a height read out of either is undone by this factor; see `trueHeight`.
+    const onPostRender = () => {
+      this.lastFrameExaggeration = this.exaggeration;
+    };
+    scene.postRender.addEventListener(onPostRender);
+    this.removePostRenderHandler = () => scene.postRender.removeEventListener(onPostRender);
+
     // The one thing that has to be redone when elevation data arrives rather than when the camera
     // moves. Everything else in the scene either reads the ground on the frame it needs it or is
     // rebuilt when the survey reloads; the excavation's walls are built once from the ground of
@@ -884,6 +916,7 @@ class CesiumScene3D implements Scene3DCore {
     this.removeMoveEndHandler = undefined;
     this.viewChangedListeners.clear();
     this.removePreRenderHandler();
+    this.removePostRenderHandler();
     this.removeTileLoadHandler?.();
     this.removeTileLoadHandler = undefined;
     // Any elevation model still being read answers into a destroyed scene otherwise; bumping the
@@ -910,6 +943,7 @@ class CesiumScene3D implements Scene3DCore {
     // twice under one id can be found, and it must not outlive the scene it named.
     this.vectorSourceIds.clear();
     this.groundLineLayouts.clear();
+    this.drawnHeightLayouts.clear();
     // Same reason as the elevation sequence above: a model file still being read would otherwise
     // answer into a destroyed scene. Emptying the registry is what makes that answer nobody's, and
     // the widget below takes the models already in the scene down with it.
@@ -1338,7 +1372,7 @@ class CesiumScene3D implements Scene3DCore {
     return {
       longitude: carto ? CesiumMath.toDegrees(carto.longitude) : 0,
       latitude: carto ? CesiumMath.toDegrees(carto.latitude) : 0,
-      height: carto ? carto.height : 0,
+      height: carto ? this.trueHeight(carto.height) : 0,
       // Wrapped into [0, 360): looking straight down the engine reports a heading of exactly one
       // full turn, and a saved view or a 2D handover comparing 360 with 0 would see a change
       // where the camera did not move.
@@ -1353,7 +1387,7 @@ class CesiumScene3D implements Scene3DCore {
   }
 
   setCamera(state: Scene3DCameraState, options: Scene3DCameraOptions = {}): void {
-    const destination = Cartesian3.fromDegrees(state.longitude, state.latitude, state.height);
+    const destination = this.toDrawnCartesian(state);
     const orientation = {
       heading: CesiumMath.toRadians(state.heading),
       pitch: CesiumMath.toRadians(state.pitch),
@@ -1442,6 +1476,13 @@ class CesiumScene3D implements Scene3DCore {
   }
 
   cameraHeightForZoom(zoom: number, latitude: number): number {
+    // How much ground is on screen is a matter of the distance the scene is drawn at, which is the
+    // stretched one: the answer is worked out there and handed back as the true height that is
+    // drawn at that distance.
+    return this.trueHeight(this.drawnCameraHeightForZoom(zoom, latitude));
+  }
+
+  private drawnCameraHeightForZoom(zoom: number, latitude: number): number {
     if (this.getProjection() === 'orthographic') {
       // An orthographic view has no cone to widen with distance: how much ground is on screen is
       // the width of its box, and this engine does not let that be an independent property — it
@@ -1693,6 +1734,65 @@ class CesiumScene3D implements Scene3DCore {
     return this.groundHeightAt(longitude, latitude);
   }
 
+  // ---- vertical exaggeration ----
+
+  setVerticalExaggeration(factor: number): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    const next = clampExaggeration(factor);
+    // The same factor again is what a flyby holding it steady asks on every frame, so it has to
+    // cost nothing.
+    if (next === undefined || next === this.exaggeration) {
+      return;
+    }
+    const { scene } = this.widget;
+    // A flight under way would land where it was aimed under the old factor, which is a different
+    // true height under the new one; it is called off where it is. The camera is then read at the
+    // factor it was placed with, to be put back at the same true height over the same ground.
+    scene.camera.cancelFlight();
+    const camera = this.getCamera();
+
+    this.exaggeration = next;
+    // The ground, models and the tiles of point clouds the library stretches itself, about the
+    // ellipsoid. Everything else is stretched by this object, by the same number; see `drawnHeight`.
+    scene.verticalExaggeration = next;
+    scene.verticalExaggerationRelativeHeight = 0;
+
+    this.setCamera(camera);
+    for (const entry of this.models.values()) {
+      if (entry.model) {
+        this.cullAtTrueHeightOnly(entry.model);
+      }
+    }
+    for (const entry of this.pointClouds.values()) {
+      if (entry.tileset) {
+        if (entry.centreline) {
+          entry.centreline.modelMatrix = this.pointCloudMatrix(entry, true);
+        }
+        this.stylePointCloud(entry);
+      }
+    }
+    // Rebuilt from what each batch was last handed, in true metres; nobody is asked to send
+    // anything again.
+    for (const layOut of [...this.drawnHeightLayouts]) {
+      layOut();
+    }
+    const footprint = this.cutawayFootprint;
+    if (footprint) {
+      this.cutawayPitchLimit = this.cutawayPitchLimitFor(footprint);
+      if (this.cutawayFill) {
+        this.replaceCutawayFill(footprint);
+      }
+    }
+    this.refreshSurface();
+    this.requestRender();
+  }
+
+  getVerticalExaggeration(): number {
+    return this.exaggeration;
+  }
+
   // ---- models ----
 
   async loadModel(id: string, options: Scene3DModelOptions): Promise<void> {
@@ -1760,6 +1860,7 @@ class CesiumScene3D implements Scene3DCore {
     if (this.modelTint || this.modelTints.has(id)) {
       this.tintModel(model, id);
     }
+    this.cullAtTrueHeightOnly(model);
     this.widget.scene.primitives.add(model);
     // Placed again on arrival rather than trusting the matrix the read started with: an elevation
     // model attaching during a long read changes where this belongs, and the read does not notice.
@@ -1882,7 +1983,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       if (!this.widget.isDestroyed() && entry.tileset) {
         entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
         if (entry.centreline) {
-          entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+          entry.centreline.modelMatrix = this.pointCloudMatrix(entry, true);
         }
       }
     }
@@ -1915,6 +2016,26 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     return Transforms.eastNorthUpToFixedFrame(
       Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
     );
+  }
+
+  /**
+   * Lets the library leave a model out of a frame for being off the screen only while the scene is
+   * at true height.
+   *
+   * The library stretches a model's vertices as it draws them, and decides whether the model is on
+   * the screen at all from a sphere around it that it does not stretch. At twice the height the
+   * walls of a cave a kilometre up are drawn a kilometre above the sphere that stands for them, so
+   * a camera looking at the walls is not looking at the sphere and the walls vanish exactly when
+   * they are looked at. The flag is the library's own and not on its published surface: it is read
+   * when a model's draw commands are built, and the library rebuilds them precisely when the factor
+   * moves to or from one — which is when this changes it.
+   */
+  private cullAtTrueHeightOnly(model: Model): void {
+    const flags = model as unknown as { _cull: boolean };
+    const cull = this.exaggeration === 1;
+    if (flags._cull !== cull) {
+      flags._cull = cull;
+    }
   }
 
   /** Puts a model where its anchor and the current placement say it goes, and asks for a frame. */
@@ -2058,20 +2179,41 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
    * the height the shared altitude rule gives, turned about the local up by the bearing of the
    * cloud's own +y — the one rotation a mesh anchor forbids and a scan anchor carries.
    */
-  private pointCloudMatrix(entry: LoadedPointCloud): Matrix4 {
+  private pointCloudMatrix(entry: LoadedPointCloud, asDrawn = false): Matrix4 {
     const { anchor, placement } = entry;
     const height = drawnAltitude(
       anchor.altitudeM,
       anchor.surveyTopAltitudeM ?? anchor.altitudeM,
       placement,
     );
+    const orientation = new HeadingPitchRoll(
+      CesiumMath.toRadians(anchor.headingDeg),
+      CesiumMath.toRadians(anchor.pitchDeg ?? 0),
+      CesiumMath.toRadians(anchor.rollDeg ?? 0),
+    );
+    if (!asDrawn || this.exaggeration === 1) {
+      return Transforms.headingPitchRollToFixedFrame(
+        Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
+        orientation,
+      );
+    }
+    // The cloud as the library draws it: its origin at the stretched height, and every metre of
+    // its own up drawn as that many metres. The tiles are placed with the true frame above and
+    // stretched by the library; this frame is for what the scene draws in the cloud's own metres
+    // beside them — its centreline — and for the height ramp, which colours stretched positions.
+    // The stretch is applied in the local east-north-up frame before the cloud's own turn, so it
+    // is along the vertical, as the library's is, even for a cloud fitted with a slight tilt.
+    const stretch = new Cartesian3(1, 1, this.exaggeration);
     return Transforms.headingPitchRollToFixedFrame(
-      Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, height),
-      new HeadingPitchRoll(
-        CesiumMath.toRadians(anchor.headingDeg),
-        CesiumMath.toRadians(anchor.pitchDeg ?? 0),
-        CesiumMath.toRadians(anchor.rollDeg ?? 0),
-      ),
+      Cartesian3.fromDegrees(anchor.longitude, anchor.latitude, this.drawnHeight(height)),
+      orientation,
+      Ellipsoid.WGS84,
+      (origin, ellipsoid, result) =>
+        Matrix4.multiplyByScale(
+          Transforms.eastNorthUpToFixedFrame(origin, ellipsoid),
+          stretch,
+          result ?? new Matrix4(),
+        ),
     );
   }
 
@@ -2080,7 +2222,9 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       entry.tileset.modelMatrix = this.pointCloudMatrix(entry);
       entry.tileset.show = entry.visible;
       if (entry.centreline) {
-        entry.centreline.modelMatrix = entry.tileset.modelMatrix;
+        // Drawn by this scene, in the tiles' own metres, so the library does not stretch it: it is
+        // put under the frame the tiles are drawn in, which is the stretched one.
+        entry.centreline.modelMatrix = this.pointCloudMatrix(entry, true);
         entry.centreline.show = entry.visible;
       }
       this.stylePointCloud(entry);
@@ -2105,7 +2249,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     if (!entry.tileset) {
       return;
     }
-    const drawn = centrelineCollection(points, this.pointCloudMatrix(entry));
+    const drawn = centrelineCollection(points, this.pointCloudMatrix(entry, true));
     if (drawn) {
       drawn.show = entry.visible;
       entry.centreline = this.widget.scene.primitives.add(drawn);
@@ -2116,10 +2260,14 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     if (!entry.tileset) {
       return;
     }
+    // The ramp reads each point where it is drawn, so its frame and its range are the stretched
+    // ones: a range somebody set is in true metres and is stretched here; the one the scene makes
+    // up for a cloud nobody bounded is the library's own sphere, which it stretches itself.
+    const range = entry.style.heightRangeM;
     entry.tileset.style = pointCloudTileStyle(
       entry.style,
-      frameOf(entry.tileset.modelMatrix),
-      entry.style.heightRangeM ?? heightRangeOf(entry.tileset),
+      frameOf(this.exaggeration === 1 ? entry.tileset.modelMatrix : this.pointCloudMatrix(entry, true)),
+      range ? [this.drawnHeight(range[0]), this.drawnHeight(range[1])] : heightRangeOf(entry.tileset),
     );
   }
 
@@ -2164,11 +2312,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     }
     // How far over the opening a viewer has to be depends on how deep it is, and it just got
     // deeper by the whole height of the hillside.
-    const center = footprintCenter(footprint);
-    this.cutawayPitchLimit = cutawayPitchLimitDegrees(
-      footprint,
-      this.groundHeightAt(center.longitude, center.latitude),
-    );
+    this.cutawayPitchLimit = this.cutawayPitchLimitFor(footprint);
     this.replaceCutawayFill(footprint);
     this.refreshSurface();
     this.requestRender();
@@ -2228,11 +2372,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       // Worked out on every call rather than only when the outline changes: how deep the
       // excavation is depends on the ground it is cut into, and that ground can move under an
       // unchanged outline as elevation data for it arrives.
-      const center = footprintCenter(usable);
-      this.cutawayPitchLimit = cutawayPitchLimitDegrees(
-        usable,
-        this.groundHeightAt(center.longitude, center.latitude),
-      );
+      this.cutawayPitchLimit = this.cutawayPitchLimitFor(usable);
     }
 
     // The outline is recomputed every time the camera comes to rest, and most of those recomputes
@@ -2268,7 +2408,11 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
             // The default sense is what is wanted: ground inside the outline is removed, ground
             // outside it is kept. The inverse — an island of ground and nothing else — is not a
             // view of a cave.
-            polygons: [new ClippingPolygon({ positions: usable.ring.map(toCartesian) })],
+            polygons: [
+              new ClippingPolygon({
+                positions: usable.ring.map((position) => this.toDrawnCartesian(position)),
+              }),
+            ],
             enabled: cutaway,
           })
         : undefined;
@@ -2301,7 +2445,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       return undefined;
     }
     const { scene } = this.widget;
-    const world = toCartesian(position);
+    const world = this.toDrawnCartesian(position);
     // Behind the camera means there is no answer, and this has to be decided here because the
     // library only decides it under a converging frustum. Under a box one, where screen position
     // does not depend on distance at all, it hands back an ordinary-looking pixel for a point that
@@ -2340,7 +2484,9 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     return {
       longitude: CesiumMath.toDegrees(carto.longitude),
       latitude: CesiumMath.toDegrees(carto.latitude),
-      height: carto.height,
+      // The depth read is of the last frame drawn, and so is its stretch. The ellipsoid answer is
+      // height zero, which no factor moves.
+      height: this.trueHeight(carto.height, this.lastFrameExaggeration),
     };
   }
 
@@ -2391,7 +2537,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       color.alpha = baseAlpha * opacity;
       colors.push({ color, baseAlpha });
       collection.add({
-        positions: item.positions.map(toCartesian),
+        positions: item.positions.map((position) => this.toDrawnCartesian(position)),
         width: item.widthPixels,
         // One material object per line, not one shared between them: clearing the collection
         // destroys each line's material, so a shared instance would be destroyed once per
@@ -2425,7 +2571,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
                 // whatever the ground turns out to be — which is precisely why it is the right
                 // shape for data that never had a height of its own.
                 geometry: new GroundPolylineGeometry({
-                  positions: item.positions.map(toCartesian),
+                  positions: item.positions.map((position) => this.toDrawnCartesian(position)),
                   width: item.widthPixels,
                 }),
                 id: item.id,
@@ -2479,6 +2625,9 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       }
     };
     this.groundLineLayouts.add(layOut);
+    // The positions are kept as they were handed over, in true metres, so a new factor is a
+    // rebuild from them and never a second request to whoever drew them.
+    this.drawnHeightLayouts.add(layOut);
 
     return this.registerVectorSource<Scene3DPolyline>(
       id,
@@ -2513,6 +2662,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       },
       () => {
         this.groundLineLayouts.delete(layOut);
+        this.drawnHeightLayouts.delete(layOut);
         for (const group of draped) {
           this.widget.scene.groundPrimitives.remove(group.primitive);
         }
@@ -2527,35 +2677,53 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     const collection = new BillboardCollection({ scene: this.widget.scene });
     this.widget.scene.primitives.add(collection);
     const markers: Billboard[] = [];
+    // The batch as it was handed over, in true metres, for the same reason a line batch keeps its
+    // own: a new factor puts every marker at a new height and nobody hands them over again.
+    let items: readonly Scene3DMarker[] = [];
     let opacity = 1;
+    const clear = () => {
+      collection.removeAll();
+      markers.length = 0;
+    };
+    const addAll = () => {
+      for (const item of items) {
+        markers.push(
+          collection.add({
+            position: this.toDrawnCartesian(item.position),
+            image: item.image,
+            scale: item.scale ?? 1,
+            // A marker on the ground is put there by the library, against the ground as it draws
+            // it — stretched with everything else — so its own height plays no part.
+            heightReference: item.clampToGround
+              ? HeightReference.CLAMP_TO_GROUND
+              : HeightReference.NONE,
+            // The icons are symbols centred on the thing they mark, the way the flat map draws
+            // them, rather than pins standing on it.
+            verticalOrigin: VerticalOrigin.CENTER,
+            disableDepthTestDistance: MARKER_PICKABLE_AT_ANY_DEPTH,
+            // The icon's own colours multiplied by white, which changes nothing until a fade
+            // lowers the alpha. The icons are images, so this is the only place a marker's
+            // transparency can live.
+            color: Color.WHITE.withAlpha(opacity),
+            id: item.id,
+          }),
+        );
+      }
+    };
+    const layOut = () => {
+      clear();
+      addAll();
+    };
+    this.drawnHeightLayouts.add(layOut);
     return this.registerVectorSource<Scene3DMarker>(
       id,
       () => {
-        collection.removeAll();
-        markers.length = 0;
+        items = [];
+        clear();
       },
-      (items) => {
-        for (const item of items) {
-          markers.push(
-            collection.add({
-              position: toCartesian(item.position),
-              image: item.image,
-              scale: item.scale ?? 1,
-              heightReference: item.clampToGround
-                ? HeightReference.CLAMP_TO_GROUND
-                : HeightReference.NONE,
-              // The icons are symbols centred on the thing they mark, the way the flat map draws
-              // them, rather than pins standing on it.
-              verticalOrigin: VerticalOrigin.CENTER,
-              disableDepthTestDistance: MARKER_PICKABLE_AT_ANY_DEPTH,
-              // The icon's own colours multiplied by white, which changes nothing until a fade
-              // lowers the alpha. The icons are images, so this is the only place a marker's
-              // transparency can live.
-              color: Color.WHITE.withAlpha(opacity),
-              id: item.id,
-            }),
-          );
-        }
+      (next) => {
+        items = next;
+        addAll();
       },
       (visible) => {
         collection.show = visible;
@@ -2568,7 +2736,10 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
           marker.color = Color.WHITE.withAlpha(next);
         }
       },
-      () => this.widget.scene.primitives.remove(collection),
+      () => {
+        this.drawnHeightLayouts.delete(layOut);
+        this.widget.scene.primitives.remove(collection);
+      },
     );
   }
 
@@ -2681,12 +2852,13 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
    * otherwise have to keep asking until a worker somewhere finished with it.
    */
   private buildCutawayFill(footprint: Scene3DCutawayFootprint): Primitive {
-    const ring = footprint.ring.map(toCartesian);
+    const ring = footprint.ring.map((position) => this.toDrawnCartesian(position));
     const wallTops = this.wallTopsFor(footprint);
     // Remembered as they are used, so that the next time elevation data settles there is
     // something to compare against.
     this.cutawayWallTops = wallTops;
-    const floors = footprint.ring.map(() => footprint.floorHeight);
+    const floorHeight = this.drawnHeight(footprint.floorHeight);
+    const floors = footprint.ring.map(() => floorHeight);
 
     const walls = new GeometryInstance({
       geometry: new WallGeometry({
@@ -2703,7 +2875,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     const floor = new GeometryInstance({
       geometry: new PolygonGeometry({
         polygonHierarchy: new PolygonHierarchy(ring),
-        height: footprint.floorHeight,
+        height: floorHeight,
         vertexFormat: PerInstanceColorAppearance.FLAT_VERTEX_FORMAT,
       }),
       attributes: { color: ColorGeometryInstanceAttribute.fromColor(CUTAWAY_FLOOR_COLOR) },
@@ -2734,11 +2906,28 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
    * On a bare ellipsoid every one of these is the same number and the rim is a flat disc. With an
    * elevation model they are ninety-six different numbers and the rim follows the hillside, which
    * is what an excavation cut into real ground looks like.
+   *
+   * Heights as drawn: the ground the walls meet is the stretched one. The overlap is not stretched
+   * — it closes a hairline on the screen, and is a drawn distance to begin with.
    */
   private wallTopsFor(footprint: Scene3DCutawayFootprint): number[] {
     return footprint.ring.map(
       (position) =>
-        this.groundHeightAt(position.longitude, position.latitude) + CUTAWAY_RIM_OVERLAP_METERS,
+        this.drawnHeight(this.groundHeightAt(position.longitude, position.latitude)) +
+        CUTAWAY_RIM_OVERLAP_METERS,
+    );
+  }
+
+  /**
+   * How far over the opening the camera has to be for the cut to show the cave, worked out from
+   * the excavation as it is drawn: the angle into a shaft is its depth against its width, and only
+   * the depth stretches.
+   */
+  private cutawayPitchLimitFor(footprint: Scene3DCutawayFootprint): number {
+    const center = footprintCenter(footprint);
+    return cutawayPitchLimitDegrees(
+      { ...footprint, floorHeight: this.drawnHeight(footprint.floorHeight) },
+      this.drawnHeight(this.groundHeightAt(center.longitude, center.latitude)),
     );
   }
 
@@ -2848,18 +3037,21 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     }
     const camera = this.getCamera();
     const target = this.getCameraTarget();
+    // Worked out where the scene is drawn, because the width is a distance on screen: the camera
+    // stands that far from the pivot as drawn, and is then written back as the true height that
+    // is drawn there.
     const pivot = {
       lon: target?.longitude ?? camera.longitude,
       lat: target?.latitude ?? camera.latitude,
       // The middle of the screen is showing sky. The ground below the camera is the honest
       // substitute: it is where a view that has lost the horizon is still standing over.
-      height: target?.height ?? this.groundHeightAt(camera.longitude, camera.latitude),
+      height: this.drawnHeight(target?.height ?? this.groundHeightAt(camera.longitude, camera.latitude)),
     };
     const eye = eyeLookingAt(pivot, camera.heading, camera.pitch, widthMeters);
     this.setCamera({
       longitude: eye.lon,
       latitude: eye.lat,
-      height: eye.height,
+      height: this.trueHeight(eye.height),
       heading: camera.heading,
       pitch: camera.pitch,
       roll: camera.roll,
@@ -2874,21 +3066,58 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
   private clampCameraDepth(): void {
     const { camera } = this.widget.scene;
     const carto = Cartographic.fromCartesian(camera.positionWC);
-    if (!carto || carto.height >= this.cameraFloorHeight) {
+    // The floor is as deep as the data, and the data is drawn stretched: so is the floor.
+    const floor = this.drawnHeight(this.cameraFloorHeight);
+    if (!carto || carto.height >= floor) {
       return;
     }
     camera.setView({
       destination: Cartesian3.fromDegrees(
         CesiumMath.toDegrees(carto.longitude),
         CesiumMath.toDegrees(carto.latitude),
-        this.cameraFloorHeight,
+        floor,
       ),
       orientation: { heading: camera.heading, pitch: camera.pitch, roll: camera.roll },
     });
   }
 
+  // ---- heights across the seam ----
+  //
+  // The one place the vertical exaggeration is applied. Everything handed to this object and
+  // everything it hands back is in true metres; everything the library draws is stretched. Each
+  // height that crosses between the two goes through one of these two, so at a factor of one they
+  // are the identity — a multiplication and a division by one, exact in floating point — and
+  // nothing drawn or reported differs from a scene that had never heard of a factor.
+  //
+  // What the library stretches by itself is not stretched here a second time: the ground, models
+  // and point-cloud tiles are handed over at their true heights and stretched by the library's own
+  // factor, which is set to the same number. Everything else it draws at the position it is given
+  // — lines, markers, the excavation's walls, a scan's centreline, the camera — so those go in
+  // through `drawnHeight`, and anything read back out of a drawn picture comes out through
+  // `trueHeight`.
+
+  /** A true height, in metres above the ellipsoid, as the scene draws it. */
+  private drawnHeight(height: number): number {
+    return height * this.exaggeration;
+  }
+
   /**
-   * Height of the drawn ground at a point, or the ellipsoid where no elevation model says.
+   * A drawn height as true metres. `factor` is the one it was drawn at: the factor in force for
+   * where this object put something itself, and the last frame's for a height read back out of
+   * the picture — the ground under a point, the depth under a pixel.
+   */
+  private trueHeight(drawn: number, factor: number = this.exaggeration): number {
+    return drawn / factor;
+  }
+
+  /** A contract position as the engine's own world coordinate, at the height it is drawn at. */
+  private toDrawnCartesian(position: Scene3DPosition): Cartesian3 {
+    return Cartesian3.fromDegrees(position.longitude, position.latitude, this.drawnHeight(position.height));
+  }
+
+  /**
+   * Height of the drawn ground at a point, in true metres, or the ellipsoid where no elevation
+   * model says.
    *
    * The answer is bounded because the globe does not only answer about the ground: it answers from
    * whatever surface tile it is holding, and for a moment after the camera arrives somewhere new
@@ -2906,7 +3135,10 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
    * believe an impossible one.
    */
   private groundHeightAt(longitude: number, latitude: number): number {
-    const height = this.widget.scene.globe.getHeight(Cartographic.fromDegrees(longitude, latitude));
+    const drawn = this.widget.scene.globe.getHeight(Cartographic.fromDegrees(longitude, latitude));
+    // The globe answers from the surface it drew, which was stretched by the factor of that frame.
+    // The bound is on the true height: it is about what the earth has, not about how it is drawn.
+    const height = drawn === undefined ? undefined : this.trueHeight(drawn, this.lastFrameExaggeration);
     return height !== undefined && Math.abs(height) <= GROUND_HEIGHT_LIMIT_METERS ? height : 0;
   }
 
@@ -3035,7 +3267,11 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       return orthographicGroundSampleDistance(halfWidth * 2, this.viewportWidthPixels());
     }
     return cameraGroundSampleDistance({
-      heightMeters: camera.height - this.groundHeightAt(camera.longitude, camera.latitude),
+      // The distance the ground is drawn at, which is what decides how much of it a pixel covers:
+      // under a stretched scene the camera stands as many times higher over the stretched ground.
+      heightMeters:
+        this.drawnHeight(camera.height) -
+        this.drawnHeight(this.groundHeightAt(camera.longitude, camera.latitude)),
       latitudeDegrees: camera.latitude,
       fieldOfViewRadians: this.fieldOfViewRadians(),
       viewportHeightPixels: this.viewportHeightPixels(),
@@ -3060,11 +3296,6 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     const { canvas } = this.widget;
     return canvas.clientWidth || canvas.width || 1;
   }
-}
-
-/** A contract position as the engine's own world coordinate. */
-function toCartesian(position: Scene3DPosition): Cartesian3 {
-  return Cartesian3.fromDegrees(position.longitude, position.latitude, position.height);
 }
 
 /**
