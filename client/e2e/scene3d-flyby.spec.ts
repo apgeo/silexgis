@@ -125,6 +125,31 @@ test('a press on the scene takes the camera back from a flyby, and the flyby goe
   await expect(status(page)).toHaveAttribute('data-status', 'idle');
 });
 
+test('the position can be stepped through quickly from the keyboard without the page falling over', async ({ page }) => {
+  test.slow();
+  await openFlybyOverDemoCave(page);
+  await page.getByTestId('flyby-load-route').uncheck();
+  await page.getByTestId('flyby-play').click();
+  await expect(status(page)).toHaveAttribute('data-status', 'playing', { timeout: 120_000 });
+  await page.getByTestId('flyby-pause').click();
+  await expect(status(page)).toHaveAttribute('data-status', 'paused');
+
+  // An arrow key held down on the slider: every step is a new moment of the flyby, and each used
+  // to ask every loader of the view to read the scene again. Any error the page reports while this
+  // runs fails the test.
+  await page.getByTestId('flyby-position').getByRole('slider').focus();
+  const before = await camera(page);
+  for (let press = 0; press < 80; press += 1) {
+    await page.keyboard.press('ArrowRight');
+  }
+  await expect(status(page)).toHaveAttribute('data-status', 'paused');
+  await expect(page.getByTestId('flyby-panel')).toBeVisible();
+  await expect.poll(async () => sameCamera(await camera(page), before)).toBe(false);
+  // The view is still alive and still answers.
+  await page.getByTestId('flyby-stop').click();
+  await expect(status(page)).toHaveAttribute('data-status', 'idle');
+});
+
 test('a flyby is kept under a name, changed section by section, and played on a clean screen', async ({ page }) => {
   test.slow();
   await openFlybyOverDemoCave(page);

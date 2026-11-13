@@ -188,6 +188,41 @@ describe('playing a flyby', () => {
     expect(scene.refreshes - afterStart).toBe(3);
   });
 
+  it('does not have the scene load at every step of a clock being moved by hand, only when it comes to rest', () => {
+    const scene = stage();
+    const player = createFlybyPlayer(timeline, scene);
+    player.seek(1);
+    const afterFirst = scene.refreshes;
+    // A slider dragged, or an arrow key held: sixty moments in six tenths of a second.
+    for (let step = 0; step < 60; step += 1) {
+      scene.advance(10);
+      player.seek(1 + step * 0.1);
+    }
+    // Every one of them moved the camera; none of them asked the scene to read itself again.
+    expect(scene.camera()).toEqual(flybyCameraAt(timeline, 6.9, () => 0));
+    expect(scene.refreshes).toBe(afterFirst);
+    // Left alone for a quarter of a second, where it rests is loaded — once.
+    for (let frame = 0; frame < 30; frame += 1) {
+      scene.advance(16);
+    }
+    expect(scene.refreshes).toBe(afterFirst + 1);
+    for (let frame = 0; frame < 30; frame += 1) {
+      scene.advance(16);
+    }
+    expect(scene.refreshes).toBe(afterFirst + 1);
+    expect(scene.pendingFrames()).toBe(0);
+
+    // A clock moved for longer than a flight goes between refreshes still refreshes as it goes.
+    for (let step = 0; step < 200; step += 1) {
+      scene.advance(10);
+      player.seek(step * 0.05);
+    }
+    expect(scene.refreshes).toBeGreaterThan(afterFirst + 1);
+    // And nothing is left waiting once the flyby is stopped.
+    player.stop();
+    expect(scene.pendingFrames()).toBe(0);
+  });
+
   it('leaves the camera alone when its scene goes away', () => {
     const scene = stage();
     const player = createFlybyPlayer(timeline, scene);

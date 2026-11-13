@@ -80,6 +80,8 @@ export interface FlybyPlayer {
 
 /** How often, in real time, a flying camera has the scene load what is now in view. */
 const REFRESH_MILLISECONDS = 1500;
+/** How long the clock has to be left alone after being moved by hand before its moment counts as where it rests. */
+const SEEK_REST_MILLISECONDS = 250;
 
 export interface FlybyPlayerOptions {
   loop?: boolean;
@@ -134,6 +136,40 @@ export function createFlybyPlayer(
     }
   };
 
+  // A clock moved by hand is moved many times in a row: a slider being dragged, an arrow key held
+  // down. Each step is a new moment, but not a new place to load the scene for — asking every
+  // loader to read the view again at each of them is a storm of requests answered too late to
+  // matter, and of redraws of the page that asked. So while the clock is being moved the scene is
+  // refreshed no more often than in flight, and once more when the clock comes to rest, which is
+  // the moment somebody will actually look at.
+  let restFrame: number | undefined;
+  let lastSeekAt = 0;
+  const cancelRest = () => {
+    if (restFrame !== undefined) {
+      stage.cancelFrame(restFrame);
+      restFrame = undefined;
+    }
+  };
+  const refreshAtRest = () => {
+    lastSeekAt = stage.now();
+    if (restFrame !== undefined) {
+      return;
+    }
+    const wait = () => {
+      restFrame = undefined;
+      // Playing again, the flight refreshes as it goes; stopped, there is no moment to load for.
+      if (destroyed || state.status === 'playing' || state.status === 'idle') {
+        return;
+      }
+      if (stage.now() - lastSeekAt >= SEEK_REST_MILLISECONDS) {
+        refresh(true);
+        return;
+      }
+      restFrame = stage.requestFrame(wait);
+    };
+    restFrame = stage.requestFrame(wait);
+  };
+
   const tick = () => {
     frame = undefined;
     if (destroyed || state.status !== 'playing') {
@@ -173,13 +209,14 @@ export function createFlybyPlayer(
       }
       const clamped = Math.min(Math.max(t, 0), timeline.length);
       place(clamped);
-      refresh(true);
+      refresh(false);
       if (state.status === 'playing') {
         zeroAt = stage.now() - clamped * 1000;
         publish({ t: clamped, section: flybySectionAt(timeline, clamped) });
       } else {
         // A clock moved by hand is a flyby held at a moment, wherever it stood before.
         publish({ status: 'paused', t: clamped, section: flybySectionAt(timeline, clamped) });
+        refreshAtRest();
       }
     },
     play() {
@@ -203,6 +240,7 @@ export function createFlybyPlayer(
     },
     stop() {
       cancel();
+      cancelRest();
       if (!destroyed) {
         stage.look?.restore();
       }
@@ -219,6 +257,7 @@ export function createFlybyPlayer(
     destroy() {
       destroyed = true;
       cancel();
+      cancelRest();
       listeners.clear();
     },
   };
