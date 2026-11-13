@@ -9811,7 +9811,8 @@
         "walls": "Colour of the walls",
         "lines": "Colour of the survey lines",
         "surface": "Ground over the caves",
-        "sky": "Sky"
+        "sky": "Sky",
+        "lens": "Lens"
       },
       "layer": "Layer",
       "layerTo": "Shown or hidden",
@@ -9857,6 +9858,15 @@
       "sayNameAndSize": "Its name, length and depth",
       "length": "{{metres}} m long",
       "depth": "{{metres}} m deep"
+    },
+    "frame": {
+      "north": "North arrow in the corner",
+      "corner": "A line of text in the corner"
+    },
+    "lens": {
+      "on": "Set the lens",
+      "degrees": "Lens, in degrees across the picture",
+      "change": "Lens to {{degrees}}°"
     }
   },
   "mapSymbols": {

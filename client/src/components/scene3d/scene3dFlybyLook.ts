@@ -313,6 +313,7 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
         background: settings.activeBaseId,
         backgroundOpacity: settings.activeBaseId === undefined ? 1 : (settings.baseOpacity[settings.activeBaseId] ?? 1),
         surface: settings.surfaceMode,
+        ...(engine ? { lens: engine.getFieldOfView() } : {}),
         layers: Object.fromEntries(layers.map((key) => [key, viewerLayer(settings, key)])),
       };
     },
@@ -347,6 +348,9 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
     },
     showSky(colour) {
       handles.engine()?.setBackgroundColor(colour);
+    },
+    showLens(degrees) {
+      handles.engine()?.setFieldOfView(degrees);
     },
     requestRender() {
       handles.engine()?.requestRender();

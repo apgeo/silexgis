@@ -172,6 +172,11 @@ const NEAR_PLANE_METERS = 0.5;
 /** Fallback vertical field of view when the frustum is not the perspective one (60°, the default). */
 const DEFAULT_FOVY_RADIANS = Math.PI / 3;
 
+/** The lens the scene has when nobody has set one: the library's own, across the wider side. */
+const DEFAULT_LENS_DEGREES = 60;
+/** The narrowest and widest lens a caller may ask for, in degrees. */
+const LENS_LIMITS = { min: 10, max: 100 } as const;
+
 /**
  * How many places down the lower half of the screen to look for ground when the middle of it is
  * sky. Coarse deliberately: each one reads the depth buffer, and the answer only has to be good
@@ -1369,10 +1374,41 @@ class CesiumScene3D implements Scene3DCore {
     } else if (camera.frustum instanceof OrthographicFrustum) {
       camera.switchToPerspectiveFrustum();
       // The switch builds a fresh frustum carrying the library's defaults, so the near plane this
-      // scene needs to see inside a narrow passage has to be put back on it.
+      // scene needs to see inside a narrow passage has to be put back on it — and the lens.
       camera.frustum.near = NEAR_PLANE_METERS;
+      this.applyLens();
     }
     this.requestRender();
+  }
+
+  /** The lens asked for, in degrees; undefined while the scene has its own. */
+  private lensDegrees: number | undefined;
+
+  setFieldOfView(degrees: number | undefined): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    this.lensDegrees =
+      degrees === undefined || !Number.isFinite(degrees)
+        ? undefined
+        : Math.min(LENS_LIMITS.max, Math.max(LENS_LIMITS.min, degrees));
+    this.applyLens();
+    this.requestRender();
+  }
+
+  getFieldOfView(): number {
+    const { frustum } = this.widget.scene.camera;
+    return frustum instanceof PerspectiveFrustum && frustum.fov !== undefined && frustum.fov > 0
+      ? (frustum.fov * 180) / Math.PI
+      : (this.lensDegrees ?? DEFAULT_LENS_DEGREES);
+  }
+
+  /** Puts the lens asked for on a perspective frustum; one that is a box has no angle to set. */
+  private applyLens(): void {
+    const { frustum } = this.widget.scene.camera;
+    if (frustum instanceof PerspectiveFrustum) {
+      frustum.fov = ((this.lensDegrees ?? DEFAULT_LENS_DEGREES) * Math.PI) / 180;
+    }
   }
 
   getOrthoHalfWidth(): number | undefined {

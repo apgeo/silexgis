@@ -33,6 +33,14 @@ export interface FlybyTextPlan {
   captions: FlybyPlacedCaption[];
   fadeIn: number;
   fadeOut: number;
+  /** Whether a north arrow is drawn, and the line of text in the corner when there is one. */
+  northArrow: boolean;
+  corner?: string;
+  /**
+   * The camera's compass heading at a moment, for the north arrow: given by whoever built the plan
+   * from the flyby's path. Left out, the arrow points up.
+   */
+  heading?(t: number): number;
 }
 
 export interface FlybyShownCard {
@@ -49,6 +57,9 @@ export interface FlybyTextState {
   title?: FlybyShownCard;
   end?: FlybyShownCard;
   caption?: { text: string; alpha: number };
+  /** The camera's heading, degrees, when a north arrow is drawn. */
+  north?: number;
+  corner?: string;
 }
 
 /** A card or caption takes this long to appear and to go, at most, in seconds. */
@@ -68,6 +79,8 @@ export function flybyTextPlan(document: FlybyDocument, found: readonly FlybyCapt
     captions: [],
     fadeIn: Math.min(texts.fadeIn ?? 0, length),
     fadeOut: Math.min(texts.fadeOut ?? 0, length),
+    northArrow: texts.northArrow === true,
+    ...(texts.corner ? { corner: texts.corner } : {}),
   };
   if (texts.title) {
     plan.title = {
@@ -97,7 +110,15 @@ export function flybyTextPlan(document: FlybyDocument, found: readonly FlybyCapt
 
 /** True when the plan writes nothing and darkens nothing: then no overlay is needed. */
 export function flybyTextPlanIsEmpty(plan: FlybyTextPlan): boolean {
-  return !plan.title && !plan.end && plan.captions.length === 0 && plan.fadeIn === 0 && plan.fadeOut === 0;
+  return (
+    !plan.title &&
+    !plan.end &&
+    plan.captions.length === 0 &&
+    plan.fadeIn === 0 &&
+    plan.fadeOut === 0 &&
+    !plan.northArrow &&
+    !plan.corner
+  );
 }
 
 function eased(p: number): number {
@@ -142,6 +163,13 @@ export function flybyTextsAt(plan: FlybyTextPlan, t: number): FlybyTextState {
       state.end = { text: plan.end.text, ...(plan.end.subtitle ? { subtitle: plan.end.subtitle } : {}), alpha };
     }
   }
+  if (plan.northArrow) {
+    // Rounded to a tenth of a degree, so a camera at rest does not redraw the arrow every frame.
+    state.north = Math.round((plan.heading?.(clamped) ?? 0) * 10) / 10;
+  }
+  if (plan.corner) {
+    state.corner = plan.corner;
+  }
   // One caption at a time: the latest one that has begun.
   for (const caption of plan.captions) {
     const alpha = presence(caption.start, caption.end, clamped, CAPTION_FADE_SECONDS, CAPTION_FADE_SECONDS);
@@ -182,6 +210,13 @@ export type FlybyTextCanvas = Pick<
   | 'textBaseline'
   | 'shadowColor'
   | 'shadowBlur'
+  | 'translate'
+  | 'rotate'
+  | 'lineTo'
+  | 'arc'
+  | 'stroke'
+  | 'strokeStyle'
+  | 'lineWidth'
 >;
 
 const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
@@ -279,6 +314,61 @@ function caption(context: FlybyTextCanvas, text: string, alpha: number, width: n
 }
 
 /**
+ * A north arrow in the top right corner. The picture's up is the way the camera faces, so north is
+ * turned from up by the camera's heading, the other way.
+ */
+function northArrow(context: FlybyTextCanvas, heading: number, width: number, unit: number) {
+  const radius = unit * 0.045;
+  const margin = unit * 0.03;
+  context.save();
+  context.translate(width - margin - radius, margin + radius);
+  context.globalAlpha = 0.9;
+  context.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  context.beginPath();
+  context.arc(0, 0, radius, 0, Math.PI * 2);
+  context.fill();
+  context.rotate((-heading * Math.PI) / 180);
+  // A narrow arrow, its point white and its tail grey, and the N beyond its point.
+  context.fillStyle = '#ffffff';
+  context.beginPath();
+  context.moveTo(0, -radius * 0.62);
+  context.lineTo(radius * 0.26, radius * 0.1);
+  context.lineTo(-radius * 0.26, radius * 0.1);
+  context.closePath();
+  context.fill();
+  context.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  context.beginPath();
+  context.moveTo(radius * 0.26, radius * 0.1);
+  context.lineTo(0, radius * 0.62);
+  context.lineTo(-radius * 0.26, radius * 0.1);
+  context.closePath();
+  context.fill();
+  context.fillStyle = '#ffffff';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = `700 ${radius * 0.42}px ${FONT_FAMILY}`;
+  context.fillText('N', 0, -radius * 0.82);
+  context.restore();
+}
+
+/** A line of text in the top left corner, for the whole of the flyby. */
+function cornerText(context: FlybyTextCanvas, text: string, width: number, unit: number) {
+  const size = unit * 0.032;
+  const margin = unit * 0.03;
+  context.save();
+  context.globalAlpha = 0.95;
+  context.fillStyle = '#ffffff';
+  context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  context.shadowBlur = unit * 0.01;
+  context.textAlign = 'left';
+  context.textBaseline = 'top';
+  context.font = `500 ${size}px ${FONT_FAMILY}`;
+  const [line] = wrap(context, text, width * 0.6, 1);
+  context.fillText(line ?? '', margin, margin);
+  context.restore();
+}
+
+/**
  * Draws what is over the scene at one moment onto a canvas `width` by `height`, **over whatever the
  * canvas already holds**. A movie's frame is the scene first and the texts over it, on one canvas,
  * so nothing here may wipe it; a canvas that holds only texts is cleared by whoever owns it, with
@@ -289,6 +379,13 @@ function caption(context: FlybyTextCanvas, text: string, alpha: number, width: n
  */
 export function drawFlybyTexts(context: FlybyTextCanvas, state: FlybyTextState, width: number, height: number): void {
   const unit = Math.min(width, height);
+  // The furniture of the frame first, so a fade to black takes it with the picture.
+  if (state.north !== undefined) {
+    northArrow(context, state.north, width, unit);
+  }
+  if (state.corner) {
+    cornerText(context, state.corner, width, unit);
+  }
   if (state.dim > 0) {
     context.save();
     context.globalAlpha = 1;

@@ -257,7 +257,15 @@ export interface FlybyLook {
   surface?: FlybySurface;
   /** What is drawn above the horizon; left out, nothing — the scene draws no sky of its own. */
   sky?: FlybyColour;
+  /**
+   * The lens: how wide the picture is, in degrees across its wider side. Narrow flattens distance —
+   * a mountain stands like a wall behind the cave —, wide takes in a valley from close by.
+   */
+  lens?: number;
 }
+
+/** The narrowest and the widest lens, in degrees across the wider side of the picture; the scene's own is 60. */
+export const FLYBY_LENS_RANGE = { min: 10, max: 100 } as const;
 
 /** What a change changes, and what to. */
 export type FlybyChangeWhat =
@@ -274,7 +282,9 @@ export type FlybyChangeWhat =
   /** Always a cut. */
   | { kind: 'surface'; surface: FlybySurface }
   /** The sky's colour, or (null) none. */
-  | { kind: 'sky'; colour: FlybyColour | null };
+  | { kind: 'sky'; colour: FlybyColour | null }
+  /** The lens, widened or narrowed: a zoom without moving the camera. */
+  | { kind: 'lens'; degrees: number };
 
 export type FlybyChangeKind = FlybyChangeWhat['kind'];
 
@@ -287,6 +297,7 @@ export const FLYBY_CHANGE_KINDS: readonly FlybyChangeKind[] = [
   'lines',
   'surface',
   'sky',
+  'lens',
 ];
 
 /** The kinds that happen at one moment whatever length they are given. */
@@ -332,6 +343,10 @@ export interface FlybyTexts {
   fadeIn?: number;
   /** Seconds it sinks to black at the end. */
   fadeOut?: number;
+  /** A north arrow in a corner of the picture, turning as the camera turns. */
+  northArrow?: boolean;
+  /** A line of text in a corner of the picture for the whole flyby: a club's name, a date. */
+  corner?: string;
 }
 
 export interface FlybyDocument {
@@ -480,6 +495,9 @@ function lookIsSound(look: FlybyLook): boolean {
   if ((look.lines !== undefined && !isFlybyColour(look.lines)) || (look.sky !== undefined && !isFlybyColour(look.sky))) {
     return false;
   }
+  if (look.lens !== undefined && !isLens(look.lens)) {
+    return false;
+  }
   return Object.entries(look.layers ?? {}).every(
     ([key, layer]) => isFlybyLayerKey(key) && (layer.opacity === undefined || isShare(layer.opacity)),
   );
@@ -503,7 +521,13 @@ function changeIsSound(change: FlybyChange): boolean {
       return change.colour === null || isFlybyColour(change.colour);
     case 'surface':
       return FLYBY_SURFACES.includes(change.surface);
+    case 'lens':
+      return isLens(change.degrees);
   }
+}
+
+function isLens(degrees: number): boolean {
+  return degrees >= FLYBY_LENS_RANGE.min && degrees <= FLYBY_LENS_RANGE.max;
 }
 
 /**
@@ -867,6 +891,13 @@ function readLook(value: unknown): FlybyLook | null {
     }
     look.surface = surface;
   }
+  if (bag.lens !== undefined) {
+    const lens = finite(bag.lens);
+    if (lens === undefined) {
+      return null;
+    }
+    look.lens = lens;
+  }
   return look;
 }
 
@@ -920,6 +951,10 @@ function readChange(value: unknown): FlybyChange | null {
     case 'surface': {
       const surface = FLYBY_SURFACES.find((candidate) => candidate === bag.surface);
       return surface ? { kind: 'surface', surface, ...timing } : null;
+    }
+    case 'lens': {
+      const degrees = finite(bag.degrees);
+      return degrees !== undefined ? { kind: 'lens', degrees, ...timing } : null;
     }
     default:
       return null;
@@ -988,6 +1023,21 @@ function readTexts(value: unknown): FlybyTexts | null {
       }
       texts[key] = seconds;
     }
+  }
+  if (bag.northArrow !== undefined) {
+    if (typeof bag.northArrow !== 'boolean') {
+      return null;
+    }
+    if (bag.northArrow) {
+      texts.northArrow = true;
+    }
+  }
+  if (bag.corner !== undefined) {
+    const corner = plainText(bag.corner);
+    if (!corner) {
+      return null;
+    }
+    texts.corner = corner;
   }
   return texts;
 }

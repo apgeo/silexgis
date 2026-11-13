@@ -305,7 +305,7 @@ export function compileFlyby(
     const text = section.say ? say(subjectFor(section.subject, resolved)?.about ?? {}, section.say) : undefined;
     return text ? [{ section: section.id, text, at: 0, seconds: section.seconds }] : [];
   });
-  return {
+  const timeline: FlybyTimeline = {
     length: t,
     origin,
     knots,
@@ -314,6 +314,9 @@ export function compileFlyby(
     look: flybyLookPlan(document),
     texts: flybyTextPlan(document, found),
   };
+  // The north arrow turns with the camera, which only the path knows.
+  timeline.texts.heading = (time) => wrapHeading(flybyKnotAt(timeline, time).heading);
+  return timeline;
 }
 
 /** Puts what a section says about its subject into words; undefined when there is nothing to say. */

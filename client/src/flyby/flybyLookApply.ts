@@ -40,6 +40,11 @@ export interface FlybyLookTarget {
   showSurface(surface: FlybySurface | undefined): void;
   /** Undefined: no sky. */
   showSky(colour: FlybyColour | undefined): void;
+  /**
+   * The lens, degrees across the wider side of the picture; undefined gives the scene its own.
+   * Left out by a view that cannot change its lens, and a flyby's lens is then not shown.
+   */
+  showLens?(degrees: number | undefined): void;
   /** Asks the scene for one frame, once a moment's changes are all made. */
   requestRender(): void;
 }
@@ -93,6 +98,8 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
         target.showSurface(undefined);
       } else if (member === 'sky') {
         target.showSky(undefined);
+      } else if (member === 'lens') {
+        target.showLens?.(undefined);
       }
     }
     const touched = applied.size > 0;
@@ -140,6 +147,10 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
       if (state.sky !== undefined) {
         const sky = state.sky ?? undefined;
         changed = put('sky', sky ?? null, () => target.showSky(sky)) || changed;
+      }
+      if (state.lens !== undefined && target.showLens) {
+        const lens = state.lens;
+        changed = put('lens', lens, () => target.showLens!(lens)) || changed;
       }
       if (changed) {
         target.requestRender();

@@ -73,6 +73,7 @@ function world() {
     meshesInViewActive: undefined as boolean | undefined,
     scansActive: undefined as boolean | undefined,
     photosVisible: undefined as boolean | undefined,
+    lens: undefined as number | undefined,
   };
   const engine = {
     hasImageryLayer: (id: string) => imagery.has(id),
@@ -92,6 +93,10 @@ function world() {
     setSurfaceMode: (mode: Scene3DSurfaceMode) => {
       state.surface = mode;
     },
+    setFieldOfView: (degrees: number | undefined) => {
+      state.lens = degrees;
+    },
+    getFieldOfView: () => state.lens ?? 60,
     requestRender: () => {},
   } as unknown as Scene3DCore;
   const data = {
@@ -204,6 +209,7 @@ const EVERYTHING: FlybyChange[] = [
   { kind: 'walls', colour: '#ff8000', strength: 0.8, ...at('wt') },
   { kind: 'lines', colour: '#00ff00', ...at('li', 0) },
   { kind: 'surface', surface: 'cutaway', ...at('su', 0) },
+  { kind: 'lens', degrees: 30, ...at('le') },
 ];
 
 describe('a flyby\'s look on the 3D view\'s scene', () => {
@@ -235,6 +241,7 @@ describe('a flyby\'s look on the 3D view\'s scene', () => {
       meshVisible: false,
       scansActive: false,
       photosVisible: false,
+      lens: 30,
     });
     expect((played.state.filterSpecs as { visible: boolean }[])[0].visible).toBe(true);
 

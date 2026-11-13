@@ -164,6 +164,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       moveTo() {},
       lineTo() {},
       arcTo() {},
+      arc() {},
       fillText() {},
       stroke() {},
       fill() {},

@@ -9824,7 +9824,8 @@
         "walls": "Culoarea pereților",
         "lines": "Culoarea drumuirilor",
         "surface": "Terenul peste peșteri",
-        "sky": "Cerul"
+        "sky": "Cerul",
+        "lens": "Obiectivul"
       },
       "layer": "Strat",
       "layerTo": "Afișat sau ascuns",
@@ -9870,6 +9871,15 @@
       "sayNameAndSize": "Numele, lungimea și adâncimea ei",
       "length": "{{metres}} m lungime",
       "depth": "{{metres}} m adâncime"
+    },
+    "frame": {
+      "north": "Săgeata nordului în colț",
+      "corner": "Un rând de text în colț"
+    },
+    "lens": {
+      "on": "Alege obiectivul",
+      "degrees": "Obiectiv, în grade pe lățimea imaginii",
+      "change": "Obiectiv la {{degrees}}°"
     }
   },
   "mapSymbols": {

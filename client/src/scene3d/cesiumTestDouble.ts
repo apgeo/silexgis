@@ -419,6 +419,8 @@ export const Plane = {
 export class PerspectiveFrustum {
   near = 1;
   fovy = Math.PI / 3;
+  /** The angle across the wider side of the picture, which is what a lens is set by. */
+  fov = Math.PI / 3;
 }
 
 /**

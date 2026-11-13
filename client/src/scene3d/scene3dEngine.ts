@@ -334,6 +334,18 @@ export interface Scene3DCamera {
    */
   getOrthoHalfWidth(): number | undefined;
   /**
+   * Widens or narrows the lens: the field of view, in degrees across the wider side of the
+   * picture; undefined gives the scene its own (60°). Held through a switch of projection and back.
+   *
+   * A flyby needs it: a narrow lens from far off flattens a mountain into a wall standing behind a
+   * cave, a wide one from close by takes in a whole valley, and a lens that changes while the camera
+   * stays put is the one zoom a camera path cannot give. An orthographic view has no angle and is not
+   * changed by it until it is perspective again. Values are held to between 10° and 100°.
+   */
+  setFieldOfView(degrees: number | undefined): void;
+  /** The field of view in force under a perspective projection, degrees across the wider side. */
+  getFieldOfView(): number;
+  /**
    * How high above the ellipsoid this camera has to be to show the same ground detail a 2D map at
    * `zoom` would, at the given latitude.
    *

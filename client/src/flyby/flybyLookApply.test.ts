@@ -193,3 +193,43 @@ describe('a player with a look', () => {
     expect(look.shown).toEqual({});
   });
 });
+
+describe('the lens of a flyby', () => {
+  it('narrows over the time a change takes, from the opening lens, and is given back when stopped', () => {
+    const { target, shown } = scene();
+    const lenses: (number | undefined)[] = [];
+    target.showLens = (degrees) => {
+      lenses.push(degrees);
+      shown.lens = degrees;
+    };
+    const document = flyby({
+      look: { lens: 50 },
+      changes: [{ id: 'le', kind: 'lens', degrees: 20, section: 'orbit-2', at: 0, seconds: 4 }],
+    });
+    const plan = flybyLookPlan(document);
+    const stage = createFlybyLookStage(target);
+    stage.show(plan, 5);
+    expect(shown.lens).toBe(50);
+    stage.show(plan, 12);
+    expect(shown.lens).toBeGreaterThan(20);
+    expect(shown.lens).toBeLessThan(50);
+    stage.show(plan, 20);
+    expect(shown.lens).toBe(20);
+    // Back before the change: the opening lens again, worked out from the moment alone.
+    stage.show(plan, 1);
+    expect(shown.lens).toBe(50);
+    stage.restore();
+    expect(lenses.at(-1)).toBeUndefined();
+  });
+
+  it('leaves the lens alone when the flyby says nothing of it, or the view cannot change it', () => {
+    const { target, calls } = scene();
+    const stage = createFlybyLookStage(target);
+    stage.show(flybyLookPlan(flyby({ look: { lens: 30 } })), 3);
+    expect(calls).not.toContain('lens');
+    const own = scene();
+    own.target.showLens = () => own.calls.push('lens');
+    createFlybyLookStage(own.target).show(flybyLookPlan(flyby({ look: { sky: '#000000' } })), 3);
+    expect(own.calls).not.toContain('lens');
+  });
+});

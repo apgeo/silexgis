@@ -152,3 +152,22 @@ describe('the flybys a person has kept', () => {
     expect(flybyFileName({ name: '///' })).toBe('flyby.flyby.json');
   });
 });
+
+describe('the lens in a document', () => {
+  it('is read back as written, and refused outside what a lens can be', async () => {
+    const { normalizeFlybyDocument, flybyProblems } = await import('./flybyDocument.ts');
+    const { buildPreset } = await import('./flybyPresets.ts');
+    const document = {
+      ...buildPreset('aroundCave', [{ kind: 'cave', caveId: 'a' }]),
+      look: { lens: 35 },
+      changes: [{ id: 'lens-1', kind: 'lens' as const, degrees: 90, section: 'orbit-2', at: 0, seconds: 3 }],
+    };
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(document)))).toEqual(document);
+    expect(flybyProblems({ ...document, look: { lens: 3 } })).toContainEqual({ code: 'badLook' });
+    expect(flybyProblems({ ...document, changes: [{ ...document.changes[0], degrees: 120 }] })).toContainEqual({
+      code: 'badChange',
+      change: 'lens-1',
+      section: 'orbit-2',
+    });
+  });
+});

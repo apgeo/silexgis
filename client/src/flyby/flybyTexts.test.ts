@@ -32,6 +32,7 @@ function flyby(texts: FlybyDocument['texts'], speed = 1): FlybyDocument {
 function recorder() {
   const drawn: { text: string; x: number; y: number; alpha: number; font: string }[] = [];
   const boxes: { fill: string; alpha: number }[] = [];
+  const turns: { x: number; y: number; angle: number }[] = [];
   const context = {
     font: '10px sans-serif',
     fillStyle: '#000',
@@ -68,12 +69,22 @@ function recorder() {
     moveTo() {},
     arcTo() {},
     closePath() {},
+    lineTo() {},
+    arc() {},
+    stroke() {},
+    translate(x: number, y: number) {
+      turns.push({ x, y, angle: 0 });
+    },
+    rotate(angle: number) {
+      turns[turns.length - 1].angle = angle;
+    },
   };
   // What the texts are drawn with, and what the owner of a texts-only canvas wipes it with.
   return {
     context: context as unknown as FlybyTextCanvas & Pick<CanvasRenderingContext2D, 'clearRect'>,
     drawn,
     boxes,
+    turns,
   };
 }
 
@@ -170,5 +181,32 @@ describe('drawing the texts', () => {
     // The canvas that holds only texts is emptied between moments by its owner.
     clearFlybyTexts(context, 100, 100);
     expect(drawn).toEqual([]);
+  });
+});
+
+describe('the furniture of the frame', () => {
+  it('draws a north arrow that turns against the camera, and a line in the corner, for the whole flyby', () => {
+    const plan = flybyTextPlan(flyby({ northArrow: true, corner: 'Clubul de speologie' }));
+    expect(flybyTextPlanIsEmpty(plan)).toBe(false);
+    plan.heading = (t) => t * 3;
+    expect(flybyTextsAt(plan, 0)).toEqual({ dim: 0, north: 0, corner: 'Clubul de speologie' });
+    expect(flybyTextsAt(plan, 30)).toEqual({ dim: 0, north: 90, corner: 'Clubul de speologie' });
+
+    const { context, drawn, turns } = recorder();
+    drawFlybyTexts(context, flybyTextsAt(plan, 30), 1000, 600);
+    // In the top right corner, turned a quarter turn back: north is to the left when facing east.
+    expect(turns).toHaveLength(1);
+    expect(turns[0].x).toBeGreaterThan(900);
+    expect(turns[0].y).toBeLessThan(100);
+    expect(turns[0].angle).toBeCloseTo(-Math.PI / 2);
+    expect(drawn.map((entry) => entry.text)).toEqual(['N', 'Clubul de speologie']);
+    // The corner line is at the top left, clear of the credits along the bottom.
+    expect(drawn[1].x).toBeLessThan(50);
+    expect(drawn[1].y).toBeLessThan(50);
+  });
+
+  it('draws neither unless asked, and points the arrow up when nobody says which way the camera faces', () => {
+    expect(flybyTextsAt(flybyTextPlan(flyby({})), 3)).toEqual({ dim: 0 });
+    expect(flybyTextsAt(flybyTextPlan(flyby({ northArrow: true })), 3).north).toBe(0);
   });
 });

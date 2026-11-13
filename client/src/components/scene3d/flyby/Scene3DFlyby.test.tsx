@@ -782,6 +782,21 @@ describe('a tour that stops at each cave', () => {
   });
 });
 
+describe('the furniture of the frame', () => {
+  it('draws a north arrow and a corner line over the picture when asked', async () => {
+    renderFlyby(lookingScene());
+    fireEvent.click(screen.getByText('Texts over the picture'));
+    fireEvent.click(screen.getByTestId('flyby-text-north'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'A line of text in the corner' }), { target: { value: 'Club' } });
+    const overlay = screen.getByTestId('flyby-texts');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(overlay.dataset.shown).toBe('north corner');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(overlay.dataset.shown).toBe('');
+  });
+});
+
 describe('the words for every preset and every kind of section', () => {
   it('exist in both languages', () => {
     for (const locale of [en, ro]) {

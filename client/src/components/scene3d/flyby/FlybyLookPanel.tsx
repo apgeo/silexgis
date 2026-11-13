@@ -7,6 +7,7 @@ import { useGeofiles, useMapLayers, useRasterMaps, useSavedFilters } from '../..
 import {
   FLYBY_CHANGE_KINDS,
   FLYBY_CUT_CHANGES,
+  FLYBY_LENS_RANGE,
   FLYBY_NAMED_LAYERS,
   flybyLayerKey,
   FLYBY_MAX_CHANGE_SECONDS,
@@ -31,6 +32,7 @@ import {
   type FlybyRecipeResult,
 } from '../../../flyby/flybyRecipes.ts';
 import { newChangeId, withLayerLook } from '../../../flyby/flybyEdit.ts';
+import { FLYBY_OWN_LENS } from '../../../flyby/flybyLook.ts';
 import { isDrawableIn3d } from '../../../scene3d/baseImagery3d.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
@@ -354,6 +356,28 @@ function OpeningLook({
           ]}
         />
       </label>
+      <Checkbox
+        checked={look.lens !== undefined}
+        onChange={(event) => set('lens', event.target.checked ? FLYBY_OWN_LENS : undefined)}
+        disabled={busy}
+        data-testid="flyby-look-lens-on"
+      >
+        {t('flyby.lens.on')}
+      </Checkbox>
+      {look.lens !== undefined && (
+        <div className="scene3d-flyby-field scene3d-flyby-field-wide" data-testid="flyby-look-lens">
+          <Slider
+            min={FLYBY_LENS_RANGE.min}
+            max={FLYBY_LENS_RANGE.max}
+            step={5}
+            value={look.lens}
+            onChange={(value) => set('lens', value)}
+            disabled={busy}
+            tooltip={{ formatter: (value) => `${value}°` }}
+            ariaLabelForHandle={t('flyby.lens.degrees')}
+          />
+        </div>
+      )}
       <OpeningLayers look={look} setLook={setLook} layers={layers} busy={busy} />
     </div>
   );
@@ -656,6 +680,8 @@ function useChangeWords(names: Names) {
         return t(change.surface === 'cutaway' ? 'flyby.look.change.surfaceCutaway' : 'flyby.look.change.surfaceOverlay');
       case 'sky':
         return change.colour ? t('flyby.look.change.sky', { colour: change.colour }) : t('flyby.look.change.skyNone');
+      case 'lens':
+        return t('flyby.lens.change', { degrees: change.degrees });
     }
   };
 }
@@ -779,6 +805,8 @@ function defaultChange(kind: FlybyChangeKind, names: Names): FlybyChangeWhat | u
       return { kind, surface: 'cutaway' };
     case 'sky':
       return { kind, colour: DEFAULT_SKY };
+    case 'lens':
+      return { kind, degrees: 30 };
   }
 }
 
@@ -911,6 +939,21 @@ function AddChange({
               />
             )}
           </>
+        );
+      case 'lens':
+        return (
+          <InputNumber
+            size="small"
+            min={FLYBY_LENS_RANGE.min}
+            max={FLYBY_LENS_RANGE.max}
+            step={5}
+            value={what.degrees}
+            onChange={(degrees) => degrees !== null && setWhat({ ...what, degrees })}
+            disabled={busy}
+            suffix="°"
+            aria-label={t('flyby.lens.degrees')}
+            data-testid="flyby-add-change-lens"
+          />
         );
       case 'surface':
         return (
@@ -1114,6 +1157,24 @@ function TextsEditor({
       >
         {t('flyby.look.fadeOut')}
       </Checkbox>
+      <Checkbox
+        checked={texts.northArrow === true}
+        onChange={(event) => set('northArrow', event.target.checked ? true : undefined)}
+        disabled={busy}
+        data-testid="flyby-text-north"
+      >
+        {t('flyby.frame.north')}
+      </Checkbox>
+      <Input
+        size="small"
+        value={texts.corner ?? ''}
+        onChange={(event) => set('corner', event.target.value.trim().length > 0 ? event.target.value : undefined)}
+        maxLength={FLYBY_MAX_TEXT}
+        disabled={busy}
+        placeholder={t('flyby.frame.corner')}
+        aria-label={t('flyby.frame.corner')}
+        data-testid="flyby-text-corner"
+      />
     </div>
   );
 }

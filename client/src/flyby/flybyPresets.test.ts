@@ -459,3 +459,17 @@ describe('a tour that stops at each cave', () => {
     expect(unnamed.texts.captions.map((caption) => caption.text)).toEqual(['Peștera B (? m, ? m)']);
   });
 });
+
+describe('the north arrow of a flight', () => {
+  it('points where north is in the picture at every moment, and is kept with the flyby', () => {
+    const document = { ...buildPreset('aroundCave', [{ kind: 'cave', caveId: 'a' }]), texts: { northArrow: true, corner: 'Club' } };
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(document)))).toEqual(document);
+    const timeline = compileFlyby(document, [
+      { centre: { lon: 25, lat: 45.5, height: 900 }, radius: 200, halfHeight: 50, coarse: false },
+    ]);
+    for (const t of [0, 3, 9.5, 17, timeline.length]) {
+      const north = flybyTextsAt(timeline.texts, t).north!;
+      expect(Math.abs(north - flybyCameraAt(timeline, t, flat).heading)).toBeLessThanOrEqual(0.05);
+    }
+  });
+});

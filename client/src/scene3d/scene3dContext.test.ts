@@ -1561,6 +1561,43 @@ describe('lines that belong on the ground', () => {
   });
 });
 
+describe('the lens', () => {
+  const frustumOf = () => engine.engineState.widgets[0].scene.camera.frustum as InstanceType<typeof engine.PerspectiveFrustum>;
+
+  it('opens on the scene\'s own lens, and narrows, widens and gives it back on request', async () => {
+    const session = acquire();
+    expect(session.engine.getFieldOfView()).toBeCloseTo(60);
+
+    session.engine.setFieldOfView(25);
+    expect(frustumOf().fov).toBeCloseTo((25 * Math.PI) / 180);
+    expect(session.engine.getFieldOfView()).toBeCloseTo(25);
+
+    session.engine.setFieldOfView(undefined);
+    expect(frustumOf().fov).toBeCloseTo(Math.PI / 3);
+    session.release();
+  });
+
+  it('holds a lens asked for outside what a camera can do to the nearest it can', async () => {
+    const session = acquire();
+    session.engine.setFieldOfView(2);
+    expect(session.engine.getFieldOfView()).toBeCloseTo(10);
+    session.engine.setFieldOfView(170);
+    expect(session.engine.getFieldOfView()).toBeCloseTo(100);
+    session.release();
+  });
+
+  it('keeps its lens through a spell without perspective', async () => {
+    // The switch back builds a fresh frustum with the library's own angle on it.
+    const session = acquire();
+    session.engine.setFieldOfView(30);
+    session.engine.setProjection('orthographic');
+    session.engine.setProjection('perspective');
+    expect(frustumOf()).toBeInstanceOf(engine.PerspectiveFrustum);
+    expect(frustumOf().fov).toBeCloseTo((30 * Math.PI) / 180);
+    session.release();
+  });
+});
+
 describe('drawing without perspective', () => {
   it('starts with the ordinary projection and switches on request', async () => {
     const session = acquire();

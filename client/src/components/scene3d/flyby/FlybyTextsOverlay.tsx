@@ -23,6 +23,8 @@ function shownParts(state: FlybyTextState | undefined): string {
     state.title ? 'title' : undefined,
     state.caption ? 'caption' : undefined,
     state.end ? 'end' : undefined,
+    state.north !== undefined ? 'north' : undefined,
+    state.corner ? 'corner' : undefined,
   ]
     .filter(Boolean)
     .join(' ');

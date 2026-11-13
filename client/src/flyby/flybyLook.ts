@@ -48,6 +48,8 @@ export interface FlybyLookBase {
   background?: number;
   backgroundOpacity: number;
   surface: FlybySurface;
+  /** The viewer's lens, degrees across the wider side; left out, the scene's own 60. */
+  lens?: number;
   /** For each layer the plan names. */
   layers: Record<FlybyLayerKey, { visible: boolean; opacity: number }>;
 }
@@ -80,7 +82,12 @@ export interface FlybyLookState {
   surface?: FlybySurface;
   /** null: no sky. */
   sky?: FlybyColour | null;
+  /** Degrees across the wider side of the picture. */
+  lens?: number;
 }
+
+/** The lens a scene has when nobody has set one, degrees across the wider side of the picture. */
+export const FLYBY_OWN_LENS = 60;
 
 /** The plan of a document's look; changes whose section is gone are left out, as a check reports them. */
 export function flybyLookPlan(document: FlybyDocument): FlybyLookPlan {
@@ -267,6 +274,11 @@ export function flybyLookAt(plan: FlybyLookPlan, base: FlybyLookBase, t: number)
   if (look.surface !== undefined || has('surface')) {
     state.surface = follow<FlybySurface>(changesOf(plan, 'surface'), t, look.surface ?? base.surface, (inForce, change) =>
       change.kind === 'surface' ? change.surface : inForce,
+    );
+  }
+  if (look.lens !== undefined || has('lens')) {
+    state.lens = numberAt(changesOf(plan, 'lens'), t, look.lens ?? base.lens ?? FLYBY_OWN_LENS, (change) =>
+      change.kind === 'lens' ? change.degrees : undefined,
     );
   }
   if (look.sky !== undefined || has('sky')) {
