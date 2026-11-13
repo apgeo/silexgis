@@ -13,6 +13,7 @@ import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import Scene3DFlyby from './Scene3DFlyby.tsx';
 import type { FlybyScene } from './useFlyby.ts';
+import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 
 // The two reads the tool makes of the server: a cave's name for the panel, and where a cave is
 // when nothing of it is drawn. Both answered from here, so no request leaves the test.
@@ -28,6 +29,16 @@ vi.mock('../../../api/hooks.ts', () => ({
       return { geom: { type: 'Point', coordinates: [25, 45.5] }, depth: 120, surveyedLength: 800 };
     },
   }),
+  // The lists the look panel names things from: two backgrounds, nothing else.
+  useMapLayers: () => ({
+    data: [
+      { id: 1, name: 'Street map', isBase: true, layerKind: 'xyz', urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png' },
+      { id: 2, name: 'Aerial', isBase: true, layerKind: 'xyz', urlTemplate: 'https://aerial.example/{z}/{x}/{y}.png' },
+    ],
+  }),
+  useRasterMaps: () => ({ data: { items: [] } }),
+  useGeofiles: () => ({ data: { items: [] } }),
+  useSavedFilters: () => ({ data: [] }),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,
@@ -337,6 +348,111 @@ describe('the flyby tool over the 3D scene', () => {
     unmount();
     expect(scene.camera()).toEqual(HOME);
     expect(onActiveChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+/** The fake view with a look of its own: what the flyby last put on it, member by member. */
+function lookingScene() {
+  const scene = fakeScene();
+  const shown: Record<string, unknown> = {};
+  const record = (member: string) => (value: unknown) => {
+    if (value === undefined) {
+      delete shown[member];
+    } else {
+      shown[member] = value;
+    }
+  };
+  const look: FlybyLookTarget = {
+    viewerLook: (layers) => ({
+      background: 1,
+      backgroundOpacity: 1,
+      surface: 'overlay',
+      layers: Object.fromEntries(layers.map((key) => [key, { visible: true, opacity: 1 }])),
+    }),
+    showBackground: record('background'),
+    showLayer: (key, state) => record(`layer:${key}`)(state),
+    showWalls: record('walls'),
+    showLines: record('lines'),
+    showSurface: record('surface'),
+    showSky: record('sky'),
+    requestRender: () => {},
+  };
+  return Object.assign(scene, { look, shown });
+}
+
+describe('the look of a flyby and the texts over it', () => {
+  it('opens with a soft sky, puts the look on the scene while it plays, and gives it back when stopped', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Look at the start'));
+    expect(screen.getByTestId('flyby-look-sky-on')).toBeChecked();
+    fireEvent.click(screen.getByTestId('flyby-look-lines-on'));
+    fireEvent.change(screen.getByLabelText('Colour of the survey lines'), { target: { value: '#00FF00' } });
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(scene.shown).toEqual({ sky: '#b4c8dc', lines: '#00ff00' });
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(scene.shown).toEqual({});
+  });
+
+  it('writes ready-made changes, lists them in words, and lets each be corrected or removed', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    fireEvent.change(screen.getByLabelText('Colour of the caves'), { target: { value: '#ff0000' } });
+    fireEvent.click(screen.getByTestId('flyby-recipe-colour-add'));
+    fireEvent.click(screen.getByTestId('flyby-recipe-see-through-add'));
+    fireEvent.click(screen.getByText('4 changes'));
+    const list = screen.getByTestId('flyby-changes');
+    expect(list).toHaveTextContent('Walls in #ff0000, 70%');
+    expect(list).toHaveTextContent('Survey lines in #ff0000');
+    expect(list).toHaveTextContent('Background at 40%');
+    expect(list).toHaveTextContent('2. Circle');
+
+    // Moved onto the moment of another change of the same thing: said beside it, and refused on Play.
+    fireEvent.change(screen.getByTestId('flyby-change-backgroundOpacity-2-at'), { target: { value: '0' } });
+    fireEvent.blur(screen.getByTestId('flyby-change-backgroundOpacity-2-at'));
+    expect(screen.getByTestId('flyby-change-backgroundOpacity-2-trouble')).toHaveTextContent('same thing');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    expect(screen.getByTestId('flyby-problem')).toHaveTextContent('a change or a caption');
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove the change — Background at 100%/ }));
+    expect(screen.getByText('3 changes')).toBeInTheDocument();
+    expect(screen.queryByTestId('flyby-change-backgroundOpacity-2-trouble')).not.toBeInTheDocument();
+    // A cut has no length to set.
+    expect(screen.getByTestId('flyby-change-lines-2-seconds')).toBeDisabled();
+  });
+
+  it('shows the title over the scene while it is on, and nothing once the flyby stops', async () => {
+    renderFlyby(lookingScene());
+    fireEvent.click(screen.getByText('Texts over the picture'));
+    fireEvent.change(screen.getByTestId('flyby-text-title'), { target: { value: 'Peștera A' } });
+    fireEvent.change(screen.getByTestId('flyby-text-caption-orbit-2'), { target: { value: 'Around it' } });
+    fireEvent.click(screen.getByTestId('flyby-text-fade-out'));
+    const overlay = screen.getByTestId('flyby-texts');
+    expect(overlay.dataset.shown).toBe('');
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(overlay.dataset.shown).toBe('title');
+    // The circle starts at 6 s; its caption is on through it.
+    await pass(7000);
+    expect(overlay.dataset.shown).toBe('caption');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(overlay.dataset.shown).toBe('');
+  });
+
+  it('keeps the look, the changes and the texts with the flyby, and opens them again', () => {
+    renderFlyby(lookingScene());
+    fireEvent.click(screen.getByText('Texts over the picture'));
+    fireEvent.change(screen.getByTestId('flyby-text-end'), { target: { value: 'Club' } });
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'With a look' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    const [kept] = useFlybyStore.getState().library;
+    expect(kept.look).toEqual({ sky: '#b4c8dc' });
+    expect(kept.texts).toEqual({ end: { text: 'Club', seconds: 4 } });
   });
 });
 

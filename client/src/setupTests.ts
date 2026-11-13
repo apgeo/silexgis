@@ -144,7 +144,8 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
 // that did depend on a true width would be depending on which fonts happen to be
 // installed on the machine running the tests.
 //
-// The drawing no-ops below cover the same need for a component that paints a QR square.
+// The drawing no-ops below cover the same need for a component that paints a QR square, and
+// for the texts a flyby writes over the 3D scene.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };
@@ -162,6 +163,8 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       closePath() {},
       moveTo() {},
       lineTo() {},
+      arcTo() {},
+      fillText() {},
       stroke() {},
       fill() {},
       translate() {},

@@ -111,6 +111,7 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'filters.editor.spatial.polygonProblems.',
   'filters.editor.values.',
   'filters.sorts.',
+  'flyby.look.layer.',
   'flyby.movie.levelHelp.',
   'flyby.movie.levels.',
   'flyby.preset.',

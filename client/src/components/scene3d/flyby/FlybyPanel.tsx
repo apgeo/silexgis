@@ -27,7 +27,11 @@ import { FLYBY_SECONDS_PER_TURN_RANGE, FLYBY_TURNS_RANGE, presetFits } from '../
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
 import { flybyClock } from './flybyClock.ts';
+import FlybyLookPanel from './FlybyLookPanel.tsx';
 import type { FlybyController, FlybySource, FlybyTrouble } from './useFlyby.ts';
+
+/** The problems that are about the look, the changes and the texts rather than the camera. */
+const LOOK_PROBLEMS = new Set(['badLook', 'unknownChangeSection', 'badChange', 'duplicateChange', 'overlappingChanges', 'badText']);
 
 /** The speeds offered for one section; the whole flyby's speed is a slider. */
 const SECTION_SPEEDS = [0.25, 0.5, 1, 2, 4];
@@ -40,7 +44,10 @@ export interface FlybyPanelProps {
 function troubleText(trouble: FlybyTrouble, t: (key: string, values?: Record<string, unknown>) => string): string {
   switch (trouble.kind) {
     case 'problems':
-      return t('flyby.trouble.problems');
+      // A change or a text that cannot be placed is said as such: the sections may all be fine.
+      return trouble.problems.every((problem) => LOOK_PROBLEMS.has(problem.code))
+        ? t('flyby.look.trouble')
+        : t('flyby.trouble.problems');
     case 'missing':
       return t('flyby.trouble.missing');
     case 'noScene':
@@ -357,6 +364,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
           ]}
         />
       )}
+
+      <FlybyLookPanel flyby={flyby} />
 
       <div className="scene3d-flyby-group">
         <Typography.Text strong>{t('flyby.keepTitle')}</Typography.Text>

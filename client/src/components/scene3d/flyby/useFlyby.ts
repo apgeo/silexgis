@@ -4,11 +4,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { caveQuery } from '../../../api/hooks.ts';
 import {
   flybyProblems,
+  type FlybyChange,
   type FlybyDocument,
+  type FlybyLook,
   type FlybyPresetId,
   type FlybyProblem,
   type FlybySection,
   type FlybySubject,
+  type FlybyTexts,
 } from '../../../flyby/flybyDocument.ts';
 import { createFlybyLookStage, type FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 import { createFlybyPlayer, type FlybyPlayer, type FlybyPlayerState, type FlybyStage } from '../../../flyby/flybyPlayer.ts';
@@ -22,6 +25,7 @@ import {
 import {
   buildPreset,
   DEFAULT_FLYBY_PRESET_OPTIONS,
+  FLYBY_PRESET_SKY,
   presetFits,
   presetFor,
   type FlybyPresetOptions,
@@ -130,6 +134,11 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [name, setName] = useState('');
   /** A document opened from the kept ones or a file, or one whose sections were changed by hand. */
   const [edited, setEdited] = useState<FlybyDocument | null>(null);
+  // How the scene looks, its timed changes and the texts over it: kept apart from the sections, so
+  // building the sections again from another preset or option keeps what was set here.
+  const [look, setLook] = useState<FlybyLook>({ sky: FLYBY_PRESET_SKY });
+  const [changes, setChanges] = useState<FlybyChange[]>([]);
+  const [texts, setTexts] = useState<FlybyTexts>({});
 
   const subjects = useMemo<FlybySubject[]>(() => {
     switch (source) {
@@ -146,8 +155,21 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
 
   const document = useMemo<FlybyDocument | null>(() => {
     const base = edited ?? (subjects.length > 0 ? buildPreset(preset, subjects, options) : null);
-    return base ? { ...base, speed, loop, name } : null;
-  }, [edited, subjects, preset, options, speed, loop, name]);
+    if (!base) {
+      return null;
+    }
+    // Written only when they say something, so a flyby without them is the plain document it was.
+    const built: FlybyDocument = { ...base, speed, loop, name };
+    delete built.look;
+    delete built.changes;
+    delete built.texts;
+    return {
+      ...built,
+      ...(Object.keys(look).length > 0 ? { look } : {}),
+      ...(changes.length > 0 ? { changes } : {}),
+      ...(Object.keys(texts).length > 0 ? { texts } : {}),
+    };
+  }, [edited, subjects, preset, options, speed, loop, name, look, changes, texts]);
 
   const refreshCaves = useCallback(() => setCaves(scene.cavesInView()), [scene]);
 
@@ -194,6 +216,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setSpeed(opened.speed);
     setLoop(opened.loop);
     setName(opened.name);
+    setLook(opened.look ?? {});
+    setChanges(opened.changes ?? []);
+    setTexts(opened.texts ?? {});
   }, []);
 
   // ---- the world the subjects are found in ----
@@ -488,6 +513,13 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     edited: edited !== null,
     changeSection,
     open,
+    // how it looks, and what it says
+    look,
+    setLook,
+    changes,
+    setChanges,
+    texts,
+    setTexts,
     // playing
     playerState,
     length,

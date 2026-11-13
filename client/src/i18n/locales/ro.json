@@ -9646,6 +9646,95 @@
       "noScene": "Vizualizarea 3D nu este încă pregătită.",
       "badFile": "Acest fișier nu este un survol pe care această versiune îl poate deschide.",
       "failed": "Survolul nu a putut fi pregătit: {{detail}}"
+    },
+    "look": {
+      "openingTitle": "Aspectul la început",
+      "own": "Cum îl ai",
+      "background": "Harta de bază",
+      "backgroundOpacityOn": "Alege cât de puternic se desenează harta de bază",
+      "backgroundOpacity": "Intensitatea hărții de bază",
+      "skyOn": "Culoarea cerului",
+      "sky": "Culoarea cerului",
+      "wallsOn": "Colorează pereții peșterii",
+      "wallsColour": "Culoarea pereților",
+      "wallsStrength": "Intensitatea culorii pereților",
+      "linesOn": "Drumuirile într-o singură culoare",
+      "linesColour": "Culoarea drumuirilor",
+      "surface": "Terenul peste peșteri",
+      "surfaceOverlay": "Desenat peste peșteri",
+      "surfaceCutaway": "Decupat deasupra peșterii",
+      "recipesTitle": "Schimbări gata făcute",
+      "recipe": {
+        "add": "Adaugă",
+        "secondsEach": "Secunde fiecare",
+        "cycle": {
+          "name": "Hărțile de bază pe rând",
+          "backgrounds": "Hărțile de bază, în ordine",
+          "crossFade": "Trecere treptată"
+        },
+        "seeThrough": {
+          "name": "Prin teren în timpul ocolului",
+          "share": "Intensitatea hărții de bază în timpul ocolului"
+        },
+        "colour": {
+          "name": "Colorează peșterile",
+          "colour": "Culoarea peșterilor",
+          "from": "Începând cu secțiunea"
+        },
+        "oldMap": {
+          "name": "Hartă veche, hartă nouă",
+          "raster": "Hartă georeferențiată",
+          "section": "În timpul secțiunii",
+          "none": "Nu este listată nicio hartă georeferențiată."
+        },
+        "features": {
+          "name": "Obiecte pe rând",
+          "filters": "Straturi din filtre, în ordine",
+          "none": "Lista hărții nu are niciun strat din filtru. Adaugă unul mai întâi în straturile hărții plane."
+        }
+      },
+      "changesTitle_one": "{{count}} schimbare",
+      "changesTitle": "{{count}} schimbări",
+      "noChanges": "Nicio schimbare deocamdată. Adaugă câteva cu o schimbare gata făcută.",
+      "changeAt": "Secunde de la începutul secțiunii — {{what}}, {{section}}",
+      "changeSeconds": "Cât durează, în secunde — {{what}}",
+      "removeChange": "Șterge schimbarea — {{what}}",
+      "changeClash": "Schimbă același lucru ca o altă schimbare, în același timp.",
+      "changeBad": "Începe în afara secțiunii sale sau numește o secțiune pe care survolul nu o mai are.",
+      "change": {
+        "background": "Harta de bază: {{name}}",
+        "backgroundOpacity": "Harta de bază la {{percent}}%",
+        "layerOn": "Arată {{name}}",
+        "layerOff": "Ascunde {{name}}",
+        "layerOpacity": "{{name}} la {{percent}}%",
+        "walls": "Pereți în {{colour}}, {{percent}}%",
+        "wallsOwn": "Pereții în culorile lor",
+        "lines": "Drumuiri în {{colour}}",
+        "linesOwn": "Drumuiri colorate după adâncime",
+        "surfaceOverlay": "Teren desenat peste peșteri",
+        "surfaceCutaway": "Teren decupat deasupra peșterii",
+        "sky": "Cer în {{colour}}",
+        "skyNone": "Fără cer"
+      },
+      "layer": {
+        "centerlines": "drumuirile",
+        "entrances": "intrările",
+        "surface-features": "fenomenele de suprafață",
+        "walls": "pereții",
+        "scans": "scanările",
+        "photos": "fotografiile din stații",
+        "unknown": "un strat care nu mai este listat"
+      },
+      "textsTitle": "Texte peste imagine",
+      "title": "Titlu",
+      "subtitle": "Subtitlu",
+      "captions": "O legendă pentru fiecare secțiune",
+      "captionFor": "Legendă — {{section}}",
+      "end": "Cartonul de final",
+      "endSubtitle": "Cartonul de final, al doilea rând",
+      "fadeIn": "Apare din negru la început",
+      "fadeOut": "Se stinge în negru la final",
+      "trouble": "Acest survol nu poate fi redat așa cum este: o schimbare sau o legendă numește o secțiune pe care nu o mai are, începe în afara secțiunii sale sau schimbă același lucru ca o altă schimbare, în același timp."
     }
   }
 }

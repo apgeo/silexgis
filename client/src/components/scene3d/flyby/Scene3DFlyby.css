@@ -266,3 +266,44 @@
   z-index: 5;
   pointer-events: none;
 }
+
+/* The look of a flyby: colour wells beside their switches, the ready-made sets one under another,
+   the list of changes with its numbers under each line of words. */
+.scene3d-flyby-colour {
+  width: 32px;
+  height: 22px;
+  padding: 0 2px;
+  border: 1px solid var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scene3d-flyby-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+}
+
+.scene3d-flyby-recipe legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scene3d-flyby-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.scene3d-flyby-change-what {
+  display: block;
+  overflow-wrap: anywhere;
+}

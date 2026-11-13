@@ -48,6 +48,14 @@ const AREA_CLEARANCE = 150;
  */
 const OPENING_PITCH = -26;
 
+/**
+ * The sky a flyby built by a preset opens with. The scene draws none of its own, and a camera
+ * circling low over a ridge shows a band of black above the horizon that reads as a hole in the
+ * picture; a pale, slightly hazy blue reads as distance instead, and is quiet enough not to pull
+ * the eye off the ground under it.
+ */
+export const FLYBY_PRESET_SKY = '#b4c8dc';
+
 /** Whether a preset can be built from these subjects at all. */
 export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubject[]): boolean {
   switch (preset) {
@@ -250,5 +258,6 @@ export function buildPreset(
     // a tour afterwards finds them.
     subjects: [...subjects],
     ...built,
+    look: { sky: FLYBY_PRESET_SKY },
   };
 }

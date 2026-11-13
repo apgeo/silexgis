@@ -9633,6 +9633,95 @@
       "noScene": "The 3D view is not ready yet.",
       "badFile": "That file is not a flyby this version can open.",
       "failed": "The flyby could not be prepared: {{detail}}"
+    },
+    "look": {
+      "openingTitle": "Look at the start",
+      "own": "As you have it",
+      "background": "Background map",
+      "backgroundOpacityOn": "Set how strongly the background is drawn",
+      "backgroundOpacity": "Strength of the background",
+      "skyOn": "Sky colour",
+      "sky": "Colour of the sky",
+      "wallsOn": "Colour the cave walls",
+      "wallsColour": "Colour of the walls",
+      "wallsStrength": "Strength of the walls' colour",
+      "linesOn": "Survey lines in one colour",
+      "linesColour": "Colour of the survey lines",
+      "surface": "Ground over the caves",
+      "surfaceOverlay": "Drawn over the caves",
+      "surfaceCutaway": "Cut away above the cave",
+      "recipesTitle": "Ready-made changes",
+      "recipe": {
+        "add": "Add",
+        "secondsEach": "Seconds each",
+        "cycle": {
+          "name": "Cycle the backgrounds",
+          "backgrounds": "Backgrounds, in order",
+          "crossFade": "Cross-fade"
+        },
+        "seeThrough": {
+          "name": "See through the ground while circling",
+          "share": "Strength of the background while circling"
+        },
+        "colour": {
+          "name": "Colour the caves",
+          "colour": "Colour of the caves",
+          "from": "From the section"
+        },
+        "oldMap": {
+          "name": "Old map, new map",
+          "raster": "Georeferenced map",
+          "section": "During the section",
+          "none": "No georeferenced map is listed."
+        },
+        "features": {
+          "name": "Features in turn",
+          "filters": "Filter layers, in order",
+          "none": "There is no filter layer on the map's list. Add one in the flat map's layers first."
+        }
+      },
+      "changesTitle_one": "{{count}} change",
+      "changesTitle": "{{count}} changes",
+      "noChanges": "No changes yet. Add some with a ready-made set.",
+      "changeAt": "Seconds into the section — {{what}}, {{section}}",
+      "changeSeconds": "How long, in seconds — {{what}}",
+      "removeChange": "Remove the change — {{what}}",
+      "changeClash": "Changes the same thing as another change at the same time.",
+      "changeBad": "Starts outside its section, or names a section the flyby no longer has.",
+      "change": {
+        "background": "Background: {{name}}",
+        "backgroundOpacity": "Background at {{percent}}%",
+        "layerOn": "Show {{name}}",
+        "layerOff": "Hide {{name}}",
+        "layerOpacity": "{{name}} at {{percent}}%",
+        "walls": "Walls in {{colour}}, {{percent}}%",
+        "wallsOwn": "Walls in their own colours",
+        "lines": "Survey lines in {{colour}}",
+        "linesOwn": "Survey lines coloured by depth",
+        "surfaceOverlay": "Ground drawn over the caves",
+        "surfaceCutaway": "Ground cut away above the cave",
+        "sky": "Sky in {{colour}}",
+        "skyNone": "No sky"
+      },
+      "layer": {
+        "centerlines": "the survey lines",
+        "entrances": "the entrances",
+        "surface-features": "the surface features",
+        "walls": "the walls",
+        "scans": "the scans",
+        "photos": "the station photographs",
+        "unknown": "a layer no longer listed"
+      },
+      "textsTitle": "Texts over the picture",
+      "title": "Title",
+      "subtitle": "Subtitle",
+      "captions": "A caption for each section",
+      "captionFor": "Caption — {{section}}",
+      "end": "End card",
+      "endSubtitle": "End card, second line",
+      "fadeIn": "Rise out of black at the start",
+      "fadeOut": "Sink to black at the end",
+      "trouble": "This flyby cannot be played as it stands: a change or a caption names a section it no longer has, starts outside its section, or changes the same thing as another change at the same time."
     }
   }
 }
