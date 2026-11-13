@@ -44,6 +44,7 @@ import {
   Plane,
   PolygonGeometry,
   PolygonHierarchy,
+  type Polyline,
   PolylineCollection,
   PolylineMaterialAppearance,
   Primitive,
@@ -626,11 +627,12 @@ class CesiumScene3D implements Scene3DCore {
    */
   private readonly groundLineLayouts = new Set<() => void>();
   /**
-   * One per vector batch in the scene, lines and markers alike: puts that batch back into the
-   * scene from what it was last handed. Called when the vertical exaggeration changes, which moves
-   * every height the batch was drawn at without anything having replaced it.
+   * One per vector batch in the scene, lines and markers alike: moves what that batch drew at a
+   * height to where the factor in force draws it, from what the batch was last handed. Called when
+   * the vertical exaggeration changes, which moves every such height without anything having
+   * replaced it.
    */
-  private readonly drawnHeightLayouts = new Set<() => void>();
+  private readonly heightRestretches = new Set<() => void>();
 
   /**
    * How many times taller than true the scene is drawn. Read only through `drawnHeight` and
@@ -943,7 +945,7 @@ class CesiumScene3D implements Scene3DCore {
     // twice under one id can be found, and it must not outlive the scene it named.
     this.vectorSourceIds.clear();
     this.groundLineLayouts.clear();
-    this.drawnHeightLayouts.clear();
+    this.heightRestretches.clear();
     // Same reason as the elevation sequence above: a model file still being read would otherwise
     // answer into a destroyed scene. Emptying the registry is what makes that answer nobody's, and
     // the widget below takes the models already in the scene down with it.
@@ -1758,6 +1760,7 @@ class CesiumScene3D implements Scene3DCore {
     // ellipsoid. Everything else is stretched by this object, by the same number; see `drawnHeight`.
     scene.verticalExaggeration = next;
     scene.verticalExaggerationRelativeHeight = 0;
+    this.forgetGroundUnderMarkers();
 
     this.setCamera(camera);
     for (const entry of this.models.values()) {
@@ -1773,10 +1776,10 @@ class CesiumScene3D implements Scene3DCore {
         this.stylePointCloud(entry);
       }
     }
-    // Rebuilt from what each batch was last handed, in true metres; nobody is asked to send
+    // Moved from what each batch was last handed, in true metres; nobody is asked to send
     // anything again.
-    for (const layOut of [...this.drawnHeightLayouts]) {
-      layOut();
+    for (const restretch of [...this.heightRestretches]) {
+      restretch();
     }
     const footprint = this.cutawayFootprint;
     if (footprint) {
@@ -1791,6 +1794,26 @@ class CesiumScene3D implements Scene3DCore {
 
   getVerticalExaggeration(): number {
     return this.exaggeration;
+  }
+
+  /**
+   * Makes the library find the ground under every marker it lays on the ground afresh.
+   *
+   * When the factor changes the library re-stretches its surface tiles and asks again where the
+   * ground is under each such marker — but every tile keeps the answers it found before, keyed by
+   * the place and not by the factor, and hands the old one back. Seen in a browser: after a change
+   * of factor, entrance markers stayed at the height the ground had been drawn at before, above or
+   * inside the hillside. Emptying those answers before the next frame is what makes the library's
+   * own second look a real one. The tiles and their caches are not on its published surface; they
+   * are reached here, at the one place that knows the factor changed, and nowhere else.
+   */
+  private forgetGroundUnderMarkers(): void {
+    const surface = (
+      this.widget.scene.globe as unknown as {
+        _surface?: { forEachLoadedTile?(visit: (tile: { clearPositionCache?(): void }) => void): void };
+      }
+    )._surface;
+    surface?.forEachLoadedTile?.((tile) => tile.clearPositionCache?.());
   }
 
   // ---- models ----
@@ -2524,6 +2547,8 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     // one per colour rather than one per line because a fade multiplies a material's colour, which
     // costs nothing, while rebuilding a draped primitive rebuilds its geometry.
     const draped: { color: Color; baseAlpha: number; primitive: GroundPolylinePrimitive }[] = [];
+    // The lines drawn at their own heights, each with what it was drawn from.
+    const flat: { line: Polyline; item: Scene3DPolyline }[] = [];
     // The last batch as it was handed over, kept because the ground can change shape underneath
     // it: attaching an elevation model is exactly what turns "height zero" from the right place
     // for a ground-clamped line into a hillside's worth of error.
@@ -2536,7 +2561,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       const baseAlpha = color.alpha;
       color.alpha = baseAlpha * opacity;
       colors.push({ color, baseAlpha });
-      collection.add({
+      const line = collection.add({
         positions: item.positions.map((position) => this.toDrawnCartesian(position)),
         width: item.widthPixels,
         // One material object per line, not one shared between them: clearing the collection
@@ -2547,6 +2572,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
         material: Material.fromType(Material.ColorType, { color }),
         id: item.id,
       });
+      flat.push({ line, item });
     };
 
     const addDraped = (onGround: readonly Scene3DPolyline[]) => {
@@ -2591,6 +2617,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     const clear = () => {
       collection.removeAll();
       colors.length = 0;
+      flat.length = 0;
       for (const group of draped) {
         this.widget.scene.groundPrimitives.remove(group.primitive);
       }
@@ -2625,9 +2652,18 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       }
     };
     this.groundLineLayouts.add(layOut);
-    // The positions are kept as they were handed over, in true metres, so a new factor is a
-    // rebuild from them and never a second request to whoever drew them.
-    this.drawnHeightLayouts.add(layOut);
+
+    // A new factor moves the lines drawn at a height where they stand, from the positions they were
+    // handed in true metres, rather than emptying the batch and filling it again. Measured with
+    // four thousand survey legs, that is a seventeenth of the work, and it leaves the library's
+    // grouping of the batch by colour as it was. A line laid on the ground is on the ground at
+    // every factor, and is left alone.
+    const restretch = () => {
+      for (const { line, item } of flat) {
+        line.positions = item.positions.map((position) => this.toDrawnCartesian(position));
+      }
+    };
+    this.heightRestretches.add(restretch);
 
     return this.registerVectorSource<Scene3DPolyline>(
       id,
@@ -2662,7 +2698,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
       },
       () => {
         this.groundLineLayouts.delete(layOut);
-        this.drawnHeightLayouts.delete(layOut);
+        this.heightRestretches.delete(restretch);
         for (const group of draped) {
           this.widget.scene.groundPrimitives.remove(group.primitive);
         }
@@ -2676,19 +2712,19 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     // The scene is handed over so the collection can resolve markers that sit on the terrain.
     const collection = new BillboardCollection({ scene: this.widget.scene });
     this.widget.scene.primitives.add(collection);
-    const markers: Billboard[] = [];
-    // The batch as it was handed over, in true metres, for the same reason a line batch keeps its
-    // own: a new factor puts every marker at a new height and nobody hands them over again.
-    let items: readonly Scene3DMarker[] = [];
+    // Each marker with what it was drawn from, in true metres, for the same reason a line batch
+    // keeps its own: a new factor puts a marker at a new height and nobody hands it over again.
+    const markers: { billboard: Billboard; item: Scene3DMarker }[] = [];
     let opacity = 1;
     const clear = () => {
       collection.removeAll();
       markers.length = 0;
     };
-    const addAll = () => {
+    const addAll = (items: readonly Scene3DMarker[]) => {
       for (const item of items) {
-        markers.push(
-          collection.add({
+        markers.push({
+          item,
+          billboard: collection.add({
             position: this.toDrawnCartesian(item.position),
             image: item.image,
             scale: item.scale ?? 1,
@@ -2707,37 +2743,35 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
             color: Color.WHITE.withAlpha(opacity),
             id: item.id,
           }),
-        );
+        });
       }
     };
-    const layOut = () => {
-      clear();
-      addAll();
+    // Moved where they stand, as lines are. One on the ground is on the ground at every factor.
+    const restretch = () => {
+      for (const { billboard, item } of markers) {
+        if (!item.clampToGround) {
+          billboard.position = this.toDrawnCartesian(item.position);
+        }
+      }
     };
-    this.drawnHeightLayouts.add(layOut);
+    this.heightRestretches.add(restretch);
     return this.registerVectorSource<Scene3DMarker>(
       id,
-      () => {
-        items = [];
-        clear();
-      },
-      (next) => {
-        items = next;
-        addAll();
-      },
+      clear,
+      addAll,
       (visible) => {
         collection.show = visible;
       },
       (next) => {
         opacity = next;
-        for (const marker of markers) {
+        for (const { billboard } of markers) {
           // Assigned rather than mutated: the batch keeps colours in a GPU buffer and only the
           // property setter tells it that one of them has moved.
-          marker.color = Color.WHITE.withAlpha(next);
+          billboard.color = Color.WHITE.withAlpha(next);
         }
       },
       () => {
-        this.drawnHeightLayouts.delete(layOut);
+        this.heightRestretches.delete(restretch);
         this.widget.scene.primitives.remove(collection);
       },
     );

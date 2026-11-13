@@ -1610,6 +1610,25 @@ class FakeGlobe {
   drawnExaggeration = 1;
 
   /**
+   * The library's own tree of surface tiles, as much of it as the scene reaches — not on the
+   * published surface. Each loaded tile keeps the ground heights it found under markers laid on
+   * the ground, keyed by place and not by factor, until something empties them.
+   */
+  readonly _surface = {
+    loadedTiles: [0, 1].map(() => ({
+      positionCacheClears: 0,
+      clearPositionCache() {
+        this.positionCacheClears += 1;
+      },
+    })),
+    forEachLoadedTile(visit: (tile: { clearPositionCache(): void }) => void) {
+      for (const tile of this.loadedTiles) {
+        visit(tile);
+      }
+    },
+  };
+
+  /**
    * Height of the ground as drawn: what a test arranged in `terrainHeight` or `terrainHeightAt` is
    * the ground's true height, and the real globe answers from its stretched surface.
    */

@@ -4063,6 +4063,23 @@ describe('vertical exaggeration', () => {
     session.release();
   });
 
+  it('makes the library look for the ground under markers again when the factor changes', () => {
+    // Every surface tile keeps the ground it found under a marker laid on the ground, keyed by the
+    // place and not by the factor; left alone, it hands the old factor's ground back after a change.
+    const session = acquire();
+    const tiles = scene().globe._surface.loadedTiles;
+
+    session.engine.setVerticalExaggeration(1);
+    expect(tiles.map((tile) => tile.positionCacheClears)).toEqual([0, 0]);
+
+    session.engine.setVerticalExaggeration(2);
+    expect(tiles.map((tile) => tile.positionCacheClears)).toEqual([1, 1]);
+
+    session.engine.setVerticalExaggeration(2);
+    expect(tiles.map((tile) => tile.positionCacheClears)).toEqual([1, 1]);
+    session.release();
+  });
+
   it('does not put a removed batch back when the factor changes', () => {
     const session = acquire();
     const source = session.engine.createPolylineSource('lines');
