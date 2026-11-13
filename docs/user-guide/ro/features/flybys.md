@@ -17,10 +17,10 @@ Este oferit oriunde se află vizualizarea 3D — pagina **Vizualizare 3D**, scen
 scena dintr-o fereastră proprie — oricui este autentificat.
 
 > **Ce poate face un survol astăzi.** Poate fi redat în vizualizare; poate schimba în timpul
-> zborului hărțile de bază, straturile și culorile peșterilor; poate scrie peste imagine un titlu,
-> legende și un carton de final; poate fi redat pe un ecran curat ca să îl înregistrezi cu alt
-> program; poate fi scris într-un fișier film chiar de SilexGIS; și poate fi păstrat sau transmis
-> ca fișier. Încă nefăcută: exagerarea reliefului în timpul zborului.
+> zborului hărțile de bază, straturile, culorile peșterilor și înălțimea reliefului; poate scrie
+> peste imagine un titlu, legende și un carton de final; poate fi redat pe un ecran curat ca să îl
+> înregistrezi cu alt program; poate fi scris într-un fișier film chiar de SilexGIS; și poate fi
+> păstrat sau transmis ca fișier.
 
 ---
 
@@ -162,6 +162,7 @@ aici, fie lăsată **cum o ai**.
 | **Drumuirile într-o singură culoare** | În locul culorilor după adâncime |
 | **Terenul peste peșteri** | Desenat peste peșteri sau decupat deasupra peșterii |
 | **Alege obiectivul** | Cât de largă este imaginea, de la 10° la 100° pe latura ei mai lungă (al scenei este de 60°). Un obiectiv îngust, de departe, turtește un munte ca un zid în spatele peșterii; unul larg cuprinde o vale de aproape |
+| **Stabilește exagerarea verticală** | Relieful desenat de atâtea ori mai înalt decât în realitate, de la ×0,5 la ×5 — terenul, peșterile și camera împreună, ca setarea **Relief** din panoul straturilor. Lăsată cum o ai, survolul începe cu setarea ta (sau cu cea a unei vederi salvate pe care ai deschis-o) |
 
 **Schimbări gata făcute** — seturi de schimbări în timp, scrise dintr-o apăsare. Adăugat din nou,
 un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
@@ -174,6 +175,7 @@ un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
 | **Hartă veche, hartă nouă** | O hartă georeferențiată apare treptat peste harta de bază în timpul unei secțiuni și dispare din nou |
 | **Luminează peștera vizitată** | Toate peșterile încep estompate — pereții și drumuirile în a doua culoare — iar la fiecare oprire a unui tur peștera vizitată se luminează în prima culoare când camera se îndreaptă spre ea și se estompează din nou când camera pleacă. Într-un tur al peșterilor unui filtru salvat, fiecare dintre ele pe rând |
 | **Obiecte pe rând** | Straturi de obiecte arătate unul după altul: straturile din filtre aflate în lista hărții și cele ale survolului (mai jos). Toate sunt ascunse când începe survolul |
+| **Relieful crește** | În timpul fiecărui ocol — sau al secțiunii pe care o alegi — relieful crește până la factorul dat și revine înainte de sfârșitul secțiunii, la factorul cu care a început survolul: al lui, dacă i-ai stabilit unul, altfel cel pe care îl folosește cine redă survolul |
 
 **Obiecte arătate de survol** — straturi de obiecte pe care survolul le desenează singur, fără
 să adaugi mai întâi un strat din filtru pe harta plană. Fiecare este ales **după tip** — unul sau
@@ -193,8 +195,9 @@ hărțile georeferențiate, fișierele importate, straturile din filtre — poat
 aparține, la câte secunde de la începutul secțiunii pornește și cât durează. Corectează numerele
 sau șterge o schimbare. **Adaugă o schimbare** scrie una de mână: ce se schimbă (harta de bază,
 intensitatea ei, un strat afișat sau ascuns, intensitatea unui strat, culoarea pereților,
-culoarea drumuirilor, terenul peste peșteri, cerul, obiectivul — un zoom cu camera pe loc), în ce, în timpul cărei secțiuni, la câte
-secunde de la începutul ei și cât durează. O schimbare aparține secțiunii ei, așa că o secțiune făcută mai lentă sau
+culoarea drumuirilor, terenul peste peșteri, cerul, obiectivul — un zoom cu camera pe loc —,
+relieful, trecut treptat de la factorul în vigoare la cel dat sau **înapoi la cel de la începutul
+survolului**), în ce, în timpul cărei secțiuni, la câte secunde de la începutul ei și cât durează. O schimbare aparține secțiunii ei, așa că o secțiune făcută mai lentă sau
 mai rapidă își mută schimbările cu ea. Drumuirile și terenul peste peșteri se schimbă dintr-o dată,
 nu treptat. Două schimbări ale aceluiași lucru în același timp sunt semnalate, iar survolul nu
 poate fi redat până când una nu este mutată.
@@ -204,7 +207,10 @@ poate fi redat până când una nu este mutată.
 final** arătat până în ultimul moment, iar imaginea poate apărea din negru la început și se poate
 stinge în negru la final. O **săgeată a nordului** în colțul din dreapta sus se rotește odată cu
 camera, iar **un rând de text în colț** — numele unui club, o dată — stă în stânga sus pe tot
-survolul. Sunt desenate peste scenă proporțional cu mărimea ei, fac parte din ce arată ecranul
+survolul. Cât timp relieful nu este desenat la înălțimea lui reală — de survol sau de setarea ta —
+colțul din stânga sus o spune, cu litere mici: *Relief ×2*. Un versant exagerat arată ca unul
+real, așa că o imagine a lui spune că este exagerat; debifează **Scrie „Relief ×2” într-un colț
+cât timp relieful este exagerat** ca să nu apară. Sunt desenate peste scenă proporțional cu mărimea ei, fac parte din ce arată ecranul
 curat și sunt în fiecare cadru al unui film.
 
 Trasă înapoi, poziția anulează ce a schimbat survolul după acel moment, exact cum redarea înainte
@@ -351,6 +357,12 @@ datelor browserului pentru acest site le elimină — pentru asta există fișie
 - **Un calculator lent.** Un survol este redat în timp real. Pe un calculator fără placă grafică
   scena desenează doar câteva cadre pe secundă, iar zborul arată ca atare — camera este mereu în
   locul potrivit pentru acel moment, doar că este văzută mai rar.
+- **Relieful în timpul zborului.** O schimbare a reliefului redesenează tot ce are o înălțime —
+  terenul, pereții, fiecare drumuire — la fiecare cadru cât timp durează. Pe datele demonstrative,
+  o creștere a reliefului redată în direct a desenat tot atâtea cadre pe secundă cât același zbor
+  fără ea; o scenă plină de topografii mari poate desena mai puține cât timp relieful se schimbă.
+  Un film nu este afectat: fiecare cadru al lui este desenat pentru momentul lui. Când survolul se
+  oprește, relieful revine la setarea ta — survolul nu o schimbă niciodată.
 - **Un tur lung.** Pregătirea vizitează fiecare peșteră care nu este încă desenată, apoi traseul.
   Douăsprezece peșteri cu traseul încărcat pot lua câteva minute înainte de primul cadru.
 - **Urmarea unei linii.** O secțiune care urmează o drumuire sau un traseu zboară mai întâi la

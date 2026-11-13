@@ -15,11 +15,10 @@ ready-made flight to use, change any part of it you like, press **Play**, and wa
 It is offered wherever the 3D view is — the **3D view** page, the scene beside the map, and the
 scene in a window of its own — to anybody who is signed in.
 
-> **What a flyby can do today.** Play in the view; change the background maps, the layers and
-> the caves' colours during the flight; write a title, captions and an end card over it; play on
-> a clean screen for you to record with another program; be written to a movie file by SilexGIS
-> itself; and be kept and exchanged as a file. Not built yet: stretching the relief during a
-> flight.
+> **What a flyby can do today.** Play in the view; change the background maps, the layers, the
+> caves' colours and the height of the relief during the flight; write a title, captions and an
+> end card over it; play on a clean screen for you to record with another program; be written to
+> a movie file by SilexGIS itself; and be kept and exchanged as a file.
 
 ---
 
@@ -157,6 +156,7 @@ here or left **as you have it**.
 | **Survey lines in one colour** | Instead of their colours by depth |
 | **Ground over the caves** | Drawn over the caves, or cut away above the cave |
 | **Set the lens** | How wide the picture is, from 10° to 100° across its wider side (the scene's own is 60°). A narrow lens from far off flattens a mountain into a wall behind the cave; a wide one takes in a valley from close by |
+| **Set the vertical exaggeration** | The relief drawn this many times taller than true, from ×0.5 to ×5 — the ground, the caves and the camera together, as the **Relief** setting of the layers panel does. Left as you have it, the flyby opens at your own setting (or at the one of a saved view you opened) |
 
 **Ready-made changes** — sets of timed changes written in one press. Adding a set again replaces
 the one added before rather than doubling it.
@@ -169,6 +169,7 @@ the one added before rather than doubling it.
 | **Old map, new map** | A georeferenced map fades in over the background during a section and out again |
 | **Light the cave being visited** | Every cave opens dimmed — walls and survey lines in the second colour — and at each stop of a tour the cave being visited lights up in the first colour as the camera heads for it, and dims again as it leaves. In a tour of a saved filter's caves, each of them in turn |
 | **Features in turn** | Layers of features shown one after another: the filter layers on the map's list, and the flyby's own (below). All of them are hidden when the flyby opens |
+| **Grow the relief** | During each circle — or during the one section you pick — the relief rises to the factor you give and falls back before the section ends, to the factor the flyby opened at: its own when you set one, otherwise whatever the person playing it keeps |
 
 **Features the flyby shows** — layers of features the flyby draws itself, without your adding a
 filter layer to the flat map first. Each is chosen **by kind** — one or more kinds of feature from
@@ -188,8 +189,9 @@ georeferenced maps, the imported files, the filter layers — can be **shown**, 
 seconds into that section it starts, and how long it lasts. Correct the numbers or remove a
 change. **Add a change** writes one by hand: what changes (the background map, its strength, a
 layer shown or hidden, a layer's strength, the walls' colour, the survey lines' colour, the
-ground over the caves, the sky, the lens — a zoom while the camera stays where it is), what to, during which section, how many seconds into it, and how
-long it takes. A change belongs to its section, so making a section slower or faster moves its changes
+ground over the caves, the sky, the lens — a zoom while the camera stays where it is —, the relief,
+eased from the factor in force to the one you give or **back to how the flyby opened**), what to,
+during which section, how many seconds into it, and how long it takes. A change belongs to its section, so making a section slower or faster moves its changes
 with it. Survey lines and the ground over the caves change at a single moment, not gradually. Two
 changes of the same thing at the same time are marked, and the flyby will not play until one is
 moved.
@@ -198,7 +200,11 @@ moved.
 **caption** for any section, shown along the bottom while it is flown, an **end card** shown to
 the last moment, and the picture rising out of black at the start and sinking into it at the
 end. A **north arrow** in the top right corner turns as the camera turns, and **a line of text
-in the corner** — a club's name, a date — stays at the top left for the whole flyby. They are
+in the corner** — a club's name, a date — stays at the top left for the whole flyby. While the
+relief is drawn other than at its true height — by the flyby, or by your own setting — the top
+left corner also says so, small: *Relief ×2*. A stretched hillside looks like a real one, so a
+picture of it says it is stretched; untick **Say “Relief ×2” in a corner while the relief is
+stretched** to leave it out. They are
 drawn over the scene in proportion to its size, they are part of what the clean screen shows, and
 they are in every frame of a movie.
 
@@ -340,6 +346,12 @@ site removes them, which is what the file is for.
 - **A slow machine.** A flyby plays in real time. On a machine without a graphics card the
   scene draws only a few frames a second and the flight looks like it — the camera is always in
   the right place for the moment, it is just seen less often.
+- **The relief during a flight.** A change of the relief redraws everything that has a height —
+  the ground, the walls, every survey line — on every frame while it lasts. On the demonstration
+  data a live rise of the relief drew as many frames a second as the same flight without it; a
+  scene full of large surveys may draw fewer while the relief changes. A movie is not affected:
+  each of its frames is drawn for its own moment. When the flyby stops, the relief goes back to
+  your own setting — the flyby never changes it.
 - **A long tour.** Preparing visits every cave that is not yet drawn, then the route. Twelve
   caves with the route loaded can take a couple of minutes before the first frame.
 - **Following a line.** A section that follows a survey or a track first flies to where the line
