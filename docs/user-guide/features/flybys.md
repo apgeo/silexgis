@@ -170,14 +170,15 @@ position to look at any moment.
 
 Every frame is drawn for its own moment of the flyby and handed to the file with its exact time,
 so the movie runs smoothly however slowly your computer draws the scene. A slow computer makes a
-slow export, never a jerky movie.
+slow export, never a jerky movie. The one exception is **Live recording**, below, which you choose
+when you would rather have the file in the flyby's own time.
 
 | Setting | Does |
 |---|---|
 | **Ready-made files** | *HD video* (1280 × 720, 30 frames a second — MP4 where the browser writes it, WebM otherwise), *Reels / TikTok* (1080 × 1920 MP4), *Square post* (1080 × 1080 MP4), *For a chat* (a small GIF). A ready-made file sets the format, size, rate and quality only |
 | **Format** | MP4, WebM or GIF — only what this browser can write is offered. A browser with no video encoder makes GIFs only, and says so |
 | **Frame size**, **Frames a second**, **Quality** | The same sizes and rates as the movie of a tracked trip. A GIF is at most 800 pixels wide and 600 frames long |
-| **How each frame is taken** | **Quick**: each frame is taken as soon as it is drawn, as the live view would show it, map tiles still arriving included. **Fine**: before each frame the scene finishes loading what it shows — no half-loaded ground in any frame, but seconds a frame on a computer without a graphics card. **Fine, larger than the screen**: as Fine, and the scene is drawn at the movie's own size even when that is larger than the box on the screen — the sharpest file, and the slowest. Quick and Fine draw the scene no larger than the box and scale the frame up |
+| **How each frame is taken** | **Quick**: each frame is taken as soon as it is drawn, as the live view would show it, map tiles still arriving included. **Fine**: before each frame the scene finishes loading what it shows — no half-loaded ground in any frame, but seconds a frame on a computer without a graphics card. **Fine, larger than the screen**: as Fine, and the scene is drawn at the movie's own size even when that is larger than the box on the screen — the sharpest file, and the slowest. Quick and Fine draw the scene no larger than the box and scale the frame up. **Live recording** — offered only in browsers with a recorder of their own (Chrome, Edge, Firefox, Safari) — see [Live recording](#live-recording) |
 | **Draft** | Half the size, 8 frames a second (10 for a GIF), taken quickly: to check the timing of a flyby in a fraction of the time |
 | **What to film** | The whole flyby, or a stretch of it from one second of the flyby's clock to another |
 | **Still at the end** | Holds the last moment for that many seconds |
@@ -197,6 +198,25 @@ was too slow.
 
 A long video (more than about 256 MB) is written straight to a file you choose, as it is made,
 in browsers that allow it (Chrome, Edge); elsewhere it is made in memory and then downloaded.
+
+### Live recording
+
+**Live recording** plays the flyby in real time and has the browser's own recorder film it,
+texts and map credits included. It takes exactly as long as the flyby — no longer, however slow
+the computer — but the file holds **what the screen showed, at the speed this computer drew it**:
+
+- On a slow computer the movie stutters. A frame the computer could not draw in time is simply
+  not in the file. After the recording the panel says how many frames were recorded and how many a
+  second that came to, and warns when it is well below the rate you chose.
+- **Frames a second** is the most the recording takes, not a promise.
+- In some browsers (Chrome among them) the file has no length and no seek points: players show
+  it without a total time and may not let you jump about in it.
+- The file is MP4 where the browser records MP4, otherwise WebM. GIF is not offered, and **Draft**
+  makes a frame-exact draft instead.
+- The scene is drawn no larger than its box on the screen, and the frame is scaled up to the
+  movie's size.
+
+For a smooth file whatever the computer, use **Quick** or **Fine**.
 
 - **The map credits are in every frame** and cannot be switched off: the map sources' licences
   require them on any picture of their tiles.

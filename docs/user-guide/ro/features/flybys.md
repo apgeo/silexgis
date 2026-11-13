@@ -174,14 +174,15 @@ poziția ca să vezi orice moment.
 
 Fiecare cadru este desenat pentru propriul lui moment al survolului și dat fișierului cu timpul
 lui exact, așa că filmul curge lin oricât de încet ar desena calculatorul scena. Un calculator
-lent face un export lent, niciodată un film sacadat.
+lent face un export lent, niciodată un film sacadat. Singura excepție este **Înregistrarea în timp
+real**, mai jos, pe care o alegi când vrei fișierul în timpul survolului însuși.
 
 | Setare | Face |
 |---|---|
 | **Fișiere gata pregătite** | *Video HD* (1280 × 720, 30 de cadre pe secundă — MP4 unde browserul îl scrie, altfel WebM), *Reels / TikTok* (MP4 de 1080 × 1920), *Postare pătrată* (MP4 de 1080 × 1080), *Pentru chat* (un GIF mic). Un fișier gata pregătit schimbă doar formatul, mărimea, ritmul și calitatea |
 | **Format** | MP4, WebM sau GIF — este oferit doar ce poate scrie acest browser. Un browser fără codor video face doar GIF-uri și spune asta |
 | **Dimensiunea cadrului**, **Cadre pe secundă**, **Calitate** | Aceleași mărimi și ritmuri ca la filmul unei ture urmărite. Un GIF are cel mult 800 de pixeli lățime și 600 de cadre |
-| **Cum este luat fiecare cadru** | **Rapid**: fiecare cadru este luat imediat ce este desenat, cum l-ar arăta vizualizarea în timp real, cu plăcile hărții încă sosind. **Fin**: înaintea fiecărui cadru scena termină de încărcat ce arată — niciun cadru cu teren pe jumătate încărcat, dar secunde pe cadru pe un calculator fără placă grafică. **Fin, mai mare decât ecranul**: ca Fin, iar scena este desenată la mărimea filmului chiar când aceasta e mai mare decât cadrul de pe ecran — cel mai clar fișier și cel mai lent. Rapid și Fin desenează scena cel mult cât cadrul de pe ecran și măresc imaginea |
+| **Cum este luat fiecare cadru** | **Rapid**: fiecare cadru este luat imediat ce este desenat, cum l-ar arăta vizualizarea în timp real, cu plăcile hărții încă sosind. **Fin**: înaintea fiecărui cadru scena termină de încărcat ce arată — niciun cadru cu teren pe jumătate încărcat, dar secunde pe cadru pe un calculator fără placă grafică. **Fin, mai mare decât ecranul**: ca Fin, iar scena este desenată la mărimea filmului chiar când aceasta e mai mare decât cadrul de pe ecran — cel mai clar fișier și cel mai lent. Rapid și Fin desenează scena cel mult cât cadrul de pe ecran și măresc imaginea. **Înregistrare în timp real** — oferită doar în browserele cu un înregistrator propriu (Chrome, Edge, Firefox, Safari) — vezi [Înregistrarea în timp real](#înregistrarea-în-timp-real) |
 | **Ciornă** | Jumătate din mărime, 8 cadre pe secundă (10 pentru un GIF), luate rapid: ca să verifici ritmul unui survol într-o fracțiune din timp |
 | **Ce se filmează** | Tot survolul sau o porțiune din el, de la o secundă a ceasului survolului la alta |
 | **Imagine fixă la sfârșit** | Ține ultimul moment atâtea secunde |
@@ -202,6 +203,26 @@ fost prea lent.
 Un film video lung (mai mult de aproximativ 256 MB) este scris direct într-un fișier ales de tine,
 pe măsură ce se face, în browserele care permit asta (Chrome, Edge); în rest este făcut în
 memorie și apoi descărcat.
+
+### Înregistrarea în timp real
+
+**Înregistrare în timp real** redă survolul în timp real și îl filmează chiar înregistratorul
+browserului, cu texte și mențiuni de sursă cu tot. Durează exact cât survolul — nu mai mult, oricât
+de lent ar fi calculatorul — dar fișierul conține **ce a arătat ecranul, cu viteza cu care l-a
+desenat acest calculator**:
+
+- Pe un calculator lent filmul sacadează. Un cadru pe care calculatorul nu l-a putut desena la timp
+  pur și simplu lipsește din fișier. După înregistrare panoul spune câte cadre s-au înregistrat și
+  câte pe secundă a însemnat asta, și avertizează când e mult sub ritmul ales.
+- **Cadre pe secundă** este cel mult cât ia înregistrarea, nu o promisiune.
+- În unele browsere (printre ele Chrome) fișierul nu are durată și nici puncte de derulare:
+  playerele îl arată fără timp total și s-ar putea să nu te lase să sari prin el.
+- Fișierul este MP4 unde browserul înregistrează MP4, altfel WebM. GIF nu este oferit, iar
+  **Ciornă** face în locul ei o ciornă cadru cu cadru.
+- Scena este desenată cel mult cât cadrul ei de pe ecran, iar imaginea este mărită la mărimea
+  filmului.
+
+Pentru un fișier fluent pe orice calculator, folosește **Rapid** sau **Fin**.
 
 - **Mențiunile de sursă ale hărților sunt în fiecare cadru** și nu pot fi oprite: licențele
   surselor de hărți le cer pe orice imagine a plăcilor lor.
