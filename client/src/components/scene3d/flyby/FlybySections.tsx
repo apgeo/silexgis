@@ -47,7 +47,16 @@ const SECTION_SPEEDS = [0.25, 0.5, 1, 2, 4];
 const BEFORE = 'before';
 
 /** The section problems the list says beside the section they are about. */
-const SECTION_PROBLEMS = new Set(['badSeconds', 'badSpeed', 'badRange', 'badPitch', 'badPose', 'unknownSubject', 'duplicateSection']);
+const SECTION_PROBLEMS = new Set([
+  'badSeconds',
+  'badSpeed',
+  'badRange',
+  'badPitch',
+  'badPose',
+  'unknownSubject',
+  'duplicateSection',
+  'badEach',
+]);
 
 export interface FlybySectionsProps {
   document: FlybyDocument;
@@ -93,7 +102,12 @@ export default function FlybySections({ document, current, busy, subjectLabel, o
             >
               <span className="scene3d-flyby-section-name">
                 {kindName(section.kind)}
-                <Typography.Text type="secondary"> · {subjectLabel(section.subject)}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {' · '}
+                  {section.each
+                    ? t('flyby.byFilter.eachOf', { name: subjectLabel(section.subject) })
+                    : subjectLabel(section.subject)}
+                </Typography.Text>
               </span>
               <InputNumber
                 size="small"

@@ -100,6 +100,11 @@ export interface FlybyWorld {
    * it cannot be read. Left out of a world that cannot say.
    */
   fileLines?(geofileId: string): Promise<{ bounds: Scene3DBounds; lines: { longitude: number; latitude: number }[][] } | undefined>;
+  /**
+   * The caves a saved filter keeps for this reader, at most `limit`, in the order the filter gives;
+   * undefined when the filter cannot be run for them. Left out of a world that cannot say.
+   */
+  filterCaves?(savedFilterId: string, limit: number): Promise<string[] | undefined>;
 }
 
 /** The smallest subject a camera is asked to circle: a short cave is still stood back from. */
@@ -257,6 +262,9 @@ export async function resolveSubject(
       }
       return sized(view.target, view.distance * VIEW_RADIUS_RATIO, 0, false);
     }
+    case 'filter':
+      // Its caves, each found as a cave, are what it stands for: see `expandFlyby`.
+      return undefined;
     case 'place': {
       if (subject.height !== undefined) {
         // A captured view: the point it looked at and how far the eye stood from it, exactly — a

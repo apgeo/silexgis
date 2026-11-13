@@ -239,7 +239,8 @@ export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubjec
       return subjects.length >= 1;
     case 'aroundSeveral':
     case 'tour':
-      return subjects.length >= 2;
+      // A saved filter's caves are several, however many it turns out to keep for the reader.
+      return subjects.length >= 2 || subjects[0]?.kind === 'filter';
   }
 }
 
@@ -248,7 +249,7 @@ export function presetFor(subjects: readonly FlybySubject[]): FlybyPresetId {
   if (subjects[0]?.kind === 'file') {
     return 'alongLine';
   }
-  if (subjects.length >= 2) {
+  if (subjects.length >= 2 || subjects[0]?.kind === 'filter') {
     return 'tour';
   }
   return subjects[0]?.kind === 'cave' ? 'aroundCave' : 'aroundArea';
@@ -351,7 +352,52 @@ function aroundSeveral(options: FlybyPresetOptions): Built {
   };
 }
 
+/** The stops of a tour of one cave: circling it, below it if asked, and a pause over it if asked. */
+function atCave(subject: number, options: FlybyPresetOptions, id: (kind: string) => string, circling: FlybyFullPose): FlybySection[] {
+  const sign = options.clockwise ? 1 : -1;
+  return [
+    { id: id('orbit'), kind: 'orbit', subject, seconds: orbitSeconds(options), to: { headingBy: sign * 360 * options.turns } },
+    ...(options.underground ? dive(subject, sign, id, circling) : []),
+    ...(options.pauseSeconds > 0
+      ? [
+          {
+            // Still over the cave for a moment, saying what it is if that was asked for.
+            id: id('hold'),
+            kind: 'hold' as const,
+            subject,
+            seconds: options.pauseSeconds,
+            to: {},
+            ...(options.pauseSay !== 'none' ? { say: options.pauseSay } : {}),
+          },
+        ]
+      : []),
+  ];
+}
+
+/**
+ * A tour of the caves a saved filter keeps, written once for all of them: from above the lot, for
+ * each cave a hop over and the stops at it, and back out to the lot. The caves are not known here —
+ * they are asked for when the flyby is prepared — so the stops are marked to be flown for each.
+ */
+function filterTour(options: FlybyPresetOptions): Built {
+  const sign = options.clockwise ? 1 : -1;
+  const id = numbered();
+  const circling: FlybyFullPose = { heading: 0, pitch: -32, range: 2.8, lift: 0, clearance: CAVE_CLEARANCE };
+  const hop: FlybySection = { id: id('hop'), kind: 'hop', subject: 0, seconds: 8, to: { headingBy: sign * 50, pitch: circling.pitch, range: circling.range, lift: 0, clearance: CAVE_CLEARANCE } };
+  const stops = [hop, ...atCave(0, options, id, circling)].map((section): FlybySection => ({ ...section, each: true }));
+  return {
+    start: { subject: 0, pose: { heading: 0, pitch: -40, range: 2.2, lift: 0, clearance: AREA_CLEARANCE } },
+    sections: [
+      ...stops,
+      { id: id('rise'), kind: 'rise', subject: 0, seconds: 8, to: { headingBy: sign * 60, pitch: -40, range: 2.2, lift: 0, clearance: AREA_CLEARANCE }, rest: true },
+    ],
+  };
+}
+
 function tour(subjects: readonly FlybySubject[], options: FlybyPresetOptions): Built {
+  if (subjects.length === 1 && subjects[0].kind === 'filter') {
+    return filterTour(options);
+  }
   const sign = options.clockwise ? 1 : -1;
   const id = numbered();
   const circling: FlybyFullPose = { heading: 0, pitch: -32, range: 2.8, lift: 0, clearance: CAVE_CLEARANCE };
@@ -362,27 +408,7 @@ function tour(subjects: readonly FlybySubject[], options: FlybyPresetOptions): B
         ? { id: id('approach'), kind: 'approach', subject: 0, seconds: 6, to: { headingBy: sign * 50, pitch: circling.pitch, range: circling.range, lift: 0 } }
         : { id: id('hop'), kind: 'hop', subject: index, seconds: 8, to: { headingBy: sign * 50, pitch: circling.pitch, range: circling.range, lift: 0, clearance: CAVE_CLEARANCE } },
     );
-    sections.push({
-      id: id('orbit'),
-      kind: 'orbit',
-      subject: index,
-      seconds: orbitSeconds(options),
-      to: { headingBy: sign * 360 * options.turns },
-    });
-    if (options.underground) {
-      sections.push(...dive(index, sign, id, circling));
-    }
-    if (options.pauseSeconds > 0) {
-      // Still over the cave for a moment, saying what it is if that was asked for.
-      sections.push({
-        id: id('hold'),
-        kind: 'hold',
-        subject: index,
-        seconds: options.pauseSeconds,
-        to: {},
-        ...(options.pauseSay !== 'none' ? { say: options.pauseSay } : {}),
-      });
-    }
+    sections.push(...atCave(index, options, id, circling));
   });
   // And back out to all of them at once, which is the picture a tour is remembered by.
   sections.push({

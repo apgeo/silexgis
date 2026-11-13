@@ -19,6 +19,21 @@ import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 
 // The two reads the tool makes of the server: a cave's name for the panel, and where a cave is
 // when nothing of it is drawn. Both answered from here, so no request leaves the test.
+const { SAVED_FILTERS, asked, filterAnswer } = vi.hoisted(() => ({
+  SAVED_FILTERS: [
+    {
+      id: 'f0000000-0000-4000-8000-000000000001',
+      name: 'Deep caves',
+      state: 'ready',
+      document: { version: 1, scope: [{ world: 'feature', where: null }], sort: 'title', descending: false },
+    },
+    { id: 'f0000000-0000-4000-8000-000000000002', name: 'Broken', state: 'unreadable', document: null },
+  ],
+  /** What the tool asked the filter route. */
+  asked: [] as unknown[],
+  /** Whether the filter route answers with nothing, as for a reader who may see none of the caves. */
+  filterAnswer: { empty: false },
+}));
 vi.mock('../../../api/hooks.ts', () => ({
   useCaveNames: (ids: readonly string[]) =>
     new Map(ids.filter((id) => id !== 'unnamed').map((id) => [id, `Cave ${id.toUpperCase()}`])),
@@ -41,7 +56,24 @@ vi.mock('../../../api/hooks.ts', () => ({
   useRasterMaps: () => ({ data: { items: [] } }),
   // One imported file, which a flyby along a line can follow.
   useGeofiles: () => ({ data: { items: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] } }),
-  useSavedFilters: () => ({ data: [] }),
+  // One saved filter that can be run and one that no longer can; the first keeps caves b and a.
+  useSavedFilters: () => ({ data: SAVED_FILTERS }),
+  savedFiltersQuery: () => ({ queryKey: ['saved-filters'], queryFn: async () => SAVED_FILTERS }),
+  filterQueryOptions: (body: { document: unknown; pageSize: number }) => ({
+    queryKey: ['filter-query', body],
+    queryFn: async () => {
+      asked.push(body);
+      const hits = filterAnswer.empty ? [] : ['b', 'a'].slice(0, body.pageSize);
+      return { worlds: [{ world: 'feature', hits: hits.map((id) => ({ world: 'feature', id })) }] };
+    },
+  }),
+  // A search that finds one cave by any name, and an entrance beside it that is not one.
+  useSearch: (q: string) => ({
+    data:
+      q.trim().length >= 2
+        ? { features: [{ id: 'far', kind: 'cave', name: 'Far cave', subtitle: null }, { id: 'e1', kind: 'caveEntrance', name: 'An entrance', subtitle: null }] }
+        : undefined,
+  }),
   geofileQuery: (id: string) => ({
     queryKey: ['geofile', id],
     queryFn: async () => ({ id, bbox: { type: 'Polygon', coordinates: [[[25, 45.5], [25.02, 45.5], [25.02, 45.51], [25, 45.51], [25, 45.5]]] } }),
@@ -794,6 +826,93 @@ describe('the furniture of the frame', () => {
     expect(overlay.dataset.shown).toBe('north corner');
     fireEvent.click(screen.getByTestId('flyby-stop'));
     expect(overlay.dataset.shown).toBe('');
+  });
+});
+
+describe('what a flyby is about, found by a saved filter or by name', () => {
+  afterEach(() => {
+    asked.length = 0;
+    filterAnswer.empty = false;
+  });
+
+  it('tours the caves a saved filter keeps, asked for only when it is played, and keeps only the filter', async () => {
+    renderFlyby(fakeScene([drawnCave, { caveId: 'b', bounds: [25.1, 45.5, 25.104, 45.504], top: 900, bottom: 850 }]), null);
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves a saved filter selects' }));
+    // Only a filter that can be run is offered.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'The saved filter' }));
+    expect(screen.queryByTitle('Broken')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Deep caves'));
+    expect(screen.getByRole('spinbutton', { name: 'At most' })).toHaveValue('12');
+    expect(screen.getByTestId('flyby-preset')).toHaveTextContent('Cave tour');
+    fireEvent.click(screen.getByText('3 sections'));
+    const names = Array.from(
+      screen.getByTestId('flyby-sections').querySelectorAll('.scene3d-flyby-section-name'),
+      (node) => node.textContent,
+    );
+    expect(names).toEqual([
+      'Over to · each of the caves of “Deep caves”',
+      'Circle · each of the caves of “Deep caves”',
+      'Back up · the caves of “Deep caves”',
+    ]);
+    // Nothing is asked until the flyby is played.
+    expect(asked).toEqual([]);
+
+    fireEvent.change(screen.getByTestId('flyby-turns'), { target: { value: '0.25' } });
+    fireEvent.blur(screen.getByTestId('flyby-turns'));
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    expect(status()).toBe('playing');
+    // Its caves, asked for this reader, at most the number given, in the filter's order.
+    expect(asked).toEqual([
+      expect.objectContaining({
+        pageSize: 12,
+        document: expect.objectContaining({
+          sort: 'title',
+          scope: [{ world: 'feature', where: { node: 'condition', field: 'kind', op: 'equals', values: [{ type: 'id', value: 'cave' }] } }],
+        }),
+      }),
+    ]);
+    // Two caves of a hop and a quarter circle, then the rise: 2 × (8 + 6) + 8 seconds.
+    expect(screen.getByTestId('flyby-time')).toHaveTextContent('/ 0:36');
+    // The panel marks the section being flown as written: the hop over, for the second cave too.
+    await pass(15_000);
+    expect(screen.getByTestId('flyby-sections').querySelector('.scene3d-flyby-section-current')?.textContent).toContain('Over to');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+
+    // Kept, it names the filter and the number, and none of the caves.
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'By filter' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    const kept = useFlybyStore.getState().library[0];
+    expect(kept.subjects).toEqual([{ kind: 'filter', savedFilterId: 'f0000000-0000-4000-8000-000000000001', limit: 12 }]);
+    expect(JSON.stringify(kept)).not.toMatch(/"caveId"/);
+  });
+
+  it('says so when the filter keeps no cave the reader may see, and gives the camera back', async () => {
+    filterAnswer.empty = true;
+    const { scene } = renderFlyby(fakeScene(), null);
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves a saved filter selects' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'The saved filter' }));
+    fireEvent.click(screen.getByTitle('Deep caves'));
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    expect(screen.getByTestId('flyby-problem')).toHaveTextContent('selects no cave you may see');
+    expect(scene.camera()).toEqual(HOME);
+    expect(status()).toBe('idle');
+  });
+
+  it('adds a cave found by its name to the tour, though the view does not show it', async () => {
+    renderFlyby(fakeScene(), null);
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves in view' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Add a cave by name' }), { target: { value: 'Far' } });
+    await pass(400);
+    // A cave is offered; an entrance found by the same words is not.
+    expect(screen.queryByText('An entrance')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Far cave'));
+    expect(screen.getByRole('checkbox', { name: 'Cave FAR' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Cave A' })).toBeChecked();
+    // Two caves ticked: a tour of both, the one found by name last.
+    fireEvent.click(screen.getByText('5 sections'));
+    expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Over to · Cave FAR');
   });
 });
 

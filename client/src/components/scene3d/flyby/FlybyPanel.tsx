@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   CloseOutlined,
   DeleteOutlined,
@@ -8,12 +8,15 @@ import {
   NodeIndexOutlined,
   ReloadOutlined,
   SaveOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
-import { Alert, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
+import { Alert, AutoComplete, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useCaveNames, useGeofiles } from '../../../api/hooks.ts';
+import { useCaveNames, useGeofiles, useSavedFilters, useSearch } from '../../../api/hooks.ts';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
 import { saveBlob } from '../../../api/download.ts';
 import {
+  FLYBY_FILTER_LIMIT,
   FLYBY_PRESETS,
   FLYBY_SPEED_RANGE,
   flybyHoldsPlace,
@@ -52,6 +55,8 @@ function troubleText(trouble: FlybyTrouble, t: (key: string, values?: Record<str
         : t('flyby.trouble.problems');
     case 'missing':
       return t('flyby.trouble.missing');
+    case 'emptyFilter':
+      return t('flyby.byFilter.empty');
     case 'noScene':
       return t('flyby.trouble.noScene');
     case 'badFile':
@@ -59,6 +64,38 @@ function troubleText(trouble: FlybyTrouble, t: (key: string, values?: Record<str
     case 'failed':
       return t('flyby.trouble.failed', { detail: trouble.detail });
   }
+}
+
+/**
+ * A box that finds caves by name, as the search over the map does, and adds the one picked to the
+ * tour's list: a cave the view does not show is as good a stop as one it does.
+ */
+function CaveSearch({ onPick, disabled }: { onPick(caveId: string): void; disabled: boolean }) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState('');
+  const debounced = useDebouncedValue(query);
+  const { data: results } = useSearch(debounced);
+  const caves = (results?.features ?? []).filter((feature) => feature.kind === 'cave');
+  return (
+    <AutoComplete
+      size="small"
+      value={query}
+      onChange={setQuery}
+      onSelect={(caveId: string) => {
+        onPick(caveId);
+        setQuery('');
+      }}
+      disabled={disabled}
+      options={caves.map((cave) => ({
+        value: cave.id,
+        label: cave.subtitle ? `${cave.name ?? t('flyby.unnamedCave')} — ${cave.subtitle}` : (cave.name ?? t('flyby.unnamedCave')),
+      }))}
+      notFoundContent={debounced.trim().length >= 2 && results ? t('flyby.byFilter.searchNone') : undefined}
+      data-testid="flyby-cave-search"
+    >
+      <Input prefix={<SearchOutlined />} placeholder={t('flyby.byFilter.search')} aria-label={t('flyby.byFilter.search')} />
+    </AutoComplete>
+  );
 }
 
 /**
@@ -85,6 +122,7 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   const namedIds = [
     ...new Set([
       ...flyby.caves.map((cave) => cave.caveId),
+      ...flyby.checked,
       ...(document?.subjects.flatMap((subject) => (subject.kind === 'cave' ? [subject.caveId] : [])) ?? []),
     ]),
   ];
@@ -94,6 +132,16 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   const files = (geofilePage?.items ?? []).filter((file) => file.importStatus === 'imported');
   const caveLabel = (caveId: string) =>
     caveNames.get(caveId) ?? flyby.caves.find((cave) => cave.caveId === caveId)?.label ?? t('flyby.unnamedCave');
+  // The saved filters this account may run: what a flyby about "the caves a filter keeps" picks from.
+  const { data: savedFilters } = useSavedFilters();
+  const runnable = (savedFilters ?? []).filter((filter) => filter.state === 'ready');
+  const filterName = (savedFilterId: string) =>
+    savedFilters?.find((filter) => filter.id.toLowerCase() === savedFilterId.toLowerCase())?.name;
+  // The caves in view, then those ticked that are not: found by name, or named by a flyby opened.
+  const listed = [
+    ...flyby.caves.map((cave) => cave.caveId),
+    ...flyby.checked.filter((caveId) => !flyby.caves.some((cave) => cave.caveId === caveId)),
+  ];
 
   const subjectLabel = (ref: FlybySubjectRef): string => {
     if (ref === 'all') {
@@ -109,6 +157,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         return t('flyby.subject.view');
       case 'file':
         return files.find((file) => file.id === subject.geofileId)?.name ?? t('flyby.subject.file');
+      case 'filter':
+        return t('flyby.byFilter.subject', { name: filterName(subject.savedFilterId) ?? t('flyby.byFilter.unknown') });
       case 'place':
         // A view captured from the camera is called by its place in the list of views.
         return subject.height !== undefined ? t('flyby.views.name', { number: ref + 1 }) : t('flyby.subject.place');
@@ -136,6 +186,7 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   const sourceOptions: { value: FlybySource; label: string; disabled?: boolean }[] = [
     { value: 'selected', label: t('flyby.source.selected'), disabled: !flyby.selectedSubject },
     { value: 'inView', label: t('flyby.source.inView') },
+    { value: 'filter', label: t('flyby.byFilter.source') },
     { value: 'view', label: t('flyby.source.view') },
     { value: 'file', label: t('flyby.source.file') },
   ];
@@ -213,9 +264,46 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
               options={files.map((file) => ({ value: file.id, label: file.name }))}
             />
           ))}
+        {flyby.source === 'filter' && (
+          <div className="scene3d-flyby-caves" data-testid="flyby-by-filter">
+            {runnable.length === 0 ? (
+              <Typography.Text type="secondary">{t('flyby.byFilter.none')}</Typography.Text>
+            ) : (
+              <Select
+                size="small"
+                value={flyby.savedFilterId}
+                onChange={flyby.setSavedFilterId}
+                disabled={busy}
+                placeholder={t('flyby.byFilter.pick')}
+                aria-label={t('flyby.byFilter.pick')}
+                data-testid="flyby-filter"
+                showSearch
+                optionFilterProp="label"
+                options={runnable.map((filter) => ({ value: filter.id, label: filter.name }))}
+              />
+            )}
+            <label className="scene3d-flyby-field">
+              <span>{t('flyby.byFilter.limit')}</span>
+              <InputNumber
+                size="small"
+                min={FLYBY_FILTER_LIMIT.min}
+                max={FLYBY_FILTER_LIMIT.max}
+                step={1}
+                precision={0}
+                value={flyby.filterLimit}
+                onChange={(value) => value !== null && flyby.setFilterLimit(value)}
+                disabled={busy}
+                aria-label={t('flyby.byFilter.limit')}
+                data-testid="flyby-filter-limit"
+              />
+            </label>
+            <Typography.Text type="secondary">{t('flyby.byFilter.hint')}</Typography.Text>
+          </div>
+        )}
         {flyby.source === 'inView' && (
           <div className="scene3d-flyby-caves">
-            {flyby.caves.length === 0 ? (
+            <CaveSearch onPick={flyby.addCave} disabled={busy} />
+            {listed.length === 0 ? (
               <Typography.Text type="secondary">{t('flyby.source.noCaves')}</Typography.Text>
             ) : (
               <Checkbox.Group
@@ -231,9 +319,9 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
                 }}
                 aria-label={t('flyby.source.inView')}
               >
-                {flyby.caves.map((cave) => (
-                  <Checkbox key={cave.caveId} value={cave.caveId} data-testid={`flyby-cave-${cave.caveId}`}>
-                    {caveLabel(cave.caveId)}
+                {listed.map((caveId) => (
+                  <Checkbox key={caveId} value={caveId} data-testid={`flyby-cave-${caveId}`}>
+                    {caveLabel(caveId)}
                   </Checkbox>
                 ))}
               </Checkbox.Group>

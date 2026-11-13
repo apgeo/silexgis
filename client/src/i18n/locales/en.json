@@ -9790,7 +9790,8 @@
         "badPitch": "Its angle is outside what is allowed.",
         "badPose": "A turn, a lift or a height above the ground is outside what is allowed.",
         "unknownSubject": "What it is about is not in this flyby.",
-        "duplicateSection": "Two sections have the same name inside the file."
+        "duplicateSection": "Two sections have the same name inside the file.",
+        "badEach": "It is to be flown for each cave of what it is about, and that is not a saved filter."
       },
       "rangeM": "Distance, in metres"
     },
@@ -9867,6 +9868,19 @@
       "on": "Set the lens",
       "degrees": "Lens, in degrees across the picture",
       "change": "Lens to {{degrees}}°"
+    },
+    "byFilter": {
+      "source": "Caves a saved filter selects",
+      "pick": "The saved filter",
+      "none": "You have no saved filter that can be run. Save one in the filter panel of the map first.",
+      "limit": "At most",
+      "hint": "Which caves, and in what order, is asked when the flyby is played, for whoever plays it: the flyby keeps only the filter and the number.",
+      "subject": "the caves of “{{name}}”",
+      "unknown": "a saved filter",
+      "eachOf": "each of {{name}}",
+      "empty": "The saved filter this flyby is about selects no cave you may see, or can no longer be run.",
+      "search": "Add a cave by name",
+      "searchNone": "No cave by that name"
     }
   },
   "mapSymbols": {

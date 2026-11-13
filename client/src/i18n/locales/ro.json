@@ -9803,7 +9803,8 @@
         "badPitch": "Unghiul ei este în afara limitelor.",
         "badPose": "O rotire, o ridicare sau o înălțime deasupra terenului este în afara limitelor.",
         "unknownSubject": "Subiectul ei nu este în acest survol.",
-        "duplicateSection": "Două secțiuni au același nume în fișier."
+        "duplicateSection": "Două secțiuni au același nume în fișier.",
+        "badEach": "Ar trebui parcursă pentru fiecare peșteră a subiectului său, iar acesta nu este un filtru salvat."
       },
       "rangeM": "Distanță, în metri"
     },
@@ -9880,6 +9881,19 @@
       "on": "Alege obiectivul",
       "degrees": "Obiectiv, în grade pe lățimea imaginii",
       "change": "Obiectiv la {{degrees}}°"
+    },
+    "byFilter": {
+      "source": "Peșterile selectate de un filtru salvat",
+      "pick": "Filtrul salvat",
+      "none": "Nu ai niciun filtru salvat care poate fi rulat. Salvează mai întâi unul din panoul de filtre al hărții.",
+      "limit": "Cel mult",
+      "hint": "Care peșteri și în ce ordine se află abia când survolul este redat, pentru cine îl redă: survolul păstrează doar filtrul și numărul.",
+      "subject": "peșterile din „{{name}}”",
+      "unknown": "un filtru salvat",
+      "eachOf": "fiecare dintre {{name}}",
+      "empty": "Filtrul salvat al acestui survol nu selectează nicio peșteră pe care o poți vedea sau nu mai poate fi rulat.",
+      "search": "Adaugă o peșteră după nume",
+      "searchNone": "Nicio peșteră cu acest nume"
     }
   },
   "mapSymbols": {

@@ -34,7 +34,18 @@ export type FlybySubject =
    * they captured was looking at, which is where `height` comes from — a view can look at a cave
    * under the ground. The one subject that holds coordinates.
    */
-  | { kind: 'place'; longitude: number; latitude: number; radiusM: number; height?: number };
+  | { kind: 'place'; longitude: number; latitude: number; radiusM: number; height?: number }
+  /**
+   * The caves a saved filter selects, at most `limit` of them, in the order the filter gives. Only
+   * the filter's id and the limit are written down: the caves are asked for when the flyby is
+   * prepared, under the rights of whoever plays it, so a flyby kept in a file names none of them
+   * and follows the filter when its author refines it. Taken as a whole, it is all of its caves
+   * together; a section marked `each` is flown once for every one of them.
+   */
+  | { kind: 'filter'; savedFilterId: string; limit: number };
+
+/** How many caves a subject drawn from a saved filter may stand for, and how many it is given at first. */
+export const FLYBY_FILTER_LIMIT = { min: 1, max: 40, initial: 12 } as const;
 
 /** One of the document's subjects by position in its list, or all of them taken as one. */
 export type FlybySubjectRef = number | 'all';
@@ -156,6 +167,12 @@ export interface FlybySection {
   rest?: boolean;
   /** Writes the subject's name — and, if asked, its size — along the bottom while the section lasts. */
   say?: FlybySay;
+  /**
+   * Flown once for each cave its subject — a saved filter's caves — stands for. Consecutive
+   * sections marked so, about the same subject, are one run: the whole run is flown for the first
+   * cave, then the whole run for the next, so a tour of "hop over, circle, stop" is written once.
+   */
+  each?: boolean;
 }
 
 export type FlybyPresetId =
@@ -393,6 +410,10 @@ export const FLYBY_MAX_TURN_DEGREES = 3600;
 /** Why a document cannot be played, in a form the interface can put into words. */
 export type FlybyProblem =
   | { code: 'noSubjects' }
+  /** A subject drawn from a saved filter asks for no caves, or for more than a flyby can visit. */
+  | { code: 'badSubject'; subject: number }
+  /** A section is to be flown for each of its subject's caves, and its subject is not a saved filter's. */
+  | { code: 'badEach'; section: string }
   | { code: 'noSections' }
   | { code: 'unknownSubject'; section?: string }
   | { code: 'badSeconds'; section: string }
@@ -448,6 +469,14 @@ export function flybyProblems(document: FlybyDocument): FlybyProblem[] {
   if (document.subjects.length === 0) {
     problems.push({ code: 'noSubjects' });
   }
+  document.subjects.forEach((subject, index) => {
+    if (
+      subject.kind === 'filter' &&
+      !(Number.isInteger(subject.limit) && subject.limit >= FLYBY_FILTER_LIMIT.min && subject.limit <= FLYBY_FILTER_LIMIT.max)
+    ) {
+      problems.push({ code: 'badSubject', subject: index });
+    }
+  });
   if (document.sections.length === 0) {
     problems.push({ code: 'noSections' });
   }
@@ -466,6 +495,8 @@ export function flybyProblems(document: FlybyDocument): FlybyProblem[] {
     seen.add(section.id);
     if (!subjectExists(document, section.subject)) {
       problems.push({ code: 'unknownSubject', section: section.id });
+    } else if (section.each && (section.subject === 'all' || document.subjects[section.subject]?.kind !== 'filter')) {
+      problems.push({ code: 'badEach', section: section.id });
     }
     if (!(section.seconds >= FLYBY_SECONDS_RANGE.min && section.seconds <= FLYBY_SECONDS_RANGE.max)) {
       problems.push({ code: 'badSeconds', section: section.id });
@@ -706,6 +737,11 @@ function readSubject(value: unknown): FlybySubject | null {
     }
     case 'view':
       return { kind: 'view' };
+    case 'filter': {
+      const savedFilterId = text(bag.savedFilterId, 100);
+      const limit = finite(bag.limit);
+      return savedFilterId && limit !== undefined ? { kind: 'filter', savedFilterId, limit } : null;
+    }
     case 'file': {
       const geofileId = text(bag.geofileId, 100);
       return geofileId ? { kind: 'file', geofileId } : null;
@@ -802,6 +838,9 @@ function readSection(value: unknown): FlybySection | null {
       return null;
     }
     section.say = say;
+  }
+  if (bag.each === true) {
+    section.each = true;
   }
   return section;
 }

@@ -25,6 +25,14 @@ export function useFilterVocabulary() {
   });
 }
 
+/** A filter run as a query object, for code that asks outside React's render under the same key. */
+export function filterQueryOptions(body: FilterQueryBody) {
+  return {
+    queryKey: queryKeys.filterQuery(body),
+    queryFn: () => unwrap(api.POST('/api/v1/filters/query', { body })),
+  };
+}
+
 /**
  * Runs a filter.
  *
@@ -33,8 +41,7 @@ export function useFilterVocabulary() {
  */
 export function useFilterQuery(body: FilterQueryBody, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.filterQuery(body),
-    queryFn: () => unwrap(api.POST('/api/v1/filters/query', { body })),
+    ...filterQueryOptions(body),
     enabled,
     placeholderData: keepPreviousData,
   });

@@ -2,8 +2,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { caveQuery, fetchGeofileFeatureCollection, geofileQuery } from '../../../api/hooks.ts';
 import {
+  caveQuery,
+  fetchGeofileFeatureCollection,
+  filterQueryOptions,
+  geofileQuery,
+  savedFiltersQuery,
+  type FilterQueryBody,
+} from '../../../api/hooks.ts';
+import type { FilterDocument } from '../../../filters/types.ts';
+import {
+  FLYBY_FILTER_LIMIT,
   flybyProblems,
   type FlybyChange,
   type FlybyDocument,
@@ -15,11 +24,15 @@ import {
   type FlybyTexts,
 } from '../../../flyby/flybyDocument.ts';
 import { updateSection } from '../../../flyby/flybyEdit.ts';
+import { expandFlyby, type FlybyExpanded } from '../../../flyby/flybyExpand.ts';
+import { cavesOfFilterDocument, FLYBY_FEATURE_WORLD } from '../../../flyby/flybyFilters.ts';
 import { createFlybyLookStage, type FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 import { createFlybyPlayer, type FlybyPlayer, type FlybyPlayerState, type FlybyStage } from '../../../flyby/flybyPlayer.ts';
 import {
+  FlybyFilterEmpty,
   isFlybyAbort,
   prepareFlyby,
+  resolveFilterGroups,
   settleScene,
   type FlybyPrepareProgress,
   type FlybyPrepareStage,
@@ -77,12 +90,14 @@ export interface FlybyScene {
 }
 
 /** Where the subjects of a flyby being put together come from. */
-export type FlybySource = 'selected' | 'inView' | 'view' | 'file';
+export type FlybySource = 'selected' | 'inView' | 'filter' | 'view' | 'file';
 
 /** What went wrong, in a form the panel puts into words. */
 export type FlybyTrouble =
   | { kind: 'problems'; problems: FlybyProblem[] }
   | { kind: 'missing' }
+  /** A saved filter the flyby is about keeps no cave for this reader, or cannot be run for them. */
+  | { kind: 'emptyFilter' }
   | { kind: 'noScene' }
   | { kind: 'badFile' }
   | { kind: 'failed'; detail: string };
@@ -177,6 +192,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [presetChoice, setPresetChoice] = useState<FlybyPresetId>();
   /** The imported file a flyby along a line follows, when that is what it is about. */
   const [fileId, setFileIdState] = useState<string>();
+  /** The saved filter whose caves a flyby is about, and how many of them at most. */
+  const [savedFilterId, setSavedFilterIdState] = useState<string>();
+  const [filterLimit, setFilterLimitState] = useState<number>(FLYBY_FILTER_LIMIT.initial);
   const [options, setOptionsState] = useState<FlybyPresetOptions>(DEFAULT_FLYBY_PRESET_OPTIONS);
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
@@ -201,8 +219,10 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         return [{ kind: 'view' }];
       case 'file':
         return fileId ? [{ kind: 'file', geofileId: fileId }] : [];
+      case 'filter':
+        return savedFilterId ? [{ kind: 'filter', savedFilterId, limit: filterLimit }] : [];
     }
-  }, [source, selectedSubject, checked, fileId]);
+  }, [source, selectedSubject, checked, fileId, savedFilterId, filterLimit]);
 
   const preset = presetChoice && presetFits(presetChoice, subjects) ? presetChoice : presetFor(subjects);
 
@@ -253,6 +273,19 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const setCheckedCaves = useCallback((next: string[]) => {
     setEdited(null);
     setChecked(next);
+  }, []);
+  /** A cave found by its name, ticked at the end of the list — whether or not it is in view. */
+  const addCave = useCallback((caveId: string) => {
+    setEdited(null);
+    setChecked((current) => (current.includes(caveId) ? current : [...current, caveId]));
+  }, []);
+  const setSavedFilterId = useCallback((next: string | undefined) => {
+    setEdited(null);
+    setSavedFilterIdState(next);
+  }, []);
+  const setFilterLimit = useCallback((next: number) => {
+    setEdited(null);
+    setFilterLimitState(Math.round(Math.min(FLYBY_FILTER_LIMIT.max, Math.max(FLYBY_FILTER_LIMIT.min, next))));
   }, []);
   const setPreset = useCallback((next: FlybyPresetId) => {
     setEdited(null);
@@ -381,6 +414,24 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         );
         return { bounds: box, lines };
       },
+      filterCaves: async (savedFilterId, limit) => {
+        // The filter as this reader may read it: one they may not, or one that can no longer be
+        // run, keeps nothing — never the caves it kept for somebody else.
+        const filters = await queryClient.fetchQuery({ ...savedFiltersQuery(), staleTime: 30_000 }).catch(() => undefined);
+        const saved = filters?.find((filter) => filter.id.toLowerCase() === savedFilterId.toLowerCase());
+        const asked = saved?.state === 'ready' && saved.document ? cavesOfFilterDocument(saved.document as unknown as FilterDocument) : undefined;
+        if (!asked) {
+          return undefined;
+        }
+        const body: FilterQueryBody = {
+          document: asked as unknown as FilterQueryBody['document'],
+          page: 1,
+          pageSize: limit,
+          count: false,
+        };
+        const answer = await queryClient.fetchQuery({ ...filterQueryOptions(body), staleTime: 30_000 }).catch(() => undefined);
+        return answer?.worlds.find((world) => world.world === FLYBY_FEATURE_WORLD)?.hits.map((hit) => hit.id).slice(0, limit);
+      },
       viewTarget: () => {
         const engine = scene.engine();
         if (!engine) {
@@ -432,8 +483,16 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   // ---- playing ----
 
   const playerRef = useRef<{ player: FlybyPlayer; key: string; timeline: FlybyTimeline; unsubscribe(): void } | null>(null);
-  /** The subjects as last found, kept so a change of timing does not send the camera visiting again. */
-  const foundRef = useRef<{ key: string; resolved: (FlybyResolvedSubject | undefined)[] } | null>(null);
+  /**
+   * The subjects as last found, kept so a change of timing does not send the camera visiting again:
+   * with the caves each saved filter kept, which the document is written out for again.
+   */
+  const foundRef = useRef<{
+    key: string;
+    resolved: (FlybyResolvedSubject | undefined)[];
+    filterCaves: Map<number, string[]>;
+  } | null>(null);
+
   const abortRef = useRef<AbortController | null>(null);
   const [playerState, setPlayerState] = useState<FlybyPlayerState>({ status: 'idle', t: 0, section: 0 });
   const [length, setLength] = useState(0);
@@ -500,9 +559,13 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setPreparing(true);
     try {
       let timeline;
+      let expanded: FlybyExpanded;
       if (foundRef.current?.key === subjectsKey) {
         // Same subjects, different timing: the path is rebuilt from where they were found.
-        timeline = compileFlyby(document, foundRef.current.resolved, say);
+        expanded = expandFlyby(document, foundRef.current.filterCaves);
+        const resolved = [...foundRef.current.resolved];
+        resolveFilterGroups(expanded, resolved);
+        timeline = compileFlyby(expanded.document, resolved, say);
       } else {
         const prepared = await prepareFlyby(document, world, stage, {
           loadRoute,
@@ -510,16 +573,29 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
           signal: controller.signal,
           onProgress: setPreparing,
         });
-        foundRef.current = { key: subjectsKey, resolved: prepared.resolved };
+        foundRef.current = { key: subjectsKey, resolved: prepared.resolved, filterCaves: prepared.filterCaves };
+        expanded = prepared.expanded;
         timeline = prepared.timeline;
         setUnsettled(prepared.unsettled);
       }
-      setLineFallbacks(flybyLineFallbacks(document, foundRef.current?.resolved ?? []));
+      const sectionOf = expanded.sectionOf;
+      // Said of the sections as written: one flown for each cave is named once, whichever cave it failed at.
+      setLineFallbacks([
+        ...new Set(
+          flybyLineFallbacks(expanded.document, foundRef.current?.resolved ?? []).flatMap((id) => {
+            const at = expanded.document.sections.findIndex((section) => section.id === id);
+            const original = document.sections[sectionOf[at] ?? -1];
+            return original ? [original.id] : [];
+          }),
+        ),
+      ]);
       const player = createFlybyPlayer(timeline, stage, { loop: document.loop, home });
       let shown = Number.NEGATIVE_INFINITY;
       const texts = timeline.texts;
-      const unsubscribe = player.subscribe((next) => {
-        tellMoment({ status: next.status, t: next.t, texts });
+      const unsubscribe = player.subscribe((played) => {
+        tellMoment({ status: played.status, t: played.t, texts });
+        // The panel lists the sections as written: one flown for each cave is the one written once.
+        const next = { ...played, section: sectionOf[played.section] ?? played.section };
         // A playing flyby reports sixty times a second; the slider and the clock need a tenth of
         // that. Only while it plays, though: a moment it was put at by hand, or left at by a pause,
         // is the last word until the next one, and one that was skipped would leave the clock
@@ -549,7 +625,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         setTrouble(
           error instanceof FlybySubjectMissing
             ? { kind: 'missing' }
-            : { kind: 'failed', detail: error instanceof Error ? error.message : String(error) },
+            : error instanceof FlybyFilterEmpty
+              ? { kind: 'emptyFilter' }
+              : { kind: 'failed', detail: error instanceof Error ? error.message : String(error) },
         );
       }
       return undefined;
@@ -633,6 +711,11 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     orderByRoute,
     fileId,
     setFileId,
+    addCave,
+    savedFilterId,
+    setSavedFilterId,
+    filterLimit,
+    setFilterLimit,
     // how it is built
     preset,
     setPreset,

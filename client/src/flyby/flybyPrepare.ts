@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { eyeLookingAt } from '../scene3d/camera3d.ts';
 import type { FlybyDocument } from './flybyDocument.ts';
+import { expandFlyby, filterSubjects, type FlybyExpanded } from './flybyExpand.ts';
 import { placeFlybyMoment, type FlybyStage } from './flybyPlayer.ts';
 import { surveyRoute } from './flybyRoutes.ts';
-import { resolveSubject, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
+import { resolveSubject, subjectsTogether, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
 import { compileFlyby, type FlybySayWords, type FlybyTimeline } from './flybyTimeline.ts';
 
 // Getting a flyby ready to be played: finding its subjects, and loading its route.
@@ -45,6 +46,11 @@ export interface FlybyPrepareOptions {
 
 export interface FlybyPrepared {
   timeline: FlybyTimeline;
+  /** The document as played: every saved filter's caves written out as subjects of their own. */
+  expanded: FlybyExpanded;
+  /** The caves each subject drawn from a saved filter stood for, by the subject's position. */
+  filterCaves: Map<number, string[]>;
+  /** Found for the written-out document's subjects. */
   resolved: (FlybyResolvedSubject | undefined)[];
   /** Moments of the route that had not finished loading when their wait ran out. */
   unsettled: number;
@@ -61,6 +67,46 @@ const ROUTE_MAX_STOPS = 40;
 
 function cancelled(): DOMException {
   return new DOMException('The flyby was cancelled while being prepared.', 'AbortError');
+}
+
+/** A subject drawn from a saved filter stands for no cave this reader may see — or the filter cannot be run for them. */
+export class FlybyFilterEmpty extends Error {
+  readonly subject: number;
+
+  constructor(subject: number) {
+    super(`flyby: the saved filter of subject ${subject} selects no cave`);
+    this.name = 'FlybyFilterEmpty';
+    this.subject = subject;
+  }
+}
+
+/**
+ * Asks the server which caves each of the document's saved filters keeps for this reader.
+ * Rejects with {@link FlybyFilterEmpty} for the first that keeps none.
+ */
+export async function flybyFilterCaves(document: FlybyDocument, world: FlybyWorld): Promise<Map<number, string[]>> {
+  const caves = new Map<number, string[]>();
+  for (const index of filterSubjects(document)) {
+    const subject = document.subjects[index];
+    const found = subject.kind === 'filter' ? await world.filterCaves?.(subject.savedFilterId, subject.limit) : undefined;
+    if (!found || found.length === 0) {
+      throw new FlybyFilterEmpty(index);
+    }
+    caves.set(index, found);
+  }
+  return caves;
+}
+
+/** A subject drawn from a filter, found: all of its caves together, once they are found. */
+export function resolveFilterGroups(
+  expanded: Pick<FlybyExpanded, 'groups'>,
+  resolved: (FlybyResolvedSubject | undefined)[],
+): void {
+  for (const [index, members] of expanded.groups) {
+    resolved[index] = subjectsTogether(
+      members.flatMap((member) => (resolved[member] ? [resolved[member]!] : [])),
+    );
+  }
 }
 
 /** Whether preparing ended because it was cancelled, rather than because something failed. */
@@ -90,12 +136,13 @@ export function routeStops(timeline: FlybyTimeline): number[] {
 /**
  * Finds the document's subjects and builds its path, visiting what has to be visited on the way.
  *
- * Rejects with an `AbortError` when cancelled, and with `FlybySubjectMissing` when a subject the
- * flyby flies around is not in this reader's world. The camera is left wherever the last visit put
+ * Rejects with an `AbortError` when cancelled, with `FlybyFilterEmpty` when a saved filter it is
+ * about keeps no cave for this reader, and with `FlybySubjectMissing` when a subject the flyby flies
+ * around is not in this reader's world. The camera is left wherever the last visit put
  * it: whoever asked is about to play the flyby, or to put the camera back themselves.
  */
 export async function prepareFlyby(
-  document: FlybyDocument,
+  authored: FlybyDocument,
   world: FlybyWorld,
   stage: FlybyPrepareStage,
   options: FlybyPrepareOptions,
@@ -105,6 +152,13 @@ export async function prepareFlyby(
       throw cancelled();
     }
   };
+
+  // Which caves its saved filters keep, asked first: everything after works on the document with
+  // those caves written out, and never on a list of them kept anywhere else.
+  const filterCaves = await flybyFilterCaves(authored, world);
+  check();
+  const expanded = expandFlyby(authored, filterCaves);
+  const document = expanded.document;
 
   // Everything is found once before the camera moves at all: "what the view shows" has to mean the
   // view the person was looking at, not wherever the first visit left the camera.
@@ -178,6 +232,7 @@ export async function prepareFlyby(
     }
   }
 
+  resolveFilterGroups(expanded, resolved);
   const timeline = compileFlyby(document, resolved, options.say);
   let unsettled = 0;
   if (options.loadRoute) {
@@ -194,7 +249,7 @@ export async function prepareFlyby(
     }
   }
   check();
-  return { timeline, resolved, unsettled };
+  return { timeline, expanded, filterCaves, resolved, unsettled };
 }
 
 // ---- "has the scene finished" ----
