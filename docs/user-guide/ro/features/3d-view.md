@@ -70,6 +70,27 @@ sus; **Nu acum** pune acea generare deoparte pentru restul sesiunii. Scena nu sc
 singură: o schimbare reîncarcă terenul în timp ce te miști și modifică altitudinile pe care
 stă totul.
 
+### Relief: exagerare verticală
+
+Un relief domol poate fi greu de citit, la fel și adâncimea unei peșteri de sub el. Cursorul
+**Relief** din panoul de straturi desenează toate înălțimile din scenă mai înalte — de până la
+cinci ori — sau mai turtite, până la jumătate. Totul este întins împreună, de la nivelul mării în
+sus: terenul, intrările peșterilor, drumuirile, pereții, norii de puncte, decuparea și înălțimea
+camerei însăși. Astfel o intrare rămâne pe teren și o drumuire rămâne între pereții ei; o peșteră
+își păstrează proporția față de muntele de deasupra.
+
+- **Înălțimea reală** readuce factorul la ×1.
+- Cât timp factorul nu este ×1, scena o spune — *Relief ×2* — pentru că o pantă întinsă arată ca
+  una reală.
+- Altitudinile, adâncimile și lungimile afișate oriunde rămân cele reale. La fel poziția din bara
+  de adrese: un link deschide același loc la orice factor.
+- Pentru că și înălțimea camerei este întinsă, aceeași cameră stă de două ori mai sus deasupra
+  unui teren desenat de două ori mai înalt: la ×2 vezi mai mult teren în jur, ca dintr-o lume mai
+  înaltă.
+- Factorul este ținut minte în acest browser. O vedere salvată ține minte factorul la care a fost
+  salvată; deschiderea ei desenează scena la acel factor pentru restul sesiunii, fără să-ți
+  schimbe propria setare. Mutarea cursorului face din nou factorul al tău.
+
 ---
 
 ## Vederea peșterii prin pământ
