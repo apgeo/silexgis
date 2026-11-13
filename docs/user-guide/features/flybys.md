@@ -15,9 +15,9 @@ It is offered wherever the 3D view is — the **3D view** page, the scene beside
 scene in a window of its own — to anybody who is signed in.
 
 > **What a flyby can do today.** Play in the view, play on a clean screen for you to record
-> with another program, and be kept and exchanged as a file. Changing the background maps and
-> the caves' colours during the flight, and saving the flight as a movie from SilexGIS itself,
-> are not built yet.
+> with another program, be written to a movie file by SilexGIS itself, and be kept and
+> exchanged as a file. Changing the background maps and the caves' colours during the flight is
+> not built yet.
 
 ---
 
@@ -84,6 +84,7 @@ panel says when the sections on screen are ones you opened or changed by hand.
 | **Position** | Drag it to any moment, forwards or backwards, playing or not |
 | **Repeat** | Plays again from the start when it ends |
 | **Clean screen** | See below |
+| **Make a movie** | See [Making a movie](#making-a-movie) |
 
 While the flyby is getting ready the bar says what it is doing — *Finding the caves*, *Loading
 the route* — and **Stop** cancels it.
@@ -109,6 +110,52 @@ start, so you can start your screen recorder first.
 - **Space** pauses and resumes.
 - **Escape** returns to the ordinary view, with the flyby held where it was.
 - Pressing on the scene does nothing here, so a stray click cannot spoil a recording.
+- The scene is boxed to the shape of the movie frame last chosen under **Make a movie** (16:9
+  until you choose another), with dark bars round it, so a recording of the screen has the shape
+  you want.
+
+## Making a movie
+
+**Make a movie** (the camera button on the bar) writes the flyby to an **MP4**, **WebM** or
+**GIF** file in the browser — nothing is sent to the server. The flyby panel gives way to the
+movie panel, and the scene is **boxed to the shape of the movie's frame** beside it, with dark
+bars round it: what you see is what the file will hold. You can still play the flyby and drag its
+position to look at any moment.
+
+Every frame is drawn for its own moment of the flyby and handed to the file with its exact time,
+so the movie runs smoothly however slowly your computer draws the scene. A slow computer makes a
+slow export, never a jerky movie.
+
+| Setting | Does |
+|---|---|
+| **Ready-made files** | *HD video* (1280 × 720, 30 frames a second — MP4 where the browser writes it, WebM otherwise), *Reels / TikTok* (1080 × 1920 MP4), *Square post* (1080 × 1080 MP4), *For a chat* (a small GIF). A ready-made file sets the format, size, rate and quality only |
+| **Format** | MP4, WebM or GIF — only what this browser can write is offered. A browser with no video encoder makes GIFs only, and says so |
+| **Frame size**, **Frames a second**, **Quality** | The same sizes and rates as the movie of a tracked trip. A GIF is at most 800 pixels wide and 600 frames long |
+| **How each frame is taken** | **Quick**: each frame is taken as soon as it is drawn, as the live view would show it, map tiles still arriving included. **Fine**: before each frame the scene finishes loading what it shows — no half-loaded ground in any frame, but seconds a frame on a computer without a graphics card. **Fine, larger than the screen**: as Fine, and the scene is drawn at the movie's own size even when that is larger than the box on the screen — the sharpest file, and the slowest. Quick and Fine draw the scene no larger than the box and scale the frame up |
+| **Draft** | Half the size, 8 frames a second (10 for a GIF), taken quickly: to check the timing of a flyby in a fraction of the time |
+| **What to film** | The whole flyby, or a stretch of it from one second of the flyby's clock to another |
+| **Still at the end** | Holds the last moment for that many seconds |
+
+Under the settings the panel says how many frames the movie will have, how long it runs and
+roughly how large the file will be, and the name it will be saved under: the flyby's name when
+it has one (`silexgis-<name>-<date>`), otherwise `silexgis-flyby-<date>`.
+
+**Export** makes the file. The panel shows how far it has got and roughly how long is left;
+**Cancel export** stops it, and nothing is saved. Closing the panel, or pressing Escape, while a
+movie is being made asks first whether to stop it. However the export ends, the camera and the
+scene are put back as they were.
+
+After a **Fine** export the panel says how many frames were made, how long it took, and how many
+frames — if any — had to be taken before the scene had finished loading, because a map server
+was too slow.
+
+A long video (more than about 256 MB) is written straight to a file you choose, as it is made,
+in browsers that allow it (Chrome, Edge); elsewhere it is made in memory and then downloaded.
+
+- **The map credits are in every frame** and cannot be switched off: the map sources' licences
+  require them on any picture of their tiles.
+- **The movie shows where these caves are.** The panel says so beside Export, always: the file
+  outlives the check that let you see them, so share it only with people who may see that.
 
 ## Keeping a flyby
 

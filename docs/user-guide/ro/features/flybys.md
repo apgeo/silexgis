@@ -15,9 +15,9 @@ Este oferit oriunde se află vizualizarea 3D — pagina **Vizualizare 3D**, scen
 scena dintr-o fereastră proprie — oricui este autentificat.
 
 > **Ce poate face un survol astăzi.** Poate fi redat în vizualizare, redat pe un ecran curat ca
-> să îl înregistrezi cu alt program și păstrat sau transmis ca fișier. Schimbarea hărților de bază
-> și a culorilor peșterilor în timpul zborului și salvarea zborului ca film chiar din SilexGIS nu
-> sunt încă făcute.
+> să îl înregistrezi cu alt program, scris într-un fișier film chiar de SilexGIS și păstrat sau
+> transmis ca fișier. Schimbarea hărților de bază și a culorilor peșterilor în timpul zborului nu
+> este încă făcută.
 
 ---
 
@@ -86,6 +86,7 @@ nou, iar panoul spune când secțiunile de pe ecran sunt unele deschise sau modi
 | **Poziția** | Trage-o la orice moment, înainte sau înapoi, în timpul redării sau nu |
 | **Repetă** | Redă din nou de la început când se termină |
 | **Ecran curat** | Vezi mai jos |
+| **Fă un film** | Vezi [Facerea unui film](#facerea-unui-film) |
 
 Cât timp survolul se pregătește, bara spune ce face — *Se caută peșterile*, *Se încarcă
 traseul* — iar **Oprește** îl anulează.
@@ -113,6 +114,53 @@ survolul este redat de la început, ca să poți porni mai întâi programul de 
 - **Spațiu** pune pe pauză și reia.
 - **Escape** te aduce înapoi la vederea obișnuită, cu survolul ținut unde era.
 - O apăsare pe scenă nu face nimic aici, așa că un clic rătăcit nu poate strica o înregistrare.
+- Scena este încadrată în forma cadrului de film ales ultima dată la **Fă un film** (16:9 până
+  alegi altceva), cu benzi întunecate în jur, ca o înregistrare a ecranului să aibă forma dorită.
+
+## Facerea unui film
+
+**Fă un film** (butonul cu cameră de pe bară) scrie survolul într-un fișier **MP4**, **WebM** sau
+**GIF**, în browser — nimic nu este trimis serverului. Panoul survolului lasă locul panoului de
+film, iar scena este **încadrată în forma cadrului filmului** lângă el, cu benzi întunecate în
+jur: ce vezi este ce va conține fișierul. Poți în continuare să redai survolul și să îi tragi
+poziția ca să vezi orice moment.
+
+Fiecare cadru este desenat pentru propriul lui moment al survolului și dat fișierului cu timpul
+lui exact, așa că filmul curge lin oricât de încet ar desena calculatorul scena. Un calculator
+lent face un export lent, niciodată un film sacadat.
+
+| Setare | Face |
+|---|---|
+| **Fișiere gata pregătite** | *Video HD* (1280 × 720, 30 de cadre pe secundă — MP4 unde browserul îl scrie, altfel WebM), *Reels / TikTok* (MP4 de 1080 × 1920), *Postare pătrată* (MP4 de 1080 × 1080), *Pentru chat* (un GIF mic). Un fișier gata pregătit schimbă doar formatul, mărimea, ritmul și calitatea |
+| **Format** | MP4, WebM sau GIF — este oferit doar ce poate scrie acest browser. Un browser fără codor video face doar GIF-uri și spune asta |
+| **Dimensiunea cadrului**, **Cadre pe secundă**, **Calitate** | Aceleași mărimi și ritmuri ca la filmul unei ture urmărite. Un GIF are cel mult 800 de pixeli lățime și 600 de cadre |
+| **Cum este luat fiecare cadru** | **Rapid**: fiecare cadru este luat imediat ce este desenat, cum l-ar arăta vizualizarea în timp real, cu plăcile hărții încă sosind. **Fin**: înaintea fiecărui cadru scena termină de încărcat ce arată — niciun cadru cu teren pe jumătate încărcat, dar secunde pe cadru pe un calculator fără placă grafică. **Fin, mai mare decât ecranul**: ca Fin, iar scena este desenată la mărimea filmului chiar când aceasta e mai mare decât cadrul de pe ecran — cel mai clar fișier și cel mai lent. Rapid și Fin desenează scena cel mult cât cadrul de pe ecran și măresc imaginea |
+| **Ciornă** | Jumătate din mărime, 8 cadre pe secundă (10 pentru un GIF), luate rapid: ca să verifici ritmul unui survol într-o fracțiune din timp |
+| **Ce se filmează** | Tot survolul sau o porțiune din el, de la o secundă a ceasului survolului la alta |
+| **Imagine fixă la sfârșit** | Ține ultimul moment atâtea secunde |
+
+Sub setări, panoul spune câte cadre va avea filmul, cât durează, cam cât de mare va fi fișierul
+și numele sub care va fi salvat: numele survolului când are unul (`silexgis-<nume>-<dată>`),
+altfel `silexgis-flyby-<dată>`.
+
+**Exportă** face fișierul. Panoul arată cât a ajuns și cam cât mai durează; **Anulează exportul**
+îl oprește și nu se salvează nimic. Închiderea panoului sau Escape în timp ce se face un film te
+întreabă mai întâi dacă vrei să îl oprești. Oricum s-ar încheia exportul, camera și scena sunt
+puse înapoi cum erau.
+
+După un export **Fin**, panoul spune câte cadre s-au făcut, cât a durat și câte cadre — dacă au
+fost — au trebuit luate înainte ca scena să termine de încărcat, pentru că un server de hărți a
+fost prea lent.
+
+Un film video lung (mai mult de aproximativ 256 MB) este scris direct într-un fișier ales de tine,
+pe măsură ce se face, în browserele care permit asta (Chrome, Edge); în rest este făcut în
+memorie și apoi descărcat.
+
+- **Mențiunile de sursă ale hărților sunt în fiecare cadru** și nu pot fi oprite: licențele
+  surselor de hărți le cer pe orice imagine a plăcilor lor.
+- **Filmul arată unde sunt aceste peșteri.** Panoul spune asta lângă Exportă, mereu: fișierul
+  trăiește mai mult decât verificarea care ți-a permis să le vezi, așa că trimite-l doar celor
+  care au voie să vadă asta.
 
 ## Păstrarea unui survol
 
