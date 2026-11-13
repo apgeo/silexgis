@@ -203,6 +203,11 @@
   white-space: nowrap;
 }
 
+/* The movie panel stands where the flyby panel does, and is a little wider. */
+.scene3d-flyby-movie {
+  width: min(360px, calc(100% - 64px));
+}
+
 /* Under a finger or on a narrow screen the panel becomes a sheet across the bottom of the view,
    above the bar, leaving the top of the scene to be looked at. */
 @media (max-width: 640px), (hover: none) and (pointer: coarse) {
@@ -214,4 +219,39 @@
     width: auto;
     max-height: 55%;
   }
+}
+
+/* Boxed to a movie's frame: the scene's element is the largest box of exactly the frame's shape
+   that fits beside the controls, at whole pixels, and the rest of the view is dark. What is seen is
+   what the file will hold. The hover and pick labels are off meanwhile: they are drawn as elements
+   over the whole view, not into the frame. */
+.scene3d-wrap-framed {
+  background: #000;
+}
+
+.scene3d-wrap-framed .scene3d-canvas {
+  position: absolute;
+  left: var(--flyby-frame-left);
+  top: var(--flyby-frame-top);
+  width: var(--flyby-frame-width);
+  height: var(--flyby-frame-height);
+}
+
+.scene3d-wrap-framed .scene3d-overlay {
+  display: none;
+}
+
+.scene3d-flyby-movie-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scene3d-flyby-movie-help {
+  font-size: 12px;
+}
+
+/* Held while a movie is being made: the flyby is the recorder's, not the bar's. */
+.scene3d-flyby-held .scene3d-flyby-transport {
+  opacity: 0.6;
 }

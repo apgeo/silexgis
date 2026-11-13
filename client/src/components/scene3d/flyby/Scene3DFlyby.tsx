@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Spin } from 'antd';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { flybyMovieFrameSize } from '../../../flyby/flybyMovie.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import FlybyPanel from './FlybyPanel.tsx';
 import FlybyTransport from './FlybyTransport.tsx';
 import { useFlyby, type FlybyScene } from './useFlyby.ts';
+import { useFlybyFrameBox } from './useFlybyFrameBox.ts';
 import './Scene3DFlyby.css';
+
+// Its own chunk: the movie encoders are only fetched by somebody who makes a movie.
+const FlybyMovieDialog = lazy(() => import('./FlybyMovieDialog.tsx'));
 
 export interface Scene3DFlybyProps {
   scene: FlybyScene;
@@ -34,9 +40,19 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
   const flyby = useFlyby(scene, selection, loadRoute);
   const { active, playerState, pause, play, ensurePlayer } = flyby;
 
+  // ---- the movie ----
+
+  const [movieOpen, setMovieOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const movieSize = flybyMovieFrameSize({ size: useFlybyStore((state) => state.movie.size) });
+  // State rather than a ref: the panel arrives in a chunk of its own, after this has rendered, and
+  // the box has to be fitted again beside it once it is there.
+  const [movieElement, setMovieElement] = useState<HTMLDivElement | null>(null);
+  const transportRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    onActiveChange(active);
-  }, [active, onActiveChange]);
+    onActiveChange(active || exporting);
+  }, [active, exporting, onActiveChange]);
   // And when the tool is closed with a flyby in flight, which no change of `active` reports.
   useEffect(() => () => onActiveChange(false), [onActiveChange]);
 
@@ -45,6 +61,15 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
   const [clean, setClean] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownTimer = useRef<number | undefined>(undefined);
+
+  // While a movie is being set up, and on the clean screen, the scene is boxed to the movie's frame:
+  // what is seen is what the file will hold, or what an outside recorder should keep.
+  useFlybyFrameBox(
+    scene.wrap,
+    movieOpen || clean ? { width: movieSize.width, height: movieSize.height } : null,
+    () => (clean ? [] : [movieElement, transportRef.current?.firstElementChild ?? null]),
+    exporting,
+  );
 
   const leaveClean = useCallback(() => {
     window.clearTimeout(countdownTimer.current);
@@ -156,8 +181,28 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
 
   return (
     <>
-      {!clean && <FlybyPanel flyby={flyby} onClose={onClose} />}
-      {!clean && <FlybyTransport flyby={flyby} onCleanScreen={() => void enterClean()} />}
+      {!clean && !movieOpen && <FlybyPanel flyby={flyby} onClose={onClose} />}
+      {!clean && movieOpen && (
+        <Suspense fallback={<Spin className="scene3d-flyby-panel scene3d-flyby-movie" />}>
+          <FlybyMovieDialog
+            ref={setMovieElement}
+            flyby={flyby}
+            scene={scene}
+            onExportingChange={setExporting}
+            onClose={() => setMovieOpen(false)}
+          />
+        </Suspense>
+      )}
+      {!clean && (
+        // A plain element: the bar is placed against the view, not against this.
+        <div ref={transportRef} className={exporting ? 'scene3d-flyby-held' : undefined} inert={exporting}>
+          <FlybyTransport
+            flyby={flyby}
+            onCleanScreen={() => void enterClean()}
+            onMakeMovie={() => setMovieOpen(true)}
+          />
+        </div>
+      )}
       {clean && countdown !== null && (
         <div className="scene3d-flyby-countdown" data-testid="flyby-countdown" role="status" aria-live="assertive">
           {countdown}

@@ -31,7 +31,7 @@ import {
   type FlybyResolvedSubject,
   type FlybyWorld,
 } from '../../../flyby/flybySubjects.ts';
-import { compileFlyby, FlybySubjectMissing } from '../../../flyby/flybyTimeline.ts';
+import { compileFlyby, FlybySubjectMissing, type FlybyTimeline } from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import { geoJsonBounds } from '../../../scene3d/geoJson3d.ts';
@@ -259,7 +259,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
 
   // ---- playing ----
 
-  const playerRef = useRef<{ player: FlybyPlayer; key: string; unsubscribe(): void } | null>(null);
+  const playerRef = useRef<{ player: FlybyPlayer; key: string; timeline: FlybyTimeline; unsubscribe(): void } | null>(null);
   /** The subjects as last found, kept so a change of timing does not send the camera visiting again. */
   const foundRef = useRef<{ key: string; resolved: (FlybyResolvedSubject | undefined)[] } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -343,7 +343,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
           return next;
         });
       });
-      playerRef.current = { player, key, unsubscribe };
+      playerRef.current = { player, key, timeline, unsubscribe };
       setLength(timeline.length);
       return player;
     } catch (error) {
@@ -363,6 +363,12 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       setPreparing(null);
     }
   }, [document, scene, world, stage, loadRoute, dropPlayer]);
+
+  /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
+  const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {
+    const player = await ensurePlayer();
+    return player && playerRef.current?.player === player ? playerRef.current.timeline : undefined;
+  }, [ensurePlayer]);
 
   const play = useCallback(async () => {
     const player = await ensurePlayer();
@@ -453,6 +459,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setTrouble,
     unsettled,
     ensurePlayer,
+    ensureTimeline,
+    stage,
     play,
     pause,
     seek,

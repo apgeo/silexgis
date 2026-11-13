@@ -5,6 +5,7 @@ import {
   PauseOutlined,
   RetweetOutlined,
   StopOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons';
 import { Progress, Slider, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,8 @@ export interface FlybyTransportProps {
   flyby: FlybyController;
   /** Plays the flyby with everything but the scene taken off the screen. */
   onCleanScreen(): void;
+  /** Opens the dialog the flyby is written to a movie file from. */
+  onMakeMovie(): void;
 }
 
 /**
@@ -26,7 +29,7 @@ export interface FlybyTransportProps {
  * nothing but its time — and is only held while the flyby is still being prepared, when there is no
  * path yet to be anywhere on.
  */
-export default function FlybyTransport({ flyby, onCleanScreen }: FlybyTransportProps) {
+export default function FlybyTransport({ flyby, onCleanScreen, onMakeMovie }: FlybyTransportProps) {
   const { t } = useTranslation();
   const { playerState, preparing } = flyby;
   const playing = playerState.status === 'playing';
@@ -108,6 +111,16 @@ export default function FlybyTransport({ flyby, onCleanScreen }: FlybyTransportP
           onClick={onCleanScreen}
           aria-label={t('flyby.cleanScreen')}
           data-testid="flyby-clean"
+        />
+      </Tooltip>
+      <Tooltip title={t('flyby.movie.openHint')}>
+        <Button
+          size="small"
+          icon={<VideoCameraOutlined />}
+          disabled={!flyby.document || preparing !== null}
+          onClick={onMakeMovie}
+          aria-label={t('flyby.movie.open')}
+          data-testid="flyby-movie"
         />
       </Tooltip>
     </div>
