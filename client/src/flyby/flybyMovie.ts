@@ -17,11 +17,15 @@ import { GIF_FRAME_RATES, type MovieFormat, type MovieQuality } from '../movie/e
  * `fineLarge` waits as `fine` does and also draws the scene at the movie's own size when that is
  * larger than the view on the screen; the other two draw it no larger than the screen does and let
  * the frame be scaled up, which costs nothing extra per frame.
+ *
+ * `live` is not frame by frame at all: the flyby plays in real time and the browser's own recorder
+ * films it, at whatever pace the machine draws. It is offered only where the browser has such a
+ * recorder.
  */
-export type FlybyMovieLevel = 'quick' | 'fine' | 'fineLarge';
+export type FlybyMovieLevel = 'quick' | 'fine' | 'fineLarge' | 'live';
 
 /** The levels, in the order they are offered. */
-export const FLYBY_MOVIE_LEVELS: readonly FlybyMovieLevel[] = ['quick', 'fine', 'fineLarge'];
+export const FLYBY_MOVIE_LEVELS: readonly FlybyMovieLevel[] = ['quick', 'fine', 'fineLarge', 'live'];
 
 export interface FlybyMovieSettings {
   format: MovieFormat;
