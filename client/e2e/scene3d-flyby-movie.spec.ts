@@ -448,6 +448,10 @@ function firstFrame(page: Page, bytes: Buffer, type: string) {
 test('a flyby is recorded live by the browser\'s own recorder, texts and credits in its frames, and the scene is handed back', async ({ page }) => {
   test.setTimeout(600_000);
   await openFlyby(page);
+  // A title over the opening, which is on no surface of the scene's own: it is in the file only if
+  // the frames are composed.
+  await page.getByText('Texts over the picture').click();
+  await page.getByTestId('flyby-text-title').fill('Live flyby');
   const home = await camera(page);
   await page.getByTestId('flyby-movie').click();
   const panel = page.getByTestId('flyby-movie-dialog');
