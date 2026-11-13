@@ -9772,6 +9772,43 @@
         "unknownSubject": "What it is about is not in this flyby.",
         "duplicateSection": "Two sections have the same name inside the file."
       }
+    },
+    "handLook": {
+      "layersTitle": "Layers",
+      "layerShown": "{{name}}: shown or hidden",
+      "layerStrength": "{{name}}: strength",
+      "shown": "Shown",
+      "hidden": "Hidden",
+      "ownStrength": "As you have it",
+      "addTitle": "Add a change",
+      "kind": "What changes",
+      "kinds": {
+        "background": "Background map",
+        "backgroundOpacity": "Strength of the background",
+        "layer": "A layer shown or hidden",
+        "layerOpacity": "Strength of a layer",
+        "walls": "Colour of the walls",
+        "lines": "Colour of the survey lines",
+        "surface": "Ground over the caves",
+        "sky": "Sky"
+      },
+      "layer": "Layer",
+      "layerTo": "Shown or hidden",
+      "strength": "Strength",
+      "linesByDepth": "By depth again",
+      "noSky": "No sky",
+      "section": "During the section",
+      "at": "Seconds into the section it starts",
+      "seconds": "Seconds it takes",
+      "add": "Add the change",
+      "layerNames": {
+        "centerlines": "Survey lines",
+        "entrances": "Entrances",
+        "surface-features": "Surface features",
+        "walls": "Cave walls",
+        "scans": "Scans",
+        "photos": "Station photographs"
+      }
     }
   },
   "mapSymbols": {

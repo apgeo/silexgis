@@ -112,6 +112,8 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'filters.editor.values.',
   'filters.sorts.',
   'flyby.edit.problem.',
+  'flyby.handLook.kinds.',
+  'flyby.handLook.layerNames.',
   'flyby.look.layer.',
   'flyby.movie.levelHelp.',
   'flyby.movie.levels.',

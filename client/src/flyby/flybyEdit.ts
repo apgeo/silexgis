@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   FLYBY_MAX_SECTIONS,
+  type FlybyChange,
+  type FlybyChangeKind,
   type FlybyDocument,
+  type FlybyLayerKey,
+  type FlybyLayerLook,
+  type FlybyLook,
   type FlybyPose,
   type FlybySection,
   type FlybySectionKind,
@@ -160,4 +165,45 @@ export function updateSection(document: FlybyDocument, id: string, patch: FlybyS
       return next;
     }),
   };
+}
+
+// ---- the look, by hand ----
+
+/** An id for a new change of `kind` that no change of the list has: `walls-4`. */
+export function newChangeId(changes: readonly FlybyChange[], kind: FlybyChangeKind): string {
+  const taken = new Set(changes.map((change) => change.id));
+  let next = 1 + Math.max(0, ...changes.map((change) => Number(/-(\d+)$/.exec(change.id)?.[1] ?? 0)));
+  while (taken.has(`${kind}-${next}`)) {
+    next += 1;
+  }
+  return `${kind}-${next}`;
+}
+
+/**
+ * The opening look with one layer's word on it changed. A member given as undefined is taken out —
+ * the layer is then as the viewer has it in that respect — and a layer with nothing left to say is
+ * taken out of the look, and the list of layers with it when it is empty.
+ */
+export function withLayerLook(look: FlybyLook, key: FlybyLayerKey, patch: { visible?: boolean; opacity?: number }): FlybyLook {
+  const layer: FlybyLayerLook = { ...look.layers?.[key] };
+  for (const member of ['visible', 'opacity'] as const) {
+    if (member in patch) {
+      if (patch[member] === undefined) {
+        delete layer[member];
+      } else {
+        (layer as Record<string, unknown>)[member] = patch[member];
+      }
+    }
+  }
+  const layers = { ...look.layers };
+  if (Object.keys(layer).length === 0) {
+    delete layers[key];
+  } else {
+    layers[key] = layer;
+  }
+  const next: FlybyLook = { ...look, layers };
+  if (Object.keys(layers).length === 0) {
+    delete next.layers;
+  }
+  return next;
 }

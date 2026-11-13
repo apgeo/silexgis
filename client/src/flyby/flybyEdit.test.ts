@@ -6,10 +6,12 @@ import {
   duplicateSection,
   FLYBY_ADDABLE_KINDS,
   moveSection,
+  newChangeId,
   newSectionId,
   removeSection,
   sectionDefaults,
   updateSection,
+  withLayerLook,
 } from './flybyEdit.ts';
 import { buildPreset } from './flybyPresets.ts';
 import type { FlybyResolvedSubject } from './flybySubjects.ts';
@@ -144,5 +146,32 @@ describe('editing the sections of a flyby', () => {
     expect(flybyProblems(updateSection(tour(), 'orbit-2', { to: { lift: 40 } }))).toEqual([{ code: 'badPose', section: 'orbit-2' }]);
     expect(flybyProblems(updateSection(tour(), 'orbit-2', { to: { clearance: -5 } }))).toEqual([{ code: 'badPose', section: 'orbit-2' }]);
     expect(flybyProblems(updateSection(tour(), 'orbit-2', { to: { headingBy: 99_999 } }))).toEqual([{ code: 'badPose', section: 'orbit-2' }]);
+  });
+});
+
+describe('editing the look by hand', () => {
+  it('numbers a new change on from the ones there are', () => {
+    const changes = tour().changes!;
+    expect(newChangeId(changes, 'walls')).toBe('walls-1');
+    const numbered = [{ ...changes[0], id: 'backgroundOpacity-4' }];
+    expect(newChangeId(numbered, 'walls')).toBe('walls-5');
+    expect(newChangeId([], 'sky')).toBe('sky-1');
+  });
+
+  it('sets, changes and takes back one layer of the opening look', () => {
+    const shown = withLayerLook({ sky: '#000000' }, 'walls', { visible: true });
+    expect(shown).toEqual({ sky: '#000000', layers: { walls: { visible: true } } });
+    const faded = withLayerLook(shown, 'walls', { opacity: 0.4 });
+    expect(faded.layers).toEqual({ walls: { visible: true, opacity: 0.4 } });
+    expect(withLayerLook(faded, 'walls', { visible: undefined }).layers).toEqual({ walls: { opacity: 0.4 } });
+    // Nothing left to say about the layer: it is as the viewer has it, and the list goes too.
+    expect(withLayerLook(withLayerLook(faded, 'walls', { visible: undefined }), 'walls', { opacity: undefined })).toEqual({
+      sky: '#000000',
+    });
+  });
+
+  it('writes an opening look per layer that the document accepts and the look plan reads', () => {
+    const document = { ...tour(), look: withLayerLook(withLayerLook({}, 'file:abc', { visible: false }), 'centerlines', { opacity: 0.5 }) };
+    expect(flybyProblems(document)).toEqual([]);
   });
 });

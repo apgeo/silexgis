@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { Checkbox, Collapse, Input, InputNumber, Select, Slider, Typography } from 'antd';
+import { Checkbox, Collapse, Input, InputNumber, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useGeofiles, useMapLayers, useRasterMaps, useSavedFilters } from '../../../api/hooks.ts';
 import {
+  FLYBY_CHANGE_KINDS,
   FLYBY_CUT_CHANGES,
+  FLYBY_NAMED_LAYERS,
+  flybyLayerKey,
   FLYBY_MAX_CHANGE_SECONDS,
   FLYBY_MAX_TEXT,
   flybyProblems,
   type FlybyChange,
+  type FlybyChangeKind,
+  type FlybyChangeWhat,
   type FlybyColour,
   type FlybyDocument,
   type FlybyLayerKey,
@@ -25,6 +30,7 @@ import {
   seeThroughGround,
   type FlybyRecipeResult,
 } from '../../../flyby/flybyRecipes.ts';
+import { newChangeId, withLayerLook } from '../../../flyby/flybyEdit.ts';
 import { isDrawableIn3d } from '../../../scene3d/baseImagery3d.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
@@ -78,7 +84,23 @@ function useLayerNames() {
           return filterName(id) ?? t('flyby.look.layer.unknown');
       }
     };
+    // Every layer of this installation a flyby can name: the scene's own, then the lists'.
+    const layerList: { value: FlybyLayerKey; label: string }[] = [
+      ...FLYBY_NAMED_LAYERS.map((key) => ({ value: key, label: t(`flyby.handLook.layerNames.${key}`) })),
+      ...layers
+        .filter((entry) => !entry.isBase && isDrawableIn3d(entry, layers))
+        .map((entry) => ({ value: flybyLayerKey('overlay', Number(entry.id)), label: entry.name })),
+      ...rasters.filter((raster) => raster.cogUrl).map((raster) => ({ value: flybyLayerKey('raster', raster.id), label: raster.name })),
+      ...(geofilePage?.items ?? [])
+        .filter((file) => file.importStatus === 'imported')
+        .map((file) => ({ value: flybyLayerKey('file', file.id), label: file.name })),
+      ...filterLayers.map((spec) => ({
+        value: flybyLayerKey('filter', spec.savedFilterId),
+        label: filterName(spec.savedFilterId) ?? t('flyby.look.layer.unknown'),
+      })),
+    ];
     return {
+      layers: layerList,
       backgrounds: backgrounds.map((entry) => ({ value: Number(entry.id), label: entry.name })),
       rasters: rasters.filter((raster) => raster.cogUrl).map((raster) => ({ value: raster.id, label: raster.name })),
       filters: filterLayers.map((spec) => ({
@@ -147,7 +169,7 @@ export default function FlybyLookPanel({ flyby }: FlybyLookPanelProps) {
         {
           key: 'look',
           label: t('flyby.look.openingTitle'),
-          children: <OpeningLook look={look} setLook={flyby.setLook} backgrounds={names.backgrounds} busy={busy} />,
+          children: <OpeningLook look={look} setLook={flyby.setLook} backgrounds={names.backgrounds} layers={names.layers} busy={busy} />,
         },
         {
           key: 'recipes',
@@ -195,11 +217,13 @@ function OpeningLook({
   look,
   setLook,
   backgrounds,
+  layers,
   busy,
 }: {
   look: FlybyLook;
   setLook(look: FlybyLook): void;
   backgrounds: Names['backgrounds'];
+  layers: Names['layers'];
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -330,7 +354,69 @@ function OpeningLook({
           ]}
         />
       </label>
+      <OpeningLayers look={look} setLook={setLook} layers={layers} busy={busy} />
     </div>
+  );
+}
+
+/**
+ * Each layer of the installation as the flyby opens on it: shown, hidden, or as the viewer has it,
+ * and at a strength of its own or the viewer's.
+ */
+function OpeningLayers({
+  look,
+  setLook,
+  layers,
+  busy,
+}: {
+  look: FlybyLook;
+  setLook(look: FlybyLook): void;
+  layers: Names['layers'];
+  busy: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <fieldset className="scene3d-flyby-recipe" data-testid="flyby-look-layers">
+      <legend>{t('flyby.handLook.layersTitle')}</legend>
+      <ul className="scene3d-flyby-layers">
+        {layers.map((layer) => {
+          const own = look.layers?.[layer.value] ?? {};
+          return (
+            <li key={layer.value} data-testid={`flyby-look-layer-${layer.value}`}>
+              <span className="scene3d-flyby-layer-name">{layer.label}</span>
+              <Select
+                size="small"
+                value={own.visible === undefined ? OWN : own.visible ? 'shown' : 'hidden'}
+                onChange={(value: string) =>
+                  setLook(withLayerLook(look, layer.value, { visible: value === OWN ? undefined : value === 'shown' }))
+                }
+                disabled={busy}
+                aria-label={t('flyby.handLook.layerShown', { name: layer.label })}
+                data-testid={`flyby-look-layer-${layer.value}-shown`}
+                options={[
+                  { value: OWN, label: t('flyby.look.own') },
+                  { value: 'shown', label: t('flyby.handLook.shown') },
+                  { value: 'hidden', label: t('flyby.handLook.hidden') },
+                ]}
+              />
+              <InputNumber
+                size="small"
+                min={0}
+                max={100}
+                step={10}
+                value={own.opacity === undefined ? null : percent(own.opacity)}
+                placeholder={t('flyby.handLook.ownStrength')}
+                onChange={(value) => setLook(withLayerLook(look, layer.value, { opacity: value === null ? undefined : value / 100 }))}
+                disabled={busy}
+                suffix="%"
+                aria-label={t('flyby.handLook.layerStrength', { name: layer.label })}
+                data-testid={`flyby-look-layer-${layer.value}-strength`}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
   );
 }
 
@@ -602,65 +688,321 @@ function ChangeList({
   }
   const update = (id: string, next: Partial<Pick<FlybyChange, 'at' | 'seconds'>>) =>
     setChanges(changes.map((change) => (change.id === id ? ({ ...change, ...next } as FlybyChange) : change)));
+  const add = <AddChange document={document} changes={changes} setChanges={setChanges} sectionLabel={sectionLabel} names={names} busy={busy} />;
   if (changes.length === 0) {
-    return <Typography.Text type="secondary">{t('flyby.look.noChanges')}</Typography.Text>;
+    return (
+      <div className="scene3d-flyby-group">
+        <Typography.Text type="secondary">{t('flyby.look.noChanges')}</Typography.Text>
+        {add}
+      </div>
+    );
   }
   return (
-    <ol className="scene3d-flyby-changes" data-testid="flyby-changes">
-      {changes.map((change) => {
-        const section = document.sections.find((candidate) => candidate.id === change.section);
-        const what = words(change);
+    <div className="scene3d-flyby-group">
+      <ol className="scene3d-flyby-changes" data-testid="flyby-changes">
+        {changes.map((change) => {
+          const section = document.sections.find((candidate) => candidate.id === change.section);
+          const what = words(change);
+          return (
+            <li key={change.id} data-testid={`flyby-change-${change.id}`}>
+              <span className="scene3d-flyby-change-what">
+                {what}
+                <Typography.Text type="secondary"> · {sectionLabel(change.section)}</Typography.Text>
+              </span>
+              <div className="scene3d-flyby-row">
+                <InputNumber
+                  size="small"
+                  min={0}
+                  max={section?.seconds ?? FLYBY_MAX_CHANGE_SECONDS}
+                  step={0.5}
+                  value={change.at}
+                  onChange={(value) => value !== null && update(change.id, { at: value })}
+                  disabled={busy}
+                  prefix="+"
+                  suffix={t('flyby.secondsUnit')}
+                  aria-label={t('flyby.look.changeAt', { what, section: sectionLabel(change.section) })}
+                  data-testid={`flyby-change-${change.id}-at`}
+                />
+                <InputNumber
+                  size="small"
+                  min={0}
+                  max={FLYBY_MAX_CHANGE_SECONDS}
+                  step={0.5}
+                  value={FLYBY_CUT_CHANGES.includes(change.kind) ? 0 : change.seconds}
+                  onChange={(value) => value !== null && update(change.id, { seconds: value })}
+                  disabled={busy || FLYBY_CUT_CHANGES.includes(change.kind)}
+                  suffix={t('flyby.secondsUnit')}
+                  aria-label={t('flyby.look.changeSeconds', { what })}
+                  data-testid={`flyby-change-${change.id}-seconds`}
+                />
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<DeleteOutlined />}
+                  disabled={busy}
+                  onClick={() => setChanges(changes.filter((other) => other.id !== change.id))}
+                  aria-label={t('flyby.look.removeChange', { what })}
+                  data-testid={`flyby-change-${change.id}-remove`}
+                />
+              </div>
+              {trouble.has(change.id) && (
+                <Typography.Text type="danger" data-testid={`flyby-change-${change.id}-trouble`}>
+                  {trouble.get(change.id)}
+                </Typography.Text>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {add}
+    </div>
+  );
+}
+
+/** What a new change of each kind asks for before anybody sets it. */
+function defaultChange(kind: FlybyChangeKind, names: Names): FlybyChangeWhat | undefined {
+  const layer = names.layers[0]?.value;
+  switch (kind) {
+    case 'background':
+      return names.backgrounds[0] ? { kind, background: names.backgrounds[0].value } : undefined;
+    case 'backgroundOpacity':
+      return { kind, opacity: 0.5 };
+    case 'layer':
+      return layer ? { kind, layer, visible: false } : undefined;
+    case 'layerOpacity':
+      return layer ? { kind, layer, opacity: 0.5 } : undefined;
+    case 'walls':
+      return { kind, colour: DEFAULT_WALLS, strength: 0.7 };
+    case 'lines':
+      return { kind, colour: DEFAULT_LINES };
+    case 'surface':
+      return { kind, surface: 'cutaway' };
+    case 'sky':
+      return { kind, colour: DEFAULT_SKY };
+  }
+}
+
+/**
+ * A change written by hand: what it changes and to what, the section it belongs to, the seconds
+ * into it that it starts and how long it takes. Added to the list, where its numbers can be
+ * corrected like those of a ready-made one.
+ */
+function AddChange({
+  document,
+  changes,
+  setChanges,
+  sectionLabel,
+  names,
+  busy,
+}: {
+  document: FlybyDocument;
+  changes: FlybyChange[];
+  setChanges(changes: FlybyChange[]): void;
+  sectionLabel(id: string): string;
+  names: Names;
+  busy: boolean;
+}) {
+  const { t } = useTranslation();
+  const [what, setWhat] = useState<FlybyChangeWhat>({ kind: 'backgroundOpacity', opacity: 0.5 });
+  const [sectionChoice, setSection] = useState<string>();
+  const [at, setAt] = useState(0);
+  const [seconds, setSeconds] = useState(2);
+  const section = document.sections.find((candidate) => candidate.id === sectionChoice) ?? document.sections[0];
+  const cut = FLYBY_CUT_CHANGES.includes(what.kind);
+  const kinds = FLYBY_CHANGE_KINDS.filter((kind) => defaultChange(kind, names) !== undefined);
+  const layerSelect = (layer: FlybyLayerKey, onChange: (layer: FlybyLayerKey) => void) => (
+    <Select
+      size="small"
+      className="scene3d-flyby-grow"
+      value={layer}
+      onChange={onChange}
+      disabled={busy}
+      aria-label={t('flyby.handLook.layer')}
+      data-testid="flyby-add-change-layer"
+      optionFilterProp="label"
+      showSearch
+      options={names.layers}
+    />
+  );
+  const share = (value: number, onChange: (value: number) => void, label: string) => (
+    <InputNumber
+      size="small"
+      min={0}
+      max={100}
+      step={10}
+      value={percent(value)}
+      onChange={(next) => next !== null && onChange(next / 100)}
+      disabled={busy}
+      suffix="%"
+      aria-label={label}
+      data-testid="flyby-add-change-share"
+    />
+  );
+
+  const target = (() => {
+    switch (what.kind) {
+      case 'background':
         return (
-          <li key={change.id} data-testid={`flyby-change-${change.id}`}>
-            <span className="scene3d-flyby-change-what">
-              {what}
-              <Typography.Text type="secondary"> · {sectionLabel(change.section)}</Typography.Text>
-            </span>
-            <div className="scene3d-flyby-row">
-              <InputNumber
-                size="small"
-                min={0}
-                max={section?.seconds ?? FLYBY_MAX_CHANGE_SECONDS}
-                step={0.5}
-                value={change.at}
-                onChange={(value) => value !== null && update(change.id, { at: value })}
-                disabled={busy}
-                prefix="+"
-                suffix={t('flyby.secondsUnit')}
-                aria-label={t('flyby.look.changeAt', { what, section: sectionLabel(change.section) })}
-                data-testid={`flyby-change-${change.id}-at`}
-              />
-              <InputNumber
-                size="small"
-                min={0}
-                max={FLYBY_MAX_CHANGE_SECONDS}
-                step={0.5}
-                value={FLYBY_CUT_CHANGES.includes(change.kind) ? 0 : change.seconds}
-                onChange={(value) => value !== null && update(change.id, { seconds: value })}
-                disabled={busy || FLYBY_CUT_CHANGES.includes(change.kind)}
-                suffix={t('flyby.secondsUnit')}
-                aria-label={t('flyby.look.changeSeconds', { what })}
-                data-testid={`flyby-change-${change.id}-seconds`}
-              />
-              <Button
-                size="small"
-                type="text"
-                icon={<DeleteOutlined />}
-                disabled={busy}
-                onClick={() => setChanges(changes.filter((other) => other.id !== change.id))}
-                aria-label={t('flyby.look.removeChange', { what })}
-                data-testid={`flyby-change-${change.id}-remove`}
-              />
-            </div>
-            {trouble.has(change.id) && (
-              <Typography.Text type="danger" data-testid={`flyby-change-${change.id}-trouble`}>
-                {trouble.get(change.id)}
-              </Typography.Text>
-            )}
-          </li>
+          <Select
+            size="small"
+            className="scene3d-flyby-grow"
+            value={what.background}
+            onChange={(background: number) => setWhat({ ...what, background })}
+            disabled={busy}
+            aria-label={t('flyby.look.background')}
+            data-testid="flyby-add-change-background"
+            optionFilterProp="label"
+            options={names.backgrounds}
+          />
         );
-      })}
-    </ol>
+      case 'backgroundOpacity':
+        return share(what.opacity, (opacity) => setWhat({ ...what, opacity }), t('flyby.look.backgroundOpacity'));
+      case 'layer':
+        return (
+          <>
+            {layerSelect(what.layer, (layer) => setWhat({ ...what, layer }))}
+            <Segmented
+              size="small"
+              value={what.visible ? 'shown' : 'hidden'}
+              onChange={(value) => setWhat({ ...what, visible: value === 'shown' })}
+              disabled={busy}
+              aria-label={t('flyby.handLook.layerTo')}
+              data-testid="flyby-add-change-visible"
+              options={[
+                { value: 'shown', label: t('flyby.handLook.shown') },
+                { value: 'hidden', label: t('flyby.handLook.hidden') },
+              ]}
+            />
+          </>
+        );
+      case 'layerOpacity':
+        return (
+          <>
+            {layerSelect(what.layer, (layer) => setWhat({ ...what, layer }))}
+            {share(what.opacity, (opacity) => setWhat({ ...what, opacity }), t('flyby.handLook.strength'))}
+          </>
+        );
+      case 'walls':
+        return (
+          <>
+            <ColourWell value={what.colour} onChange={(colour) => setWhat({ ...what, colour })} label={t('flyby.look.wallsColour')} disabled={busy} testId="flyby-add-change-colour" />
+            {share(what.strength, (strength) => setWhat({ ...what, strength }), t('flyby.look.wallsStrength'))}
+          </>
+        );
+      case 'lines':
+      case 'sky':
+        return (
+          <>
+            <Checkbox
+              checked={what.colour === null}
+              onChange={(event) => setWhat({ ...what, colour: event.target.checked ? null : what.kind === 'lines' ? DEFAULT_LINES : DEFAULT_SKY })}
+              disabled={busy}
+              data-testid="flyby-add-change-own"
+            >
+              {t(what.kind === 'lines' ? 'flyby.handLook.linesByDepth' : 'flyby.handLook.noSky')}
+            </Checkbox>
+            {what.colour !== null && (
+              <ColourWell
+                value={what.colour}
+                onChange={(colour) => setWhat({ ...what, colour })}
+                label={t(what.kind === 'lines' ? 'flyby.look.linesColour' : 'flyby.look.sky')}
+                disabled={busy}
+                testId="flyby-add-change-colour"
+              />
+            )}
+          </>
+        );
+      case 'surface':
+        return (
+          <Select
+            size="small"
+            className="scene3d-flyby-grow"
+            value={what.surface}
+            onChange={(surface: FlybySurface) => setWhat({ ...what, surface })}
+            disabled={busy}
+            aria-label={t('flyby.look.surface')}
+            data-testid="flyby-add-change-surface"
+            options={[
+              { value: 'overlay', label: t('flyby.look.surfaceOverlay') },
+              { value: 'cutaway', label: t('flyby.look.surfaceCutaway') },
+            ]}
+          />
+        );
+    }
+  })();
+
+  return (
+    <fieldset className="scene3d-flyby-recipe" data-testid="flyby-add-change">
+      <legend>{t('flyby.handLook.addTitle')}</legend>
+      <Select
+        size="small"
+        value={what.kind}
+        onChange={(kind: FlybyChangeKind) => setWhat(defaultChange(kind, names) ?? what)}
+        disabled={busy}
+        aria-label={t('flyby.handLook.kind')}
+        data-testid="flyby-add-change-kind"
+        options={kinds.map((kind) => ({ value: kind, label: t(`flyby.handLook.kinds.${kind}`) }))}
+      />
+      <div className="scene3d-flyby-row">{target}</div>
+      <div className="scene3d-flyby-row">
+        <Select
+          size="small"
+          className="scene3d-flyby-grow"
+          value={section?.id}
+          onChange={setSection}
+          disabled={busy}
+          aria-label={t('flyby.handLook.section')}
+          data-testid="flyby-add-change-section"
+          options={document.sections.map((candidate) => ({ value: candidate.id, label: sectionLabel(candidate.id) }))}
+        />
+        <InputNumber
+          size="small"
+          min={0}
+          max={section?.seconds ?? FLYBY_MAX_CHANGE_SECONDS}
+          step={0.5}
+          value={at}
+          onChange={(value) => value !== null && setAt(value)}
+          disabled={busy}
+          prefix="+"
+          suffix={t('flyby.secondsUnit')}
+          aria-label={t('flyby.handLook.at')}
+          data-testid="flyby-add-change-at"
+        />
+        <InputNumber
+          size="small"
+          min={0}
+          max={FLYBY_MAX_CHANGE_SECONDS}
+          step={0.5}
+          value={cut ? 0 : seconds}
+          onChange={(value) => value !== null && setSeconds(value)}
+          disabled={busy || cut}
+          suffix={t('flyby.secondsUnit')}
+          aria-label={t('flyby.handLook.seconds')}
+          data-testid="flyby-add-change-seconds"
+        />
+      </div>
+      <Button
+        size="small"
+        icon={<PlusOutlined />}
+        disabled={busy || !section}
+        onClick={() =>
+          section &&
+          setChanges([
+            ...changes,
+            {
+              ...what,
+              id: newChangeId(changes, what.kind),
+              section: section.id,
+              at: Math.min(at, section.seconds),
+              seconds: cut ? 0 : seconds,
+            } as FlybyChange,
+          ])
+        }
+        data-testid="flyby-add-change-add"
+      >
+        {t('flyby.handLook.add')}
+      </Button>
+    </fieldset>
   );
 }
 

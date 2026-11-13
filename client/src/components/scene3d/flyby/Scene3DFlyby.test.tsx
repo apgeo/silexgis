@@ -546,6 +546,56 @@ describe('editing the sections by hand', () => {
   });
 });
 
+describe('changes of the look by hand', () => {
+  it('adds a change of any kind, and the flyby puts it on the scene at its moment', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('0 changes'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'What changes' }));
+    fireEvent.click(screen.getByTitle('A layer shown or hidden'));
+    // The scene's own layers are offered by name.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Layer' }));
+    fireEvent.click(screen.getByTitle('Cave walls'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'During the section' }));
+    fireEvent.click(screen.getByTitle('2. Circle'));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Seconds into the section it starts' }), { target: { value: '1' } });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: 'Seconds into the section it starts' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Seconds it takes' }), { target: { value: '0' } });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: 'Seconds it takes' }));
+    fireEvent.click(screen.getByTestId('flyby-add-change-add'));
+    expect(screen.getByText('1 change')).toBeInTheDocument();
+    expect(screen.getByTestId('flyby-changes')).toHaveTextContent('Hide the walls · 2. Circle');
+
+    // A cut has no length, whatever was typed.
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'What changes' }));
+    fireEvent.click(screen.getByTitle('Ground over the caves'));
+    expect(screen.getByRole('spinbutton', { name: 'Seconds it takes' })).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(scene.shown['layer:walls']).toEqual({ visible: true, opacity: 1 });
+    // The circle starts at 6 s; one second into it the walls are put off.
+    await pass(7500);
+    expect(scene.shown['layer:walls']).toEqual({ visible: false, opacity: 0 });
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('opens with each layer shown, hidden or as the viewer has it, at a strength of its own', () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Look at the start'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Entrances: shown or hidden' }));
+    fireEvent.click(screen.getAllByTitle('Hidden').at(-1)!);
+    const strength = screen.getByRole('spinbutton', { name: 'Survey lines: strength' });
+    fireEvent.change(strength, { target: { value: '40' } });
+    fireEvent.blur(strength);
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Layers' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    const [kept] = useFlybyStore.getState().library;
+    expect(kept.look?.layers).toEqual({ entrances: { visible: false }, centerlines: { opacity: 0.4 } });
+  });
+});
+
 describe('the words for every preset and every kind of section', () => {
   it('exist in both languages', () => {
     for (const locale of [en, ro]) {

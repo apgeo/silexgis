@@ -9785,6 +9785,43 @@
         "unknownSubject": "Subiectul ei nu este în acest survol.",
         "duplicateSection": "Două secțiuni au același nume în fișier."
       }
+    },
+    "handLook": {
+      "layersTitle": "Straturi",
+      "layerShown": "{{name}}: afișat sau ascuns",
+      "layerStrength": "{{name}}: intensitate",
+      "shown": "Afișat",
+      "hidden": "Ascuns",
+      "ownStrength": "Ca la tine",
+      "addTitle": "Adaugă o schimbare",
+      "kind": "Ce se schimbă",
+      "kinds": {
+        "background": "Harta de bază",
+        "backgroundOpacity": "Intensitatea hărții de bază",
+        "layer": "Un strat afișat sau ascuns",
+        "layerOpacity": "Intensitatea unui strat",
+        "walls": "Culoarea pereților",
+        "lines": "Culoarea drumuirilor",
+        "surface": "Terenul peste peșteri",
+        "sky": "Cerul"
+      },
+      "layer": "Strat",
+      "layerTo": "Afișat sau ascuns",
+      "strength": "Intensitate",
+      "linesByDepth": "Din nou după adâncime",
+      "noSky": "Fără cer",
+      "section": "În timpul secțiunii",
+      "at": "Secunde de la începutul secțiunii",
+      "seconds": "Secunde cât durează",
+      "add": "Adaugă schimbarea",
+      "layerNames": {
+        "centerlines": "Drumuiri",
+        "entrances": "Intrări",
+        "surface-features": "Fenomene de suprafață",
+        "walls": "Pereți",
+        "scans": "Scanări",
+        "photos": "Fotografii din stații"
+      }
     }
   },
   "mapSymbols": {

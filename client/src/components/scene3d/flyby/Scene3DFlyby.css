@@ -351,3 +351,25 @@
 .scene3d-flyby-section-editor .scene3d-flyby-row .ant-input-number {
   width: 96px;
 }
+
+/* The opening look per layer: the layer's name over its two choices. */
+.scene3d-flyby-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scene3d-flyby-layers li {
+  display: grid;
+  grid-template-columns: 1fr 88px;
+  gap: 4px;
+  align-items: center;
+}
+
+.scene3d-flyby-layer-name {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
