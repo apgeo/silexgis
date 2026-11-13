@@ -242,6 +242,8 @@ export const clientAreas = {
   'client/src/geodata/': 'georeferencedMaps',
   'client/src/imagelink/': 'resLinks',
   'client/src/map/': 'map',
+  // The movie encoders and the file a long movie is written to, shared by the movies made here.
+  'client/src/movie/': ['surveys', 'trips'],
   'client/src/notifications/': 'notifications',
   'client/src/pdf/': 'documents',
   'client/src/photolibrary/': 'photoLibraries',

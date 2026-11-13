@@ -17,7 +17,7 @@ import {
 import Button from '../../Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
+import type { MovieFormatSupport } from '../../../movie/encode/movieEncoder.ts';
 import {
   MOVIE_GIF_MAX_FRAMES,
   MOVIE_GIF_MAX_WIDTH,
@@ -38,7 +38,7 @@ import {
   type MovieViewDirection,
   type MovieViewLayer,
 } from '../../../caveview/movie/movieSettings.ts';
-import { GIF_FRAME_RATES } from '../../../caveview/movie/encode/movieEncoder.ts';
+import { GIF_FRAME_RATES } from '../../../movie/encode/movieEncoder.ts';
 import { MOVIE_PRESETS, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import {
   MOVIE_ASPECTS,

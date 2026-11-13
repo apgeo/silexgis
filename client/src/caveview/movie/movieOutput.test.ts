@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { videoBitrate } from './encode/video/videoEncoder.ts';
+import { videoBitrate } from '../../movie/encode/video/videoEncoder.ts';
 import {
   localIsoDate,
   MOVIE_GIF_SIZE_BUDGET,

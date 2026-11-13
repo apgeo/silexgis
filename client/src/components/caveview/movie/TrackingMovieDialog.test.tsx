@@ -4,10 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
-import { MemoryMovieSink } from '../../../caveview/movie/encode/memoryMovieSink.ts';
-import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
-import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
-import type { MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
+import { MemoryMovieSink } from '../../../movie/encode/memoryMovieSink.ts';
+import type { MovieFormatSupport } from '../../../movie/encode/movieEncoder.ts';
+import type { MovieSink } from '../../../movie/encode/movieSink.ts';
+import type { MovieFileChoice } from '../../../movie/movieFileSink.ts';
 import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
 import {
   MovieFrameUncomposedError,
@@ -79,8 +79,8 @@ vi.mock('./useMovieTrips.ts', () => ({
 const probe = vi.hoisted(() => ({
   answer: [] as MovieFormatSupport[],
 }));
-vi.mock('../../../caveview/movie/encode/movieEncoder.ts', async (original) => ({
-  ...(await original<typeof import('../../../caveview/movie/encode/movieEncoder.ts')>()),
+vi.mock('../../../movie/encode/movieEncoder.ts', async (original) => ({
+  ...(await original<typeof import('../../../movie/encode/movieEncoder.ts')>()),
   probeMovieFormats: () => Promise.resolve(probe.answer),
 }));
 const recordMovie = vi.hoisted(() => vi.fn<(recording: MovieRecording) => Promise<Blob>>());
@@ -99,8 +99,8 @@ const disk = vi.hoisted(() => ({
   goes: false,
   choose: vi.fn<(name: string, format: string) => Promise<MovieFileChoice>>(),
 }));
-vi.mock('../../../caveview/movie/movieFileSink.ts', async (original) => ({
-  ...(await original<typeof import('../../../caveview/movie/movieFileSink.ts')>()),
+vi.mock('../../../movie/movieFileSink.ts', async (original) => ({
+  ...(await original<typeof import('../../../movie/movieFileSink.ts')>()),
   movieGoesToDisk: (format: string) => disk.goes && format !== 'gif',
   chooseMovieFile: disk.choose,
 }));

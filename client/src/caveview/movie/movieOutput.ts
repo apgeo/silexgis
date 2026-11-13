@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { videoBitrate } from './encode/video/videoEncoder.ts';
+import { videoBitrate } from '../../movie/encode/video/videoEncoder.ts';
 import { movieAutoTitle, movieTitle } from './movieCaptions.ts';
 import type { MovieQuality, MovieSettings } from './movieSettings.ts';
 import { movieSize } from './movieSettings.ts';

@@ -21,7 +21,7 @@ import {
   MOVIE_EXTENSION,
   probeMovieFormats,
   type MovieFormatSupport,
-} from '../../../caveview/movie/encode/movieEncoder.ts';
+} from '../../../movie/encode/movieEncoder.ts';
 import {
   drawMovieCaptions,
   movieAutoTitle,
@@ -51,8 +51,8 @@ import {
   withMovieOutput,
   type MoviePresetId,
 } from '../../../caveview/movie/moviePresets.ts';
-import type { MovieSink } from '../../../caveview/movie/encode/movieSink.ts';
-import { chooseMovieFile, movieGoesToDisk, type MovieFileChoice } from '../../../caveview/movie/movieFileSink.ts';
+import type { MovieSink } from '../../../movie/encode/movieSink.ts';
+import { chooseMovieFile, movieGoesToDisk, type MovieFileChoice } from '../../../movie/movieFileSink.ts';
 import {
   isMovieAbort,
   recordMovie,
