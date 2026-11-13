@@ -395,3 +395,117 @@ test('a movie being made stops when asked, saves nothing and hands the scene bac
   });
   expect([surface.width, surface.height]).toEqual([surface.clientWidth, surface.clientHeight]);
 });
+
+// ---- a live recording by the browser's own recorder ----
+
+/** The first frame a browser decodes from a video file, and what it makes of the file. */
+function firstFrame(page: Page, bytes: Buffer, type: string) {
+  return page.evaluate(
+    async ({ base64, type }) => {
+      const data = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([data], { type }));
+      const video = document.createElement('video');
+      video.muted = true;
+      video.preload = 'auto';
+      try {
+        await new Promise<void>((resolve, reject) => {
+          video.onloadeddata = () => resolve();
+          video.onerror = () => reject(new Error(`the video did not load: ${video.error?.message ?? 'no detail'}`));
+          setTimeout(() => reject(new Error('the video showed no frame')), 30_000);
+          video.src = url;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d', { willReadFrequently: true })!;
+        context.drawImage(video, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let sum = 0;
+        let squares = 0;
+        const count = pixels.length / 4;
+        for (let at = 0; at < pixels.length; at += 4) {
+          const light = (pixels[at] + pixels[at + 1] + pixels[at + 2]) / 3;
+          sum += light;
+          squares += light * light;
+        }
+        const mean = sum / count;
+        return {
+          width: video.videoWidth,
+          height: video.videoHeight,
+          // A recording without seek points says it has no length: the very thing the panel warns of.
+          duration: Number.isFinite(video.duration) ? video.duration : null,
+          spread: Math.sqrt(Math.max(0, squares / count - mean * mean)),
+          png: canvas.toDataURL('image/png'),
+        };
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
+    { base64: bytes.toString('base64'), type },
+  );
+}
+
+test('a flyby is recorded live by the browser\'s own recorder, texts and credits in its frames, and the scene is handed back', async ({ page }) => {
+  test.setTimeout(600_000);
+  await openFlyby(page);
+  const home = await camera(page);
+  await page.getByTestId('flyby-movie').click();
+  const panel = page.getByTestId('flyby-movie-dialog');
+  await expect(panel).toBeVisible({ timeout: 30_000 });
+  await choose(page, panel, 'flyby-movie-size', '640 × 360');
+  await choose(page, panel, 'flyby-movie-fps', '30');
+
+  // Offered here, as the fourth way, and the panel says plainly what it costs.
+  await panel.getByTestId('flyby-movie-level-live').click();
+  await expect(panel.getByTestId('flyby-movie-level-live')).toBeChecked();
+  await expect(panel).toContainText('at the speed this computer drew it');
+  await expect(panel.getByTestId('flyby-movie-summary')).toContainText(/^Up to \d+ frames of 640 × 360/);
+  // Whatever container the recorder writes, the panel has turned to it.
+  const format = (await panel.getByTestId('flyby-movie-format-mp4').isChecked()) ? 'mp4' : 'webm';
+  await expect(panel.getByTestId(`flyby-movie-format-${format}`)).toBeChecked();
+
+  // Three seconds of the turn, and its last moment held for half a second.
+  await panel.getByText('A stretch of it').click();
+  await typeNumber(page, panel.getByTestId('flyby-movie-from'), 0);
+  await typeNumber(page, panel.getByTestId('flyby-movie-to'), 3);
+  await typeNumber(page, panel.getByTestId('flyby-movie-hold'), 0.5);
+
+  const download = page.waitForEvent('download', { timeout: 300_000 });
+  await panel.getByTestId('flyby-movie-export').click();
+  await expect(panel.getByTestId('flyby-movie-progress')).toContainText('Recording live', { timeout: 60_000 });
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(new RegExp(`^silexgis-flyby-\\d{4}-\\d{2}-\\d{2}\\.${format}$`));
+  const bytes = await readFile(await file.path());
+  await expect(panel.getByTestId('flyby-movie-progress')).toBeHidden({ timeout: 30_000 });
+  await expect(panel.getByTestId('flyby-movie-failed')).toHaveCount(0);
+  const report = (await panel.getByTestId('flyby-movie-report').textContent()) ?? '';
+  console.log(`[flyby live] ${format}, ${bytes.length} bytes; the panel says: ${report}`);
+  const kept = process.env.SILEXGIS_FLYBY_MOVIE_SHOTS;
+  if (kept) {
+    await writeFile(path.join(kept, `live.${format}`), bytes);
+  }
+
+  // A video of the kind named, with something in it.
+  if (format === 'webm') {
+    expect(bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3');
+    expect(webmFrames(bytes)).toBeGreaterThan(1);
+  } else {
+    expect(bytes.subarray(4, 8).toString('latin1')).toBe('ftyp');
+  }
+  expect(bytes.length).toBeGreaterThan(5_000);
+  expect(report).toMatch(/frames? recorded in 0:0[34]: about [\d.]+ a second/);
+  const frame = await firstFrame(page, bytes, format === 'webm' ? 'video/webm' : 'video/mp4');
+  await keep('live-first-frame', frame.png);
+  console.log(`[flyby live] decoded at ${frame.width} x ${frame.height}, length ${frame.duration ?? 'not given'}`);
+  expect([frame.width, frame.height]).toEqual([640, 360]);
+  // The scene, not a blank surface read at the wrong moment.
+  expect(frame.spread).toBeGreaterThan(4);
+
+  // The camera is where it was before the recording, and the surface is the element's own size again.
+  await expect.poll(async () => sameCamera(await camera(page), home), { timeout: 15_000 }).toBe(true);
+  const surface = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-testid="scene3d-surface"] canvas') as HTMLCanvasElement;
+    return { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight };
+  });
+  expect([surface.width, surface.height]).toEqual([surface.clientWidth, surface.clientHeight]);
+});

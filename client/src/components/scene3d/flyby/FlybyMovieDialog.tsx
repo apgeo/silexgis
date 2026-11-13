@@ -211,10 +211,13 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
     firstAnswer.current = false;
     const writes = (format: MovieFormat) =>
       format === 'gif' || formats.some((entry) => entry.format === format && entry.supported);
-    if (!writes(settingsRef.current.format)) {
+    const { level, format } = settingsRef.current;
+    // What is recorded live is the recorder's to write, not the encoders' asked here.
+    const recordedLive = level === 'live' && liveTypes.some((type) => type.format === format);
+    if (!recordedLive && !writes(format)) {
       setSettings({ ...settingsRef.current, format: FORMATS.find(writes) ?? 'gif' });
     }
-  }, [formats, setSettings]);
+  }, [formats, liveTypes, setSettings]);
   const formatRefused = isLive ? liveType === null : formats !== null && !supported(settings.format);
 
   const applyPreset = async (id: MoviePresetId) => {
@@ -513,7 +516,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
             <Radio.Button
               key={format}
               value={format}
-              disabled={formats !== null && !supported(format) && settings.format !== format}
+              disabled={(isLive || formats !== null) && !supported(format) && settings.format !== format}
               data-testid={`flyby-movie-format-${format}`}
             >
               {t(`caveview.movie.formats.${format}`)}
