@@ -33,6 +33,7 @@ import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer } from '../map/baseLayers.ts';
 import { CENTERLINE_LAYER_ID } from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../map/entranceLayer.ts';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
   setFeatureTypeSymbols,
@@ -200,6 +201,13 @@ export default function MapPage() {
   const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
+  // The installation's entrance symbols arrive with the map's configuration; the layer restyles
+  // itself when they change.
+  useEffect(() => {
+    if (mapConfig) {
+      setEntranceSymbols(mapConfig);
+    }
+  }, [mapConfig]);
   // Asked of the photo-library slice itself rather than of the map config: most of that
   // slice's routes are not map routes, and keeping the question out of the map endpoints is
   // what keeps the whole feature removable by deleting its directories.

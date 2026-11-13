@@ -14,7 +14,7 @@ Trimiterea mesajelor** arată dacă ceva din toate acestea chiar funcționează.
 > Acestea pot fi stabilite și din mediul de instalare, iar pagina o spune. Stabilirea lor aici
 > este calea care nu are nevoie de repornire.
 
-Pagina are unsprezece file:
+Pagina are aceste file:
 
 | Fila | Ce hotărăște | Mai jos |
 |---|---|---|
@@ -27,6 +27,7 @@ Pagina are unsprezece file:
 | **Notificări** | Cât se păstrează notificările și cât poate costa un anunț | [Păstrare](#păstrare) · [Garda de cheltuială](#garda-de-cheltuială) |
 | **Fototeci** | Oprirea și repornirea folosirii unei fototeci pe care instalarea o are deja | [Fototeci](#fototeci) |
 | **Încărcări de topografii** | Dacă o peșteră făcută de o încărcare de topografie ia primul model al acelei încărcări drept formă | [Încărcări de topografii](#încărcări-de-topografii) |
+| **Simboluri pe hartă** | Cum sunt desenate intrările de peșteră pe hartă, în 3D și pe legăturile partajate | [Simboluri pe hartă](#simboluri-pe-hartă) |
 | **Spațiul de lucru** | Cu ce aranjare a spațiului de lucru al hărții pornește un cont nou | [Spațiul de lucru](#spațiul-de-lucru) |
 | **Hărți în documente** | Ce fundaluri de hartă pot fi copiate într-un document | [Hărți în documente](#hărți-în-documente) |
 | **Hartă de bază proprie** | Harta de bază vectorială a instalării: ce se servește și descărcarea unei regiuni | [Hartă de bază proprie](#hartă-de-bază-proprie) |
@@ -166,6 +167,27 @@ fiecărei versiuni, 1 doar pe ale celei mai noi) și dimensiunea de la care card
 peșterii și pagina de stare avertizează că versiunile mai vechi țin mult
 (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, implicit 500 MB). Amândouă se stabilesc în
 mediul instalării; fila le numește.
+
+## Simboluri pe hartă
+
+Fila **Simboluri pe hartă** alege cum sunt desenate intrările de peșteră — la fel pe hartă, în
+vederea 3D și pe legăturile de hartă partajate. Sunt două alegeri:
+
+- **Intrare la poziția măsurată** — implicit simbolul de intrare de peșteră (un arc peste o
+  deschidere întunecată), în verdele-albastru al hărții.
+- **Intrare afișată aproximativ** — semnul unei intrări protejate arătate cuiva fără acces la
+  poziția exactă, mutată pe grila de protecție. Implicit același simbol, în portocaliu. Alege ceva ce
+  un cititor poate deosebi de primul; o formă desenată primește aici și un contur punctat.
+
+Fiecare se alege din aceeași bibliotecă precum simbolul unui tip de obiectiv (vezi
+[Vocabulare](vocabularies.md)). O formă desenată poate primi o culoare proprie de la butonul de
+culoare de lângă ea, sau rămâne în culoarea stratului; un fișier de simbol își păstrează culorile.
+Previzualizarea le arată pe amândouă în trei mărimi. **Revino la valorile implicite** pune înapoi
+perechea cu intrarea de peșteră. Grupurile de mai multe intrări de la zoom mic rămân bule numerotate.
+
+Valorile implicite se pot da și în mediul instalării (`SILEXGIS__MapSymbols__EntranceSymbol`,
+`SILEXGIS__MapSymbols__ApproximateEntranceSymbol`); o valoare salvată aici are întâietate. De unde vin
+simbolurile și licențele lor este scris în `client/public/feature_symbols/PROVENANCE.md`.
 
 ## Spațiul de lucru
 

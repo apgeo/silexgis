@@ -79,6 +79,9 @@ public sealed class AppSettingsService(
     public ValueTask<TestDataSettings> GetTestDataAsync(CancellationToken ct = default) =>
         GetAsync<TestDataSettings>(AppSettingSections.TestData, "TestData", ct);
 
+    public async ValueTask<MapSymbolSettings> GetMapSymbolsAsync(CancellationToken ct = default) =>
+        (await GetAsync<MapSymbolSettings>(AppSettingSections.MapSymbols, "MapSymbols", ct)).Sanitised();
+
     /// <summary>
     /// The brakes on the neighbouring photo libraries.
     /// </summary>

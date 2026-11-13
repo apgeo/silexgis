@@ -13,6 +13,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -193,6 +194,11 @@ public sealed record TerrainBuildChoiceDto(
 /// cave-density layer colours by when a reader chooses fixed rather than relative bands; the band
 /// above the last bound is open-ended.
 /// </param>
+/// <param name="EntranceSymbol">
+/// The marker an entrance is drawn with at its surveyed position: a bundled symbol file or a drawn
+/// shape, as an administrator chose it (see the administration settings' map symbols).
+/// </param>
+/// <param name="ApproximateEntranceSymbol">The marker of an entrance shown only approximately.</param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -215,7 +221,9 @@ public sealed record MapConfigDto(
     int ScansInViewMaxCavesLimit,
     long ScansInViewMaxBytesLimit,
     int SelectionMax,
-    IReadOnlyList<double> DensityFixedBands);
+    IReadOnlyList<double> DensityFixedBands,
+    string EntranceSymbol,
+    string ApproximateEntranceSymbol);
 
 /// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
 public sealed record EntrancePointRow(
@@ -313,6 +321,7 @@ public static class MapEndpoints
         IOptions<MapOptions> mapOptions,
         IOptions<TerrainOptions> terrainOptions,
         SilexGisDbContext db,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         if (await userAccessor.GetAsync(ct) is null)
@@ -321,6 +330,7 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
+        var symbols = await settings.GetMapSymbolsAsync(ct);
         var sources = await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct);
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
@@ -346,7 +356,9 @@ public static class MapEndpoints
             options.ScansInViewMaxCavesLimit,
             options.ScansInViewMaxBytesLimit,
             options.SelectionMax,
-            options.DensityFixedBandBounds()));
+            options.DensityFixedBandBounds(),
+            symbols.EntranceSymbol,
+            symbols.ApproximateEntranceSymbol));
     }
 
     /// <summary>

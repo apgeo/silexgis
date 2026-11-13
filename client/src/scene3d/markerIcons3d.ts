@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import {
-  entrancePalette,
-  featureSymbolUrl,
-  surfaceFeaturePalette,
-} from '../map/markerPalette.ts';
+import { entranceSymbolReference } from '../map/entranceSymbols.ts';
+import { entrancePalette, surfaceFeaturePalette } from '../map/markerPalette.ts';
+import { symbolImage } from '../map/symbolLibrary.ts';
 
 // Images for the markers the 3D scene draws.
 //
@@ -15,8 +13,9 @@ import {
 // renderings tied to one set of colours, adds no asset to fetch, and works on an installation
 // serving no third-party content at all.
 //
-// Feature-type symbols are different: those already exist as image files the flat map points at,
-// so the scene points at exactly the same URL rather than redrawing them.
+// Entrance and feature-type symbols come from the symbol library both renderers share: a bundled
+// file is the very URL the flat map points at, and a drawn shape the very same inline SVG, so a
+// cave is drawn with the same symbol in both views and the scene adds no picture of its own.
 
 /** An image plus the factor it should be drawn at, which is what a marker needs to be built. */
 export interface MarkerIcon {
@@ -40,17 +39,22 @@ const CLUSTER_FONT_PIXELS = 12;
 /** Fallback dot for a feature whose type carries no symbol file. */
 const FEATURE_DOT_RADIUS = 6;
 
-/**
- * The flat map draws the symbol files at half size, so the 64-pixel artwork lands at about 32
- * pixels. The scene follows, or the same cave's symbols would be twice the size in one view.
- */
-const FEATURE_SYMBOL_SCALE = 0.5;
-
 const entranceIcons = new Map<string, MarkerIcon>();
 const clusterIcons = new Map<number, MarkerIcon>();
 
-/** The pin for a single cave entrance; an approximate one is larger and ringed with a dashed line. */
+/**
+ * The marker of a single cave entrance: the installation's chosen symbol for an entrance at its
+ * surveyed position or for one shown approximately, falling back to the plain dot (larger and
+ * ringed with a dashed line when approximate) when the choice names nothing this build ships.
+ */
 export function entranceIcon(approximate: boolean): MarkerIcon {
+  const image = symbolImage(entranceSymbolReference(approximate), {
+    color: approximate ? entrancePalette.approximate : entrancePalette.point,
+    approximate,
+  });
+  if (image) {
+    return { image: image.src, scale: image.scale };
+  }
   const key = approximate ? 'approximate' : 'exact';
   const cached = entranceIcons.get(key);
   if (cached) {
@@ -95,12 +99,13 @@ export function clusterIcon(count: number): MarkerIcon {
   return icon;
 }
 
-/** The symbol a surface feature is drawn with, falling back to a plain dot for untyped rows. */
-export function surfaceFeatureIcon(symbolFile: string | null | undefined): MarkerIcon {
-  if (typeof symbolFile === 'string' && symbolFile.length > 0) {
-    return { image: featureSymbolUrl(symbolFile), scale: FEATURE_SYMBOL_SCALE };
-  }
-  return featureDotIcon();
+/**
+ * The symbol a surface feature is drawn with — its type's file or drawn shape — falling back to a
+ * plain dot for untyped rows and for a symbol this build does not ship.
+ */
+export function surfaceFeatureIcon(symbol: string | null | undefined): MarkerIcon {
+  const image = symbolImage(symbol, { color: surfaceFeaturePalette.point });
+  return image ? { image: image.src, scale: image.scale } : featureDotIcon();
 }
 
 let featureDot: MarkerIcon | undefined;

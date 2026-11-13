@@ -18,6 +18,7 @@ import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
+import { onEntranceSymbolsChanged, setEntranceSymbols } from '../../map/entranceSymbols.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
   isDrawableIn3d,
@@ -783,6 +784,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // there; here the label has to be attached to the item, because a hit test runs once per drawn
     // frame and cannot go looking things up.
     const unsubscribeCatalog = onFeatureTypeCatalogChanged(() => data.reload());
+    // The entrance markers are images chosen as they are built, so a different choice of symbol
+    // arriving with the map's configuration is drawn only once they are built again.
+    const unsubscribeEntranceSymbols = onEntranceSymbolsChanged(() => data.reload());
 
     // The same panel's "zoom to" buttons: while this view is on screen, they move this camera.
     // The two camera members are what lets a saved view remember, and restore, a place underground
@@ -823,6 +827,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       unsubscribeView();
       detachCamera();
       unsubscribeCatalog();
+      unsubscribeEntranceSymbols();
       unsubscribeChanges();
       unsubscribeClick();
       unsubscribeHover();
@@ -1022,6 +1027,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   }, []);
 
   const { data: mapConfig } = useMapConfig();
+  useEffect(() => {
+    if (mapConfig) {
+      setEntranceSymbols(mapConfig);
+    }
+  }, [mapConfig]);
   // This person's own limits for the walls in view, kept in this browser. Read one by one so
   // that an unrelated preference changing does not hand the loader the same numbers again.
   const ownMeshesMinZoom = useUiPrefsStore((s) => s.meshesInViewMinZoom);

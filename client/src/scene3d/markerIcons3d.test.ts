@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
 import { entrancePalette, surfaceFeaturePalette } from '../map/markerPalette.ts';
 import { clusterIcon, entranceIcon, surfaceFeatureIcon } from './markerIcons3d.ts';
 
@@ -10,26 +11,43 @@ function svgOf(image: string): string {
 }
 
 describe('entranceIcon', () => {
-  it('draws an exact entrance in the same colour the flat map fills it with', () => {
+  afterEach(() => setEntranceSymbols(null));
+
+  it('draws an exact entrance as the cave-entrance glyph, in the colour the flat map uses', () => {
     const svg = svgOf(entranceIcon(false).image);
 
+    expect(svg).toContain('<path');
     expect(svg).toContain(`fill='${entrancePalette.point}'`);
     expect(svg).toContain(`stroke='${entrancePalette.stroke}'`);
     expect(svg).not.toContain('stroke-dasharray');
   });
 
-  it('marks an approximate entrance the way the flat map does — warm, larger, dashed ring', () => {
-    const exact = svgOf(entranceIcon(false).image);
+  it('marks an approximate entrance warm and with a dashed casing, so colour is not the only cue', () => {
     const approximate = svgOf(entranceIcon(true).image);
 
     expect(approximate).toContain(`fill='${entrancePalette.approximate}'`);
     expect(approximate).toContain('stroke-dasharray');
+  });
+
+  it('follows the installation\'s choice of symbol, the same file the flat map draws', () => {
+    setEntranceSymbols({ entranceSymbol: 'qgis_poi_cave.svg', approximateEntranceSymbol: 'shape:triangle:aa0000' });
+
+    expect(entranceIcon(false)).toEqual({ image: '/feature_symbols/qgis_poi_cave.svg', scale: 0.5 });
+    expect(svgOf(entranceIcon(true).image)).toContain("fill='#aa0000'");
+  });
+
+  it('falls back to the plain dot when the choice names a file this build does not ship', () => {
+    setEntranceSymbols({ entranceSymbol: 'gone.svg', approximateEntranceSymbol: 'gone.svg' });
+
+    const exact = svgOf(entranceIcon(false).image);
+    const approximate = svgOf(entranceIcon(true).image);
+    expect(exact).toContain('<circle');
     expect(radiusOf(approximate)).toBeGreaterThan(radiusOf(exact));
   });
 
-  it('hands back the same icon for the same kind, so the renderer caches one image', () => {
-    expect(entranceIcon(false)).toBe(entranceIcon(false));
-    expect(entranceIcon(true)).not.toBe(entranceIcon(false));
+  it('hands back the same image for the same kind, so the renderer caches one texture', () => {
+    expect(entranceIcon(false).image).toBe(entranceIcon(false).image);
+    expect(entranceIcon(true).image).not.toBe(entranceIcon(false).image);
   });
 });
 
@@ -66,8 +84,13 @@ describe('surfaceFeatureIcon', () => {
     expect(icon.scale).toBe(0.5);
   });
 
-  it('falls back to a plain dot for a type with no symbol of its own', () => {
-    for (const missing of [null, undefined, '']) {
+  it('draws a drawn shape in the features\' colour unless the reference names one', () => {
+    expect(svgOf(surfaceFeatureIcon('shape:star').image)).toContain(`fill='${surfaceFeaturePalette.point}'`);
+    expect(svgOf(surfaceFeatureIcon('shape:star:123abc').image)).toContain("fill='#123abc'");
+  });
+
+  it('falls back to a plain dot for a type with no symbol of its own, or one not shipped', () => {
+    for (const missing of [null, undefined, '', 'not-shipped.png', '../etc/passwd']) {
       const icon = surfaceFeatureIcon(missing);
       expect(svgOf(icon.image)).toContain(`fill='${surfaceFeaturePalette.point}'`);
       expect(icon.scale).toBe(1);

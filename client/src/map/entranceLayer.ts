@@ -5,12 +5,14 @@ import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
+import { Circle as CircleStyle, Fill, Icon, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
 import { worldBbox } from '../geo/coords.ts';
 import { handleMapFilterError, mapFilterParams } from './mapFilters.ts';
 import { entrancePalette as palette } from './markerPalette.ts';
 import { declutterOption } from './declutter.ts';
+import { entranceSymbolReference, onEntranceSymbolsChanged } from './entranceSymbols.ts';
+import { symbolImage, type SymbolImage } from './symbolLibrary.ts';
 
 export const ENTRANCE_LAYER_ID = 'entrances';
 
@@ -85,32 +87,75 @@ export function attachEntranceLoader(map: Map): () => void {
   };
 }
 
+// Styles are built once per distinct look and shared by every feature that has it. The layer asks
+// for a style per feature on every frame, and with hundreds of entrances in view, building a fresh
+// style (and with it a fresh image) each time is what makes panning stutter; a shared style is
+// also what lets OpenLayers rasterise each symbol image once.
+const clusterStyles = new globalThis.Map<number, Style>();
+const pointStyles = new globalThis.Map<string, Style>();
+
+// A different choice of symbol restyles what is already drawn; nothing else would redraw it.
+onEntranceSymbolsChanged(() => source.changed());
+
 export function entranceStyle(feature: FeatureLike): Style {
   const props = feature.getProperties();
 
   if (props.cluster === true) {
     const count = Number(props.count ?? 0);
-    return new Style({
-      // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
-      // way. Left at the default, decluttering would hide overlapping markers themselves, which
-      // would mean switching it on made features vanish — the opposite of what it is for.
-      image: new CircleStyle({
-        declutterMode: 'obstacle',
-        radius: Math.min(24, 12 + Math.sqrt(count)),
-        fill: new Fill({ color: palette.cluster }),
-        stroke: new Stroke({ color: palette.stroke, width: 2 }),
-      }),
-      text: new Text({
-        text: String(count),
-        fill: new Fill({ color: palette.stroke }),
-        font: 'bold 12px sans-serif',
-        // Part of the bubble it is written in, not a label competing for space beside it.
-        declutterMode: 'none',
-      }),
-    });
+    let style = clusterStyles.get(count);
+    if (!style) {
+      style = new Style({
+        // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+        // way. Left at the default, decluttering would hide overlapping markers themselves, which
+        // would mean switching it on made features vanish — the opposite of what it is for.
+        image: new CircleStyle({
+          declutterMode: 'obstacle',
+          radius: Math.min(24, 12 + Math.sqrt(count)),
+          fill: new Fill({ color: palette.cluster }),
+          stroke: new Stroke({ color: palette.stroke, width: 2 }),
+        }),
+        text: new Text({
+          text: String(count),
+          fill: new Fill({ color: palette.stroke }),
+          font: 'bold 12px sans-serif',
+          // Part of the bubble it is written in, not a label competing for space beside it.
+          declutterMode: 'none',
+        }),
+      });
+      clusterStyles.set(count, style);
+    }
+    return style;
   }
 
-  const approximate = props.approximate === true;
+  return entrancePointStyle(props.approximate === true);
+}
+
+/**
+ * The marker of one entrance: the installation's chosen symbol, or — when that names nothing this
+ * build ships — the plain dot entrances were drawn with before symbols could be chosen. Built once
+ * per distinct image and shared.
+ */
+function entrancePointStyle(approximate: boolean): Style {
+  const image = symbolImage(entranceSymbolReference(approximate), {
+    color: approximate ? palette.approximate : palette.point,
+    approximate,
+  });
+  const key = image ? `${image.src}|${image.scale}` : `fallback|${approximate}`;
+  let style = pointStyles.get(key);
+  if (!style) {
+    style = buildEntrancePointStyle(approximate, image);
+    pointStyles.set(key, style);
+  }
+  return style;
+}
+
+function buildEntrancePointStyle(approximate: boolean, image: SymbolImage | undefined): Style {
+  if (image) {
+    // Always drawn, for the same reason as the plain circle below.
+    return new Style({ image: new Icon({ src: image.src, scale: image.scale, declutterMode: 'obstacle' }) });
+  }
+  // A reference this build cannot read (a symbol file removed since it was chosen): the plain
+  // marker entrances were drawn with before symbols could be chosen at all.
   return new Style({
     // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
     // way. Left at the default, decluttering would hide overlapping markers themselves, which

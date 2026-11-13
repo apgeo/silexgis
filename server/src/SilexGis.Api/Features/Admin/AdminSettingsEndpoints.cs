@@ -71,6 +71,11 @@ public static class AdminSettingsEndpoints
             .WithSummary(
                 "Switches the test-data generator on or off for full administrators. "
                 + "Works only where the deployment allows the generator at all (TestData:Allowed).");
+        admin.MapPut("/map-symbols", SaveMapSymbolsAsync)
+            .WithValidation<MapSymbolSettingsDto>()
+            .WithSummary(
+                "Saves the markers cave entrances are drawn with on the map and in the 3D scene: "
+                + "one for an entrance at its surveyed position, one for an entrance shown approximately.");
         admin.MapPut("/photo-libraries", SavePhotoLibrariesAsync)
             .WithValidation<PhotoLibrarySuspensionDto>()
             .WithSummary(
@@ -636,6 +641,37 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
     }
 
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveMapSymbolsAsync(
+        MapSymbolSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        IOptions<TestDataOptions> testData,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.MapSymbols,
+            new MapSymbolSettings
+            {
+                EntranceSymbol = request.EntranceSymbol,
+                ApproximateEntranceSymbol = request.ApproximateEntranceSymbol,
+            },
+            ct);
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
+    }
+
     private static async Task<AdminSettingsDto> SnapshotAsync(
         IAppSettingsService settings, IEmailDelivery emailDelivery, ISmsDelivery smsDelivery, TestDataOptions testData, CancellationToken ct)
     {
@@ -651,6 +687,7 @@ public static class AdminSettingsEndpoints
         var sync = await settings.GetSyncAsync(ct);
         var surveyUploads = await settings.GetSurveyUploadsAsync(ct);
         var generator = await settings.GetTestDataAsync(ct);
+        var symbols = await settings.GetMapSymbolsAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -709,6 +746,7 @@ public static class AdminSettingsEndpoints
                 sync.RejectedHeldBytesRetentionDays),
             new SurveyUploadSettingsDto(surveyUploads.FirstModelOfCreatedCave),
             new TestDataSettingsDto(generator.Enabled, testData.Allowed),
+            new MapSymbolSettingsDto(symbols.EntranceSymbol, symbols.ApproximateEntranceSymbol),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

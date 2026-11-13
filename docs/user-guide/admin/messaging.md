@@ -14,7 +14,7 @@ delivery** shows whether any of it is actually working.
 > These can also be set from the deployment's environment, and the page says so. Setting them
 > here is the route that does not need a restart.
 
-The page has eleven tabs:
+The page has these tabs:
 
 | Tab | Decides | Below |
 |---|---|---|
@@ -27,6 +27,7 @@ The page has eleven tabs:
 | **Notifications** | How long notifications are kept, and what an announcement may cost | [Retention](#retention) · [The money guard](#the-money-guard) |
 | **Photo libraries** | Stopping and restarting the use of a photo library the installation already has | [Photo libraries](#photo-libraries) |
 | **Survey uploads** | Whether a cave made by a survey upload takes that upload's first model as its shape | [Survey uploads](#survey-uploads) |
+| **Map symbols** | How cave entrances are drawn on the map, in 3D and on shared links | [Map symbols](#map-symbols) |
 | **Workspace** | Which arrangement of the map workspace a new account starts with | [Workspace](#workspace) |
 | **Maps in documents** | Which map backgrounds a document may copy | [Maps in documents](#maps-in-documents) |
 | **Own basemap** | The installation's own vector basemap: what is served, and downloading a region | [Own basemap](#own-basemap) |
@@ -161,6 +162,28 @@ produced (`SILEXGIS__SurveyUploads__KeepArtefactVersions` — 0 keeps every vers
 newest's) and the size at which the cave's *Surveys* card and the status page warn that older
 versions hold a lot (`SILEXGIS__SurveyUploads__OlderVersionsWarnMegabytes`, 500 MB by default).
 Both are set in the deployment's environment; the tab names them.
+
+## Map symbols
+
+The **Map symbols** tab chooses how cave entrances are drawn — on the map, in the 3D view and on
+shared map links alike. There are two choices:
+
+- **Entrance at its surveyed position** — by default the cave-entrance symbol (an arch over a dark
+  opening) in the map's teal.
+- **Entrance shown approximately** — the marker of a protected entrance shown to somebody without
+  exact view, snapped to the protection grid. By default the same symbol in orange. Choose something
+  a reader can tell from the first; a drawn shape is also given a dashed outline here.
+
+Each is picked from the same library as a feature kind's symbol (see
+[Vocabularies](vocabularies.md)). A drawn shape can be given a colour of its own with the colour
+button beside it, or left in the layer's colour; a symbol file keeps its own colours. The preview
+shows both at three sizes. **Back to the defaults** restores the cave-entrance pair. Groups of
+several entrances at low zoom are still drawn as numbered bubbles.
+
+The defaults can also be set in the deployment's environment
+(`SILEXGIS__MapSymbols__EntranceSymbol`, `SILEXGIS__MapSymbols__ApproximateEntranceSymbol`); a value
+saved here wins. Where the symbols come from and their licences is listed in
+`client/public/feature_symbols/PROVENANCE.md`.
 
 ## Workspace
 

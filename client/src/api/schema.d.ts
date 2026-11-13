@@ -8491,6 +8491,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/map-symbols": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Saves the markers cave entrances are drawn with on the map and in the 3D scene: one for an entrance at its surveyed position, one for an entrance shown approximately. */
+        put: operations["adminSettingsSaveMapSymbols"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/photo-libraries": {
         parameters: {
             query?: never;
@@ -9485,6 +9502,7 @@ export interface components {
             sync: components["schemas"]["SyncSettingsDto"];
             surveyUploads: components["schemas"]["SurveyUploadSettingsDto"];
             testData: components["schemas"]["TestDataSettingsDto"];
+            mapSymbols: components["schemas"]["MapSymbolSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -13114,6 +13132,8 @@ export interface components {
             /** Format: int32 */
             selectionMax: number;
             densityFixedBands: number[];
+            entranceSymbol: string;
+            approximateEntranceSymbol: string;
         };
         MapControlPointDto: {
             /** Format: double */
@@ -13224,6 +13244,10 @@ export interface components {
             dpi: null | number;
             /** @default false */
             allLayers: boolean;
+        };
+        MapSymbolSettingsDto: {
+            entranceSymbol: string;
+            approximateEntranceSymbol: string;
         };
         MapViewDto: {
             /** Format: uuid */
@@ -15592,6 +15616,8 @@ export interface components {
         SharedViewOverlaysDto: {
             entrances: boolean;
             features: boolean;
+            entranceSymbol: string;
+            approximateEntranceSymbol: string;
         };
         SharedViewReachDto: {
             /** Format: double */
@@ -43084,6 +43110,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TestDataSettingsWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSettingsDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    adminSettingsSaveMapSymbols: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapSymbolSettingsDto"];
             };
         };
         responses: {

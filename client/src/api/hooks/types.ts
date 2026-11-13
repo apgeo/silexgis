@@ -99,6 +99,7 @@ export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type SurveyUploadSettings = components['schemas']['SurveyUploadSettingsDto'];
 export type TestDataSettings = components['schemas']['TestDataSettingsDto'];
+export type MapSymbolSettings = components['schemas']['MapSymbolSettingsDto'];
 export type TestDataOverview = components['schemas']['TestDataOverviewDto'];
 export type TestDataRun = components['schemas']['TestDataRunDto'];
 export type TestDataProfile = components['schemas']['TestDataProfile'];

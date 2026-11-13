@@ -46,6 +46,8 @@ function mapConfig(
     meshAskAboveBytes: 50 * 1024 * 1024,
     selectionMax: 200,
     densityFixedBands: [1, 5, 20],
+    entranceSymbol: 'shape:cave',
+    approximateEntranceSymbol: 'shape:cave:d46b08',
   };
 }
 

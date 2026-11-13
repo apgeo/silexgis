@@ -10,6 +10,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Basemap;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -88,7 +89,13 @@ public sealed record SharedViewBackgroundDto(
 
 /// <param name="Entrances">The cave entrances overlay is drawn: the view had it on, and the installation allows it.</param>
 /// <param name="Features">The surface features overlay is drawn, on the same two conditions.</param>
-public sealed record SharedViewOverlaysDto(bool Entrances, bool Features);
+/// <param name="EntranceSymbol">
+/// The installation's entrance marker, so the link draws entrances the way the map does. Not
+/// information about any cave: the same answer for every link and every reader.
+/// </param>
+/// <param name="ApproximateEntranceSymbol">The marker of an entrance shown only approximately.</param>
+public sealed record SharedViewOverlaysDto(
+    bool Entrances, bool Features, string EntranceSymbol, string ApproximateEntranceSymbol);
 
 public sealed record MapViewWriteRequest(
     string Name,
@@ -336,6 +343,7 @@ public static class MapViewEndpoints
         SilexGisDbContext db,
         IOptions<MapOptions> mapOptions,
         BasemapStore basemap,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.ShareToken == token, ct);
@@ -348,8 +356,12 @@ public static class MapViewEndpoints
         // least-privileged reader there is; this answer only says which of them to ask, and where.
         var config = SharedViewConfig.Read(view.Config);
         var dataOn = mapOptions.Value.SharedViewData;
+        var symbols = await settings.GetMapSymbolsAsync(ct);
         var overlays = new SharedViewOverlaysDto(
-            dataOn && config.EntrancesVisible, dataOn && config.SurfaceFeaturesVisible);
+            dataOn && config.EntrancesVisible,
+            dataOn && config.SurfaceFeaturesVisible,
+            symbols.EntranceSymbol,
+            symbols.ApproximateEntranceSymbol);
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
         var camera = config.Camera;
         var reach = (overlays.Entrances || overlays.Features) && camera is not null ? camera.Reach : null;
