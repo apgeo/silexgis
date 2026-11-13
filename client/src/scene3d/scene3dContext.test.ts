@@ -4111,7 +4111,7 @@ describe('vertical exaggeration', () => {
           item instanceof engine.PolylineCollection && item.polylines.some((line) => line.id === 'scan-centreline'),
       )!;
 
-    it('hands a model over at its true height for the library to stretch, and lets it be culled only at true height', async () => {
+    it('hands a model over at its true height for the library to stretch, and lets it be culled only while never stretched', async () => {
       const session = acquire();
       const loading = session.engine.loadModel('mesh', {
         url: MESH_URL,
@@ -4132,8 +4132,11 @@ describe('vertical exaggeration', () => {
       // kilometre above that sphere, the walls would vanish exactly when they are looked at.
       expect(model._cull).toBe(false);
 
+      // Back at true height the library is still drawing at a factor a hair above one (see the
+      // next case), so the model stays unculled; a model is only ever culled the library's way in
+      // a scene that has not been stretched.
       session.engine.setVerticalExaggeration(1);
-      expect(model._cull).toBe(true);
+      expect(model._cull).toBe(false);
       session.release();
     });
 
@@ -4260,6 +4263,19 @@ describe('vertical exaggeration', () => {
     });
   });
 
+  it('never hands the library exactly one again once stretched, and reports true height regardless', () => {
+    // The library's step back to its unstretched tile layout breaks tiles that share a layout with
+    // another; a hair above one keeps them all stretched, a millimetre per thousand metres.
+    const session = acquire();
+    session.engine.setVerticalExaggeration(2);
+
+    session.engine.setVerticalExaggeration(1);
+
+    expect(scene().verticalExaggeration).toBe(1 + 1e-6);
+    expect(session.engine.getVerticalExaggeration()).toBe(1);
+    session.release();
+  });
+
   it('puts everything back exactly as it was at true height', () => {
     // The first thing to prove and the last to check: back at one, every number the scene handed
     // the library, and every number it hands a caller, is the one from before a factor was set.
@@ -4293,13 +4309,14 @@ describe('vertical exaggeration', () => {
     expect(height).toBe(before.camera.height);
     expect(flatLines().polylines.map((line) => line.positions)).toEqual(before.lines);
     expect(markerBatch().billboards.map((billboard) => billboard.position)).toEqual(before.markers);
-    expect(session.engine.groundHeight(25.3, 45.7)).toBe(before.ground);
+    // Read off ground the library draws a millionth taller, and divided by the same: true.
+    expect(session.engine.groundHeight(25.3, 45.7)).toBeCloseTo(before.ground, 6);
     const read = session.engine.getCamera();
     for (const key of Object.keys(before.read) as (keyof typeof before.read)[]) {
       expect(read[key]).toBeCloseTo(before.read[key], 9);
     }
-    expect(session.engine.getPseudoZoom()).toBeCloseTo(before.zoom, 9);
-    expect(scene().verticalExaggeration).toBe(1);
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(before.zoom, 6);
+    expect(session.engine.getVerticalExaggeration()).toBe(1);
     session.release();
   });
 

@@ -240,6 +240,20 @@ const CUTAWAY_RIM_OVERLAP_METERS = 2;
 const CUTAWAY_RIM_REFRESH_METERS = 1;
 
 /**
+ * What the library is told for true height once the scene has been stretched: one and a millionth,
+ * which is under a millimetre on the highest summit and never drawn differently from one.
+ *
+ * Telling it exactly one makes it re-encode every surface tile it holds back to the unstretched
+ * layout, and that step is broken for tiles that share their layout description with another — an
+ * upsampled child, a fill — which it rewrites in place for the first and then finds already done
+ * for the second. Seen in a browser after the factor came back to one: whole tiles of ground
+ * drawn as holes onto the black behind the globe. A factor that is never quite one keeps every
+ * tile in the stretched layout, which it handles. A scene that has never been stretched is told
+ * nothing at all and is drawn exactly as it always was.
+ */
+const TRUE_HEIGHT_ONCE_STRETCHED = 1 + 1e-6;
+
+/**
  * The excavation is drawn in earth colours rather than left as the hole it is. Cutting the ground
  * away does not put anything in its place: the opening renders as a hard black void with a
  * stepped rim, which reads as a broken renderer rather than as a hole in a hillside. These are the
@@ -830,7 +844,7 @@ class CesiumScene3D implements Scene3DCore {
     // factor that frame was drawn at, and the depth it leaves behind is of that frame. From here
     // on, a height read out of either is undone by this factor; see `trueHeight`.
     const onPostRender = () => {
-      this.lastFrameExaggeration = this.exaggeration;
+      this.lastFrameExaggeration = scene.verticalExaggeration;
     };
     scene.postRender.addEventListener(onPostRender);
     this.removePostRenderHandler = () => scene.postRender.removeEventListener(onPostRender);
@@ -1758,7 +1772,8 @@ class CesiumScene3D implements Scene3DCore {
     this.exaggeration = next;
     // The ground, models and the tiles of point clouds the library stretches itself, about the
     // ellipsoid. Everything else is stretched by this object, by the same number; see `drawnHeight`.
-    scene.verticalExaggeration = next;
+    // True height after a stretch is handed over as a hair above one; see the constant.
+    scene.verticalExaggeration = next === 1 ? TRUE_HEIGHT_ONCE_STRETCHED : next;
     scene.verticalExaggerationRelativeHeight = 0;
     this.forgetGroundUnderMarkers();
 
@@ -2050,12 +2065,12 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
    * walls of a cave a kilometre up are drawn a kilometre above the sphere that stands for them, so
    * a camera looking at the walls is not looking at the sphere and the walls vanish exactly when
    * they are looked at. The flag is the library's own and not on its published surface: it is read
-   * when a model's draw commands are built, and the library rebuilds them precisely when the factor
-   * moves to or from one — which is when this changes it.
+   * when a model's draw commands are built, and the library rebuilds them precisely when its factor
+   * moves to or from one — which is when this changes it, so it follows the library's factor.
    */
   private cullAtTrueHeightOnly(model: Model): void {
     const flags = model as unknown as { _cull: boolean };
-    const cull = this.exaggeration === 1;
+    const cull = this.widget.scene.verticalExaggeration === 1;
     if (flags._cull !== cull) {
       flags._cull = cull;
     }
@@ -3138,7 +3153,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
   /**
    * A drawn height as true metres. `factor` is the one it was drawn at: the factor in force for
    * where this object put something itself, and the last frame's for a height read back out of
-   * the picture — the ground under a point, the depth under a pixel.
+   * the picture — the ground under a point, the depth under a pixel — which is the library's own.
    */
   private trueHeight(drawn: number, factor: number = this.exaggeration): number {
     return drawn / factor;
