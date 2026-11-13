@@ -9559,13 +9559,17 @@
       "nothingSelected": "Select a cave or an area on the map or in the scene first.",
       "noCaves": "No cave is drawn in the view. Move closer to one, then refresh the list.",
       "refresh": "Refresh the list",
-      "shortestRoute": "Shortest route"
+      "shortestRoute": "Shortest route",
+      "file": "An imported file",
+      "pickFile": "The file to follow",
+      "noFiles": "No imported file is ready. Import a GPX or KML track under Geodata first."
     },
     "subject": {
       "all": "all together",
       "feature": "the selected area",
       "view": "the view",
-      "place": "a pinned place"
+      "place": "a pinned place",
+      "file": "an imported file"
     },
     "presetTitle": "Preset",
     "preset": {
@@ -9596,6 +9600,10 @@
       "descent": {
         "name": "Descent",
         "hint": "From the cave's highest drawn point down its survey to the deepest, the camera a little behind and above, looking along the passage. A cave whose survey is not drawn, or does not join the two, is dived into instead."
+      },
+      "alongLine": {
+        "name": "Along a line",
+        "hint": "Follows the track of an imported file at a height above the ground, looking ahead, then rises to show all of it."
       }
     },
     "editedNote": "These sections were opened or changed by hand. Changing what the flyby is about, its preset or its options builds them again.",
@@ -9620,7 +9628,8 @@
       "hold": "Hold",
       "tilt": "Tilt",
       "keyframe": "To a view",
-      "descent": "Down the survey"
+      "descent": "Down the survey",
+      "follow": "Along the line"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Seconds — {{section}}",
@@ -9781,7 +9790,8 @@
         "badPose": "A turn, a lift or a height above the ground is outside what is allowed.",
         "unknownSubject": "What it is about is not in this flyby.",
         "duplicateSection": "Two sections have the same name inside the file."
-      }
+      },
+      "rangeM": "Distance, in metres"
     },
     "handLook": {
       "layersTitle": "Layers",
@@ -9834,7 +9844,8 @@
       "remove": "Remove {{view}}"
     },
     "routes": {
-      "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it."
+      "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it.",
+      "noLine": "The file holds no line to follow: the camera flies straight to it instead."
     }
   },
   "mapSymbols": {

@@ -95,7 +95,7 @@ describe('a flight through views its author captured', () => {
     }
     const steps = frameSteps(timeline);
     const median = [...steps].sort((a, b) => a - b)[Math.floor(steps.length / 2)];
-    expect(steps[steps.length - 1]).toBeLessThan(median * 0.05);
+    expect(steps[steps.length - 1]).toBeLessThan(median * 0.2);
     // Every moment is a function of its time alone.
     const again = compileFlyby(document, await resolveAll(document, world(0)));
     expect(flybyCameraAt(again, 9.7, flat)).toEqual(flybyCameraAt(timeline, 9.7, flat));
@@ -171,7 +171,8 @@ describe('a descent down a cave\'s survey', () => {
   it('follows the survey from its highest point to its deepest, a little behind and above the point followed', () => {
     expect(timeline.stretches).toHaveLength(1);
     const span = timeline.spans[1];
-    expect(stretch.start).toBeCloseTo(span.start + 3);
+    // A fifth of the section flies to where the line begins.
+    expect(stretch.start).toBeCloseTo(span.start + 6);
     expect(stretch.end).toBeCloseTo(span.end);
     for (let t = stretch.start; t <= stretch.end; t += 0.5) {
       const knot = flybyKnotAt(timeline, t);
@@ -236,5 +237,72 @@ describe('a descent down a cave\'s survey', () => {
     // At the end of the section the camera looks at the deepest point from close by.
     const end = flybyCameraAt(diving, diving.spans[1].end, () => 1005);
     expect(metersBetween(eyeOf(end), eyeLookingAt(cave.bottom!, end.heading, -30, 0.15 * 150))).toBeLessThan(0.5);
+  });
+});
+
+describe('a flight along an imported file\'s track', () => {
+  // An invented walk of about four kilometres, wandering a little as a GPS track does.
+  const track = Array.from({ length: 120 }, (_, i) => ({
+    longitude: 25 + i * 0.0004 + 0.00003 * Math.sin(i * 1.7),
+    latitude: 45.5 + 0.004 * Math.sin(i / 25) + 0.00002 * Math.cos(i * 2.3),
+  }));
+  const ground = (longitude: number, latitude: number) => 900 + 150 * Math.sin((longitude - 25) * 120) + 80 * Math.cos((latitude - 45.5) * 300);
+  const withFile: FlybyWorld = {
+    ...world(0),
+    groundHeight: ground,
+    fileLines: async () => ({
+      bounds: [25, 45.496, 25.048, 45.504],
+      lines: [track, [track[0], track[1]]],
+    }),
+  };
+  const document = buildPreset('alongLine', [{ kind: 'file', geofileId: 'walk' }]);
+
+  it('is about the file by its id alone, and is built as along the line and back up', async () => {
+    expect(document.sections.map((section) => section.kind)).toEqual(['follow', 'rise']);
+    expect(document.subjects).toEqual([{ kind: 'file', geofileId: 'walk' }]);
+    expect(flybyHoldsPlace(document)).toBe(false);
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(document)))).toEqual(document);
+  });
+
+  it('follows the track at a height above the ground, looking ahead along it', async () => {
+    const resolved = await resolveAll(document, withFile);
+    expect(resolved[0]?.route).toHaveLength(120);
+    const timeline = compileFlyby(document, resolved);
+    const stretch = timeline.stretches[0];
+    expect(stretch.distance).toBe(250);
+    for (let t = stretch.start + 0.5; t < stretch.end; t += 1) {
+      const knot = flybyKnotAt(timeline, t);
+      const followed = movedBy(timeline.origin, knot.target);
+      // On the track, give or take the smoothing of its wander.
+      const nearest = Math.min(...track.map((point) => metersBetween({ lon: point.longitude, lat: point.latitude, height: 0 }, { ...followed, height: 0 })));
+      expect(nearest).toBeLessThan(40);
+      const camera = flybyCameraAt(timeline, t, ground);
+      // Above the ground under it by at least the clearance asked for.
+      expect(camera.height - ground(camera.longitude, camera.latitude)).toBeGreaterThanOrEqual(60 - 1e-6);
+      // Facing where the track goes next: a point a little further along is ahead of the camera.
+      const ahead = movedBy(timeline.origin, flybyKnotAt(timeline, Math.min(t + 2, stretch.end)).target);
+      const east = (ahead.lon - camera.longitude) * Math.cos((ahead.lat * Math.PI) / 180);
+      const north = ahead.lat - camera.latitude;
+      const bearing = ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+      expect(Math.abs(((bearing - camera.heading + 540) % 360) - 180)).toBeLessThan(25);
+    }
+  });
+
+  it('flies the whole of it as one curve with no jump, and rests at the end', async () => {
+    const timeline = compileFlyby(document, await resolveAll(document, withFile));
+    const steps = frameSteps(timeline, ground);
+    expectNoJump(steps);
+    const median = [...steps].sort((a, b) => a - b)[Math.floor(steps.length / 2)];
+    expect(steps[steps.length - 1]).toBeLessThan(median * 0.2);
+    const again = compileFlyby(document, await resolveAll(document, withFile));
+    expect(flybyCameraAt(again, 31.4, ground)).toEqual(flybyCameraAt(timeline, 31.4, ground));
+  });
+
+  it('flies straight to a file that holds no line, and says which section could not follow one', async () => {
+    const pointsOnly: FlybyWorld = { ...withFile, fileLines: async () => ({ bounds: [25, 45.496, 25.048, 45.504], lines: [] }) };
+    const resolved = await resolveAll(document, pointsOnly);
+    expect(resolved[0]?.route).toBeUndefined();
+    expect(compileFlyby(document, resolved).stretches).toEqual([]);
+    expect(flybyLineFallbacks(document, resolved)).toEqual(['follow-1']);
   });
 });

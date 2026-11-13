@@ -39,8 +39,23 @@ vi.mock('../../../api/hooks.ts', () => ({
     ],
   }),
   useRasterMaps: () => ({ data: { items: [] } }),
-  useGeofiles: () => ({ data: { items: [] } }),
+  // One imported file, which a flyby along a line can follow.
+  useGeofiles: () => ({ data: { items: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] } }),
   useSavedFilters: () => ({ data: [] }),
+  geofileQuery: (id: string) => ({
+    queryKey: ['geofile', id],
+    queryFn: async () => ({ id, bbox: { type: 'Polygon', coordinates: [[[25, 45.5], [25.02, 45.5], [25.02, 45.51], [25, 45.51], [25, 45.5]]] } }),
+  }),
+  fetchGeofileFeatureCollection: async () => ({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: [[25, 45.5], [25.01, 45.505], [25.02, 45.51]] },
+      },
+    ],
+  }),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,
@@ -672,9 +687,9 @@ describe('a descent down a cave\'s survey', () => {
     fireEvent.click(screen.getByText('4 sections'));
     expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Down the survey · Cave A');
     fireEvent.click(screen.getByTestId('flyby-play'));
-    await pass(15_000);
+    await pass(24_000);
     expect(status()).toBe('playing');
-    expect(screen.queryByTestId('flyby-line-fallback')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('flyby-line-fallback-descent')).not.toBeInTheDocument();
     // Half-way down the survey the camera is under the ground, between the entrance and the bottom.
     expect(scene.camera().height).toBeLessThan(1000);
     expect(scene.camera().longitude).toBeGreaterThan(24.999);
@@ -688,7 +703,28 @@ describe('a descent down a cave\'s survey', () => {
     // The camera goes to look at the cave first, so the scene draws its survey, and waits on it.
     await pass(1000);
     expect(status()).toBe('playing');
-    expect(screen.getByTestId('flyby-line-fallback')).toHaveTextContent('dives straight down');
+    expect(screen.getByTestId('flyby-line-fallback-descent')).toHaveTextContent('dives straight down');
+  });
+});
+
+describe('a flight along an imported file', () => {
+  it('follows the file chosen, named by its own name', async () => {
+    const { scene } = renderFlyby(fakeScene(), null);
+    fireEvent.click(screen.getByRole('radio', { name: 'An imported file' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'The file to follow' }));
+    fireEvent.click(screen.getByTitle('Ridge walk'));
+    expect(screen.getByTestId('flyby-preset')).toHaveTextContent('Along a line');
+    fireEvent.click(screen.getByText('2 sections'));
+    expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Along the line · Ridge walk');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(40_000);
+    expect(status()).toBe('playing');
+    expect(screen.queryByTestId('flyby-line-fallback-follow')).not.toBeInTheDocument();
+    // Part of the way along, over the line between its ends.
+    const camera = scene.camera();
+    expect(camera.longitude).toBeGreaterThan(24.995);
+    expect(camera.longitude).toBeLessThan(25.02);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
   });
 });
 

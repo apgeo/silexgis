@@ -16,6 +16,7 @@ import {
   FLYBY_MAX_RANGE,
   FLYBY_MAX_TURN_DEGREES,
   FLYBY_MIN_RANGE,
+  FLYBY_RANGE_M,
   FLYBY_SECONDS_RANGE,
   FLYBY_SECTION_KINDS,
   flybyProblems,
@@ -345,6 +346,23 @@ function SectionEditor({ document, section, name, busy, subjectLabel, change }: 
           data-testid={id('range')}
         />
       </label>
+      {to.rangeM !== undefined && (
+        <label className="scene3d-flyby-field">
+          <span>{t('flyby.edit.rangeM')}</span>
+          <InputNumber
+            size="small"
+            min={FLYBY_RANGE_M.min}
+            max={FLYBY_RANGE_M.max}
+            step={10}
+            value={to.rangeM}
+            onChange={(value) => number('rangeM', value)}
+            disabled={busy}
+            suffix="m"
+            aria-label={named(t('flyby.edit.rangeM'))}
+            data-testid={id('range-m')}
+          />
+        </label>
+      )}
       <label className="scene3d-flyby-field">
         <span>{t('flyby.edit.aim')}</span>
         <Select

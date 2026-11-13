@@ -9572,13 +9572,17 @@
       "nothingSelected": "Selectează mai întâi o peșteră sau o zonă pe hartă sau în scenă.",
       "noCaves": "Nicio peșteră nu este desenată în vedere. Apropie-te de una, apoi reîmprospătează lista.",
       "refresh": "Reîmprospătează lista",
-      "shortestRoute": "Traseul cel mai scurt"
+      "shortestRoute": "Traseul cel mai scurt",
+      "file": "Un fișier importat",
+      "pickFile": "Fișierul de urmat",
+      "noFiles": "Niciun fișier importat nu este gata. Importă mai întâi un traseu GPX sau KML la Geodate."
     },
     "subject": {
       "all": "toate împreună",
       "feature": "zona selectată",
       "view": "vederea",
-      "place": "un loc fixat"
+      "place": "un loc fixat",
+      "file": "un fișier importat"
     },
     "presetTitle": "Presetare",
     "preset": {
@@ -9609,6 +9613,10 @@
       "descent": {
         "name": "Coborâre",
         "hint": "De la cel mai înalt punct desenat al peșterii, pe drumuire în jos, până la cel mai adânc, cu camera puțin în urmă și deasupra, privind de-a lungul galeriei. Într-o peșteră a cărei drumuire nu este desenată sau nu le leagă pe cele două, camera coboară direct."
+      },
+      "alongLine": {
+        "name": "De-a lungul unei linii",
+        "hint": "Urmează traseul unui fișier importat la o înălțime deasupra terenului, privind înainte, apoi se ridică pentru a-l arăta întreg."
       }
     },
     "editedNote": "Aceste secțiuni au fost deschise sau modificate de mână. Schimbarea subiectului, a presetării sau a opțiunilor le construiește din nou.",
@@ -9633,7 +9641,8 @@
       "hold": "Oprire",
       "tilt": "Înclinare",
       "keyframe": "Spre o vedere",
-      "descent": "Pe drumuire în jos"
+      "descent": "Pe drumuire în jos",
+      "follow": "De-a lungul liniei"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Secunde — {{section}}",
@@ -9794,7 +9803,8 @@
         "badPose": "O rotire, o ridicare sau o înălțime deasupra terenului este în afara limitelor.",
         "unknownSubject": "Subiectul ei nu este în acest survol.",
         "duplicateSection": "Două secțiuni au același nume în fișier."
-      }
+      },
+      "rangeM": "Distanță, în metri"
     },
     "handLook": {
       "layersTitle": "Straturi",
@@ -9847,7 +9857,8 @@
       "remove": "Elimină {{view}}"
     },
     "routes": {
-      "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze."
+      "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze.",
+      "noLine": "Fișierul nu are nicio linie de urmat: camera zboară direct spre el."
     }
   },
   "mapSymbols": {

@@ -173,6 +173,8 @@ export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubjec
       return true;
     case 'descent':
       return subjects[0]?.kind === 'cave';
+    case 'alongLine':
+      return subjects[0]?.kind === 'file';
     case 'aroundCave':
     case 'aroundArea':
     case 'planToProfile':
@@ -185,6 +187,9 @@ export function presetFits(preset: FlybyPresetId, subjects: readonly FlybySubjec
 
 /** The preset a set of subjects is most likely wanted for. */
 export function presetFor(subjects: readonly FlybySubject[]): FlybyPresetId {
+  if (subjects[0]?.kind === 'file') {
+    return 'alongLine';
+  }
   if (subjects.length >= 2) {
     return 'tour';
   }
@@ -360,6 +365,32 @@ function descent(options: FlybyPresetOptions): Built {
   };
 }
 
+/** Metres the camera follows a track from, behind and above the point it follows. */
+const FOLLOW_DISTANCE = 250;
+
+/**
+ * Along an imported file's track: from above the whole of it down to where it begins, along it at a
+ * height over the ground looking ahead, and back up to see all of it. The track is found when the
+ * flyby is prepared, from the file as this reader may see it; nothing of it is written here.
+ */
+function alongLine(): Built {
+  const id = numbered();
+  return {
+    start: { subject: 0, pose: { heading: 0, pitch: -45, range: 1.6, lift: 0, clearance: AREA_CLEARANCE } },
+    sections: [
+      { id: id('follow'), kind: 'follow', subject: 0, seconds: 60, to: { pitch: -22, rangeM: FOLLOW_DISTANCE, clearance: CAVE_CLEARANCE } },
+      {
+        id: id('rise'),
+        kind: 'rise',
+        subject: 0,
+        seconds: 8,
+        to: { aim: 'centre', pitch: -45, range: 1.4, lift: 0, clearance: AREA_CLEARANCE },
+        rest: true,
+      },
+    ],
+  };
+}
+
 function planToProfile(options: FlybyPresetOptions): Built {
   const sign = options.clockwise ? 1 : -1;
   const id = numbered();
@@ -415,6 +446,8 @@ export function buildPreset(
         return planToProfile(options);
       case 'descent':
         return descent(options);
+      case 'alongLine':
+        return alongLine();
     }
   })();
   return {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { caveQuery } from '../../../api/hooks.ts';
+import { caveQuery, fetchGeofileFeatureCollection, geofileQuery } from '../../../api/hooks.ts';
 import {
   flybyProblems,
   type FlybyChange,
@@ -50,8 +50,9 @@ import {
 } from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
-import { geoJsonBounds } from '../../../scene3d/geoJson3d.ts';
-import type { Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEngine.ts';
+import { featuresOf, geoJsonBounds, lineStrings } from '../../../scene3d/geoJson3d.ts';
+import { boundsToBbox } from '../../../scene3d/viewBounds3d.ts';
+import type { Scene3DBounds, Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEngine.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import { APPROXIMATE_SPAN_DEGREES, geometryFor } from '../../../viewlinks/geoTargets.ts';
 
@@ -75,7 +76,7 @@ export interface FlybyScene {
 }
 
 /** Where the subjects of a flyby being put together come from. */
-export type FlybySource = 'selected' | 'inView' | 'view';
+export type FlybySource = 'selected' | 'inView' | 'view' | 'file';
 
 /** What went wrong, in a form the panel puts into words. */
 export type FlybyTrouble =
@@ -145,6 +146,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       .map((cave) => cave.caveId),
   );
   const [presetChoice, setPresetChoice] = useState<FlybyPresetId>();
+  /** The imported file a flyby along a line follows, when that is what it is about. */
+  const [fileId, setFileIdState] = useState<string>();
   const [options, setOptionsState] = useState<FlybyPresetOptions>(DEFAULT_FLYBY_PRESET_OPTIONS);
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
@@ -167,8 +170,10 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         return checked.map((caveId) => ({ kind: 'cave', caveId }));
       case 'view':
         return [{ kind: 'view' }];
+      case 'file':
+        return fileId ? [{ kind: 'file', geofileId: fileId }] : [];
     }
-  }, [source, selectedSubject, checked]);
+  }, [source, selectedSubject, checked, fileId]);
 
   const preset = presetChoice && presetFits(presetChoice, subjects) ? presetChoice : presetFor(subjects);
 
@@ -212,6 +217,10 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     },
     [refreshCaves],
   );
+  const setFileId = useCallback((next: string | undefined) => {
+    setEdited(null);
+    setFileIdState(next);
+  }, []);
   const setCheckedCaves = useCallback((next: string[]) => {
     setEdited(null);
     setChecked(next);
@@ -323,6 +332,25 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       },
       groundHeight: (longitude, latitude) => scene.engine()?.groundHeight(longitude, latitude) ?? 0,
       ...(scene.caveLines ? { caveLines: (caveId: string) => scene.caveLines!(caveId) } : {}),
+      fileLines: async (geofileId) => {
+        // A file this reader may not read answers with a refusal, which here is simply "not found".
+        const file = await queryClient.fetchQuery({ ...geofileQuery(geofileId), staleTime: 30_000 }).catch(() => undefined);
+        const box = file ? geoJsonBounds(file.bbox) : undefined;
+        if (!box) {
+          return undefined;
+        }
+        // A hair wider than the file's own box, so the rounding of the request leaves no end of a line out.
+        const pad = 0.001;
+        const asked: Scene3DBounds = [box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad];
+        const collection = await fetchGeofileFeatureCollection(geofileId, boundsToBbox(asked)).catch(() => undefined);
+        if (!collection) {
+          return undefined;
+        }
+        const lines = featuresOf(collection).flatMap((feature) =>
+          lineStrings(feature).map((line) => line.map(({ longitude, latitude }) => ({ longitude, latitude }))),
+        );
+        return { bounds: box, lines };
+      },
       viewTarget: () => {
         const engine = scene.engine();
         if (!engine) {
@@ -572,6 +600,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     checked,
     setCheckedCaves,
     orderByRoute,
+    fileId,
+    setFileId,
     // how it is built
     preset,
     setPreset,

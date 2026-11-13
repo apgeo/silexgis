@@ -27,6 +27,8 @@ export type FlybySubject =
   | { kind: 'feature'; featureId: string }
   /** Whatever the 3D view is centred on at the moment the flyby is prepared. */
   | { kind: 'view' }
+  /** An imported file — a GPX track, a line in a KML —, by its id: what it draws, found when played. */
+  | { kind: 'file'; geofileId: string }
   /**
    * A place its author put into the flyby: a point pinned on the ground, or the point a camera view
    * they captured was looking at, which is where `height` comes from — a view can look at a cave
@@ -64,6 +66,13 @@ export interface FlybyPose {
   /** Distance from the point looked at, in radii of the subject. */
   range?: number;
   /**
+   * Distance from the point looked at in metres, in place of `range`: for a camera whose distance
+   * has nothing to do with the size of what it looks at — following a track from a few hundred
+   * metres behind, or starting a flight at the scale of a country. A section that gives a `range`
+   * takes this away again.
+   */
+  rangeM?: number;
+  /**
    * Raises the point looked at, counted in halves of the subject's height: from its middle, 1 is
    * level with its top and -1 with its bottom.
    */
@@ -76,7 +85,7 @@ export interface FlybyPose {
 }
 
 /** A pose with nothing left out: what the opening of a flyby has to be. It looks at the middle unless it says. */
-export type FlybyFullPose = Required<Omit<FlybyPose, 'headingBy' | 'aim'>> & Pick<FlybyPose, 'aim'>;
+export type FlybyFullPose = Required<Omit<FlybyPose, 'headingBy' | 'aim' | 'rangeM'>> & Pick<FlybyPose, 'aim' | 'rangeM'>;
 
 /**
  * What a section is, as its author thinks of it. Every kind is a move of the camera to a pose; the
@@ -92,7 +101,8 @@ export type FlybySectionKind =
   | 'hold'
   | 'tilt'
   | 'keyframe'
-  | 'descent';
+  | 'descent'
+  | 'follow';
 
 export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'approach',
@@ -109,6 +119,11 @@ export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
    * followed; a cave whose survey gives no such way is dived into instead, to its `to` pose.
    */
   'descent',
+  /**
+   * Along an imported file's track, behind and above the point followed, looking ahead; a file with
+   * no line in it is flown to as a plain move.
+   */
+  'follow',
 ];
 
 /** One shot: the camera moves from where the section before left it to `to`. */
@@ -133,7 +148,8 @@ export type FlybyPresetId =
   | 'tour'
   | 'planToProfile'
   | 'myViews'
-  | 'descent';
+  | 'descent'
+  | 'alongLine';
 
 export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundCave',
@@ -142,6 +158,7 @@ export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
   'aroundArea',
   'planToProfile',
   'descent',
+  'alongLine',
   'myViews',
 ];
 
@@ -325,6 +342,8 @@ export const FLYBY_SECONDS_RANGE = { min: 0.5, max: 600 } as const;
 /** A camera that looks at its subject from closer than this is inside the point it looks at. */
 export const FLYBY_MIN_RANGE = 0.02;
 export const FLYBY_MAX_RANGE = 5000;
+/** The nearest and the furthest a distance in metres may be: a metre, and the width of a large country. */
+export const FLYBY_RANGE_M = { min: 1, max: 2_000_000 } as const;
 export const FLYBY_MAX_SUBJECTS = 40;
 export const FLYBY_MAX_SECTIONS = 200;
 export const FLYBY_MAX_CHANGES = 400;
@@ -369,7 +388,10 @@ function subjectExists(document: FlybyDocument, ref: FlybySubjectRef): boolean {
 
 function poseProblems(pose: FlybyPose, section: string | undefined): FlybyProblem[] {
   const problems: FlybyProblem[] = [];
-  if (pose.range !== undefined && !(pose.range >= FLYBY_MIN_RANGE && pose.range <= FLYBY_MAX_RANGE)) {
+  if (
+    (pose.range !== undefined && !(pose.range >= FLYBY_MIN_RANGE && pose.range <= FLYBY_MAX_RANGE)) ||
+    (pose.rangeM !== undefined && !(pose.rangeM >= FLYBY_RANGE_M.min && pose.rangeM <= FLYBY_RANGE_M.max))
+  ) {
     problems.push({ code: 'badRange', section });
   }
   if (pose.pitch !== undefined && !(pose.pitch >= -90 && pose.pitch <= 90)) {
@@ -643,6 +665,10 @@ function readSubject(value: unknown): FlybySubject | null {
     }
     case 'view':
       return { kind: 'view' };
+    case 'file': {
+      const geofileId = text(bag.geofileId, 100);
+      return geofileId ? { kind: 'file', geofileId } : null;
+    }
     case 'place': {
       const longitude = finite(bag.longitude);
       const latitude = finite(bag.latitude);
@@ -680,7 +706,7 @@ function readPose(value: unknown): FlybyPose | null {
   }
   const bag = value as Record<string, unknown>;
   const pose: FlybyPose = {};
-  for (const key of ['heading', 'headingBy', 'pitch', 'range', 'lift'] as const) {
+  for (const key of ['heading', 'headingBy', 'pitch', 'range', 'rangeM', 'lift'] as const) {
     if (bag[key] !== undefined) {
       const number = finite(bag[key]);
       if (number === undefined) {
@@ -996,6 +1022,7 @@ export function normalizeFlybyDocument(value: unknown): FlybyDocument | null {
         lift: startPose.lift ?? 0,
         clearance: startPose.clearance === undefined ? null : startPose.clearance,
         ...(startPose.aim ? { aim: startPose.aim } : {}),
+        ...(startPose.rangeM !== undefined ? { rangeM: startPose.rangeM } : {}),
       },
     },
     sections: sections as FlybySection[],

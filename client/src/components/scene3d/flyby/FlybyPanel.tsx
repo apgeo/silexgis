@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Alert, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useCaveNames } from '../../../api/hooks.ts';
+import { useCaveNames, useGeofiles } from '../../../api/hooks.ts';
 import { saveBlob } from '../../../api/download.ts';
 import {
   FLYBY_PRESETS,
@@ -83,6 +83,9 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
     ]),
   ];
   const caveNames = useCaveNames(namedIds);
+  // The imported files that hold something to follow: what a flyby along a line can be about.
+  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
+  const files = (geofilePage?.items ?? []).filter((file) => file.importStatus === 'imported');
   const caveLabel = (caveId: string) =>
     caveNames.get(caveId) ?? flyby.caves.find((cave) => cave.caveId === caveId)?.label ?? t('flyby.unnamedCave');
 
@@ -98,6 +101,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         return t('flyby.subject.feature');
       case 'view':
         return t('flyby.subject.view');
+      case 'file':
+        return files.find((file) => file.id === subject.geofileId)?.name ?? t('flyby.subject.file');
       case 'place':
         // A view captured from the camera is called by its place in the list of views.
         return subject.height !== undefined ? t('flyby.views.name', { number: ref + 1 }) : t('flyby.subject.place');
@@ -126,6 +131,7 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
     { value: 'selected', label: t('flyby.source.selected'), disabled: !flyby.selectedSubject },
     { value: 'inView', label: t('flyby.source.inView') },
     { value: 'view', label: t('flyby.source.view') },
+    { value: 'file', label: t('flyby.source.file') },
   ];
 
   return (
@@ -153,9 +159,17 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         />
       )}
 
-      {document && flyby.lineFallbacks.some((id) => document.sections.some((section) => section.id === id)) && (
-        // Said once the flyby has been prepared, which is when the way down was looked for.
-        <Alert type="info" showIcon title={t('flyby.routes.fallback')} data-testid="flyby-line-fallback" />
+      {(['descent', 'follow'] as const).map((kind) =>
+        // Said once the flyby has been prepared, which is when the line to follow was looked for.
+        document?.sections.some((section) => section.kind === kind && flyby.lineFallbacks.includes(section.id)) ? (
+          <Alert
+            key={kind}
+            type="info"
+            showIcon
+            title={t(kind === 'descent' ? 'flyby.routes.fallback' : 'flyby.routes.noLine')}
+            data-testid={`flyby-line-fallback-${kind}`}
+          />
+        ) : null,
       )}
 
       <div className="scene3d-flyby-group">
@@ -176,6 +190,23 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         {flyby.source === 'selected' && !flyby.selectedSubject && (
           <Typography.Text type="secondary">{t('flyby.source.nothingSelected')}</Typography.Text>
         )}
+        {flyby.source === 'file' &&
+          (files.length === 0 ? (
+            <Typography.Text type="secondary">{t('flyby.source.noFiles')}</Typography.Text>
+          ) : (
+            <Select
+              size="small"
+              value={flyby.fileId}
+              onChange={flyby.setFileId}
+              disabled={busy}
+              placeholder={t('flyby.source.pickFile')}
+              aria-label={t('flyby.source.pickFile')}
+              data-testid="flyby-file"
+              showSearch
+              optionFilterProp="label"
+              options={files.map((file) => ({ value: file.id, label: file.name }))}
+            />
+          ))}
         {flyby.source === 'inView' && (
           <div className="scene3d-flyby-caves">
             {flyby.caves.length === 0 ? (

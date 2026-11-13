@@ -3,6 +3,7 @@ import { METERS_PER_DEGREE_LATITUDE, clampLatitude } from '../scene3d/pseudoZoom
 import { metersBetween, type Camera3DEye } from '../scene3d/camera3d.ts';
 import type { Scene3DBounds } from '../scene3d/scene3dEngine.ts';
 import type { FlybyDocument, FlybySubject, FlybySubjectRef } from './flybyDocument.ts';
+import { trackRoute } from './flybyRoutes.ts';
 
 // Finding a flyby's subjects in the world, at the moment it is played.
 //
@@ -79,6 +80,11 @@ export interface FlybyWorld {
    * the ground, which carry no heights, are left out. Left out of a world that cannot say.
    */
   caveLines?(caveId: string): { longitude: number; latitude: number; height: number }[][];
+  /**
+   * The lines an imported file holds and the box it fills, as this reader may see it; undefined when
+   * it cannot be read. Left out of a world that cannot say.
+   */
+  fileLines?(geofileId: string): Promise<{ bounds: Scene3DBounds; lines: { longitude: number; latitude: number }[][] } | undefined>;
 }
 
 /** The smallest subject a camera is asked to circle: a short cave is still stood back from. */
@@ -219,6 +225,15 @@ export async function resolveSubject(
     case 'feature': {
       const bounds = await world.featureBounds(subject.featureId);
       return bounds ? subjectFromBounds(bounds, world.groundHeight) : undefined;
+    }
+    case 'file': {
+      const file = await world.fileLines?.(subject.geofileId);
+      if (!file) {
+        return undefined;
+      }
+      // The box it fills, and its longest line on the ground to be followed along.
+      const route = trackRoute(file.lines, world.groundHeight);
+      return { ...subjectFromBounds(file.bounds, world.groundHeight), ...(route ? { route } : {}) };
     }
     case 'view': {
       const view = world.viewTarget();

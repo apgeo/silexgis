@@ -117,8 +117,12 @@ const HOP_DISTANCE_RATIO = 0.9;
 const HOP_PITCH_DEGREES = -40;
 const MIN_PITCH = -89.9;
 const MAX_PITCH = 60;
-/** Seconds a section that follows a line takes to fly to the line's start before it sets off along it. */
-const LINE_LEAD_SECONDS = 3;
+/**
+ * The share of a section that follows a line spent flying to where the line begins, held between
+ * a couple of seconds and a few: long enough to come down from an overview without rushing it.
+ */
+const LINE_LEAD_SHARE = 0.2;
+const LINE_LEAD_SECONDS = { min: 2, max: 8 } as const;
 /** Seconds the camera takes to gather speed along a line, and to lose it again at the line's end. */
 const LINE_RAMP_SECONDS = 2.5;
 /** Most points a line is followed through, however long it is. */
@@ -135,6 +139,8 @@ function poseAfter(previous: FlybyFullPose, to: FlybyPose): FlybyFullPose {
     heading: to.heading ?? previous.heading + (to.headingBy ?? 0),
     pitch: to.pitch ?? previous.pitch,
     range: to.range ?? previous.range,
+    // A distance in metres holds until a section gives one in radii again.
+    ...(to.range === undefined && (to.rangeM ?? previous.rangeM) !== undefined ? { rangeM: to.rangeM ?? previous.rangeM } : {}),
     lift: to.lift ?? previous.lift,
     clearance: to.clearance === undefined ? previous.clearance : to.clearance,
   };
@@ -168,7 +174,7 @@ function knotOf(
   return {
     t,
     target: { east: centre.east, north: centre.north, up: centre.up + stance.pose.lift * subject.halfHeight },
-    distance: stance.pose.range * subject.radius,
+    distance: stance.pose.rangeM ?? stance.pose.range * subject.radius,
     heading: stance.pose.heading,
     pitch: stance.pose.pitch,
     clearance: stance.pose.clearance,
@@ -223,7 +229,7 @@ export function compileFlyby(
     const end = knotOf(next, resolved, origin, t + length, last || section.rest === true || section.kind === 'hold');
 
     const line =
-      section.kind === 'descent'
+      section.kind === 'descent' || section.kind === 'follow'
         ? lineStretch(subjectFor(next.subject, resolved)?.route, end, previous.heading, origin, t, length)
         : undefined;
     if (line) {
@@ -384,7 +390,10 @@ function lineStretch(
   });
   const turned = smoothed(headings, reach, meanNumber);
 
-  const lead = Math.min(LINE_LEAD_SECONDS, length * 0.25);
+  const lead = Math.min(
+    length * 0.4,
+    Math.min(LINE_LEAD_SECONDS.max, Math.max(LINE_LEAD_SECONDS.min, length * LINE_LEAD_SHARE)),
+  );
   const stretch: FlybyStretch = {
     start: start + lead,
     end: start + length,
@@ -608,14 +617,15 @@ export function flybyCameraAt(
 
 /**
  * The sections that were to follow a line and found none to follow — a cave whose survey is not
- * drawn, or does not join its highest point to its deepest — and are flown as plain moves instead.
+ * drawn, or does not join its highest point to its deepest; a file with no line in it — and are
+ * flown as plain moves instead.
  */
 export function flybyLineFallbacks(
   document: Pick<FlybyDocument, 'sections'>,
   resolved: readonly (FlybyResolvedSubject | undefined)[],
 ): string[] {
   return document.sections
-    .filter((section) => section.kind === 'descent' && (subjectFor(section.subject, resolved)?.route?.length ?? 0) < 2)
+    .filter((section) => (section.kind === 'descent' || section.kind === 'follow') && (subjectFor(section.subject, resolved)?.route?.length ?? 0) < 2)
     .map((section) => section.id);
 }
 
