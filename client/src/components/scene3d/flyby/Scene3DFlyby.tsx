@@ -6,6 +6,7 @@ import { flybyMovieFrameSize } from '../../../flyby/flybyMovie.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import FlybyPanel from './FlybyPanel.tsx';
+import FlybyTextsOverlay from './FlybyTextsOverlay.tsx';
 import FlybyTransport from './FlybyTransport.tsx';
 import { useFlyby, type FlybyScene } from './useFlyby.ts';
 import { useFlybyFrameBox } from './useFlybyFrameBox.ts';
@@ -181,6 +182,9 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
 
   return (
     <>
+      {/* Under the panel and the bar, over the scene; shown on the clean screen too, where it is
+          part of what is being recorded. */}
+      <FlybyTextsOverlay subscribeMoment={flyby.subscribeMoment} />
       {!clean && !movieOpen && <FlybyPanel flyby={flyby} onClose={onClose} />}
       {!clean && movieOpen && (
         <Suspense fallback={<Spin className="scene3d-flyby-panel scene3d-flyby-movie" />}>

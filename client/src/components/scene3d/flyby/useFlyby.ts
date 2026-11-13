@@ -32,6 +32,7 @@ import {
   type FlybyResolvedSubject,
   type FlybyWorld,
 } from '../../../flyby/flybySubjects.ts';
+import type { FlybyTextPlan } from '../../../flyby/flybyTexts.ts';
 import { compileFlyby, FlybySubjectMissing, type FlybyTimeline } from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
@@ -67,6 +68,13 @@ export type FlybyTrouble =
   | { kind: 'noScene' }
   | { kind: 'badFile' }
   | { kind: 'failed'; detail: string };
+
+/** Where a flyby is, as told on every frame it is placed at: what is written over the scene follows it. */
+export interface FlybyMoment {
+  status: FlybyPlayerState['status'];
+  t: number;
+  texts: FlybyTextPlan;
+}
 
 /** How often the position shown is brought up to date while a flyby plays, in milliseconds. */
 const POSITION_UPDATE_MILLISECONDS = 100;
@@ -280,6 +288,20 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [preparing, setPreparing] = useState<FlybyPrepareProgress | true | null>(null);
   const [trouble, setTrouble] = useState<FlybyTrouble>();
   const [unsettled, setUnsettled] = useState(0);
+  // Told of every moment, unthrottled and outside React state: what is drawn over the scene must
+  // keep step with the scene frame by frame, which the throttled state above does not.
+  const momentListeners = useRef(new Set<(moment: FlybyMoment | null) => void>());
+  const tellMoment = useCallback((moment: FlybyMoment | null) => {
+    for (const listener of [...momentListeners.current]) {
+      listener(moment);
+    }
+  }, []);
+  const subscribeMoment = useCallback((listener: (moment: FlybyMoment | null) => void) => {
+    momentListeners.current.add(listener);
+    return () => {
+      momentListeners.current.delete(listener);
+    };
+  }, []);
 
   const dropPlayer = useCallback(() => {
     const held = playerRef.current;
@@ -290,8 +312,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       held.player.destroy();
       playerRef.current = null;
       setPlayerState({ status: 'idle', t: 0, section: 0 });
+      tellMoment(null);
     }
-  }, []);
+  }, [tellMoment]);
 
   /** The player for the document as it stands, prepared if it has to be; undefined when it cannot be. */
   const ensurePlayer = useCallback(async (): Promise<FlybyPlayer | undefined> => {
@@ -336,7 +359,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       }
       const player = createFlybyPlayer(timeline, stage, { loop: document.loop, home });
       let shown = Number.NEGATIVE_INFINITY;
+      const texts = timeline.texts;
       const unsubscribe = player.subscribe((next) => {
+        tellMoment({ status: next.status, t: next.t, texts });
         // A playing flyby reports sixty times a second; the slider and the clock need a tenth of
         // that. Only while it plays, though: a moment it was put at by hand, or left at by a pause,
         // is the last word until the next one, and one that was skipped would leave the clock
@@ -374,7 +399,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       abortRef.current = null;
       setPreparing(null);
     }
-  }, [document, scene, world, stage, loadRoute, dropPlayer]);
+  }, [document, scene, world, stage, loadRoute, dropPlayer, tellMoment]);
 
   /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
   const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {
@@ -477,6 +502,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     pause,
     seek,
     stop,
+    subscribeMoment,
     active: preparing !== null || playerState.status !== 'idle',
   };
 }

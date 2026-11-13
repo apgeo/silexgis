@@ -255,3 +255,14 @@
 .scene3d-flyby-held .scene3d-flyby-transport {
   opacity: 0.6;
 }
+
+/* What a flyby writes over the scene. Over the scene and its callouts, under the panel, the bar
+   and the countdown; it takes no pointer, so the scene under it can still be pressed. */
+.scene3d-flyby-texts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
