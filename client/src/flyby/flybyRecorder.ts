@@ -117,7 +117,8 @@ function nextTask(): Promise<void> {
   });
 }
 
-function detachedCanvas(width: number, height: number, willReadFrequently: boolean): FlybyFrameCanvas {
+/** A canvas of its own to compose a movie's frames on, on no page. */
+export function detachedCanvas(width: number, height: number, willReadFrequently: boolean): FlybyFrameCanvas {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -156,6 +157,48 @@ export function flybyCaptureSize(
     return { width: movie.width, height: movie.height };
   }
   return { width: Math.round(surface.width), height: Math.round(surface.height) };
+}
+
+/**
+ * What draws a movie's frame for moment `t` onto `frame`: the scene as it is drawn now, then the
+ * caller's drawing over it, then the credits.
+ *
+ * Every way of making a movie of a flyby composes its frames through this one function, so a frame
+ * taken one by one and a frame recorded live hold the same things in the same places. The scene is
+ * drawn and read in the same task — the surface is not kept, and a later read finds it blank — so
+ * whoever calls this has placed the moment and does not await anything between that and the call.
+ */
+export function createFlybyFrameComposer(
+  stage: Pick<FlybyRecorderStage, 'captureFrame' | 'credits'>,
+  frame: FlybyFrameCanvas,
+  compose?: FlybyRecording['compose'],
+): (t: number) => void {
+  const { width, height } = frame.canvas;
+  let creditsKey: string | null = null;
+  let lines: string[] = [];
+  return (t) => {
+    const { context } = frame;
+    const surface = stage.captureFrame();
+    context.drawImage(surface, 0, 0, width, height);
+    if (compose) {
+      // Whatever the caller's drawing leaves set — a transparency, a shadow — is not the credits'.
+      context.save();
+      try {
+        compose(context, t, width, height);
+      } finally {
+        context.restore();
+      }
+    }
+    const credits = stage.credits();
+    const key = credits.join('\n');
+    if (key !== creditsKey) {
+      creditsKey = key;
+      lines = creditLines(credits);
+    }
+    // Always, whatever the caller drew: the map tiles' licences ask for their credit on every
+    // picture of them.
+    drawCreditStrip(context, lines, width, height);
+  };
 }
 
 /** Records the movie and answers its file with the report. */
@@ -284,8 +327,7 @@ async function record(
     capturing = true;
 
     const frame = createCanvas(width, height, encoder.samplesWanted > 0);
-    let creditsKey: string | null = null;
-    let lines: string[] = [];
+    const composeFrame = createFlybyFrameComposer(stage, frame, compose);
     let lastRefresh = Number.NEGATIVE_INFINITY;
     let placed: number | null = null;
 
@@ -308,32 +350,6 @@ async function record(
       }
       placed = t;
       return ranOut;
-    };
-
-    /** Draws frame `index` onto the frame canvas: scene, then the caller's drawing, then the credits. */
-    const composeFrame = (t: number) => {
-      const { context } = frame;
-      // Read in the task it was drawn in: the surface is not kept, and a later read finds it blank.
-      const surface = stage.captureFrame();
-      context.drawImage(surface, 0, 0, width, height);
-      if (compose) {
-        // Whatever the caller's drawing leaves set — a transparency, a shadow — is not the credits'.
-        context.save();
-        try {
-          compose(context, t, width, height);
-        } finally {
-          context.restore();
-        }
-      }
-      const credits = stage.credits();
-      const key = credits.join('\n');
-      if (key !== creditsKey) {
-        creditsKey = key;
-        lines = creditLines(credits);
-      }
-      // Always, whatever the caller drew: the map tiles' licences ask for their credit on every
-      // picture of them.
-      drawCreditStrip(context, lines, width, height);
     };
 
     const samples = flybySampleFrames(schedule.count, encoder.samplesWanted);
