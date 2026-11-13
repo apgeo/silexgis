@@ -111,6 +111,16 @@ export class FlybySubjectMissing extends Error {
 
 /** How much of a turn one stretch of an orbit may cover before a knot is put in the middle of it. */
 const ORBIT_STEP_DEGREES = 90;
+/**
+ * Coming in from far away, the camera keeps looking straight down until it is this many times as
+ * close as where it is going, and no closer than the first of these distances in metres (nor than
+ * half as far again as where it is going): only then does it tilt to the pose it is coming to. Seen
+ * straight down, the arithmetic of a flat patch of ground about the subject is exact whatever the
+ * height; looked at sideways from hundreds of kilometres off, it would miss by the curve of the
+ * Earth.
+ */
+const FAR_TILT_FACTOR = 8;
+const FAR_TILT_METRES = 25_000;
 /** A hop's highest point stands at least this share of the way between the two subjects back. */
 const HOP_DISTANCE_RATIO = 0.9;
 /** A hop looks down at least this steeply at its highest point, so the ground travels under it. */
@@ -259,6 +269,19 @@ export function compileFlyby(
       // Over open ground the higher of the two limits holds; a hop out of a cave has left it by now.
       middle.clearance = end.clearance ?? previous.clearance;
       knots.push(middle);
+    } else if (section.kind === 'fromFar') {
+      // Straight down while far, then the tilt. The knot that ends the straight-down part sits on
+      // the same even fall of the distance's logarithm as the two ends, so the descent does not
+      // change pace there; only the tilt starts.
+      const tilt = Math.min(FAR_TILT_FACTOR * end.distance, Math.max(FAR_TILT_METRES, 1.5 * end.distance));
+      if (previous.distance > tilt * 1.01 && tilt > end.distance) {
+        const share = Math.log(previous.distance / tilt) / Math.log(previous.distance / end.distance);
+        const held = between(previous, end, share);
+        held.pitch = previous.pitch;
+        held.heading = previous.heading;
+        held.clearance = previous.clearance;
+        knots.push(held);
+      }
     } else {
       // A long turn is cut into quarter-turns so it is flown at an even rate: one stretch from 0 to
       // 720 degrees would be free to hurry through its middle.

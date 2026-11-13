@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { eyeLookingAt, metersBetween, movedBy, type Camera3DEye } from '../scene3d/camera3d.ts';
 import type { Scene3DCameraState } from '../scene3d/scene3dEngine.ts';
 import { flybyHoldsPlace, flybyProblems, normalizeFlybyDocument, type FlybyDocument } from './flybyDocument.ts';
-import { buildPreset, viewsOfDocument, type FlybyCapturedView } from './flybyPresets.ts';
+import { buildPreset, DEFAULT_FLYBY_PRESET_OPTIONS, viewsOfDocument, type FlybyCapturedView } from './flybyPresets.ts';
 import { resolveSubject, type FlybyResolvedSubject, type FlybyWorld } from './flybySubjects.ts';
 import { compileFlyby, flybyCameraAt, flybyKnotAt, flybyLineFallbacks, type FlybyTimeline } from './flybyTimeline.ts';
 
@@ -304,5 +304,108 @@ describe('a flight along an imported file\'s track', () => {
     expect(resolved[0]?.route).toBeUndefined();
     expect(compileFlyby(document, resolved).stretches).toEqual([]);
     expect(flybyLineFallbacks(document, resolved)).toEqual(['follow-1']);
+  });
+});
+
+// ---- from far away: the camera's real direction on the real (ellipsoidal) Earth ----
+
+const WGS84_A = 6_378_137;
+const WGS84_F = 1 / 298.257223563;
+const WGS84_E2 = WGS84_F * (2 - WGS84_F);
+const radians = (degrees: number) => (degrees * Math.PI) / 180;
+
+/** A point as the scene's engine places it: earth-centred metres. */
+function earthCentred(lon: number, lat: number, height: number): [number, number, number] {
+  const phi = radians(lat);
+  const lambda = radians(lon);
+  const n = WGS84_A / Math.sqrt(1 - WGS84_E2 * Math.sin(phi) ** 2);
+  return [
+    (n + height) * Math.cos(phi) * Math.cos(lambda),
+    (n + height) * Math.cos(phi) * Math.sin(lambda),
+    (n * (1 - WGS84_E2) + height) * Math.sin(phi),
+  ];
+}
+
+/**
+ * The angle, in degrees, between where a camera points — its heading and pitch taken in the frame
+ * of the ground under the eye, as the engine takes them — and the point it is meant to look at.
+ * Nothing here is the flat patch of ground the path is worked out on: it is the check of it.
+ */
+function offCentre(camera: Scene3DCameraState, looked: Camera3DEye): number {
+  const phi = radians(camera.latitude);
+  const lambda = radians(camera.longitude);
+  const east = [-Math.sin(lambda), Math.cos(lambda), 0];
+  const north = [-Math.sin(phi) * Math.cos(lambda), -Math.sin(phi) * Math.sin(lambda), Math.cos(phi)];
+  const up = [Math.cos(phi) * Math.cos(lambda), Math.cos(phi) * Math.sin(lambda), Math.sin(phi)];
+  const h = radians(camera.heading);
+  const p = radians(camera.pitch);
+  const look = [0, 1, 2].map((i) => east[i] * Math.sin(h) * Math.cos(p) + north[i] * Math.cos(h) * Math.cos(p) + up[i] * Math.sin(p));
+  const eye = earthCentred(camera.longitude, camera.latitude, camera.height);
+  const point = earthCentred(looked.lon, looked.lat, looked.height);
+  const toward = [0, 1, 2].map((i) => point[i] - eye[i]);
+  const length = Math.hypot(...toward);
+  const cos = (look[0] * toward[0] + look[1] * toward[1] + look[2] * toward[2]) / length;
+  return (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
+}
+
+describe('a flight from far away', () => {
+  const small: FlybyResolvedSubject = { centre: { lon: 25.3, lat: 45.45, height: 1100 }, radius: 200, halfHeight: 60, coarse: false };
+  const massif: FlybyResolvedSubject = { centre: { lon: 23.1, lat: 46.6, height: 1200 }, radius: 8000, halfHeight: 400, coarse: false };
+  const cases = [
+    { name: 'a cave', preset: 'aroundCave' as const, subject: small, subjects: [{ kind: 'cave' as const, caveId: 'a' }] },
+    { name: 'a massif', preset: 'aroundArea' as const, subject: massif, subjects: [{ kind: 'feature' as const, featureId: 'm' }] },
+  ];
+
+  for (const { name, preset, subject, subjects } of cases) {
+    it(`keeps ${name} in the middle of the picture at every distance, from the scale of the country down`, () => {
+      const document = buildPreset(preset, subjects, { ...DEFAULT_FLYBY_PRESET_OPTIONS, fromFar: true });
+      expect(document.sections[0].kind).toBe('fromFar');
+      expect(flybyProblems(document)).toEqual([]);
+      const timeline = compileFlyby(document, [subject]);
+      const far = timeline.spans[0];
+      const opening = flybyCameraAt(timeline, 0, flat);
+      expect(opening.height - subject.centre.height).toBeGreaterThan(340_000);
+      let worst = 0;
+      for (let t = 0; t <= far.end + 4; t += 0.05) {
+        const knot = flybyKnotAt(timeline, t);
+        const camera = flybyCameraAt(timeline, t, flat);
+        const looked = movedBy(timeline.origin, knot.target);
+        worst = Math.max(worst, offCentre(camera, looked));
+        // Straight down, or as near as makes no difference, for as long as it is far.
+        if (knot.distance > 60_000) {
+          expect(camera.pitch).toBeLessThan(-89.5);
+        }
+      }
+      // A tenth of a degree is a few pixels in the middle of a picture sixty degrees wide.
+      expect(worst).toBeLessThan(0.15);
+    });
+  }
+
+  it('comes down all the way without climbing back, and on into the flight as it was', () => {
+    const plain = buildPreset('aroundCave', cases[0].subjects);
+    const document = buildPreset('aroundCave', cases[0].subjects, { ...DEFAULT_FLYBY_PRESET_OPTIONS, fromFar: true });
+    expect(document.sections.slice(1)).toEqual(plain.sections);
+    const timeline = compileFlyby(document, [small]);
+    const plainTimeline = compileFlyby(plain, [small]);
+    // Past the approach — which now flies on from the descent instead of starting from still — the
+    // flight is the one without it, fourteen seconds later.
+    for (const t of [7, 15, 25]) {
+      expect(flybyCameraAt(timeline, t + 14, flat).longitude).toBeCloseTo(flybyCameraAt(plainTimeline, t, flat).longitude, 9);
+    }
+    // Closer at every moment of the descent than at the one before.
+    for (let t = 0.1; t <= 14; t += 0.1) {
+      expect(flybyKnotAt(timeline, t).distance).toBeLessThan(flybyKnotAt(timeline, t - 0.1).distance);
+    }
+    // Its speed falls by hundreds of times on the way down, so it is held to change gently from
+    // each frame to the next rather than to stay near a typical speed: no lurch anywhere.
+    // (Past its first half second, where it sets off from still and every frame is a whole
+    // multiple of the first; and up to the circle, which slows to a stop the same way at its end.)
+    const steps = frameSteps(timeline);
+    for (let i = 15; i < 30 * 30; i += 1) {
+      if (steps[i] > 0.05 && steps[i - 1] > 0.05) {
+        expect(steps[i] / steps[i - 1]).toBeLessThan(1.3);
+        expect(steps[i - 1] / steps[i]).toBeLessThan(1.3);
+      }
+    }
   });
 });

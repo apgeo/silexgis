@@ -25,6 +25,8 @@ export interface FlybyPresetOptions {
   underground: boolean;
   /** Seconds one full circle takes at a speed of 1. */
   secondsPerTurn: number;
+  /** Whether the flight opens far above — at the scale of the country — and comes down into the preset. */
+  fromFar: boolean;
 }
 
 export const DEFAULT_FLYBY_PRESET_OPTIONS: FlybyPresetOptions = {
@@ -32,7 +34,52 @@ export const DEFAULT_FLYBY_PRESET_OPTIONS: FlybyPresetOptions = {
   clockwise: true,
   underground: false,
   secondsPerTurn: 24,
+  fromFar: false,
 };
+
+/** Metres above its subject a flight from far away starts: a country fills the picture. */
+export const FLYBY_FAR_DISTANCE = 350_000;
+/** Seconds the descent from that far takes, at a speed of 1. */
+const FAR_SECONDS = 14;
+/**
+ * How far the camera looks below the horizon while it is far away: straight down, a hair short of
+ * it, because exactly straight down every heading is the same picture and the turn into what
+ * follows would start with a spin.
+ */
+export const FLYBY_FAR_PITCH = -89.9;
+
+/**
+ * The same flight opened from far away: it starts straight above its first subject at the scale of
+ * a country, and comes down — looking straight down while it is far — into the pose the flight
+ * opened with before, from where it goes on as it did.
+ */
+function fromFar(built: Built): Built {
+  const { subject, pose } = built.start;
+  return {
+    start: {
+      subject,
+      pose: { ...pose, pitch: FLYBY_FAR_PITCH, rangeM: FLYBY_FAR_DISTANCE },
+    },
+    sections: [
+      {
+        // Numbered nought: the preset's own sections are numbered from one.
+        id: 'fromFar-0',
+        kind: 'fromFar',
+        subject,
+        seconds: FAR_SECONDS,
+        to: {
+          ...(pose.aim ? { aim: pose.aim } : {}),
+          heading: pose.heading,
+          pitch: pose.pitch,
+          range: pose.range,
+          lift: pose.lift,
+          clearance: pose.clearance,
+        },
+      },
+      ...built.sections,
+    ],
+  };
+}
 
 export const FLYBY_TURNS_RANGE = { min: 0.25, max: 5 } as const;
 export const FLYBY_SECONDS_PER_TURN_RANGE = { min: 6, max: 180 } as const;
@@ -146,7 +193,9 @@ export function viewsOfDocument(document: FlybyDocument): FlybyCapturedView[] | 
     subject.kind === 'place' && subject.height !== undefined ? subject : undefined,
   );
   const legs = document.sections.filter((section) => section.kind === 'keyframe');
-  const poses = [document.start.pose, ...legs.map((section) => section.to)];
+  // Opened from far away, the first view's pose is where the descent from far comes down to.
+  const opening = document.sections[0]?.kind === 'fromFar' ? document.sections[0].to : document.start.pose;
+  const poses = [opening, ...legs.map((section) => section.to)];
   if (
     places.some((place) => !place) ||
     legs.length !== places.length - 1 ||
@@ -418,6 +467,7 @@ export function buildPreset(
   name = '',
   views: readonly FlybyCapturedView[] = [],
 ): FlybyDocument {
+  const far = (built: Built): Built => (options.fromFar && built.sections.length > 0 ? fromFar(built) : built);
   if (preset === 'myViews') {
     return {
       version: FLYBY_VERSION,
@@ -427,7 +477,7 @@ export function buildPreset(
       loop: false,
       subjects: views.map(viewSubject),
       ...(views.length > 0
-        ? myViews(views)
+        ? far(myViews(views))
         : { start: { subject: 0, pose: { heading: 0, pitch: OPENING_PITCH, range: 1, lift: 0, clearance: null } }, sections: [] }),
       look: { sky: FLYBY_PRESET_SKY },
     };
@@ -459,7 +509,7 @@ export function buildPreset(
     // The presets that are about one subject take the first; the rest stay listed, so switching to
     // a tour afterwards finds them.
     subjects: [...subjects],
-    ...built,
+    ...far(built),
     look: { sky: FLYBY_PRESET_SKY },
   };
 }

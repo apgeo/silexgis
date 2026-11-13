@@ -45,6 +45,7 @@ const DEFAULTS: Record<FlybySectionKind, { seconds: number; to: FlybyPose }> = {
   keyframe: { seconds: 6, to: { range: 1, lift: 0, aim: 'centre' } },
   descent: { seconds: 30, to: { aim: 'bottom', pitch: -30, range: 0.15, clearance: null } },
   follow: { seconds: 60, to: { pitch: -22, rangeM: 250, clearance: 60 } },
+  fromFar: { seconds: 14, to: { pitch: -30, range: 4 } },
 };
 
 /** The defaults a new section of `kind` starts from. */

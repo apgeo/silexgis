@@ -728,6 +728,21 @@ describe('a flight along an imported file', () => {
   });
 });
 
+describe('a flight from far away', () => {
+  it('opens far above the cave and comes down into the preset', async () => {
+    const { scene } = renderFlyby();
+    fireEvent.click(screen.getByTestId('flyby-from-far'));
+    fireEvent.click(screen.getByText('3 sections'));
+    expect(screen.getByTestId('flyby-sections').querySelector('.scene3d-flyby-section-name')).toHaveTextContent('From far away · Cave A');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    // At the scale of the country, looking straight down.
+    expect(scene.camera().height).toBeGreaterThan(300_000);
+    expect(scene.camera().pitch).toBeLessThan(-89);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+});
+
 describe('the words for every preset and every kind of section', () => {
   it('exist in both languages', () => {
     for (const locale of [en, ro]) {

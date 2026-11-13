@@ -9629,7 +9629,8 @@
       "tilt": "Tilt",
       "keyframe": "To a view",
       "descent": "Down the survey",
-      "follow": "Along the line"
+      "follow": "Along the line",
+      "fromFar": "From far away"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Seconds — {{section}}",
@@ -9846,7 +9847,8 @@
     "routes": {
       "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it.",
       "noLine": "The file holds no line to follow: the camera flies straight to it instead."
-    }
+    },
+    "fromFar": "Start from far away, at the scale of the country"
   },
   "mapSymbols": {
     "names": {

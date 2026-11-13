@@ -9642,7 +9642,8 @@
       "tilt": "Înclinare",
       "keyframe": "Spre o vedere",
       "descent": "Pe drumuire în jos",
-      "follow": "De-a lungul liniei"
+      "follow": "De-a lungul liniei",
+      "fromFar": "De departe"
     },
     "secondsUnit": "s",
     "sectionSeconds": "Secunde — {{section}}",
@@ -9859,7 +9860,8 @@
     "routes": {
       "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze.",
       "noLine": "Fișierul nu are nicio linie de urmat: camera zboară direct spre el."
-    }
+    },
+    "fromFar": "Pornește de departe, la scara țării"
   },
   "mapSymbols": {
     "names": {

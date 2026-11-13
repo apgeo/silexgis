@@ -331,6 +331,14 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         >
           {t('flyby.underground')}
         </Checkbox>
+        <Checkbox
+          checked={flyby.options.fromFar}
+          onChange={(event) => flyby.setOptions({ fromFar: event.target.checked })}
+          disabled={busy}
+          data-testid="flyby-from-far"
+        >
+          {t('flyby.fromFar')}
+        </Checkbox>
         {/* The test id is on the wrapper and the name on the handle: the slider hands neither of
             its own attributes to the element a reader or a test would look for them on. */}
         <div className="scene3d-flyby-field scene3d-flyby-field-wide" data-testid="flyby-speed">

@@ -102,7 +102,8 @@ export type FlybySectionKind =
   | 'tilt'
   | 'keyframe'
   | 'descent'
-  | 'follow';
+  | 'follow'
+  | 'fromFar';
 
 export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
   'approach',
@@ -124,6 +125,11 @@ export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
    * no line in it is flown to as a plain move.
    */
   'follow',
+  /**
+   * In from far away — the scale of a country — looking straight down while far, and tilting to
+   * its pose only once near.
+   */
+  'fromFar',
 ];
 
 /** One shot: the camera moves from where the section before left it to `to`. */
