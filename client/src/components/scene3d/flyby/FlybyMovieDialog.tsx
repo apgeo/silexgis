@@ -27,6 +27,7 @@ import {
   type FlybyRecordingProgress,
   type FlybyRecordingReport,
 } from '../../../flyby/flybyRecorder.ts';
+import { drawFlybyTexts, flybyTextsAt } from '../../../flyby/flybyTexts.ts';
 import {
   GIF_FRAME_RATES,
   MOVIE_EXTENSION,
@@ -246,13 +247,22 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
     // by the recorder on its way out, or here when the recorder never took the scene.
     const engine = scene.engine();
     const found = engine?.getCamera();
+    // And the moment the flyby was being held at, if it was: the scene goes back to that moment,
+    // look and all, rather than to a camera with the viewer's own look under a bar that still says
+    // "paused at 0:12".
+    const held = flyby.playerState.status === 'idle' ? null : flyby.playerState.t;
     let handedBack = false;
     const handBack = () => {
       handedBack = true;
+      // Whatever the frames changed of the scene's look is given back before the camera is.
+      flyby.stage.look?.restore();
       if (found) {
         flyby.stage.setCamera(found);
       }
       flyby.stage.refreshData();
+      if (held !== null) {
+        flyby.seek(held);
+      }
     };
     try {
       const timeline = await flyby.ensureTimeline();
@@ -283,11 +293,17 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         endCapture: () => scene.engine()?.endCapture(),
         credits: () => live().getVisibleCredits(),
         remember: () => handBack,
+        // The same look the player puts on the scene at each moment, so a frame shows the
+        // background, the layers and the colours the screen showed then.
+        ...(flyby.stage.look ? { look: flyby.stage.look } : {}),
       };
       const recording: FlybyRecording = {
         timeline,
         stage,
         ...asked,
+        // And the same texts, drawn by the same function the view draws them with.
+        compose: (context, t, width, height) =>
+          drawFlybyTexts(context, flybyTextsAt(timeline.texts, t), width, height),
         signal: controller.signal,
         onProgress: (progress) => setRun({ progress }),
       };

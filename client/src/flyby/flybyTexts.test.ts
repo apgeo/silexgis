@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLYBY_VERSION, type FlybyDocument } from './flybyDocument.ts';
 import {
+  clearFlybyTexts,
   drawFlybyTexts,
   flybyTextPlan,
   flybyTextPlanIsEmpty,
@@ -68,7 +69,12 @@ function recorder() {
     arcTo() {},
     closePath() {},
   };
-  return { context: context as unknown as FlybyTextCanvas, drawn, boxes };
+  // What the texts are drawn with, and what the owner of a texts-only canvas wipes it with.
+  return {
+    context: context as unknown as FlybyTextCanvas & Pick<CanvasRenderingContext2D, 'clearRect'>,
+    drawn,
+    boxes,
+  };
 }
 
 describe('what a flyby writes over the scene', () => {
@@ -154,10 +160,15 @@ describe('drawing the texts', () => {
     }
   });
 
-  it('clears what was drawn before', () => {
+  it('draws over what the canvas holds, and leaves wiping it to whoever owns the canvas', () => {
+    // A movie's frame is the scene with the texts over it, on one canvas: texts that cleared
+    // first would leave a film of captions on nothing.
     const { context, drawn } = recorder();
     drawFlybyTexts(context, { dim: 0, title: { text: 'One', alpha: 1 } }, 100, 100);
     drawFlybyTexts(context, { dim: 0 }, 100, 100);
+    expect(drawn.map((line) => line.text)).toEqual(['One']);
+    // The canvas that holds only texts is emptied between moments by its owner.
+    clearFlybyTexts(context, 100, 100);
     expect(drawn).toEqual([]);
   });
 });

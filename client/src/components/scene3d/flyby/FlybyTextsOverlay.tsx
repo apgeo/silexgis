@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
 import {
+  clearFlybyTexts,
   drawFlybyTexts,
   flybyTextsAt,
   sameFlybyTexts,
@@ -54,6 +55,8 @@ export default function FlybyTextsOverlay({ subscribeMoment }: FlybyTextsOverlay
       drawn = state;
       canvas.dataset.shown = shownParts(state);
       if (context) {
+        // This canvas holds only the texts, so the moment before is wiped off it first.
+        clearFlybyTexts(context, canvas.width, canvas.height);
         drawFlybyTexts(context, state ?? { dim: 0 }, canvas.width, canvas.height);
       }
     };

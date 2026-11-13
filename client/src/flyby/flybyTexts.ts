@@ -153,12 +153,16 @@ export function sameFlybyTexts(a: FlybyTextState | undefined, b: FlybyTextState 
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** Empties a canvas that holds nothing but texts, before the next moment's are drawn on it. */
+export function clearFlybyTexts(context: Pick<CanvasRenderingContext2D, 'clearRect'>, width: number, height: number): void {
+  context.clearRect(0, 0, width, height);
+}
+
 /** The parts of a 2D canvas the texts are drawn with; a test hands in a recorder. */
 export type FlybyTextCanvas = Pick<
   CanvasRenderingContext2D,
   | 'save'
   | 'restore'
-  | 'clearRect'
   | 'fillRect'
   | 'fillText'
   | 'measureText'
@@ -271,12 +275,15 @@ function caption(context: FlybyTextCanvas, text: string, alpha: number, width: n
 }
 
 /**
- * Draws what is over the scene at one moment onto a canvas `width` by `height`, clearing it first.
+ * Draws what is over the scene at one moment onto a canvas `width` by `height`, **over whatever the
+ * canvas already holds**. A movie's frame is the scene first and the texts over it, on one canvas,
+ * so nothing here may wipe it; a canvas that holds only texts is cleared by whoever owns it, with
+ * {@link clearFlybyTexts}.
+ *
  * Nothing here is a fixed number of pixels: every size is a share of the frame's smaller side, so
  * a title fills the same part of a phone-shaped movie as of a wide one.
  */
 export function drawFlybyTexts(context: FlybyTextCanvas, state: FlybyTextState, width: number, height: number): void {
-  context.clearRect(0, 0, width, height);
   const unit = Math.min(width, height);
   if (state.dim > 0) {
     context.save();
