@@ -8,8 +8,10 @@
 ---
 
 Un survol zboară camera vizualizării 3D în locul tău: până la o peșteră și în jurul ei, de la o
-peșteră la următoarea, în jurul unui munte sau din planul topografiei până la profilul ei. Alegi
-despre ce este și ce zbor gata făcut să folosească, apeși **Redă** și privești.
+peșteră la următoarea, în jurul unui munte, din planul topografiei până la profilul ei, pe
+drumuirea unei peșteri în jos, de-a lungul unui traseu GPS sau prin vederi pe care le salvezi
+singur. Alegi despre ce este și ce zbor gata făcut să folosească, schimbi orice parte a lui,
+apeși **Redă** și privești.
 
 Este oferit oriunde se află vizualizarea 3D — pagina **Vizualizare 3D**, scena de lângă hartă și
 scena dintr-o fereastră proprie — oricui este autentificat.
@@ -18,8 +20,7 @@ scena dintr-o fereastră proprie — oricui este autentificat.
 > zborului hărțile de bază, straturile și culorile peșterilor; poate scrie peste imagine un titlu,
 > legende și un carton de final; poate fi redat pe un ecran curat ca să îl înregistrezi cu alt
 > program; poate fi scris într-un fișier film chiar de SilexGIS; și poate fi păstrat sau transmis
-> ca fișier. Încă nefăcute: exagerarea reliefului în timpul zborului și mai multe zboruri gata
-> făcute.
+> ca fișier. Încă nefăcută: exagerarea reliefului în timpul zborului.
 
 ---
 
@@ -36,6 +37,7 @@ sau ✕ din panou ca să îl închizi.
 | **Ce este selectat** | Peștera, peștera intrării sau zona (un masiv, o zonă carstică, un deal) selectată pe hartă sau în scenă |
 | **Peșterile din vedere** | Peșterile pe care scena le desenează acum, bifate în ordinea în care vrei să fie vizitate. **Reîmprospătează lista** citește din nou vederea după ce te-ai mutat; **Traseul cel mai scurt** pune peșterile bifate în ordinea în care camera călătorește cel mai puțin |
 | **Ce arată vederea** | Orice este în centrul scenei când apeși Redă — o creastă, o vale, un grup de peșteri — fără să fie nevoie să selectezi ceva |
+| **Un fișier importat** | Un traseu GPX sau o linie dintr-un KML ori alt fișier importat la **Geodate**, ales din lista fișierelor importate; ce urmează *De-a lungul unei linii* |
 
 O peșteră este găsită din ce desenează scena din ea: drumuirile ei când sunt încărcate, altfel
 intrările ei. O peșteră care nu este desenată deloc este căutată, camera merge să o privească
@@ -50,9 +52,20 @@ pentru ca scena să o încarce, iar zborul este construit din ce este desenat ap
 | **În jurul mai multor peșteri** | Un singur ocol, destul de larg cât să le cuprindă pe toate |
 | **În jurul unui munte** | Dă ocol zonei de deasupra crestelor, privind spre interior |
 | **Din plan în profil** | Pornește de deasupra, ca în planul topografiei, se înclină până la vederea din lateral și se rotește |
+| **Coborâre** | Deasupra celui mai înalt punct desenat al peșterii, apoi pe drumuire în jos până la cel mai adânc punct, cu camera puțin în urmă și deasupra punctului urmărit, privind de-a lungul galeriei; o clipă la fund, apoi înapoi sus |
+| **De-a lungul unei linii** | Coboară la începutul traseului unui fișier importat și îl urmează la o înălțime deasupra terenului, privind înainte, apoi se ridică pentru a-l arăta întreg |
+| **Vederile mele** | Zboară prin vederi pe care le salvezi singur din scenă, în ordinea din listă — vezi [Vederile mele](#vederile-mele) |
 
 Sunt oferite doar presetările care se potrivesc cu ce ai ales: un tur are nevoie de cel puțin
-două peșteri.
+două peșteri, o coborâre de o peșteră, un zbor de-a lungul unei linii de un fișier importat.
+*Vederile mele* este oferită mereu.
+
+**Coborârea** urmează drumuirile pe care le desenează scena, găsite când apeși Redă: nimic din
+drumuire nu este scris în survol. Merge pe drumul cel mai scurt de-a lungul liniilor, de la cel
+mai înalt punct la cel mai adânc. Dacă drumuirea peșterii nu este desenată, nu are adâncimi sau
+cel mai înalt și cel mai adânc punct sunt pe linii care nu se întâlnesc — scena desenează doar o
+parte din ea ori o parte nu a fost niciodată legată —, camera coboară direct până la cel mai adânc
+punct, iar panoul spune asta după ce survolul a fost pregătit.
 
 ## Opțiuni
 
@@ -62,6 +75,9 @@ două peșteri.
 | **Secunde pe ocol** | Cât durează un ocol complet |
 | **Sens** | În sensul acelor de ceasornic sau invers, văzut de sus |
 | **Coboară sub pământ până în punctul cel mai de jos al peșterii** | Adaugă o coborâre sub suprafață și drumul înapoi (pentru *În jurul unei peșteri* și *Turul peșterilor*) |
+| **Oprire la fiecare peșteră timp de** | *Turul peșterilor* se oprește nemișcat deasupra fiecărei peșteri atâtea secunde după ce îi dă ocol (0: fără oprire) |
+| **Scrie peste imagine** | Cât timp turul stă la o peșteră: nimic (implicit), numele peșterii sau numele cu lungimea și adâncimea ei. Numele și cifrele sunt citite de pe server când survolul este pregătit, așa cum ai voie să le vezi; nu sunt scrise în survol |
+| **Pornește de departe, la scara țării** | Orice zbor gata făcut începe sus de tot — toată țara în imagine — și coboară până unde ar fi început altfel, privind drept în jos cât este departe și înclinându-se doar când este aproape |
 | **Viteza întregului survol** | De la ×0,25 la ×4: același zbor în mai mult sau mai puțin timp |
 | **Încarcă mai întâi traseul** | Înainte de redare, camera vizitează punctele-cheie ale zborului și așteaptă la fiecare să se încarce harta și peșterile, astfel încât zborul însuși să nu le arate sosind. Durează puțin și merită; oprește opțiunea pentru o privire rapidă |
 
@@ -76,8 +92,48 @@ coborâre în ea, urcare înapoi — fiecare cu durata ei. Fiecare secțiune are
 **viteza** ei (de la ×0,25 la ×4), așa că o parte poate fi încetinită fără să atingi restul.
 Secțiunea zburată este evidențiată cât timp survolul este redat.
 
-Schimbarea subiectului survolului, a presetării sau a opțiunilor construiește secțiunile din
-nou, iar panoul spune când secțiunile de pe ecran sunt unele deschise sau modificate de tine.
+Sub fiecare secțiune sunt butoane pentru a **modifica** ce face, a o **muta** mai sus sau mai jos,
+a o **dubla** și a o **elimina** (un survol păstrează cel puțin una). La capătul listei alegi un
+fel și apeși **Adaugă o secțiune** ca să adaugi una la sfârșit. O secțiune eliminată își ia cu ea
+schimbările aspectului și legenda; una mutată le păstrează.
+
+**Modifică** deschide ce face secțiunea. Fiecare valoare este fie aleasă aici, fie lăsată **ca
+înainte** — goală —, iar atunci camera păstrează ce i-a lăsat secțiunea dinainte:
+
+| Câmp | Face |
+|---|---|
+| **Fel** | Cum se numește secțiunea; *spre* (subiectul următor) este zburat în arc, *pe drumuire în jos* și *de-a lungul liniei* urmează o linie, celelalte sunt deplasări |
+| **Despre** | Despre care dintre subiectele survolului este camera în timpul ei, sau despre toate împreună |
+| **Rotire cu** | Cât se rotește camera, în grade sau în ture; negativ înseamnă invers |
+| **Orientare** | Pentru o secțiune care spune încotro să privească, nu cât să se rotească (o vedere salvată) |
+| **Unghi sub orizont** | −90 privește drept în jos |
+| **Distanță** | În mărimi ale subiectului: 2 înseamnă de două ori mai departe decât este de mare peștera. O secțiune care urmează un traseu își spune distanța în metri |
+| **Privește spre** | Mijlocul subiectului, punctul lui cel mai înalt sau cel mai jos |
+| **Ridicat cu** | Ridică punctul privit, în jumătăți din înălțimea lui |
+| **Deasupra terenului** | Cel puțin atâția metri deasupra terenului, sau **poate intra sub teren** |
+| **Scrie peste imagine** | Nimic, numele, sau numele, lungimea și adâncimea subiectului, jos, pe toată durata secțiunii |
+| **Se oprește la sfârșitul ei** | Camera se oprește în loc să zboare mai departe în secțiunea următoare |
+
+O valoare în afara limitelor este spusă cu roșu lângă secțiune. Schimbarea subiectului
+survolului, a presetării sau a opțiunilor construiește secțiunile din nou, iar panoul spune când
+secțiunile de pe ecran sunt unele deschise sau modificate de tine.
+
+## Vederile mele
+
+Alege **Vederile mele** ca presetare pentru un zbor pe care niciunul gata făcut nu îl dă. Adu
+scena la o imagine dorită și apasă **Adaugă această vedere**; fă la fel pentru imaginea următoare
+și pentru cea de după. Survolul zboară de la fiecare vedere la următoarea ca un singur zbor lin și
+se oprește pe ultima.
+
+Fiecare vedere de după prima are **secundele** cât durează zborul până la ea. O vedere poate fi
+**luată din nou** din camera de acum, mutată mai sus sau mai jos, ori eliminată. O vedere luată
+de sub teren — din interiorul unei peșteri — lasă zborul să intre sub teren ca să ajungă la ea;
+între vederi luate deasupra terenului camera rămâne deasupra lui.
+
+O vedere este păstrată ca punctul pe care îl privea și ca distanța și direcția din care stătea
+camera, așa că **un survol din vederile tale conține locuri**: panoul spune asta, iar un fișier al
+lui spune unde sunt acele locuri. Mijlocul imaginii trebuie să arate terenul când apeși **Adaugă
+această vedere**.
 
 ## Cum arată scena și ce se scrie peste ea
 
@@ -96,6 +152,7 @@ aici, fie lăsată **cum o ai**.
 | **Colorează pereții peșterii** | Pereții amestecați cu o culoare, cu o intensitate; umbrirea lor rămâne |
 | **Drumuirile într-o singură culoare** | În locul culorilor după adâncime |
 | **Terenul peste peșteri** | Desenat peste peșteri sau decupat deasupra peșterii |
+| **Alege obiectivul** | Cât de largă este imaginea, de la 10° la 100° pe latura ei mai lungă (al scenei este de 60°). Un obiectiv îngust, de departe, turtește un munte ca un zid în spatele peșterii; unul larg cuprinde o vale de aproape |
 
 **Schimbări gata făcute** — seturi de schimbări în timp, scrise dintr-o apăsare. Adăugat din nou,
 un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
@@ -108,9 +165,16 @@ un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
 | **Hartă veche, hartă nouă** | O hartă georeferențiată apare treptat peste harta de bază în timpul unei secțiuni și dispare din nou |
 | **Obiecte pe rând** | Straturile din filtre pe care le alegi, arătate unul după altul; toate sunt ascunse când începe survolul. Sunt oferite doar straturile aflate deja în lista de straturi din filtre a hărții |
 
+La **Straturi**, fiecare strat al acestei instalări — cele ale scenei, suprapunerile de plăci,
+hărțile georeferențiate, fișierele importate, straturile din filtre — poate fi **afișat**,
+**ascuns** sau lăsat **cum îl ai** când începe survolul, cu o intensitate proprie sau cu a ta.
+
 **Schimbări** — fiecare schimbare pe câte un rând, în cuvinte: ce face, secțiunea căreia îi
 aparține, la câte secunde de la începutul secțiunii pornește și cât durează. Corectează numerele
-sau șterge o schimbare. O schimbare aparține secțiunii ei, așa că o secțiune făcută mai lentă sau
+sau șterge o schimbare. **Adaugă o schimbare** scrie una de mână: ce se schimbă (harta de bază,
+intensitatea ei, un strat afișat sau ascuns, intensitatea unui strat, culoarea pereților,
+culoarea drumuirilor, terenul peste peșteri, cerul, obiectivul — un zoom cu camera pe loc), în ce, în timpul cărei secțiuni, la câte
+secunde de la începutul ei și cât durează. O schimbare aparține secțiunii ei, așa că o secțiune făcută mai lentă sau
 mai rapidă își mută schimbările cu ea. Drumuirile și terenul peste peșteri se schimbă dintr-o dată,
 nu treptat. Două schimbări ale aceluiași lucru în același timp sunt semnalate, iar survolul nu
 poate fi redat până când una nu este mutată.
@@ -118,8 +182,10 @@ poate fi redat până când una nu este mutată.
 **Texte peste imagine** — un **titlu** (cu un al doilea rând) arătat din primul moment, o
 **legendă** pentru orice secțiune, arătată jos cât timp secțiunea este zburată, un **carton de
 final** arătat până în ultimul moment, iar imaginea poate apărea din negru la început și se poate
-stinge în negru la final. Sunt desenate peste scenă proporțional cu mărimea ei și fac parte din ce
-arată ecranul curat.
+stinge în negru la final. O **săgeată a nordului** în colțul din dreapta sus se rotește odată cu
+camera, iar **un rând de text în colț** — numele unui club, o dată — stă în stânga sus pe tot
+survolul. Sunt desenate peste scenă proporțional cu mărimea ei, fac parte din ce arată ecranul
+curat și sunt în fiecare cadru al unui film.
 
 Trasă înapoi, poziția anulează ce a schimbat survolul după acel moment, exact cum redarea înainte
 a schimbat.
@@ -239,7 +305,9 @@ Pentru un fișier fluent pe orice calculator, folosește **Rapid** sau **Fin**.
 | **Șterge** | Elimină survolul păstrat al cărui nume este în câmpul de nume |
 | **Salvează în fișier** / **Deschide din fișier** | Scrie survolul ca un fișier mic `.flyby.json` și citește unul — ca să muți un survol în alt browser sau să îl trimiți cuiva |
 
-Un survol își numește peșterile și zonele prin referință, nu prin poziție. Deschis de altcineva,
+Un survol își numește peșterile, zonele și fișierele prin referință, nu prin poziție — în afară de
+vederile salvate pentru *Vederile mele*, care sunt locuri și pe care panoul le semnalează ca atare.
+Deschis de altcineva,
 zboară în jurul a ceea ce *acea persoană* are voie să vadă: o peșteră pe care nu o poate citi este
 raportată ca negăsită, iar o peșteră al cărei loc exact este protejat este survolată în locul
 aproximativ care îi este arătat. Survolurile sunt păstrate în browser, nu pe server; ștergerea
@@ -258,3 +326,11 @@ datelor browserului pentru acest site le elimină — pentru asta există fișie
   locul potrivit pentru acel moment, doar că este văzută mai rar.
 - **Un tur lung.** Pregătirea vizitează fiecare peșteră care nu este încă desenată, apoi traseul.
   Douăsprezece peșteri cu traseul încărcat pot lua câteva minute înainte de primul cadru.
+- **Urmarea unei linii.** O secțiune care urmează o drumuire sau un traseu zboară mai întâi la
+  începutul liniei, apoi pornește de-a lungul ei, prinzând viteză, și încetinește până se oprește
+  la capăt. Linia este netezită pe o distanță cam cât cea a camerei față de ea, așa că o drumuire
+  în zigzag sau un traseu GPS tremurat nu sunt zburate tronson cu tronson. Durata urmăririi este
+  a secțiunii: lungește secțiunea pentru un traseu lung. Spre un fișier fără nicio linie se zboară
+  direct, iar panoul spune asta.
+- **Numele peșterilor peste imagine** sunt scrise doar când le ceri și doar așa cum ai voie să le
+  citești; un fișier de survol își numește peșterile prin referință, niciodată prin nume.

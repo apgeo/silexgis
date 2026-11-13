@@ -8,8 +8,9 @@
 ---
 
 A flyby flies the camera of the 3D view for you: in to a cave and around it, from one cave to
-the next, around a mountain, or from the survey's plan down to its profile. You choose what it
-is about and which ready-made flight to use, press **Play**, and watch.
+the next, around a mountain, from the survey's plan down to its profile, down a cave's survey,
+along a GPS track, or through views you capture yourself. You choose what it is about and which
+ready-made flight to use, change any part of it you like, press **Play**, and watch.
 
 It is offered wherever the 3D view is — the **3D view** page, the scene beside the map, and the
 scene in a window of its own — to anybody who is signed in.
@@ -18,7 +19,7 @@ scene in a window of its own — to anybody who is signed in.
 > the caves' colours during the flight; write a title, captions and an end card over it; play on
 > a clean screen for you to record with another program; be written to a movie file by SilexGIS
 > itself; and be kept and exchanged as a file. Not built yet: stretching the relief during a
-> flight, and more ready-made flights.
+> flight.
 
 ---
 
@@ -35,6 +36,7 @@ button again, or the ✕ of the panel, to close it.
 | **What is selected** | The cave, the entrance's cave, or the area (a massif, a karst area, a hill) selected on the map or in the scene |
 | **Caves in view** | The caves the scene is drawing now, ticked in the order you want them visited. **Refresh the list** reads the view again after you have moved; **Shortest route** puts the ticked caves in the order that makes the camera travel least |
 | **What the view shows** | Whatever the scene is centred on when you press Play — a ridge, a valley, a group of caves — with no need to select anything |
+| **An imported file** | A GPX track or a line from a KML or other file imported under **Geodata**, picked from the list of imported files; what *Along a line* follows |
 
 A cave is found from what the scene draws of it: its survey lines when they are loaded, its
 entrances otherwise. A cave that is not drawn at all is looked up, the camera goes to look at
@@ -49,8 +51,19 @@ it so the scene loads it, and the flight is built from what is then drawn.
 | **Around several caves** | One circle wide enough to hold all of them |
 | **Around a mountain** | Circles the area from above its ridges, looking in |
 | **Plan to profile** | Starts straight above, as on the survey's plan, tilts down to the side view and turns |
+| **Descent** | Over the cave's highest drawn point, then down its survey to its deepest point, the camera a little behind and above the point it follows, looking along the passage; a moment at the bottom, and back up |
+| **Along a line** | Comes down to the start of an imported file's track and follows it at a height above the ground, looking ahead, then rises to show all of it |
+| **My own views** | Flies through views you capture from the scene yourself, in the order you list them — see [My own views](#my-own-views) |
 
-Only the presets that fit what you chose are offered: a tour needs at least two caves.
+Only the presets that fit what you chose are offered: a tour needs at least two caves, a descent
+a cave, a flight along a line an imported file. *My own views* is always offered.
+
+**Descent** follows the survey lines the scene draws, found when you press Play: nothing of the
+survey is written into the flyby. It goes the shortest way along the lines from the highest
+point to the deepest. If the cave's survey is not drawn, carries no depths, or its highest and
+deepest points are on lines that do not meet — the scene draws only part of it, or a part was
+never tied in — the camera dives straight down to the deepest point instead, and the panel says
+so once the flyby has been prepared.
 
 ## Options
 
@@ -60,6 +73,9 @@ Only the presets that fit what you chose are offered: a tour needs at least two 
 | **Seconds per turn** | How long one full circle takes |
 | **Direction** | Clockwise or counter-clockwise, seen from above |
 | **Go underground to the cave's lowest point** | Adds a descent below the surface and the way back up (for *Around a cave* and *Cave tour*) |
+| **Stop at each cave for** | A *Cave tour* stops still over each cave for that many seconds after circling it (0: no stop) |
+| **Write over the picture** | While a tour stops at a cave: nothing (the default), the cave's name, or its name with its length and depth. The name and the figures are read from the server when the flyby is prepared, as you are allowed to see them; they are not written into the flyby |
+| **Start from far away, at the scale of the country** | Any ready-made flight opens high above — the whole country in the picture — and comes down to where it would otherwise have started, looking straight down while it is far and tilting only once it is near |
 | **Speed of the whole flyby** | ×0.25 to ×4: the same flight in more or less time |
 | **Load the route first** | Before playing, the camera visits the flight's key points and waits for the map and the caves to load at each, so the flight itself does not show them arriving. It takes a little while and is worth it; switch it off for a quick look |
 
@@ -73,8 +89,47 @@ into it, back up — each with its length. Every section has its own **seconds**
 **speed** (×0.25 to ×4), so one part can be slowed without touching the rest. The section being
 flown is highlighted while the flyby plays.
 
-Changing what the flyby is about, its preset or its options builds the sections again, and the
-panel says when the sections on screen are ones you opened or changed by hand.
+Under each section, buttons to **edit** what it does, **move** it up or down, **duplicate** it
+and **remove** it (a flyby keeps at least one). At the foot of the list, pick a kind and press
+**Add a section** to add one at the end. A section removed takes its changes of the look and its
+caption with it; a section moved keeps them.
+
+**Edit** opens what the section does. Each value is either set here or left **as before** —
+empty — and then the camera keeps what the section before left it:
+
+| Field | Does |
+|---|---|
+| **Kind** | What the section is called; *over to* (another subject) is flown up and over in an arc, *down the survey* and *along the line* follow a line, the others are moves |
+| **About** | Which of the flyby's subjects the camera is about during it, or all of them together |
+| **Turn by** | How far the camera goes round, in degrees or in turns; negative is the other way |
+| **Facing** | For a section that says which way to face rather than how far to turn (a captured view) |
+| **Angle below the horizon** | −90 looks straight down |
+| **Distance** | In sizes of what it is about: 2 is twice as far as the cave is large. A section that follows a track says its distance in metres instead |
+| **Looks at** | The middle of what it is about, its highest point, or its lowest |
+| **Raised by** | Lifts the point looked at, in halves of its height |
+| **Above the ground** | At least so many metres above the ground, or **may go underground** |
+| **Write over the picture** | Nothing, the name, or the name, length and depth of what it is about, along the bottom for the whole section |
+| **Come to rest at its end** | The camera stops instead of flying on into the next section |
+
+A value outside what is allowed is said in red beside the section. Changing what the flyby is
+about, its preset or its options builds the sections again, and the panel says when the sections
+on screen are ones you opened or changed by hand.
+
+## My own views
+
+Choose **My own views** as the preset for a flight that no ready-made one gives. Move the scene
+to a picture you want and press **Add this view**; do it again for the next picture, and the
+next. The flyby flies from each view to the next as one smooth flight and comes to rest on the
+last.
+
+Each view after the first has the **seconds** the flight to it takes. A view can be **taken
+again** from the camera as it is now, moved up or down, or removed. A view taken from under the
+ground — inside a cave — lets the flight go underground to reach it; between views taken above
+the ground the camera keeps above it.
+
+A view is kept as the point it looked at and how far and which way the camera stood from it, so
+**a flyby of your own views holds places**: the panel says so, and a file of it says where those
+places are. The middle of the picture has to show ground when you press **Add this view**.
 
 ## How the scene looks, and what is written over it
 
@@ -93,6 +148,7 @@ here or left **as you have it**.
 | **Colour the cave walls** | The walls mixed with one colour, by a strength; their shading is kept |
 | **Survey lines in one colour** | Instead of their colours by depth |
 | **Ground over the caves** | Drawn over the caves, or cut away above the cave |
+| **Set the lens** | How wide the picture is, from 10° to 100° across its wider side (the scene's own is 60°). A narrow lens from far off flattens a mountain into a wall behind the cave; a wide one takes in a valley from close by |
 
 **Ready-made changes** — sets of timed changes written in one press. Adding a set again replaces
 the one added before rather than doubling it.
@@ -105,9 +161,16 @@ the one added before rather than doubling it.
 | **Old map, new map** | A georeferenced map fades in over the background during a section and out again |
 | **Features in turn** | The filter layers you pick, shown one after another; all of them are hidden when the flyby opens. Only layers already on the map's list of filter layers are offered |
 
+Under **Layers**, every layer of this installation — the scene's own, the tile overlays, the
+georeferenced maps, the imported files, the filter layers — can be **shown**, **hidden** or left
+**as you have it** when the flyby starts, and at a strength of its own or yours.
+
 **Changes** — every change as a line in words: what it does, the section it belongs to, the
 seconds into that section it starts, and how long it lasts. Correct the numbers or remove a
-change. A change belongs to its section, so making a section slower or faster moves its changes
+change. **Add a change** writes one by hand: what changes (the background map, its strength, a
+layer shown or hidden, a layer's strength, the walls' colour, the survey lines' colour, the
+ground over the caves, the sky, the lens — a zoom while the camera stays where it is), what to, during which section, how many seconds into it, and how
+long it takes. A change belongs to its section, so making a section slower or faster moves its changes
 with it. Survey lines and the ground over the caves change at a single moment, not gradually. Two
 changes of the same thing at the same time are marked, and the flyby will not play until one is
 moved.
@@ -115,8 +178,10 @@ moved.
 **Texts over the picture** — a **title** (with a second line) shown from the first moment, a
 **caption** for any section, shown along the bottom while it is flown, an **end card** shown to
 the last moment, and the picture rising out of black at the start and sinking into it at the
-end. They are drawn over the scene in proportion to its size, and they are part of what the
-clean screen shows.
+end. A **north arrow** in the top right corner turns as the camera turns, and **a line of text
+in the corner** — a club's name, a date — stays at the top left for the whole flyby. They are
+drawn over the scene in proportion to its size, they are part of what the clean screen shows, and
+they are in every frame of a movie.
 
 Dragging the position backwards undoes what the flyby changed after that moment, exactly as
 playing forwards made it.
@@ -232,7 +297,8 @@ For a smooth file whatever the computer, use **Quick** or **Fine**.
 | **Delete** | Removes the kept flyby whose name is in the name field |
 | **Save to file** / **Open from file** | Writes the flyby as a small `.flyby.json` file, and reads one — to move a flyby to another browser or send it to somebody |
 
-A flyby names its caves and areas by reference, not by position. Opened by somebody else, it
+A flyby names its caves, areas and files by reference, not by position — except the views you
+captured for *My own views*, which are places, and which the panel marks as such. Opened by somebody else, it
 flies around what *they* are allowed to see: a cave they cannot read is reported as not found,
 and a cave whose exact place is protected is flown around at the approximate place they are
 shown. Flybys are kept in the browser, not on the server; clearing the browser's data for the
@@ -251,3 +317,10 @@ site removes them, which is what the file is for.
   the right place for the moment, it is just seen less often.
 - **A long tour.** Preparing visits every cave that is not yet drawn, then the route. Twelve
   caves with the route loaded can take a couple of minutes before the first frame.
+- **Following a line.** A section that follows a survey or a track first flies to where the line
+  begins, then sets off along it, gathering speed, and slows to a stop at its end. The line is
+  smoothed over about the camera's own distance from it, so a zigzag survey or a jittery GPS
+  track is not flown leg by leg. Its length is the section's: lengthen the section for a long
+  track. A file with no line in it is flown to straight, and the panel says so.
+- **Cave names over the picture** are written only when you ask for them, and only as you may
+  read them; a flyby file names its caves by reference, never by name.
