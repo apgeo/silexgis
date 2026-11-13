@@ -40,6 +40,12 @@ export interface FlybyLookTarget {
    */
   showFeatureLayers?(layers: readonly FlybyFeatureLayer[] | undefined): void;
   showWalls(tint: { colour: FlybyColour; strength: number } | undefined): void;
+  /**
+   * One cave in a colour of its own — its walls mixed with it by `strength`, its survey lines in it
+   * — over the colour of every cave; undefined gives it back to that. Left out by a view that cannot
+   * colour one cave apart, and such a change is then not shown.
+   */
+  showCave?(caveId: string, tint: { colour: FlybyColour; strength: number } | undefined): void;
   /** Undefined: the lines in their colours by depth. */
   showLines(colour: FlybyColour | undefined): void;
   showSurface(surface: FlybySurface | undefined): void;
@@ -99,6 +105,8 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
         target.showLayer(member.slice('layer:'.length), undefined);
       } else if (member === 'walls') {
         target.showWalls(undefined);
+      } else if (member.startsWith('cave:')) {
+        target.showCave?.(member.slice('cave:'.length), undefined);
       } else if (member === 'lines') {
         target.showLines(undefined);
       } else if (member === 'surface') {
@@ -146,6 +154,11 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
       if (state.walls) {
         const walls = state.walls;
         changed = put('walls', walls, () => target.showWalls(walls.strength > 0 ? walls : undefined)) || changed;
+      }
+      for (const [caveId, tint] of Object.entries(state.caves ?? {})) {
+        if (target.showCave) {
+          changed = put(`cave:${caveId}`, tint, () => target.showCave!(caveId, tint.strength > 0 ? tint : undefined)) || changed;
+        }
       }
       if (state.lines !== undefined) {
         const lines = state.lines ?? undefined;

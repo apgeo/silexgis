@@ -192,3 +192,59 @@ export function featuresInTurn(
   });
   return { look, changes: replacing(document, new Set(keys.map((key) => `layer:${key}`)), added) };
 }
+
+export interface LightTheVisitedOptions {
+  /** The cave being visited. */
+  lit: FlybyColour;
+  /** Every other cave. */
+  dim: FlybyColour;
+  /** How much of `dim` is mixed into the others' walls, 0–1. */
+  dimStrength: number;
+}
+
+/** How much of the lit colour is mixed into the walls of the cave being visited. */
+const LIT_STRENGTH = 0.85;
+/** Seconds a cave takes to light up, and to dim again; less in a stop too short for both. */
+const LIGHT_SECONDS = 1.5;
+
+/**
+ * The cave being visited lit, the others dimmed: every cave opens in the dim colour — walls and
+ * survey lines — and each stop of the tour lights its own cave as the camera heads for it and
+ * dims it again as the camera leaves. A stop is a run of sections about the same cave, or about a
+ * saved filter's caves flown for each of them, and so lights each of those in turn.
+ */
+export function lightTheVisited(document: FlybyDocument, options: LightTheVisitedOptions): FlybyRecipeResult {
+  const look: FlybyLook = { ...document.look, walls: { colour: options.dim, strength: options.dimStrength }, lines: options.dim };
+  const stopAbout = (index: number): number | undefined => {
+    const section = document.sections[index];
+    const subject = typeof section.subject === 'number' ? document.subjects[section.subject] : undefined;
+    return subject?.kind === 'cave' || (subject?.kind === 'filter' && section.each) ? (section.subject as number) : undefined;
+  };
+  const stops: { subject: number; first: number; last: number }[] = [];
+  document.sections.forEach((section, index) => {
+    const subject = stopAbout(index);
+    const last = stops[stops.length - 1];
+    if (subject === undefined) {
+      return;
+    }
+    // A run of sections flown for each of a filter's caves is one stop however it is cut.
+    if (last && last.last === index - 1 && last.subject === subject && Boolean(document.sections[last.first].each) === Boolean(section.each)) {
+      last.last = index;
+    } else {
+      stops.push({ subject, first: index, last: index });
+    }
+  });
+  const members = new Set(['walls', 'lines', ...(document.changes ?? []).filter((change) => change.kind === 'cave').map(flybyChangeMember)]);
+  const kept = (document.changes ?? []).filter((change) => !members.has(flybyChangeMember(change)));
+  const id = idMaker(kept);
+  const added: FlybyChange[] = stops.flatMap(({ subject, first, last }) => {
+    const from = document.sections[first];
+    const to = document.sections[last];
+    const fade = round(Math.min(LIGHT_SECONDS, from.seconds / 2, to.seconds / 2));
+    return [
+      { kind: 'cave', subject, colour: options.lit, strength: LIT_STRENGTH, id: id('cave'), section: from.id, at: 0, seconds: fade },
+      { kind: 'cave', subject, colour: options.lit, strength: 0, id: id('cave'), section: to.id, at: round(to.seconds - fade), seconds: fade },
+    ];
+  });
+  return { look, changes: [...kept, ...added] };
+}

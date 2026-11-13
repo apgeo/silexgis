@@ -9908,6 +9908,20 @@
       "colour": "Culoarea pentru {{name}}",
       "symbol": "Simbolul pentru {{name}}",
       "remove": "Elimină stratul {{name}}"
+    },
+    "lightCave": {
+      "name": "Luminează peștera vizitată",
+      "lit": "Culoarea peșterii vizitate",
+      "dim": "Culoarea celorlalte peșteri",
+      "change": "Peștera vizitată în {{colour}}, {{percent}}%",
+      "changeBack": "Peștera vizitată revine la culoarea celorlalte"
+    },
+    "walls": {
+      "title": "Pereți pe traseul acestui survol",
+      "question_one": "Pereții unei peșteri de pe traseu au {{size}} de descărcat. Îi descarci pentru acest survol?",
+      "question": "Pereții celor {{count}} peșteri de pe traseu au {{size}} de descărcat. Îi descarci pentru acest survol?",
+      "download": "Descarcă-i",
+      "without": "Rulează fără ei"
     }
   },
   "mapSymbols": {

@@ -56,6 +56,7 @@ import {
   type FlybyWorld,
 } from '../../../flyby/flybySubjects.ts';
 import type { FlybyTextPlan } from '../../../flyby/flybyTexts.ts';
+import { flybyWallsQuestion, type FlybyWallsAsk, type FlybyWallsQuestion } from '../../../flyby/flybyWalls.ts';
 import {
   compileFlyby,
   flybyLineFallbacks,
@@ -88,6 +89,8 @@ export interface FlybyScene {
   look?: FlybyLookTarget;
   /** One cave's survey lines as drawn now, at their drawn heights; what a descent follows. */
   caveLines?(caveId: string): { longitude: number; latitude: number; height: number }[][];
+  /** The walls the view waits for a yes about; left out, a flyby asks nothing about walls. */
+  walls?: FlybyWallsAsk;
 }
 
 /** Where the subjects of a flyby being put together come from. */
@@ -508,6 +511,34 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const [unsettled, setUnsettled] = useState(0);
   /** Sections that were to follow a line and had none to follow, as last prepared. */
   const [lineFallbacks, setLineFallbacks] = useState<string[]>([]);
+  /** The walls on the route waiting for a yes, while the question is open; and how it is answered. */
+  const [wallsQuestion, setWallsQuestion] = useState<FlybyWallsQuestion>();
+  const wallsAnswerRef = useRef<((yes: boolean) => void) | null>(null);
+  const answerWalls = useCallback((yes: boolean) => {
+    const answer = wallsAnswerRef.current;
+    wallsAnswerRef.current = null;
+    setWallsQuestion(undefined);
+    answer?.(yes);
+  }, []);
+  /** Asks once, for the whole route, about the walls on it that wait for a yes; a no is kept. */
+  const askAboutWalls = useCallback(
+    async (played: FlybyDocument, signal: AbortSignal) => {
+      const question = scene.walls ? flybyWallsQuestion(played, scene.walls) : undefined;
+      if (!question) {
+        return;
+      }
+      const yes = await new Promise<boolean>((resolve) => {
+        wallsAnswerRef.current = resolve;
+        setWallsQuestion(question);
+        // A flyby stopped while the question is open goes nowhere, and downloads nothing.
+        signal.addEventListener('abort', () => answerWalls(false), { once: true });
+      });
+      if (yes && !signal.aborted) {
+        scene.walls?.agree(question.caveIds);
+      }
+    },
+    [scene, answerWalls],
+  );
   // Told of every moment, unthrottled and outside React state: what is drawn over the scene must
   // keep step with the scene frame by frame, which the throttled state above does not.
   const momentListeners = useRef(new Set<(moment: FlybyMoment | null) => void>());
@@ -585,6 +616,10 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         timeline = prepared.timeline;
         setUnsettled(prepared.unsettled);
       }
+      await askAboutWalls(expanded.document, controller.signal);
+      if (controller.signal.aborted) {
+        throw new DOMException('The flyby was stopped before it played.', 'AbortError');
+      }
       const sectionOf = expanded.sectionOf;
       // Said of the sections as written: one flown for each cave is named once, whichever cave it failed at.
       setLineFallbacks([
@@ -642,7 +677,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       abortRef.current = null;
       setPreparing(null);
     }
-  }, [document, scene, world, stage, loadRoute, say, dropPlayer, tellMoment]);
+  }, [document, scene, world, stage, loadRoute, say, dropPlayer, tellMoment, askAboutWalls]);
 
   /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
   const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {
@@ -759,6 +794,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setTrouble,
     unsettled,
     lineFallbacks,
+    wallsQuestion,
+    answerWalls,
     ensurePlayer,
     ensureTimeline,
     stage,

@@ -619,6 +619,26 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       },
       wrap: () => wrapRef.current,
       surface: () => slotRef.current,
+      // Of the two ways walls are drawn, only the selected cave's waits for a yes: the walls of
+      // every cave in view are held to a budget instead, and never ask.
+      walls: {
+        pending: (caveIds) => {
+          const mesh = meshRef.current?.getState();
+          return mesh?.status === 'asking' &&
+            mesh.caveId !== undefined &&
+            mesh.meshSizeBytes !== undefined &&
+            caveIds.includes(mesh.caveId)
+            ? [{ caveId: mesh.caveId, bytes: mesh.meshSizeBytes }]
+            : [];
+        },
+        agree: (caveIds) => {
+          const mesh = meshRef.current;
+          const asking = mesh?.getState();
+          if (mesh && asking?.status === 'asking' && asking.caveId !== undefined && caveIds.includes(asking.caveId)) {
+            mesh.confirmDownload();
+          }
+        },
+      },
       look: createScene3DLookTarget(
         {
           engine: () => engineRef.current,
@@ -1731,7 +1751,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
             and a build waved away stays away for the session. */}
         {/* Walls large enough to be a cost on a metered connection: their size is said and the
             download waits for a yes. Nothing is fetched until it is pressed. */}
-        {meshState.status === 'asking' && meshState.meshSizeBytes !== undefined && (
+        {/* Not while a flyby has the camera: it asked once for its whole route, and a no is kept. */}
+        {meshState.status === 'asking' && meshState.meshSizeBytes !== undefined && !flybyActive && (
           <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-mesh-ask">
             {t('scene3d.meshAsk', { size: formatSize(meshState.meshSizeBytes) })}
             <Button

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Spin } from 'antd';
+import { Modal, Spin } from 'antd';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatSize } from '../../attachments/fileFormat.ts';
 import { flybyMovieFrameSize } from '../../../flyby/flybyMovie.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
@@ -207,6 +208,21 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
           />
         </div>
       )}
+      {/* Asked once before the flyby plays, for every cave on its route whose walls wait for a yes. */}
+      <Modal
+        open={flyby.wallsQuestion !== undefined}
+        title={t('flyby.walls.title')}
+        okText={t('flyby.walls.download')}
+        cancelText={t('flyby.walls.without')}
+        onOk={() => flyby.answerWalls(true)}
+        onCancel={() => flyby.answerWalls(false)}
+        okButtonProps={{ 'data-testid': 'flyby-walls-download' } as Record<string, string>}
+        cancelButtonProps={{ 'data-testid': 'flyby-walls-without' } as Record<string, string>}
+        destroyOnHidden
+      >
+        {flyby.wallsQuestion &&
+          t('flyby.walls.question', { count: flyby.wallsQuestion.caveIds.length, size: formatSize(flyby.wallsQuestion.bytes) })}
+      </Modal>
       {clean && countdown !== null && (
         <div className="scene3d-flyby-countdown" data-testid="flyby-countdown" role="status" aria-live="assertive">
           {countdown}

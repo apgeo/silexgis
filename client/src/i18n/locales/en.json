@@ -9895,6 +9895,20 @@
       "colour": "Colour of {{name}}",
       "symbol": "Symbol of {{name}}",
       "remove": "Remove the layer {{name}}"
+    },
+    "lightCave": {
+      "name": "Light the cave being visited",
+      "lit": "Colour of the cave being visited",
+      "dim": "Colour of the other caves",
+      "change": "The cave visited in {{colour}}, {{percent}}%",
+      "changeBack": "The cave visited back to the colour of the others"
+    },
+    "walls": {
+      "title": "Walls on this flyby's route",
+      "question_one": "The walls of {{count}} cave on the route are {{size}} to download. Download them for this flyby?",
+      "question": "The walls of {{count}} caves on the route are {{size}} to download. Download them for this flyby?",
+      "download": "Download them",
+      "without": "Play without them"
     }
   },
   "mapSymbols": {

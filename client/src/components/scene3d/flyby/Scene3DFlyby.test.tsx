@@ -423,6 +423,7 @@ function lookingScene() {
     showBackground: record('background'),
     showLayer: (key, state) => record(`layer:${key}`)(state),
     showFeatureLayers: record('features'),
+    showCave: (caveId, tint) => record(`cave:${caveId}`)(tint),
     showWalls: record('walls'),
     showLines: record('lines'),
     showSurface: record('surface'),
@@ -916,6 +917,80 @@ describe('what a flyby is about, found by a saved filter or by name', () => {
     // Two caves ticked: a tour of both, the one found by name last.
     fireEvent.click(screen.getByText('5 sections'));
     expect(screen.getByTestId('flyby-sections')).toHaveTextContent('Over to · Cave FAR');
+  });
+});
+
+describe('a colour for the cave being visited', () => {
+  it('lights each cave of a tour in turn and dims the others, and gives every cave back when stopped', async () => {
+    const scene = Object.assign(lookingScene(), {
+      cavesInView: () => [drawnCave, { caveId: 'b', bounds: [25.1, 45.5, 25.104, 45.504] as [number, number, number, number], top: 900, bottom: 850 }],
+    });
+    renderFlyby(scene, null);
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves in view' }));
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    fireEvent.change(screen.getByLabelText('Colour of the cave being visited'), { target: { value: '#FF0000' } });
+    fireEvent.click(screen.getByTestId('flyby-recipe-light-add'));
+    fireEvent.click(screen.getByText('4 changes'));
+    expect(screen.getByTestId('flyby-changes')).toHaveTextContent('The cave visited in #ff0000, 85%');
+    expect(screen.getByTestId('flyby-changes')).toHaveTextContent('The cave visited back to the colour of the others');
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(10_000);
+    expect(scene.shown).toMatchObject({ walls: { colour: '#5a6470', strength: 0.75 }, lines: '#5a6470', 'cave:a': { colour: '#ff0000' } });
+    expect(scene.shown['cave:b']).toBeUndefined();
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(Object.keys(scene.shown).filter((member) => member.startsWith('cave:') || member === 'walls')).toEqual([]);
+  });
+});
+
+describe('walls on the route that wait for a yes', () => {
+  function walledScene(pending: boolean) {
+    const agreed: string[][] = [];
+    const scene = Object.assign(fakeScene(), {
+      walls: {
+        pending: (caveIds: readonly string[]) => (pending && caveIds.includes('a') ? [{ caveId: 'a', bytes: 60 * 1024 * 1024 }] : []),
+        agree: (caveIds: readonly string[]) => {
+          agreed.push([...caveIds]);
+        },
+      },
+    });
+    return { scene, agreed };
+  }
+
+  it('asks once before the flyby plays, and downloads them on a yes', async () => {
+    const { scene, agreed } = walledScene(true);
+    renderFlyby(scene);
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    expect(screen.getByText('Walls on this flyby\'s route')).toBeInTheDocument();
+    expect(screen.getByText(/The walls of 1 cave on the route are 60.0 MB to download/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('flyby-walls-download'));
+    await pass(50);
+    expect(agreed).toEqual([['a']]);
+    expect(status()).toBe('playing');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('plays without them on a no, and downloads nothing', async () => {
+    const { scene, agreed } = walledScene(true);
+    renderFlyby(scene);
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    fireEvent.click(screen.getByTestId('flyby-walls-without'));
+    await pass(50);
+    expect(agreed).toEqual([]);
+    expect(status()).toBe('playing');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('asks nothing when no walls wait for a yes', async () => {
+    const { scene } = walledScene(false);
+    renderFlyby(scene);
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(50);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(status()).toBe('playing');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
   });
 });
 

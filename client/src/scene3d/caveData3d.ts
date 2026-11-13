@@ -13,6 +13,7 @@ import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import { featuresOf, propertiesOf } from './geoJson3d.ts';
 import {
   caveCenterlines,
+  caveIdOf,
   cavesDrawn,
   centerlineBounds,
   centerlineLoadState,
@@ -217,8 +218,11 @@ export interface CaveData3DHandle {
    * Draws every survey line in one CSS colour instead of its colour by depth; undefined gives the
    * lines their depth colours back. The lines already drawn are redrawn at once, and the colour
    * holds through every load after, until it is taken off.
+   *
+   * Given a cave, the colour is that cave's own, over the one for every line: a flyby lights the
+   * cave it is visiting. Undefined then hands that cave back to the colour of the rest.
    */
-  setLineColour(colour: string | undefined): void;
+  setLineColour(colour: string | undefined, caveId?: string): void;
   getState(): CaveData3DState;
   /** Subscribes to load-state changes; returns an unsubscribe function. */
   subscribe(listener: (state: CaveData3DState) => void): () => void;
@@ -281,8 +285,17 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
   /** One colour for every survey line, when something asked for it; the drawn copy is what is coloured. */
   let lineColour: string | undefined;
+  /** Colours of their own for some caves' lines, over the one above. */
+  const caveLineColours = new Map<string, string>();
   const showCenterlines = (polylines: readonly Scene3DPolyline[]) =>
-    centerlines.replace(lineColour ? polylines.map((polyline) => ({ ...polyline, color: lineColour! })) : polylines);
+    centerlines.replace(
+      lineColour || caveLineColours.size > 0
+        ? polylines.map((polyline) => {
+            const own = caveLineColours.get(caveIdOf(polyline) ?? '') ?? lineColour;
+            return own ? { ...polyline, color: own } : polyline;
+          })
+        : polylines,
+    );
   let drawnCenter = { longitude: 0, latitude: 0 };
   let surveyTops = new Map<string, number>();
   // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
@@ -632,11 +645,21 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // back the note of which cave is drawn that hiding the survey layer dropped.
       void load();
     },
-    setLineColour(colour) {
-      if (colour === lineColour) {
+    setLineColour(colour, caveId) {
+      if (caveId !== undefined) {
+        if (caveLineColours.get(caveId) === colour) {
+          return;
+        }
+        if (colour === undefined) {
+          caveLineColours.delete(caveId);
+        } else {
+          caveLineColours.set(caveId, colour);
+        }
+      } else if (colour === lineColour) {
         return;
+      } else {
+        lineColour = colour;
       }
-      lineColour = colour;
       showCenterlines(drawnCenterlines);
     },
     setLayerOpacity(layer, opacity) {

@@ -275,7 +275,7 @@ function liftBy(positions: readonly Scene3DPosition[], meters: number): Scene3DP
 }
 
 /** The cave a survey line belongs to, or nothing when the line came from somewhere else. */
-function caveIdOf(polyline: Scene3DPolyline): string | undefined {
+export function caveIdOf(polyline: Scene3DPolyline): string | undefined {
   const id = polyline.id as Partial<CenterlinePick> | null | undefined;
   return typeof id?.caveId === 'string' ? id.caveId : undefined;
 }

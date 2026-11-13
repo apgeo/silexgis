@@ -30,6 +30,7 @@ import {
   colourCaves,
   cycleBackgrounds,
   featuresInTurn,
+  lightTheVisited,
   oldMapNewMap,
   seeThroughGround,
   type FlybyRecipeResult,
@@ -47,6 +48,9 @@ import type { FlybyController } from './useFlyby.ts';
 const DEFAULT_WALLS = '#e07020';
 const DEFAULT_LINES = '#ffd23c';
 const DEFAULT_SKY = '#b4c8dc';
+/** The cave being visited, lit, and every other one, dimmed. */
+const DEFAULT_LIT = '#ffb000';
+const DEFAULT_DIM = '#5a6470';
 const TITLE_SECONDS = 4;
 const END_SECONDS = 4;
 const FADE_IN_SECONDS = 1.5;
@@ -656,6 +660,8 @@ function Recipes({
   const [raster, setRaster] = useState<string>();
   const [rasterSection, setRasterSection] = useState<string>();
   const [filters, setFilters] = useState<string[]>([]);
+  const [lit, setLit] = useState(DEFAULT_LIT);
+  const [dim, setDim] = useState(DEFAULT_DIM);
   const [filterSeconds, setFilterSeconds] = useState(6);
   const present = (id: string | undefined) => (id && document.sections.some((section) => section.id === id) ? id : orbit);
 
@@ -751,6 +757,23 @@ function Recipes({
             disabled={busy || !present(colourFrom)}
             onClick={() => apply(colourCaves(document, { colour, strength: 0.7, section: present(colourFrom)! }))}
             data-testid="flyby-recipe-colour-add"
+          >
+            {t('flyby.look.recipe.add')}
+          </Button>
+        </div>
+      </fieldset>
+
+      <fieldset className="scene3d-flyby-recipe" data-testid="flyby-recipe-light">
+        <legend>{t('flyby.lightCave.name')}</legend>
+        <div className="scene3d-flyby-row">
+          <ColourWell value={lit} onChange={setLit} label={t('flyby.lightCave.lit')} disabled={busy} testId="flyby-recipe-light-lit" />
+          <ColourWell value={dim} onChange={setDim} label={t('flyby.lightCave.dim')} disabled={busy} testId="flyby-recipe-light-dim" />
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            disabled={busy}
+            onClick={() => apply(lightTheVisited(document, { lit, dim, dimStrength: 0.75 }))}
+            data-testid="flyby-recipe-light-add"
           >
             {t('flyby.look.recipe.add')}
           </Button>
@@ -878,6 +901,10 @@ function useChangeWords(names: Names) {
         return change.colour ? t('flyby.look.change.sky', { colour: change.colour }) : t('flyby.look.change.skyNone');
       case 'lens':
         return t('flyby.lens.change', { degrees: change.degrees });
+      case 'cave':
+        return change.strength > 0
+          ? t('flyby.lightCave.change', { colour: change.colour, percent: percent(change.strength) })
+          : t('flyby.lightCave.changeBack');
     }
   };
 }
@@ -1003,6 +1030,9 @@ function defaultChange(kind: FlybyChangeKind, names: Names): FlybyChangeWhat | u
       return { kind, colour: DEFAULT_SKY };
     case 'lens':
       return { kind, degrees: 30 };
+    case 'cave':
+      // Written by the ready-made set that lights the cave being visited, which knows the stops.
+      return undefined;
   }
 }
 

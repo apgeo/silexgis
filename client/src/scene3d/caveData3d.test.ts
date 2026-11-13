@@ -645,6 +645,30 @@ describe('the survey lines in one colour', () => {
     expect(colours(engine)).toEqual(own);
     handle.detach();
   });
+
+  it('gives one cave\'s lines a colour of their own over the colour of the rest, and hands them back', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    const byCave = () =>
+      Object.fromEntries(
+        (engine.sources.get(CENTERLINE_SOURCE_ID)!.items as { color: string; id: { caveId: string } }[]).map((line) => [
+          line.id.caveId,
+          line.color,
+        ]),
+      );
+    const own = byCave();
+    handle.setLineColour('#808080');
+    handle.setLineColour('#ff0000', 'cave-2');
+    expect(byCave()).toEqual({ 'cave-1': '#808080', 'cave-2': '#ff0000' });
+    handle.setLineColour(undefined, 'cave-2');
+    expect(byCave()).toEqual({ 'cave-1': '#808080', 'cave-2': '#808080' });
+    handle.setLineColour('#ff0000', 'cave-2');
+    handle.setLineColour(undefined);
+    expect(byCave()).toEqual({ 'cave-1': own['cave-1'], 'cave-2': '#ff0000' });
+    handle.detach();
+  });
 });
 
 describe('layers a viewer turns off and fades', () => {

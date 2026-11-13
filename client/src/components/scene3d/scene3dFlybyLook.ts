@@ -15,7 +15,11 @@ import { SCANS_IN_VIEW_LAYER_ID, type ScansInView3DHandle } from '../../scene3d/
 import type { Scene3DCore, Scene3DSurfaceMode } from '../../scene3d/scene3dEngine.ts';
 import { STATION_PHOTOS_SOURCE_ID, type StationPhotos3DHandle } from '../../scene3d/stationPhotos3d.ts';
 import { SURVEY_MESH_LAYER_ID, type SurveyMesh3DHandle } from '../../scene3d/surveyMesh3d.ts';
-import type { SurveyMeshesInView3DHandle, SurveyWalls3DMode } from '../../scene3d/surveyMeshesInView3d.ts';
+import {
+  surveyMeshInViewModelId,
+  type SurveyMeshesInView3DHandle,
+  type SurveyWalls3DMode,
+} from '../../scene3d/surveyMeshesInView3d.ts';
 
 // A flyby's look, put on the 3D view's own scene.
 //
@@ -279,6 +283,10 @@ function channel(hex: string, at: number): number {
   return Number.parseInt(hex.slice(at, at + 2), 16) / 255;
 }
 
+function modelTint(tint: { colour: string; strength: number }) {
+  return { red: channel(tint.colour, 1), green: channel(tint.colour, 3), blue: channel(tint.colour, 5), amount: tint.strength };
+}
+
 /** What a flyby does to the view's scene, through the view's own handles and settings. */
 export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene3DLookHeld): FlybyLookTarget {
   const drawLayer = (key: FlybyLayerKey) => {
@@ -385,11 +393,15 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
       }
     },
     showWalls(tint) {
-      handles
-        .engine()
-        ?.setModelTint(
-          tint ? { red: channel(tint.colour, 1), green: channel(tint.colour, 3), blue: channel(tint.colour, 5), amount: tint.strength } : undefined,
-        );
+      handles.engine()?.setModelTint(tint ? modelTint(tint) : undefined);
+    },
+    showCave(caveId, tint) {
+      // A cave's walls are loaded under its own id when every cave in view has walls, and under the
+      // one id of the selected cave's walls otherwise — which are this cave's only while it is the
+      // one selected.
+      const ids = [surveyMeshInViewModelId(caveId), ...(handles.mesh()?.getState().caveId === caveId ? [SURVEY_MESH_LAYER_ID] : [])];
+      handles.engine()?.setModelTintFor(ids, tint ? modelTint(tint) : undefined);
+      handles.data()?.setLineColour(tint?.colour, caveId);
     },
     showLines(colour) {
       handles.data()?.setLineColour(colour);

@@ -79,8 +79,8 @@ export function expandFlyby(document: FlybyDocument, caves: FlybyFilterCaves): F
   const runs = eachRuns(document);
   const sections: FlybySection[] = [];
   const sectionOf: number[] = [];
-  /** For a section copied per cave: the copies' ids and the cave each is about, in order. */
-  const copies = new Map<string, { id: string; subject: number }[]>();
+  /** For a section copied per cave: the copies' ids, the cave each is about and the filter it is one of. */
+  const copies = new Map<string, { id: string; subject: number; of: number }[]>();
   let index = 0;
   while (index < document.sections.length) {
     const run = runs.find((candidate) => candidate.from === index);
@@ -99,17 +99,32 @@ export function expandFlyby(document: FlybyDocument, caves: FlybyFilterCaves): F
         delete copy.each;
         sections.push(copy);
         sectionOf.push(at);
-        copies.set(original.id, [...(copies.get(original.id) ?? []), { id, subject }]);
+        copies.set(original.id, [...(copies.get(original.id) ?? []), { id, subject, of: run.subject }]);
       }
     });
     index = run.to + 1;
   }
 
-  // A change or a caption tied to a section flown for each cave is tied to every copy of it.
-  const changes: FlybyChange[] = (document.changes ?? []).flatMap((change) => {
+  // A change or a caption tied to a section flown for each cave is tied to every copy of it. A
+  // change that colours a filter's caves colours, in a copy flown for one of them, that one; and
+  // anywhere else, every one of them.
+  const changes: FlybyChange[] = [];
+  for (const change of document.changes ?? []) {
     const copied = copies.get(change.section);
-    return copied ? copied.map((copy, ordinal) => ({ ...change, id: copyId(change.id, ordinal), section: copy.id })) : [change];
-  });
+    const placings = copied
+      ? copied.map((copy, ordinal) => ({ id: copyId(change.id, ordinal), section: copy.id, cave: copy.subject, of: copy.of }))
+      : [{ id: change.id, section: change.section, cave: undefined, of: undefined }];
+    for (const placing of placings) {
+      if (change.kind !== 'cave' || !groups.has(change.subject)) {
+        changes.push({ ...change, id: placing.id, section: placing.section });
+        continue;
+      }
+      const caves = placing.of === change.subject && placing.cave !== undefined ? [placing.cave] : (groups.get(change.subject) ?? []);
+      caves.forEach((subject, ordinal) =>
+        changes.push({ ...change, id: caves.length > 1 ? copyId(placing.id, ordinal) : placing.id, section: placing.section, subject }),
+      );
+    }
+  }
   const captions: FlybyCaption[] = (document.texts?.captions ?? []).flatMap((caption) => {
     const copied = copies.get(caption.section);
     return copied ? copied.map((copy) => ({ ...caption, section: copy.id })) : [caption];

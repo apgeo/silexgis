@@ -78,7 +78,6 @@ function CaveSearch({ onPick, disabled }: { onPick(caveId: string): void; disabl
   const caves = (results?.features ?? []).filter((feature) => feature.kind === 'cave');
   return (
     <AutoComplete
-      size="small"
       value={query}
       onChange={setQuery}
       onSelect={(caveId: string) => {
@@ -93,7 +92,7 @@ function CaveSearch({ onPick, disabled }: { onPick(caveId: string): void; disabl
       notFoundContent={debounced.trim().length >= 2 && results ? t('flyby.byFilter.searchNone') : undefined}
       data-testid="flyby-cave-search"
     >
-      <Input prefix={<SearchOutlined />} placeholder={t('flyby.byFilter.search')} aria-label={t('flyby.byFilter.search')} />
+      <Input size="small" prefix={<SearchOutlined />} placeholder={t('flyby.byFilter.search')} aria-label={t('flyby.byFilter.search')} />
     </AutoComplete>
   );
 }

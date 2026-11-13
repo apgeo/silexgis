@@ -44,6 +44,8 @@ export interface FlybyLookPlan {
   layers: FlybyLayerKey[];
   /** The layers of features the flyby draws itself, for as long as it has the scene. */
   features: FlybyFeatureLayer[];
+  /** The cave each subject a change colours on its own is, by the subject's position. */
+  caveOf: Record<number, string>;
 }
 
 /**
@@ -91,6 +93,8 @@ export interface FlybyLookState {
   sky?: FlybyColour | null;
   /** Degrees across the wider side of the picture. */
   lens?: number;
+  /** Caves in a colour of their own, by cave id; a strength of 0 is the colour of the rest. */
+  caves?: Record<string, { colour: FlybyColour; strength: number }>;
 }
 
 /** The lens a scene has when nobody has set one, degrees across the wider side of the picture. */
@@ -115,7 +119,14 @@ export function flybyLookPlan(document: FlybyDocument): FlybyLookPlan {
       layers.add(change.layer);
     }
   }
-  return { look, changes, layers: [...layers], features };
+  const caveOf: Record<number, string> = {};
+  for (const { change } of changes) {
+    const subject = change.kind === 'cave' ? document.subjects[change.subject] : undefined;
+    if (change.kind === 'cave' && subject?.kind === 'cave') {
+      caveOf[change.subject] = subject.caveId;
+    }
+  }
+  return { look, changes, layers: [...layers], features, caveOf };
 }
 
 /** True when the plan changes nothing: then nothing of the scene is touched at all. */
@@ -185,6 +196,24 @@ function follow<T>(
     value = step(value, timed.change, progress(timed, t));
   }
   return value;
+}
+
+/**
+ * A tint stepped towards a change of the walls or of one cave. Walls in their own colours have no
+ * tint to mix from: the new colour is taken whole and only its strength rises. Going back to their
+ * own, the colour is kept as it fades.
+ */
+function tintStep(
+  inForce: { colour: FlybyColour; strength: number },
+  change: FlybyChange,
+  p: number,
+): { colour: FlybyColour; strength: number } {
+  if (change.kind !== 'walls' && change.kind !== 'cave') {
+    return inForce;
+  }
+  const from = inForce.strength > 0 ? inForce.colour : change.colour;
+  const to = change.strength > 0 ? change.colour : from;
+  return { colour: mixFlybyColours(from, to, p), strength: lerp(inForce.strength, change.strength, p) };
 }
 
 /** The background shown at `t`. */
@@ -259,21 +288,11 @@ export function flybyLookAt(plan: FlybyLookPlan, base: FlybyLookBase, t: number)
     state.layers[key] = layerAt(plan, base, key, t);
   }
   if (look.walls || has('walls')) {
-    state.walls = follow(
-      changesOf(plan, 'walls'),
-      t,
-      look.walls ?? { colour: '#000000', strength: 0 },
-      (inForce, change, p) => {
-        if (change.kind !== 'walls') {
-          return inForce;
-        }
-        // Walls in their own colours have no tint to mix from: the new colour is taken whole and
-        // only its strength rises. Going back to their own, the colour is kept as it fades.
-        const from = inForce.strength > 0 ? inForce.colour : change.colour;
-        const to = change.strength > 0 ? change.colour : from;
-        return { colour: mixFlybyColours(from, to, p), strength: lerp(inForce.strength, change.strength, p) };
-      },
-    );
+    state.walls = follow(changesOf(plan, 'walls'), t, look.walls ?? { colour: '#000000', strength: 0 }, tintStep);
+  }
+  for (const [subject, caveId] of Object.entries(plan.caveOf)) {
+    state.caves ??= {};
+    state.caves[caveId] = follow(changesOf(plan, `cave:${subject}`), t, { colour: '#000000', strength: 0 }, tintStep);
   }
   if (look.lines !== undefined || has('lines')) {
     state.lines = follow<FlybyColour | null>(changesOf(plan, 'lines'), t, look.lines ?? null, (inForce, change) =>

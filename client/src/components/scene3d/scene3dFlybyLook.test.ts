@@ -76,6 +76,8 @@ function world() {
     photosVisible: undefined as boolean | undefined,
     lens: undefined as number | undefined,
     featureSpecs: undefined as unknown,
+    modelTints: {} as Record<string, Scene3DModelTint | undefined>,
+    caveLines: {} as Record<string, string | undefined>,
   };
   const engine = {
     hasImageryLayer: (id: string) => imagery.has(id),
@@ -88,6 +90,11 @@ function world() {
     },
     setModelTint: (tint: Scene3DModelTint | undefined) => {
       state.tint = tint;
+    },
+    setModelTintFor: (ids: readonly string[], tint: Scene3DModelTint | undefined) => {
+      for (const id of ids) {
+        state.modelTints[id] = tint;
+      }
     },
     setBackgroundColor: (css: string | undefined) => {
       state.sky = css;
@@ -108,8 +115,12 @@ function world() {
     setLayerOpacity: (layer: string, opacity: number) => {
       state.caveLayers[layer] = { ...state.caveLayers[layer], opacity };
     },
-    setLineColour: (colour: string | undefined) => {
-      state.lineColour = colour;
+    setLineColour: (colour: string | undefined, caveId?: string) => {
+      if (caveId === undefined) {
+        state.lineColour = colour;
+      } else {
+        state.caveLines[caveId] = colour;
+      }
     },
   } as unknown as CaveData3DHandle;
   const filterLayers = {
@@ -132,6 +143,8 @@ function world() {
     },
   } as unknown as GeofileTracks3DHandle;
   const mesh = {
+    // The selected cave's walls are cave c1's.
+    getState: () => ({ caveId: 'c1' }),
     setVisible: (visible: boolean) => {
       state.meshVisible = visible;
     },
@@ -202,6 +215,26 @@ function flyby(changes: FlybyChange[]): FlybyDocument {
 }
 
 const at = (id: string, seconds = 4) => ({ id, section: 'orbit-1', at: 2, seconds });
+
+describe('one cave in a colour of its own', () => {
+  it('tints the walls loaded for that cave and colours its survey lines, and hands both back', () => {
+    const { state, target } = world();
+    target.showCave!('c1', { colour: '#ff0000', strength: 0.5 });
+    target.showCave!('c2', { colour: '#00ff00', strength: 1 });
+    // The walls of every cave in view are under ids of their own; the selected cave's under the one id of its walls.
+    expect(state.modelTints).toEqual({
+      'survey-mesh-in-view:c1': { red: 1, green: 0, blue: 0, amount: 0.5 },
+      'survey-mesh': { red: 1, green: 0, blue: 0, amount: 0.5 },
+      'survey-mesh-in-view:c2': { red: 0, green: 1, blue: 0, amount: 1 },
+    });
+    expect(state.caveLines).toEqual({ c1: '#ff0000', c2: '#00ff00' });
+    target.showCave!('c1', undefined);
+    expect(state.modelTints['survey-mesh-in-view:c1']).toBeUndefined();
+    expect(state.modelTints['survey-mesh']).toBeUndefined();
+    expect(state.caveLines.c1).toBeUndefined();
+    expect(state.tint).toBeUndefined();
+  });
+});
 
 describe('the layers of features a flyby draws itself', () => {
   it('asks for them as the viewer\'s layers from filters are asked, shows and hides them, and takes them all away', () => {

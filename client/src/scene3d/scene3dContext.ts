@@ -1003,6 +1003,8 @@ class CesiumScene3D implements Scene3DCore {
 
   /** The colour mixed into every model, held so a model that arrives later is mixed with it too. */
   private modelTint: Scene3DModelTint | undefined;
+  /** Colours of their own for the models under some ids, over the one above; held for the same reason. */
+  private readonly modelTints = new Map<string, Scene3DModelTint>();
 
   /**
    * Tints every loaded model, and every one loaded after: `amount` 0 leaves its own colours, 1
@@ -1015,16 +1017,37 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     this.modelTint = tint && tint.amount > 0 ? { ...tint } : undefined;
-    for (const entry of this.models.values()) {
+    for (const [id, entry] of this.models) {
       if (entry.model) {
-        this.tintModel(entry.model);
+        this.tintModel(entry.model, id);
       }
     }
     this.widget.scene.requestRender();
   }
 
-  private tintModel(model: Model): void {
-    const tint = this.modelTint;
+  setModelTintFor(ids: readonly string[], tint: Scene3DModelTint | undefined): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    for (const id of ids) {
+      // An amount of 0 is a colour of its own too: the walls of the one cave in their own colours
+      // while every other is tinted. Only undefined hands the model back to the common tint.
+      if (tint) {
+        this.modelTints.set(id, { ...tint });
+      } else {
+        this.modelTints.delete(id);
+      }
+      const model = this.models.get(id)?.model;
+      if (model) {
+        this.tintModel(model, id);
+      }
+    }
+    this.widget.scene.requestRender();
+  }
+
+  private tintModel(model: Model, id: string): void {
+    const own = this.modelTints.get(id);
+    const tint = own ? (own.amount > 0 ? own : undefined) : this.modelTint;
     if (!tint) {
       // No colour is the library's own default and its documented way to draw a model untinted;
       // its type declaration just does not say so.
@@ -1734,8 +1757,8 @@ class CesiumScene3D implements Scene3DCore {
     entry.model = model;
     entry.status = 'loaded';
     // Walls that arrive while the others are tinted come in the same colour as them.
-    if (this.modelTint) {
-      this.tintModel(model);
+    if (this.modelTint || this.modelTints.has(id)) {
+      this.tintModel(model, id);
     }
     this.widget.scene.primitives.add(model);
     // Placed again on arrival rather than trusting the matrix the read started with: an elevation

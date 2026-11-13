@@ -767,6 +767,15 @@ export interface Scene3DModels {
    * Held by the scene rather than applied once, because walls go on arriving while a camera flies.
    */
   setModelTint(tint: Scene3DModelTint | undefined): void;
+  /**
+   * Gives the models under these ids a colour of their own, over the one `setModelTint` gives every
+   * model — the models there now and any loaded under those ids later; undefined hands them back to
+   * that common colour. An amount of 0 is a colour of its own too: these walls in their own colours
+   * while the rest are tinted. A flyby lights the cave it is visiting and dims the others with it;
+   * a model is named by the id it was loaded under because that is the one handle on it the scene
+   * keeps — which cave a model belongs to is the caller's to know.
+   */
+  setModelTintFor(ids: readonly string[], tint: Scene3DModelTint | undefined): void;
 }
 
 /** A colour, each channel 0–1, and how much of it is mixed into a model's own, 0–1. */

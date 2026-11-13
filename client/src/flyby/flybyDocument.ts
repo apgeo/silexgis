@@ -329,6 +329,13 @@ export type FlybyChangeWhat =
   | { kind: 'layerOpacity'; layer: FlybyLayerKey; opacity: number }
   /** The walls' colour; a strength of 0 gives them back their own. */
   | { kind: 'walls'; colour: FlybyColour; strength: number }
+  /**
+   * One cave in a colour of its own, over the colour of every cave: its walls mixed with the colour
+   * by `strength`, its survey lines in the colour while the strength is above nothing. A strength of
+   * 0 gives it back to the colour of the rest. The cave is one of the flyby's subjects — a cave, or a
+   * saved filter's caves, each of them when the change is in a section flown for each.
+   */
+  | { kind: 'cave'; subject: number; colour: FlybyColour; strength: number }
   /** The survey lines in one colour, or (null) by depth again. Always a cut: the lines are rebuilt. */
   | { kind: 'lines'; colour: FlybyColour | null }
   /** Always a cut. */
@@ -350,6 +357,7 @@ export const FLYBY_CHANGE_KINDS: readonly FlybyChangeKind[] = [
   'surface',
   'sky',
   'lens',
+  'cave',
 ];
 
 /** The kinds that happen at one moment whatever length they are given. */
@@ -629,6 +637,8 @@ function changeIsSound(change: FlybyChange): boolean {
       return isFlybyLayerKey(change.layer) && isShare(change.opacity);
     case 'walls':
       return isFlybyColour(change.colour) && isShare(change.strength);
+    case 'cave':
+      return Number.isInteger(change.subject) && isFlybyColour(change.colour) && isShare(change.strength);
     case 'lines':
     case 'sky':
       return change.colour === null || isFlybyColour(change.colour);
@@ -655,6 +665,8 @@ export function flybyChangeMember(change: FlybyChangeWhat): string {
       return `layer:${change.layer}`;
     case 'layerOpacity':
       return `layerOpacity:${change.layer}`;
+    case 'cave':
+      return `cave:${change.subject}`;
     default:
       return change.kind;
   }
@@ -715,6 +727,7 @@ function changeProblems(document: FlybyDocument): FlybyProblem[] {
     }
     if (
       !changeIsSound(change) ||
+      (change.kind === 'cave' && !['cave', 'filter'].includes(document.subjects[change.subject]?.kind ?? '')) ||
       !(change.at >= 0 && change.at <= section.seconds) ||
       !(change.seconds >= 0 && change.seconds <= FLYBY_MAX_CHANGE_SECONDS)
     ) {
@@ -1084,6 +1097,13 @@ function readChange(value: unknown): FlybyChange | null {
       const strength = finite(bag.strength);
       return isFlybyColour(bag.colour) && strength !== undefined
         ? { kind: 'walls', colour: bag.colour, strength, ...timing }
+        : null;
+    }
+    case 'cave': {
+      const strength = finite(bag.strength);
+      const subject = finite(bag.subject);
+      return isFlybyColour(bag.colour) && strength !== undefined && subject !== undefined
+        ? { kind: 'cave', subject, colour: bag.colour, strength, ...timing }
         : null;
     }
     case 'lines':

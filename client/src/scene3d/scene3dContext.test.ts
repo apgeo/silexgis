@@ -2840,6 +2840,34 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('gives the models under some ids a colour of their own over the common one, now and when they arrive', async () => {
+    const session = acquire();
+    const first = session.engine.loadModel('lit', { url: MESH_URL, anchor: anchor(), placement: anchored });
+    engine.Model.deliver(MESH_URL);
+    await first;
+    const [lit] = loadedModels();
+    session.engine.setModelTint({ red: 0.5, green: 0.5, blue: 0.5, amount: 0.8 });
+    session.engine.setModelTintFor(['lit', 'later'], { red: 1, green: 0, blue: 0, amount: 0.6 });
+    expect(lit.color).toMatchObject({ css: 'rgb(255, 0, 0)' });
+    expect(lit.colorBlendAmount).toBe(0.6);
+
+    // One loaded later under an id given a colour of its own comes in that colour; the others in the common one.
+    const later = session.engine.loadModel('later', { url: OTHER_URL, anchor: anchor(), placement: anchored });
+    engine.Model.deliver(OTHER_URL);
+    await later;
+    expect(loadedModels()[1].color).toMatchObject({ css: 'rgb(255, 0, 0)' });
+
+    // An amount of 0 is its own colours while the rest stay tinted; undefined hands it back to the common tint.
+    session.engine.setModelTintFor(['lit'], { red: 1, green: 0, blue: 0, amount: 0 });
+    expect(lit.color).toBeUndefined();
+    session.engine.setModelTintFor(['lit'], undefined);
+    expect(lit.color).toMatchObject({ css: 'rgb(128, 128, 128)' });
+    session.engine.setModelTint(undefined);
+    expect(lit.color).toBeUndefined();
+    expect(loadedModels()[1].color).toMatchObject({ css: 'rgb(255, 0, 0)' });
+    session.release();
+  });
+
   it('fills what has no ground with a colour, and puts the black back', () => {
     const session = acquire();
     const requested = scene().renderRequests;
