@@ -72,6 +72,13 @@ describe('formatScene3dHash', () => {
     expect(Math.abs(parsed.heading - 137.55)).toBeLessThanOrEqual(0.05);
     expect(Math.abs(parsed.pitch + 22.44)).toBeLessThanOrEqual(0.05);
   });
+
+  it('writes a heading a hair west of north as north, not as a whole turn', () => {
+    // What a camera put back facing north reads as: the same camera, and the same address.
+    const north = { lat: 45.5, lon: 25.4, height: 4000, heading: 0, pitch: -70 };
+    expect(formatScene3dHash({ ...north, heading: 359.9999999 })).toBe(formatScene3dHash(north));
+    expect(formatScene3dHash({ ...north, heading: 359.94 })).toBe('#3d/45.50000/25.40000/4000/359.9/-70.0');
+  });
 });
 
 describe('attachScene3dHash', () => {
