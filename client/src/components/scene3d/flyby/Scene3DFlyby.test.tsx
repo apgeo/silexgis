@@ -418,6 +418,7 @@ function lookingScene() {
       background: 1,
       backgroundOpacity: 1,
       surface: 'overlay',
+      relief: 1.5,
       layers: Object.fromEntries(layers.map((key) => [key, { visible: true, opacity: 1 }])),
     }),
     showBackground: record('background'),
@@ -428,6 +429,7 @@ function lookingScene() {
     showLines: record('lines'),
     showSurface: record('surface'),
     showSky: record('sky'),
+    showRelief: record('relief'),
     requestRender: () => {},
   };
   return Object.assign(scene, { look, shown });
@@ -845,6 +847,45 @@ describe('a tour that stops at each cave', () => {
     expect(english({}, 'name')).toBeUndefined();
     const romanian = flybySayWords(i18n.getFixedT('ro'), 'ro');
     expect(romanian({ name: 'Peștera A', lengthM: 1234, depthM: 85 }, 'nameAndSize')).toBe('Peștera A — 1.234 m lungime, 85 m adâncime');
+  });
+});
+
+describe('the relief during a flyby', () => {
+  it('opens at a factor of its own, ramps to another by a change written by hand, and gives the viewer\'s back', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Look at the start'));
+    fireEvent.click(screen.getByTestId('flyby-look-relief-on'));
+    expect(screen.getByRole('slider', { name: 'Vertical exaggeration, times true height' })).toHaveAttribute('aria-valuenow', '2');
+
+    fireEvent.click(screen.getByText('0 changes'));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'What changes' }));
+    fireEvent.click(screen.getByTitle('Relief (vertical exaggeration)'));
+    const factor = screen.getByRole('spinbutton', { name: 'Vertical exaggeration, times true height' });
+    fireEvent.change(factor, { target: { value: '3.5' } });
+    fireEvent.blur(factor);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'During the section' }));
+    fireEvent.click(screen.getByTitle('2. Circle'));
+    fireEvent.click(screen.getByTestId('flyby-add-change-add'));
+    expect(screen.getByTestId('flyby-changes')).toHaveTextContent('Relief to ×3.5 · 2. Circle');
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(scene.shown.relief).toBe(2);
+    // The circle starts at 6 s, and the change takes 2 s from its start.
+    await pass(6900);
+    expect(scene.shown.relief as number).toBeGreaterThan(2);
+    expect(scene.shown.relief as number).toBeLessThan(3.5);
+    await pass(2000);
+    expect(scene.shown.relief).toBe(3.5);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(scene.shown.relief).toBeUndefined();
+
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Relief' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    const [kept] = useFlybyStore.getState().library;
+    expect(kept.look?.relief).toBe(2);
+    expect(kept.changes).toEqual([{ kind: 'relief', factor: 3.5, id: 'relief-1', section: 'orbit-2', at: 0, seconds: 2 }]);
   });
 });
 

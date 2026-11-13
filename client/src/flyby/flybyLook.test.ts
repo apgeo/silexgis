@@ -272,3 +272,59 @@ describe('the look in a document', () => {
     expect(flybyProblems(quicker)).toEqual([]);
   });
 });
+
+describe('the relief in a flyby', () => {
+  const ramp = (factor: number, partial: Partial<FlybyChange> = {}) =>
+    change({ kind: 'relief', factor, ...partial } as Partial<FlybyChange> & Pick<FlybyChange, 'kind'>);
+
+  it('ramps from the viewer\'s factor to the target, eased, and holds it after', () => {
+    const document = flyby({ changes: [ramp(3, { at: 2 })] });
+    const plan = flybyLookPlan(document);
+    const viewer = { ...BASE, relief: 1.5 };
+    expect(flybyLookAt(plan, viewer, 0).relief).toBe(1.5);
+    expect(flybyLookAt(plan, viewer, 12).relief).toBe(1.5);
+    // Half-way through the change, eased half-way between.
+    expect(flybyLookAt(plan, viewer, 14).relief).toBeCloseTo(2.25, 6);
+    // A quarter of the way, eased: less than a quarter of the rise.
+    expect(flybyLookAt(plan, viewer, 13).relief!).toBeLessThan(1.5 + 1.5 * 0.25);
+    expect(flybyLookAt(plan, viewer, 16).relief).toBe(3);
+    expect(flybyLookAt(plan, viewer, 30).relief).toBe(3);
+    // A viewer at true height, said by leaving the factor out.
+    expect(flybyLookAt(plan, BASE, 14).relief).toBeCloseTo(2, 6);
+  });
+
+  it('opens at a factor of its own, rises and falls back, and scrubbing back gives each moment again', () => {
+    const document = flyby({
+      look: { relief: 2 },
+      changes: [ramp(4, { id: 'up', at: 0, seconds: 5 }), ramp(1, { id: 'down', at: 10, seconds: 5 })],
+    });
+    const plan = flybyLookPlan(document);
+    const viewer = { ...BASE, relief: 1.5 };
+    const forwards = [0, 5, 12, 15, 20, 22, 25, 30].map((t) => flybyLookAt(plan, viewer, t).relief);
+    expect(forwards[0]).toBe(2);
+    expect(forwards[3]).toBe(4);
+    expect(forwards[7]).toBe(1);
+    const backwards = [30, 25, 22, 20, 15, 12, 5, 0].map((t) => flybyLookAt(plan, viewer, t).relief).reverse();
+    expect(backwards).toEqual(forwards);
+  });
+
+  it('says nothing of the relief in a flyby that does not mention it', () => {
+    expect(flybyLookAt(flybyLookPlan(flyby()), { ...BASE, relief: 2 }, 5).relief).toBeUndefined();
+  });
+
+  it('is read back from a file and refused outside the range the scene\'s own setting has', () => {
+    const document = flyby({ look: { relief: 1.5 }, changes: [ramp(4, { id: 'relief-1' })] });
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(document)))).toEqual(document);
+    expect(flybyProblems(document)).toEqual([]);
+    expect(flybyProblems({ ...document, look: { relief: 6 } })).toContainEqual({ code: 'badLook' });
+    expect(flybyProblems({ ...document, changes: [ramp(0.2, { id: 'relief-1' })] })).toContainEqual({
+      code: 'badChange',
+      change: 'relief-1',
+      section: 'orbit-2',
+    });
+    // Two ramps at once steer one thing.
+    expect(
+      flybyProblems({ ...document, changes: [ramp(4, { id: 'a' }), ramp(2, { id: 'b', at: 1 })] }).map((problem) => problem.code),
+    ).toContain('overlappingChanges');
+  });
+});

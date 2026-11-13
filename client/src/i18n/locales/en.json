@@ -9821,7 +9821,8 @@
         "lines": "Colour of the survey lines",
         "surface": "Ground over the caves",
         "sky": "Sky",
-        "lens": "Lens"
+        "lens": "Lens",
+        "relief": "Relief (vertical exaggeration)"
       },
       "layer": "Layer",
       "layerTo": "Shown or hidden",
@@ -9917,6 +9918,11 @@
       "question": "The walls of {{count}} caves on the route are {{size}} to download. Download them for this flyby?",
       "download": "Download them",
       "without": "Play without them"
+    },
+    "relief": {
+      "on": "Set the vertical exaggeration",
+      "factor": "Vertical exaggeration, times true height",
+      "change": "Relief to ×{{factor}}"
     }
   },
   "mapSymbols": {

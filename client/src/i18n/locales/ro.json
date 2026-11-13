@@ -9834,7 +9834,8 @@
         "lines": "Culoarea drumuirilor",
         "surface": "Terenul peste peșteri",
         "sky": "Cerul",
-        "lens": "Obiectivul"
+        "lens": "Obiectivul",
+        "relief": "Relief (exagerare verticală)"
       },
       "layer": "Strat",
       "layerTo": "Afișat sau ascuns",
@@ -9930,6 +9931,11 @@
       "question": "Pereții celor {{count}} peșteri de pe traseu au {{size}} de descărcat. Îi descarci pentru acest survol?",
       "download": "Descarcă-i",
       "without": "Rulează fără ei"
+    },
+    "relief": {
+      "on": "Stabilește exagerarea verticală",
+      "factor": "Exagerarea verticală, de câte ori înălțimea reală",
+      "change": "Relieful la ×{{factor}}"
     }
   },
   "mapSymbols": {

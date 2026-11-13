@@ -56,6 +56,12 @@ export interface FlybyLookTarget {
    * Left out by a view that cannot change its lens, and a flyby's lens is then not shown.
    */
   showLens?(degrees: number | undefined): void;
+  /**
+   * The relief drawn this many times taller than true; undefined gives the scene back the factor
+   * the viewer has — their own, or the one of the saved view they opened. Left out by a view that
+   * cannot stretch its relief, and a flyby's relief is then not shown.
+   */
+  showRelief?(factor: number | undefined): void;
   /** Asks the scene for one frame, once a moment's changes are all made. */
   requestRender(): void;
 }
@@ -115,6 +121,8 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
         target.showSky(undefined);
       } else if (member === 'lens') {
         target.showLens?.(undefined);
+      } else if (member === 'relief') {
+        target.showRelief?.(undefined);
       }
     }
     const touched = applied.size > 0;
@@ -175,6 +183,12 @@ export function createFlybyLookStage(target: FlybyLookTarget): FlybyLookStage {
       if (state.lens !== undefined && target.showLens) {
         const lens = state.lens;
         changed = put('lens', lens, () => target.showLens!(lens)) || changed;
+      }
+      // On every frame of a ramp, and on none while it holds: a change of the relief redraws
+      // everything that has a height, so a factor already in force is not put on the scene again.
+      if (state.relief !== undefined && target.showRelief) {
+        const relief = state.relief;
+        changed = put('relief', relief, () => target.showRelief!(relief)) || changed;
       }
       if (changed) {
         target.requestRender();

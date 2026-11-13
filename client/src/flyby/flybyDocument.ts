@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { FILTER_LAYER_COLORS, FILTER_LAYER_SYMBOLS, type FilterLayerSymbol } from '../map/filterLayerList.ts';
 import type { FilterLayerColor } from '../map/markerPalette.ts';
+import { MAX_EXAGGERATION, MIN_EXAGGERATION } from '../scene3d/exaggeration3d.ts';
 
 // A flyby, written down: what the camera of the 3D scene does, around what, and for how long.
 //
@@ -287,6 +288,11 @@ export interface FlybyLook {
    * a mountain stands like a wall behind the cave —, wide takes in a valley from close by.
    */
   lens?: number;
+  /**
+   * How many times taller than true every height of the scene is drawn — the ground, the caves and
+   * the camera together. Left out, as the viewer has it.
+   */
+  relief?: number;
 }
 
 /**
@@ -319,6 +325,9 @@ export function flybyFeatureLayerKey(id: string): FlybyLayerKey {
 /** The narrowest and the widest lens, in degrees across the wider side of the picture; the scene's own is 60. */
 export const FLYBY_LENS_RANGE = { min: 10, max: 100 } as const;
 
+/** The flattest and the tallest a flyby may draw the scene: the range the scene's own setting has. */
+export const FLYBY_RELIEF_RANGE = { min: MIN_EXAGGERATION, max: MAX_EXAGGERATION } as const;
+
 /** What a change changes, and what to. */
 export type FlybyChangeWhat =
   /** Another background: cut, or crossed into over the change's length. */
@@ -343,7 +352,12 @@ export type FlybyChangeWhat =
   /** The sky's colour, or (null) none. */
   | { kind: 'sky'; colour: FlybyColour | null }
   /** The lens, widened or narrowed: a zoom without moving the camera. */
-  | { kind: 'lens'; degrees: number };
+  | { kind: 'lens'; degrees: number }
+  /**
+   * The relief stretched or flattened, from the factor in force to this one over the change's
+   * length: a mountain that rises out of the plain as the camera circles it.
+   */
+  | { kind: 'relief'; factor: number };
 
 export type FlybyChangeKind = FlybyChangeWhat['kind'];
 
@@ -357,6 +371,7 @@ export const FLYBY_CHANGE_KINDS: readonly FlybyChangeKind[] = [
   'surface',
   'sky',
   'lens',
+  'relief',
   'cave',
 ];
 
@@ -619,6 +634,9 @@ function lookIsSound(look: FlybyLook): boolean {
   if (look.lens !== undefined && !isLens(look.lens)) {
     return false;
   }
+  if (look.relief !== undefined && !isRelief(look.relief)) {
+    return false;
+  }
   return Object.entries(look.layers ?? {}).every(
     ([key, layer]) => isFlybyLayerKey(key) && (layer.opacity === undefined || isShare(layer.opacity)),
   );
@@ -646,11 +664,17 @@ function changeIsSound(change: FlybyChange): boolean {
       return FLYBY_SURFACES.includes(change.surface);
     case 'lens':
       return isLens(change.degrees);
+    case 'relief':
+      return isRelief(change.factor);
   }
 }
 
 function isLens(degrees: number): boolean {
   return degrees >= FLYBY_LENS_RANGE.min && degrees <= FLYBY_LENS_RANGE.max;
+}
+
+function isRelief(factor: number): boolean {
+  return factor >= FLYBY_RELIEF_RANGE.min && factor <= FLYBY_RELIEF_RANGE.max;
 }
 
 /**
@@ -1032,6 +1056,13 @@ function readLook(value: unknown): FlybyLook | null {
     }
     look.lens = lens;
   }
+  if (bag.relief !== undefined) {
+    const relief = finite(bag.relief);
+    if (relief === undefined) {
+      return null;
+    }
+    look.relief = relief;
+  }
   return look;
 }
 
@@ -1118,6 +1149,10 @@ function readChange(value: unknown): FlybyChange | null {
     case 'lens': {
       const degrees = finite(bag.degrees);
       return degrees !== undefined ? { kind: 'lens', degrees, ...timing } : null;
+    }
+    case 'relief': {
+      const factor = finite(bag.factor);
+      return factor !== undefined ? { kind: 'relief', factor, ...timing } : null;
     }
     default:
       return null;

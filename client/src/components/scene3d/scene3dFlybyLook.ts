@@ -41,6 +41,8 @@ export interface Scene3DLookHeld {
   surface?: Scene3DSurfaceMode;
   /** The layers of features the flyby draws itself; none when it draws none, or has stopped. */
   features?: readonly FlybyFeatureLayer[];
+  /** The factor the flyby draws the relief at; none when it leaves the relief as the viewer has it. */
+  relief?: number;
 }
 
 export function emptyLookHeld(): Scene3DLookHeld {
@@ -65,6 +67,13 @@ export interface Scene3DLookSettings {
   unreadableFilterLayers: readonly string[];
   surfaceMode: Scene3DSurfaceMode;
   wallsMode: SurveyWalls3DMode;
+  /** The factor the view draws the relief at: a saved view's for this session, else this browser's own. */
+  exaggeration: number;
+}
+
+/** The factor the relief is to be drawn at: the flyby's while it holds one, else the viewer's. */
+export function reliefInForce(settings: Pick<Scene3DLookSettings, 'exaggeration'>, held: Scene3DLookHeld): number {
+  return held.relief ?? settings.exaggeration;
 }
 
 /** The overlay keys the view keeps the walls', the scans' and the photographs' switches under. */
@@ -367,6 +376,7 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
         backgroundOpacity: settings.activeBaseId === undefined ? 1 : (settings.baseOpacity[settings.activeBaseId] ?? 1),
         surface: settings.surfaceMode,
         ...(engine ? { lens: engine.getFieldOfView() } : {}),
+        relief: settings.exaggeration,
         layers: Object.fromEntries(layers.map((key) => [key, viewerLayer(settings, key)])),
       };
     },
@@ -415,6 +425,12 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
     },
     showLens(degrees) {
       handles.engine()?.setFieldOfView(degrees);
+    },
+    showRelief(factor) {
+      // Held beside the settings, so a scene rebuilt under the flyby is drawn at the flyby's factor
+      // and not at the viewer's; given back, the view's own factor — the very one it applies.
+      held.relief = factor;
+      handles.engine()?.setVerticalExaggeration(reliefInForce(handles.settings(), held));
     },
     requestRender() {
       handles.engine()?.requestRender();

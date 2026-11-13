@@ -59,6 +59,11 @@ export interface FlybyLookBase {
   surface: FlybySurface;
   /** The viewer's lens, degrees across the wider side; left out, the scene's own 60. */
   lens?: number;
+  /**
+   * The factor the viewer has the relief drawn at — their own, or the one a saved view they opened
+   * brought; left out, true height.
+   */
+  relief?: number;
   /** For each layer the plan names. */
   layers: Record<FlybyLayerKey, { visible: boolean; opacity: number }>;
 }
@@ -93,6 +98,8 @@ export interface FlybyLookState {
   sky?: FlybyColour | null;
   /** Degrees across the wider side of the picture. */
   lens?: number;
+  /** How many times taller than true the scene is drawn. */
+  relief?: number;
   /** Caves in a colour of their own, by cave id; a strength of 0 is the colour of the rest. */
   caves?: Record<string, { colour: FlybyColour; strength: number }>;
 }
@@ -309,6 +316,9 @@ export function flybyLookAt(plan: FlybyLookPlan, base: FlybyLookBase, t: number)
       change.kind === 'lens' ? change.degrees : undefined,
     );
   }
+  if (look.relief !== undefined || has('relief')) {
+    state.relief = flybyReliefAt(plan, base.relief, t);
+  }
   if (look.sky !== undefined || has('sky')) {
     state.sky = follow<FlybyColour | null>(changesOf(plan, 'sky'), t, look.sky ?? null, (inForce, change, p) => {
       if (change.kind !== 'sky') {
@@ -322,4 +332,16 @@ export function flybyLookAt(plan: FlybyLookPlan, base: FlybyLookBase, t: number)
     });
   }
   return state;
+}
+
+/**
+ * The factor the relief is drawn at, at moment `t`: the opening factor or the viewer's own
+ * (`viewer`, true height when left out), with every change of the relief that has begun by then
+ * eased towards its target. For a flyby that never mentions the relief, the viewer's own throughout
+ * — which is what a picture of any moment of it is drawn at, and what it must say it is drawn at.
+ */
+export function flybyReliefAt(plan: FlybyLookPlan, viewer: number | undefined, t: number): number {
+  return numberAt(changesOf(plan, 'relief'), t, plan.look.relief ?? viewer ?? 1, (change) =>
+    change.kind === 'relief' ? change.factor : undefined,
+  );
 }

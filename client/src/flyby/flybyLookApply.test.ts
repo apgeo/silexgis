@@ -233,3 +233,43 @@ describe('the lens of a flyby', () => {
     expect(own.calls).not.toContain('lens');
   });
 });
+
+describe('the relief of a flyby', () => {
+  it('ramps from the viewer\'s factor, puts a factor on the scene only when it changed, and gives the scene back', () => {
+    const { target } = scene();
+    target.viewerLook = () => ({ ...VIEWER, relief: 1.5 });
+    const factors: (number | undefined)[] = [];
+    target.showRelief = (factor) => factors.push(factor);
+    const document = flyby({
+      changes: [{ id: 're', kind: 'relief', factor: 3, section: 'orbit-2', at: 0, seconds: 4 }],
+    });
+    const plan = flybyLookPlan(document);
+    const stage = createFlybyLookStage(target);
+    stage.show(plan, 2);
+    expect(factors).toEqual([1.5]);
+    // Still before the change: nothing new is put on the scene, which a change of the relief redraws whole.
+    stage.show(plan, 5);
+    expect(factors).toEqual([1.5]);
+    stage.show(plan, 12);
+    expect(factors.at(-1)).toBeCloseTo(2.25, 6);
+    stage.show(plan, 20);
+    expect(factors.at(-1)).toBe(3);
+    stage.show(plan, 25);
+    expect(factors).toHaveLength(3);
+    // Dragged back before the change: the viewer's factor again, worked out from the moment alone.
+    stage.show(plan, 1);
+    expect(factors.at(-1)).toBe(1.5);
+    stage.restore();
+    expect(factors.at(-1)).toBeUndefined();
+  });
+
+  it('leaves the relief alone when the flyby says nothing of it, or the view cannot stretch it', () => {
+    const own = scene();
+    own.target.showRelief = () => own.calls.push('relief');
+    createFlybyLookStage(own.target).show(flybyLookPlan(flyby({ look: { sky: '#000000' } })), 3);
+    expect(own.calls).not.toContain('relief');
+    const { target, calls } = scene();
+    createFlybyLookStage(target).show(flybyLookPlan(flyby({ look: { relief: 2 } })), 3);
+    expect(calls).not.toContain('relief');
+  });
+});

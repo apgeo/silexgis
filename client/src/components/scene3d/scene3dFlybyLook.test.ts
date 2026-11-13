@@ -49,6 +49,7 @@ function settings(): Scene3DLookSettings {
     unreadableFilterLayers: [],
     surfaceMode: 'overlay',
     wallsMode: 'selected',
+    exaggeration: 1,
   };
 }
 
@@ -75,6 +76,7 @@ function world() {
     scansActive: undefined as boolean | undefined,
     photosVisible: undefined as boolean | undefined,
     lens: undefined as number | undefined,
+    relief: 1,
     featureSpecs: undefined as unknown,
     modelTints: {} as Record<string, Scene3DModelTint | undefined>,
     caveLines: {} as Record<string, string | undefined>,
@@ -106,6 +108,10 @@ function world() {
       state.lens = degrees;
     },
     getFieldOfView: () => state.lens ?? 60,
+    setVerticalExaggeration: (factor: number) => {
+      state.relief = factor;
+    },
+    getVerticalExaggeration: () => state.relief,
     requestRender: () => {},
   } as unknown as Scene3DCore;
   const data = {
@@ -180,6 +186,7 @@ function world() {
     scans.setActive(switchedOn(viewer, heldNow, 'scans'));
     photos.setVisible(switchedOn(viewer, heldNow, 'photos'));
     engine.setSurfaceMode(heldNow.surface ?? viewer.surfaceMode);
+    engine.setVerticalExaggeration(heldNow.relief ?? viewer.exaggeration);
   };
   const target = createScene3DLookTarget(
     {
@@ -284,6 +291,7 @@ const EVERYTHING: FlybyChange[] = [
   { kind: 'lines', colour: '#00ff00', ...at('li', 0) },
   { kind: 'surface', surface: 'cutaway', ...at('su', 0) },
   { kind: 'lens', degrees: 30, ...at('le') },
+  { kind: 'relief', factor: 3, ...at('re') },
 ];
 
 describe('a flyby\'s look on the 3D view\'s scene', () => {
@@ -316,6 +324,7 @@ describe('a flyby\'s look on the 3D view\'s scene', () => {
       scansActive: false,
       photosVisible: false,
       lens: 30,
+      relief: 3,
     });
     expect((played.state.filterSpecs as { visible: boolean }[])[0].visible).toBe(true);
 
@@ -340,5 +349,31 @@ describe('a flyby\'s look on the 3D view\'s scene', () => {
     stage.show(plan, 4);
     expect(scene.state.imagery.get('base:1')).toEqual({ visible: true, opacity: 0.9 });
     expect(scene.state.imagery.get('base:2')!.opacity).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('the relief during a flyby', () => {
+  it('ramps the scene\'s factor and gives back the viewer\'s own, or the one a saved view brought', () => {
+    for (const own of [1, 1.5]) {
+      const scene = world();
+      // 1.5 stands for a saved view opened in this session: the view's factor in force either way.
+      scene.viewer.exaggeration = own;
+      scene.viewDraws(scene.held);
+      const stage = createFlybyLookStage(scene.target);
+      const plan = flybyLookPlan(flyby([{ kind: 'relief', factor: 4, ...at('re') }]));
+      stage.show(plan, 0);
+      expect(scene.state.relief).toBe(own);
+      stage.show(plan, 4);
+      expect(scene.state.relief).toBeCloseTo((own + 4) / 2, 6);
+      // The view's own effects run meanwhile — a scene rebuilt, a setting changed — and the flyby's factor holds.
+      scene.viewDraws(scene.held);
+      expect(scene.state.relief).toBeCloseTo((own + 4) / 2, 6);
+      stage.show(plan, 10);
+      expect(scene.state.relief).toBe(4);
+      stage.restore();
+      expect(scene.state.relief).toBe(own);
+      expect(scene.held.relief).toBeUndefined();
+      expect(scene.viewer.exaggeration).toBe(own);
+    }
   });
 });

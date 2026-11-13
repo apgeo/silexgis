@@ -9,6 +9,7 @@ import {
   FLYBY_CUT_CHANGES,
   flybyFeatureLayerKey,
   FLYBY_LENS_RANGE,
+  FLYBY_RELIEF_RANGE,
   FLYBY_MAX_FEATURE_LAYERS,
   FLYBY_NAMED_LAYERS,
   flybyLayerKey,
@@ -40,6 +41,7 @@ import { FILTER_LAYER_COLORS, FILTER_LAYER_SYMBOLS } from '../../../map/filterLa
 import { filterLayerPalette } from '../../../map/markerPalette.ts';
 import { FLYBY_OWN_LENS } from '../../../flyby/flybyLook.ts';
 import { isDrawableIn3d } from '../../../scene3d/baseImagery3d.ts';
+import { EXAGGERATION_STEP, formatExaggeration } from '../../../scene3d/exaggeration3d.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
 import type { FlybyController } from './useFlyby.ts';
@@ -56,6 +58,8 @@ const END_SECONDS = 4;
 const FADE_IN_SECONDS = 1.5;
 const FADE_OUT_SECONDS = 2;
 const CAPTION_SECONDS = 6;
+/** The factor a relief set or changed by hand starts from: tall enough to be seen, not a caricature. */
+const DEFAULT_RELIEF = 2;
 
 const percent = (share: number) => Math.round(share * 100);
 
@@ -284,7 +288,7 @@ function OpeningLook({
   layers: Names['layers'];
   busy: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   /** The look with one member set, or taken out when `value` is undefined. */
   const set = <K extends keyof FlybyLook>(key: K, value: FlybyLook[K] | undefined) => {
     const next = { ...look };
@@ -431,6 +435,28 @@ function OpeningLook({
             disabled={busy}
             tooltip={{ formatter: (value) => `${value}°` }}
             ariaLabelForHandle={t('flyby.lens.degrees')}
+          />
+        </div>
+      )}
+      <Checkbox
+        checked={look.relief !== undefined}
+        onChange={(event) => set('relief', event.target.checked ? DEFAULT_RELIEF : undefined)}
+        disabled={busy}
+        data-testid="flyby-look-relief-on"
+      >
+        {t('flyby.relief.on')}
+      </Checkbox>
+      {look.relief !== undefined && (
+        <div className="scene3d-flyby-field scene3d-flyby-field-wide" data-testid="flyby-look-relief">
+          <Slider
+            min={FLYBY_RELIEF_RANGE.min}
+            max={FLYBY_RELIEF_RANGE.max}
+            step={EXAGGERATION_STEP}
+            value={look.relief}
+            onChange={(value) => set('relief', value)}
+            disabled={busy}
+            tooltip={{ formatter: (value) => (value === undefined ? '' : `×${formatExaggeration(value, i18n.language)}`) }}
+            ariaLabelForHandle={t('flyby.relief.factor')}
           />
         </div>
       )}
@@ -876,7 +902,7 @@ function Recipes({
 
 /** A change in words: what it does, to what. */
 function useChangeWords(names: Names) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (change: FlybyChange): string => {
     switch (change.kind) {
       case 'background':
@@ -901,6 +927,8 @@ function useChangeWords(names: Names) {
         return change.colour ? t('flyby.look.change.sky', { colour: change.colour }) : t('flyby.look.change.skyNone');
       case 'lens':
         return t('flyby.lens.change', { degrees: change.degrees });
+      case 'relief':
+        return t('flyby.relief.change', { factor: formatExaggeration(change.factor, i18n.language) });
       case 'cave':
         return change.strength > 0
           ? t('flyby.lightCave.change', { colour: change.colour, percent: percent(change.strength) })
@@ -1030,6 +1058,8 @@ function defaultChange(kind: FlybyChangeKind, names: Names): FlybyChangeWhat | u
       return { kind, colour: DEFAULT_SKY };
     case 'lens':
       return { kind, degrees: 30 };
+    case 'relief':
+      return { kind, factor: DEFAULT_RELIEF };
     case 'cave':
       // Written by the ready-made set that lights the cave being visited, which knows the stops.
       return undefined;
@@ -1179,6 +1209,21 @@ function AddChange({
             suffix="°"
             aria-label={t('flyby.lens.degrees')}
             data-testid="flyby-add-change-lens"
+          />
+        );
+      case 'relief':
+        return (
+          <InputNumber
+            size="small"
+            min={FLYBY_RELIEF_RANGE.min}
+            max={FLYBY_RELIEF_RANGE.max}
+            step={EXAGGERATION_STEP}
+            value={what.factor}
+            onChange={(factor) => factor !== null && setWhat({ ...what, factor })}
+            disabled={busy}
+            prefix="×"
+            aria-label={t('flyby.relief.factor')}
+            data-testid="flyby-add-change-relief"
           />
         );
       case 'surface':

@@ -188,6 +188,7 @@ const NO_LOOK_SETTINGS: Scene3DLookSettings = {
   unreadableFilterLayers: [],
   surfaceMode: 'overlay',
   wallsMode: 'selected',
+  exaggeration: 1,
 };
 const NO_CATALOG: MapLayerInfo[] = [];
 
@@ -843,8 +844,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       },
       // The factor travels beside the camera. A view being opened sets it for this session and
       // leaves this browser's own preference alone; it is put on the scene at once as well, so a
-      // camera restored straight after it is restored at the factor it was written down at.
-      getExaggeration3D: () => engine.getVerticalExaggeration(),
+      // camera restored straight after it is restored at the factor it was written down at. A view
+      // written down while a flyby stretches the relief keeps the viewer's factor, not the flyby's.
+      getExaggeration3D: () =>
+        lookHeldRef.current.relief === undefined ? engine.getVerticalExaggeration() : lookSettingsRef.current.exaggeration,
       setExaggeration3D: (factor) => {
         const carried = readExaggeration(factor) ?? 1;
         useWorkspaceStore.getState().setScene3dExaggerationOfView(carried);
@@ -1123,13 +1126,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   }, [pointDetail, engineVersion, showingHere]);
 
   // How many times taller than true the scene is drawn: the factor a saved view brought into this
-  // session, else this browser's own. Applied again to a scene rebuilt after a lost context, which
-  // starts at true height.
+  // session, else this browser's own — or a flyby's, for as long as one holds the relief. Applied
+  // again to a scene rebuilt after a lost context, which starts at true height.
   const ownExaggeration = useUiPrefsStore((s) => s.scene3dExaggeration);
   const viewExaggeration = useWorkspaceStore((s) => s.scene3dExaggerationOfView);
   const exaggeration = exaggerationInForce(viewExaggeration, ownExaggeration);
   useEffect(() => {
-    engineRef.current?.setVerticalExaggeration(exaggeration);
+    engineRef.current?.setVerticalExaggeration(lookHeldRef.current.relief ?? exaggeration);
   }, [exaggeration, engineVersion]);
   // A factor chosen in the panel is this person's own: kept for this browser, and in place of
   // whatever a saved view set for the session. True height is kept as no preference at all.
@@ -1409,6 +1412,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     unreadableFilterLayers,
     surfaceMode,
     wallsMode,
+    exaggeration,
   };
   const setWallsMode = useWorkspaceStore((s) => s.setScene3dWallsMode);
   const estimatedPassages = useWorkspaceStore((s) => s.scene3dEstimatedPassages);
