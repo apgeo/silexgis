@@ -606,6 +606,12 @@ export interface Scene3DSurface {
   onSurfaceStateChanged(listener: (state: Scene3DSurfaceState) => void): () => void;
   /** Sets, or with `undefined` clears, the ground a cutaway is cut out of. */
   setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined): void;
+  /**
+   * What is drawn where there is no ground: above the horizon, and around the globe from far off.
+   * The scene draws no sky of its own — that is black — and a camera low over a ridge shows a band
+   * of it. A CSS colour fills that band; undefined puts the black back.
+   */
+  setBackgroundColor(css: string | undefined): void;
 }
 
 // ---- the ground's elevation ---------------------------------------------------
@@ -742,6 +748,21 @@ export interface Scene3DModels {
    * every model the scene holds and every one it loads after. Models without any are untouched.
    */
   setEstimatedPassages(display: EstimatedPassagesDisplay): void;
+  /**
+   * Mixes one colour into every model the scene holds and every one it loads after, by `amount`
+   * 0–1, the models' own shading kept; undefined, or an amount of 0, gives them back their own
+   * colours. A flyby colours the caves' walls with it, and a recording of the scene does too.
+   * Held by the scene rather than applied once, because walls go on arriving while a camera flies.
+   */
+  setModelTint(tint: Scene3DModelTint | undefined): void;
+}
+
+/** A colour, each channel 0–1, and how much of it is mixed into a model's own, 0–1. */
+export interface Scene3DModelTint {
+  red: number;
+  green: number;
+  blue: number;
+  amount: number;
 }
 
 // ---- point clouds -------------------------------------------------------------

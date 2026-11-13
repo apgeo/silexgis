@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
+  type MapLayerInfo,
   useFeatureTypes,
   useGeofiles,
   useMapConfig,
@@ -19,7 +20,6 @@ import {
 } from '../../map/featureTypeCatalog.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
-  baseImageryLayerId,
   isDrawableIn3d,
   syncBaseImagery,
   syncTileOverlayImagery,
@@ -36,7 +36,6 @@ import {
 import {
   attachCaveData3d,
   limitsFromMapConfig,
-  CAVE_DATA_3D_LAYERS,
   EMPTY_CAVE_DATA_3D_STATE,
   type CaveData3DHandle,
   type CaveData3DState,
@@ -126,6 +125,17 @@ import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DFlyby from './flyby/Scene3DFlyby.tsx';
 import type { FlybyScene } from './flyby/useFlyby.ts';
+import {
+  createScene3DLookTarget,
+  drawBackground,
+  drawCaveDataLayers,
+  drawFilterLayers,
+  drawHeldImagery,
+  drawTracks,
+  emptyLookHeld,
+  switchedOn,
+  type Scene3DLookSettings,
+} from './scene3dFlybyLook.ts';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
 import {
@@ -156,6 +166,27 @@ function sameImageryStatus(known: RenderedSourceStatus | undefined, next: Render
   }
   return known.state === 'ready' || (next.state !== 'ready' && known.code === next.code);
 }
+
+/** The settings a flyby falls back on before the view has rendered once. */
+const NO_LOOK_SETTINGS: Scene3DLookSettings = {
+  catalog: [],
+  activeBaseId: undefined,
+  baseOpacity: {},
+  overlayVisible: {},
+  overlayOpacity: {},
+  visibleTileOverlayIds: [],
+  tileOverlayOpacity: {},
+  rasters: [],
+  visibleRasterIds: [],
+  rasterOpacity: {},
+  geofiles: [],
+  visibleGeofileIds: [],
+  filterLayers: [],
+  unreadableFilterLayers: [],
+  surfaceMode: 'overlay',
+  wallsMode: 'selected',
+};
+const NO_CATALOG: MapLayerInfo[] = [];
 
 /** One empty list for every render in which the configuration has not arrived or has no builds. */
 const NO_TERRAIN_BUILDS: TerrainBuildChoice[] = [];
@@ -339,6 +370,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const { data: layers } = useMapLayers();
   const [activeBaseId, setActiveBaseId] = useState<number>();
 
+  // What a flyby holds of the look while it plays, and the viewer's own settings it falls back on.
+  // Both live outside React state: a flyby changes the look on every frame, and the view's effects
+  // read them at the moment they draw so a setting changed elsewhere meanwhile never undoes the
+  // flyby's, and the flyby's never reaches the shared settings.
+  const lookHeldRef = useRef(emptyLookHeld());
+  const lookSettingsRef = useRef<Scene3DLookSettings>(NO_LOOK_SETTINGS);
+
   // How each catalogue layer the scene draws itself stands — a GeoTIFF it cannot read, a vector
   // entry drawn by its stand-in — keyed by catalogue id, for the layer list to say beside the entry.
   const [imageryStatus, setImageryStatus] = useState<Record<number, RenderedSourceStatus>>({});
@@ -394,6 +432,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     syncBaseImagery(engine, imageryContext, activeBaseId);
+    // A flyby showing another background keeps showing it; with none playing this is the choice above.
+    drawBackground(engine, lookSettingsRef.current, lookHeldRef.current);
     // Nothing moved the camera, and the scene only draws when asked to.
     engine.requestRender();
   }, [imageryContext, activeBaseId, engineVersion]);
@@ -430,6 +470,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     syncTileOverlayImagery(engine, imageryContext, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+    drawHeldImagery(engine, lookSettingsRef.current, lookHeldRef.current);
     engine.requestRender();
   }, [imageryContext, visibleTileOverlayIds, tileOverlayOpacity, engineVersion, activeBaseId]);
 
@@ -441,9 +482,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Flattening a raster takes seconds and touches a second drawing context, so this is the one
     // imagery effect that is asynchronous. Nothing is awaited by the caller: the scene is usable
     // throughout and each sheet appears when it is ready.
-    void syncRasterImagery(engine, rasters, new Set(visibleRasterIds), rasterOpacity).then(() =>
-      engineRef.current?.requestRender(),
-    );
+    void syncRasterImagery(engine, rasters, new Set(visibleRasterIds), rasterOpacity).then(() => {
+      const now = engineRef.current;
+      if (now) {
+        drawHeldImagery(now, lookSettingsRef.current, lookHeldRef.current);
+        now.requestRender();
+      }
+    });
   }, [rasters, visibleRasterIds, rasterOpacity, engineVersion]);
 
   // ---- what a viewer can turn off, fade and cut into ----
@@ -469,12 +514,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Every base keeps its own value and only one of them is visible at a time, so this is
     // applied to all of them rather than to the active one: switching basemap then shows that
     // layer at the transparency it was left at.
-    for (const layer of layers) {
-      if (layer.isBase) {
-        const id = Number(layer.id);
-        engine.setImageryLayerOpacity(baseImageryLayerId(id), baseOpacity[id] ?? 1);
-      }
-    }
+    drawBackground(engine, lookSettingsRef.current, lookHeldRef.current);
     engine.requestRender();
   }, [layers, baseOpacity, activeBaseId, engineVersion]);
 
@@ -573,6 +613,20 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       },
       wrap: () => wrapRef.current,
       surface: () => slotRef.current,
+      look: createScene3DLookTarget(
+        {
+          engine: () => engineRef.current,
+          data: () => dataRef.current,
+          filterLayers: () => filterLayersRef.current,
+          tracks: () => tracksRef.current,
+          mesh: () => meshRef.current,
+          meshesInView: () => meshesInViewRef.current,
+          scans: () => scansInViewRef.current,
+          photos: () => photosRef.current,
+          settings: () => lookSettingsRef.current,
+        },
+        lookHeldRef.current,
+      ),
     }),
     [],
   );
@@ -1269,6 +1323,26 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // fifty-megabyte one — would be on the graphics card twice.
   const meshVisible = overlayVisible[SURVEY_MESH_LAYER_ID] ?? true;
   const wallsMode = useWorkspaceStore((s) => s.scene3dWallsMode);
+  // Written while rendering so every effect below, and a flyby between renders, reads the settings
+  // of this render and not the one before.
+  lookSettingsRef.current = {
+    catalog: layers ?? NO_CATALOG,
+    activeBaseId,
+    baseOpacity,
+    overlayVisible,
+    overlayOpacity,
+    visibleTileOverlayIds,
+    tileOverlayOpacity,
+    rasters,
+    visibleRasterIds,
+    rasterOpacity,
+    geofiles,
+    visibleGeofileIds,
+    filterLayers,
+    unreadableFilterLayers,
+    surfaceMode,
+    wallsMode,
+  };
   const setWallsMode = useWorkspaceStore((s) => s.setScene3dWallsMode);
   const estimatedPassages = useWorkspaceStore((s) => s.scene3dEstimatedPassages);
   const setEstimatedPassages = useWorkspaceStore((s) => s.setScene3dEstimatedPassages);
@@ -1283,11 +1357,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!mesh || !meshesInView) {
       return;
     }
-    const everyCaveInView = meshVisible && wallsMode === 'inView';
+    // The viewer's switch, unless a flyby has shown or hidden the walls.
+    const wallsShown = switchedOn(lookSettingsRef.current, lookHeldRef.current, 'walls');
+    const everyCaveInView = wallsShown && wallsMode === 'inView';
     if (!everyCaveInView) {
       meshesInView.setActive(false);
     }
-    mesh.setVisible(meshVisible && wallsMode === 'selected');
+    mesh.setVisible(wallsShown && wallsMode === 'selected');
     mesh.setCave(
       selectedCaveId,
       selectedCaveId ? dataRef.current?.caveSurveyTop(selectedCaveId) : undefined,
@@ -1305,7 +1381,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     scansInView.setSelectedCave(selectedCaveId);
-    scansInView.setActive(scansVisible);
+    scansInView.setActive(switchedOn(lookSettingsRef.current, lookHeldRef.current, 'scans'));
   }, [selectedCaveId, scansVisible, engineVersion, showingHere]);
 
   // The photographs of the selected cave, on by default like its walls and switched in the same
@@ -1317,7 +1393,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!photos) {
       return;
     }
-    photos.setVisible(photosVisible);
+    photos.setVisible(switchedOn(lookSettingsRef.current, lookHeldRef.current, 'photos'));
     photos.setCave(selectedCaveId);
   }, [selectedCaveId, photosVisible, engineVersion, showingHere]);
 
@@ -1328,25 +1404,24 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!data) {
       return;
     }
-    for (const layer of CAVE_DATA_3D_LAYERS) {
-      data.setLayerVisible(layer, overlayVisible[layer] ?? true);
-      data.setLayerOpacity(layer, overlayOpacity[layer] ?? 1);
-    }
+    drawCaveDataLayers(data, lookSettingsRef.current, lookHeldRef.current);
   }, [overlayVisible, overlayOpacity, engineVersion]);
 
   // Keyed on the same counter the loader is attached on, so a rebuilt scene comes back with them.
   useEffect(() => {
-    filterLayersRef.current?.setLayers(
-      filterLayers,
-      new Set(unreadableFilterLayers),
-      new globalThis.Map(Object.entries(overlayOpacity)),
-    );
+    const handle = filterLayersRef.current;
+    if (handle) {
+      drawFilterLayers(handle, lookSettingsRef.current, lookHeldRef.current);
+    }
   }, [filterLayers, unreadableFilterLayers, overlayOpacity, engineVersion, showingHere]);
 
   // Which files are drawn, keyed on the same counters the loader is attached on, so a rebuilt
   // scene — or a mount that takes the surface back — comes up with the viewer's files on it.
   useEffect(() => {
-    tracksRef.current?.setFiles(geofiles, new Set(visibleGeofileIds));
+    const tracks = tracksRef.current;
+    if (tracks) {
+      drawTracks(tracks, lookSettingsRef.current, lookHeldRef.current);
+    }
   }, [geofiles, visibleGeofileIds, engineVersion, showingHere]);
 
   // Each file's fade, read from under the key the flat map keeps it by — the file's own id, which
@@ -1355,11 +1430,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // it was set.
   useEffect(() => {
     const tracks = tracksRef.current;
-    if (!tracks) {
-      return;
-    }
-    for (const geofile of geofiles) {
-      tracks.setOpacity(geofile.id, overlayOpacity[geofile.id] ?? 1);
+    if (tracks) {
+      drawTracks(tracks, lookSettingsRef.current, lookHeldRef.current);
     }
   }, [geofiles, overlayOpacity, engineVersion, showingHere]);
 
@@ -1368,7 +1440,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!engine) {
       return;
     }
-    engine.setSurfaceMode(surfaceMode);
+    engine.setSurfaceMode(lookHeldRef.current.surface ?? surfaceMode);
     // The scene decides for itself whether the cutaway is worth drawing from where the camera is
     // standing, and changes its mind as the camera moves, so what it is doing is subscribed to
     // rather than assumed from what was asked for.

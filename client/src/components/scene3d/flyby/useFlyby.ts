@@ -10,6 +10,7 @@ import {
   type FlybySection,
   type FlybySubject,
 } from '../../../flyby/flybyDocument.ts';
+import { createFlybyLookStage, type FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 import { createFlybyPlayer, type FlybyPlayer, type FlybyPlayerState, type FlybyStage } from '../../../flyby/flybyPlayer.ts';
 import {
   isFlybyAbort,
@@ -52,6 +53,8 @@ export interface FlybyScene {
   wrap(): HTMLElement | null;
   /** The element the scene is drawn into: a press there means the viewer is taking the camera. */
   surface(): HTMLElement | null;
+  /** What a flyby's look is put on the scene through; left out, a flyby moves the camera only. */
+  look?: FlybyLookTarget;
 }
 
 /** Where the subjects of a flyby being put together come from. */
@@ -85,9 +88,17 @@ export function subjectOfSelection(selection: WorkspaceSelection | null): FlybyS
   }
 }
 
-/** What of a document decides its path: everything but what it is called and whether it repeats. */
+/** What of a document decides what is played: everything but what it is called and whether it repeats. */
 function pathKey(document: FlybyDocument): string {
-  return JSON.stringify([document.subjects, document.start, document.sections, document.speed]);
+  return JSON.stringify([
+    document.subjects,
+    document.start,
+    document.sections,
+    document.speed,
+    document.look,
+    document.changes,
+    document.texts,
+  ]);
 }
 
 export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null, loadRoute: boolean) {
@@ -241,6 +252,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       now: () => performance.now(),
       requestFrame: (callback) => window.requestAnimationFrame(callback),
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
+      ...(scene.look ? { look: createFlybyLookStage(scene.look) } : {}),
       settle: (timeoutMs) =>
         settleScene(
           {

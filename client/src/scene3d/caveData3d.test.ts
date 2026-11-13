@@ -587,6 +587,34 @@ describe('the caves a view is drawing', () => {
   });
 });
 
+describe('the survey lines in one colour', () => {
+  /** The colour of every line drawn now. */
+  const colours = (engine: FakeEngine) =>
+    new Set((engine.sources.get(CENTERLINE_SOURCE_ID)!.items as { color: string }[]).map((line) => line.color));
+
+  it('redraws the lines in one colour at once, keeps it through a load, and gives the depths back', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items.length).toBeGreaterThan(0));
+    const own = colours(engine);
+    expect(own.has('#ffcc00')).toBe(false);
+
+    handle.setLineColour('#ffcc00');
+    expect(colours(engine)).toEqual(new Set(['#ffcc00']));
+    // Nothing fetched: the lines held are recoloured.
+    expect(calls.centerlines).toHaveLength(1);
+
+    handle.reload();
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(colours(engine)).toEqual(new Set(['#ffcc00']));
+
+    handle.setLineColour(undefined);
+    expect(colours(engine)).toEqual(own);
+    handle.detach();
+  });
+});
+
 describe('layers a viewer turns off and fades', () => {
   it('stops fetching a layer that is turned off, because the requests are the cost of it', async () => {
     const engine = new FakeEngine();

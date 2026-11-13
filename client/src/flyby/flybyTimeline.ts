@@ -15,7 +15,9 @@ import {
   type FlybyPose,
   type FlybySubjectRef,
 } from './flybyDocument.ts';
+import { flybyLookPlan, type FlybyLookPlan } from './flybyLook.ts';
 import { subjectFor, type FlybyResolvedSubject } from './flybySubjects.ts';
+import { flybyTextPlan, type FlybyTextPlan } from './flybyTexts.ts';
 
 // A flyby turned into a path: where the camera is at every moment.
 //
@@ -69,6 +71,10 @@ export interface FlybyTimeline {
   origin: Camera3DEye;
   knots: FlybyKnot[];
   spans: FlybySpan[];
+  /** What the flyby does to the scene's look, placed on the same clock. */
+  look: FlybyLookPlan;
+  /** What it writes over the scene, placed on the same clock. */
+  texts: FlybyTextPlan;
 }
 
 /** Why a document could not be turned into a path. */
@@ -217,7 +223,7 @@ export function compileFlyby(
     t += length;
   });
 
-  return { length: t, origin, knots, spans };
+  return { length: t, origin, knots, spans, look: flybyLookPlan(document), texts: flybyTextPlan(document) };
 }
 
 // ---- the curve through the knots ----

@@ -205,6 +205,12 @@ export interface CaveData3DHandle {
   setLayerVisible(layer: CaveData3DLayer, visible: boolean): void;
   /** Fades one layer, 0..1. It survives reloading, because the viewer asked for it. */
   setLayerOpacity(layer: CaveData3DLayer, opacity: number): void;
+  /**
+   * Draws every survey line in one CSS colour instead of its colour by depth; undefined gives the
+   * lines their depth colours back. The lines already drawn are redrawn at once, and the colour
+   * holds through every load after, until it is taken off.
+   */
+  setLineColour(colour: string | undefined): void;
   getState(): CaveData3DState;
   /** Subscribes to load-state changes; returns an unsubscribe function. */
   subscribe(listener: (state: CaveData3DState) => void): () => void;
@@ -265,6 +271,10 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let settleTimer: number | undefined;
   let detached = false;
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
+  /** One colour for every survey line, when something asked for it; the drawn copy is what is coloured. */
+  let lineColour: string | undefined;
+  const showCenterlines = (polylines: readonly Scene3DPolyline[]) =>
+    centerlines.replace(lineColour ? polylines.map((polyline) => ({ ...polyline, color: lineColour! })) : polylines);
   let drawnCenter = { longitude: 0, latitude: 0 };
   let surveyTops = new Map<string, number>();
   // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
@@ -334,7 +344,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         return;
       }
       const polylines = centerlinePolylines(collection, placement);
-      centerlines.replace(polylines);
+      showCenterlines(polylines);
       // Kept so a "frame this cave" action can answer from what is actually drawn rather than
       // fetching the cave again: the two would then disagree whenever the server had withheld
       // part of the survey, and the camera would frame geometry that is not on the screen.
@@ -608,6 +618,13 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // thrown away, so this is a catch-up rather than a cold start — and it is also what puts
       // back the note of which cave is drawn that hiding the survey layer dropped.
       void load();
+    },
+    setLineColour(colour) {
+      if (colour === lineColour) {
+        return;
+      }
+      lineColour = colour;
+      showCenterlines(drawnCenterlines);
     },
     setLayerOpacity(layer, opacity) {
       if (layerOpacity[layer] === opacity) {

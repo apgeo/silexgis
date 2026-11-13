@@ -2783,6 +2783,37 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('tints a model that arrives after the tint was asked for, and not one after it is taken off', async () => {
+    const session = acquire();
+    session.engine.setModelTint({ red: 0, green: 0, blue: 1, amount: 0.5 });
+    const first = session.engine.loadModel('first', { url: MESH_URL, anchor: anchor(), placement: anchored });
+    engine.Model.deliver(MESH_URL);
+    await first;
+    const [early] = loadedModels();
+    // Walls arriving while a flyby has the caves coloured come in that colour.
+    expect(early.color).toMatchObject({ css: 'rgb(0, 0, 255)' });
+    expect(early.colorBlendAmount).toBe(0.5);
+
+    session.engine.setModelTint(undefined);
+    expect(early.color).toBeUndefined();
+    const second = session.engine.loadModel('second', { url: OTHER_URL, anchor: anchor(), placement: anchored });
+    engine.Model.deliver(OTHER_URL);
+    await second;
+    expect(loadedModels()[1].color).toBeUndefined();
+    session.release();
+  });
+
+  it('fills what has no ground with a colour, and puts the black back', () => {
+    const session = acquire();
+    const requested = scene().renderRequests;
+    session.engine.setBackgroundColor('#9db4cc');
+    expect(scene().backgroundColor).toMatchObject({ css: '#9db4cc', alpha: 1 });
+    expect(scene().renderRequests).toBeGreaterThan(requested);
+    session.engine.setBackgroundColor(undefined);
+    expect(scene().backgroundColor).toMatchObject({ css: '#000000' });
+    session.release();
+  });
+
   it('tints every loaded model for a recording, and takes the tint off again', async () => {
     const session = acquire();
     const loading = session.engine.loadModel('cave-mesh', {
@@ -2793,9 +2824,7 @@ describe('models the scene loads', () => {
     engine.Model.deliver(MESH_URL);
     await loading;
     const [model] = loadedModels();
-    const scene3d = session.engine as unknown as {
-      setModelTint(tint: { red: number; green: number; blue: number; amount: number } | undefined): void;
-    };
+    const scene3d = session.engine;
 
     scene3d.setModelTint({ red: 1, green: 0.5, blue: 0, amount: 0.8 });
     expect(model.color).toMatchObject({ css: 'rgb(255, 128, 0)', alpha: 1 });

@@ -103,6 +103,7 @@ import type {
   Scene3DModelAnchor,
   Scene3DModelOptions,
   Scene3DModelStatus,
+  Scene3DModelTint,
   Scene3DPick,
   Scene3DPointCloudAnchor,
   Scene3DPointCloudDetail,
@@ -995,32 +996,40 @@ class CesiumScene3D implements Scene3DCore {
     };
   }
 
+  /** The colour mixed into every model, held so a model that arrives later is mixed with it too. */
+  private modelTint: Scene3DModelTint | undefined;
+
   /**
-   * Tints every loaded model: `amount` 0 leaves its own colours, 1 paints it in `color` alone, the
-   * shading kept either way. Only a scripted recording asks for this, to recolour a cave's walls in
-   * front of the camera; nothing in the interface does, so nothing there has to agree with it.
+   * Tints every loaded model, and every one loaded after: `amount` 0 leaves its own colours, 1
+   * paints it in the colour alone, the shading kept either way. A flyby recolours the caves' walls
+   * with it while walls are still arriving, and a scripted recording does the same in front of the
+   * camera.
    */
-  setModelTint(tint: { red: number; green: number; blue: number; amount: number } | undefined): void {
+  setModelTint(tint: Scene3DModelTint | undefined): void {
     if (this.widget.isDestroyed()) {
       return;
     }
+    this.modelTint = tint && tint.amount > 0 ? { ...tint } : undefined;
     for (const entry of this.models.values()) {
-      const model = entry.model;
-      if (!model) {
-        continue;
-      }
-      if (!tint || tint.amount <= 0) {
-        // No colour is the library's own default and its documented way to draw a model untinted;
-        // its type declaration just does not say so.
-        model.color = undefined as unknown as Color;
-      } else {
-        const byte = (channel: number) => Math.round(Math.min(1, Math.max(0, channel)) * 255);
-        model.color = Color.fromCssColorString(`rgb(${byte(tint.red)}, ${byte(tint.green)}, ${byte(tint.blue)})`);
-        model.colorBlendMode = ColorBlendMode.MIX;
-        model.colorBlendAmount = Math.min(1, tint.amount);
+      if (entry.model) {
+        this.tintModel(entry.model);
       }
     }
     this.widget.scene.requestRender();
+  }
+
+  private tintModel(model: Model): void {
+    const tint = this.modelTint;
+    if (!tint) {
+      // No colour is the library's own default and its documented way to draw a model untinted;
+      // its type declaration just does not say so.
+      model.color = undefined as unknown as Color;
+      return;
+    }
+    const byte = (channel: number) => Math.round(Math.min(1, Math.max(0, channel)) * 255);
+    model.color = Color.fromCssColorString(`rgb(${byte(tint.red)}, ${byte(tint.green)}, ${byte(tint.blue)})`);
+    model.colorBlendMode = ColorBlendMode.MIX;
+    model.colorBlendAmount = Math.min(1, tint.amount);
   }
 
   // ---- a picture of the scene ----
@@ -1688,6 +1697,10 @@ class CesiumScene3D implements Scene3DCore {
     }
     entry.model = model;
     entry.status = 'loaded';
+    // Walls that arrive while the others are tinted come in the same colour as them.
+    if (this.modelTint) {
+      this.tintModel(model);
+    }
     this.widget.scene.primitives.add(model);
     // Placed again on arrival rather than trusting the matrix the read started with: an elevation
     // model attaching during a long read changes where this belongs, and the read does not notice.
@@ -2126,6 +2139,15 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
 
   getSurfaceState(): Scene3DSurfaceState {
     return this.surfaceState;
+  }
+
+  setBackgroundColor(css: string | undefined): void {
+    if (this.widget.isDestroyed()) {
+      return;
+    }
+    // Black is the engine's own default and what this scene has always shown with no sky drawn.
+    this.widget.scene.backgroundColor = Color.fromCssColorString(css ?? '#000000');
+    this.widget.scene.requestRender();
   }
 
   onSurfaceStateChanged(listener: (state: Scene3DSurfaceState) => void): () => void {

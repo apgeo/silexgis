@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Scene3DCameraState } from '../scene3d/scene3dEngine.ts';
+import type { FlybyLookStage } from './flybyLookApply.ts';
 import { flybyCameraAt, flybySectionAt, type FlybyTimeline } from './flybyTimeline.ts';
 
 // Playing a flyby in a scene.
@@ -27,6 +28,11 @@ export interface FlybyStage {
   now(): number;
   requestFrame(callback: () => void): number;
   cancelFrame(handle: number): void;
+  /**
+   * Puts a moment's look on the scene and gives the viewer's own back. Left out, a flyby moves the
+   * camera and nothing else.
+   */
+  look?: FlybyLookStage;
 }
 
 /**
@@ -38,9 +44,11 @@ export interface FlybyStage {
  */
 export function placeFlybyMoment(
   timeline: FlybyTimeline,
-  stage: Pick<FlybyStage, 'setCamera' | 'groundHeight'>,
+  stage: Pick<FlybyStage, 'setCamera' | 'groundHeight' | 'look'>,
   t: number,
 ): void {
+  // The look first, so the frame the camera move asks for is drawn with it.
+  stage.look?.show(timeline.look, Math.min(Math.max(t, 0), timeline.length));
   stage.setCamera(flybyCameraAt(timeline, t, stage.groundHeight));
 }
 
@@ -63,7 +71,7 @@ export interface FlybyPlayer {
   /** Plays from where the clock is, or from the start when it had reached the end. */
   play(): void;
   pause(): void;
-  /** Ends the flyby and puts the camera back where the flyby found it. */
+  /** Ends the flyby and puts the camera, and everything the flyby changed of the look, back as it found them. */
   stop(): void;
   setLoop(loop: boolean): void;
   /** Stops without touching the camera: for a scene that is going away. */
@@ -195,6 +203,9 @@ export function createFlybyPlayer(
     },
     stop() {
       cancel();
+      if (!destroyed) {
+        stage.look?.restore();
+      }
       if (found && !destroyed) {
         stage.setCamera(found);
         stage.refreshData();
