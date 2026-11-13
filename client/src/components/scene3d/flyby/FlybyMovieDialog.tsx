@@ -11,6 +11,7 @@ import { flybyLength } from '../../../flyby/flybyDocument.ts';
 import {
   FLYBY_DRAFT_FPS,
   FLYBY_MOVIE_LEVELS,
+  DEFAULT_FLYBY_MOVIE_SETTINGS,
   flybyFrameSchedule,
   flybyMovieFrameSize,
   flybyMovieOutput,
@@ -27,6 +28,13 @@ import {
   type FlybyRecordingProgress,
   type FlybyRecordingReport,
 } from '../../../flyby/flybyRecorder.ts';
+import {
+  flybyLiveTypes,
+  recordFlybyLive,
+  type FlybyLiveProgress,
+  type FlybyLiveReport,
+  type FlybyLiveStage,
+} from '../../../flyby/flybyLiveRecorder.ts';
 import { drawFlybyTexts, flybyTextsAt } from '../../../flyby/flybyTexts.ts';
 import {
   GIF_FRAME_RATES,
@@ -92,7 +100,20 @@ function aspectOf(width: number, height: number): string | undefined {
 
 interface ExportRun {
   progress: FlybyRecordingProgress | null;
+  /** How far a live recording has got. */
+  live: FlybyLiveProgress | null;
 }
+
+/** What the panel says once a movie is made. */
+type MadeReport =
+  | { kind: 'frames'; report: FlybyRecordingReport; level: FlybyMovieOutput['level'] }
+  | { kind: 'live'; report: FlybyLiveReport; fps: number };
+
+/**
+ * Below this share of the frame rate asked for, a live recording is said to have stuttered: the
+ * machine drew too few frames for the movie to look smooth.
+ */
+const LIVE_SMOOTH_SHARE = 0.8;
 
 /**
  * The panel a flyby is written to a movie file from.
@@ -109,9 +130,10 @@ interface ExportRun {
  * <b>A copy of what the reader could see.</b> The file outlives the check that let this reader see
  * where the caves are, so the panel says so beside Export, always.
  *
- * The way each frame is taken is a list of choices rather than a switch so that a fourth — a live
- * recording by the browser's own recorder, which films what the screen shows at the speed it is
- * drawn — has a place to go.
+ * <b>A fourth way, live.</b> Where the browser has a recorder of its own, the flyby can instead be
+ * played in real time and filmed as it plays: no slower than the flyby, but what the file holds is
+ * what the screen showed at the speed this machine drew it. The panel says so beside the choice, and
+ * a live recording is written only as the containers that recorder writes.
  */
 export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onClose, ref }: FlybyMovieDialogProps) {
   const { t, i18n } = useTranslation();
@@ -139,6 +161,28 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const firstAnswer = useRef(true);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+
+  // What this browser records live: asked once, as the browser's answer does not change.
+  const [liveTypes] = useState(() => flybyLiveTypes());
+  const levels = FLYBY_MOVIE_LEVELS.filter((level) => level !== 'live' || liveTypes.length > 0);
+  const isLive = output.level === 'live' && liveTypes.length > 0;
+  const liveType = liveTypes.find((type) => type.format === settings.format) ?? null;
+  // A live recording remembered from a browser that had the recorder, opened in one that has not.
+  useEffect(() => {
+    if (settingsRef.current.level === 'live' && liveTypes.length === 0) {
+      setSettings({ ...settingsRef.current, level: DEFAULT_FLYBY_MOVIE_SETTINGS.level });
+    }
+  }, [liveTypes, setSettings]);
+  const chooseLevel = (level: FlybyMovieSettings['level']) => {
+    // Recorded live, the file is what the browser's recorder writes; a format it does not write is
+    // turned to the one it writes best.
+    if (level === 'live' && !liveTypes.some((type) => type.format === settings.format)) {
+      change({ level, format: liveTypes[0].format });
+      return;
+    }
+    change({ level });
+  };
+
   useEffect(() => {
     let current = true;
     setFormats(null);
@@ -153,9 +197,10 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
       current = false;
     };
   }, [output.width, output.height, output.fps]);
-  const supported = (format: MovieFormat) =>
+  const encodes = (format: MovieFormat) =>
     format === 'gif' || formats?.some((entry) => entry.format === format && entry.supported) === true;
-  const writesVideo = formats === null || supported('webm') || supported('mp4');
+  const supported = (format: MovieFormat) => (isLive ? liveTypes.some((type) => type.format === format) : encodes(format));
+  const writesVideo = formats === null || encodes('webm') || encodes('mp4');
   // Opened for the first time in a browser that cannot write what was remembered, the panel turns to
   // what it can write, rather than open on a refusal.
   // Only on the first answer: a format the person then picks is theirs to keep.
@@ -170,7 +215,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
       setSettings({ ...settingsRef.current, format: FORMATS.find(writes) ?? 'gif' });
     }
   }, [formats, setSettings]);
-  const formatRefused = formats !== null && !supported(settings.format);
+  const formatRefused = isLive ? liveType === null : formats !== null && !supported(settings.format);
 
   const applyPreset = async (id: MoviePresetId) => {
     const preset = await moviePresetOutput(id);
@@ -196,7 +241,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   // ---- exporting ----
   const [run, setRun] = useState<ExportRun | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [report, setReport] = useState<{ report: FlybyRecordingReport; level: FlybyMovieOutput['level'] } | null>(null);
+  const [report, setReport] = useState<MadeReport | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const choosingFileRef = useRef(false);
   const exporting = run !== null;
@@ -217,9 +262,10 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
     if (exporting || choosingFileRef.current || !flyby.document || refusal !== null || formatRefused) {
       return;
     }
-    // Asked from the press itself: a browser only asks where to save in direct answer to one.
+    // Asked from the press itself: a browser only asks where to save in direct answer to one. A live
+    // recording is gathered by the browser's recorder and saved when it ends.
     let disk: { name: string; sink: MovieSink } | null = null;
-    if (movieGoesToDisk(output.format, estimate)) {
+    if (!isLive && movieGoesToDisk(output.format, estimate)) {
       choosingFileRef.current = true;
       let choice: MovieFileChoice;
       try {
@@ -241,7 +287,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
     const asked = { output, holdEndS: settings.holdEndS, stretch: part === 'whole' ? undefined : { ...stretch } };
     setFailure(null);
     setReport(null);
-    setRun({ progress: null });
+    setRun({ progress: null, live: null });
     flyby.pause();
     // The camera as the person left it, before getting the flyby ready moves it about. Handed back
     // by the recorder on its way out, or here when the recorder never took the scene.
@@ -297,15 +343,37 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         // background, the layers and the colours the screen showed then.
         ...(flyby.stage.look ? { look: flyby.stage.look } : {}),
       };
+      // And the same texts, drawn by the same function the view draws them with.
+      const compose: FlybyRecording['compose'] = (context, t, width, height) =>
+        drawFlybyTexts(context, flybyTextsAt(timeline.texts, t), width, height);
+      if (isLive && liveType !== null) {
+        const liveStage: FlybyLiveStage = {
+          ...stage,
+          now: flyby.stage.now,
+          requestFrame: flyby.stage.requestFrame,
+          cancelFrame: flyby.stage.cancelFrame,
+        };
+        const made = await recordFlybyLive({
+          timeline,
+          stage: liveStage,
+          ...asked,
+          type: liveType,
+          compose,
+          signal: controller.signal,
+          onProgress: (live) => setRun({ progress: null, live }),
+        });
+        saveBlob(made.file, name);
+        void message.success(t('caveview.movie.saved', { name }));
+        setReport({ kind: 'live', report: made.report, fps: output.fps });
+        return;
+      }
       const recording: FlybyRecording = {
         timeline,
         stage,
         ...asked,
-        // And the same texts, drawn by the same function the view draws them with.
-        compose: (context, t, width, height) =>
-          drawFlybyTexts(context, flybyTextsAt(timeline.texts, t), width, height),
+        compose,
         signal: controller.signal,
-        onProgress: (progress) => setRun({ progress }),
+        onProgress: (progress) => setRun({ progress, live: null }),
       };
       let result: { file: Blob | null; report: FlybyRecordingReport };
       if (disk === null) {
@@ -318,7 +386,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         saveBlob(result.file, name);
       }
       void message.success(t('caveview.movie.saved', { name }));
-      setReport({ report: result.report, level: output.level });
+      setReport({ kind: 'frames', report: result.report, level: output.level });
     } catch (error) {
       if (!isFlybyRecordingAbort(error)) {
         setFailure(error instanceof Error ? error.message : String(error));
@@ -387,6 +455,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const rates = isGif ? GIF_FRAME_RATES : MOVIE_VIDEO_FRAME_RATES;
   const sizeLabel = `${output.width} × ${output.height}`;
   const progress = run?.progress ?? null;
+  const liveProgress = run?.live ?? null;
 
   return (
     <div
@@ -464,7 +533,17 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
             {t('caveview.movie.formatNoVideoEncoder')}
           </Typography.Text>
         )}
-        {formatRefused && writesVideo && (
+        {isLive && liveType === null && (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('flyby.movie.liveFormats', {
+              formats: liveTypes.map((type) => t(`caveview.movie.formats.${type.format}`)).join(', '),
+            })}
+            data-testid="flyby-movie-live-format"
+          />
+        )}
+        {!isLive && formatRefused && writesVideo && (
           <Alert
             type="warning"
             showIcon
@@ -531,12 +610,12 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         <Radio.Group
           value={settings.level}
           disabled={settings.draft || exporting}
-          onChange={(event) => change({ level: event.target.value as FlybyMovieSettings['level'] })}
+          onChange={(event) => chooseLevel(event.target.value as FlybyMovieSettings['level'])}
           aria-label={t('flyby.movie.level')}
           data-testid="flyby-movie-level"
           className="scene3d-flyby-movie-choices"
         >
-          {FLYBY_MOVIE_LEVELS.map((level) => (
+          {levels.map((level) => (
             <Radio key={level} value={level} data-testid={`flyby-movie-level-${level}`}>
               {t(`flyby.movie.levels.${level}`)}
             </Radio>
@@ -610,7 +689,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
       </div>
 
       <Typography.Text data-testid="flyby-movie-summary">
-        {t('flyby.movie.summary', {
+        {t(isLive ? 'flyby.movie.summaryLive' : 'flyby.movie.summary', {
           count: schedule.count,
           size: sizeLabel,
           length: flybyClock(schedule.count / output.fps),
@@ -629,13 +708,21 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         />
       )}
       <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-movie-file">
-        {run === null && movieGoesToDisk(output.format, estimate)
+        {run === null && !isLive && movieGoesToDisk(output.format, estimate)
           ? t('caveview.movie.fileAsked', { name: fileName })
           : t('caveview.movie.fileNamed', { name: fileName })}
       </Typography.Text>
       <Alert type="info" showIcon title={t('flyby.movie.privacy')} data-testid="flyby-movie-privacy" />
 
-      {run !== null && (
+      {run !== null && liveProgress !== null && (
+        <div data-testid="flyby-movie-progress" role="status">
+          <Progress percent={liveProgress.total > 0 ? Math.floor((liveProgress.seconds / liveProgress.total) * 100) : 0} size="small" />
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+            {t('flyby.movie.liveProgress', { done: flybyClock(liveProgress.seconds), total: flybyClock(liveProgress.total) })}
+          </Typography.Text>
+        </div>
+      )}
+      {run !== null && liveProgress === null && (
         <div data-testid="flyby-movie-progress" role="status">
           <Progress
             percent={progress === null || progress.total === 0 ? 0 : Math.floor((progress.done / progress.total) * 100)}
@@ -660,7 +747,20 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           data-testid="flyby-movie-failed"
         />
       )}
-      {report !== null && report.level !== 'quick' && (
+      {report?.kind === 'live' && (
+        <Alert
+          type={report.report.fps < report.fps * LIVE_SMOOTH_SHARE ? 'warning' : 'success'}
+          showIcon
+          data-testid="flyby-movie-report"
+          title={t('flyby.movie.liveReport', {
+            count: report.report.frames,
+            time: flybyClock(report.report.seconds),
+            fps: report.report.fps.toLocaleString(i18n.language, { maximumFractionDigits: 1 }),
+          })}
+          description={report.report.fps < report.fps * LIVE_SMOOTH_SHARE ? t('flyby.movie.liveReportSlow', { fps: report.fps }) : undefined}
+        />
+      )}
+      {report?.kind === 'frames' && report.level !== 'quick' && (
         <Alert
           type={report.report.unsettledFrames > 0 ? 'warning' : 'success'}
           showIcon
@@ -679,7 +779,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           <Button
             type="primary"
             icon={<VideoCameraOutlined />}
-            disabled={!flyby.document || refusal !== null || formatRefused || formats === null}
+            disabled={!flyby.document || refusal !== null || formatRefused || (!isLive && formats === null)}
             onClick={() => void exportMovie()}
             data-testid="flyby-movie-export"
           >

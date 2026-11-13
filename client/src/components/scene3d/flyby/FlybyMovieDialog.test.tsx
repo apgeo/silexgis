@@ -167,6 +167,46 @@ async function openMovie() {
   await pass(20);
 }
 
+/** The browser's own recorder, where a test gives the page one: what was made of it, and the rates its canvases were filmed at. */
+const browserRecorder = {
+  made: [] as { state: string; options: { mimeType: string } }[],
+  streams: [] as number[],
+};
+
+/** Gives the page a recorder that writes `types`, and canvases that can be filmed. */
+function stubBrowserRecorder(types: string[]) {
+  class FakeMediaRecorder {
+    static isTypeSupported = (type: string) => types.includes(type);
+    state = 'inactive';
+    mimeType: string;
+    options: { mimeType: string };
+    ondataavailable: ((event: { data: Blob }) => void) | null = null;
+    onerror: ((event: Event) => void) | null = null;
+    onstop: ((event: Event) => void) | null = null;
+    constructor(_stream: unknown, options: { mimeType: string }) {
+      this.options = options;
+      this.mimeType = options.mimeType;
+      browserRecorder.made.push(this);
+    }
+    start() {
+      this.state = 'recording';
+    }
+    stop() {
+      this.state = 'inactive';
+      this.ondataavailable?.({ data: new Blob(['live movie']) });
+      this.onstop?.(new Event('stop'));
+    }
+  }
+  vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+  Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', {
+    configurable: true,
+    value(fps: number) {
+      browserRecorder.streams.push(fps);
+      return { getTracks: () => [{ stop: () => undefined }] };
+    },
+  });
+}
+
 const frameStyle = (wrap: HTMLElement) =>
   ['left', 'top', 'width', 'height'].map((side) => wrap.style.getPropertyValue(`--flyby-frame-${side}`));
 
@@ -193,6 +233,10 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  delete (HTMLCanvasElement.prototype as { captureStream?: unknown }).captureStream;
+  browserRecorder.made = [];
+  browserRecorder.streams = [];
   document.body.replaceChildren();
 });
 
@@ -301,6 +345,94 @@ describe('making a movie of a flyby', () => {
     expect(scene.capture.open).toBeNull();
     expect(scene.camera()).toEqual(HOME);
     expect(onActiveChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('offers no live recording in a browser without a recorder of its own', async () => {
+    renderFlyby();
+    await openMovie();
+    expect(screen.getByTestId('flyby-movie-level-fine')).toBeInTheDocument();
+    expect(screen.queryByTestId('flyby-movie-level-live')).not.toBeInTheDocument();
+  });
+
+  it('turns a live recording remembered from another browser into a frame-exact one where there is no recorder', async () => {
+    useFlybyStore.setState({ movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'webm', level: 'live' } });
+    renderFlyby();
+    await openMovie();
+    expect(useFlybyStore.getState().movie.level).toBe('fine');
+  });
+
+  describe('live, where the browser has a recorder', () => {
+    beforeEach(() => {
+      stubBrowserRecorder(['video/webm;codecs=vp9', 'video/webm;codecs=vp8']);
+    });
+
+    it('is offered as a fourth way, says plainly what it costs, and turns a GIF into what the recorder writes', async () => {
+      useFlybyStore.setState({ movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'gif', size: '480x270', fps: 10 } });
+      renderFlyby();
+      await openMovie();
+      fireEvent.click(screen.getByTestId('flyby-movie-level-live'));
+      await pass(20);
+      expect(useFlybyStore.getState().movie).toMatchObject({ level: 'live', format: 'webm' });
+      expect(screen.getByText(/the browser's own recorder films it/)).toHaveTextContent(
+        "The flyby plays in real time and the browser's own recorder films it: the file holds what the screen showed, at the speed this computer drew it. On a slow computer the movie stutters, and in some browsers the file has no length and cannot be wound on.",
+      );
+      // The rate is a ceiling now, not a promise.
+      expect(screen.getByTestId('flyby-movie-summary')).toHaveTextContent(/^Up to \d+ frames of 480 × 270/);
+      // This recorder writes no MP4, so MP4 cannot be chosen; and a GIF chosen again is refused.
+      expect(screen.getByTestId('flyby-movie-format-mp4')).toBeDisabled();
+      act(() => {
+        useFlybyStore.setState({ movie: { ...useFlybyStore.getState().movie, format: 'gif' } });
+      });
+      expect(screen.getByTestId('flyby-movie-live-format')).toHaveTextContent('This browser records live only as WebM');
+      expect(screen.getByTestId('flyby-movie-export')).toBeDisabled();
+    });
+
+    it('records the flyby as it plays, saves the file under the same name, says how fast it drew, and hands the view back', async () => {
+      useFlybyStore.setState({ movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'webm', level: 'live', size: '640x360', fps: 30 } });
+      const { scene, onActiveChange } = renderFlyby();
+      fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Round the cave' } });
+      await openMovie();
+      fireEvent.click(screen.getByTestId('flyby-movie-export'));
+      await pass(1000);
+      expect(onActiveChange).toHaveBeenLastCalledWith(true);
+      expect(screen.getByTestId('flyby-movie-progress')).toHaveTextContent(/Recording live: 0:0\d of 0:30/);
+      expect(browserRecorder.made[0].state).toBe('recording');
+      // Thirty seconds of flight, in real time.
+      for (let tries = 0; tries < 80 && saveBlob.mock.calls.length === 0; tries += 1) {
+        await pass(500);
+      }
+      expect(saveBlob).toHaveBeenCalledTimes(1);
+      expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-round-the-cave-\d{4}-\d{2}-\d{2}\.webm$/);
+      expect((saveBlob.mock.calls[0][0] as Blob).type).toBe('video/webm;codecs=vp9');
+      expect(browserRecorder.made[0].options.mimeType).toBe('video/webm;codecs=vp9');
+      expect(browserRecorder.streams).toEqual([30]);
+      expect(screen.getByTestId('flyby-movie-report')).toHaveTextContent(/frames recorded in 0:30: about [\d.]+ a second\./);
+      // Nothing frame-exact was opened.
+      expect(encoding.opened).toHaveLength(0);
+      expect(scene.capture.frames).toBeGreaterThan(30);
+      expect(scene.capture.open).toBeNull();
+      expect(scene.camera()).toEqual(HOME);
+      expect(onActiveChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it('asks before a close throws a live recording away, and when stopped saves nothing and hands the view back', async () => {
+      useFlybyStore.setState({ movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'webm', level: 'live', size: '640x360' } });
+      const { scene, onActiveChange } = renderFlyby();
+      await openMovie();
+      fireEvent.click(screen.getByTestId('flyby-movie-export'));
+      await pass(1000);
+      expect(screen.getByTestId('flyby-transport').parentElement).toHaveAttribute('inert');
+      fireEvent.keyDown(screen.getByTestId('flyby-movie-dialog'), { key: 'Escape' });
+      await pass(50);
+      fireEvent.click(screen.getAllByRole('button', { name: 'Stop and close' }).at(-1)!);
+      await pass(300);
+      expect(screen.queryByTestId('flyby-movie-dialog')).not.toBeInTheDocument();
+      expect(browserRecorder.made[0].state).toBe('inactive');
+      expect(saveBlob).not.toHaveBeenCalled();
+      expect(scene.capture.open).toBeNull();
+      expect(scene.camera()).toEqual(HOME);
+      expect(onActiveChange).toHaveBeenLastCalledWith(false);
+    });
   });
 
   it('refuses a GIF longer than a GIF may be, and says what to do', async () => {

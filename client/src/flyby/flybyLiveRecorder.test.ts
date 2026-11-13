@@ -406,10 +406,9 @@ describe('the browser\'s own recorder', () => {
       onerror: ((event: Event) => void) | null = null;
       onstop: ((event: Event) => void) | null = null;
       sliceMs?: number;
-      constructor(
-        readonly stream: { getTracks(): { stop(): void }[] },
-        readonly options: { mimeType: string; videoBitsPerSecond: number },
-      ) {
+      options: { mimeType: string; videoBitsPerSecond: number };
+      constructor(_stream: unknown, options: { mimeType: string; videoBitsPerSecond: number }) {
+        this.options = options;
         this.mimeType = options.mimeType;
         made.push(this);
       }

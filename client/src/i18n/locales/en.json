@@ -9512,12 +9512,14 @@
       "levels": {
         "quick": "Quick",
         "fine": "Fine",
-        "fineLarge": "Fine, larger than the screen"
+        "fineLarge": "Fine, larger than the screen",
+        "live": "Live recording"
       },
       "levelHelp": {
         "quick": "Each frame is taken as soon as it is drawn, as a live view shows it: map tiles may still be arriving.",
         "fine": "Before each frame the scene finishes loading what it shows. Slower: seconds a frame on a computer without a graphics card.",
-        "fineLarge": "As Fine, and the scene is drawn at the movie's own size even where that is larger than the window. The sharpest file, and the slowest to make."
+        "fineLarge": "As Fine, and the scene is drawn at the movie's own size even where that is larger than the window. The sharpest file, and the slowest to make.",
+        "live": "The flyby plays in real time and the browser's own recorder films it: the file holds what the screen showed, at the speed this computer drew it. On a slow computer the movie stutters, and in some browsers the file has no length and cannot be wound on."
       },
       "draft": "Draft",
       "draftHelp": "Half the size, {{fps}} frames a second, each frame taken quickly: to check the timing in a fraction of the time.",
@@ -9528,6 +9530,13 @@
       "to": "To (s)",
       "summary_one": "{{count}} frame of {{size}} · {{length}} · about {{bytes}}",
       "summary": "{{count}} frames of {{size}} · {{length}} · about {{bytes}}",
+      "summaryLive_one": "Up to {{count}} frame of {{size}} · {{length}} · about {{bytes}}",
+      "summaryLive": "Up to {{count}} frames of {{size}} · {{length}} · about {{bytes}}",
+      "liveFormats": "This browser records live only as {{formats}}: choose that format.",
+      "liveProgress": "Recording live: {{done}} of {{total}}",
+      "liveReport_one": "{{count}} frame recorded in {{time}}: about {{fps}} a second.",
+      "liveReport": "{{count}} frames recorded in {{time}}: about {{fps}} a second.",
+      "liveReportSlow": "Fewer than the {{fps}} a second asked for: the movie will stutter. Quick or Fine makes a smooth file, however slowly the computer draws.",
       "gifTooLong": "A GIF holds at most {{max}} frames, and this one would have {{frames}}. Film a stretch, lower the frame rate, or make a video.",
       "gifLarge": "A GIF this long may come to more than {{size}}, which many chats refuse. Film a stretch, make it smaller, or make a video.",
       "privacy": "The movie shows where these caves are. Share it only with people who may see that.",

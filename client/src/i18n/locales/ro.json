@@ -9525,12 +9525,14 @@
       "levels": {
         "quick": "Rapid",
         "fine": "Fin",
-        "fineLarge": "Fin, mai mare decât ecranul"
+        "fineLarge": "Fin, mai mare decât ecranul",
+        "live": "Înregistrare în timp real"
       },
       "levelHelp": {
         "quick": "Fiecare cadru este luat imediat ce este desenat, cum îl arată vizualizarea în timp real: plăcile hărții pot fi încă pe drum.",
         "fine": "Înaintea fiecărui cadru, scena termină de încărcat ce arată. Mai lent: secunde pe cadru pe un calculator fără placă grafică.",
-        "fineLarge": "Ca la Fin, iar scena este desenată la mărimea filmului chiar acolo unde aceasta e mai mare decât fereastra. Cel mai clar fișier și cel mai lent de făcut."
+        "fineLarge": "Ca la Fin, iar scena este desenată la mărimea filmului chiar acolo unde aceasta e mai mare decât fereastra. Cel mai clar fișier și cel mai lent de făcut.",
+        "live": "Survolul rulează în timp real și îl filmează chiar înregistratorul browserului: fișierul conține ce a arătat ecranul, cu viteza cu care l-a desenat acest calculator. Pe un calculator lent filmul sacadează, iar în unele browsere fișierul nu are durată și nu poate fi derulat."
       },
       "draft": "Ciornă",
       "draftHelp": "Jumătate din mărime, {{fps}} cadre pe secundă, fiecare cadru luat rapid: ca să verifici ritmul într-o fracțiune din timp.",
@@ -9541,6 +9543,13 @@
       "to": "Până la (s)",
       "summary_one": "{{count}} cadru de {{size}} · {{length}} · aproximativ {{bytes}}",
       "summary": "{{count}} cadre de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "summaryLive_one": "Până la {{count}} cadru de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "summaryLive": "Până la {{count}} cadre de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "liveFormats": "Acest browser înregistrează în timp real doar ca {{formats}}: alege acest format.",
+      "liveProgress": "Se înregistrează în timp real: {{done}} din {{total}}",
+      "liveReport_one": "{{count}} cadru înregistrat în {{time}}: aproximativ {{fps}} pe secundă.",
+      "liveReport": "{{count}} cadre înregistrate în {{time}}: aproximativ {{fps}} pe secundă.",
+      "liveReportSlow": "Mai puține decât cele {{fps}} pe secundă cerute: filmul va sacada. Rapid sau Fin fac un fișier fluent, oricât de încet ar desena calculatorul.",
       "gifTooLong": "Un GIF are cel mult {{max}} de cadre, iar acesta ar avea {{frames}}. Filmează o porțiune, scade numărul de cadre pe secundă sau fă un film video.",
       "gifLarge": "Un GIF atât de lung poate depăși {{size}}, iar multe aplicații de mesagerie îl refuză. Filmează o porțiune, micșorează-l sau fă un film video.",
       "privacy": "Filmul arată unde sunt aceste peșteri. Trimite-l doar celor care au voie să vadă asta.",
