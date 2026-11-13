@@ -165,6 +165,8 @@ export const specs = {
     'scene3d-flyby.spec.ts',
     // A flyby written to a movie file: the capture session, the boxed scene, the file read back.
     'scene3d-flyby-movie.spec.ts',
+    // A flyby that crosses backgrounds and colours the caves: the look changed, scrubbed back, handed back.
+    'scene3d-flyby-look.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
