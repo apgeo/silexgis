@@ -206,32 +206,35 @@ test('a flyby crosses into another background and colours the caves, scrubs back
   const before = await colourIn(page, LINE_GREEN, 'whole', 60);
   await page.getByTestId('flyby-play').click();
   await expect(status(page)).toHaveAttribute('data-status', 'playing', { timeout: 180_000 });
-  // The title lasts a few real seconds, and a busy machine can take longer than that to report
-  // that the flyby is playing. So the title is looked for at a moment the test puts the flyby at,
-  // not at whichever moment the clock has reached.
-  await page.getByTestId('flyby-pause').click();
-  await page.getByTestId('flyby-position').getByRole('slider').focus();
-  await page.keyboard.press('Home');
-  for (let step = 0; step < 8; step += 1) {
-    await page.keyboard.press('ArrowRight');
-  }
-  await expect(page.getByTestId('flyby-texts')).toHaveAttribute('data-shown', /title/);
-  await page.getByTestId('flyby-play').click();
-  await expect(status(page)).toHaveAttribute('data-status', 'playing');
   // The look is the flyby's while it flies; at its end, the GeoTIFF and green survey lines.
   await expect(status(page)).toHaveAttribute('data-status', 'ended', { timeout: 120_000 });
   await expectMostly(page, GEOTIFF_MAGENTA, 'the GeoTIFF the flyby crossed into');
   await expect.poll(() => colourIn(page, LINE_GREEN, 'whole', 60), { timeout: 60_000 }).toBeGreaterThan(before + 20);
 
   // Dragged back to the start: the street map again, the lines in their own colours, the title on.
+  // The title lasts a few seconds of a flyby that is itself only a few seconds long, and on a busy
+  // machine a press can take longer than that to land — a pause pressed while it plays can arrive
+  // after the end, on the play button that has taken its place. So the title is looked for at
+  // moments the test puts the flyby at, once nothing is playing.
   await page.getByTestId('flyby-position').getByRole('slider').focus();
   await page.keyboard.press('Home');
   await expect(status(page)).toHaveAttribute('data-status', 'paused');
   await expectMostly(page, STREET_BLUE, 'the street map after scrubbing back');
   await expect.poll(() => colourIn(page, LINE_GREEN, 'whole', 60), { timeout: 60_000 }).toBeLessThanOrEqual(before + 5);
   await expect(page.getByTestId('flyby-texts')).toHaveAttribute('data-shown', /title/);
+  // A little way in, step by step: still the opening, still its title.
+  for (let step = 0; step < 8; step += 1) {
+    await page.keyboard.press('ArrowRight');
+  }
+  await expect(page.getByTestId('flyby-position').getByRole('slider')).toHaveAttribute('aria-valuenow', '0.8');
+  await expect(status(page)).toHaveAttribute('data-status', 'paused');
+  await expect(page.getByTestId('flyby-texts')).toHaveAttribute('data-shown', /title/);
+  // And played on from there, to the end again: a flyby held at a moment ends only by playing.
+  await page.getByTestId('flyby-play').click();
+  await expect(status(page)).toHaveAttribute('data-status', 'ended', { timeout: 120_000 });
 
   // Forward again, and stopped there: the viewer's own scene comes back from the flyby's.
+  await page.getByTestId('flyby-position').getByRole('slider').focus();
   await page.keyboard.press('End');
   await expectMostly(page, GEOTIFF_MAGENTA, 'the GeoTIFF again at the end');
   await page.getByTestId('flyby-stop').click();

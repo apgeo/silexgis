@@ -497,6 +497,36 @@ describe('the look of a flyby and the texts over it', () => {
     expect(overlay.dataset.shown).toBe('');
   });
 
+  it('shows the title again at a moment set by hand once the flyby has ended, and keeps it there', async () => {
+    renderFlyby(lookingScene());
+    fireEvent.click(screen.getByText('Texts over the picture'));
+    fireEvent.change(screen.getByTestId('flyby-text-title'), { target: { value: 'Peștera A' } });
+    const overlay = screen.getByTestId('flyby-texts');
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(40_000);
+    expect(status()).toBe('ended');
+    expect(overlay.dataset.shown).toBe('');
+
+    // Nothing plays any more: what is drawn over the scene follows the hand alone. The slider reads
+    // the key by its number, which a bare key name does not carry here.
+    const handle = screen.getByRole('slider', { name: 'Position in the flyby' });
+    fireEvent.keyDown(handle, { key: 'Home', keyCode: 36, which: 36 });
+    expect(status()).toBe('paused');
+    expect(overlay.dataset.shown).toBe('title');
+    for (let step = 0; step < 8; step += 1) {
+      fireEvent.keyDown(handle, { key: 'ArrowRight', keyCode: 39, which: 39 });
+    }
+    expect(handle).toHaveAttribute('aria-valuenow', '0.8');
+    expect(overlay.dataset.shown).toBe('title');
+    // Held there: a moment set by hand is not moved on by the clock, nor taken off by a refresh at rest.
+    await pass(2000);
+    expect(handle).toHaveAttribute('aria-valuenow', '0.8');
+    expect(overlay.dataset.shown).toBe('title');
+    fireEvent.keyDown(handle, { key: 'End', keyCode: 35, which: 35 });
+    expect(overlay.dataset.shown).toBe('');
+  });
+
   it('keeps the look, the changes and the texts with the flyby, and opens them again', () => {
     renderFlyby(lookingScene());
     fireEvent.click(screen.getByText('Texts over the picture'));
