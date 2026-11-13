@@ -1661,6 +1661,26 @@ docker compose up -d
 A backup without `terrain-uploads.tar.gz` — one made before it existed, or by an installation that
 never uploaded a raster — restores as before and leaves the terrain volume as it is.
 
+### Copying an installation's data to another installation
+
+To replicate one installation's dataset in another, make a bundle and serve it over HTTPS:
+
+```bash
+sh scripts/export-bundle.sh /srv/export/<random-name>      # db.sql.gz, files.tar.gz, SHA256SUMS, MANIFEST.txt
+```
+
+Browser-uploaded terrain rasters are left out unless `--with-terrain` is given, and baked terrain is
+never included (it is rebuilt from its recipe). On the receiving installation:
+
+```bash
+sh scripts/import-bundle.sh https://host/<random-name>/ --yes
+```
+
+The import downloads everything, checks it against `SHA256SUMS`, and only then stops the api, runs
+`restore.sh` and starts the stack again, which applies any newer migrations. **It replaces the
+receiving installation's database and uploads.** The bundle carries everything the database holds,
+password hashes and share tokens included, so serve it only where that is acceptable.
+
 ### Rehearsing a restore
 
 A backup that has never been restored is a hope. `restore-drill.sh` loads one into a throwaway
