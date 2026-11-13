@@ -35,9 +35,18 @@ sau ✕ din panou ca să îl închizi.
 | Alegere | Survolul este despre |
 |---|---|
 | **Ce este selectat** | Peștera, peștera intrării sau zona (un masiv, o zonă carstică, un deal) selectată pe hartă sau în scenă |
-| **Peșterile din vedere** | Peșterile pe care scena le desenează acum, bifate în ordinea în care vrei să fie vizitate. **Reîmprospătează lista** citește din nou vederea după ce te-ai mutat; **Traseul cel mai scurt** pune peșterile bifate în ordinea în care camera călătorește cel mai puțin |
+| **Peșterile din vedere** | Peșterile pe care scena le desenează acum, bifate în ordinea în care vrei să fie vizitate. **Adaugă o peșteră după nume** găsește orice peșteră pe care o poți citi și o bifează la sfârșitul listei, fie că vederea o arată, fie că nu. **Reîmprospătează lista** citește din nou vederea după ce te-ai mutat; **Traseul cel mai scurt** pune peșterile bifate în ordinea în care camera călătorește cel mai puțin |
+| **Peșterile selectate de un filtru salvat** | Peșterile pe care le păstrează unul dintre filtrele tale salvate, **cel mult** numărul pe care îl dai (la început 12), în ordinea în care le sortează filtrul. Sunt oferite doar filtrele care pot fi rulate |
 | **Ce arată vederea** | Orice este în centrul scenei când apeși Redă — o creastă, o vale, un grup de peșteri — fără să fie nevoie să selectezi ceva |
 | **Un fișier importat** | Un traseu GPX sau o linie dintr-un KML ori alt fișier importat la **Geodate**, ales din lista fișierelor importate; ce urmează *De-a lungul unei linii* |
+
+Un survol despre un filtru salvat păstrează doar filtrul și numărul — niciodată peșterile. Care
+peșteri sunt se află abia când survolul este redat, pentru cine îl redă: altcineva care îți
+deschide survolul vizitează peșterile pe care filtrul le păstrează pentru *el*, iar un filtru
+modificat între timp este urmat. Un filtru care nu păstrează nicio peșteră pe care cel care
+redă o poate vedea, sau care nu mai poate fi rulat, este semnalat înainte să se miște ceva.
+*Turul peșterilor* unui filtru este scris o singură dată pentru toate peșterile lui — lista
+secțiunilor spune „fiecare dintre peșterile din …” — și este parcurs o dată pentru fiecare peșteră.
 
 O peșteră este găsită din ce desenează scena din ea: drumuirile ei când sunt încărcate, altfel
 intrările ei. O peșteră care nu este desenată deloc este căutată, camera merge să o privească
@@ -163,7 +172,18 @@ un set îl înlocuiește pe cel adăugat înainte, nu îl dublează.
 | **Prin teren în timpul ocolului** | În timpul fiecărui ocol harta de bază se estompează până la intensitatea aleasă și revine |
 | **Colorează peșterile** | De la începutul secțiunii alese, pereții și drumuirile într-o singură culoare |
 | **Hartă veche, hartă nouă** | O hartă georeferențiată apare treptat peste harta de bază în timpul unei secțiuni și dispare din nou |
-| **Obiecte pe rând** | Straturile din filtre pe care le alegi, arătate unul după altul; toate sunt ascunse când începe survolul. Sunt oferite doar straturile aflate deja în lista de straturi din filtre a hărții |
+| **Luminează peștera vizitată** | Toate peșterile încep estompate — pereții și drumuirile în a doua culoare — iar la fiecare oprire a unui tur peștera vizitată se luminează în prima culoare când camera se îndreaptă spre ea și se estompează din nou când camera pleacă. Într-un tur al peșterilor unui filtru salvat, fiecare dintre ele pe rând |
+| **Obiecte pe rând** | Straturi de obiecte arătate unul după altul: straturile din filtre aflate în lista hărții și cele ale survolului (mai jos). Toate sunt ascunse când începe survolul |
+
+**Obiecte arătate de survol** — straturi de obiecte pe care survolul le desenează singur, fără
+să adaugi mai întâi un strat din filtru pe harta plană. Fiecare este ales **după tip** — unul sau
+mai multe tipuri de obiecte din catalog — sau **după un filtru salvat** și are o culoare și un
+simbol proprii, din aceeași paletă ca straturile din filtre ale hărții. Un asemenea strat este
+desenat doar în scena 3D și doar cât timp survolul rulează; lista ta de straturi nu se schimbă
+niciodată, iar când survolul se oprește stratul dispare. Este arătat de la început, dacă aspectul
+de la început nu îl ascunde, și poate fi afișat, ascuns și estompat în momentele alese, ca orice
+alt strat. Ce arată este cerut acelorași rute ca straturile din filtre ale hărții, cu drepturile
+celui care redă survolul. Eliminarea unui strat elimină și schimbările care îl afișau sau îl ascundeau.
 
 La **Straturi**, fiecare strat al acestei instalări — cele ale scenei, suprapunerile de plăci,
 hărțile georeferențiate, fișierele importate, straturile din filtre — poate fi **afișat**,
@@ -319,8 +339,15 @@ datelor browserului pentru acest site le elimină — pentru asta există fișie
   sau ai fiecărei peșteri din vedere, dacă asta este aprins în straturi. Un tur al unor peșteri
   pe care nu le-ai selectat le arată drumuirile. Un survol poate arăta sau ascunde pereții,
   scanările și fotografiile din stații, dar nu le poate estompa: apar și dispar dintr-o dată.
-- **O culoare pentru fiecare peșteră.** *Colorează peșterile* dă tuturor peșterilor din scenă o
-  singură culoare. O culoare pentru fiecare peșteră a unui tur nu este încă făcută.
+- **O culoare pentru o singură peșteră.** *Colorează peșterile* dă tuturor peșterilor din scenă o
+  singură culoare; *Luminează peștera vizitată* dă peșterii fiecărei opriri o culoare proprie
+  peste aceasta. Schimbările ei sunt listate ca celelalte și pot fi corectate sau șterse; nu se
+  scriu de mână.
+- **Pereți mari.** Pereții destul de mari încât vederea să întrebe înainte de a-i descărca sunt
+  întrebați o singură dată, înainte ca survolul să fie redat, pentru toate peșterile de pe traseu:
+  câte și cât de mari. **Descarcă-i** îi aduce; **Rulează fără ei** redă survolul fără ei, iar
+  vederea nu mai întreabă cât timp rulează. Doar pereții peșterii selectate așteaptă un da: pereții
+  tuturor peșterilor din vedere sunt ținuți într-un buget.
 - **Un calculator lent.** Un survol este redat în timp real. Pe un calculator fără placă grafică
   scena desenează doar câteva cadre pe secundă, iar zborul arată ca atare — camera este mereu în
   locul potrivit pentru acel moment, doar că este văzută mai rar.

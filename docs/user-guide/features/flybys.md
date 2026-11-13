@@ -34,9 +34,17 @@ button again, or the ✕ of the panel, to close it.
 | Choice | The flyby is about |
 |---|---|
 | **What is selected** | The cave, the entrance's cave, or the area (a massif, a karst area, a hill) selected on the map or in the scene |
-| **Caves in view** | The caves the scene is drawing now, ticked in the order you want them visited. **Refresh the list** reads the view again after you have moved; **Shortest route** puts the ticked caves in the order that makes the camera travel least |
+| **Caves in view** | The caves the scene is drawing now, ticked in the order you want them visited. **Add a cave by name** finds any cave you may read and ticks it at the end of the list, whether or not the view shows it. **Refresh the list** reads the view again after you have moved; **Shortest route** puts the ticked caves in the order that makes the camera travel least |
+| **Caves a saved filter selects** | The caves one of your saved filters keeps, **at most** the number you give (12 to start with), in the order the filter sorts them. Only filters that can be run are offered |
 | **What the view shows** | Whatever the scene is centred on when you press Play — a ridge, a valley, a group of caves — with no need to select anything |
 | **An imported file** | A GPX track or a line from a KML or other file imported under **Geodata**, picked from the list of imported files; what *Along a line* follows |
+
+A flyby about a saved filter keeps only the filter and the number — never the caves. Which caves
+they are is asked when the flyby is played, for whoever plays it: somebody else opening your
+flyby tours the caves the filter keeps for *them*, and a filter refined since is followed. A
+filter that keeps no cave the player may see, or can no longer be run, is said so before anything
+moves. The *Cave tour* of a filter is written once for all of its caves — the sections list says
+"each of the caves of …" — and is flown once per cave.
 
 A cave is found from what the scene draws of it: its survey lines when they are loaded, its
 entrances otherwise. A cave that is not drawn at all is looked up, the camera goes to look at
@@ -159,7 +167,18 @@ the one added before rather than doubling it.
 | **See through the ground while circling** | During each circle the background fades to the strength you give and back |
 | **Colour the caves** | From the start of the section you pick, the walls and the survey lines in one colour |
 | **Old map, new map** | A georeferenced map fades in over the background during a section and out again |
-| **Features in turn** | The filter layers you pick, shown one after another; all of them are hidden when the flyby opens. Only layers already on the map's list of filter layers are offered |
+| **Light the cave being visited** | Every cave opens dimmed — walls and survey lines in the second colour — and at each stop of a tour the cave being visited lights up in the first colour as the camera heads for it, and dims again as it leaves. In a tour of a saved filter's caves, each of them in turn |
+| **Features in turn** | Layers of features shown one after another: the filter layers on the map's list, and the flyby's own (below). All of them are hidden when the flyby opens |
+
+**Features the flyby shows** — layers of features the flyby draws itself, without your adding a
+filter layer to the flat map first. Each is chosen **by kind** — one or more kinds of feature from
+the catalogue — or **by a saved filter**, and has a colour and a symbol of its own, from the same
+palette as the map's filter layers. Such a layer is drawn only in the 3D scene and only while the
+flyby plays; your own list of layers is never changed, and when the flyby stops the layer is gone.
+It is shown from the start unless the look at the start hides it, and can be shown, hidden and
+faded at chosen moments like any other layer. What it shows is asked of the same routes as the
+map's filter layers, under the rights of whoever plays the flyby. Removing one removes the
+changes that showed or hid it.
 
 Under **Layers**, every layer of this installation — the scene's own, the tile overlays, the
 georeferenced maps, the imported files, the filter layers — can be **shown**, **hidden** or left
@@ -310,8 +329,14 @@ site removes them, which is what the file is for.
   or of every cave in view if that is switched on in the layers. A tour of caves you have not
   selected shows their survey lines. A flyby can show or hide the walls, the scans and the
   station photographs, but not fade them: they appear and go at once.
-- **A colour for every cave.** *Colour the caves* gives all the caves in the scene one colour. A
-  colour for each cave of a tour is not built yet.
+- **A colour for one cave.** *Colour the caves* gives all the caves in the scene one colour;
+  *Light the cave being visited* gives the cave of each stop a colour of its own over that. Its
+  changes are listed like the others, and can be corrected or removed; they are not written by hand.
+- **Large walls.** Walls large enough that the view asks before downloading them are asked about
+  once, before the flyby plays, for every cave on its route: how many and how big. **Download
+  them** fetches them; **Play without them** plays the flyby without, and the view does not ask
+  again while it plays. Only the selected cave's walls ever wait for a yes: the walls of every
+  cave in view are held to a budget instead.
 - **A slow machine.** A flyby plays in real time. On a machine without a graphics card the
   scene draws only a few frames a second and the flight looks like it — the camera is always in
   the right place for the moment, it is just seen less often.
