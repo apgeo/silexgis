@@ -9510,5 +9510,103 @@
       "accounts": "cu exporturile de cont"
     },
     "note": "Notă"
+  },
+  "flyby": {
+    "title": "Survol",
+    "openHint": "Survol: zboară camera în jurul unei peșteri, al mai multor peșteri sau al unui munte",
+    "layersHeld": "Camera este condusă de un survol. Oprește-l ca să schimbi straturile.",
+    "unnamedCave": "Peșteră fără nume",
+    "aboutTitle": "În jurul a ce se zboară",
+    "source": {
+      "selected": "Ce este selectat",
+      "inView": "Peșterile din vedere",
+      "view": "Ce arată vederea",
+      "nothingSelected": "Selectează mai întâi o peșteră sau o zonă pe hartă sau în scenă.",
+      "noCaves": "Nicio peșteră nu este desenată în vedere. Apropie-te de una, apoi reîmprospătează lista.",
+      "refresh": "Reîmprospătează lista",
+      "shortestRoute": "Traseul cel mai scurt"
+    },
+    "subject": {
+      "all": "toate împreună",
+      "feature": "zona selectată",
+      "view": "vederea",
+      "place": "un loc fixat"
+    },
+    "presetTitle": "Presetare",
+    "preset": {
+      "aroundCave": {
+        "name": "În jurul unei peșteri",
+        "hint": "Se apropie, dă ocol peșterii și, dacă i se cere, coboară până în punctul ei cel mai de jos și înapoi."
+      },
+      "tour": {
+        "name": "Turul peșterilor",
+        "hint": "Vizitează pe rând fiecare peșteră — până la ea, în jurul ei — și se încheie deasupra tuturor."
+      },
+      "aroundSeveral": {
+        "name": "În jurul mai multor peșteri",
+        "hint": "Un singur ocol, destul de larg cât să le cuprindă pe toate."
+      },
+      "aroundArea": {
+        "name": "În jurul unui munte",
+        "hint": "Dă ocol zonei de deasupra crestelor, privind spre interior."
+      },
+      "planToProfile": {
+        "name": "Din plan în profil",
+        "hint": "Pornește de deasupra, ca în planul topografiei, se înclină până la vederea din lateral și se rotește."
+      }
+    },
+    "editedNote": "Aceste secțiuni au fost deschise sau modificate de mână. Schimbarea subiectului, a presetării sau a opțiunilor le construiește din nou.",
+    "optionsTitle": "Opțiuni",
+    "turns": "Ocoluri în jurul fiecăreia",
+    "secondsPerTurn": "Secunde pe ocol",
+    "direction": "Sens",
+    "clockwise": "În sensul acelor de ceasornic",
+    "counterclockwise": "În sens invers",
+    "underground": "Coboară sub pământ până în punctul cel mai de jos al peșterii",
+    "speed": "Viteza întregului survol: ×{{speed}}",
+    "speedLabel": "Viteza întregului survol",
+    "loadRoute": "Încarcă mai întâi traseul, ca zborul să nu arate harta sosind",
+    "sectionsTitle_one": "{{count}} secțiune",
+    "sectionsTitle": "{{count}} secțiuni",
+    "section": {
+      "approach": "Apropiere",
+      "orbit": "Ocol",
+      "hop": "Spre",
+      "dive": "Coborâre în",
+      "rise": "Urcare înapoi",
+      "hold": "Oprire",
+      "tilt": "Înclinare"
+    },
+    "secondsUnit": "s",
+    "sectionSeconds": "Secunde — {{section}}",
+    "sectionSpeed": "Viteză — {{section}}",
+    "keepTitle": "Păstrează",
+    "name": "Numele survolului",
+    "namePlaceholder": "Nume",
+    "openSaved": "Deschide un survol salvat",
+    "deleteSaved": "Șterge survolul salvat cu acest nume",
+    "saveFile": "Salvează în fișier",
+    "openFile": "Deschide din fișier",
+    "holdsPlace": "Acest survol conține un loc fixat. Fișierul lui arată unde este acel loc oricui îi este trimis.",
+    "transportTitle": "Redarea survolului",
+    "play": "Redă",
+    "pause": "Pauză",
+    "stop": "Oprește și pune camera la loc",
+    "position": "Poziția în survol",
+    "loop": "Repetă",
+    "loopHint": "Redă din nou de la început când se termină",
+    "cleanScreen": "Ecran curat",
+    "cleanScreenHint": "Redă pe un ecran curat, pentru înregistrarea cu alt program: doar scena și atribuirile hărților, după o numărătoare inversă. Escape te aduce înapoi.",
+    "cleanScreenLeave": "Ecran curat. Apasă Escape ca să revii, Spațiu pentru pauză.",
+    "preparing": "Se pregătește…",
+    "preparingSubjects": "Se caută peșterile: {{done}} din {{total}}",
+    "preparingRoute": "Se încarcă traseul: {{done}} din {{total}}",
+    "trouble": {
+      "problems": "Acest survol nu poate fi redat așa cum este: o secțiune are o durată, o viteză sau o distanță în afara limitelor.",
+      "missing": "Ceva în jurul căruia zboară acest survol nu a putut fi găsit. Poate a fost șters sau nu îl poți citi.",
+      "noScene": "Vizualizarea 3D nu este încă pregătită.",
+      "badFile": "Acest fișier nu este un survol pe care această versiune îl poate deschide.",
+      "failed": "Survolul nu a putut fi pregătit: {{detail}}"
+    }
   }
 }

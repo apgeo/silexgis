@@ -161,6 +161,8 @@ export const specs = {
     'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
     // A tiled scan drawn in the scene and opened in the local viewer.
     'point-clouds.spec.ts',
+    // A flyby played in the scene: the camera flown, the address left alone, the camera handed back.
+    'scene3d-flyby.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
@@ -234,6 +236,8 @@ export const clientAreas = {
   'client/src/caveview/': ['surveys', 'trips'],
   'client/src/diagnostics/': 'diagnostics',
   'client/src/filters/': 'filters',
+  // A flyby's document, path and player: played only in the 3D scene.
+  'client/src/flyby/': 'scene',
   // The placement editor's pure rules: corners, point pairs, refusal wording.
   'client/src/geodata/': 'georeferencedMaps',
   'client/src/imagelink/': 'resLinks',

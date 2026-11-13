@@ -1,0 +1,396 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+// A flyby, written down: what the camera of the 3D scene does, around what, and for how long.
+//
+// Plain data on purpose. The same document is played in the view, scrubbed back and forth by a
+// slider, saved in the browser, written to a file and read back, and later handed to whatever makes
+// a movie of it — so everything it can ask for is a named kind below rather than a function, and
+// nothing in it is an engine object.
+//
+// It names no place unless its author pinned one. The camera is described around a *subject* — a
+// cave, an area feature, whatever the view was showing — as a direction, a tilt and a distance
+// counted in the subject's own size, and the subject is found again each time the flyby is played,
+// from what the server sends the person playing it. A flyby of a cave is therefore a few numbers
+// and an id: it discloses nothing its reader could not already see, and it still works after the
+// cave has been resurveyed and its extent has changed.
+//
+// Every moment of a flyby is a function of its time and of nothing else. Nothing here is an action
+// that cannot be taken back, so a player can be asked for any moment in any order.
+
+export const FLYBY_VERSION = 1;
+
+/** What the camera is about. */
+export type FlybySubject =
+  /** A cave: its survey as drawn, or where the server says it is when nothing of it is drawn. */
+  | { kind: 'cave'; caveId: string }
+  /** A feature with an extent on the ground: a massif, a karst area, a hill. */
+  | { kind: 'feature'; featureId: string }
+  /** Whatever the 3D view is centred on at the moment the flyby is prepared. */
+  | { kind: 'view' }
+  /** A place its author pinned. The one subject that holds coordinates. */
+  | { kind: 'place'; longitude: number; latitude: number; radiusM: number };
+
+/** One of the document's subjects by position in its list, or all of them taken as one. */
+export type FlybySubjectRef = number | 'all';
+
+/**
+ * Which point of a subject the camera looks at: its middle, its highest point or its lowest. For a
+ * cave the last two are places on the survey itself — usually an entrance, and the deepest station
+ * — which is what makes a descent follow the cave rather than sink through the middle of the box
+ * around it. A subject that has no such places of its own answers with the top and the bottom of
+ * its middle.
+ */
+export type FlybyAim = 'centre' | 'top' | 'bottom';
+
+export const FLYBY_AIMS: readonly FlybyAim[] = ['centre', 'top', 'bottom'];
+
+/**
+ * Where the camera is, around a subject. A value left out stays as the move before left it, which
+ * is what lets a section say only what it changes.
+ */
+export interface FlybyPose {
+  /** The point of the subject looked at; the middle unless a move before said otherwise. */
+  aim?: FlybyAim;
+  /** Compass direction the camera faces, degrees. */
+  heading?: number;
+  /** Turns the heading by this much from where it was, degrees; positive is clockwise from above. */
+  headingBy?: number;
+  /** Angle below the horizon, degrees: -90 looks straight down. */
+  pitch?: number;
+  /** Distance from the point looked at, in radii of the subject. */
+  range?: number;
+  /**
+   * Raises the point looked at, counted in halves of the subject's height: from its middle, 1 is
+   * level with its top and -1 with its bottom.
+   */
+  lift?: number;
+  /**
+   * Keeps the eye at least this many metres above the ground, tilting down to keep looking at the
+   * same point; null lifts the limit, which going underground needs.
+   */
+  clearance?: number | null;
+}
+
+/** A pose with nothing left out: what the opening of a flyby has to be. It looks at the middle unless it says. */
+export type FlybyFullPose = Required<Omit<FlybyPose, 'headingBy' | 'aim'>> & Pick<FlybyPose, 'aim'>;
+
+/**
+ * What a section is, as its author thinks of it. Every kind is a move of the camera to a pose; the
+ * kind is what the section is called, which defaults it is given, and — for a hop — the arc it is
+ * flown in.
+ */
+export type FlybySectionKind = 'approach' | 'orbit' | 'hop' | 'dive' | 'rise' | 'hold' | 'tilt';
+
+export const FLYBY_SECTION_KINDS: readonly FlybySectionKind[] = [
+  'approach',
+  'orbit',
+  'hop',
+  'dive',
+  'rise',
+  'hold',
+  'tilt',
+];
+
+/** One shot: the camera moves from where the section before left it to `to`. */
+export interface FlybySection {
+  /** Stable within the document, so a timed change can be tied to a section that is later moved. */
+  id: string;
+  kind: FlybySectionKind;
+  subject: FlybySubjectRef;
+  /** How long the section lasts at a speed of 1, in seconds. */
+  seconds: number;
+  /** This section's own speed: 2 plays it in half the time. Left out, 1. */
+  speed?: number;
+  to: FlybyPose;
+  /** The camera comes to a stop at the end of this section instead of flying on into the next. */
+  rest?: boolean;
+}
+
+export type FlybyPresetId = 'aroundArea' | 'aroundCave' | 'aroundSeveral' | 'tour' | 'planToProfile';
+
+export const FLYBY_PRESETS: readonly FlybyPresetId[] = [
+  'aroundCave',
+  'tour',
+  'aroundSeveral',
+  'aroundArea',
+  'planToProfile',
+];
+
+export interface FlybyDocument {
+  version: typeof FLYBY_VERSION;
+  name: string;
+  /** The preset the sections were built from, for the panel to show; the sections are what is played. */
+  preset?: FlybyPresetId;
+  /** The speed of the whole flyby: 2 plays all of it in half the time. */
+  speed: number;
+  /** Plays again from the start when it reaches the end. */
+  loop: boolean;
+  subjects: FlybySubject[];
+  /** Where the camera is at the very start. */
+  start: { subject: FlybySubjectRef; pose: FlybyFullPose };
+  sections: FlybySection[];
+}
+
+export const FLYBY_SPEED_RANGE = { min: 0.25, max: 4 } as const;
+export const FLYBY_SECONDS_RANGE = { min: 0.5, max: 600 } as const;
+/** A camera that looks at its subject from closer than this is inside the point it looks at. */
+export const FLYBY_MIN_RANGE = 0.02;
+export const FLYBY_MAX_RANGE = 5000;
+export const FLYBY_MAX_SUBJECTS = 40;
+export const FLYBY_MAX_SECTIONS = 200;
+
+/** Why a document cannot be played, in a form the interface can put into words. */
+export type FlybyProblem =
+  | { code: 'noSubjects' }
+  | { code: 'noSections' }
+  | { code: 'unknownSubject'; section?: string }
+  | { code: 'badSeconds'; section: string }
+  | { code: 'badSpeed'; section?: string }
+  | { code: 'badRange'; section?: string }
+  | { code: 'badPitch'; section?: string }
+  | { code: 'duplicateSection'; section: string };
+
+function subjectExists(document: FlybyDocument, ref: FlybySubjectRef): boolean {
+  return ref === 'all' || (Number.isInteger(ref) && ref >= 0 && ref < document.subjects.length);
+}
+
+function poseProblems(pose: FlybyPose, section: string | undefined): FlybyProblem[] {
+  const problems: FlybyProblem[] = [];
+  if (pose.range !== undefined && !(pose.range >= FLYBY_MIN_RANGE && pose.range <= FLYBY_MAX_RANGE)) {
+    problems.push({ code: 'badRange', section });
+  }
+  if (pose.pitch !== undefined && !(pose.pitch >= -90 && pose.pitch <= 90)) {
+    problems.push({ code: 'badPitch', section });
+  }
+  return problems;
+}
+
+/** Every reason the document cannot be played; empty when it can. */
+export function flybyProblems(document: FlybyDocument): FlybyProblem[] {
+  const problems: FlybyProblem[] = [];
+  if (document.subjects.length === 0) {
+    problems.push({ code: 'noSubjects' });
+  }
+  if (document.sections.length === 0) {
+    problems.push({ code: 'noSections' });
+  }
+  if (!(document.speed >= FLYBY_SPEED_RANGE.min && document.speed <= FLYBY_SPEED_RANGE.max)) {
+    problems.push({ code: 'badSpeed' });
+  }
+  if (!subjectExists(document, document.start.subject)) {
+    problems.push({ code: 'unknownSubject' });
+  }
+  problems.push(...poseProblems(document.start.pose, undefined));
+  const seen = new Set<string>();
+  for (const section of document.sections) {
+    if (seen.has(section.id)) {
+      problems.push({ code: 'duplicateSection', section: section.id });
+    }
+    seen.add(section.id);
+    if (!subjectExists(document, section.subject)) {
+      problems.push({ code: 'unknownSubject', section: section.id });
+    }
+    if (!(section.seconds >= FLYBY_SECONDS_RANGE.min && section.seconds <= FLYBY_SECONDS_RANGE.max)) {
+      problems.push({ code: 'badSeconds', section: section.id });
+    }
+    const speed = section.speed ?? 1;
+    if (!(speed >= FLYBY_SPEED_RANGE.min && speed <= FLYBY_SPEED_RANGE.max)) {
+      problems.push({ code: 'badSpeed', section: section.id });
+    }
+    problems.push(...poseProblems(section.to, section.id));
+  }
+  return problems;
+}
+
+/** How long a section really lasts, in seconds, at the document's and its own speed. */
+export function sectionLength(document: Pick<FlybyDocument, 'speed'>, section: FlybySection): number {
+  return section.seconds / (document.speed * (section.speed ?? 1));
+}
+
+/** How long the whole flyby lasts, in seconds. */
+export function flybyLength(document: FlybyDocument): number {
+  return document.sections.reduce((total, section) => total + sectionLength(document, section), 0);
+}
+
+/** True when the document holds a place: a pinned subject is the only thing in it with coordinates. */
+export function flybyHoldsPlace(document: FlybyDocument): boolean {
+  return document.subjects.some((subject) => subject.kind === 'place');
+}
+
+// ---- reading a document that came from outside the running program ----
+
+function finite(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function text(value: unknown, limit: number): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= limit ? value : undefined;
+}
+
+function readSubject(value: unknown): FlybySubject | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const bag = value as Record<string, unknown>;
+  switch (bag.kind) {
+    case 'cave': {
+      const caveId = text(bag.caveId, 100);
+      return caveId ? { kind: 'cave', caveId } : null;
+    }
+    case 'feature': {
+      const featureId = text(bag.featureId, 100);
+      return featureId ? { kind: 'feature', featureId } : null;
+    }
+    case 'view':
+      return { kind: 'view' };
+    case 'place': {
+      const longitude = finite(bag.longitude);
+      const latitude = finite(bag.latitude);
+      const radiusM = finite(bag.radiusM);
+      if (
+        longitude === undefined ||
+        latitude === undefined ||
+        radiusM === undefined ||
+        Math.abs(longitude) > 180 ||
+        Math.abs(latitude) > 90 ||
+        !(radiusM > 0)
+      ) {
+        return null;
+      }
+      return { kind: 'place', longitude, latitude, radiusM };
+    }
+    default:
+      return null;
+  }
+}
+
+function readSubjectRef(value: unknown): FlybySubjectRef | null {
+  if (value === 'all') {
+    return 'all';
+  }
+  const index = finite(value);
+  return index !== undefined && Number.isInteger(index) && index >= 0 ? index : null;
+}
+
+function readPose(value: unknown): FlybyPose | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const bag = value as Record<string, unknown>;
+  const pose: FlybyPose = {};
+  for (const key of ['heading', 'headingBy', 'pitch', 'range', 'lift'] as const) {
+    if (bag[key] !== undefined) {
+      const number = finite(bag[key]);
+      if (number === undefined) {
+        return null;
+      }
+      pose[key] = number;
+    }
+  }
+  if (bag.aim !== undefined) {
+    const aim = FLYBY_AIMS.find((candidate) => candidate === bag.aim);
+    if (!aim) {
+      return null;
+    }
+    pose.aim = aim;
+  }
+  if (bag.clearance === null) {
+    pose.clearance = null;
+  } else if (bag.clearance !== undefined) {
+    const clearance = finite(bag.clearance);
+    if (clearance === undefined) {
+      return null;
+    }
+    pose.clearance = clearance;
+  }
+  return pose;
+}
+
+function readSection(value: unknown): FlybySection | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const bag = value as Record<string, unknown>;
+  const id = text(bag.id, 64);
+  const kind = FLYBY_SECTION_KINDS.find((candidate) => candidate === bag.kind);
+  const subject = readSubjectRef(bag.subject);
+  const seconds = finite(bag.seconds);
+  const to = readPose(bag.to);
+  if (!id || !kind || subject === null || seconds === undefined || !to) {
+    return null;
+  }
+  const section: FlybySection = { id, kind, subject, seconds, to };
+  const speed = finite(bag.speed);
+  if (speed !== undefined) {
+    section.speed = speed;
+  }
+  if (bag.rest === true) {
+    section.rest = true;
+  }
+  return section;
+}
+
+/**
+ * Reads a flyby out of something stored — a file a person chose, an entry in the browser's storage
+ * — or returns null when it is not one that can be played.
+ *
+ * Every field is checked rather than trusted, and a document that fails anywhere is refused whole:
+ * half a flyby is not a shorter flyby, it is a camera that goes somewhere its author never meant.
+ * What comes back holds only the fields this module knows, so nothing a stranger added to a file
+ * travels any further than here.
+ */
+export function normalizeFlybyDocument(value: unknown): FlybyDocument | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const bag = value as Record<string, unknown>;
+  if (bag.version !== FLYBY_VERSION) {
+    return null;
+  }
+  if (!Array.isArray(bag.subjects) || !Array.isArray(bag.sections)) {
+    return null;
+  }
+  if (bag.subjects.length > FLYBY_MAX_SUBJECTS || bag.sections.length > FLYBY_MAX_SECTIONS) {
+    return null;
+  }
+  const subjects = bag.subjects.map(readSubject);
+  const sections = bag.sections.map(readSection);
+  const start = typeof bag.start === 'object' && bag.start !== null ? (bag.start as Record<string, unknown>) : undefined;
+  const startSubject = readSubjectRef(start?.subject);
+  const startPose = readPose(start?.pose);
+  if (
+    subjects.some((subject) => subject === null) ||
+    sections.some((section) => section === null) ||
+    startSubject === null ||
+    !startPose ||
+    startPose.heading === undefined ||
+    startPose.pitch === undefined ||
+    startPose.range === undefined
+  ) {
+    return null;
+  }
+  const document: FlybyDocument = {
+    version: FLYBY_VERSION,
+    name: text(bag.name, 200) ?? '',
+    speed: finite(bag.speed) ?? 1,
+    loop: bag.loop === true,
+    subjects: subjects as FlybySubject[],
+    start: {
+      subject: startSubject,
+      pose: {
+        heading: startPose.heading,
+        pitch: startPose.pitch,
+        range: startPose.range,
+        lift: startPose.lift ?? 0,
+        clearance: startPose.clearance === undefined ? null : startPose.clearance,
+        ...(startPose.aim ? { aim: startPose.aim } : {}),
+      },
+    },
+    sections: sections as FlybySection[],
+  };
+  const preset = FLYBY_PRESETS.find((candidate) => candidate === bag.preset);
+  if (preset) {
+    document.preset = preset;
+  }
+  return flybyProblems(document).length === 0 ? document : null;
+}

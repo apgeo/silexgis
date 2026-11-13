@@ -9497,5 +9497,103 @@
       "accounts": "with account exports"
     },
     "note": "Note"
+  },
+  "flyby": {
+    "title": "Flyby",
+    "openHint": "Flyby: fly the camera around a cave, several caves or a mountain",
+    "layersHeld": "A flyby has the camera. Stop it to change the layers.",
+    "unnamedCave": "Unnamed cave",
+    "aboutTitle": "What to fly around",
+    "source": {
+      "selected": "What is selected",
+      "inView": "Caves in view",
+      "view": "What the view shows",
+      "nothingSelected": "Select a cave or an area on the map or in the scene first.",
+      "noCaves": "No cave is drawn in the view. Move closer to one, then refresh the list.",
+      "refresh": "Refresh the list",
+      "shortestRoute": "Shortest route"
+    },
+    "subject": {
+      "all": "all together",
+      "feature": "the selected area",
+      "view": "the view",
+      "place": "a pinned place"
+    },
+    "presetTitle": "Preset",
+    "preset": {
+      "aroundCave": {
+        "name": "Around a cave",
+        "hint": "Flies in, circles the cave and, if asked, goes down to its lowest point and back."
+      },
+      "tour": {
+        "name": "Cave tour",
+        "hint": "Visits each cave in turn — over to it, around it — and ends above all of them."
+      },
+      "aroundSeveral": {
+        "name": "Around several caves",
+        "hint": "One circle wide enough to hold all of them."
+      },
+      "aroundArea": {
+        "name": "Around a mountain",
+        "hint": "Circles the area from above its ridges, looking in."
+      },
+      "planToProfile": {
+        "name": "Plan to profile",
+        "hint": "Starts straight above, as on the survey's plan, tilts down to the side view and turns."
+      }
+    },
+    "editedNote": "These sections were opened or changed by hand. Changing what the flyby is about, its preset or its options builds them again.",
+    "optionsTitle": "Options",
+    "turns": "Turns around each",
+    "secondsPerTurn": "Seconds per turn",
+    "direction": "Direction",
+    "clockwise": "Clockwise",
+    "counterclockwise": "Counter-clockwise",
+    "underground": "Go underground to the cave's lowest point",
+    "speed": "Speed of the whole flyby: ×{{speed}}",
+    "speedLabel": "Speed of the whole flyby",
+    "loadRoute": "Load the route first, so the flight does not show the map arriving",
+    "sectionsTitle_one": "{{count}} section",
+    "sectionsTitle": "{{count}} sections",
+    "section": {
+      "approach": "Approach",
+      "orbit": "Circle",
+      "hop": "Over to",
+      "dive": "Down into",
+      "rise": "Back up",
+      "hold": "Hold",
+      "tilt": "Tilt"
+    },
+    "secondsUnit": "s",
+    "sectionSeconds": "Seconds — {{section}}",
+    "sectionSpeed": "Speed — {{section}}",
+    "keepTitle": "Keep",
+    "name": "Name of the flyby",
+    "namePlaceholder": "Name",
+    "openSaved": "Open a saved flyby",
+    "deleteSaved": "Delete the saved flyby of this name",
+    "saveFile": "Save to file",
+    "openFile": "Open from file",
+    "holdsPlace": "This flyby holds a pinned place. Its file shows where that is to anyone it is sent to.",
+    "transportTitle": "Flyby playback",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop and put the camera back",
+    "position": "Position in the flyby",
+    "loop": "Repeat",
+    "loopHint": "Play again from the start when it ends",
+    "cleanScreen": "Clean screen",
+    "cleanScreenHint": "Play on a clean screen, for recording with another program: only the scene and the map credits, after a countdown. Escape returns.",
+    "cleanScreenLeave": "Clean screen. Press Escape to return, Space to pause.",
+    "preparing": "Getting ready…",
+    "preparingSubjects": "Finding the caves: {{done}} of {{total}}",
+    "preparingRoute": "Loading the route: {{done}} of {{total}}",
+    "trouble": {
+      "problems": "This flyby cannot be played as it stands: a section has a length, speed or distance outside what is allowed.",
+      "missing": "Something this flyby flies around could not be found. It may have been deleted, or you may not be able to read it.",
+      "noScene": "The 3D view is not ready yet.",
+      "badFile": "That file is not a flyby this version can open.",
+      "failed": "The flyby could not be prepared: {{detail}}"
+    }
   }
 }

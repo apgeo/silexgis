@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import {
   BorderOuterOutlined,
   CameraOutlined,
+  CompassOutlined,
   DisconnectOutlined,
   ExpandOutlined,
   LinkOutlined,
@@ -40,6 +41,9 @@ export interface Scene3DCameraControlsProps {
    * pressed twice. The button says so and takes no second press until the first is done.
    */
   savingImage?: boolean;
+  /** Whether the flyby tool is open over the scene; the button opens and closes it. */
+  flybyOpen: boolean;
+  onFlybyOpenChange(open: boolean): void;
   /** Handed out so whoever mounts this can measure how much of the view it stands on. */
   containerRef?: RefObject<HTMLDivElement | null>;
 }
@@ -73,6 +77,8 @@ export default function Scene3DCameraControls({
   onCoupledChange,
   onSaveImage,
   savingImage = false,
+  flybyOpen,
+  onFlybyOpenChange,
   containerRef,
 }: Scene3DCameraControlsProps) {
   const { t } = useTranslation();
@@ -154,6 +160,16 @@ export default function Scene3DCameraControls({
               >
                 {t('scene3d.saveImage')}
               </Button>
+              <Button
+                block
+                type={flybyOpen ? 'primary' : 'default'}
+                icon={<CompassOutlined />}
+                aria-pressed={flybyOpen}
+                onClick={() => onFlybyOpenChange(!flybyOpen)}
+                data-testid="scene3d-flyby"
+              >
+                {t('flyby.title')}
+              </Button>
             </div>
           }
         >
@@ -226,6 +242,17 @@ export default function Scene3DCameraControls({
           aria-label={t('scene3d.saveImage')}
           onClick={onSaveImage}
           data-testid="scene3d-save-image"
+        />
+      </Tooltip>
+      <Tooltip title={t('flyby.openHint')} placement="left">
+        <Button
+          size="small"
+          type={flybyOpen ? 'primary' : 'default'}
+          icon={<CompassOutlined />}
+          aria-label={t('flyby.title')}
+          aria-pressed={flybyOpen}
+          onClick={() => onFlybyOpenChange(!flybyOpen)}
+          data-testid="scene3d-flyby"
         />
       </Tooltip>
     </div>

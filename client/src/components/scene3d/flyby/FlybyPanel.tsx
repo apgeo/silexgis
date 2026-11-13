@@ -1,0 +1,447 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { useRef } from 'react';
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  FolderOpenOutlined,
+  NodeIndexOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+} from '@ant-design/icons';
+import { Alert, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { useCaveNames } from '../../../api/hooks.ts';
+import { saveBlob } from '../../../api/download.ts';
+import {
+  FLYBY_PRESETS,
+  FLYBY_SECONDS_RANGE,
+  FLYBY_SPEED_RANGE,
+  flybyHoldsPlace,
+  sectionLength,
+  type FlybyDocument,
+  type FlybySubjectRef,
+} from '../../../flyby/flybyDocument.ts';
+import { FLYBY_FILE_MAX_BYTES, flybyFileName, flybyFileText, parseFlybyFile } from '../../../flyby/flybyLibrary.ts';
+import { FLYBY_SECONDS_PER_TURN_RANGE, FLYBY_TURNS_RANGE, presetFits } from '../../../flyby/flybyPresets.ts';
+import { useFlybyStore } from '../../../stores/flybyStore.ts';
+import Button from '../../Button.tsx';
+import { flybyClock } from './flybyClock.ts';
+import type { FlybyController, FlybySource, FlybyTrouble } from './useFlyby.ts';
+
+/** The speeds offered for one section; the whole flyby's speed is a slider. */
+const SECTION_SPEEDS = [0.25, 0.5, 1, 2, 4];
+
+export interface FlybyPanelProps {
+  flyby: FlybyController;
+  onClose(): void;
+}
+
+function troubleText(trouble: FlybyTrouble, t: (key: string, values?: Record<string, unknown>) => string): string {
+  switch (trouble.kind) {
+    case 'problems':
+      return t('flyby.trouble.problems');
+    case 'missing':
+      return t('flyby.trouble.missing');
+    case 'noScene':
+      return t('flyby.trouble.noScene');
+    case 'badFile':
+      return t('flyby.trouble.badFile');
+    case 'failed':
+      return t('flyby.trouble.failed', { detail: trouble.detail });
+  }
+}
+
+/**
+ * The flyby tool's panel: what the flyby is about, how it is built, its sections, and keeping it.
+ *
+ * Everything here is controlled by the hook that owns the flyby; the panel holds nothing of its
+ * own but the file input. While a flyby is being prepared or played, what it is built from cannot
+ * be changed — a change would end the flight in progress — so those controls are held and the
+ * transport bar under the scene is what the viewer uses.
+ */
+export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
+  const { t } = useTranslation();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const library = useFlybyStore((state) => state.library);
+  const saveFlyby = useFlybyStore((state) => state.save);
+  const removeFlyby = useFlybyStore((state) => state.remove);
+  const loadRoute = useFlybyStore((state) => state.loadRoute);
+  const setLoadRoute = useFlybyStore((state) => state.setLoadRoute);
+
+  const { document } = flyby;
+  const busy = flyby.active;
+  // Names for every cave the panel may have to call something: those in view, and those a flyby
+  // that was opened names by id alone.
+  const namedIds = [
+    ...new Set([
+      ...flyby.caves.map((cave) => cave.caveId),
+      ...(document?.subjects.flatMap((subject) => (subject.kind === 'cave' ? [subject.caveId] : [])) ?? []),
+    ]),
+  ];
+  const caveNames = useCaveNames(namedIds);
+  const caveLabel = (caveId: string) =>
+    caveNames.get(caveId) ?? flyby.caves.find((cave) => cave.caveId === caveId)?.label ?? t('flyby.unnamedCave');
+
+  const subjectLabel = (ref: FlybySubjectRef): string => {
+    if (ref === 'all') {
+      return t('flyby.subject.all');
+    }
+    const subject = document?.subjects[ref];
+    switch (subject?.kind) {
+      case 'cave':
+        return caveLabel(subject.caveId);
+      case 'feature':
+        return t('flyby.subject.feature');
+      case 'view':
+        return t('flyby.subject.view');
+      case 'place':
+        return t('flyby.subject.place');
+      default:
+        return '';
+    }
+  };
+
+  const openFile = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+    const opened = file.size <= FLYBY_FILE_MAX_BYTES ? parseFlybyFile(await file.text()) : null;
+    if (opened) {
+      flyby.setTrouble(undefined);
+      flyby.open(opened);
+    } else {
+      flyby.setTrouble({ kind: 'badFile' });
+    }
+  };
+
+  const saveFile = (saved: FlybyDocument) =>
+    saveBlob(new Blob([flybyFileText(saved)], { type: 'application/json' }), flybyFileName(saved));
+
+  const sourceOptions: { value: FlybySource; label: string; disabled?: boolean }[] = [
+    { value: 'selected', label: t('flyby.source.selected'), disabled: !flyby.selectedSubject },
+    { value: 'inView', label: t('flyby.source.inView') },
+    { value: 'view', label: t('flyby.source.view') },
+  ];
+
+  return (
+    <section className="scene3d-flyby-panel" data-testid="flyby-panel" aria-label={t('flyby.title')}>
+      <header className="scene3d-flyby-panel-header">
+        <Typography.Title level={5}>{t('flyby.title')}</Typography.Title>
+        <Button
+          size="small"
+          type="text"
+          icon={<CloseOutlined />}
+          aria-label={t('common.close')}
+          onClick={onClose}
+          data-testid="flyby-close"
+        />
+      </header>
+
+      {flyby.trouble && (
+        <Alert
+          type="error"
+          showIcon
+          closable
+          onClose={() => flyby.setTrouble(undefined)}
+          title={troubleText(flyby.trouble, t)}
+          data-testid="flyby-problem"
+        />
+      )}
+
+      <div className="scene3d-flyby-group">
+        <Typography.Text strong>{t('flyby.aboutTitle')}</Typography.Text>
+        <Radio.Group
+          value={flyby.source}
+          onChange={(event) => flyby.setSource(event.target.value as FlybySource)}
+          disabled={busy}
+          aria-label={t('flyby.aboutTitle')}
+          data-testid="flyby-source"
+        >
+          {sourceOptions.map((option) => (
+            <Radio key={option.value} value={option.value} disabled={option.disabled} data-testid={`flyby-source-${option.value}`}>
+              {option.label}
+            </Radio>
+          ))}
+        </Radio.Group>
+        {flyby.source === 'selected' && !flyby.selectedSubject && (
+          <Typography.Text type="secondary">{t('flyby.source.nothingSelected')}</Typography.Text>
+        )}
+        {flyby.source === 'inView' && (
+          <div className="scene3d-flyby-caves">
+            {flyby.caves.length === 0 ? (
+              <Typography.Text type="secondary">{t('flyby.source.noCaves')}</Typography.Text>
+            ) : (
+              <Checkbox.Group
+                value={flyby.checked}
+                disabled={busy}
+                // Kept in the order they were ticked, which is the order a tour visits them in.
+                onChange={(values) => {
+                  const next = values.map(String);
+                  flyby.setCheckedCaves([
+                    ...flyby.checked.filter((id) => next.includes(id)),
+                    ...next.filter((id) => !flyby.checked.includes(id)),
+                  ]);
+                }}
+                aria-label={t('flyby.source.inView')}
+              >
+                {flyby.caves.map((cave) => (
+                  <Checkbox key={cave.caveId} value={cave.caveId} data-testid={`flyby-cave-${cave.caveId}`}>
+                    {caveLabel(cave.caveId)}
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            )}
+            <div className="scene3d-flyby-row">
+              <Button size="small" icon={<ReloadOutlined />} onClick={flyby.refreshCaves} disabled={busy} data-testid="flyby-caves-refresh">
+                {t('flyby.source.refresh')}
+              </Button>
+              <Button
+                size="small"
+                icon={<NodeIndexOutlined />}
+                onClick={() => void flyby.orderByRoute()}
+                disabled={busy || flyby.checked.length < 3}
+                data-testid="flyby-caves-route"
+              >
+                {t('flyby.source.shortestRoute')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="scene3d-flyby-group">
+        <Typography.Text strong>{t('flyby.presetTitle')}</Typography.Text>
+        <Select
+          value={flyby.preset}
+          onChange={flyby.setPreset}
+          disabled={busy || !document}
+          aria-label={t('flyby.presetTitle')}
+          data-testid="flyby-preset"
+          options={FLYBY_PRESETS.map((preset) => ({
+            value: preset,
+            label: t(`flyby.preset.${preset}.name`),
+            disabled: !presetFits(preset, document?.subjects ?? []),
+          }))}
+        />
+        <Typography.Text type="secondary">{t(`flyby.preset.${flyby.preset}.hint`)}</Typography.Text>
+        {flyby.edited && (
+          <Typography.Text type="secondary" data-testid="flyby-edited">
+            {t('flyby.editedNote')}
+          </Typography.Text>
+        )}
+      </div>
+
+      <div className="scene3d-flyby-group">
+        <Typography.Text strong>{t('flyby.optionsTitle')}</Typography.Text>
+        <label className="scene3d-flyby-field">
+          <span>{t('flyby.turns')}</span>
+          <InputNumber
+            size="small"
+            min={FLYBY_TURNS_RANGE.min}
+            max={FLYBY_TURNS_RANGE.max}
+            step={0.25}
+            value={flyby.options.turns}
+            onChange={(value) => value !== null && flyby.setOptions({ turns: value })}
+            disabled={busy}
+            aria-label={t('flyby.turns')}
+            data-testid="flyby-turns"
+          />
+        </label>
+        <label className="scene3d-flyby-field">
+          <span>{t('flyby.secondsPerTurn')}</span>
+          <InputNumber
+            size="small"
+            min={FLYBY_SECONDS_PER_TURN_RANGE.min}
+            max={FLYBY_SECONDS_PER_TURN_RANGE.max}
+            step={2}
+            value={flyby.options.secondsPerTurn}
+            onChange={(value) => value !== null && flyby.setOptions({ secondsPerTurn: value })}
+            disabled={busy}
+            aria-label={t('flyby.secondsPerTurn')}
+            data-testid="flyby-seconds-per-turn"
+          />
+        </label>
+        <div className="scene3d-flyby-field scene3d-flyby-field-wide">
+          <span>{t('flyby.direction')}</span>
+          <Segmented
+            block
+            size="small"
+            value={flyby.options.clockwise ? 'clockwise' : 'counterclockwise'}
+            onChange={(value) => flyby.setOptions({ clockwise: value === 'clockwise' })}
+            disabled={busy}
+            aria-label={t('flyby.direction')}
+            data-testid="flyby-direction"
+            options={[
+              { value: 'clockwise', label: t('flyby.clockwise') },
+              { value: 'counterclockwise', label: t('flyby.counterclockwise') },
+            ]}
+          />
+        </div>
+        <Checkbox
+          checked={flyby.options.underground}
+          onChange={(event) => flyby.setOptions({ underground: event.target.checked })}
+          disabled={busy || (flyby.preset !== 'aroundCave' && flyby.preset !== 'tour')}
+          data-testid="flyby-underground"
+        >
+          {t('flyby.underground')}
+        </Checkbox>
+        {/* The test id is on the wrapper and the name on the handle: the slider hands neither of
+            its own attributes to the element a reader or a test would look for them on. */}
+        <div className="scene3d-flyby-field scene3d-flyby-field-wide" data-testid="flyby-speed">
+          <span>{t('flyby.speed', { speed: flyby.speed })}</span>
+          <Slider
+            min={FLYBY_SPEED_RANGE.min}
+            max={FLYBY_SPEED_RANGE.max}
+            step={0.25}
+            value={flyby.speed}
+            onChange={flyby.setSpeed}
+            disabled={busy}
+            tooltip={{ formatter: (value) => `×${value}` }}
+            ariaLabelForHandle={t('flyby.speedLabel')}
+          />
+        </div>
+        <Checkbox checked={loadRoute} onChange={(event) => setLoadRoute(event.target.checked)} disabled={busy} data-testid="flyby-load-route">
+          {t('flyby.loadRoute')}
+        </Checkbox>
+      </div>
+
+      {document && (
+        <Collapse
+          size="small"
+          ghost
+          items={[
+            {
+              key: 'sections',
+              label: t('flyby.sectionsTitle', { count: document.sections.length }),
+              children: (
+                <ol className="scene3d-flyby-sections" data-testid="flyby-sections">
+                  {document.sections.map((section, index) => (
+                    <li
+                      key={section.id}
+                      className={flyby.playerState.status !== 'idle' && flyby.playerState.section === index ? 'scene3d-flyby-section-current' : undefined}
+                    >
+                      <span className="scene3d-flyby-section-name">
+                        {t(`flyby.section.${section.kind}`)}
+                        <Typography.Text type="secondary"> · {subjectLabel(section.subject)}</Typography.Text>
+                      </span>
+                      <InputNumber
+                        size="small"
+                        min={FLYBY_SECONDS_RANGE.min}
+                        max={FLYBY_SECONDS_RANGE.max}
+                        step={1}
+                        value={section.seconds}
+                        onChange={(value) => value !== null && flyby.changeSection(section.id, { seconds: value })}
+                        disabled={busy}
+                        suffix={t('flyby.secondsUnit')}
+                        aria-label={t('flyby.sectionSeconds', { section: t(`flyby.section.${section.kind}`) })}
+                        data-testid={`flyby-section-${section.id}-seconds`}
+                      />
+                      <Select
+                        size="small"
+                        value={section.speed ?? 1}
+                        onChange={(value) => flyby.changeSection(section.id, { speed: value })}
+                        disabled={busy}
+                        aria-label={t('flyby.sectionSpeed', { section: t(`flyby.section.${section.kind}`) })}
+                        data-testid={`flyby-section-${section.id}-speed`}
+                        options={SECTION_SPEEDS.map((value) => ({ value, label: `×${value}` }))}
+                      />
+                      <Typography.Text type="secondary" className="scene3d-flyby-section-length">
+                        {flybyClock(sectionLength(document, section))}
+                      </Typography.Text>
+                    </li>
+                  ))}
+                </ol>
+              ),
+            },
+          ]}
+        />
+      )}
+
+      <div className="scene3d-flyby-group">
+        <Typography.Text strong>{t('flyby.keepTitle')}</Typography.Text>
+        <div className="scene3d-flyby-row">
+          <Input
+            size="small"
+            value={flyby.name}
+            onChange={(event) => flyby.setName(event.target.value)}
+            maxLength={120}
+            placeholder={t('flyby.namePlaceholder')}
+            aria-label={t('flyby.name')}
+            data-testid="flyby-name"
+          />
+          <Button
+            size="small"
+            icon={<SaveOutlined />}
+            disabled={!document || flyby.name.trim().length === 0}
+            onClick={() => document && saveFlyby({ ...document, name: flyby.name.trim() })}
+            data-testid="flyby-save"
+          >
+            {t('common.save')}
+          </Button>
+        </div>
+        {library.length > 0 && (
+          <div className="scene3d-flyby-row">
+            <Select
+              size="small"
+              className="scene3d-flyby-saved"
+              placeholder={t('flyby.openSaved')}
+              value={null}
+              disabled={busy}
+              onChange={(value: string | null) => {
+                const kept = library.find((entry) => entry.name === value);
+                if (kept) {
+                  flyby.setTrouble(undefined);
+                  flyby.open(kept);
+                }
+              }}
+              aria-label={t('flyby.openSaved')}
+              data-testid="flyby-saved"
+              options={library.map((entry) => ({ value: entry.name, label: entry.name }))}
+            />
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={!library.some((entry) => entry.name === flyby.name.trim())}
+              onClick={() => removeFlyby(flyby.name.trim())}
+              aria-label={t('flyby.deleteSaved')}
+              data-testid="flyby-delete"
+            />
+          </div>
+        )}
+        <div className="scene3d-flyby-row">
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            disabled={!document}
+            onClick={() => document && saveFile(document)}
+            data-testid="flyby-file-save"
+          >
+            {t('flyby.saveFile')}
+          </Button>
+          <Button size="small" icon={<FolderOpenOutlined />} disabled={busy} onClick={() => fileInput.current?.click()} data-testid="flyby-file-open">
+            {t('flyby.openFile')}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            data-testid="flyby-file-input"
+            onChange={(event) => {
+              void openFile(event.target.files?.[0]);
+              // Emptied so that choosing the same file again is still a change.
+              event.target.value = '';
+            }}
+          />
+        </div>
+        {document && flybyHoldsPlace(document) && (
+          <Typography.Text type="secondary" data-testid="flyby-holds-place">
+            {t('flyby.holdsPlace')}
+          </Typography.Text>
+        )}
+      </div>
+    </section>
+  );
+}

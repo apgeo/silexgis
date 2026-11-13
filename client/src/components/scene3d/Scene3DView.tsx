@@ -124,6 +124,8 @@ import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewl
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
+import Scene3DFlyby from './flyby/Scene3DFlyby.tsx';
+import type { FlybyScene } from './flyby/useFlyby.ts';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
 import {
@@ -185,6 +187,7 @@ export interface Scene3DViewProps {
 export default function Scene3DView({ height = '100%', syncUrlHash = false }: Scene3DViewProps) {
   const { t, i18n } = useTranslation();
   const slotRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   // Answered once, before anything is downloaded: the engine chunk is a megabyte that a browser
   // which cannot draw the scene should never be asked to fetch.
@@ -526,6 +529,54 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // rather than the last button pressed. Undefined until the scene exists.
   const [camera, setCamera] = useState<Camera3DState>();
 
+  // ---- flybys ----
+
+  /** Whether the flyby tool is open over the scene. */
+  const [flybyOpen, setFlybyOpen] = useState(false);
+  // Whether a flyby has the camera. Held twice: as state for the chrome that is held meanwhile, and
+  // in a ref for the exchange with the flat map and the address bar, which ask at the moment of
+  // each message and must not make the effect that owns them run again.
+  const [flybyActive, setFlybyActive] = useState(false);
+  const flybyActiveRef = useRef(false);
+  const changeFlybyActive = useCallback((active: boolean) => {
+    flybyActiveRef.current = active;
+    setFlybyActive(active);
+  }, []);
+  // Everything the tool asks of this view, read through the refs at the moment it is asked, so the
+  // object never changes and a scene rebuilt under a flyby is simply the scene it finds next.
+  const flybyScene = useMemo<FlybyScene>(
+    () => ({
+      engine: () => engineRef.current,
+      cavesInView: () => dataRef.current?.cavesInView() ?? [],
+      // The loaders reload when the camera comes to rest, and a camera in flight never does.
+      refreshData: () => {
+        dataRef.current?.reload();
+        filterLayersRef.current?.reload();
+        tracksRef.current?.reload();
+        meshesInViewRef.current?.reload();
+        scansInViewRef.current?.reload();
+      },
+      dataLoading: () => {
+        const mesh = meshRef.current?.getState().status;
+        const meshes = meshesInViewRef.current?.getState();
+        const scans = scansInViewRef.current?.getState();
+        return Boolean(
+          dataRef.current?.getState().loading ||
+            tracksRef.current?.getState().loading ||
+            mesh === 'looking' ||
+            mesh === 'loading' ||
+            meshes?.listing ||
+            (meshes?.loading ?? 0) > 0 ||
+            scans?.listing ||
+            (scans?.loading ?? 0) > 0,
+        );
+      },
+      wrap: () => wrapRef.current,
+      surface: () => slotRef.current,
+    }),
+    [],
+  );
+
   useEffect(() => {
     const engine = engineRef.current;
     // Only the mount actually showing the scene drives it. Two mounts share one scene, and if both
@@ -618,7 +669,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // coupling never appears in this effect's dependencies. A re-run here detaches the wall mesh
       // and reloads the cave — tens of megabytes of graphics memory released and fetched again —
       // which is far too much to spend on a button press, and would look like the scene breaking.
-      { followsExtent: () => useWorkspaceStore.getState().scene3dCoupledToMap },
+      // A camera being flown by a flyby is out of the exchange for as long as the flight lasts: the
+      // flat map must not chase it round a cave, and must not send it anywhere either.
+      {
+        followsExtent: () =>
+          useWorkspaceStore.getState().scene3dCoupledToMap && !flybyActiveRef.current,
+      },
     );
     syncRef.current = sync;
 
@@ -704,7 +760,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const unsubscribeView = engine.onViewChanged(refreshCamera);
     refreshCamera();
 
-    const detachHash = syncUrlHash ? attachScene3dHash(engine) : undefined;
+    const detachHash = syncUrlHash
+      ? attachScene3dHash(engine, { paused: () => flybyActiveRef.current })
+      : undefined;
 
     return () => {
       detachHash?.();
@@ -1409,7 +1467,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
-    <div className="scene3d-wrap" style={{ height }}>
+    <div className="scene3d-wrap" ref={wrapRef} style={{ height }}>
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
       )}
@@ -1474,6 +1532,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           onCoupledChange={changeCoupling}
           onSaveImage={saveImage}
           savingImage={savingImage}
+          flybyOpen={flybyOpen}
+          onFlybyOpenChange={setFlybyOpen}
+        />
+      )}
+      {status === 'ready' && showingHere && flybyOpen && (
+        <Scene3DFlyby
+          scene={flybyScene}
+          selection={selection}
+          onActiveChange={changeFlybyActive}
+          onClose={() => setFlybyOpen(false)}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer
@@ -1533,10 +1601,14 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
               />
             }
           >
+            {/* Held while a flyby has the camera: the layers are the flyby's to show for as long as
+                it flies, and a switch thrown under it would be undone by its next moment. */}
             <Button
               size="small"
               icon={<LayoutOutlined />}
               aria-label={t('map.layersTitle')}
+              title={flybyActive ? t('flyby.layersHeld') : undefined}
+              disabled={flybyActive}
               data-testid="scene3d-layers-trigger"
             />
           </Popover>
