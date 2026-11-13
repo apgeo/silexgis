@@ -41,6 +41,15 @@ export interface FlybyTextPlan {
    * from the flyby's path. Left out, the arrow points up.
    */
   heading?(t: number): number;
+  /** Whether the picture says in a corner how much the relief is stretched, when it is. */
+  reliefMark: boolean;
+  /**
+   * The factor the relief is drawn at, at a moment: given by whoever plays the flyby, who alone
+   * knows the factor of the scene it plays in. Left out, true height throughout, and no mark.
+   */
+  relief?(t: number): number;
+  /** The mark in the reader's words, for a factor already rounded to a tenth; left out, `×2`. */
+  reliefWords?(factor: number): string;
 }
 
 export interface FlybyShownCard {
@@ -60,6 +69,8 @@ export interface FlybyTextState {
   /** The camera's heading, degrees, when a north arrow is drawn. */
   north?: number;
   corner?: string;
+  /** The words saying the relief is stretched, while it is drawn other than true. */
+  relief?: string;
 }
 
 /** A card or caption takes this long to appear and to go, at most, in seconds. */
@@ -81,6 +92,7 @@ export function flybyTextPlan(document: FlybyDocument, found: readonly FlybyCapt
     fadeOut: Math.min(texts.fadeOut ?? 0, length),
     northArrow: texts.northArrow === true,
     ...(texts.corner ? { corner: texts.corner } : {}),
+    reliefMark: texts.reliefMark !== false,
   };
   if (texts.title) {
     plan.title = {
@@ -117,7 +129,8 @@ export function flybyTextPlanIsEmpty(plan: FlybyTextPlan): boolean {
     plan.fadeIn === 0 &&
     plan.fadeOut === 0 &&
     !plan.northArrow &&
-    !plan.corner
+    !plan.corner &&
+    !(plan.reliefMark && plan.relief)
   );
 }
 
@@ -169,6 +182,14 @@ export function flybyTextsAt(plan: FlybyTextPlan, t: number): FlybyTextState {
   }
   if (plan.corner) {
     state.corner = plan.corner;
+  }
+  if (plan.reliefMark && plan.relief) {
+    // To the tenth a person chooses the factor in, which is also what keeps the mark from being
+    // redrawn on every frame of a ramp, and from saying "×1" for a factor a hair from true.
+    const factor = Math.round(plan.relief(clamped) * 10) / 10;
+    if (factor !== 1) {
+      state.relief = plan.reliefWords?.(factor) ?? `×${factor}`;
+    }
   }
   // One caption at a time: the latest one that has begun.
   for (const caption of plan.captions) {
@@ -368,6 +389,23 @@ function cornerText(context: FlybyTextCanvas, text: string, width: number, unit:
   context.restore();
 }
 
+/** The relief's stretch, small in the top left corner — under the corner's own line when there is one. */
+function reliefMark(context: FlybyTextCanvas, text: string, width: number, unit: number, below: boolean) {
+  const size = unit * 0.026;
+  const margin = unit * 0.03;
+  context.save();
+  context.globalAlpha = 0.9;
+  context.fillStyle = '#ffffff';
+  context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  context.shadowBlur = unit * 0.01;
+  context.textAlign = 'left';
+  context.textBaseline = 'top';
+  context.font = `500 ${size}px ${FONT_FAMILY}`;
+  const [line] = wrap(context, text, width * 0.4, 1);
+  context.fillText(line ?? '', margin, margin + (below ? unit * 0.032 * 1.35 : 0));
+  context.restore();
+}
+
 /**
  * Draws what is over the scene at one moment onto a canvas `width` by `height`, **over whatever the
  * canvas already holds**. A movie's frame is the scene first and the texts over it, on one canvas,
@@ -385,6 +423,9 @@ export function drawFlybyTexts(context: FlybyTextCanvas, state: FlybyTextState, 
   }
   if (state.corner) {
     cornerText(context, state.corner, width, unit);
+  }
+  if (state.relief) {
+    reliefMark(context, state.relief, width, unit, Boolean(state.corner));
   }
   if (state.dim > 0) {
     context.save();

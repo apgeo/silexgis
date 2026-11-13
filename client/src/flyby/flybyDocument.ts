@@ -423,6 +423,12 @@ export interface FlybyTexts {
   northArrow?: boolean;
   /** A line of text in a corner of the picture for the whole flyby: a club's name, a date. */
   corner?: string;
+  /**
+   * False keeps the picture from saying "Relief ×2" in a corner while the relief is drawn other
+   * than true. Left out, it says so: a stretched hillside looks like a real one, and somebody
+   * judging a slope off a movie has to know.
+   */
+  reliefMark?: boolean;
 }
 
 export interface FlybyDocument {
@@ -1229,6 +1235,14 @@ function readTexts(value: unknown): FlybyTexts | null {
     }
     if (bag.northArrow) {
       texts.northArrow = true;
+    }
+  }
+  if (bag.reliefMark !== undefined) {
+    if (typeof bag.reliefMark !== 'boolean') {
+      return null;
+    }
+    if (!bag.reliefMark) {
+      texts.reliefMark = false;
     }
   }
   if (bag.corner !== undefined) {

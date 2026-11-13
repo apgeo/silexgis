@@ -9930,7 +9930,9 @@
         "factor": "The factor the relief rises to",
         "during": "When it rises and falls back",
         "everyCircle": "In every circle"
-      }
+      },
+      "mark": "Relief ×{{factor}}",
+      "markOn": "Say “Relief ×2” in a corner while the relief is stretched"
     }
   },
   "mapSymbols": {

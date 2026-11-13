@@ -25,6 +25,7 @@ function shownParts(state: FlybyTextState | undefined): string {
     state.end ? 'end' : undefined,
     state.north !== undefined ? 'north' : undefined,
     state.corner ? 'corner' : undefined,
+    state.relief ? 'relief' : undefined,
   ]
     .filter(Boolean)
     .join(' ');

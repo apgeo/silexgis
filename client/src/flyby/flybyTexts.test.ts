@@ -210,3 +210,50 @@ describe('the furniture of the frame', () => {
     expect(flybyTextsAt(flybyTextPlan(flyby({ northArrow: true })), 3).north).toBe(0);
   });
 });
+
+describe('the mark of a stretched relief', () => {
+  it('says the relief in a corner only while the factor is not 1, rounded to a tenth', () => {
+    const plan = flybyTextPlan(flyby({}));
+    // A ramp from true height to ×3 over the first 10 s, and back to true height at the end.
+    plan.relief = (t) => (t <= 10 ? 1 + 0.2 * t : t >= 29 ? 1 : 3);
+    plan.reliefWords = (factor) => `Relief ×${factor}`;
+    expect(flybyTextPlanIsEmpty(plan)).toBe(false);
+    expect(flybyTextsAt(plan, 0)).toEqual({ dim: 0 });
+    // A factor a hair from true is true height to the tenth, and says nothing.
+    expect(flybyTextsAt(plan, 0.2).relief).toBeUndefined();
+    expect(flybyTextsAt(plan, 5).relief).toBe('Relief ×2');
+    expect(flybyTextsAt(plan, 20).relief).toBe('Relief ×3');
+    expect(flybyTextsAt(plan, 30).relief).toBeUndefined();
+    // Scrubbed back, each moment says what it said going forwards.
+    expect(flybyTextsAt(plan, 5)).toEqual(flybyTextsAt(plan, 5));
+    // Two moments of the ramp within the same tenth draw the same picture, so the canvas is not drawn again.
+    expect(sameFlybyTexts(flybyTextsAt(plan, 5), flybyTextsAt(plan, 5.2))).toBe(true);
+
+    const { context, drawn } = recorder();
+    drawFlybyTexts(context, flybyTextsAt(plan, 20), 1000, 600);
+    expect(drawn.map((entry) => entry.text)).toEqual(['Relief ×3']);
+    expect(drawn[0].x).toBeLessThan(50);
+    expect(drawn[0].y).toBeLessThan(50);
+  });
+
+  it('goes under the corner line, and is not drawn when the flyby switches it off', () => {
+    const plan = flybyTextPlan(flyby({ corner: 'Club' }));
+    plan.relief = () => 2;
+    const { context, drawn } = recorder();
+    drawFlybyTexts(context, flybyTextsAt(plan, 3), 1000, 600);
+    expect(drawn.map((entry) => entry.text)).toEqual(['Club', '×2']);
+    expect(drawn[1].y).toBeGreaterThan(drawn[0].y);
+
+    const off = flybyTextPlan(flyby({ reliefMark: false }));
+    off.relief = () => 2;
+    expect(flybyTextsAt(off, 3)).toEqual({ dim: 0 });
+    expect(flybyTextPlanIsEmpty(off)).toBe(true);
+  });
+
+  it('is written to a file only when switched off, and read back so', async () => {
+    const { normalizeFlybyDocument } = await import('./flybyDocument.ts');
+    const off = flyby({ reliefMark: false });
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(off)))).toEqual(off);
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(flyby({ reliefMark: true }))))?.texts).toEqual({});
+  });
+});

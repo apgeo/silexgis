@@ -9943,7 +9943,9 @@
         "factor": "Factorul până la care crește relieful",
         "during": "Când crește și revine",
         "everyCircle": "În fiecare cerc"
-      }
+      },
+      "mark": "Relief ×{{factor}}",
+      "markOn": "Scrie „Relief ×2” într-un colț cât timp relieful este exagerat"
     }
   },
   "mapSymbols": {

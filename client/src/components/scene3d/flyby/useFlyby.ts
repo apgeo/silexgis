@@ -27,6 +27,7 @@ import {
 import { updateSection } from '../../../flyby/flybyEdit.ts';
 import { expandFlyby, type FlybyExpanded } from '../../../flyby/flybyExpand.ts';
 import { cavesOfFilterDocument, FLYBY_FEATURE_WORLD } from '../../../flyby/flybyFilters.ts';
+import { flybyReliefAt } from '../../../flyby/flybyLook.ts';
 import { createFlybyLookStage, type FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 import { createFlybyPlayer, type FlybyPlayer, type FlybyPlayerState, type FlybyStage } from '../../../flyby/flybyPlayer.ts';
 import {
@@ -65,6 +66,7 @@ import {
   type FlybyTimeline,
 } from '../../../flyby/flybyTimeline.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
+import { formatExaggeration } from '../../../scene3d/exaggeration3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import { featuresOf, geoJsonBounds, lineStrings } from '../../../scene3d/geoJson3d.ts';
 import { boundsToBbox } from '../../../scene3d/viewBounds3d.ts';
@@ -91,6 +93,11 @@ export interface FlybyScene {
   caveLines?(caveId: string): { longitude: number; latitude: number; height: number }[][];
   /** The walls the view waits for a yes about; left out, a flyby asks nothing about walls. */
   walls?: FlybyWallsAsk;
+  /**
+   * The factor the viewer has the relief drawn at, apart from any flyby — their own, or the one a
+   * saved view they opened brought. Left out, true height.
+   */
+  relief?(): number;
 }
 
 /** Where the subjects of a flyby being put together come from. */
@@ -182,6 +189,10 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
   const say = useMemo(() => flybySayWords(t, i18n.language), [t, i18n.language]);
+  const reliefWords = useMemo(
+    () => (factor: number) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
+    [t, i18n.language],
+  );
 
   // ---- what the flyby is about, and how it is built ----
 
@@ -631,6 +642,13 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
           }),
         ),
       ]);
+      // What the relief is drawn at, for the mark in a corner of the picture: the flyby's factor at
+      // each moment where the view lets a flyby stretch it, and the viewer's own throughout where
+      // the flyby says nothing of it — a picture of a stretched scene says so either way.
+      timeline.texts.relief = scene.look?.showRelief
+        ? (time) => flybyReliefAt(timeline.look, scene.relief?.(), time)
+        : () => scene.relief?.() ?? 1;
+      timeline.texts.reliefWords = reliefWords;
       const player = createFlybyPlayer(timeline, stage, { loop: document.loop, home });
       let shown = Number.NEGATIVE_INFINITY;
       const texts = timeline.texts;
@@ -677,7 +695,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
       abortRef.current = null;
       setPreparing(null);
     }
-  }, [document, scene, world, stage, loadRoute, say, dropPlayer, tellMoment, askAboutWalls]);
+  }, [document, scene, world, stage, loadRoute, say, reliefWords, dropPlayer, tellMoment, askAboutWalls]);
 
   /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
   const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {

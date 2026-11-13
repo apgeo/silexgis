@@ -1497,6 +1497,14 @@ function TextsEditor({
       >
         {t('flyby.frame.north')}
       </Checkbox>
+      <Checkbox
+        checked={texts.reliefMark !== false}
+        onChange={(event) => set('reliefMark', event.target.checked ? undefined : false)}
+        disabled={busy}
+        data-testid="flyby-text-relief"
+      >
+        {t('flyby.relief.markOn')}
+      </Checkbox>
       <Input
         size="small"
         value={texts.corner ?? ''}

@@ -403,8 +403,12 @@ describe('the flyby tool over the 3D scene', () => {
 });
 
 /** The fake view with a look of its own: what the flyby last put on it, member by member. */
-function lookingScene() {
-  const scene = fakeScene();
+/** A scene whose look a flyby can change; `relief` is the factor the viewer keeps, left out true height. */
+function lookingScene(relief?: number) {
+  const scene: ReturnType<typeof fakeScene> = fakeScene();
+  if (relief !== undefined) {
+    scene.relief = () => relief;
+  }
   const shown: Record<string, unknown> = {};
   const record = (member: string) => (value: unknown) => {
     if (value === undefined) {
@@ -418,7 +422,7 @@ function lookingScene() {
       background: 1,
       backgroundOpacity: 1,
       surface: 'overlay',
-      relief: 1.5,
+      ...(relief !== undefined ? { relief } : {}),
       layers: Object.fromEntries(layers.map((key) => [key, { visible: true, opacity: 1 }])),
     }),
     showBackground: record('background'),
@@ -852,7 +856,7 @@ describe('a tour that stops at each cave', () => {
 
 describe('the relief during a flyby', () => {
   it('opens at a factor of its own, ramps to another by a change written by hand, and gives the viewer\'s back', async () => {
-    const scene = lookingScene();
+    const scene = lookingScene(1.5);
     renderFlyby(scene);
     fireEvent.click(screen.getByText('Look at the start'));
     fireEvent.click(screen.getByTestId('flyby-look-relief-on'));
@@ -891,7 +895,7 @@ describe('the relief during a flyby', () => {
 
 describe('the relief grown by a ready-made set', () => {
   it('rises during the circle and falls back to the viewer\'s own factor', async () => {
-    const scene = lookingScene();
+    const scene = lookingScene(1.5);
     renderFlyby(scene);
     fireEvent.click(screen.getByText('Ready-made changes'));
     const factor = screen.getByRole('spinbutton', { name: 'The factor the relief rises to' });
@@ -912,6 +916,45 @@ describe('the relief grown by a ready-made set', () => {
     expect(scene.shown.relief).toBe(4);
     fireEvent.click(screen.getByTestId('flyby-stop'));
     expect(scene.shown.relief).toBeUndefined();
+  });
+});
+
+describe('the mark of a stretched relief over the picture', () => {
+  it('says the relief while the flyby stretches it, and not once it is back to true height', async () => {
+    renderFlyby(lookingScene());
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    fireEvent.click(screen.getByTestId('flyby-recipe-relief-add'));
+    const overlay = screen.getByTestId('flyby-texts');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(overlay.dataset.shown).toBe('');
+    await pass(17_000);
+    expect(overlay.dataset.shown).toBe('relief');
+    await pass(13_000);
+    expect(overlay.dataset.shown).toBe('');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+  });
+
+  it('says the viewer\'s own stretch for a flyby that says nothing of the relief, unless switched off', async () => {
+    renderFlyby(lookingScene(2));
+    const overlay = screen.getByTestId('flyby-texts');
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(overlay.dataset.shown).toBe('relief');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(overlay.dataset.shown).toBe('');
+
+    fireEvent.click(screen.getByText('Texts over the picture'));
+    const mark = screen.getByRole('checkbox', { name: 'Say “Relief ×2” in a corner while the relief is stretched' });
+    expect(mark).toBeChecked();
+    fireEvent.click(mark);
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    expect(overlay.dataset.shown).toBe('');
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'No mark' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    expect(useFlybyStore.getState().library[0].texts).toEqual({ reliefMark: false });
   });
 });
 

@@ -641,6 +641,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           }
         },
       },
+      relief: () => lookSettingsRef.current.exaggeration,
       look: createScene3DLookTarget(
         {
           engine: () => engineRef.current,
