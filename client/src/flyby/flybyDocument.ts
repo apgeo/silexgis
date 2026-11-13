@@ -355,9 +355,10 @@ export type FlybyChangeWhat =
   | { kind: 'lens'; degrees: number }
   /**
    * The relief stretched or flattened, from the factor in force to this one over the change's
-   * length: a mountain that rises out of the plain as the camera circles it.
+   * length: a mountain that rises out of the plain as the camera circles it. Null goes back to the
+   * factor the flyby opened at — its own, or else the one of whoever plays it.
    */
-  | { kind: 'relief'; factor: number };
+  | { kind: 'relief'; factor: number | null };
 
 export type FlybyChangeKind = FlybyChangeWhat['kind'];
 
@@ -665,7 +666,7 @@ function changeIsSound(change: FlybyChange): boolean {
     case 'lens':
       return isLens(change.degrees);
     case 'relief':
-      return isRelief(change.factor);
+      return change.factor === null || isRelief(change.factor);
   }
 }
 
@@ -1151,7 +1152,7 @@ function readChange(value: unknown): FlybyChange | null {
       return degrees !== undefined ? { kind: 'lens', degrees, ...timing } : null;
     }
     case 'relief': {
-      const factor = finite(bag.factor);
+      const factor = bag.factor === null ? null : finite(bag.factor);
       return factor !== undefined ? { kind: 'relief', factor, ...timing } : null;
     }
     default:

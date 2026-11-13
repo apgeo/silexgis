@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { FLYBY_VERSION, flybyProblems, type FlybyDocument } from './flybyDocument.ts';
-import { flybyLookAt, flybyLookPlan, type FlybyLookBase } from './flybyLook.ts';
-import { colourCaves, cycleBackgrounds, featuresInTurn, oldMapNewMap, seeThroughGround } from './flybyRecipes.ts';
+import { flybyLookAt, flybyLookPlan, flybyReliefAt, type FlybyLookBase } from './flybyLook.ts';
+import { colourCaves, cycleBackgrounds, featuresInTurn, growRelief, oldMapNewMap, seeThroughGround } from './flybyRecipes.ts';
 
 /** An approach of 6 s and a circle of 24 s at a speed of 1: 30 s in all. */
 function flyby(overrides: Partial<FlybyDocument> = {}): FlybyDocument {
@@ -98,5 +98,39 @@ describe('ready-made changes', () => {
     expect(shown(4)).toEqual(['filter:a']);
     expect(shown(12)).toEqual(['filter:b']);
     expect(shown(29)).toEqual(['filter:c']);
+  });
+
+  it('grows the relief during each circle and lets it fall back to the factor the flyby opened at', () => {
+    const start = flyby({ changes: [{ id: 'sky-1', kind: 'sky', colour: null, section: 'approach-1', at: 0, seconds: 1 }] });
+    const document = withRecipe(start, growRelief(start, { factor: 3 }));
+    expect(flybyProblems(document)).toEqual([]);
+    expect(document.look).toEqual({});
+    expect(document.changes!.map((change) => change.id)).toEqual(['sky-1', 'relief-1', 'relief-2']);
+    const plan = flybyLookPlan(document);
+    // The circle runs from 6 to 30 s: up from 7.2 s over 8.4 s, down from 20.4 s over 8.4 s.
+    for (const viewer of [1, 2]) {
+      expect(flybyReliefAt(plan, viewer, 6)).toBe(viewer);
+      expect(flybyReliefAt(plan, viewer, 18)).toBe(3);
+      expect(flybyReliefAt(plan, viewer, 24.6)).toBeCloseTo((3 + viewer) / 2, 6);
+      expect(flybyReliefAt(plan, viewer, 30)).toBe(viewer);
+    }
+    // A flyby that opens at a factor of its own falls back to that one, and the look says so throughout.
+    const own = { ...document, look: { relief: 1.5 } };
+    expect(flybyLookAt(flybyLookPlan(own), { ...BASE, relief: 2 }, 30).relief).toBe(1.5);
+    // Done again, it replaces the rise rather than clashing with it.
+    const again = withRecipe(document, growRelief(document, { factor: 4 }));
+    expect(flybyProblems(again)).toEqual([]);
+    expect(again.changes!.filter((change) => change.kind === 'relief')).toHaveLength(2);
+  });
+
+  it('grows the relief in a chosen section only, written in its own seconds', () => {
+    const document = withRecipe(flyby(), growRelief(flyby(), { factor: 2.5, section: 'approach-1' }));
+    expect(document.changes).toEqual([
+      { kind: 'relief', factor: 2.5, id: 'relief-1', section: 'approach-1', at: 0.3, seconds: 2.1 },
+      { kind: 'relief', factor: null, id: 'relief-2', section: 'approach-1', at: 3.6, seconds: 2.1 },
+    ]);
+    // A flyby with no circle and no section chosen gets no rise at all.
+    const noCircle = flyby({ sections: [flyby().sections[0]] });
+    expect(growRelief(noCircle, { factor: 3 }).changes).toEqual([]);
   });
 });

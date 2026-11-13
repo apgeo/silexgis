@@ -9922,7 +9922,15 @@
     "relief": {
       "on": "Set the vertical exaggeration",
       "factor": "Vertical exaggeration, times true height",
-      "change": "Relief to ×{{factor}}"
+      "change": "Relief to ×{{factor}}",
+      "changeBack": "Relief back to how the flyby opened",
+      "backOption": "Back to how the flyby opened",
+      "grow": {
+        "name": "Grow the relief",
+        "factor": "The factor the relief rises to",
+        "during": "When it rises and falls back",
+        "everyCircle": "In every circle"
+      }
     }
   },
   "mapSymbols": {

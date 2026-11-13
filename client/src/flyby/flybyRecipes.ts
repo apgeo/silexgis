@@ -143,6 +143,36 @@ export function colourCaves(
   return { look, changes: replacing(document, new Set(['walls', 'lines']), added) };
 }
 
+export interface GrowReliefOptions {
+  /** The factor the relief rises to. */
+  factor: number;
+  /** The section it rises and falls in; left out, every circle. */
+  section?: string;
+}
+
+/**
+ * The relief rises to `factor` and falls back during each circle, or during one chosen section:
+ * the mountain grows out of the plain as the camera goes round it and settles again before the
+ * camera leaves. It falls back to the factor the flyby opened at, which is the viewer's own when
+ * the flyby sets none — so the same flyby, played by somebody who keeps the relief at ×2, rises
+ * from ×2 and comes back to ×2.
+ */
+export function growRelief(document: FlybyDocument, options: GrowReliefOptions): FlybyRecipeResult {
+  const look = { ...document.look };
+  const starts = flybySectionStarts(document);
+  const added: Timed[] = [];
+  for (const section of document.sections) {
+    if (options.section === undefined ? section.kind !== 'orbit' : section.id !== options.section) {
+      continue;
+    }
+    const start = starts.get(section.id) ?? 0;
+    const length = sectionLength(document, section);
+    added.push({ kind: 'relief', factor: options.factor, t: start + length * 0.05, seconds: length * 0.35 });
+    added.push({ kind: 'relief', factor: null, t: start + length * 0.6, seconds: length * 0.35 });
+  }
+  return { look, changes: replacing(document, new Set(['relief']), added) };
+}
+
 /** A georeferenced map fades in over the background during a section, and out again before it ends. */
 export function oldMapNewMap(document: FlybyDocument, options: { raster: string; section: string }): FlybyRecipeResult {
   const key = flybyLayerKey('raster', options.raster);

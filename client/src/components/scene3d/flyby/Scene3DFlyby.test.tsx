@@ -889,6 +889,32 @@ describe('the relief during a flyby', () => {
   });
 });
 
+describe('the relief grown by a ready-made set', () => {
+  it('rises during the circle and falls back to the viewer\'s own factor', async () => {
+    const scene = lookingScene();
+    renderFlyby(scene);
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    const factor = screen.getByRole('spinbutton', { name: 'The factor the relief rises to' });
+    fireEvent.change(factor, { target: { value: '4' } });
+    fireEvent.blur(factor);
+    fireEvent.click(screen.getByTestId('flyby-recipe-relief-add'));
+    fireEvent.click(screen.getByText('2 changes'));
+    const list = screen.getByTestId('flyby-changes');
+    expect(list).toHaveTextContent('Relief to ×4 · 2. Circle');
+    expect(list).toHaveTextContent('Relief back to how the flyby opened · 2. Circle');
+
+    fireEvent.click(screen.getByTestId('flyby-play'));
+    await pass(100);
+    // The viewer's own, until the circle starts the rise.
+    expect(scene.shown.relief).toBe(1.5);
+    // The circle runs from 6 to 30 s: risen by 15.6 s, falling from 20.4 s.
+    await pass(17_000);
+    expect(scene.shown.relief).toBe(4);
+    fireEvent.click(screen.getByTestId('flyby-stop'));
+    expect(scene.shown.relief).toBeUndefined();
+  });
+});
+
 describe('the furniture of the frame', () => {
   it('draws a north arrow and a corner line over the picture when asked', async () => {
     renderFlyby(lookingScene());

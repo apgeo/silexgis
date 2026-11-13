@@ -341,7 +341,8 @@ export function flybyLookAt(plan: FlybyLookPlan, base: FlybyLookBase, t: number)
  * — which is what a picture of any moment of it is drawn at, and what it must say it is drawn at.
  */
 export function flybyReliefAt(plan: FlybyLookPlan, viewer: number | undefined, t: number): number {
-  return numberAt(changesOf(plan, 'relief'), t, plan.look.relief ?? viewer ?? 1, (change) =>
-    change.kind === 'relief' ? change.factor : undefined,
+  const opening = plan.look.relief ?? viewer ?? 1;
+  return numberAt(changesOf(plan, 'relief'), t, opening, (change) =>
+    change.kind === 'relief' ? (change.factor ?? opening) : undefined,
   );
 }

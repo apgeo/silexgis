@@ -31,6 +31,7 @@ import {
   colourCaves,
   cycleBackgrounds,
   featuresInTurn,
+  growRelief,
   lightTheVisited,
   oldMapNewMap,
   seeThroughGround,
@@ -60,6 +61,10 @@ const FADE_OUT_SECONDS = 2;
 const CAPTION_SECONDS = 6;
 /** The factor a relief set or changed by hand starts from: tall enough to be seen, not a caricature. */
 const DEFAULT_RELIEF = 2;
+/** The factor the ready-made rise of the relief climbs to unless told otherwise. */
+const GROW_RELIEF_TO = 3;
+/** The choice that grows the relief in every circle rather than in one section. */
+const EVERY_CIRCLE = 'everyCircle';
 
 const percent = (share: number) => Math.round(share * 100);
 
@@ -689,6 +694,11 @@ function Recipes({
   const [lit, setLit] = useState(DEFAULT_LIT);
   const [dim, setDim] = useState(DEFAULT_DIM);
   const [filterSeconds, setFilterSeconds] = useState(6);
+  const [growTo, setGrowTo] = useState(GROW_RELIEF_TO);
+  const [growDuring, setGrowDuring] = useState<string>(EVERY_CIRCLE);
+  const hasCircle = document.sections.some((section) => section.kind === 'orbit');
+  /** The section chosen while it is still in the flyby; else every circle. */
+  const growSection = growDuring !== EVERY_CIRCLE && document.sections.some((section) => section.id === growDuring) ? growDuring : undefined;
   const present = (id: string | undefined) => (id && document.sections.some((section) => section.id === id) ? id : orbit);
 
   return (
@@ -758,6 +768,43 @@ function Recipes({
             disabled={busy || !document.sections.some((section) => section.kind === 'orbit')}
             onClick={() => apply(seeThroughGround(document, { share: share / 100 }))}
             data-testid="flyby-recipe-see-through-add"
+          >
+            {t('flyby.look.recipe.add')}
+          </Button>
+        </div>
+      </fieldset>
+
+      <fieldset className="scene3d-flyby-recipe" data-testid="flyby-recipe-relief">
+        <legend>{t('flyby.relief.grow.name')}</legend>
+        <div className="scene3d-flyby-row">
+          <InputNumber
+            size="small"
+            min={FLYBY_RELIEF_RANGE.min}
+            max={FLYBY_RELIEF_RANGE.max}
+            step={EXAGGERATION_STEP}
+            value={growTo}
+            onChange={(value) => value !== null && setGrowTo(value)}
+            disabled={busy}
+            prefix="×"
+            aria-label={t('flyby.relief.grow.factor')}
+            data-testid="flyby-recipe-relief-factor"
+          />
+          <Select
+            size="small"
+            className="scene3d-flyby-grow"
+            value={growSection ?? EVERY_CIRCLE}
+            onChange={setGrowDuring}
+            disabled={busy}
+            aria-label={t('flyby.relief.grow.during')}
+            data-testid="flyby-recipe-relief-section"
+            options={[{ value: EVERY_CIRCLE, label: t('flyby.relief.grow.everyCircle') }, ...sectionOptions]}
+          />
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            disabled={busy || (growSection === undefined && !hasCircle)}
+            onClick={() => apply(growRelief(document, { factor: growTo, ...(growSection ? { section: growSection } : {}) }))}
+            data-testid="flyby-recipe-relief-add"
           >
             {t('flyby.look.recipe.add')}
           </Button>
@@ -928,7 +975,9 @@ function useChangeWords(names: Names) {
       case 'lens':
         return t('flyby.lens.change', { degrees: change.degrees });
       case 'relief':
-        return t('flyby.relief.change', { factor: formatExaggeration(change.factor, i18n.language) });
+        return change.factor === null
+          ? t('flyby.relief.changeBack')
+          : t('flyby.relief.change', { factor: formatExaggeration(change.factor, i18n.language) });
       case 'cave':
         return change.strength > 0
           ? t('flyby.lightCave.change', { colour: change.colour, percent: percent(change.strength) })
@@ -1213,18 +1262,30 @@ function AddChange({
         );
       case 'relief':
         return (
-          <InputNumber
-            size="small"
-            min={FLYBY_RELIEF_RANGE.min}
-            max={FLYBY_RELIEF_RANGE.max}
-            step={EXAGGERATION_STEP}
-            value={what.factor}
-            onChange={(factor) => factor !== null && setWhat({ ...what, factor })}
-            disabled={busy}
-            prefix="×"
-            aria-label={t('flyby.relief.factor')}
-            data-testid="flyby-add-change-relief"
-          />
+          <>
+            <Checkbox
+              checked={what.factor === null}
+              onChange={(event) => setWhat({ ...what, factor: event.target.checked ? null : DEFAULT_RELIEF })}
+              disabled={busy}
+              data-testid="flyby-add-change-own"
+            >
+              {t('flyby.relief.backOption')}
+            </Checkbox>
+            {what.factor !== null && (
+              <InputNumber
+                size="small"
+                min={FLYBY_RELIEF_RANGE.min}
+                max={FLYBY_RELIEF_RANGE.max}
+                step={EXAGGERATION_STEP}
+                value={what.factor}
+                onChange={(factor) => factor !== null && setWhat({ ...what, factor })}
+                disabled={busy}
+                prefix="×"
+                aria-label={t('flyby.relief.factor')}
+                data-testid="flyby-add-change-relief"
+              />
+            )}
+          </>
         );
       case 'surface':
         return (

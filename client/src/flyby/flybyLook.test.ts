@@ -316,6 +316,10 @@ describe('the relief in a flyby', () => {
     const document = flyby({ look: { relief: 1.5 }, changes: [ramp(4, { id: 'relief-1' })] });
     expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(document)))).toEqual(document);
     expect(flybyProblems(document)).toEqual([]);
+    // Back to how it opened is written as no factor at all, and read back so.
+    const back = flyby({ changes: [ramp(4, { id: 'up' }), { ...ramp(1, { id: 'back', at: 10 }), factor: null } as FlybyChange] });
+    expect(normalizeFlybyDocument(JSON.parse(JSON.stringify(back)))).toEqual(back);
+    expect(flybyLookAt(flybyLookPlan(back), { ...BASE, relief: 1.5 }, 30).relief).toBe(1.5);
     expect(flybyProblems({ ...document, look: { relief: 6 } })).toContainEqual({ code: 'badLook' });
     expect(flybyProblems({ ...document, changes: [ramp(0.2, { id: 'relief-1' })] })).toContainEqual({
       code: 'badChange',

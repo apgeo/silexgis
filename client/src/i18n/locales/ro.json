@@ -9935,7 +9935,15 @@
     "relief": {
       "on": "Stabilește exagerarea verticală",
       "factor": "Exagerarea verticală, de câte ori înălțimea reală",
-      "change": "Relieful la ×{{factor}}"
+      "change": "Relieful la ×{{factor}}",
+      "changeBack": "Relieful înapoi la cel de la începutul survolului",
+      "backOption": "Înapoi la cel de la începutul survolului",
+      "grow": {
+        "name": "Relieful crește",
+        "factor": "Factorul până la care crește relieful",
+        "during": "Când crește și revine",
+        "everyCircle": "În fiecare cerc"
+      }
     }
   },
   "mapSymbols": {
