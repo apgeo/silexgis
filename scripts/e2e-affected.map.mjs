@@ -171,6 +171,8 @@ export const specs = {
     'scene3d-flyby-edit.spec.ts',
     // A flyby about what a saved filter selects, with features of a kind drawn while it flies and gone after.
     'scene3d-flyby-features.spec.ts',
+    // The relief setting over served relief: a marker on the ground stays on the stretched ground.
+    'scene3d-relief.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
