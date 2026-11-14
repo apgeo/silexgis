@@ -67,7 +67,11 @@ Item kinds (`client/src/presenter/scenario.ts` is the reference):
   the basemap's opacity slider through a list of percentages.
 
 Setup: `cave` (opened in 3D with its walls; among caves matching the name, one that has walls),
-`basemap`, `layersOff`, `hide` (CSS selectors left out of the picture).
+or `file` (an imported geodata file, found by name, opened in 3D with the file drawn: the camera
+poses are then described around its extent, whose middle on the ground is the centre and half its
+diagonal one radius), `ground` (a terrain build to draw instead of the default, picked in the
+layer panel's Ground list by text its row contains, such as `Level 13`), `basemap`, `layersOff`,
+`layersOn`, `hide` (CSS selectors left out of the picture).
 
 ## How it works
 

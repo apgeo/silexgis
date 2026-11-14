@@ -222,9 +222,56 @@ function watchToken(page: Page): () => string | undefined {
   return () => token;
 }
 
-async function setUp(page: Page, target: Target, scenario: Scenario, token: () => string | undefined) {
+type Extent = { west: number; south: number; east: number; north: number };
+
+/**
+ * Finds an imported file by name and answers its id, name and extent. An exact name beats one that
+ * merely contains the words; a file still importing has no extent and is refused.
+ */
+async function findFile(page: Page, target: Target, name: string, auth: string) {
+  const response = await page.request.get(
+    `${target.url}/api/v1/geofiles?search=${encodeURIComponent(name)}&pageSize=20`,
+    { headers: { authorization: auth } },
+  );
+  const body = (await response.json()) as {
+    items?: { id: string; name: string; bbox?: { coordinates: number[][][] } | null }[];
+  };
+  const files = body.items ?? [];
+  const file = files.find((f) => f.name.toLowerCase() === name.toLowerCase()) ?? files[0];
+  if (!file?.bbox) {
+    throw new Error(`no imported file named "${name}" with an extent (${files.length} matched by name)`);
+  }
+  const ring = file.bbox.coordinates[0];
+  const extent: Extent = {
+    west: Math.min(...ring.map((p) => p[0])),
+    south: Math.min(...ring.map((p) => p[1])),
+    east: Math.max(...ring.map((p) => p[0])),
+    north: Math.max(...ring.map((p) => p[1])),
+  };
+  return { id: file.id, name: file.name, extent };
+}
+
+/** Sets the scene up as the scenario says; answers the extent to move around when it is about a file. */
+async function setUp(
+  page: Page,
+  target: Target,
+  scenario: Scenario,
+  token: () => string | undefined,
+): Promise<Extent | undefined> {
   const setup = scenario.setup ?? {};
-  if (setup.cave) {
+  let file: Awaited<ReturnType<typeof findFile>> | undefined;
+  if (setup.file) {
+    const auth = token();
+    if (!auth) {
+      throw new Error('signed in, but no API request carried a token to look the file up with');
+    }
+    file = await findFile(page, target, setup.file, auth);
+    console.log(`setup: file "${file.name}"`);
+    const { west, south, east, north } = file.extent;
+    // Straight down from a few kilometres over its middle: where the scene opens is only where it
+    // loads from, the first camera item puts the camera where the movie starts.
+    await page.goto(`${target.url}/map3d#3d/${((south + north) / 2).toFixed(5)}/${((west + east) / 2).toFixed(5)}/4000/0/-90`);
+  } else if (setup.cave) {
     const auth = token();
     if (!auth) {
       throw new Error('signed in, but no API request carried a token to look the cave up with');
@@ -265,10 +312,27 @@ async function setUp(page: Page, target: Target, scenario: Scenario, token: () =
     await page.goto(`${target.url}/map3d`);
   }
   await page.getByTestId('scene3d-container').locator('canvas').first().waitFor({ state: 'attached', timeout: 90_000 });
+  if (setup.ground) {
+    const trigger = page.getByTestId('scene3d-layers-trigger');
+    const panel = page.getByTestId('scene3d-layer-panel');
+    await trigger.click();
+    await panel.waitFor();
+    const row = page.getByTestId('scene3d-terrain-rows').locator('.ant-radio-wrapper', { hasText: setup.ground });
+    if ((await row.count()) !== 1) {
+      throw new Error(`${await row.count()} terrain builds in the Ground list match "${setup.ground}"; it has to be one`);
+    }
+    await row.click();
+    console.log(`setup: drawing the terrain "${(await row.textContent())?.trim()}"`);
+    await trigger.click();
+    await panel.waitFor({ state: 'hidden' });
+  }
   // A large model is offered before it is fetched; the recording always takes it.
   const ask = page.getByTestId('scene3d-mesh-ask-download');
   const deadline = Date.now() + 120_000;
   for (;;) {
+    if (file) {
+      break;
+    }
     if (await ask.isVisible().catch(() => false)) {
       await ask.click();
     }
@@ -289,14 +353,19 @@ async function setUp(page: Page, target: Target, scenario: Scenario, token: () =
   if (setup.hide?.length) {
     await page.addStyleTag({ content: `${setup.hide.join(', ')} { display: none !important; }` });
   }
-  if (setup.basemap || setup.layersOff?.length) {
+  const layersOn = [...(setup.layersOn ?? []), ...(file ? [file.name] : [])];
+  if (setup.basemap || setup.layersOff?.length || layersOn.length) {
     const trigger = page.getByTestId('scene3d-layers-trigger');
     const panel = page.getByTestId('scene3d-layer-panel');
     await trigger.click();
     await panel.waitFor();
-    for (const label of setup.layersOff ?? []) {
+    for (const [label, on] of [
+      ...(setup.layersOff ?? []).map((label) => [label, false] as const),
+      ...layersOn.map((label) => [label, true] as const),
+    ]) {
       const row = panel.locator('.ant-checkbox-wrapper', { hasText: label }).first();
-      if (await row.evaluate((node) => node.classList.contains('ant-checkbox-wrapper-checked'))) {
+      await row.waitFor({ timeout: 30_000 });
+      if ((await row.evaluate((node) => node.classList.contains('ant-checkbox-wrapper-checked'))) !== on) {
         await row.click();
       }
     }
@@ -316,6 +385,7 @@ async function setUp(page: Page, target: Target, scenario: Scenario, token: () =
     await trigger.click();
     await panel.waitFor({ state: 'hidden' });
   }
+  return file?.extent;
 }
 
 function hasCommand(command: string): boolean {
@@ -463,16 +533,16 @@ async function main() {
 
   const started = Date.now();
   await signIn(page, target);
-  await setUp(page, target, scenario, token);
+  const extent = await setUp(page, target, scenario, token);
   await page.addScriptTag({ content: script });
   await page.evaluate(
-    async ([data, mode]) => {
+    async ([data, mode, around]) => {
       const api = window.__silexgisPresenterRunner!;
-      const runner = api.createRunner(data, { mode });
+      const runner = api.createRunner(data, { mode, extent: around ?? undefined });
       (window as unknown as { __presenterRun: unknown }).__presenterRun = runner;
       await runner.prepare();
     },
-    [scenario, options.mode === 'step' ? 'step' : 'live'] as const,
+    [scenario, options.mode === 'step' ? 'step' : 'live', extent ?? null] as const,
   );
   console.log(`ready after ${clock((Date.now() - started) / 1000)}; scenario ${length.toFixed(1)} s, mode ${options.mode}`);
 
@@ -480,7 +550,7 @@ async function main() {
     mkdirSync(runDir, { recursive: true });
     const facts = await page.evaluate(async (time) => {
       const bridge = window.__silexgisPresenter!.scene3d!;
-      const sphere = bridge.modelSphere()!;
+      const sphere = bridge.modelSphere();
       const run = (window as unknown as { __presenterRun: { seek(t: number): void; settle(ms: number): Promise<boolean> } }).__presenterRun;
       for (let t = 0; t <= time; t += 0.25) {
         run.seek(t);
@@ -495,8 +565,10 @@ async function main() {
       }
       const panel = document.querySelector('[data-testid="scene3d-layer-panel"]');
       return {
-        sphereRadius: Math.round(sphere.radius),
-        sphereCentreBelowGround: Math.round(bridge.groundHeight(sphere.longitude, sphere.latitude) - sphere.height),
+        sphereRadius: sphere ? Math.round(sphere.radius) : null,
+        sphereCentreBelowGround: sphere
+          ? Math.round(bridge.groundHeight(sphere.longitude, sphere.latitude) - sphere.height)
+          : null,
         cameraAboveGround: Math.round(bridge.getCamera().height - bridge.groundHeight(bridge.getCamera().longitude, bridge.getCamera().latitude)),
         settled,
         popovers,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { cameraPoseAt, modelTintAt, type CameraLeg, type Pose } from './runner.ts';
+import { cameraPoseAt, extentSphere, modelTintAt, type CameraLeg, type Pose } from './runner.ts';
 
 const pose = (heading: number, range: number): Pose => ({ heading, pitch: -30, range, lift: 0, aboveGround: null });
 
@@ -62,5 +62,30 @@ describe('the colour of the walls in a presentation', () => {
     expect(modelTintAt(items, 7)).toEqual({ red: 0.5, green: 0, blue: 0.5, amount: 0.9 });
     expect(modelTintAt(items, 11)).toMatchObject({ red: 0, blue: 1, amount: 0.5 });
     expect(modelTintAt(items, 12)).toBeUndefined();
+  });
+});
+
+describe('a presentation about an imported file', () => {
+  it('circles the middle of the file’s extent, on the ground there, at a radius reaching its corners', () => {
+    // A kilometre east-west and half a kilometre north-south at 45°, standing on ground 300 m up.
+    const halfWidth = 500 / (111_320 * Math.cos(Math.PI / 4));
+    const halfHeight = 250 / 111_320;
+    const asked: [number, number][] = [];
+    const sphere = extentSphere(
+      { west: 14 - halfWidth, east: 14 + halfWidth, south: 45 - halfHeight, north: 45 + halfHeight },
+      (longitude, latitude) => {
+        asked.push([longitude, latitude]);
+        return 300;
+      },
+    );
+    expect(sphere.longitude).toBeCloseTo(14, 9);
+    expect(sphere.latitude).toBeCloseTo(45, 9);
+    expect(sphere.height).toBe(300);
+    expect(asked).toEqual([[sphere.longitude, sphere.latitude]]);
+    expect(sphere.radius).toBeCloseTo(Math.hypot(500, 250), 0);
+  });
+
+  it('gives a file of one point a size to be circled at', () => {
+    expect(extentSphere({ west: 14, east: 14, south: 45, north: 45 }, () => 0).radius).toBe(50);
   });
 });

@@ -35,6 +35,32 @@ export type PresenterMode = 'step' | 'live';
 
 export interface PresenterRunnerOptions {
   mode: PresenterMode;
+  /**
+   * The extent to move around, in degrees, when the scenario is about an imported file rather than
+   * a cave model; the camera then circles the extent's middle, at the ground's height there.
+   */
+  extent?: { west: number; south: number; east: number; north: number };
+}
+
+/** Metres in a degree of latitude, and of longitude at the equator (WGS84, near enough here). */
+const METRES_PER_DEGREE = 111_320;
+
+/** A sphere standing in for a model: centred on the extent's middle at ground level, reaching its corners. */
+export function extentSphere(
+  extent: NonNullable<PresenterRunnerOptions['extent']>,
+  groundHeight: (longitude: number, latitude: number) => number,
+): Scene3DPresenterSphere {
+  const longitude = (extent.west + extent.east) / 2;
+  const latitude = (extent.south + extent.north) / 2;
+  const width = (extent.east - extent.west) * METRES_PER_DEGREE * Math.cos((latitude * Math.PI) / 180);
+  const height = (extent.north - extent.south) * METRES_PER_DEGREE;
+  return {
+    longitude,
+    latitude,
+    height: groundHeight(longitude, latitude),
+    // A file of one point still has a size to be circled at.
+    radius: Math.max(50, Math.hypot(width, height) / 2),
+  };
 }
 
 export interface PresenterRunner {
@@ -488,7 +514,9 @@ export function createRunner(scenario: Scenario, options: PresenterRunnerOptions
   const runner: PresenterRunner = {
     length,
     async prepare() {
-      sphere = bridge().modelSphere();
+      sphere = options.extent
+        ? extentSphere(options.extent, (longitude, latitude) => bridge().groundHeight(longitude, latitude))
+        : bridge().modelSphere();
       if (!sphere) {
         throw new Error('presenter: no cave model is drawn in the 3D view, so there is nothing to move around');
       }
