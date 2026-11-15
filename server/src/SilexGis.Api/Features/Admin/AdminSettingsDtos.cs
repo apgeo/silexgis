@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
+using SilexGis.Domain.Map;
 using SilexGis.Domain.Settings;
 
 namespace SilexGis.Api.Features.Admin;
@@ -103,6 +104,7 @@ public sealed record AdminSettingsDto(
     SyncSettingsDto Sync,
     SurveyUploadSettingsDto SurveyUploads,
     TestDataSettingsDto TestData,
+    MapSymbolSettingsDto MapSymbols,
     bool MailConfigured,
     bool SmsConfigured);
 
@@ -121,6 +123,25 @@ public sealed record TestDataSettingsDto(bool Enabled, bool DeploymentAllows);
 
 /// <summary>Switches the generator on or off for full administrators.</summary>
 public sealed record TestDataSettingsWriteRequest(bool Enabled);
+
+/// <summary>
+/// The markers cave entrances are drawn with on the map and in the 3D scene: one for an entrance
+/// drawn where it was surveyed, one for an entrance drawn only approximately. Each is a symbol
+/// file from the bundled set (<c>osm_cave.svg</c>) or a drawn shape with an optional colour
+/// (<c>shape:cave</c>, <c>shape:triangle:d46b08</c>).
+/// </summary>
+public sealed record MapSymbolSettingsDto(string EntranceSymbol, string ApproximateEntranceSymbol);
+
+public sealed class MapSymbolSettingsDtoValidator : AbstractValidator<MapSymbolSettingsDto>
+{
+    public MapSymbolSettingsDtoValidator()
+    {
+        const string Message =
+            "The symbol is a file name from the bundled set, such as osm_cave.svg, or a drawn shape, such as shape:cave or shape:triangle:d46b08.";
+        RuleFor(x => x.EntranceSymbol).Must(MapSymbol.IsValid).WithMessage(Message);
+        RuleFor(x => x.ApproximateEntranceSymbol).Must(MapSymbol.IsValid).WithMessage(Message);
+    }
+}
 
 public sealed class TestDataSettingsWriteRequestValidator : AbstractValidator<TestDataSettingsWriteRequest>
 {

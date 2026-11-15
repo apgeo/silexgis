@@ -235,6 +235,8 @@ export const groups = {
     'SelectionMaxConfigurationTests',
     // The fixed cave-density bands, published to the client and checked at start.
     'DensityBandsConfigurationTests',
+    // The entrance markers an administrator chooses, published with the map's configuration.
+    'MapSymbolSettingsTests',
     // Opt-in: member reads through one grant and through a thousand, at a chosen size.
     'GrantScaleMeasurementTests',
   ],
@@ -683,12 +685,12 @@ export const crossCutting = {
     'FeatureShareTests', 'FeatureTests', 'FeatureTypeWriteTests', 'FileAttachmentTests',
     'FileImportReviewHoldTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryRestoreTests',
     'HypsometryTests', 'ImmichPhotoLibraryTests', 'MapBackgroundDocumentChoiceTests',
-    'MapLayerKindTests', 'MapViewTests', 'NotificationHealthTests', 'PermissionGroupCrudTests',
-    'PhotoGalleryTests', 'PhotoImportTests', 'PhotoLibraryAlbumEndpointTests',
-    'PhotoLibraryBrowseEndpointTests', 'PhotoLibraryEndpointTests',
-    'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests', 'PlacePointProtectionTests',
-    'PlacePointWriteTests', 'PlaceStationTests', 'ProcessingProfileTests',
-    'ProcessingProfileTransferTests', 'ProcessingProfileUseTests',
+    'MapLayerKindTests', 'MapSymbolSettingsTests', 'MapViewTests', 'NotificationHealthTests',
+    'PermissionGroupCrudTests', 'PhotoGalleryTests', 'PhotoImportTests',
+    'PhotoLibraryAlbumEndpointTests', 'PhotoLibraryBrowseEndpointTests',
+    'PhotoLibraryEndpointTests', 'PhotoLibrarySearchEndpointTests', 'PhotoLibraryTests',
+    'PlacePointProtectionTests', 'PlacePointWriteTests', 'PlaceStationTests',
+    'ProcessingProfileTests', 'ProcessingProfileTransferTests', 'ProcessingProfileUseTests',
     'PublicTripMomentPicturesTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'ReportTemplateTests', 'ResLinkApiTests', 'RosterFullAdministratorsGuardTests',
     'RosterTrusteeRightsBoundTests', 'SavedFilterTests', 'SpeleolocTripImportTests',

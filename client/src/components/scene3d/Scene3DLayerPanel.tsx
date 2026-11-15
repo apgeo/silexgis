@@ -26,6 +26,13 @@ import type {
   SurveyWalls3DMode,
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
+import {
+  EXAGGERATION_STEP,
+  formatExaggeration,
+  MAX_EXAGGERATION,
+  MIN_EXAGGERATION,
+} from '../../scene3d/exaggeration3d.ts';
+import Button from '../Button.tsx';
 import { meshesInViewMessage, meshProgressMessage, scansInViewMessage } from './meshMessages.ts';
 import type { ScansInView3DState } from '../../scene3d/scansInView3d.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
@@ -135,6 +142,9 @@ export interface Scene3DLayerPanelProps {
   onSurfaceModeChange: (mode: Scene3DSurfaceMode) => void;
   /** What the scene is actually doing about the ground; undefined until it has started. */
   surfaceState: Scene3DSurfaceState | undefined;
+  /** How many times taller than true the scene is drawn; 1 is true height. */
+  exaggeration: number;
+  onExaggerationChange: (factor: number) => void;
 }
 
 /**
@@ -189,8 +199,12 @@ export default function Scene3DLayerPanel({
   surfaceMode,
   onSurfaceModeChange,
   surfaceState,
+  exaggeration,
+  onExaggerationChange,
 }: Scene3DLayerPanelProps) {
   const { t, i18n } = useTranslation();
+  const factorLabel = (factor: number) =>
+    t('scene3d.relief.value', { factor: formatExaggeration(factor, i18n.language) });
 
   const overlayName = (layer: CaveData3DLayer) => {
     if (layer === CENTERLINE_SOURCE_ID) {
@@ -788,6 +802,40 @@ export default function Scene3DLayerPanel({
           </Radio.Group>
         </>
       )}
+
+      <Divider style={{ margin: '12px 0' }} />
+
+      {/* How tall the scene is drawn. A setting of the whole view rather than of the ground alone:
+          everything that has a height is stretched with it, so it sits beside the ground and not
+          inside the elevation models, which only an installation with builds has. */}
+      <div className="scene3d-relief-head">
+        <Typography.Text strong>{t('scene3d.relief.title')}</Typography.Text>
+        <Typography.Text data-testid="scene3d-relief-value">{factorLabel(exaggeration)}</Typography.Text>
+      </div>
+      <div className="scene3d-relief-row" data-testid="scene3d-relief">
+        <Slider
+          className="scene3d-relief-slider"
+          min={MIN_EXAGGERATION}
+          max={MAX_EXAGGERATION}
+          step={EXAGGERATION_STEP}
+          value={exaggeration}
+          onChange={(value: number) => onExaggerationChange(value)}
+          tooltip={{ formatter: (value) => (value === undefined ? '' : factorLabel(value)) }}
+          ariaLabelForHandle={t('scene3d.relief.label')}
+          ariaValueTextFormatterForHandle={(value) => (value === undefined ? '' : factorLabel(value))}
+        />
+        <Button
+          size="small"
+          disabled={exaggeration === 1}
+          onClick={() => onExaggerationChange(1)}
+          data-testid="scene3d-relief-reset"
+        >
+          {t('scene3d.relief.reset')}
+        </Button>
+      </div>
+      <Typography.Text type="secondary" className="scene3d-surface-hint">
+        {t('scene3d.relief.hint')}
+      </Typography.Text>
 
       <Divider style={{ margin: '12px 0' }} />
 

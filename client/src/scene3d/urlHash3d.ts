@@ -63,7 +63,10 @@ export function parseScene3dHash(hash: string = window.location.hash): Scene3DHa
  * write-back bite, so an idle camera stops rewriting the URL.
  */
 export function formatScene3dHash({ lat, lon, height, heading, pitch }: Scene3DHash): string {
-  return `#3d/${lat.toFixed(5)}/${lon.toFixed(5)}/${height.toFixed(0)}/${wrapHeading(heading).toFixed(1)}/${pitch.toFixed(1)}`;
+  // Rounded to the tenth before it is folded into the turn: a camera facing a hair west of north
+  // is facing north to a tenth of a degree, and folding first would write it as 360.0.
+  const tenths = wrapHeading(Math.round(heading * 10) / 10);
+  return `#3d/${lat.toFixed(5)}/${lon.toFixed(5)}/${height.toFixed(0)}/${tenths.toFixed(1)}/${pitch.toFixed(1)}`;
 }
 
 /** True when the URL carries a shareable 3D position (used to skip an opening view). */
@@ -101,7 +104,10 @@ export type Scene3DHashCamera = Pick<Scene3DCamera, 'getCamera' | 'setCamera' | 
  *   * It replaces the history entry instead of adding one, and only when the text would change,
  *     so panning does not fill the back button with a hundred near-identical positions.
  */
-export function attachScene3dHash(engine: Scene3DHashCamera): () => void {
+export function attachScene3dHash(
+  engine: Scene3DHashCamera,
+  options: { paused?: () => boolean } = {},
+): () => void {
   const initial = parseScene3dHash();
   if (initial) {
     engine.setCamera(toSceneCamera(cameraFromHash(initial)), { animate: false });
@@ -109,6 +115,11 @@ export function attachScene3dHash(engine: Scene3DHashCamera): () => void {
 
   let timer: number | undefined;
   const write = () => {
+    // A camera being flown by a script is not where its viewer chose to stand: an address written
+    // from the middle of a flight would bookmark a moment of it.
+    if (options.paused?.()) {
+      return;
+    }
     const camera = engine.getCamera();
     const next = formatScene3dHash({
       lat: camera.latitude,

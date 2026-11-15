@@ -152,6 +152,45 @@ export async function rasterizeCog(cogUrl: string, bounds: Scene3DBounds): Promi
 }
 
 /**
+ * Puts one georeferenced map into the scene hidden, if it is not there already, and resolves true
+ * once it is there.
+ *
+ * Drawing a sheet takes seconds, so something that will show one at a given moment — a flyby that
+ * fades an old map in half-way through — has it drawn beforehand and only shows it then. Resolves
+ * false when the sheet cannot be drawn: it has no file, no place, or its file cannot be read.
+ */
+export async function prepareRasterImagery(
+  engine: Scene3DImagery,
+  raster: RasterMapInfo,
+  rasterize: (cogUrl: string, bounds: Scene3DBounds) => Promise<string> = rasterizeCog,
+): Promise<boolean> {
+  const layerId = rasterImageryLayerId(raster.id);
+  if (engine.hasImageryLayer(layerId)) {
+    return true;
+  }
+  const bounds = rasterBounds(raster);
+  if (!raster.cogUrl || !bounds) {
+    return false;
+  }
+  try {
+    const imageUrl = await rasterize(raster.cogUrl, bounds);
+    // Something else may have drawn it during the seconds this took.
+    if (!engine.hasImageryLayer(layerId)) {
+      engine.addImageOverlayLayer(layerId, {
+        imageUrl,
+        bounds,
+        attribution: raster.attribution ?? undefined,
+        visible: false,
+        opacity: 0,
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Brings the scene's georeferenced maps into line with the wanted set.
  *
  * Rendering one is slow and the result never changes, so a raster that has been drawn once is kept

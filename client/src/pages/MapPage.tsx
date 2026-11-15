@@ -33,6 +33,7 @@ import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer } from '../map/baseLayers.ts';
 import { CENTERLINE_LAYER_ID } from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../map/entranceLayer.ts';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
   setFeatureTypeSymbols,
@@ -61,7 +62,7 @@ import {
 } from '../map/filterLayerList.ts';
 import { useCompareOffer } from '../caveview/useCompareOffer.ts';
 import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
-import { applyViewCamera3d } from '../workspace/viewCamera.ts';
+import { applyViewCamera3d, applyViewExaggeration3d } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX } from '../map/rasterLayers.ts';
 import { hasMapHash } from '../map/urlHash.ts';
@@ -200,6 +201,13 @@ export default function MapPage() {
   const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
+  // The installation's entrance symbols arrive with the map's configuration; the layer restyles
+  // itself when they change.
+  useEffect(() => {
+    if (mapConfig) {
+      setEntranceSymbols(mapConfig);
+    }
+  }, [mapConfig]);
   // Asked of the photo-library slice itself rather than of the map config: most of that
   // slice's routes are not map routes, and keeping the question out of the map endpoints is
   // what keeps the whole feature removable by deleting its directories.
@@ -626,7 +634,9 @@ export default function MapPage() {
     // A view saved from a session that had the scene open remembers where its camera stood. It
     // goes to whichever view is on screen, which is nothing at all when no scene is mounted — the
     // camera then stays in the document for the next time one is, rather than being staged for a
-    // scene the viewer has not opened.
+    // scene the viewer has not opened. The factor the scene was drawn at goes first: a plan view's
+    // width is a distance on the screen, and is put back at the factor it was measured at.
+    applyViewExaggeration3d(ui.exaggeration3d);
     applyViewCamera3d(ui.camera3d);
     // A refusal remembered from before is about this session's filters, not the view's; each layer
     // the view brings asks the server afresh.

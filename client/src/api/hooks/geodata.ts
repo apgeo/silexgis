@@ -259,12 +259,19 @@ export function useImportRasterAnnotation() {
   });
 }
 
+/**
+ * One imported file's description as a query object rather than as a hook, for code that asks
+ * about a file outside React's render and still goes through the same cache under the same key.
+ */
+export function geofileQuery(id: string) {
+  return {
+    queryKey: queryKeys.geofile(id),
+    queryFn: () => unwrap(api.GET('/api/v1/geofiles/{id}', { params: { path: { id } } })),
+  };
+}
+
 export function useGeofile(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.geofile(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/geofiles/{id}', { params: { path: { id: id! } } })),
-    enabled: Boolean(id),
-  });
+  return useQuery({ ...geofileQuery(id ?? ''), enabled: Boolean(id) });
 }
 
 /**

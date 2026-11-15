@@ -49,6 +49,26 @@
   margin: 0 8px 0 24px;
 }
 
+/* The relief factor: its name with the factor read out beside it, then the slider with the way
+   back to true height at its end, on one line so the two are seen as one control. */
+.scene3d-relief-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.scene3d-relief-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scene3d-relief-row .scene3d-relief-slider {
+  flex: 1;
+  min-width: 0;
+  margin-inline: 6px;
+}
+
 .scene3d-surface-hint {
   margin-top: 8px;
   font-size: 12px;

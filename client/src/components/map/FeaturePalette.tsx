@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import type { FeatureType } from '../../api/hooks.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { groupFeatureTypes } from './featureTypeGroups.ts';
+import { surfaceFeaturePalette } from '../../map/markerPalette.ts';
+import { SymbolPreview } from './SymbolPicker.tsx';
 
 interface FeaturePaletteProps {
   featureTypes: FeatureType[];
@@ -104,22 +106,7 @@ export default function FeaturePalette({ featureTypes, value, onChange }: Featur
   );
 }
 
-/** Renders a feature type's map symbol (its PNG), falling back to a plain dot. */
+/** Renders a feature type's map symbol as the map draws it, falling back to a plain dot. */
 export function FeatureSymbol({ type, size = 26 }: { type: FeatureType; size?: number }) {
-  if (type.symbolFile) {
-    return (
-      <img
-        src={`/feature_symbols/${type.symbolFile}`}
-        alt=""
-        width={size}
-        height={size}
-        style={{ objectFit: 'contain' }}
-      />
-    );
-  }
-  return (
-    <span
-      style={{ display: 'inline-block', width: size * 0.5, height: size * 0.5, borderRadius: '50%', background: '#7a5c1e' }}
-    />
-  );
+  return <SymbolPreview reference={type.symbolFile} color={surfaceFeaturePalette.point} size={size} />;
 }

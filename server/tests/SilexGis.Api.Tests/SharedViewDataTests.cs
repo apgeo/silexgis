@@ -93,6 +93,9 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var view = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}");
         view["overlays"]!["entrances"]!.GetValue<bool>().ShouldBeTrue();
         view["overlays"]!["features"]!.GetValue<bool>().ShouldBeTrue();
+        // The installation's entrance markers ride along, so the link draws entrances as the map does.
+        view["overlays"]!["entranceSymbol"]!.GetValue<string>().ShouldBe("shape:cave");
+        view["overlays"]!["approximateEntranceSymbol"]!.GetValue<string>().ShouldBe("shape:cave:d46b08");
         view["background"].ShouldNotBeNull();
 
         // Points: the public cave's entrance, exactly where it is, by its public name — and no

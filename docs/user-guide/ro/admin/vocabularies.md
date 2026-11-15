@@ -44,7 +44,7 @@ fiecare:
 | **Forme în care poate fi desenat** | Punct · Linie · Contur · Mai multe puncte · Mai multe linii · Mai multe contururi |
 | **Când este protejat** | *Arătat aliniat la grilă (doar punctele)* sau *Nu este arătat deloc* — cum apare un obiect de acest tip cuiva fără vedere exactă. Vezi [Protecția locațiilor](location-protection.md) |
 | **Doar în interiorul altui obiect** | Pentru tipuri care n-au sens singure, cum este un loc din interiorul unei peșteri |
-| **Simbol pe hartă** | Ales din simbolurile pe care le are aplicația, sau niciunul |
+| **Simbol pe hartă** | Ales din biblioteca de simboluri, sau niciunul: o formă desenată (cerc, punct, inel, pătrat, triunghi, romb, stea, cruce, intrare de peșteră) în culoarea obiectivelor sau în una aleasă, simbolurile speologice ale clubului, simboluri cartografice (OpenStreetMap, QGIS) sau geologice (standardul USGS FGDC). Scrie în listă ca să cauți; lista arată fiecare simbol așa cum îl desenează harta |
 | **Ajustări de stil pe hartă** | Opțional; gol păstrează stilul implicit |
 | **Schema detaliilor** | Ce i se cere unui obiect de acest tip. În formular apar doar câmpuri simple de text, număr, da/nu și alegere, iar fereastra arată dinainte câmpurile pe care le va oferi formularul |
 

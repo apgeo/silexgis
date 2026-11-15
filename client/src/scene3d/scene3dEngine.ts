@@ -29,7 +29,8 @@ import type { Scene3DContextLossState } from './contextLoss.ts';
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
 // `Scene3DCore` names the groups something really provides, and today that is all of them:
 // lifecycle, imagery, camera, coordinates, picking, vector sources, the ground surface, its
-// elevation, loaded models, and a picture of what is drawn.
+// elevation, how much taller than true the scene is drawn, loaded models, and a picture of what
+// is drawn.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -334,6 +335,18 @@ export interface Scene3DCamera {
    */
   getOrthoHalfWidth(): number | undefined;
   /**
+   * Widens or narrows the lens: the field of view, in degrees across the wider side of the
+   * picture; undefined gives the scene its own (60°). Held through a switch of projection and back.
+   *
+   * A flyby needs it: a narrow lens from far off flattens a mountain into a wall standing behind a
+   * cave, a wide one from close by takes in a whole valley, and a lens that changes while the camera
+   * stays put is the one zoom a camera path cannot give. An orthographic view has no angle and is not
+   * changed by it until it is perspective again. Values are held to between 10° and 100°.
+   */
+  setFieldOfView(degrees: number | undefined): void;
+  /** The field of view in force under a perspective projection, degrees across the wider side. */
+  getFieldOfView(): number;
+  /**
    * How high above the ellipsoid this camera has to be to show the same ground detail a 2D map at
    * `zoom` would, at the given latitude.
    *
@@ -606,6 +619,12 @@ export interface Scene3DSurface {
   onSurfaceStateChanged(listener: (state: Scene3DSurfaceState) => void): () => void;
   /** Sets, or with `undefined` clears, the ground a cutaway is cut out of. */
   setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined): void;
+  /**
+   * What is drawn where there is no ground: above the horizon, and around the globe from far off.
+   * The scene draws no sky of its own — that is black — and a camera low over a ridge shows a band
+   * of it. A CSS colour fills that band; undefined puts the black back.
+   */
+  setBackgroundColor(css: string | undefined): void;
 }
 
 // ---- the ground's elevation ---------------------------------------------------
@@ -649,6 +668,39 @@ export interface Scene3DTerrain {
    * free.
    */
   groundHeight(longitude: number, latitude: number): number;
+}
+
+// ---- vertical exaggeration ------------------------------------------------------
+
+/**
+ * How much taller than it is the whole scene is drawn.
+ *
+ * Every height is stretched together, about the ellipsoid: the ground, the walls of caves, survey
+ * lines, scans, markers placed at a height, the opening cut over a cave, the limit on how deep the
+ * camera goes, and the camera itself. The picture is what the world would look like if it were
+ * that much taller — an entrance still on the ground, a survey line still inside its walls, a cave
+ * in the same proportion to the mountain over it.
+ *
+ * None of that is visible through the rest of this contract. Every height that crosses it, in
+ * either direction and at every factor, is in true metres: a camera written down at one factor is
+ * the same camera at any other, a marker handed over at 1000 m is read back at 1000 m, and an
+ * altitude shown to a person is the altitude of the place. The stretching happens behind the seam
+ * and nowhere else, so nothing that places, reads or writes down a position has to know a factor
+ * exists.
+ */
+export interface Scene3DVerticalExaggeration {
+  /**
+   * Draws the scene at this factor, clamped to the range the setting allows; a value that is not a
+   * number is ignored. Asks for a frame.
+   *
+   * It may be called on every frame — a flyby ramps it over time — so setting the factor already
+   * in force does nothing and costs nothing. A change redraws everything that carries a height,
+   * without anything being handed over again; the camera keeps its place over the ground and its
+   * true height, and so stands as high above the stretched ground as the ground is stretched.
+   */
+  setVerticalExaggeration(factor: number): void;
+  /** The factor the scene is drawn at; 1 is true height. */
+  getVerticalExaggeration(): number;
 }
 
 // ---- models -------------------------------------------------------------------
@@ -742,6 +794,30 @@ export interface Scene3DModels {
    * every model the scene holds and every one it loads after. Models without any are untouched.
    */
   setEstimatedPassages(display: EstimatedPassagesDisplay): void;
+  /**
+   * Mixes one colour into every model the scene holds and every one it loads after, by `amount`
+   * 0–1, the models' own shading kept; undefined, or an amount of 0, gives them back their own
+   * colours. A flyby colours the caves' walls with it, and a recording of the scene does too.
+   * Held by the scene rather than applied once, because walls go on arriving while a camera flies.
+   */
+  setModelTint(tint: Scene3DModelTint | undefined): void;
+  /**
+   * Gives the models under these ids a colour of their own, over the one `setModelTint` gives every
+   * model — the models there now and any loaded under those ids later; undefined hands them back to
+   * that common colour. An amount of 0 is a colour of its own too: these walls in their own colours
+   * while the rest are tinted. A flyby lights the cave it is visiting and dims the others with it;
+   * a model is named by the id it was loaded under because that is the one handle on it the scene
+   * keeps — which cave a model belongs to is the caller's to know.
+   */
+  setModelTintFor(ids: readonly string[], tint: Scene3DModelTint | undefined): void;
+}
+
+/** A colour, each channel 0–1, and how much of it is mixed into a model's own, 0–1. */
+export interface Scene3DModelTint {
+  red: number;
+  green: number;
+  blue: number;
+  amount: number;
 }
 
 // ---- point clouds -------------------------------------------------------------
@@ -959,6 +1035,47 @@ export interface Scene3DCapture {
    * a layer that is hidden, or was given no attribution, contributes nothing.
    */
   getVisibleCredits(): string[];
+  /**
+   * True when nothing the present view needs is still on its way: every ground tile in view with
+   * its imagery, every model, every point cloud's tiles. Something that failed to arrive counts as
+   * settled — it will not arrive, and whoever is waiting would wait for ever.
+   *
+   * A frame taken while this is false shows a scene still filling itself in, so whatever takes
+   * frames one at a time — or loads a camera path before flying it — asks this first. It describes
+   * the frame last drawn: a caller that has just moved the camera asks for a frame, lets it be
+   * drawn, and only then asks.
+   */
+  isSettled(): boolean;
+  /**
+   * Fixes the drawing surface at exactly this many pixels, for a run of frames taken one by one.
+   *
+   * The surface is otherwise as large as its element, a pixel of the page to a pixel drawn. A
+   * movie's frame has a size of its own — often larger than the window it is made in — so while a
+   * capture is open each pixel of the element is drawn as however many frame pixels it takes.
+   * Nothing on the page changes size; only what is drawn into the surface does, and with it how
+   * long a frame takes to draw.
+   *
+   * The element must already have the frame's shape, because a surface is drawn at its element's
+   * shape and a frame taken off any other would be a stretched picture. Throws when it has not,
+   * when a capture is already open, when the scene has been closed, or when the surface cannot be
+   * made that large; nothing is changed when it throws.
+   */
+  beginCapture(size: { width: number; height: number }): void;
+  /**
+   * Draws a frame now and hands back the drawing surface holding it.
+   *
+   * To be read — drawn into another canvas, handed to an encoder — before anything is awaited:
+   * the surface is not kept between frames, and a read in any later task finds it blank and
+   * reports nothing wrong. Throws when no capture is open, and when the surface is no longer the
+   * size the capture fixed, which is what a window resized half-way through a movie looks like —
+   * better a movie that stops than one whose frames change size.
+   */
+  captureFrame(): HTMLCanvasElement;
+  /**
+   * Puts the surface back to its element's own size and asks for a frame at it. Safe to call when
+   * no capture is open, so whoever opened one can always call it on the way out.
+   */
+  endCapture(): void;
 }
 
 // ---- the whole surface, and the part that exists today -----------------------
@@ -973,6 +1090,7 @@ export interface Scene3DEngine
     Scene3DVectorSources,
     Scene3DSurface,
     Scene3DTerrain,
+    Scene3DVerticalExaggeration,
     Scene3DModels,
     Scene3DPointClouds,
     Scene3DCapture {}
@@ -995,6 +1113,7 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DVectorSources &
   Scene3DSurface &
   Scene3DTerrain &
+  Scene3DVerticalExaggeration &
   Scene3DModels &
   Scene3DPointClouds &
   Scene3DCapture;

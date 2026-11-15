@@ -109,12 +109,24 @@ Test fixture only: nothing here is built into a shipped artifact.
   Checksum:  sha256 6147b6d027aa5b51da88c56a8d1ced1c3586e1ca47ac3be16885f40fc1d9fc78
 
 --------------------------------------------------------------------------------
-Feature symbol icons
+Map symbols
 --------------------------------------------------------------------------------
-The 19 PNG symbols under client/public/feature_symbols/ (used to render surface
-features on the map). These originate from earlier SilexGIS versions.
+The symbol files under client/public/feature_symbols/ (surface features and cave
+entrances on the map and in the 3D view). Per-file sources, commits and the way each
+was prepared: client/public/feature_symbols/PROVENANCE.md
 
-  Provenance and license status: client/public/feature_symbols/PROVENANCE.md
+  - 19 PNG: the SilexGIS / Silex Brașov speleological set, from earlier SilexGIS
+    versions (project license; owner sign-off pending, see PROVENANCE.md).
+  - osm_*.svg (5): OpenStreetMap Carto, https://github.com/gravitystorm/openstreetmap-carto
+    License: CC0 1.0 Universal. The drawn cave-entrance shape in
+    client/src/map/symbolLibrary.ts is that project's natural/cave.svg outline.
+  - qgis_*.svg (19): QGIS, https://github.com/qgis/QGIS (images/svg)
+    License: GPL-2.0-or-later, used under GPL-3.0 —
+    client/public/feature_symbols/LICENSE-GPL-3.0.txt
+  - fgdc_*.svg (18): FGDC Digital Cartographic Standard for Geologic Map
+    Symbolization (USGS, a U.S. Government work), SVG renditions from
+    https://github.com/rodreras/geologic_icons
+    License: GPL-3.0 — client/public/feature_symbols/LICENSE-GPL-3.0.txt
 
 --------------------------------------------------------------------------------
 Noto Sans (the labels of vector map backgrounds)

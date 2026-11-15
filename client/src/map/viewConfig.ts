@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { normalizeCamera3DState, type Camera3DState } from '../scene3d/camera3d.ts';
-import { viewCamera3dState } from '../workspace/viewCamera.ts';
+import { readExaggeration } from '../scene3d/exaggeration3d.ts';
+import { viewCamera3dState, viewExaggeration3d } from '../workspace/viewCamera.ts';
 import { unreadableTileLayers } from './baseLayers.ts';
 import {
   isKarstDensityBands,
@@ -129,6 +130,16 @@ export interface ViewConfig {
    * document has a version at all: a saved view outlives the code that saved it.
    */
   camera3d?: Camera3DState;
+  /**
+   * How many times taller than true the 3D scene was drawn. Added after v1 shipped, and written only
+   * beside a 3D camera and only when it was not true height: a view whose camera block has none was
+   * saved at true height — every view saved before the setting existed was — and opening it draws
+   * the scene at true height for the session. A view with no camera says nothing about the scene.
+   *
+   * The camera's heights are true metres at every factor, so the camera block itself is the same
+   * whatever this says.
+   */
+  exaggeration3d?: number;
 }
 
 /** UI state the map page owns; the camera lives on the OL map itself. */
@@ -158,6 +169,8 @@ export interface WorkspaceUiState {
   overlayOrder: string[];
   /** The 3D camera the view carried, if any; applied to the 3D view on screen, if there is one. */
   camera3d?: Camera3DState;
+  /** The factor the 3D scene is drawn at for the session: present exactly when `camera3d` is. */
+  exaggeration3d?: number;
 }
 
 // The stacking order is read straight off the OL overlay group, and the 3D camera off whichever
@@ -166,14 +179,16 @@ export interface WorkspaceUiState {
 // a scene is mounted beside it, and a stale camera saved from a scene closed ten minutes ago would
 // be restored as confidently as a live one.
 export function captureViewConfig(
-  ui: Omit<WorkspaceUiState, 'overlayOrder' | 'camera3d'>,
+  ui: Omit<WorkspaceUiState, 'overlayOrder' | 'camera3d' | 'exaggeration3d'>,
 ): ViewConfig {
   const view = getWorkspaceMap().getView();
   const center = toLonLat(view.getCenter() ?? [0, 0]);
   const camera3d = viewCamera3dState();
+  const exaggeration3d = camera3d ? viewExaggeration3d() : undefined;
   return {
     configVersion: 1,
     ...(camera3d ? { camera3d } : {}),
+    ...(exaggeration3d !== undefined && exaggeration3d !== 1 ? { exaggeration3d } : {}),
     center: [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))],
     zoom: Math.round((view.getZoom() ?? 8) * 100) / 100,
     baseLayerId: ui.baseLayerId,
@@ -236,7 +251,20 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     // stores it without looking inside, so a hand-edited or older-shaped camera block has to read
     // as "this view says nothing about the scene" instead of taking a camera somewhere impossible.
     camera3d: normalizeCamera3DState(parsed.camera3d) ?? undefined,
+    ...exaggerationOf(parsed),
   };
+}
+
+/**
+ * The factor a stored view draws the 3D scene at: what it carries, read as the setting reads any
+ * stored factor, or true height when it carries a camera and no factor. Nothing when it carries no
+ * camera, because such a view says nothing about the scene at all.
+ */
+function exaggerationOf(parsed: Partial<ViewConfig>): Pick<WorkspaceUiState, 'exaggeration3d'> {
+  if (!normalizeCamera3DState(parsed.camera3d)) {
+    return {};
+  }
+  return { exaggeration3d: readExaggeration(parsed.exaggeration3d) ?? 1 };
 }
 
 /**

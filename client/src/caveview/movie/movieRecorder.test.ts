@@ -12,9 +12,9 @@ import type {
   CaveViewTrail,
   CaveViewTrailOptions,
 } from '../loadCaveView.ts';
-import { MemoryMovieSink } from './encode/memoryMovieSink.ts';
-import type { MovieEncoder, MovieEncoderOptions } from './encode/movieEncoder.ts';
-import { MovieSinkMismatch } from './encode/movieSink.ts';
+import { MemoryMovieSink } from '../../movie/encode/memoryMovieSink.ts';
+import type { MovieEncoder, MovieEncoderOptions } from '../../movie/encode/movieEncoder.ts';
+import { MovieSinkMismatch } from '../../movie/encode/movieSink.ts';
 import { movieMarkerId, movieParty, type MovieTripData } from './movieParty.ts';
 import {
   isMovieAbort,

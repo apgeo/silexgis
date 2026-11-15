@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
+  type MapLayerInfo,
   useFeatureTypes,
   useGeofiles,
   useMapConfig,
@@ -17,9 +18,9 @@ import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
+import { onEntranceSymbolsChanged, setEntranceSymbols } from '../../map/entranceSymbols.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
-  baseImageryLayerId,
   isDrawableIn3d,
   syncBaseImagery,
   syncTileOverlayImagery,
@@ -36,7 +37,6 @@ import {
 import {
   attachCaveData3d,
   limitsFromMapConfig,
-  CAVE_DATA_3D_LAYERS,
   EMPTY_CAVE_DATA_3D_STATE,
   type CaveData3DHandle,
   type CaveData3DState,
@@ -118,12 +118,27 @@ import {
   type ScansInView3DState,
 } from '../../scene3d/scansInView3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import { exaggerationInForce, formatExaggeration, readExaggeration } from '../../scene3d/exaggeration3d.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
 import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
+import Scene3DFlyby from './flyby/Scene3DFlyby.tsx';
+import type { FlybyScene } from './flyby/useFlyby.ts';
+import {
+  createScene3DLookTarget,
+  drawBackground,
+  drawCaveDataLayers,
+  drawFeatureLayers,
+  drawFilterLayers,
+  drawHeldImagery,
+  drawTracks,
+  emptyLookHeld,
+  switchedOn,
+  type Scene3DLookSettings,
+} from './scene3dFlybyLook.ts';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
 import {
@@ -155,6 +170,28 @@ function sameImageryStatus(known: RenderedSourceStatus | undefined, next: Render
   return known.state === 'ready' || (next.state !== 'ready' && known.code === next.code);
 }
 
+/** The settings a flyby falls back on before the view has rendered once. */
+const NO_LOOK_SETTINGS: Scene3DLookSettings = {
+  catalog: [],
+  activeBaseId: undefined,
+  baseOpacity: {},
+  overlayVisible: {},
+  overlayOpacity: {},
+  visibleTileOverlayIds: [],
+  tileOverlayOpacity: {},
+  rasters: [],
+  visibleRasterIds: [],
+  rasterOpacity: {},
+  geofiles: [],
+  visibleGeofileIds: [],
+  filterLayers: [],
+  unreadableFilterLayers: [],
+  surfaceMode: 'overlay',
+  wallsMode: 'selected',
+  exaggeration: 1,
+};
+const NO_CATALOG: MapLayerInfo[] = [];
+
 /** One empty list for every render in which the configuration has not arrived or has no builds. */
 const NO_TERRAIN_BUILDS: TerrainBuildChoice[] = [];
 
@@ -185,6 +222,7 @@ export interface Scene3DViewProps {
 export default function Scene3DView({ height = '100%', syncUrlHash = false }: Scene3DViewProps) {
   const { t, i18n } = useTranslation();
   const slotRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   // Answered once, before anything is downloaded: the engine chunk is a megabyte that a browser
   // which cannot draw the scene should never be asked to fetch.
@@ -336,6 +374,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const { data: layers } = useMapLayers();
   const [activeBaseId, setActiveBaseId] = useState<number>();
 
+  // What a flyby holds of the look while it plays, and the viewer's own settings it falls back on.
+  // Both live outside React state: a flyby changes the look on every frame, and the view's effects
+  // read them at the moment they draw so a setting changed elsewhere meanwhile never undoes the
+  // flyby's, and the flyby's never reaches the shared settings.
+  const lookHeldRef = useRef(emptyLookHeld());
+  const lookSettingsRef = useRef<Scene3DLookSettings>(NO_LOOK_SETTINGS);
+
   // How each catalogue layer the scene draws itself stands — a GeoTIFF it cannot read, a vector
   // entry drawn by its stand-in — keyed by catalogue id, for the layer list to say beside the entry.
   const [imageryStatus, setImageryStatus] = useState<Record<number, RenderedSourceStatus>>({});
@@ -391,6 +436,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     syncBaseImagery(engine, imageryContext, activeBaseId);
+    // A flyby showing another background keeps showing it; with none playing this is the choice above.
+    drawBackground(engine, lookSettingsRef.current, lookHeldRef.current);
     // Nothing moved the camera, and the scene only draws when asked to.
     engine.requestRender();
   }, [imageryContext, activeBaseId, engineVersion]);
@@ -427,6 +474,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     syncTileOverlayImagery(engine, imageryContext, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+    drawHeldImagery(engine, lookSettingsRef.current, lookHeldRef.current);
     engine.requestRender();
   }, [imageryContext, visibleTileOverlayIds, tileOverlayOpacity, engineVersion, activeBaseId]);
 
@@ -438,9 +486,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Flattening a raster takes seconds and touches a second drawing context, so this is the one
     // imagery effect that is asynchronous. Nothing is awaited by the caller: the scene is usable
     // throughout and each sheet appears when it is ready.
-    void syncRasterImagery(engine, rasters, new Set(visibleRasterIds), rasterOpacity).then(() =>
-      engineRef.current?.requestRender(),
-    );
+    void syncRasterImagery(engine, rasters, new Set(visibleRasterIds), rasterOpacity).then(() => {
+      const now = engineRef.current;
+      if (now) {
+        drawHeldImagery(now, lookSettingsRef.current, lookHeldRef.current);
+        now.requestRender();
+      }
+    });
   }, [rasters, visibleRasterIds, rasterOpacity, engineVersion]);
 
   // ---- what a viewer can turn off, fade and cut into ----
@@ -466,12 +518,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Every base keeps its own value and only one of them is visible at a time, so this is
     // applied to all of them rather than to the active one: switching basemap then shows that
     // layer at the transparency it was left at.
-    for (const layer of layers) {
-      if (layer.isBase) {
-        const id = Number(layer.id);
-        engine.setImageryLayerOpacity(baseImageryLayerId(id), baseOpacity[id] ?? 1);
-      }
-    }
+    drawBackground(engine, lookSettingsRef.current, lookHeldRef.current);
     engine.requestRender();
   }, [layers, baseOpacity, activeBaseId, engineVersion]);
 
@@ -479,6 +526,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   const dataRef = useRef<CaveData3DHandle | null>(null);
   const filterLayersRef = useRef<FilterLayers3DHandle | null>(null);
+  /** The layers of features a flyby draws itself: a loader of their own, so the viewer's list never holds them. */
+  const flybyFeatureLayersRef = useRef<FilterLayers3DHandle | null>(null);
   // Where two caves come closest, if a pair has been measured. Held apart from the loader above
   // for the same reason the walls are: nothing about it is camera-driven — it is drawn because
   // somebody asked a question on a cave's page, and it stays until they ask a different one.
@@ -526,6 +575,92 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // rather than the last button pressed. Undefined until the scene exists.
   const [camera, setCamera] = useState<Camera3DState>();
 
+  // ---- flybys ----
+
+  /** Whether the flyby tool is open over the scene. */
+  const [flybyOpen, setFlybyOpen] = useState(false);
+  // Whether a flyby has the camera. Held twice: as state for the chrome that is held meanwhile, and
+  // in a ref for the exchange with the flat map and the address bar, which ask at the moment of
+  // each message and must not make the effect that owns them run again.
+  const [flybyActive, setFlybyActive] = useState(false);
+  const flybyActiveRef = useRef(false);
+  const changeFlybyActive = useCallback((active: boolean) => {
+    flybyActiveRef.current = active;
+    setFlybyActive(active);
+  }, []);
+  // Everything the tool asks of this view, read through the refs at the moment it is asked, so the
+  // object never changes and a scene rebuilt under a flyby is simply the scene it finds next.
+  const flybyScene = useMemo<FlybyScene>(
+    () => ({
+      engine: () => engineRef.current,
+      cavesInView: () => dataRef.current?.cavesInView() ?? [],
+      caveLines: (caveId) => dataRef.current?.caveLines(caveId) ?? [],
+      // The loaders reload when the camera comes to rest, and a camera in flight never does.
+      refreshData: () => {
+        dataRef.current?.reload();
+        filterLayersRef.current?.reload();
+        flybyFeatureLayersRef.current?.reload();
+        tracksRef.current?.reload();
+        meshesInViewRef.current?.reload();
+        scansInViewRef.current?.reload();
+      },
+      dataLoading: () => {
+        const mesh = meshRef.current?.getState().status;
+        const meshes = meshesInViewRef.current?.getState();
+        const scans = scansInViewRef.current?.getState();
+        return Boolean(
+          dataRef.current?.getState().loading ||
+            tracksRef.current?.getState().loading ||
+            mesh === 'looking' ||
+            mesh === 'loading' ||
+            meshes?.listing ||
+            (meshes?.loading ?? 0) > 0 ||
+            scans?.listing ||
+            (scans?.loading ?? 0) > 0,
+        );
+      },
+      wrap: () => wrapRef.current,
+      surface: () => slotRef.current,
+      // Of the two ways walls are drawn, only the selected cave's waits for a yes: the walls of
+      // every cave in view are held to a budget instead, and never ask.
+      walls: {
+        pending: (caveIds) => {
+          const mesh = meshRef.current?.getState();
+          return mesh?.status === 'asking' &&
+            mesh.caveId !== undefined &&
+            mesh.meshSizeBytes !== undefined &&
+            caveIds.includes(mesh.caveId)
+            ? [{ caveId: mesh.caveId, bytes: mesh.meshSizeBytes }]
+            : [];
+        },
+        agree: (caveIds) => {
+          const mesh = meshRef.current;
+          const asking = mesh?.getState();
+          if (mesh && asking?.status === 'asking' && asking.caveId !== undefined && caveIds.includes(asking.caveId)) {
+            mesh.confirmDownload();
+          }
+        },
+      },
+      relief: () => lookSettingsRef.current.exaggeration,
+      look: createScene3DLookTarget(
+        {
+          engine: () => engineRef.current,
+          data: () => dataRef.current,
+          filterLayers: () => filterLayersRef.current,
+          featureLayers: () => flybyFeatureLayersRef.current,
+          tracks: () => tracksRef.current,
+          mesh: () => meshRef.current,
+          meshesInView: () => meshesInViewRef.current,
+          scans: () => scansInViewRef.current,
+          photos: () => photosRef.current,
+          settings: () => lookSettingsRef.current,
+        },
+        lookHeldRef.current,
+      ),
+    }),
+    [],
+  );
+
   useEffect(() => {
     const engine = engineRef.current;
     // Only the mount actually showing the scene drives it. Two mounts share one scene, and if both
@@ -544,6 +679,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     dataRef.current = data;
     const filterLayers3d = attachFilterLayers3d(engine);
     filterLayersRef.current = filterLayers3d;
+    const flybyFeatureLayers3d = attachFilterLayers3d(engine);
+    flybyFeatureLayersRef.current = flybyFeatureLayers3d;
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
     // Each cave's top is read through the loader at the moment its walls are placed, for the
@@ -618,7 +755,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // coupling never appears in this effect's dependencies. A re-run here detaches the wall mesh
       // and reloads the cave — tens of megabytes of graphics memory released and fetched again —
       // which is far too much to spend on a button press, and would look like the scene breaking.
-      { followsExtent: () => useWorkspaceStore.getState().scene3dCoupledToMap },
+      // A camera being flown by a flyby is out of the exchange for as long as the flight lasts: the
+      // flat map must not chase it round a cave, and must not send it anywhere either.
+      {
+        followsExtent: () =>
+          useWorkspaceStore.getState().scene3dCoupledToMap && !flybyActiveRef.current,
+      },
     );
     syncRef.current = sync;
 
@@ -673,6 +815,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // there; here the label has to be attached to the item, because a hit test runs once per drawn
     // frame and cannot go looking things up.
     const unsubscribeCatalog = onFeatureTypeCatalogChanged(() => data.reload());
+    // The entrance markers are images chosen as they are built, so a different choice of symbol
+    // arriving with the map's configuration is drawn only once they are built again.
+    const unsubscribeEntranceSymbols = onEntranceSymbolsChanged(() => data.reload());
 
     // The same panel's "zoom to" buttons: while this view is on screen, they move this camera.
     // The two camera members are what lets a saved view remember, and restore, a place underground
@@ -698,19 +843,33 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         applyCamera3D(engine, state);
         setCamera(readCamera3D(engine));
       },
+      // The factor travels beside the camera. A view being opened sets it for this session and
+      // leaves this browser's own preference alone; it is put on the scene at once as well, so a
+      // camera restored straight after it is restored at the factor it was written down at. A view
+      // written down while a flyby stretches the relief keeps the viewer's factor, not the flyby's.
+      getExaggeration3D: () =>
+        lookHeldRef.current.relief === undefined ? engine.getVerticalExaggeration() : lookSettingsRef.current.exaggeration,
+      setExaggeration3D: (factor) => {
+        const carried = readExaggeration(factor) ?? 1;
+        useWorkspaceStore.getState().setScene3dExaggerationOfView(carried);
+        engine.setVerticalExaggeration(carried);
+      },
     });
 
     const refreshCamera = () => setCamera(readCamera3D(engine));
     const unsubscribeView = engine.onViewChanged(refreshCamera);
     refreshCamera();
 
-    const detachHash = syncUrlHash ? attachScene3dHash(engine) : undefined;
+    const detachHash = syncUrlHash
+      ? attachScene3dHash(engine, { paused: () => flybyActiveRef.current })
+      : undefined;
 
     return () => {
       detachHash?.();
       unsubscribeView();
       detachCamera();
       unsubscribeCatalog();
+      unsubscribeEntranceSymbols();
       unsubscribeChanges();
       unsubscribeClick();
       unsubscribeHover();
@@ -730,6 +889,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       dataRef.current = null;
       filterLayers3d.detach();
       filterLayersRef.current = null;
+      flybyFeatureLayers3d.detach();
+      flybyFeatureLayersRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
       // would keep tens of megabytes for a view nobody is looking at.
       mesh.detach();
@@ -910,6 +1071,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   }, []);
 
   const { data: mapConfig } = useMapConfig();
+  useEffect(() => {
+    if (mapConfig) {
+      setEntranceSymbols(mapConfig);
+    }
+  }, [mapConfig]);
   // This person's own limits for the walls in view, kept in this browser. Read one by one so
   // that an unrelated preference changing does not hand the loader the same numbers again.
   const ownMeshesMinZoom = useUiPrefsStore((s) => s.meshesInViewMinZoom);
@@ -959,6 +1125,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   useEffect(() => {
     engineRef.current?.setPointCloudDetail(pointCloudDetailInForce(pointDetail, coarsePointer()));
   }, [pointDetail, engineVersion, showingHere]);
+
+  // How many times taller than true the scene is drawn: the factor a saved view brought into this
+  // session, else this browser's own — or a flyby's, for as long as one holds the relief. Applied
+  // again to a scene rebuilt after a lost context, which starts at true height.
+  const ownExaggeration = useUiPrefsStore((s) => s.scene3dExaggeration);
+  const viewExaggeration = useWorkspaceStore((s) => s.scene3dExaggerationOfView);
+  const exaggeration = exaggerationInForce(viewExaggeration, ownExaggeration);
+  useEffect(() => {
+    engineRef.current?.setVerticalExaggeration(lookHeldRef.current.relief ?? exaggeration);
+  }, [exaggeration, engineVersion]);
+  // A factor chosen in the panel is this person's own: kept for this browser, and in place of
+  // whatever a saved view set for the session. True height is kept as no preference at all.
+  const setExaggeration = useCallback((factor: number) => {
+    const chosen = readExaggeration(factor) ?? 1;
+    useUiPrefsStore.getState().setScene3dExaggeration(chosen === 1 ? undefined : chosen);
+    useWorkspaceStore.getState().setScene3dExaggerationOfView(undefined);
+  }, []);
 
   // Above what size a selected cave's walls wait for a yes: this person's own number where they
   // set one, else the installation's, else the default it ships with. Declared after the effect
@@ -1211,6 +1394,27 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // fifty-megabyte one — would be on the graphics card twice.
   const meshVisible = overlayVisible[SURVEY_MESH_LAYER_ID] ?? true;
   const wallsMode = useWorkspaceStore((s) => s.scene3dWallsMode);
+  // Written while rendering so every effect below, and a flyby between renders, reads the settings
+  // of this render and not the one before.
+  lookSettingsRef.current = {
+    catalog: layers ?? NO_CATALOG,
+    activeBaseId,
+    baseOpacity,
+    overlayVisible,
+    overlayOpacity,
+    visibleTileOverlayIds,
+    tileOverlayOpacity,
+    rasters,
+    visibleRasterIds,
+    rasterOpacity,
+    geofiles,
+    visibleGeofileIds,
+    filterLayers,
+    unreadableFilterLayers,
+    surfaceMode,
+    wallsMode,
+    exaggeration,
+  };
   const setWallsMode = useWorkspaceStore((s) => s.setScene3dWallsMode);
   const estimatedPassages = useWorkspaceStore((s) => s.scene3dEstimatedPassages);
   const setEstimatedPassages = useWorkspaceStore((s) => s.setScene3dEstimatedPassages);
@@ -1225,11 +1429,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!mesh || !meshesInView) {
       return;
     }
-    const everyCaveInView = meshVisible && wallsMode === 'inView';
+    // The viewer's switch, unless a flyby has shown or hidden the walls.
+    const wallsShown = switchedOn(lookSettingsRef.current, lookHeldRef.current, 'walls');
+    const everyCaveInView = wallsShown && wallsMode === 'inView';
     if (!everyCaveInView) {
       meshesInView.setActive(false);
     }
-    mesh.setVisible(meshVisible && wallsMode === 'selected');
+    mesh.setVisible(wallsShown && wallsMode === 'selected');
     mesh.setCave(
       selectedCaveId,
       selectedCaveId ? dataRef.current?.caveSurveyTop(selectedCaveId) : undefined,
@@ -1247,7 +1453,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     scansInView.setSelectedCave(selectedCaveId);
-    scansInView.setActive(scansVisible);
+    scansInView.setActive(switchedOn(lookSettingsRef.current, lookHeldRef.current, 'scans'));
   }, [selectedCaveId, scansVisible, engineVersion, showingHere]);
 
   // The photographs of the selected cave, on by default like its walls and switched in the same
@@ -1259,7 +1465,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!photos) {
       return;
     }
-    photos.setVisible(photosVisible);
+    photos.setVisible(switchedOn(lookSettingsRef.current, lookHeldRef.current, 'photos'));
     photos.setCave(selectedCaveId);
   }, [selectedCaveId, photosVisible, engineVersion, showingHere]);
 
@@ -1270,25 +1476,32 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!data) {
       return;
     }
-    for (const layer of CAVE_DATA_3D_LAYERS) {
-      data.setLayerVisible(layer, overlayVisible[layer] ?? true);
-      data.setLayerOpacity(layer, overlayOpacity[layer] ?? 1);
-    }
+    drawCaveDataLayers(data, lookSettingsRef.current, lookHeldRef.current);
   }, [overlayVisible, overlayOpacity, engineVersion]);
 
   // Keyed on the same counter the loader is attached on, so a rebuilt scene comes back with them.
   useEffect(() => {
-    filterLayersRef.current?.setLayers(
-      filterLayers,
-      new Set(unreadableFilterLayers),
-      new globalThis.Map(Object.entries(overlayOpacity)),
-    );
+    const handle = filterLayersRef.current;
+    if (handle) {
+      drawFilterLayers(handle, lookSettingsRef.current, lookHeldRef.current);
+    }
   }, [filterLayers, unreadableFilterLayers, overlayOpacity, engineVersion, showingHere]);
+
+  // A flyby's own layers, drawn again into a rebuilt scene for as long as the flyby holds them.
+  useEffect(() => {
+    const handle = flybyFeatureLayersRef.current;
+    if (handle) {
+      drawFeatureLayers(handle, lookHeldRef.current);
+    }
+  }, [engineVersion, showingHere]);
 
   // Which files are drawn, keyed on the same counters the loader is attached on, so a rebuilt
   // scene — or a mount that takes the surface back — comes up with the viewer's files on it.
   useEffect(() => {
-    tracksRef.current?.setFiles(geofiles, new Set(visibleGeofileIds));
+    const tracks = tracksRef.current;
+    if (tracks) {
+      drawTracks(tracks, lookSettingsRef.current, lookHeldRef.current);
+    }
   }, [geofiles, visibleGeofileIds, engineVersion, showingHere]);
 
   // Each file's fade, read from under the key the flat map keeps it by — the file's own id, which
@@ -1297,11 +1510,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // it was set.
   useEffect(() => {
     const tracks = tracksRef.current;
-    if (!tracks) {
-      return;
-    }
-    for (const geofile of geofiles) {
-      tracks.setOpacity(geofile.id, overlayOpacity[geofile.id] ?? 1);
+    if (tracks) {
+      drawTracks(tracks, lookSettingsRef.current, lookHeldRef.current);
     }
   }, [geofiles, overlayOpacity, engineVersion, showingHere]);
 
@@ -1310,7 +1520,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     if (!engine) {
       return;
     }
-    engine.setSurfaceMode(surfaceMode);
+    engine.setSurfaceMode(lookHeldRef.current.surface ?? surfaceMode);
     // The scene decides for itself whether the cutaway is worth drawing from where the camera is
     // standing, and changes its mind as the camera moves, so what it is doing is subscribed to
     // rather than assumed from what was asked for.
@@ -1406,10 +1616,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       ? t(terrainProblemMessage(terrainProblem.problem, terrainProblem.fellBack))
       : undefined,
     imageProblem ? t('scene3d.saveImageFailed') : undefined,
+    // Said for as long as heights are not drawn true, because a stretched hillside looks like a
+    // real one: somebody judging a slope off the screen has to know.
+    exaggeration !== 1
+      ? t('scene3d.relief.notice', { factor: formatExaggeration(exaggeration, i18n.language) })
+      : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
-    <div className="scene3d-wrap" style={{ height }}>
+    <div className="scene3d-wrap" ref={wrapRef} style={{ height }}>
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
       )}
@@ -1474,6 +1689,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           onCoupledChange={changeCoupling}
           onSaveImage={saveImage}
           savingImage={savingImage}
+          flybyOpen={flybyOpen}
+          onFlybyOpenChange={setFlybyOpen}
+        />
+      )}
+      {status === 'ready' && showingHere && flybyOpen && (
+        <Scene3DFlyby
+          scene={flybyScene}
+          selection={selection}
+          onActiveChange={changeFlybyActive}
+          onClose={() => setFlybyOpen(false)}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer
@@ -1530,13 +1755,19 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 surfaceMode={surfaceMode}
                 onSurfaceModeChange={setSurfaceMode}
                 surfaceState={surfaceState}
+                exaggeration={exaggeration}
+                onExaggerationChange={setExaggeration}
               />
             }
           >
+            {/* Held while a flyby has the camera: the layers are the flyby's to show for as long as
+                it flies, and a switch thrown under it would be undone by its next moment. */}
             <Button
               size="small"
               icon={<LayoutOutlined />}
               aria-label={t('map.layersTitle')}
+              title={flybyActive ? t('flyby.layersHeld') : undefined}
+              disabled={flybyActive}
               data-testid="scene3d-layers-trigger"
             />
           </Popover>
@@ -1559,7 +1790,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
             and a build waved away stays away for the session. */}
         {/* Walls large enough to be a cost on a metered connection: their size is said and the
             download waits for a yes. Nothing is fetched until it is pressed. */}
-        {meshState.status === 'asking' && meshState.meshSizeBytes !== undefined && (
+        {/* Not while a flyby has the camera: it asked once for its whole route, and a no is kept. */}
+        {meshState.status === 'asking' && meshState.meshSizeBytes !== undefined && !flybyActive && (
           <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-mesh-ask">
             {t('scene3d.meshAsk', { size: formatSize(meshState.meshSizeBytes) })}
             <Button

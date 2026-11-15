@@ -159,7 +159,7 @@ test('where the browser cannot write a video the dialog says so in words, and a 
   const engine = await page.evaluate<{
     videoEncoder: boolean;
     formats: { format: string; supported: boolean; codec: string | null }[];
-  }>(`import('/src/caveview/movie/encode/movieEncoder.ts').then(async (m) => ({
+  }>(`import('/src/movie/encode/movieEncoder.ts').then(async (m) => ({
     videoEncoder: typeof VideoEncoder !== 'undefined',
     formats: await m.probeMovieFormats({ width: 320, height: 180 }, ${fps}),
   }))`);

@@ -15,7 +15,8 @@ import {
   setFeatureTypeCatalog,
 } from './featureTypeCatalog.ts';
 import { handleMapFilterError, mapFilterParams } from './mapFilters.ts';
-import { featureSymbolUrl, surfaceFeaturePalette as palette } from './markerPalette.ts';
+import { surfaceFeaturePalette as palette } from './markerPalette.ts';
+import { symbolImage } from './symbolLibrary.ts';
 import { declutterOption } from './declutter.ts';
 
 // The cross-kind features overlay. The layer id keeps its historical string:
@@ -34,7 +35,49 @@ export function getSurfaceFeatureSource(): VectorSource {
 // Feature-type names and symbols live in a catalog of their own, free of any drawing library,
 // because the 3D scene needs the same answers and is loaded as a separate chunk — reaching them
 // through this layer would put OpenLayers in it. This layer only has to redraw when they change.
-const iconCache = new globalThis.Map<string, Icon>();
+//
+// Point styles are built once per symbol and shared by every feature drawn with it: the layer asks
+// for a style per feature on every frame, and a shared style is what lets OpenLayers rasterise each
+// symbol image once however many features use it.
+const pointStyles = new globalThis.Map<string, Style>();
+
+/**
+ * The marker of a point feature: its type's symbol (a bundled file or a drawn shape, the shape in
+ * the features' brown unless it names a colour), or a plain dot when the type has none or names
+ * one this build does not ship.
+ */
+function pointSymbolStyle(reference: string | null | undefined): Style {
+  const image = symbolImage(reference, { color: palette.point });
+  const key = image ? `${image.src}|${image.scale}` : 'fallback';
+  let style = pointStyles.get(key);
+  if (!style) {
+    style = new Style({
+      // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+      // way. Left at the default, decluttering would hide overlapping markers themselves, which
+      // would mean switching it on made features vanish — the opposite of what it is for.
+      image: image
+        ? new Icon({ src: image.src, scale: image.scale, declutterMode: 'obstacle' })
+        : new CircleStyle({
+            declutterMode: 'obstacle',
+            radius: 6,
+            fill: new Fill({ color: palette.point }),
+            stroke: new Stroke({ color: palette.stroke, width: 2 }),
+          }),
+    });
+    pointStyles.set(key, style);
+  }
+  return style;
+}
+
+const selectionHalo = new Style({
+  // Always drawn, for the same reason as the markers.
+  image: new CircleStyle({
+    declutterMode: 'obstacle',
+    radius: 14,
+    fill: new Fill({ color: palette.highlightHalo }),
+    stroke: new Stroke({ color: palette.highlight, width: 2 }),
+  }),
+});
 
 onFeatureTypeCatalogChanged(() => source.changed()); // restyle loaded features with the fresh names
 
@@ -123,44 +166,12 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
   // draws the image style at every point of the geometry.
   if (geometryType === 'Point' || geometryType === 'MultiPoint') {
     // A translucent halo behind the symbol marks the selected feature.
-    const halo = selected
-      ? [new Style({
-          // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
-          // way. Left at the default, decluttering would hide overlapping markers themselves, which
-          // would mean switching it on made features vanish — the opposite of what it is for.
-          image: new CircleStyle({
-            declutterMode: 'obstacle',
-            radius: 14,
-            fill: new Fill({ color: palette.highlightHalo }),
-            stroke: new Stroke({ color: palette.highlight, width: 2 }),
-          }),
-        })]
-      : [];
-
-    // Server rows carry their symbol file; pending locally drawn features only
-    // carry the armed featureTypeId, resolved through the catalog instead.
-    const symbolProp = feature.get('symbol') as string | null | undefined;
-    const symbol = symbolProp ?? getFeatureTypeSymbol(feature.get('featureTypeId'));
-    if (symbol) {
-      let icon = iconCache.get(symbol);
-      if (!icon) {
-        // Always drawn, for the same reason as the plain circles below.
-        icon = new Icon({ src: featureSymbolUrl(symbol), scale: 0.5, declutterMode: 'obstacle' });
-        iconCache.set(symbol, icon);
-      }
-      return [...halo, new Style({ image: icon })];
-    }
-    return [...halo, new Style({
-      // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
-      // way. Left at the default, decluttering would hide overlapping markers themselves, which
-      // would mean switching it on made features vanish — the opposite of what it is for.
-      image: new CircleStyle({
-        declutterMode: 'obstacle',
-        radius: 6,
-        fill: new Fill({ color: palette.point }),
-        stroke: new Stroke({ color: palette.stroke, width: 2 }),
-      }),
-    })];
+    const marker = pointSymbolStyle(
+      // Server rows carry their symbol reference; pending locally drawn features only carry the
+      // armed featureTypeId, resolved through the catalog instead.
+      (feature.get('symbol') as string | null | undefined) ?? getFeatureTypeSymbol(feature.get('featureTypeId')),
+    );
+    return selected ? [selectionHalo, marker] : [marker];
   }
 
   if (selected) {

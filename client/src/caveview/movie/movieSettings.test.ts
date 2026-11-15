@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { GIF_FRAME_RATES } from './encode/movieFormats.ts';
+import { GIF_FRAME_RATES } from '../../movie/encode/movieFormats.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
   MOVIE_GIF_MAX_FRAMES,

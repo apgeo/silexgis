@@ -30,6 +30,10 @@ function target(settledAfter: number): Scene3DPresenterTarget & { renders: numbe
     isSettled: () => fake.renders > settledAfter,
     groundHeight: () => 0,
     modelSphere: () => undefined,
+    setModelTint: vi.fn(),
+    positionToScreen: vi.fn(() => ({ x: 12, y: 34 })),
+    setVerticalExaggeration: vi.fn(),
+    getVerticalExaggeration: () => 2,
   };
   return fake;
 }
@@ -44,6 +48,28 @@ describe('the scripted-recording handle on the 3D scene', () => {
     createPresenterBridge(fake).setCamera(camera);
     expect(fake.setCamera).toHaveBeenCalledWith(camera, { animate: false });
     expect(fake.renders).toBe(1);
+  });
+
+  it('passes a tint for the models on, and taking it off too', () => {
+    const fake = target(0);
+    const bridge = createPresenterBridge(fake);
+    bridge.setModelTint({ red: 1, green: 0.5, blue: 0, amount: 0.8 });
+    bridge.setModelTint(undefined);
+    expect(fake.setModelTint).toHaveBeenNthCalledWith(1, { red: 1, green: 0.5, blue: 0, amount: 0.8 });
+    expect(fake.setModelTint).toHaveBeenNthCalledWith(2, undefined);
+  });
+
+  it('passes the relief factor and the question of where a place is drawn straight through', () => {
+    const fake = target(0);
+    const bridge = createPresenterBridge(fake);
+    const place = { longitude: 25, latitude: 45, height: 1200 };
+
+    bridge.setVerticalExaggeration(2);
+
+    expect(fake.setVerticalExaggeration).toHaveBeenCalledWith(2);
+    expect(bridge.getVerticalExaggeration()).toBe(2);
+    expect(bridge.positionToScreen(place)).toEqual({ x: 12, y: 34 });
+    expect(fake.positionToScreen).toHaveBeenCalledWith(place);
   });
 
   it('answers settled only after several settled frames in a row', async () => {

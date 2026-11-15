@@ -30,6 +30,13 @@ export interface ViewCameraTarget {
   getCamera3D?(): Camera3DState | undefined;
   /** Restores a written-down camera. Optional for the same reason. */
   setCamera3D?(state: Camera3DState): void;
+  /**
+   * How many times taller than true the view draws heights, for writing into a saved view beside
+   * its camera. Optional for the same reason as the camera: a flat map draws none.
+   */
+  getExaggeration3D?(): number;
+  /** Draws the view at a factor a saved view carried, for this session. Optional likewise. */
+  setExaggeration3D?(factor: number): void;
 }
 
 /** One view's registration, wrapped so that two views offering the same camera stay distinct. */
@@ -117,5 +124,20 @@ export function viewCamera3dState(): Camera3DState | undefined {
 export function applyViewCamera3d(state: Camera3DState | undefined): void {
   if (state) {
     active()?.setCamera3D?.(state);
+  }
+}
+
+/** The vertical exaggeration of the view on screen, for a saved view; undefined as for the camera. */
+export function viewExaggeration3d(): number | undefined {
+  return active()?.getExaggeration3D?.();
+}
+
+/**
+ * Draws the view on screen at the factor a saved view carried. Does nothing when there is none
+ * or the view on screen draws no heights, for the reason the camera above is not staged either.
+ */
+export function applyViewExaggeration3d(factor: number | undefined): void {
+  if (factor !== undefined) {
+    active()?.setExaggeration3D?.(factor);
   }
 }

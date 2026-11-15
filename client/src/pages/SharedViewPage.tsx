@@ -12,6 +12,7 @@ import { useParams } from 'react-router-dom';
 import { fetchSharedView } from '../api/hooks.ts';
 import { backgroundLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
 
 /** What a click on the shared map shows: a public name. */
 interface Picked {
@@ -55,6 +56,8 @@ export default function SharedViewPage() {
         setName(shared.name);
         const camera = shared.camera;
         const reach = shared.reach;
+        // Before the layers exist, so their first frame already draws the installation's symbol.
+        setEntranceSymbols(shared.overlays);
         const data = createSharedViewLayers(token!, shared.overlays);
         const dataLayers = new Set<unknown>(data.layers);
         const base = shared.background

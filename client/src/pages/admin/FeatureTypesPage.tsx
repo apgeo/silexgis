@@ -31,8 +31,8 @@ import {
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
-import { bundledFeatureSymbols } from '../../map/featureSymbols.ts';
-import { featureSymbolUrl } from '../../map/markerPalette.ts';
+import { surfaceFeaturePalette } from '../../map/markerPalette.ts';
+import SymbolPicker, { SymbolPreview, SymbolSourcesNote } from '../../components/map/SymbolPicker.tsx';
 
 const categories: FeatureTypeWrite['category'][] = ['surface', 'underground', 'area', 'structure'];
 const shapes: FeatureTypeWrite['acceptedGeometryClasses'] = [
@@ -206,7 +206,7 @@ export default function FeatureTypesPage() {
             width: 40,
             render: (_: unknown, type: FeatureType) =>
               type.symbolFile ? (
-                <img src={featureSymbolUrl(type.symbolFile)} alt="" width={20} height={20} />
+                <SymbolPreview reference={type.symbolFile} color={surfaceFeaturePalette.point} size={20} />
               ) : null,
           },
           { title: t('admin.featureTypes.name'), dataIndex: 'name' },
@@ -364,21 +364,12 @@ export default function FeatureTypesPage() {
           >
             <Switch disabled={shipped} />
           </Form.Item>
-          <Form.Item name="symbolFile" label={t('admin.featureTypes.symbol')}>
-            <Select
-              allowClear
-              style={{ width: 280 }}
-              placeholder={t('admin.featureTypes.noSymbol')}
-              options={bundledFeatureSymbols.map((file) => ({
-                value: file,
-                label: (
-                  <Flex gap={8} align="center">
-                    <img src={featureSymbolUrl(file)} alt="" width={16} height={16} />
-                    {file}
-                  </Flex>
-                ),
-              }))}
-            />
+          <Form.Item
+            name="symbolFile"
+            label={t('admin.featureTypes.symbol')}
+            extra={<SymbolSourcesNote />}
+          >
+            <SymbolPicker allowClear layerColor={surfaceFeaturePalette.point} testId="feature-type-symbol" />
           </Form.Item>
           <Form.Item
             name="style"

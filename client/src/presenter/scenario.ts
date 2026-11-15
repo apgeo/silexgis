@@ -12,7 +12,12 @@
 // items that would steer the same thing at once (two camera moves, two pointer actions) are refused
 // when the scenario is read, not discovered half-way through a long recording.
 
-export type Ease = 'linear' | 'in' | 'out' | 'inOut';
+/**
+ * How a change runs over its time. `smooth` is for camera moves: a run of `smooth` moves placed back
+ * to back is flown as one curve through their poses, without slowing at the joins; it starts and
+ * ends at rest. Anything else given `smooth` runs `inOut`.
+ */
+export type Ease = 'linear' | 'in' | 'out' | 'inOut' | 'smooth';
 
 /**
  * Where the camera is, described around the loaded cave model rather than in coordinates, so a
@@ -25,7 +30,10 @@ export interface OrbitPose {
   headingBy?: number;
   /** Angle below the horizon, degrees (-90 looks straight down). */
   pitch?: number;
-  /** Distance from the point looked at, in radii of the model's bounding sphere. */
+  /**
+   * Distance from the point looked at, in radii of the model's bounding sphere. Changed in equal
+   * proportions over equal times, so an approach from far away does not rush the last stretch.
+   */
   range?: number;
   /** Raises the point looked at above the model's centre, in radii (negative lowers it). */
   lift?: number;
@@ -52,7 +60,13 @@ export type ScenarioAction =
   /** Shown: the pointer ticks (or clears) a layer whose row label matches. */
   | { kind: 'layer'; label: string; on: boolean }
   /** Shown: the pointer drags the active basemap's opacity slider through these percentages. */
-  | { kind: 'basemapOpacity'; values: number[]; ease?: Ease };
+  | { kind: 'basemapOpacity'; values: number[]; ease?: Ease }
+  /**
+   * Recolours the cave's walls from their present colour to `to` ('#rrggbb'), mixed into their own
+   * colour by `strength` (0–1, default 0.8) so the shading still shows; null gives them back their
+   * own colours.
+   */
+  | { kind: 'modelColor'; to: string | null; strength?: number; ease?: Ease };
 
 export type ScenarioItem = ScenarioAction & { at: number; duration?: number };
 
@@ -88,6 +102,8 @@ export function channelOf(action: ScenarioAction): string | undefined {
       return 'pointer';
     case 'fade':
       return 'fade';
+    case 'modelColor':
+      return 'modelColor';
     case 'caption':
     case 'title':
       return undefined;
@@ -114,6 +130,12 @@ export function scenarioProblems(scenario: Scenario): string[] {
     if (item.kind === 'basemapOpacity' && item.values.length < 2) {
       problems.push(`item ${index} drags the opacity slider through fewer than two values`);
     }
+    if (item.kind === 'camera' && item.to.range !== undefined && !(item.to.range > 0)) {
+      problems.push(`item ${index} puts the camera at a range that is not above zero`);
+    }
+    if (item.kind === 'modelColor' && item.to !== null && !/^#[0-9a-f]{6}$/i.test(item.to)) {
+      problems.push(`item ${index} names the colour "${item.to}", which is not written #rrggbb`);
+    }
     const channel = channelOf(item);
     if (channel) {
       byChannel.set(channel, [...(byChannel.get(channel) ?? []), item]);
@@ -139,6 +161,8 @@ export function scenarioProblems(scenario: Scenario): string[] {
 export function ease(kind: Ease | undefined, p: number): number {
   const x = Math.min(1, Math.max(0, p));
   switch (kind ?? 'inOut') {
+    case 'smooth':
+      return ease('inOut', x);
     case 'linear':
       return x;
     case 'in':

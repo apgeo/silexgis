@@ -96,6 +96,7 @@ public class OptionsDocumentationTests
         ("Sync", typeof(SyncSettings)),
         ("SurveyUploads", typeof(SurveyUploadSettings)),
         ("TestData", typeof(TestDataSettings)),
+        ("MapSymbols", typeof(MapSymbolSettings)),
     ];
 
     public static TheoryData<string> Documents() => new()

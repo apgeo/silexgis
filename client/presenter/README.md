@@ -54,6 +54,13 @@ Item kinds (`client/src/presenter/scenario.ts` is the reference):
 - `camera` — moves to a pose described **around the drawn cave model**: `heading`/`headingBy`,
   `pitch`, `range` (in radii of the model's bounding sphere), `lift`. A zero duration jumps; the
   first one must be at 0 s. A range below about 1 with a low pitch puts the camera underground.
+  `aboveGround` keeps the eye that many metres above the ground (null lifts the limit). The range
+  changes in equal proportions over equal times, so an approach from far away keeps its pace.
+  Camera moves given `ease: 'smooth'` and placed back to back are flown as one curve through their
+  poses, never stopping at the joins: a fly-in that runs straight on into circling the cave.
+- `modelColor` — recolours the cave's walls from their present colour to `to` (`#rrggbb`, or
+  null for their own colours) over the item's duration, mixed in by `strength` so the shading
+  still shows. Done through the recording handle, not the interface.
 - `caption`, `title`, `fade` — drawn over the picture.
 - `layerPanel`, `basemap`, `layer`, `basemapOpacity` — done **through the interface** with a
   visible pointer: open the 3D layer panel, pick a basemap (opening its group), tick a layer, drag
@@ -65,7 +72,7 @@ Setup: `cave` (opened in 3D with its walls; among caves matching the name, one t
 ## How it works
 
 The application offers a small recording handle on the window **only when the browser is driven
-by automation** (`navigator.webdriver`): set the camera, read where the drawn models are, and wait
-until the scene has finished drawing. The scenario runner (`client/src/presenter/`) is bundled by
+by automation** (`navigator.webdriver`): set the camera, read where the drawn models are, tint
+them, and wait until the scene has finished drawing. The scenario runner (`client/src/presenter/`) is bundled by
 the recorder and put into the page; it moves the camera, the pointer and the overlay from one
 clock, which the recorder either steps frame by frame or lets run in real time.

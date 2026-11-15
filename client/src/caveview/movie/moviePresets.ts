@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { probeMovieFormats } from './encode/movieEncoder.ts';
+import { probeMovieFormats } from '../../movie/encode/movieEncoder.ts';
 import { MOVIE_SIZES, normaliseMovieSettings, type MovieSettings } from './movieSettings.ts';
 
 /**

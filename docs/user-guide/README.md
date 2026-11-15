@@ -46,6 +46,7 @@ linking out to the reference pages for detail.
 [Map workspace](features/map-workspace.md) ·
 [Map services (WMS and WMTS)](features/map-services.md) ·
 [3D view](features/3d-view.md) ·
+[Flybys in the 3D view](features/flybys.md) ·
 [Terrain](features/terrain.md) ·
 [Work areas](features/work-areas.md) ·
 [Saved views, panels and multi-window](features/saved-views-and-windows.md)

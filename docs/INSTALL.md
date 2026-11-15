@@ -1663,6 +1663,26 @@ docker compose up -d
 A backup without `terrain-uploads.tar.gz` — one made before it existed, or by an installation that
 never uploaded a raster — restores as before and leaves the terrain volume as it is.
 
+### Copying an installation's data to another installation
+
+To replicate one installation's dataset in another, make a bundle and serve it over HTTPS:
+
+```bash
+sh scripts/export-bundle.sh /srv/export/<random-name>      # db.sql.gz, files.tar.gz, SHA256SUMS, MANIFEST.txt
+```
+
+Browser-uploaded terrain rasters are left out unless `--with-terrain` is given, and baked terrain is
+never included (it is rebuilt from its recipe). On the receiving installation:
+
+```bash
+sh scripts/import-bundle.sh https://host/<random-name>/ --yes
+```
+
+The import downloads everything, checks it against `SHA256SUMS`, and only then stops the api, runs
+`restore.sh` and starts the stack again, which applies any newer migrations. **It replaces the
+receiving installation's database and uploads.** The bundle carries everything the database holds,
+password hashes and share tokens included, so serve it only where that is acceptable.
+
 ### Rehearsing a restore
 
 A backup that has never been restored is a hope. `restore-drill.sh` loads one into a throwaway
@@ -2708,6 +2728,8 @@ the reasoning beside each one.
 | `SILEXGIS__TestData__Allowed` | `true` | whether this deployment offers the **test-data generator**: a page for full administrators (*Administration → Test data*) that fills the database with invented but realistic caves, entrances and areas — and, as it grows, people, trips, documents and files — and removes them again. `false` hides the page, refuses its routes as if they did not exist, and refuses the `generate-test-data` command |
 | `SILEXGIS__TestData__Enabled` | `true` | the administrators' half of the generator's switch. **A default only:** the administrator settings page (tab *Test data*) changes it while the application runs, and a saved value wins over this one. The generator works only while this and `Allowed` are both on |
 | `SILEXGIS__TestData__MaxCaves` | `20000` | the most caves one run may ask for on this deployment (never more than 50,000) |
+| `SILEXGIS__MapSymbols__EntranceSymbol` | `shape:cave` | the marker cave entrances are drawn with on the map, in the 3D view and on shared map links: a symbol file shipped in `client/public/feature_symbols` (`osm_cave.svg`, `qgis_poi_cave.svg`, …) or a drawn shape — `shape:` followed by `circle`, `dot`, `ring`, `square`, `triangle`, `diamond`, `star`, `cross` or `cave`, optionally with a colour as six lower-case hex digits (`shape:triangle:146262`). **A default only:** the administrator settings page (tab *Map symbols*) chooses it from the whole library with a preview while the application runs, and a saved value wins over this one. A value that is not a well-formed symbol is ignored in favour of the default |
+| `SILEXGIS__MapSymbols__ApproximateEntranceSymbol` | `shape:cave:d46b08` | the marker of a protected entrance shown only approximately (snapped to the protection grid for a reader without exact view). Same values and the same rules as the line above; choose something a reader can tell from it — a drawn shape is also given a dashed outline here |
 | `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
 | `SILEXGIS__TestLogins__Password` | `test-login-pass-1` | the one password all three demo accounts share. A change is applied to existing accounts at the next start, so the page never advertises a credential that does not work |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |

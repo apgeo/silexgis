@@ -50,6 +50,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Spațiul de lucru al hărții](features/map-workspace.md) ·
 [Servicii de hărți (WMS și WMTS)](features/map-services.md) ·
 [Vizualizarea 3D](features/3d-view.md) ·
+[Survoluri în vizualizarea 3D](features/flybys.md) ·
 [Relief](features/terrain.md) ·
 [Zone de lucru](features/work-areas.md) ·
 [Vederi salvate, panouri și ferestre multiple](features/saved-views-and-windows.md)

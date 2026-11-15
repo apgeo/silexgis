@@ -13,12 +13,15 @@ import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import { featuresOf, propertiesOf } from './geoJson3d.ts';
 import {
   caveCenterlines,
+  caveIdOf,
+  cavesDrawn,
   centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   centerlineTopAltitudes,
   EMPTY_CENTERLINE_LOAD_STATE,
   nearestCaveCenterlines,
+  type CaveInView3D,
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -29,6 +32,7 @@ import type {
   Scene3DCamera,
   Scene3DMarker,
   Scene3DPolyline,
+  Scene3DPosition,
   Scene3DSurface,
   Scene3DVectorSource,
   Scene3DVectorSources,
@@ -167,6 +171,19 @@ export interface CaveData3DHandle {
    */
   caveSurveyTop(caveId: string): number | undefined;
   /**
+   * The caves the view is drawing now: each one's survey lines, or its entrances when it has no
+   * lines here. What a camera path around "the caves in view" is built from. A cave whose place
+   * this reader was given only roughly is listed where it was drawn, which is that rough place.
+   */
+  cavesInView(): CaveInView3D[];
+  /**
+   * The survey lines of one cave as they are drawn now, each component's positions at the heights
+   * they are drawn at — what a camera following a cave's survey down follows. Lines laid on the
+   * ground are left out: they carry no heights, and a way down them would be a way along the
+   * surface. Empty when nothing of the cave is drawn.
+   */
+  caveLines(caveId: string): Scene3DPosition[][];
+  /**
    * The payload now drawn for the same thing this one named, if it is still in the scene.
    *
    * Chrome pinned to a pick keeps the payload it was handed at the moment of the click, and every
@@ -197,6 +214,15 @@ export interface CaveData3DHandle {
   setLayerVisible(layer: CaveData3DLayer, visible: boolean): void;
   /** Fades one layer, 0..1. It survives reloading, because the viewer asked for it. */
   setLayerOpacity(layer: CaveData3DLayer, opacity: number): void;
+  /**
+   * Draws every survey line in one CSS colour instead of its colour by depth; undefined gives the
+   * lines their depth colours back. The lines already drawn are redrawn at once, and the colour
+   * holds through every load after, until it is taken off.
+   *
+   * Given a cave, the colour is that cave's own, over the one for every line: a flyby lights the
+   * cave it is visiting. Undefined then hands that cave back to the colour of the rest.
+   */
+  setLineColour(colour: string | undefined, caveId?: string): void;
   getState(): CaveData3DState;
   /** Subscribes to load-state changes; returns an unsubscribe function. */
   subscribe(listener: (state: CaveData3DState) => void): () => void;
@@ -257,6 +283,19 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let settleTimer: number | undefined;
   let detached = false;
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
+  /** One colour for every survey line, when something asked for it; the drawn copy is what is coloured. */
+  let lineColour: string | undefined;
+  /** Colours of their own for some caves' lines, over the one above. */
+  const caveLineColours = new Map<string, string>();
+  const showCenterlines = (polylines: readonly Scene3DPolyline[]) =>
+    centerlines.replace(
+      lineColour || caveLineColours.size > 0
+        ? polylines.map((polyline) => {
+            const own = caveLineColours.get(caveIdOf(polyline) ?? '') ?? lineColour;
+            return own ? { ...polyline, color: own } : polyline;
+          })
+        : polylines,
+    );
   let drawnCenter = { longitude: 0, latitude: 0 };
   let surveyTops = new Map<string, number>();
   // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
@@ -326,7 +365,7 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         return;
       }
       const polylines = centerlinePolylines(collection, placement);
-      centerlines.replace(polylines);
+      showCenterlines(polylines);
       // Kept so a "frame this cave" action can answer from what is actually drawn rather than
       // fetching the cave again: the two would then disagree whenever the server had withheld
       // part of the survey, and the camera would frame geometry that is not on the screen.
@@ -474,6 +513,42 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     caveSurveyTop(caveId) {
       return surveyTops.get(caveId);
     },
+    caveLines(caveId) {
+      return caveCenterlines(drawnCenterlines, caveId)
+        .filter((polyline) => !polyline.clampToGround)
+        .map((polyline) => polyline.positions);
+    },
+    cavesInView() {
+      const caves = cavesDrawn(drawnCenterlines);
+      const listed = new Set(caves.map((cave) => cave.caveId));
+      // An entrance of a cave that has no lines here still says where that cave is — while the
+      // entrances are shown. Turned off they are only hidden, not let go of, and a cave whose one
+      // mark the viewer has taken off the screen is not a cave the view is drawing.
+      const byEntrance = new Map<string, CaveInView3D>();
+      for (const marker of layerVisible[ENTRANCE_SOURCE_ID] ? drawnEntrances : []) {
+        const pick = pickPayload({ id: marker.id });
+        if (pick?.kind !== 'entrance' || listed.has(pick.caveId)) {
+          continue;
+        }
+        const { longitude, latitude } = marker.position;
+        const cave = byEntrance.get(pick.caveId);
+        if (cave) {
+          cave.bounds = [
+            Math.min(cave.bounds[0], longitude),
+            Math.min(cave.bounds[1], latitude),
+            Math.max(cave.bounds[2], longitude),
+            Math.max(cave.bounds[3], latitude),
+          ];
+        } else {
+          byEntrance.set(pick.caveId, {
+            caveId: pick.caveId,
+            ...(pick.label ? { label: pick.label } : {}),
+            bounds: [longitude, latitude, longitude, latitude],
+          });
+        }
+      }
+      return [...caves, ...byEntrance.values()];
+    },
     currentPick(payload) {
       for (const batch of [drawnEntrances, drawnFeatures, drawnFeatureLines, drawnCenterlines]) {
         for (const item of batch) {
@@ -569,6 +644,23 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // thrown away, so this is a catch-up rather than a cold start — and it is also what puts
       // back the note of which cave is drawn that hiding the survey layer dropped.
       void load();
+    },
+    setLineColour(colour, caveId) {
+      if (caveId !== undefined) {
+        if (caveLineColours.get(caveId) === colour) {
+          return;
+        }
+        if (colour === undefined) {
+          caveLineColours.delete(caveId);
+        } else {
+          caveLineColours.set(caveId, colour);
+        }
+      } else if (colour === lineColour) {
+        return;
+      } else {
+        lineColour = colour;
+      }
+      showCenterlines(drawnCenterlines);
     },
     setLayerOpacity(layer, opacity) {
       if (layerOpacity[layer] === opacity) {

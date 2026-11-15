@@ -161,6 +161,20 @@ export const specs = {
     'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
     // A tiled scan drawn in the scene and opened in the local viewer.
     'point-clouds.spec.ts',
+    // A flyby played in the scene: the camera flown, the address left alone, the camera handed back.
+    'scene3d-flyby.spec.ts',
+    // A flyby written to a movie file: the capture session, the boxed scene, the file read back.
+    'scene3d-flyby-movie.spec.ts',
+    // A flyby that crosses backgrounds and colours the caves: the look changed, scrubbed back, handed back.
+    'scene3d-flyby-look.spec.ts',
+    // A flyby built by hand: views captured, sections added and moved, a change written, flown as edited.
+    'scene3d-flyby-edit.spec.ts',
+    // A flyby about what a saved filter selects, with features of a kind drawn while it flies and gone after.
+    'scene3d-flyby-features.spec.ts',
+    // A flyby that grows the relief: the engine's factor read mid-flight, the mark over the picture, the viewer's handed back.
+    'scene3d-flyby-relief.spec.ts',
+    // The relief setting over served relief: a marker on the ground stays on the stretched ground.
+    'scene3d-relief.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
@@ -234,10 +248,14 @@ export const clientAreas = {
   'client/src/caveview/': ['surveys', 'trips'],
   'client/src/diagnostics/': 'diagnostics',
   'client/src/filters/': 'filters',
+  // A flyby's document, path and player: played only in the 3D scene.
+  'client/src/flyby/': 'scene',
   // The placement editor's pure rules: corners, point pairs, refusal wording.
   'client/src/geodata/': 'georeferencedMaps',
   'client/src/imagelink/': 'resLinks',
   'client/src/map/': 'map',
+  // The movie encoders and the file a long movie is written to, shared by the movies made here.
+  'client/src/movie/': ['scene', 'surveys', 'trips'],
   'client/src/notifications/': 'notifications',
   'client/src/pdf/': 'documents',
   'client/src/photolibrary/': 'photoLibraries',

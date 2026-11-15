@@ -61,8 +61,22 @@ describe('a presentation scenario', () => {
     ]);
   });
 
+  it('refuses a colour it cannot read and a camera range of nothing', () => {
+    expect(
+      scenarioProblems(
+        scenario([
+          { at: 0, kind: 'camera', to: { range: 0 } },
+          { at: 1, kind: 'modelColor', to: 'orange' },
+        ]),
+      ),
+    ).toEqual([
+      'item 0 puts the camera at a range that is not above zero',
+      'item 1 names the colour "orange", which is not written #rrggbb',
+    ]);
+  });
+
   it('eases from 0 to 1 whatever the curve', () => {
-    for (const kind of ['linear', 'in', 'out', 'inOut'] as const) {
+    for (const kind of ['linear', 'in', 'out', 'inOut', 'smooth'] as const) {
       expect(ease(kind, 0)).toBe(0);
       expect(ease(kind, 1)).toBe(1);
       expect(ease(kind, 2)).toBe(1);

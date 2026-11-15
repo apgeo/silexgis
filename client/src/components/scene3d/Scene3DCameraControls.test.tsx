@@ -28,6 +28,8 @@ function renderControls(overrides: Partial<Scene3DCameraControlsProps> = {}) {
     coupled: true,
     onCoupledChange: vi.fn(),
     onSaveImage: vi.fn(),
+    flybyOpen: false,
+    onFlybyOpenChange: vi.fn(),
     ...overrides,
   };
   render(<Scene3DCameraControls {...props} />);
@@ -235,5 +237,31 @@ describe('saving the view as an image', () => {
     fireEvent.click(screen.getByTestId('scene3d-save-image'));
 
     expect(props.onSaveImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('opening the flyby tool', () => {
+  it('offers it in the strip, and says whether it is open', () => {
+    const props = renderControls();
+    const button = screen.getByRole('button', { name: 'Flyby' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
+    expect(props.onFlybyOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it('closes it from the same button', () => {
+    const props = renderControls({ flybyOpen: true });
+    const button = screen.getByRole('button', { name: 'Flyby' });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(button);
+    expect(props.onFlybyOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('offers it behind the fold too, captioned in words', () => {
+    vi.mocked(useIsMobile).mockReturnValue(true);
+    const props = renderControls();
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
+    fireEvent.click(screen.getByRole('button', { name: 'Flyby' }));
+    expect(props.onFlybyOpenChange).toHaveBeenCalledWith(true);
   });
 });

@@ -67,6 +67,26 @@ terrain covers this area — draw it?* **Draw it** makes the switch above; **Not
 build away for the rest of the session. The scene never switches by itself: a swap reloads the
 ground while you are moving and changes the heights everything stands on.
 
+### Relief: drawing heights taller or flatter
+
+Gentle relief can be hard to read, and so can the depth of a cave under it. The layer panel's
+**Relief** slider draws every height in the scene taller — up to five times — or flatter, down to
+half. Everything is stretched together, from sea level up: the ground, cave entrances, survey
+lines, walls, scans, the cutaway, and the camera's own height. An entrance therefore still sits on
+the ground and a survey line still runs inside its walls; a cave keeps its proportion to the
+mountain over it.
+
+- **True height** puts the factor back to ×1.
+- While the factor is not ×1, the scene says so — *Relief ×2* — because a stretched slope looks
+  like a real one.
+- Altitudes, depths and lengths shown anywhere stay true. So does the position in the address
+  bar: a link opens the same place at any factor.
+- Because the camera's height is stretched too, the same camera stands twice as high over ground
+  drawn twice as high: at ×2 you see more ground around you, as you would from a taller world.
+- The factor is remembered in this browser. A saved view remembers the factor it was saved at;
+  opening it draws the scene at that factor for the rest of the session, without changing your own
+  setting. Moving the slider makes the factor yours again.
+
 ---
 
 ## Seeing the cave through the ground
@@ -195,6 +215,7 @@ See [Filters on the map](search-and-filters.md#filters-on-the-map).
 | **View from the north / south / east / west** | Fixed elevations |
 | **Remove perspective** | Orthographic projection, so distances read the same near and far |
 | **Save image** | Downloads what the scene is showing as a picture |
+| **Flyby** | Opens the tool that flies the camera for you — see [Flybys in the 3D view](flybys.md) |
 
 **Save image** downloads the view as a PNG named with the date and time it was taken
 (`silexgis-3d-20261006-140509.png`), at the full resolution of your screen. The credits of the

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import {
+  AimOutlined,
   AppstoreOutlined,
   BellOutlined,
   CameraOutlined,
@@ -35,6 +36,7 @@ import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
 import SurveyUploadsSettingsForm from './SurveyUploadsSettingsForm.tsx';
 import TestDataSettingsForm from './TestDataSettingsForm.tsx';
+import MapSymbolsSettingsForm from './MapSymbolsSettingsForm.tsx';
 import SelfHostedBasemapPanel from './SelfHostedBasemapPanel.tsx';
 import SyncSettingsForm from './SyncSettingsForm.tsx';
 import { useTranslation } from 'react-i18next';
@@ -188,6 +190,15 @@ export default function MessagingSettingsPage() {
                 </span>
               ),
               children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} />,
+            },
+            {
+              key: 'map-symbols',
+              label: (
+                <span>
+                  <AimOutlined /> {t('mapSymbols.tab')}
+                </span>
+              ),
+              children: <MapSymbolsSettingsForm settings={settings} onSaved={onSaved} />,
             },
             {
               key: 'test-data',
