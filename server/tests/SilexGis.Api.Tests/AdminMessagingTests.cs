@@ -91,6 +91,98 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
             .GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeFalse();
     }
 
+    /// <summary>
+    /// A stored secret is for the server it was typed for. Pointing the mail settings at another
+    /// host or port, or the SMS settings at another gateway address, without typing the secret
+    /// again drops it, and the answer names what was dropped — otherwise whoever may edit the
+    /// settings could send the stored credential to a server of their own with the test button.
+    /// </summary>
+    [Fact]
+    public async Task Moving_the_mail_server_or_the_sms_gateway_drops_the_stored_secret_and_says_so()
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        // Same server, no password sent: kept, and nothing to report.
+        (await SaveAsync(admin, "mail", Mail(password: "relay-pass"))).GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeTrue();
+        var kept = await SaveAsync(admin, "mail", Mail(password: null, fromName: "Renamed"));
+        kept.GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeTrue();
+        kept.GetProperty("notices").EnumerateArray().ShouldBeEmpty();
+
+        // Another host: dropped.
+        var moved = await SaveAsync(admin, "mail", Mail(password: null, host: "smtp.elsewhere.example.org"));
+        moved.GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeFalse();
+        Notices(moved).ShouldBe(["settings.mail_password_cleared"]);
+        await AssertStoredPasswordAsync(null);
+
+        // Another port: dropped as well.
+        await SaveAsync(admin, "mail", Mail(password: "relay-pass-2", host: "smtp.elsewhere.example.org"));
+        var reported = await SaveAsync(admin, "mail", Mail(password: null, host: "smtp.elsewhere.example.org", port: 465));
+        reported.GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeFalse();
+        Notices(reported).ShouldBe(["settings.mail_password_cleared"]);
+
+        // A move that carries its own password keeps that one, with nothing to report.
+        var retyped = await SaveAsync(admin, "mail", Mail(password: "relay-pass-3", host: "smtp.example.org"));
+        retyped.GetProperty("mail").GetProperty("hasPassword").GetBoolean().ShouldBeTrue();
+        Notices(retyped).ShouldBeEmpty();
+
+        // The SMS gateway's authorisation header follows the same rule.
+        (await SaveAsync(admin, "sms", Sms(authHeader: "Bearer gateway-token"))).GetProperty("sms").GetProperty("hasAuthHeader").GetBoolean().ShouldBeTrue();
+        var sameGateway = await SaveAsync(admin, "sms", Sms(method: "GET"));
+        sameGateway.GetProperty("sms").GetProperty("hasAuthHeader").GetBoolean().ShouldBeTrue();
+        Notices(sameGateway).ShouldBeEmpty();
+        var otherGateway = await SaveAsync(admin, "sms", Sms(url: "https://other-gateway.example.org/send"));
+        otherGateway.GetProperty("sms").GetProperty("hasAuthHeader").GetBoolean().ShouldBeFalse();
+        Notices(otherGateway).ShouldBe(["settings.sms_auth_header_cleared"]);
+    }
+
+    /// <summary>
+    /// The SMS gateway is somebody else's service on the internet. An address on this machine,
+    /// on a private network or on a link-local range (the cloud metadata service among them) is
+    /// refused, so the settings page cannot be used to reach what only the server can reach —
+    /// unless the installation says in its own configuration that its gateway lives there.
+    /// </summary>
+    [Theory]
+    [InlineData("http://127.0.0.1:9000/send")]
+    [InlineData("http://localhost/send")]
+    [InlineData("http://169.254.169.254/latest/meta-data/")]
+    [InlineData("http://10.1.2.3/send")]
+    [InlineData("http://192.168.0.10/send")]
+    [InlineData("http://[::1]/send")]
+    [InlineData("http://[fd00::5]/send")]
+    public async Task An_sms_gateway_on_an_internal_address_is_refused_unless_the_installation_allows_it(string url)
+    {
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        var refused = await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(url: url));
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("settings.sms_gateway_internal");
+
+        // A public gateway is accepted by the same installation.
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(url: "https://93.184.215.14/send")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var allowing = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["Auth:RateLimitPerMinute"] = "200",
+            ["SmsGateway:AllowInternalAddresses"] = "true",
+        });
+        var allowedAdmin = await AuthHelper.BearerClientAsync(allowing, adminEmail);
+        var allowed = await allowedAdmin.PutAsJsonAsync("/api/v1/admin/settings/sms", Sms(url: url));
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+    }
+
+    private static async Task<JsonElement> SaveAsync(HttpClient client, string section, object body)
+    {
+        var response = await client.PutAsJsonAsync($"/api/v1/admin/settings/{section}", body);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement.Clone();
+    }
+
+    private static List<string> Notices(JsonElement settings) =>
+        [.. settings.GetProperty("notices").EnumerateArray().Select(x => x.GetString()!)];
+
     [Fact]
     public async Task Saved_settings_replace_the_configured_ones_for_the_next_request()
     {
@@ -467,11 +559,12 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
 
     private static SecuritySettingsBody Policy() => new(false, true, true, true, false, 5, 60);
 
-    private static object Mail(string? password, string fromName = "SilexGIS") => new
+    private static object Mail(
+        string? password, string fromName = "SilexGIS", string host = "smtp.example.org", int port = 587) => new
     {
         enabled = true,
-        host = "smtp.example.org",
-        port = 587,
+        host,
+        port,
         security = "auto",
         username = "relay-user",
         password,
@@ -482,7 +575,8 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
         acceptInvalidCertificate = false,
     };
 
-    private static object Sms(string url = "https://gateway.example.org/send", string method = "POST") => new
+    private static object Sms(
+        string url = "https://gateway.example.org/send", string method = "POST", string? authHeader = null) => new
     {
         enabled = true,
         url,
@@ -490,13 +584,13 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
         contentType = "application/x-www-form-urlencoded",
         bodyTemplate = "To={to}&Body={text}",
         headers = (Dictionary<string, string>?)null,
-        authHeader = (string?)null,
+        authHeader,
         from = "+40700000000",
         timeoutSeconds = 15,
     };
 
     /// <summary>Reads the stored section straight from the database, past the redacting DTO.</summary>
-    private async Task AssertStoredPasswordAsync(string expected)
+    private async Task AssertStoredPasswordAsync(string? expected)
     {
         using var scope = factory.Services.CreateScope();
         var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();

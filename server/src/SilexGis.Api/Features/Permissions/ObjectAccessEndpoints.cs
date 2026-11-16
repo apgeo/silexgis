@@ -212,7 +212,10 @@ public static class ObjectAccessEndpoints
             .Select(e => (e.SubjectKind, e.SubjectId))
             .ToList();
 
-        AccessEntryMapping.StageReplace(db, current, staged);
+        if (await AccessEntryMapping.StageReplaceAsync(db, ctx, current, staged, ct) is { } refused)
+        {
+            return refused;
+        }
 
         var newlyGranted = request.Entries
             .Where(e => e.Effect == AccessEffect.Allow

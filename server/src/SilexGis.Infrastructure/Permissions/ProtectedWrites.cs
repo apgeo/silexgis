@@ -20,8 +20,18 @@ namespace SilexGis.Infrastructure.Permissions;
 /// </remarks>
 public static class ProtectedWrites
 {
-    public static async Task<HashSet<Guid>> WritableAsync<T>(
+    public static Task<HashSet<Guid>> WritableAsync<T>(
         IAccessService access, AccessContext ctx, IReadOnlyList<T> rows, CancellationToken ct)
+        where T : IProtectedEntity =>
+        PermittedAsync(access, ctx, AccessAction.Write, rows, ct);
+
+    /// <summary>
+    /// The same question for any one action — which of these rows the caller may share, for
+    /// instance — answered the same way, so a listing's per-row hint and the guard on the route
+    /// it leads to cannot disagree.
+    /// </summary>
+    public static async Task<HashSet<Guid>> PermittedAsync<T>(
+        IAccessService access, AccessContext ctx, AccessAction action, IReadOnlyList<T> rows, CancellationToken ct)
         where T : IProtectedEntity
     {
         if (rows.Count == 0)
@@ -39,7 +49,7 @@ public static class ProtectedWrites
         [
             .. rows
                 .Where(r => AccessEvaluator.Decide(
-                    ctx, AccessDomains.Of(r), AccessAction.Write, facts[r.Id]).Allowed)
+                    ctx, AccessDomains.Of(r), action, facts[r.Id]).Allowed)
                 .Select(r => r.Id),
         ];
     }

@@ -239,12 +239,18 @@ public static class ExpeditionSharingEndpoints
         // and reach would take with it a rule of the same shape somebody authored on a trip's
         // own tab, and they would never learn why the access they granted went away.
         //
-        // No bound is asked for at each trip on the way out: withdrawing only ever takes access
-        // away, so there is nothing here anybody could amplify. Loaded and removed rather than
-        // deleted in one statement, so the trail carries the withdrawal.
+        // A camp's sharing may carry denies, and withdrawing one lifts it on every trip it was
+        // written to, so each is bounded at its own trip exactly as removing it there by hand
+        // would be; the allows only ever take access away and pass. Loaded and removed rather
+        // than deleted in one statement, so the trail carries the withdrawal.
         var written = await db.AccessEntries
             .Where(e => e.GrantedViaExpeditionId == expedition!.Id)
             .ToListAsync(ct);
+        if (await AccessEntryMapping.RejectRemovalsAsync(db, ctx, written, ct) is { } refused)
+        {
+            return refused;
+        }
+
         db.AccessEntries.RemoveRange(written);
 
         Record(db, currentUser, expedition!.Id, "withdrawn",

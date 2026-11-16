@@ -13,8 +13,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Tests.Support;
+using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
@@ -257,6 +260,84 @@ public sealed class ExternalAuthTests : IDisposable, IClassFixture<PostgresFixtu
 
         var linked = await userManager.FindByLoginAsync("github", "gh-1");
         linked!.Id.ShouldBe(localId);
+
+        // A confirmed account was already proven to be its holder's, so linking takes nothing from
+        // it: the password stays, and nothing is recorded as the account changing hands.
+        (await userManager.HasPasswordAsync(linked)).ShouldBeTrue();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.AuditEntries.CountAsync(a =>
+            a.Action == AuditActions.ExternalAccountLinked && a.EntityId == localId.ToString())).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Federation_into_an_unconfirmed_account_confirms_it_and_removes_every_unproven_way_in()
+    {
+        var email = Email();
+        Guid squatterId;
+        using (var arrange = factory.Services.CreateScope())
+        {
+            // Somebody registered this address with a password of their own, never proved the
+            // address, and switched a second factor on that only they hold.
+            var userManager = arrange.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var squatter = new SilexGisUser { UserName = email, Email = email, EmailConfirmed = false };
+            (await userManager.CreateAsync(squatter, AuthHelper.Password)).Succeeded.ShouldBeTrue();
+            squatter.TwoFactorEmailEnabled = true;
+            (await userManager.SetTwoFactorEnabledAsync(squatter, true)).Succeeded.ShouldBeTrue();
+            squatterId = squatter.Id;
+
+            // Signed in under the unproven address, they also linked a provider identity of their
+            // own — the signed-in link flow does not ask whether the address was proved.
+            (await userManager.AddLoginAsync(squatter, new UserLoginInfo("github", "gh-squatter", "GitHub")))
+                .Succeeded.ShouldBeTrue();
+
+            // The password works before the provider sign-in: the refusal below is the takeover's.
+            (await userManager.CheckPasswordAsync(squatter, AuthHelper.Password)).ShouldBeTrue();
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ExternalAuthService>();
+            var result = await service.FederateAsync("github", "gh-proven", Principal(email, verified: true), Provider(allowCreate: false));
+            result.ErrorCode.ShouldBeNull();
+            result.User!.Id.ShouldBe(squatterId);
+        }
+
+        using (var assert = factory.Services.CreateScope())
+        {
+            var userManager = assert.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var account = (await userManager.FindByIdAsync(squatterId.ToString()))!;
+            account.EmailConfirmed.ShouldBeTrue();
+            (await userManager.HasPasswordAsync(account)).ShouldBeFalse();
+            account.TwoFactorEnabled.ShouldBeFalse();
+            account.TwoFactorEmailEnabled.ShouldBeFalse();
+            (await userManager.FindByLoginAsync("github", "gh-proven"))!.Id.ShouldBe(squatterId);
+            (await userManager.FindByLoginAsync("github", "gh-squatter")).ShouldBeNull();
+            (await userManager.GetLoginsAsync(account)).Select(l => l.ProviderKey).ShouldBe(["gh-proven"]);
+
+            var db = assert.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var audit = await db.AuditEntries.SingleAsync(a =>
+                a.Action == AuditActions.ExternalAccountLinked && a.EntityId == squatterId.ToString());
+            audit.EntityType.ShouldBe(nameof(SilexGisUser));
+            audit.Changes!.ShouldContain(nameof(SilexGisUser.EmailConfirmed));
+            audit.Changes!.ShouldContain("RemovedLogins");
+        }
+
+        // The provider identity the squatter linked no longer leads into the account.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ExternalAuthService>();
+            var squatterReturns = await service.FederateAsync(
+                "github", "gh-squatter", Principal(Email(), verified: true), Provider(allowCreate: false));
+            squatterReturns.User.ShouldBeNull();
+            squatterReturns.ErrorCode.ShouldBe("auth.external_no_account");
+        }
+
+        // Whoever chose the old password can no longer sign in with it.
+        using var after = Browser();
+        var refused = await after.PostAsJsonAsync("/api/v1/auth/login", new { email, password = AuthHelper.Password });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("auth.invalid_credentials");
     }
 
     [Fact]

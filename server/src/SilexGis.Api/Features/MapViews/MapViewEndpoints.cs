@@ -168,9 +168,12 @@ public static class MapViewEndpoints
 
         var views = await db.MapViews.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.MapViews)
-            .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name)
             .ToListAsync(ct);
-        return TypedResults.Ok(views.Select(ToDto).ToList());
+        // Ordered by what this reader is told, so another owner's home never leads the list.
+        return TypedResults.Ok(views
+            .Select(x => ToDto(x, ctx.UserId))
+            .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name, StringComparer.InvariantCulture)
+            .ToList());
     }
 
     private static async Task<Results<Created<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -206,7 +209,7 @@ public static class MapViewEndpoints
         view.IsHome = request.IsHome;
         db.MapViews.Add(view);
         await SaveWithHomeAsync(db, view, ownerChoosesHome: true, ct);
-        return TypedResults.Created($"/api/v1/map-views/{view.Id}", ToDto(view));
+        return TypedResults.Created($"/api/v1/map-views/{view.Id}", ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<Ok<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -256,7 +259,7 @@ public static class MapViewEndpoints
         }
 
         await SaveWithHomeAsync(db, view, ownerChoosesHome, ct);
-        return TypedResults.Ok(ToDto(view));
+        return TypedResults.Ok(ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -311,7 +314,7 @@ public static class MapViewEndpoints
         // Idempotent: an existing token is reused so shared links stay stable.
         view.ShareToken ??= Guid.NewGuid();
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(ToDto(view));
+        return TypedResults.Ok(ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> UnshareAsync(
@@ -477,8 +480,8 @@ public static class MapViewEndpoints
         await transaction.CommitAsync(ct);
     }
 
-    private static MapViewDto ToDto(MapView x) => new(
+    private static MapViewDto ToDto(MapView x, Guid readerId) => new(
         x.Id, x.Name, x.Description,
         JsonSerializer.Deserialize<JsonElement>(x.Config),
-        x.ShareToken, x.IsHome, x.OwnerUserId, x.CavingGroupId, x.Visibility, x.CreatedAt, x.UpdatedAt);
+        x.ShareToken, SavedViewRules.IsHomeOf(x.IsHome, x.OwnerUserId, readerId), x.OwnerUserId, x.CavingGroupId, x.Visibility, x.CreatedAt, x.UpdatedAt);
 }

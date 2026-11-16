@@ -32,7 +32,7 @@ public static class AuthEndpoints
             .WithSummary("Ends the cookie session.");
         auth.MapPost("/register", RegisterAsync)
             .WithValidation<RegisterRequest>()
-            .WithSummary("Creates an account (enabled per installation via Auth:OpenRegistration).");
+            .WithSummary("Creates an account (enabled per installation via Auth:OpenRegistration). Returns 202 alike whether or not the address already has an account; its holder is mailed instead.");
         auth.MapPost("/password/forgot", ForgotPasswordAsync)
             .WithValidation<ForgotPasswordRequest>()
             .WithSummary("Requests a password-reset link by email. Returns 202 whether or not the address has an account.");
@@ -61,7 +61,16 @@ public static class AuthEndpoints
         var user = string.IsNullOrWhiteSpace(request.Email) ? null : await userManager.FindByEmailAsync(request.Email);
         if (user is null)
         {
+            SpendAPasswordCheck(userManager, request.Password);
             return AuthProblem(StatusCodes.Status401Unauthorized, "auth.invalid_credentials", "Invalid email or password.");
+        }
+
+        if (!await userManager.HasPasswordAsync(user))
+        {
+            // Identity answers an account without a password (external sign-in only, or an
+            // invitation not yet taken up) without hashing anything — as fast as an unknown address
+            // used to be, and now distinguishable from one.
+            SpendAPasswordCheck(userManager, request.Password);
         }
 
         var result = await signInManager.PasswordSignInAsync(user, request.Password, isPersistent: true, lockoutOnFailure: true);
@@ -126,6 +135,17 @@ public static class AuthEndpoints
             return AuthProblem(StatusCodes.Status403Forbidden, "auth.registration_disabled", "Self-registration is disabled on this installation.");
         }
 
+        var policy = await settings.GetSecurityAsync(ct);
+
+        // Registration never says whether an address already has an account: that would let anyone
+        // read the member list one address at a time. A taken address gets the same answer as a new
+        // one, after the same password checks and the same slow hash, and its holder is mailed a way
+        // back in instead of a second account being opened over theirs.
+        if (await userManager.FindByEmailAsync(request.Email) is { } holder)
+        {
+            return await AnswerTakenAddressAsync(holder, request, userManager, policy, dispatcher, configuration, ct);
+        }
+
         var user = new SilexGisUser
         {
             UserName = request.Email,
@@ -141,7 +161,25 @@ public static class AuthEndpoints
         var result = await userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
-            return IdentityProblem(result);
+            var refusals = result.Errors.Where(e => !IsDuplicate(e)).ToArray();
+            if (refusals.Length > 0)
+            {
+                return IdentityProblem(refusals);
+            }
+
+            // Only the store's own duplicate check refused: a second registration of the address
+            // that raced this one, or an address that is another account's sign-in name. Answered
+            // like the lookup above; the password has already been checked and hashed by now.
+            await transaction.RollbackAsync(ct);
+            MessageResult? hint = null;
+            if (policy.SendConfirmationOnRegistration
+                && await userManager.FindByEmailAsync(request.Email) is { } raced)
+            {
+                var resetToken = await userManager.GeneratePasswordResetTokenAsync(raced);
+                hint = await AccountMessages.SendAlreadyRegisteredAsync(dispatcher, configuration, raced, resetToken, ct);
+            }
+
+            return RegistrationAccepted(request.Email, policy, hint);
         }
 
         // Capabilities live in permission groups; a new account joins the configured
@@ -155,18 +193,79 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        var policy = await settings.GetSecurityAsync(ct);
-        var confirmationSent = false;
+        MessageResult? sent = null;
         if (policy.SendConfirmationOnRegistration)
         {
             var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
-            var sent = await AccountMessages.SendEmailConfirmationAsync(dispatcher, configuration, user, token, ct);
-            confirmationSent = sent.Sent && sent.ChannelConfigured;
+            sent = await AccountMessages.SendEmailConfirmationAsync(dispatcher, configuration, user, token, ct);
         }
 
-        return TypedResults.Created(
-            $"/api/v1/users/{user.Id}",
-            new RegistrationDto(user.Id, user.Email!, user.DisplayName, confirmationSent, policy.RequireConfirmedEmail));
+        return RegistrationAccepted(request.Email, policy, sent);
+    }
+
+    /// <summary>
+    /// What registering an address that already has an account answers: exactly what a new address
+    /// would. A password the policy refuses is refused in the same words; an accepted one is hashed
+    /// and thrown away, so the answer takes the time a new account's hash takes; and the holder is
+    /// mailed when a new address would have been mailed, so the answer's own report of a message
+    /// sent does not differ either.
+    /// </summary>
+    private static async Task<IResult> AnswerTakenAddressAsync(
+        SilexGisUser holder,
+        RegisterRequest request,
+        UserManager<SilexGisUser> userManager,
+        SecuritySettings policy,
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        CancellationToken ct)
+    {
+        var probe = new SilexGisUser { UserName = request.Email, Email = request.Email, DisplayName = request.DisplayName };
+        var refusals = new List<IdentityError>();
+        foreach (var validator in userManager.PasswordValidators)
+        {
+            var checkedPassword = await validator.ValidateAsync(userManager, probe, request.Password);
+            refusals.AddRange(checkedPassword.Errors);
+        }
+
+        if (refusals.Count > 0)
+        {
+            return IdentityProblem(refusals);
+        }
+
+        _ = userManager.PasswordHasher.HashPassword(probe, request.Password);
+
+        MessageResult? sent = null;
+        if (policy.SendConfirmationOnRegistration)
+        {
+            var token = await userManager.GeneratePasswordResetTokenAsync(holder);
+            sent = await AccountMessages.SendAlreadyRegisteredAsync(dispatcher, configuration, holder, token, ct);
+        }
+
+        return RegistrationAccepted(request.Email, policy, sent);
+    }
+
+    private static IResult RegistrationAccepted(string email, SecuritySettings policy, MessageResult? sent) =>
+        TypedResults.Accepted(
+            (string?)null,
+            new RegistrationDto(email, sent is { Sent: true, ChannelConfigured: true }, policy.RequireConfirmedEmail));
+
+    private static bool IsDuplicate(IdentityError error) =>
+        error.Code is nameof(IdentityErrorDescriber.DuplicateEmail) or nameof(IdentityErrorDescriber.DuplicateUserName);
+
+    /// <summary>A hash made once, of a password nobody has, for <see cref="SpendAPasswordCheck"/> to verify against.</summary>
+    private static string? unmatchedHash;
+
+    /// <summary>
+    /// Verifies the offered password against a hash no account holds, and throws the verdict away.
+    /// A sign-in that finds no password to check would otherwise answer at once, while one that
+    /// does spends the deliberately slow hash first — the words of the two refusals are the same,
+    /// and the time they take would still say which addresses have accounts.
+    /// </summary>
+    private static void SpendAPasswordCheck(UserManager<SilexGisUser> userManager, string? password)
+    {
+        var probe = new SilexGisUser();
+        var hash = unmatchedHash ??= userManager.PasswordHasher.HashPassword(probe, Guid.NewGuid().ToString("N"));
+        _ = userManager.PasswordHasher.VerifyHashedPassword(probe, hash, password ?? string.Empty);
     }
 
     private static async Task<IResult> ForgotPasswordAsync(
@@ -312,14 +411,14 @@ public static class AuthEndpoints
         return Results.Problem(detail: detail, statusCode: status, extensions: payload);
     }
 
-    private static IResult IdentityProblem(IdentityResult result) =>
+    private static IResult IdentityProblem(IReadOnlyCollection<IdentityError> errors) =>
         Results.Problem(
-            detail: string.Join(" ", result.Errors.Select(e => e.Description)),
+            detail: string.Join(" ", errors.Select(e => e.Description)),
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?>
             {
                 ["code"] = "auth.registration_invalid",
-                ["errors"] = result.Errors.ToDictionary(e => e.Code, e => e.Description),
+                ["errors"] = errors.GroupBy(e => e.Code).ToDictionary(g => g.Key, g => g.First().Description),
             });
 }
 
@@ -410,8 +509,9 @@ public sealed class ConfirmEmailRequestValidator : AbstractValidator<ConfirmEmai
 public sealed record SessionDto(Guid UserId, string Email, string? DisplayName);
 
 /// <summary>
-/// What a new account needs to be told: whether a confirmation message actually went out, and
-/// whether signing in will require it.
+/// What registering answers, alike for a new address and one that already has an account: the
+/// address as given, whether a message actually went to it (a confirmation for a new account, a
+/// way back in for an existing holder), and whether signing in will require a confirmed address.
+/// It names no account, because naming one would say which of the two it was.
 /// </summary>
-public sealed record RegistrationDto(
-    Guid UserId, string Email, string? DisplayName, bool ConfirmationSent, bool ConfirmationRequired);
+public sealed record RegistrationDto(string Email, bool MailSent, bool ConfirmationRequired);

@@ -7,6 +7,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Sms;
 using SilexGis.Infrastructure.TestData;
 
 namespace SilexGis.Api.Features.Admin;
@@ -141,16 +142,18 @@ public static class AdminSettingsEndpoints
         }
 
         var current = await settings.GetMailAsync(ct);
+        var host = Text(request.Host);
+        var dropPassword = request.Password is null && MessagingEndpointRules.MailServerMoved(current, host, request.Port);
         await settings.SaveAsync(
             AppSettingSections.Mail,
             new MailSettings
             {
                 Enabled = request.Enabled,
-                Host = Text(request.Host),
+                Host = host,
                 Port = request.Port,
                 Security = request.Security,
                 Username = Blank(request.Username),
-                Password = KeepOrReplaceSecret(current.Password, request.Password),
+                Password = dropPassword ? null : KeepOrReplaceSecret(current.Password, request.Password),
                 FromAddress = Text(request.FromAddress),
                 FromName = Text(request.FromName),
                 ReplyTo = Blank(request.ReplyTo),
@@ -159,7 +162,9 @@ public static class AdminSettingsEndpoints
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
+        return TypedResults.Ok(await SnapshotAsync(
+            settings, emailDelivery, smsDelivery, testData.Value, ct,
+            dropPassword && current.Password is not null ? [MessagingEndpointRules.MailPasswordClearedCode] : []));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSmsAsync(
@@ -169,6 +174,7 @@ public static class AdminSettingsEndpoints
         IEmailDelivery emailDelivery,
         ISmsDelivery smsDelivery,
         IOptions<TestDataOptions> testData,
+        IOptions<SmsGatewayOptions> gateway,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -182,26 +188,39 @@ public static class AdminSettingsEndpoints
             return ApiProblems.Forbidden("access.forbidden");
         }
 
+        var url = Text(request.Url);
+        if (!gateway.Value.AllowInternalAddresses
+            && Uri.TryCreate(url, UriKind.Absolute, out var address)
+            && await SmsGatewayAddress.PointsInsideAsync(address.DnsSafeHost, ct))
+        {
+            return ApiProblems.BadRequest(
+                MessagingEndpointRules.SmsGatewayInternalCode,
+                "The SMS gateway address is on this machine or on an internal network. An installation whose gateway runs there allows it in its own configuration.");
+        }
+
         var current = await settings.GetSmsAsync(ct);
+        var dropAuthHeader = request.AuthHeader is null && MessagingEndpointRules.SmsGatewayMoved(current, url);
         await settings.SaveAsync(
             AppSettingSections.Sms,
             new SmsSettings
             {
                 Enabled = request.Enabled,
-                Url = Text(request.Url),
+                Url = url,
                 Method = Text(request.Method).ToUpperInvariant(),
                 ContentType = Text(request.ContentType),
                 BodyTemplate = request.BodyTemplate ?? string.Empty,
                 Headers = request.Headers is null
                     ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     : new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase),
-                AuthHeader = KeepOrReplaceSecret(current.AuthHeader, request.AuthHeader),
+                AuthHeader = dropAuthHeader ? null : KeepOrReplaceSecret(current.AuthHeader, request.AuthHeader),
                 From = Blank(request.From),
                 TimeoutSeconds = request.TimeoutSeconds,
             },
             ct);
 
-        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, testData.Value, ct));
+        return TypedResults.Ok(await SnapshotAsync(
+            settings, emailDelivery, smsDelivery, testData.Value, ct,
+            dropAuthHeader && current.AuthHeader is not null ? [MessagingEndpointRules.SmsAuthHeaderClearedCode] : []));
     }
 
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveSecurityAsync(
@@ -673,7 +692,8 @@ public static class AdminSettingsEndpoints
     }
 
     private static async Task<AdminSettingsDto> SnapshotAsync(
-        IAppSettingsService settings, IEmailDelivery emailDelivery, ISmsDelivery smsDelivery, TestDataOptions testData, CancellationToken ct)
+        IAppSettingsService settings, IEmailDelivery emailDelivery, ISmsDelivery smsDelivery, TestDataOptions testData, CancellationToken ct,
+        IReadOnlyList<string>? notices = null)
     {
         var mail = await settings.GetMailAsync(ct);
         var sms = await settings.GetSmsAsync(ct);
@@ -748,7 +768,8 @@ public static class AdminSettingsEndpoints
             new TestDataSettingsDto(generator.Enabled, testData.Allowed),
             new MapSymbolSettingsDto(symbols.EntranceSymbol, symbols.ApproximateEntranceSymbol),
             await emailDelivery.IsConfiguredAsync(ct),
-            await smsDelivery.IsConfiguredAsync(ct));
+            await smsDelivery.IsConfiguredAsync(ct),
+            notices ?? []);
     }
 
     /// <summary>

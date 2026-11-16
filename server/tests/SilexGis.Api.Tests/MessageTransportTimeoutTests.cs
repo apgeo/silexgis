@@ -120,6 +120,9 @@ public sealed class MessageTransportTimeoutTests(PostgresFixture postgres) : ICl
         result.Permanent.ShouldBeFalse();
         result.Error.ShouldNotBeNull();
         result.Error.ShouldContain(((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // What the gateway wrote back is not repeated: the administrator's test-send shows this
+        // error, and the address it was sent to is the administrator's to choose.
+        result.Error.ShouldNotContain("gateway says no");
     }
 
     [Theory]

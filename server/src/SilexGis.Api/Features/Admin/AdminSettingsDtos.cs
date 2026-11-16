@@ -89,7 +89,9 @@ public sealed record ProtectionSettingsDto(
 /// <summary>
 /// Everything the installation-settings page needs in one read, including whether each channel is
 /// actually working — a page that only echoed the saved values could show a fully configured mail
-/// server that has never delivered anything.
+/// server that has never delivered anything. <c>Notices</c> carries stable codes for what a save
+/// did beyond what was asked — a stored secret dropped because its server moved — and is empty on
+/// a read.
 /// </summary>
 public sealed record AdminSettingsDto(
     MailSettingsDto Mail,
@@ -106,7 +108,8 @@ public sealed record AdminSettingsDto(
     TestDataSettingsDto TestData,
     MapSymbolSettingsDto MapSymbols,
     bool MailConfigured,
-    bool SmsConfigured);
+    bool SmsConfigured,
+    IReadOnlyList<string> Notices);
 
 /// <summary>
 /// What the installation has decided about surveys sent from a field device: whether a cave an
