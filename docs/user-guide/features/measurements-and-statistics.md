@@ -244,6 +244,16 @@ missing picture is never read as "no caves on steep ground". Facing is counted o
 is at least 2°, because flat ground faces nowhere. The area's ground is sampled on a regular grid
 over its outline, so shares are estimates, good to a percentage point or so.
 
+A fourth measure, **landform**, sets the same entrances and sinkholes against the ten shapes of the
+ground — flat, peak, ridge, shoulder, spur, slope, hollow, footslope, valley and pit — read from the
+newest landform picture computed for the active build, as paired bars and a table like the others.
+The search distance that picture was drawn at sets the scale of its landforms (the same hillside is
+a slope at 100 m and a shoulder at 1 km), so a doline field read at 500 m and at 2 km can tell two
+different stories; the picture's settings are in the terrain page's register. Ground the picture
+left unclassified, such as the outermost cells of a raster, is not counted. Landform pictures are
+drawn by a separate analysis program an installation may not run: where it does not and none was
+drawn earlier, the measure says so rather than that no picture has been computed yet.
+
 Only entrances and sinkholes you may place are counted, so the figures do not change when a
 protected one is added. You need permission to read elevation data. Nothing here is published or
 exported.

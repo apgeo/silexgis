@@ -35,7 +35,8 @@ you stop over ground it covers. See
 
 Terrain is not only for the globe. An administrator can have a finished build turned into
 **pictures of the ground** — shaded relief, steepness, facing, ruggedness, topographic position,
-roughness, a coloured relief or contour lines — and everybody who may read terrain then finds them
+roughness, a coloured relief, contour lines or the landform classes — and everybody who may read
+terrain then finds them
 in the flat map's layer list under **Ground pictures**. Switch one on and it is drawn beneath the
 caves.
 
@@ -50,6 +51,14 @@ caves.
 - **They are pictures, not data.** Nothing can be measured along a contour line, selected or
   exported, and no line carries its height. Contour lines stay smooth until the map is zoomed in
   past about 1:4,000; closer than that they show their steps.
+- **Landform classes** paint every cell as one of ten shapes of the ground — flat, peak, ridge,
+  shoulder, spur, slope, hollow, footslope, valley and pit — raised forms in warm colours, hollow
+  ones in cool, flat ground and plain slopes pale. Switching the picture on shows its key under its
+  name in the layer list. The search distance it was drawn at (the terrain page's register shows
+  it) sets the scale of what it calls a landform: the same hillside is a slope at 100 m and a
+  shoulder at 1 km, so pictures drawn at different distances are worth names that say so. These are
+  drawn by a separate analysis program an installation may not run; where it does not, none are
+  listed unless some were drawn earlier.
 
 ## What it costs to have
 
