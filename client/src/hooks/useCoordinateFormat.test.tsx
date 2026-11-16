@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, expect, it } from 'vitest';
 import PointField from '../components/settings/PointField.tsx';
 import '../i18n';
@@ -13,11 +15,17 @@ afterEach(() => {
   useUiPrefsStore.setState({ coordinateSettings: defaultFormatSettings() });
 });
 
+// The field carries a point picker whose map reads the installation's backgrounds, so it is
+// rendered where the application renders it: under a query client.
+function withQueries({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
+}
+
 // A public trig point, not a registry position.
 const point: [number, number] = [24.73617, 45.59944];
 
 it('writes a shown position in the format chosen, and follows a change of it', () => {
-  render(<PointField value={point} />);
+  render(<PointField value={point} />, { wrapper: withQueries });
   expect(screen.getByText('45.59944°N 24.73617°E')).toBeTruthy();
 
   act(() => useUiPrefsStore.getState().setCoordinateFormat('utm'));
@@ -41,7 +49,7 @@ it('copies decimal degrees as lat, lon, and the other formats as they are shown'
 });
 
 it('follows the settings of the format chosen', () => {
-  render(<PointField value={point} />);
+  render(<PointField value={point} />, { wrapper: withQueries });
   act(() => useUiPrefsStore.getState().setFormatSettings('dd', { decimals: 2, style: 'signed' }));
   expect(screen.getByText('45.60, 24.74')).toBeTruthy();
 

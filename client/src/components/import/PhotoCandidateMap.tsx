@@ -1,17 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import LineString from 'ol/geom/LineString';
 import Point from 'ol/geom/Point';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import type { PhotoCandidate } from '../../api/hooks.ts';
+import { useSmallMap } from '../map/useSmallMap.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
@@ -64,8 +61,6 @@ export default function PhotoCandidateMap({
   onPlace,
   height = 420,
 }: Props) {
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource<Feature<Point | LineString>>());
   const pick = useRef(onPick);
   const place = useRef(onPlace);
@@ -74,56 +69,28 @@ export default function PhotoCandidateMap({
   place.current = onPlace;
   placing.current = placingKey;
 
-  const teardown = () => {
-    map.current?.setTarget(undefined);
-    map.current = null;
-  };
+  const { targetRef, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 8,
+    layers: () => [new VectorLayer({ source: source.current, style: styleOf })],
+    onCreate: (instance) => {
+      instance.on('singleclick', (event) => {
+        // While a place is being positioned by hand, the whole map is the target: clicking a
+        // point to select it would make the one spot you most want to correct unclickable.
+        if (placing.current) {
+          const [lon, lat] = toLonLat(event.coordinate);
+          place.current?.(placing.current, [lon, lat]);
+          return;
+        }
 
-  useEffect(() => () => teardown(), []);
-
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    target.current = el;
-    if (!el) {
-      teardown();
-      return;
-    }
-    if (map.current) {
-      return;
-    }
-
-    const instance = new Map({
-      target: el,
-      controls: [],
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: styleOf }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 8 }),
-    });
-
-    instance.on('singleclick', (event) => {
-      // While a place is being positioned by hand, the whole map is the target: clicking a
-      // point to select it would make the one spot you most want to correct unclickable.
-      if (placing.current) {
-        const [lon, lat] = toLonLat(event.coordinate);
-        place.current?.(placing.current, [lon, lat]);
-        return;
-      }
-
-      const hit = instance.forEachFeatureAtPixel(event.pixel, (feature) => feature);
-      const key = hit?.get('candidateKey') as string | undefined;
-      if (key !== undefined) {
-        pick.current?.(key);
-      }
-    });
-
-    map.current = instance;
-  };
+        const hit = instance.forEachFeatureAtPixel(event.pixel, (feature) => feature);
+        const key = hit?.get('candidateKey') as string | undefined;
+        if (key !== undefined) {
+          pick.current?.(key);
+        }
+      });
+    },
+  });
 
   useEffect(() => {
     source.current.clear();
@@ -155,16 +122,20 @@ export default function PhotoCandidateMap({
     }
 
     source.current.addFeatures(drawn);
-
-    const extent = source.current.getExtent();
-    if (drawn.length > 0 && extent && Number.isFinite(extent[0])) {
-      map.current?.getView().fit(extent, { padding: [32, 32, 32, 32], maxZoom: 16, duration: 200 });
-    }
   }, [candidates, selected, focused]);
+
+  // The camera follows the set of places, not the selection or a place moved by hand: either
+  // would otherwise jump the reader away from the spot they were looking at.
+  const placesKey = candidates.map((candidate) => candidate.key).join('\u0000');
+  useEffect(() => {
+    if (ready) {
+      frame(placesKey, source.current.getExtent(), { maxZoom: 16, duration: 200 });
+    }
+  }, [ready, placesKey, frame]);
 
   return (
     <div
-      ref={onTargetRef}
+      ref={targetRef}
       style={{ height, width: '100%', cursor: placingKey ? 'crosshair' : undefined }}
       data-testid="photo-candidate-map"
     />

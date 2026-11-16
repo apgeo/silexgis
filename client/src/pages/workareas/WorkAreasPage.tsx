@@ -6,18 +6,16 @@ import List from '../../components/List.tsx';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import GeoJSON from 'ol/format/GeoJSON';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import type Feature from 'ol/Feature';
+import type { FeatureLike } from 'ol/Feature';
 import { Fill, Stroke, Style, Text } from 'ol/style';
 import { transformExtent } from 'ol/proj';
-import { ScaleLine, defaults as defaultControls } from 'ol/control';
-import { useMapLayers, useWorkAreas } from '../../api/hooks.ts';
+import { ScaleLine } from 'ol/control';
+import { useWorkAreas } from '../../api/hooks.ts';
+import { useSmallMap } from '../../components/map/useSmallMap.ts';
 import { childrenOf, colourFor, extentOfAll, pathTo, topLevel } from '../../workareas/tree.ts';
 
 /**
@@ -32,8 +30,7 @@ import { childrenOf, colourFor, extentOfAll, pathTo, topLevel } from '../../work
 export default function WorkAreasPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useWorkAreas();
-  const { data: layers } = useMapLayers();
+  const { data, isLoading, isError, refetch } = useWorkAreas();
 
   /** The area whose inside is being shown, or null at the top level. */
   const [openId, setOpenId] = useState<string | null>(null);
@@ -45,75 +42,48 @@ export default function WorkAreasPage() {
     [areas, openId],
   );
 
-  const mapDiv = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<Map | null>(null);
-  const sourceRef = useRef<VectorSource | null>(null);
+  const source = useRef(new VectorSource());
+  // The click handler outlives renders on the map, so it reads the current list and navigation
+  // through a ref: a stale one would drill into whichever area used to be under that pixel.
+  const latest = useRef({ areas, navigate });
+  latest.current = { areas, navigate };
 
-  // Built once. The level's shapes are swapped on the source below rather than by rebuilding the
-  // map, so drilling in does not tear down and re-create a canvas the reader is looking at.
-  useEffect(() => {
-    if (!mapDiv.current || mapRef.current) {
-      return;
-    }
-    const source = new VectorSource();
-    const map = new Map({
-      target: mapDiv.current,
-      controls: defaultControls().extend([new ScaleLine()]),
-      layers: [
-        new VectorLayer({
-          source,
-          style: (feature) =>
-            new Style({
-              fill: new Fill({ color: `${feature.get('colour') as string}33` }),
-              stroke: new Stroke({ color: feature.get('colour') as string, width: 2 }),
-              text: new Text({
-                text: (feature.get('name') as string | null) ?? '',
-                font: '600 13px sans-serif',
-                fill: new Fill({ color: '#1f1f1f' }),
-                // The names sit over aerial imagery as often as over a plain background, so the
-                // halo is what keeps them readable rather than the fill colour.
-                stroke: new Stroke({ color: 'rgba(255,255,255,0.85)', width: 3 }),
-                overflow: true,
-              }),
-            }),
-        }),
-      ],
-      view: new View({ center: [0, 0], zoom: 2 }),
-    });
-    mapRef.current = map;
-    sourceRef.current = source;
-    return () => {
-      map.setTarget(undefined);
-      mapRef.current = null;
-      sourceRef.current = null;
-    };
-  }, []);
+  // Built once its container is on the page — which is not on the first render while the areas
+  // are still loading — and kept: the level's shapes are swapped on the source below rather than
+  // by rebuilding the map, so drilling in does not re-create a canvas the reader is looking at.
+  const { targetRef, ready, frame } = useSmallMap({
+    center: [0, 0],
+    zoom: 2,
+    layers: () => [new VectorLayer({ source: source.current, style: areaStyle })],
+    // Plain tiles only: this overview draws one background and has no use for a map service, whose
+    // pictures are rendered on request by somebody's server and are kept to the workspace map and
+    // the 3D scene.
+    backgrounds: (entry) => entry.layerKind === 'xyz',
+    onCreate: (map) => {
+      map.addControl(new ScaleLine());
+      // Clicking a shape does what clicking its row in the list does.
+      map.on('click', (event) => {
+        const hit = map.forEachFeatureAtPixel(
+          event.pixel,
+          (feature) => feature.get('areaId') as string | undefined,
+        );
+        const area = hit ? latest.current.areas.find((a) => a.id === hit) : undefined;
+        if (!area) {
+          return;
+        }
+        // An area with nothing inside it is where drilling stops and the real map takes over.
+        if (area.childCount > 0) {
+          setOpenId(area.id);
+        } else {
+          latest.current.navigate(`/map?area=${encodeURIComponent(area.id)}`);
+        }
+      });
+    },
+  });
 
-  // The background, once the catalog arrives. Kept under the shapes by an explicit index, since
-  // the vector layer was added first and would otherwise be painted beneath it.
+  // The shapes of the level being shown, and the camera framed on them once per level.
+  const levelKey = level.map((area) => area.id).join(',');
   useEffect(() => {
-    const map = mapRef.current;
-    // XYZ only, deliberately: this overview draws one plain tile background and has no use for a
-    // map service, whose pictures are kept to the workspace map and the 3D scene.
-    const base = layers?.find((l) => l.layerKind === 'xyz' && l.isBase);
-    if (!map || !base || map.getLayers().getArray().some((l) => l.get('silexgis:overviewBase'))) {
-      return;
-    }
-    const tile = new TileLayer({
-      source: new XYZ({ url: base.urlTemplate, attributions: base.attribution ?? undefined }),
-      zIndex: 0,
-    });
-    tile.set('silexgis:overviewBase', true);
-    map.addLayer(tile);
-  }, [layers]);
-
-  // The shapes of the level being shown, and the camera framed on them.
-  useEffect(() => {
-    const map = mapRef.current;
-    const source = sourceRef.current;
-    if (!map || !source) {
-      return;
-    }
     const format = new GeoJSON();
     const features: Feature[] = [];
     level.forEach((area, index) => {
@@ -131,52 +101,36 @@ export default function WorkAreasPage() {
       feature.set('colour', colourFor(index));
       features.push(feature);
     });
-    source.clear();
-    source.addFeatures(features);
-
-    const extent = extentOfAll(level);
-    if (extent) {
-      map.getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), {
-        padding: [40, 40, 40, 40],
-        duration: 250,
-        maxZoom: 14,
-      });
-    }
+    source.current.clear();
+    source.current.addFeatures(features);
   }, [level]);
 
-  // Clicking a shape does what clicking its row in the list does. Re-bound on every render rather
-  // than memoised: the handler closes over the current level, and a stale one would drill into
-  // whichever area used to be under that pixel.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) {
-      return undefined;
+    if (!ready) {
+      return;
     }
-    const onClick = (event: { pixel: number[] }) => {
-      const hit = map.forEachFeatureAtPixel(
-        event.pixel,
-        (feature) => feature.get('areaId') as string | undefined,
-      );
-      const area = hit ? areas.find((a) => a.id === hit) : undefined;
-      if (!area) {
-        return;
-      }
-      // An area with nothing inside it is where drilling stops and the real map takes over.
-      if (area.childCount > 0) {
-        setOpenId(area.id);
-      } else {
-        navigate(`/map?area=${encodeURIComponent(area.id)}`);
-      }
-    };
-    map.on('click', onClick as never);
-    return () => map.un('click', onClick as never);
-  });
+    const extent = extentOfAll(level);
+    frame(levelKey, extent ? transformExtent(extent, 'EPSG:4326', 'EPSG:3857') : null, {
+      padding: [40, 40, 40, 40],
+      duration: 250,
+      maxZoom: 14,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the level is named by its key
+  }, [ready, levelKey, frame]);
 
   if (isLoading) {
     return <Flex justify="center" style={{ padding: 48 }}><Spin /></Flex>;
   }
   if (isError) {
-    return <Alert type="error" title={t('workAreas.loadFailed')} style={{ margin: 24 }} />;
+    return (
+      <Alert
+        type="error"
+        showIcon
+        title={t('workAreas.loadFailed')}
+        action={<Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
+        style={{ margin: 24 }}
+      />
+    );
   }
 
   return (
@@ -264,7 +218,7 @@ export default function WorkAreasPage() {
             />
           </Card>
           <div
-            ref={mapDiv}
+            ref={targetRef}
             data-testid="work-areas-map"
             style={{ flex: 1, minWidth: 320, minHeight: 360, borderRadius: 4, overflow: 'hidden' }}
           />
@@ -272,4 +226,20 @@ export default function WorkAreasPage() {
       )}
     </Flex>
   );
+}
+
+function areaStyle(feature: FeatureLike) {
+  return new Style({
+    fill: new Fill({ color: `${feature.get('colour') as string}33` }),
+    stroke: new Stroke({ color: feature.get('colour') as string, width: 2 }),
+    text: new Text({
+      text: (feature.get('name') as string | null) ?? '',
+      font: '600 13px sans-serif',
+      fill: new Fill({ color: '#1f1f1f' }),
+      // The names sit over aerial imagery as often as over a plain background, so the halo is
+      // what keeps them readable rather than the fill colour.
+      stroke: new Stroke({ color: 'rgba(255,255,255,0.85)', width: 3 }),
+      overflow: true,
+    }),
+  });
 }

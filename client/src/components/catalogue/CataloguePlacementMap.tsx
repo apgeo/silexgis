@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
+import { theme } from 'antd';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import Point from 'ol/geom/Point';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
+import { useSmallMap } from '../map/useSmallMap.ts';
 
 /** Romania, wide enough to see all of the karst the catalogue covers. */
 const DEFAULT_CENTER: [number, number] = [25.0, 45.9];
@@ -48,54 +46,32 @@ export default function CataloguePlacementMap({
   onPlace,
   height = 380,
 }: Props) {
-  const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource<Feature<Point>>());
   const place = useRef(onPlace);
   const placing = useRef(placingId);
   place.current = onPlace;
   placing.current = placingId;
 
-  const teardown = () => {
-    map.current?.setTarget(undefined);
-    map.current = null;
-  };
+  // OpenLayers draws outside React, so the style reads the theme's colours through a ref; the next
+  // frame after a theme change picks them up.
+  const { token } = theme.useToken();
+  const colours = useRef<MarkerColours>({ placed: token.purple, placing: token.volcano7 });
+  colours.current = { placed: token.purple, placing: token.volcano7 };
 
-  useEffect(() => () => teardown(), []);
-
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    if (!el) {
-      teardown();
-      return;
-    }
-    if (map.current) {
-      return;
-    }
-
-    const instance = new Map({
-      target: el,
-      controls: [],
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: styleOf }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 6 }),
-    });
-
-    instance.on('singleclick', (event) => {
-      if (placing.current === null) {
-        return;
-      }
-      const [lon, lat] = toLonLat(event.coordinate);
-      place.current(placing.current, [lon, lat]);
-    });
-
-    map.current = instance;
-  };
+  const { targetRef, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 6,
+    layers: () => [new VectorLayer({ source: source.current, style: (feature) => styleOf(feature, colours.current) })],
+    onCreate: (instance) => {
+      instance.on('singleclick', (event) => {
+        if (placing.current === null) {
+          return;
+        }
+        const [lon, lat] = toLonLat(event.coordinate);
+        place.current(placing.current, [lon, lat]);
+      });
+    },
+  });
 
   useEffect(() => {
     source.current.clear();
@@ -106,16 +82,20 @@ export default function CataloguePlacementMap({
       point.set('placing', cave.id === placingId);
       source.current.addFeature(point);
     }
-
-    const extent = source.current.getExtent();
-    if (placed.length > 0 && extent && Number.isFinite(extent[0])) {
-      map.current?.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 14, duration: 200 });
-    }
   }, [placed, placingId]);
+
+  // The page hands over a new array on every render, so the camera keys on which caves are
+  // placed: a re-render, or picking the next cave to place, leaves the reader's view alone.
+  const placedKey = placed.map((cave) => cave.id).join(',');
+  useEffect(() => {
+    if (ready) {
+      frame(placedKey, source.current.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 14, duration: 200 });
+    }
+  }, [ready, placedKey, frame]);
 
   return (
     <div
-      ref={onTargetRef}
+      ref={targetRef}
       style={{ height, width: '100%', cursor: placingId !== null ? 'crosshair' : undefined }}
       title={placingTitle}
       data-testid="catalogue-placement-map"
@@ -123,13 +103,18 @@ export default function CataloguePlacementMap({
   );
 }
 
-function styleOf(feature: { get: (key: string) => unknown }) {
+interface MarkerColours {
+  placed: string;
+  placing: string;
+}
+
+function styleOf(feature: { get: (key: string) => unknown }, colours: MarkerColours) {
   const isPlacing = Boolean(feature.get('placing'));
 
   return new Style({
     image: new CircleStyle({
       radius: isPlacing ? 8 : 6,
-      fill: new Fill({ color: isPlacing ? '#d4380d' : '#722ed1' }),
+      fill: new Fill({ color: isPlacing ? colours.placing : colours.placed }),
       stroke: new Stroke({ color: '#fff', width: 2 }),
     }),
     text: new Text({

@@ -24,6 +24,7 @@ vi.mock('../../api/hooks.ts', () => ({
   // where it lives, and here it is only required not to interfere with the record above it.
   useTripLogMap: () => ({ data: undefined }),
   useCampAreasMap: () => ({ data: undefined }),
+  useMapLayers: () => ({ isPending: true, data: undefined }),
 }));
 
 const { default: CalendarPage } = await import('./CalendarPage.tsx');
