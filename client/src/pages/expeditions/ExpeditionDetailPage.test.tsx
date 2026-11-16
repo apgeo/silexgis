@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { ExpeditionInfo, ResLinkMember } from '../../api/hooks.ts';
 import MemberChip from '../../components/reslinks/MemberChip.tsx';
@@ -11,13 +12,17 @@ import ExpeditionDetailPage from './ExpeditionDetailPage.tsx';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy, accessSpy } = vi.hoisted(() => ({ campSpy: vi.fn(), accessSpy: vi.fn() }));
+const { campSpy, accessSpy, deleteCamp } = vi.hoisted(() => ({
+  campSpy: vi.fn(),
+  accessSpy: vi.fn(),
+  deleteCamp: vi.fn(),
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpedition: () => campSpy(),
   useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Clubul Speo' }] }),
   useEffectiveAccess: () => accessSpy(),
-  useDeleteExpedition: () => ({ mutateAsync: vi.fn() }),
+  useDeleteExpedition: () => ({ mutateAsync: deleteCamp }),
   useCan: () => false,
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
@@ -100,6 +105,7 @@ afterEach(cleanup);
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false, isError: false });
   accessSpy.mockReturnValue({ data: undefined });
+  deleteCamp.mockReset().mockResolvedValue(undefined);
 });
 
 describe('the camp page', () => {
@@ -139,6 +145,37 @@ describe('the camp page', () => {
 
     expect(screen.getByText('No such camp')).toBeTruthy();
     expect(screen.queryByTestId('expedition-name')).toBeNull();
+  });
+
+  it('keeps a camp on screen when a later read fails without an answer, and says so', () => {
+    campSpy.mockReturnValue({
+      data: camp(),
+      isPending: false,
+      isError: true,
+      error: new ApiError(503),
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByTestId('expedition-name')).toBeTruthy();
+    expect(screen.queryByText('No such camp')).toBeNull();
+    expect(screen.getByTestId('expedition-refresh-failed')).toBeTruthy();
+  });
+
+  it('says the camp could not be read, rather than that it is not there, when nothing answered', () => {
+    const refetch = vi.fn();
+    campSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.queryByText('No such camp')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('opens on its own tab, and reads the tab out of the address', () => {
@@ -283,5 +320,40 @@ describe('a chip naming a camp', () => {
     fireEvent.click(screen.getByText('Bihor summer camp'));
 
     expect(screen.getByTestId('expedition-name').textContent).toBe('Bihor summer camp');
+  });
+});
+
+describe('a camp delete that was not carried out', () => {
+  async function deleteTheCamp() {
+    accessSpy.mockReturnValue({ data: { actions: 'read,write,delete' } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('expedition-delete'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(deleteCamp).toHaveBeenCalledWith(CAMP));
+  }
+
+  it('says the caller may not delete the camp when the server refuses them', async () => {
+    deleteCamp.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    await deleteTheCamp();
+
+    expect(await screen.findByText(i18n.t('expeditions.problems.forbidden'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
+  it('leaves a stale version to the one conflict warning, with no second message of its own', async () => {
+    deleteCamp.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    await deleteTheCamp();
+
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
+  });
+
+  it('says the delete failed, not a save, when the server gave no reason it has words for', async () => {
+    deleteCamp.mockRejectedValue(new Error('connection lost'));
+    await deleteTheCamp();
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
   });
 });

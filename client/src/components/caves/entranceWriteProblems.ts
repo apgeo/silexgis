@@ -9,7 +9,11 @@ import { featureProblemMessage } from '../features/featureProblems.ts';
  * feature, so a bad shape, a missing right or somebody else's newer change is refused exactly as it
  * is for any feature, and that wording has its own home rather than a second copy here.
  */
-export function entranceWriteProblem(error: unknown, t: (key: string) => string): string {
+export function entranceWriteProblem(
+  error: unknown,
+  t: (key: string) => string,
+  fallbackKey: 'common.saveFailed' | 'common.deleteFailed' = 'common.saveFailed',
+): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'entrance.location_forbidden':
@@ -22,5 +26,5 @@ export function entranceWriteProblem(error: unknown, t: (key: string) => string)
         break;
     }
   }
-  return featureProblemMessage(error, t);
+  return featureProblemMessage(error, t, fallbackKey);
 }

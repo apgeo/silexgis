@@ -4,10 +4,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { TripLogInfo } from '../../api/hooks.ts';
 import TripLogDetailPage from './TripLogDetailPage.tsx';
 
 const TRIP = '33333333-4444-5555-6666-777777777777';
+
+// The server's one answer for a trip that is not there and for one the caller may not read.
+const refused = () => new ApiError(404, 'trip.not_found');
 
 const { tripSpy, canSpy, doorSpy, importTrack, configSpy } = vi.hoisted(() => ({
   tripSpy: vi.fn(),
@@ -249,7 +253,7 @@ describe('the trip page', () => {
     // left the page on its spinner would hold it there for good — which a reader reports as the
     // application having hung, not as a permission. The page names the ambiguity in words rather
     // than guessing which of the two it is.
-    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, error: refused() });
     renderPage();
 
     expect(screen.getByText('No such trip')).toBeInTheDocument();
@@ -263,13 +267,64 @@ describe('the trip page', () => {
   });
 
   /**
+   * A read that never reached the server says nothing about the trip. Calling it "no such trip"
+   * would send somebody away from a trip that is there, so it is worded as a read that did not
+   * land, with a way to ask again.
+   */
+  it('says the trip could not be read, with a retry, when the first read fails without an answer', () => {
+    const refetch = vi.fn();
+    tripSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.getByTestId('read-failed')).toBeInTheDocument();
+    expect(screen.queryByText('No such trip')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * TanStack Query keeps the trip it holds when a later re-read fails. A blip — the server
+   * restarting, a gateway error — must not swap a loaded page, and whatever is being edited in
+   * it, for "no such trip": the page stays and says it could not refresh.
+   */
+  it('keeps a loaded trip on screen when a later read fails, and says it could not refresh', () => {
+    const refetch = vi.fn();
+    tripSpy.mockReturnValue({
+      data: trip(),
+      isPending: false,
+      isError: true,
+      error: new ApiError(503),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.getByText('what the trip recorded')).toBeInTheDocument();
+    expect(screen.queryByText('No such trip')).toBeNull();
+    expect(screen.getByTestId('trip-refresh-failed')).toBeInTheDocument();
+  });
+
+  it('ends a loaded page when a later read is refused, because the trip has gone from this reader', () => {
+    tripSpy.mockReturnValue({ data: trip(), isPending: false, isError: true, error: refused() });
+    renderPage();
+
+    expect(screen.getByText('No such trip')).toBeInTheDocument();
+    expect(screen.queryByText('what the trip recorded')).toBeNull();
+  });
+
+  /**
    * A deleted trip answers exactly as one that was never there, so the page cannot say which it
    * is looking at. What it can do is say where a deleted one would be found, to somebody who
    * could have deleted it — the person who followed an old link to a trip they removed last week.
    */
   it('points somebody who could have deleted the trip at the deleted trips', () => {
     canSpy.mockReturnValue(true);
-    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, error: refused() });
     renderPage();
 
     expect(screen.getByText(/it may still be among the deleted trips/)).toBeInTheDocument();
@@ -289,7 +344,7 @@ describe('the trip page', () => {
       unbound: false,
       cavingGroups: [{ id: 'g1', name: 'Speo Club' }],
     });
-    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, error: refused() });
     renderPage();
 
     expect(screen.getByText(/it may still be among the deleted trips/)).toBeInTheDocument();

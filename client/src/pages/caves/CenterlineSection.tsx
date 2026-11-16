@@ -3,6 +3,7 @@ import { DeleteOutlined, StarFilled, StarOutlined, UploadOutlined } from '@ant-d
 import { App, Card, Popconfirm, Table, Tag, Tooltip, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   useCenterlines,
   useDeleteCenterline,
@@ -50,6 +51,18 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       message.success(t('centerlines.promoted'));
     } catch {
       message.error(t('common.saveFailed'));
+    }
+  };
+
+  // A refused delete leaves the row where it was, so the reader is told. A version conflict is
+  // already reported by the application-wide handler, and a second toast would contradict it.
+  const onDelete = async (id: string) => {
+    try {
+      await remove.mutateAsync({ id, caveId });
+    } catch (e) {
+      if (!isConcurrencyConflict(e)) {
+        message.error(t('common.deleteFailed'));
+      }
     }
   };
 
@@ -127,7 +140,7 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
                   render: (_: unknown, centerline: CenterlineInfo) => (
                     <Popconfirm
                       title={t('centerlines.deleteConfirm')}
-                      onConfirm={() => void remove.mutateAsync({ id: centerline.id, caveId })}
+                      onConfirm={() => void onDelete(centerline.id)}
                     >
                       <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
                     </Popconfirm>

@@ -74,6 +74,10 @@ import CaveRecordingsSection from './CaveRecordingsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
+import { entranceWriteProblem } from '../../components/caves/entranceWriteProblems.ts';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import CaveSurveysSection from './CaveSurveysSection.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
@@ -86,7 +90,7 @@ export default function CaveDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
 
-  const { data: cave, isPending } = useCave(id);
+  const { data: cave, isPending, isError, error, refetch } = useCave(id);
   const { data: summary } = useCaveSummary(id);
   const { data: entrances } = useEntrances(id);
   const { data: caveTypes } = useCaveTypes();
@@ -139,6 +143,25 @@ export default function CaveDetailPage() {
   };
   const [shareOpen, setShareOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+
+  // A deleted cave and one the reader may not see are refused alike and the refusal is not
+  // retried, so without this the spinner below would stay for good. A read that never reached the
+  // server says nothing about the cave and is worded as such, with a way to ask again.
+  if (readFailureEndsPage(isError, cave, error)) {
+    return (
+      <ReadFailedResult
+        error={error}
+        onRetry={() => void refetch()}
+        notFoundTitle={t('caves.notFound')}
+        notFoundDetail={t('caves.notFoundDetail')}
+        actions={
+          <Button type="primary" onClick={() => void navigate('/caves')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
 
   if (isPending || !cave) {
     return (
@@ -207,6 +230,18 @@ export default function CaveDetailPage() {
       navigate('/caves');
     } catch {
       message.error(t('common.saveFailed'));
+    }
+  };
+
+  // A refused delete leaves the row where it was, so the reader is told why. A version conflict is
+  // already reported by the application-wide handler; a second toast here would contradict it.
+  const onDeleteEntrance = async (entranceId: string) => {
+    try {
+      await deleteEntrance.mutateAsync(entranceId);
+    } catch (e) {
+      if (!isConcurrencyConflict(e)) {
+        message.error(entranceWriteProblem(e, t, 'common.deleteFailed'));
+      }
     }
   };
 
@@ -442,7 +477,7 @@ export default function CaveDetailPage() {
                         <Popconfirm
                           title={t('entrances.deleteConfirm')}
                           description={t('entrances.deleteRestorable')}
-                          onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
+                          onConfirm={() => void onDeleteEntrance(e.id)}
                         >
                           <Button
                             size="small"
