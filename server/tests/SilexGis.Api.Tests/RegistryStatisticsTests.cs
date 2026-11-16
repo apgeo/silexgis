@@ -779,6 +779,105 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_grouping_publishes_the_axes_its_caves_are_drawn_on_over_the_grouped_caves_only()
+    {
+        // Twelve caves whose depth does not follow their length, so the two axes are not the
+        // measures themselves under another name. Three of them record no depth: they are not
+        // grouped, so they must not be positioned either.
+        var region = Unique("CLAXES");
+        for (var i = 0; i < 12; i++)
+        {
+            await CreateCaveAsync(
+                region, 100m + (i * 50m), depth: i < 9 ? 10m + ((i * 7) % 5 * 6m) + i : null);
+        }
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={region}");
+
+        var projection = body.GetProperty("projection");
+        projection.GetProperty("measures").EnumerateArray().Select(m => m.GetString())
+            .ShouldBe(["surveyedLength", "depth"]);
+        projection.GetProperty("droppedMeasures").GetArrayLength().ShouldBe(0);
+
+        var first = projection.GetProperty("first");
+        var second = projection.GetProperty("second");
+        first.GetProperty("loadings").GetArrayLength().ShouldBe(2);
+        second.GetProperty("loadings").GetArrayLength().ShouldBe(2);
+
+        // Over two measures the axes between them carry everything, and the first carries at
+        // least as much as the second.
+        var firstShare = first.GetProperty("explainedShare").GetDouble();
+        var secondShare = second.GetProperty("explainedShare").GetDouble();
+        (firstShare + secondShare).ShouldBe(1d, 1e-6);
+        firstShare.ShouldBeGreaterThanOrEqualTo(secondShare);
+
+        // The same nine caves the grouping placed — no more, no fewer — so the picture and the
+        // colours are about one population.
+        var positioned = projection.GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).OrderBy(g => g).ToList();
+        var grouped = body.GetProperty("assignments").EnumerateArray()
+            .Select(a => a.GetProperty("caveId").GetGuid()).OrderBy(g => g).ToList();
+        grouped.Count.ShouldBe(9);
+        positioned.ShouldBe(grouped);
+    }
+
+    [Fact]
+    public async Task No_axes_are_published_where_the_grouping_itself_did_not_run()
+    {
+        // Four caves is under the floor a grouping is attempted over, so there is nothing to
+        // project; the same twelve caves asked over one measure group fine but have no second
+        // axis to draw.
+        var few = await SeedAsync("CLAXFEW", [100m, 200m, 300m, 400m]);
+        var tooFew = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={few}");
+        tooFew.GetProperty("clusters").GetArrayLength().ShouldBe(0);
+        tooFew.GetProperty("projection").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var many = await SeedAsync("CLAXONE", [.. Enumerable.Range(0, 12).Select(i => 100m + (i * 50m))]);
+        var oneMeasure = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=2&region={many}");
+        oneMeasure.GetProperty("clusters").GetArrayLength().ShouldBe(2);
+        oneMeasure.GetProperty("projection").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task The_axes_position_no_cave_the_caller_may_not_read()
+    {
+        // Same shape as the grouping's own visibility test, asked of the projection: the three
+        // denied caves would be positioned for the owner and must be absent for the viewer, and
+        // the owner's answer is read as the positive case so an empty seed cannot pass.
+        var region = Unique("CLAXVIS");
+        var denied = new List<Guid>();
+        for (var i = 0; i < 12; i++)
+        {
+            var id = await CreateCaveAsync(region, 100m + (i * 25m), depth: 5m + ((i * 5) % 7 * 4m) + i);
+            if (i < 3)
+            {
+                denied.Add(id);
+            }
+        }
+
+        foreach (var id in denied)
+        {
+            await DenyReadAsync(owner, id, viewerId);
+        }
+
+        var query = $"clustering?measures=surveyedLength,depth&clusters=2&region={region}";
+        var whole = await ReadJsonAsync(owner, query);
+        var seen = await ReadJsonAsync(viewer, query);
+
+        var wholeIds = whole.GetProperty("projection").GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).ToList();
+        wholeIds.Count.ShouldBe(12);
+        wholeIds.Intersect(denied).Count().ShouldBe(3);
+
+        var seenIds = seen.GetProperty("projection").GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).ToList();
+        seenIds.Count.ShouldBe(9);
+        seenIds.Intersect(denied).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_population_too_small_to_group_is_answered_with_the_account_of_why()
     {
         // Four caves, which is under the floor a grouping is attempted over. The answer is not an
