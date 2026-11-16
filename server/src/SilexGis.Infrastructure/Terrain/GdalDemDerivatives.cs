@@ -574,7 +574,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
     /// request instead of the whole file, and compressed, because a shaded relief of a region is
     /// mostly smooth.
     /// </remarks>
-    private static readonly string[] CloudOptimised =
+    internal static readonly string[] CloudOptimised =
         ["-of", "COG", "-co", "COMPRESS=DEFLATE", "-co", "BIGTIFF=IF_SAFER"];
 
     /// <summary>A result held in memory rather than written anywhere.</summary>
@@ -624,7 +624,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
     }
 
     /// <summary>Whether the raster places itself in degrees rather than in a projected unit.</summary>
-    private static bool IsGeographic(Dataset source)
+    internal static bool IsGeographic(Dataset source)
     {
         try
         {
@@ -639,7 +639,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
     }
 
     /// <summary>Opens an elevation raster, refusing anything that is not one of the accepted forms.</summary>
-    private static Dataset OpenSource(string path)
+    internal static Dataset OpenSource(string path)
     {
         if (!File.Exists(path))
         {
@@ -684,7 +684,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
     /// band, and that a value can actually be got out of the far corner, which is the part a file cut
     /// short does not have.
     /// </remarks>
-    private static ComputedTerrainRaster? Describe(string path)
+    internal static ComputedTerrainRaster? Describe(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
@@ -792,7 +792,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
     }
 
     /// <summary>What the library last said went wrong, falling back to what was raised instead.</summary>
-    private static string? Reason(string? fallback)
+    internal static string? Reason(string? fallback)
     {
         var recorded = Gdal.GetLastErrorMsg();
         var reason = string.IsNullOrWhiteSpace(recorded) ? fallback : recorded.Trim();
@@ -807,7 +807,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
 
     private static string Whole(int value) => value.ToString(CultureInfo.InvariantCulture);
 
-    private static void RequireAbsolute(string path, string argument)
+    internal static void RequireAbsolute(string path, string argument)
     {
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
         {
@@ -818,7 +818,7 @@ public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
         }
     }
 
-    private static void Delete(string path)
+    internal static void Delete(string path)
     {
         try
         {

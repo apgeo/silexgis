@@ -481,10 +481,16 @@ export const groups = {
     'TerrainPreparePhaseTests', 'AreaTerrainStatisticsTests', 'TerrainProbeTests', 'TerrainProfileTests', 'TerrainPublishPhaseTests',
     'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainRasterTokenServiceTests', 'TerrainSourceTests',
     'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
+    // The landform picture, computed through WhiteboxTools.
+    'TerrainLandformsTests', 'TerrainLandformApiTests',
   ],
   // Terrain analysis run by WhiteboxTools — started in a sandbox by the application itself or by
   // the analysis service in a container of its own — and the settings that choose which.
-  analysis: ['LocalWhiteboxToolsTests', 'WhiteboxServiceTests', 'OptionsDocumentationTests'],
+  analysis: [
+    'LocalWhiteboxToolsTests', 'WhiteboxServiceTests', 'OptionsDocumentationTests',
+    // The landform picture, which is computed through it.
+    'TerrainLandformsTests', 'TerrainLandformApiTests',
+  ],
 };
 
 // Path prefix (repo-relative, forward slashes) -> group name or inline class list.
@@ -713,17 +719,17 @@ export const crossCutting = {
     'SyncStagedUploadTests', 'SyncTripRecordingTests', 'SyncUploadHoldTests',
     'TagEndpointTests', 'TermRuleSetTests', 'TerrainActivationTests', 'TerrainBuildApiTests',
     'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests', 'TerrainDerivativeApiTests',
-    'TerrainProbeTests', 'TerrainProfileTests', 'TerrainSourceTests', 'TestDataGeneratorTests',
-    'TextExtractionPipelineTests', 'TrackingCsvImportTests', 'TripAndTagTests',
-    'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
-    'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
-    'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
-    'TripRecordingConversionTests', 'TripReportDocumentTests', 'TripReportMapTests',
-    'TripRestoreTests', 'TripRosterTimesFromTrackingTests', 'TripStatisticsTests',
-    'TripTrackImportTests', 'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests',
-    'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
-    'UiDefaultsTests', 'UploadDestinationTests', 'UploadLimitsAndResumeTests',
-    'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
+    'TerrainLandformApiTests', 'TerrainProbeTests', 'TerrainProfileTests', 'TerrainSourceTests',
+    'TestDataGeneratorTests', 'TextExtractionPipelineTests', 'TrackingCsvImportTests',
+    'TripAndTagTests', 'TripAttendanceLimitTests', 'TripCalloutStandDownTests',
+    'TripChecklistTickTests', 'TripImportCommitTests', 'TripImportSessionTests',
+    'TripInvitationTests', 'TripOrganizingGroupGuardTests',
+    'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripRecordingConversionTests',
+    'TripReportDocumentTests', 'TripReportMapTests', 'TripRestoreTests',
+    'TripRosterTimesFromTrackingTests', 'TripStatisticsTests', 'TripTrackImportTests',
+    'TripTrackingCaveNoteTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
+    'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
+    'UploadLimitsAndResumeTests', 'UploadReviewCurrentStateTests', 'UploadReviewDecisionTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests',
     'UserDeleteBlockedTests', 'UserTwoFactorResetTests',
   ],

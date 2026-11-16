@@ -12,16 +12,19 @@ namespace SilexGis.Domain.Terrain;
 /// the schema and are never renumbered. Adding a member is appending one.
 /// </para>
 /// <para>
-/// This list is exactly what the bundled raster library can do in this process, and it is
-/// deliberately shorter than the list of things a geomorphologist would ask for. Three families are
-/// missing and are missing on purpose rather than by oversight: <b>geomorphons</b>, which the
-/// library has no equivalent of at all and which would need a separate tool and a process boundary
-/// this application does not have; <b>curvature</b>, for which there is no mode — it is a
-/// second-derivative convolution that could be written here, but it would be new arithmetic with
-/// nothing to check it against; and <b>flow direction, accumulation and wetness index</b>, which are
-/// a different body of work entirely. None of them is approximated by anything in this list, and
-/// none of the members below may be relabelled as one of them: a slope map presented as curvature is
-/// a lie the reader has no way to detect.
+/// Every member but one is what the bundled raster library can do in this process. The exception is
+/// <see cref="Geomorphons"/>, which that library has no equivalent of at all: it is computed by
+/// WhiteboxTools, a separate program the installation runs only if it chose to (inside a sandbox,
+/// or in a container of its own), and is offered only where that program is available.
+/// </para>
+/// <para>
+/// The list is deliberately shorter than the list of things a geomorphologist would ask for. Two
+/// families are missing on purpose rather than by oversight: <b>curvature</b>, for which there is no
+/// mode — it is a second-derivative convolution that could be written here, but it would be new
+/// arithmetic with nothing to check it against; and <b>flow direction, accumulation and wetness
+/// index</b>, which are a different body of work entirely. Neither is approximated by anything in
+/// this list, and none of the members below may be relabelled as one of them: a slope map presented
+/// as curvature is a lie the reader has no way to detect.
 /// </para>
 /// </remarks>
 public enum TerrainDerivative : short
@@ -51,6 +54,15 @@ public enum TerrainDerivative : short
     /// Lines of equal height at a chosen spacing, every fifth drawn heavier, on a clear ground.
     /// </summary>
     Contours = 7,
+
+    /// <summary>
+    /// Landform classes (Jasiewicz and Stepinski's geomorphons): each cell named flat, peak, ridge,
+    /// shoulder, spur, slope, hollow, footslope, valley or pit from the pattern of higher and lower
+    /// ground along eight lines of sight. Stored as the class number, 1 to 10, in that order (see
+    /// <see cref="TerrainGeomorphons"/>).
+    /// </summary>
+    /// <remarks>Computed by WhiteboxTools rather than the raster library, and only where it runs.</remarks>
+    Geomorphons = 8,
 }
 
 /// <summary>Which arithmetic is used to work out the slope of the ground at a cell.</summary>
@@ -182,6 +194,28 @@ public sealed record TerrainDerivativeSettings
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? ContourIntervalMetres { get; init; }
+
+    /// <summary>
+    /// How far along each line of sight a landform picture looks, in metres over the ground, for
+    /// geomorphons and nothing else. Nothing means the usual distance.
+    /// </summary>
+    /// <remarks>Left out of the stored record when it holds nothing, for the reason the contour spacing is.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? GeomorphonSearchMetres { get; init; }
+
+    /// <summary>
+    /// How near a line of sight's first cell may be before it counts, in metres, for geomorphons
+    /// and nothing else; small bumps closer than this are looked past. Nothing means none.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? GeomorphonSkipMetres { get; init; }
+
+    /// <summary>
+    /// How steep a line of sight has to rise or fall, in degrees, before it counts as higher or
+    /// lower rather than level, for geomorphons and nothing else. Nothing means the usual angle.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? GeomorphonFlatnessDegrees { get; init; }
 }
 
 /// <summary>What the settings have to satisfy before anything is computed from them.</summary>
@@ -274,6 +308,14 @@ public static class TerrainDerivativeRules
         {
             return TerrainContourLines.Problem(
                 settings.ContourIntervalMetres ?? TerrainContourLines.DefaultIntervalMetres);
+        }
+
+        if (settings.Derivative == TerrainDerivative.Geomorphons)
+        {
+            return TerrainGeomorphons.Problem(
+                settings.GeomorphonSearchMetres ?? TerrainGeomorphons.DefaultSearchMetres,
+                settings.GeomorphonSkipMetres ?? 0d,
+                settings.GeomorphonFlatnessDegrees ?? TerrainGeomorphons.DefaultFlatnessDegrees);
         }
 
         return null;

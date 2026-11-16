@@ -57,6 +57,7 @@ public static class TerrainDerivativeRegistry
         // on a volume that is neither swept nor backed up — and, worse, would let the settings
         // stored beside a picture state a light direction that picture never had.
         var lightDirected = lit && settings.Lighting == TerrainHillshadeLighting.Single;
+        var landform = settings.Derivative == TerrainDerivative.Geomorphons;
 
         return new TerrainDerivativeSettings
         {
@@ -73,8 +74,10 @@ public static class TerrainDerivativeRegistry
                 ? settings.RuggednessFit
                 : TerrainRuggednessFit.Riley,
             // Contour lines are traced through the heights rather than computed from a cell's
-            // neighbours, so they have no outermost ring to compute or leave out.
-            ComputeEdges = settings.Derivative == TerrainDerivative.Contours || settings.ComputeEdges,
+            // neighbours, so they have no outermost ring to compute or leave out; nor does a
+            // landform picture, whose lines of sight simply stop at the raster's edge.
+            ComputeEdges = settings.Derivative is TerrainDerivative.Contours or TerrainDerivative.Geomorphons
+                || settings.ComputeEdges,
             ColourRamp = settings.Derivative == TerrainDerivative.ColourRelief
                 ? settings.ColourRamp
                 : [],
@@ -84,8 +87,26 @@ public static class TerrainDerivativeRegistry
             ContourIntervalMetres = settings.Derivative == TerrainDerivative.Contours
                 ? settings.ContourIntervalMetres ?? TerrainContourLines.DefaultIntervalMetres
                 : null,
+
+            // The same for a landform picture's three settings: written out when they are the
+            // usual ones, absent from every other kind of picture so its fingerprint is unchanged.
+            GeomorphonSearchMetres = landform
+                ? settings.GeomorphonSearchMetres ?? TerrainGeomorphons.DefaultSearchMetres
+                : null,
+            GeomorphonSkipMetres = landform ? settings.GeomorphonSkipMetres ?? 0d : null,
+            GeomorphonFlatnessDegrees = landform
+                ? settings.GeomorphonFlatnessDegrees ?? TerrainGeomorphons.DefaultFlatnessDegrees
+                : null,
         };
     }
+
+    /// <summary>
+    /// Whether this kind of picture is computed by the separate terrain-analysis program
+    /// (WhiteboxTools) rather than by the raster library in this process — and so can only be
+    /// asked for, or computed, where the installation runs that program.
+    /// </summary>
+    public static bool NeedsAnalysisTool(TerrainDerivative derivative) =>
+        derivative == TerrainDerivative.Geomorphons;
 
     /// <summary>The settings written down the one way they are ever written down.</summary>
     public static string Describe(TerrainDerivativeSettings settings) =>

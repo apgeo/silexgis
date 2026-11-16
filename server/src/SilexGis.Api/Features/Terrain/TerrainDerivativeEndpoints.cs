@@ -86,7 +86,10 @@ public sealed record TerrainDerivativeCreateRequest(
     TerrainRuggednessFit? RuggednessFit,
     bool? ComputeEdges,
     IReadOnlyList<TerrainColourStop>? ColourRamp,
-    double? ContourIntervalMetres)
+    double? ContourIntervalMetres,
+    double? GeomorphonSearchMetres = null,
+    double? GeomorphonSkipMetres = null,
+    double? GeomorphonFlatnessDegrees = null)
 {
     /// <summary>The request as the settings record everything downstream reads.</summary>
     public TerrainDerivativeSettings ToSettings() => new()
@@ -102,8 +105,23 @@ public sealed record TerrainDerivativeCreateRequest(
         ComputeEdges = ComputeEdges ?? true,
         ColourRamp = ColourRamp ?? [],
         ContourIntervalMetres = ContourIntervalMetres,
+        GeomorphonSearchMetres = GeomorphonSearchMetres,
+        GeomorphonSkipMetres = GeomorphonSkipMetres,
+        GeomorphonFlatnessDegrees = GeomorphonFlatnessDegrees,
     };
 }
+
+/// <summary>Whether one kind of picture can be asked for on this installation, and why not when it cannot.</summary>
+/// <param name="UnavailableReason">
+/// Null when it can. Otherwise a stable code: <c>analysis.not_configured</c> (the installation does
+/// not run the terrain-analysis program), <c>analysis.tool_missing</c> (it is meant to, and the
+/// program is not there) or <c>analysis.sandbox_missing</c> (the program is there, and the sandbox
+/// it must run in is not).
+/// </param>
+public sealed record TerrainDerivativeKindDto(
+    TerrainDerivative Derivative,
+    bool Available,
+    string? UnavailableReason);
 
 public sealed class TerrainDerivativeCreateRequestValidator
     : AbstractValidator<TerrainDerivativeCreateRequest>
@@ -162,11 +180,20 @@ public static class TerrainDerivativeEndpoints
     /// <summary>The picture is not finished, so there is nothing to fetch yet.</summary>
     public const string NotReadyCode = "terrain_derivative.not_ready";
 
+    /// <summary>
+    /// The picture is one only the separate terrain-analysis program computes, and this installation
+    /// does not run it. Refused when asked rather than queued, because a queued run could only fail.
+    /// </summary>
+    public const string AnalysisUnavailableCode = "terrain_derivative.analysis_unavailable";
+
     public static RouteGroupBuilder MapTerrainDerivativeEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/terrain/derivatives", ListAsync)
             .WithTags("Terrain")
             .WithSummary("Computed pictures of the ground, each saying whether the elevation beneath it has since been replaced; requires Read on the Terrain domain.");
+        api.MapGet("/terrain/derivatives/kinds", KindsAsync)
+            .WithTags("Terrain")
+            .WithSummary("Every kind of picture of the ground, each saying whether this installation can compute it and why not; requires Read on the Terrain domain.");
         api.MapPost("/terrain/derivatives", CreateAsync)
             .WithValidation<TerrainDerivativeCreateRequest>()
             .WithTags("Terrain")
@@ -224,6 +251,34 @@ public static class TerrainDerivativeEndpoints
     }
 
     /// <summary>
+    /// Which kinds of picture this installation can compute: every kind the raster library draws,
+    /// and those the terrain-analysis program draws only where it runs.
+    /// </summary>
+    private static async Task<Results<Ok<IReadOnlyList<TerrainDerivativeKindDto>>, UnauthorizedHttpResult, ProblemHttpResult>> KindsAsync(
+        IAccessContextAccessor accessAccessor,
+        TerrainLandforms landforms,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Read, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        var kinds = Enum.GetValues<TerrainDerivative>()
+            .Select(kind => TerrainDerivativeRegistry.NeedsAnalysisTool(kind)
+                ? new TerrainDerivativeKindDto(kind, landforms.IsAvailable, landforms.UnavailableReason)
+                : new TerrainDerivativeKindDto(kind, true, null))
+            .ToList();
+        return TypedResults.Ok<IReadOnlyList<TerrainDerivativeKindDto>>(kinds);
+    }
+
+    /// <summary>
     /// Records the request and queues the run that answers it.
     /// </summary>
     /// <remarks>
@@ -246,6 +301,7 @@ public static class TerrainDerivativeEndpoints
         IAccessContextAccessor accessAccessor,
         TerrainDerivativeCatalogue catalogue,
         ITerrainRasterTokenService tokens,
+        TerrainLandforms landforms,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -259,6 +315,16 @@ public static class TerrainDerivativeEndpoints
         if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
         {
             return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        if (TerrainDerivativeRegistry.NeedsAnalysisTool(request.Derivative) && !landforms.IsAvailable)
+        {
+            return ApiProblems.Conflict(
+                AnalysisUnavailableCode,
+                "This picture is computed by the terrain-analysis program (WhiteboxTools), which this "
+                + "installation does not run. An administrator can set it up; until then it cannot be asked for.",
+                "reason",
+                landforms.UnavailableReason);
         }
 
         var build = await db.TerrainBuilds.AsNoTracking()
