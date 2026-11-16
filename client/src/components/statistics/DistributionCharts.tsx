@@ -212,6 +212,53 @@ export function CorrelationChart({
   return <Frame option={option} height={height} testId="chart-correlation" />;
 }
 
+/**
+ * Caves laid out on two principal axes, in the standardised units the server worked them out in.
+ *
+ * <p>
+ * Both axes are linear and signed: a principal axis is centred on the average cave, so nought is
+ * the middle of the picture and a negative coordinate is a real place on it. There is deliberately
+ * no fitted line — the axes are already the best straight summary of the spread, and a regression
+ * drawn over them would claim a relationship between two quantities built to be unrelated. Colours
+ * follow the same rule as {@link CorrelationChart}: chosen by group label alone.
+ * </p>
+ */
+export function PrincipalAxesChart({
+  series,
+  xLabel,
+  yLabel,
+  height,
+}: {
+  series: CorrelationSeries[];
+  xLabel: string;
+  yLabel: string;
+} & SizedProps) {
+  const { token } = theme.useToken();
+
+  const option = useMemo<EChartsOption | null>(() => {
+    if (series.every((group) => group.points.length === 0)) return null;
+    const palette = paletteFor(token);
+    const colourFor = (cluster: number | null) =>
+      cluster === null ? palette.unclassified : palette.series[cluster % palette.series.length];
+
+    return {
+      xAxis: { type: 'value', name: xLabel, nameLocation: 'middle', nameGap: 28, scale: true, ...axisStyle(token) },
+      yAxis: { type: 'value', name: yLabel, scale: true, ...axisStyle(token) },
+      series: series.map((group) => ({
+        type: 'scatter' as const,
+        name: group.name,
+        symbolSize: 7,
+        itemStyle: { color: colourFor(group.cluster) },
+        data: group.points,
+      })),
+      legend: { bottom: 0, textStyle: { color: palette.axisLabel } },
+      tooltip: { trigger: 'item' },
+    };
+  }, [series, xLabel, yLabel, token]);
+
+  return <Frame option={option} height={height} testId="chart-principal-axes" />;
+}
+
 /** One box per category — the comparison figure, and the shape no lighter library provides. */
 export function CategoryBoxChart({
   groups,

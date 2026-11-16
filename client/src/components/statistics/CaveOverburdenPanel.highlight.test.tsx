@@ -75,6 +75,7 @@ const measured: CaveOverburden = {
   minOverburdenM: 40,
   maxOverburdenM: 55,
   meanOverburdenM: 47.5,
+  leastCover: sample(0, 40),
   samples: [sample(0, 40), sample(150, 55), sample(300, null, 'outsideCoverage')],
 };
 
@@ -171,5 +172,26 @@ describe('pressing a reading on the overburden curve', () => {
     expect(hover).toContain('150.0 m');
     // Pieces are numbered from one for a reader, not from zero.
     expect(hover).toContain('3');
+  });
+});
+
+describe('the place of least rock cover', () => {
+  it('is named on the panel and marks its own position when asked, with a label that says what it is', () => {
+    show(measured);
+    expect(screen.getByTestId('overburden-least-cover').textContent).toContain('40.0 m');
+
+    fireEvent.click(screen.getByText('Show on the map'));
+
+    const highlight = getOverburdenHighlight();
+    expect(highlight?.caveId).toBe('cave-1');
+    expect(highlight?.longitude).toBe(measured.leastCover?.longitude);
+    expect(highlight?.altitudeM).toBe(measured.leastCover?.passageAltitudeM);
+    expect(highlight?.label).toContain('Least cover');
+    expect(highlight?.label).toContain('40.0 m');
+  });
+
+  it('is absent when no reading got a ground height', () => {
+    show({ ...measured, leastCover: null, coveredSampleCount: 0 });
+    expect(screen.queryByTestId('overburden-least-cover')).toBeNull();
   });
 });

@@ -22,6 +22,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   karstDensityMode: 'hotSpot',
   karstDensityBands: 'fixed',
   karstIndexVisible: true,
+  passageDepthVisible: true,
   photosVisible: false,
   tripsVisible: true,
   tripsFrom: '2019-01-01',
@@ -300,6 +301,18 @@ describe('viewConfig cave-density grid', () => {
     expect(config.configVersion).toBe(1);
     expect(applyViewConfig(config)?.karstIndexVisible).toBe(true);
     expect(applyViewConfig(captureViewConfig({ ...baseUi, karstIndexVisible: false }))?.karstIndexVisible).toBe(false);
+  });
+
+  it('round-trips the depth-coloured passage overlay, and reads an older view as off', () => {
+    const config = captureViewConfig(baseUi);
+    expect(config.passageDepthVisible).toBe(true);
+    expect(config.configVersion).toBe(1);
+    expect(applyViewConfig(config)?.passageDepthVisible).toBe(true);
+    expect(applyViewConfig(captureViewConfig({ ...baseUi, passageDepthVisible: false }))?.passageDepthVisible).toBe(
+      false,
+    );
+    const { passageDepthVisible: _omitted, ...older } = config;
+    expect(applyViewConfig(older)?.passageDepthVisible).toBe(false);
   });
 
   it('treats an older view as off with the plain reading, and an unknown reading as the plain one', () => {

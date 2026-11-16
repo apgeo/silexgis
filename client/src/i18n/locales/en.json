@@ -572,6 +572,23 @@
         "other": "The karstification index was refused for this view."
       }
     },
+    "passageDepth": {
+      "layer": "Rock over the passage",
+      "loading": "Reading the passage in view…",
+      "shown": "Caves drawn: {{count}}.",
+      "none": "No cave with altitudes in view that you may place exactly.",
+      "failed": "The passage depth could not be read. Moving the map asks again.",
+      "noTerrain": "No elevation model is built here, so the passage cannot be coloured.",
+      "truncated": "More caves are in view than are drawn at once (at most {{max}}). Zoom in to see the rest.",
+      "legendAbove": "Reads above its ground",
+      "legendBand": "{{from}} – {{to}} m of rock",
+      "legendOver": "More than {{from}} m of rock",
+      "refused": {
+        "window": "This view cannot be asked about. Move the map to ask again.",
+        "terrain": "You do not have the right to read elevation, which this layer needs.",
+        "other": "The passage depth was refused for this view."
+      }
+    },
     "karstLegend": {
       "band": "{{from}} – {{to}}",
       "bandAbove": "more than {{from}}",
@@ -7717,6 +7734,11 @@
     }
   },
   "karstStats": {
+    "axesNone": "The principal axes could not be drawn: too few of the caves in this set record every measure, or the measures that remain do not vary.",
+    "axisDropped": "Left out of the axes because every grouped cave records the same value: {{measures}}.",
+    "axisLoadings": "Axis {{axis}} carries {{share}} % of the variation and is made of {{loadings}}. Only the relative signs mean anything; the axis itself may be read in either direction.",
+    "axisScope": "{{drawn}} of the {{total}} caves on this page are positioned. Axes and colours are worked out over the whole set this list is narrowed to, so caves on other pages are positioned too and are not drawn here.",
+    "axisTitle": "Axis {{axis}} ({{share}} % of the variation)",
     "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
     "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
     "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
@@ -7726,12 +7748,15 @@
     "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
     "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
     "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterPopulationAxes": "Grouped and positioned over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them or position them on the axes, and they are absent from the chart rather than drawn in it.",
     "clusterUngrouped": "Not grouped",
     "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
     "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
+    "modeAxes": "Principal axes",
+    "modeMeasures": "Chosen measures",
     "nothingMeasured": "No cave on this page has a surveyed length.",
     "powerLawFit": "Power-law fit (exponent {{exponent}})",
     "rank": "Rank",
@@ -7846,6 +7871,23 @@
     "measured": "Measured",
     "box": "10th · 25th · median · 75th · 90th",
     "tooFewForABox": "Too few measured caves to draw"
+  },
+  "featurePassages": {
+    "title": "Passages beneath this feature",
+    "intro": "Caves whose passage lies within {{distance}} m of this feature in plan, nearest first. Only caves you may place exactly are considered.",
+    "reach": "Reach (m)",
+    "empty": "No passage you may place lies within this reach.",
+    "noTerrain": "No elevation data has been prepared on this installation, so the rock overhead is not known; the offsets are.",
+    "truncated": "More caves qualify than are listed; the nearest are shown.",
+    "cave": "Cave",
+    "offset": "Offset",
+    "offsetUnder": "Under the outline",
+    "altitude": "Passage altitude",
+    "overburden": "Rock overhead",
+    "notMeasured": "—",
+    "unitMetres": "{{value}} m",
+    "approximate": "approximate",
+    "noAltitudes": "No altitudes surveyed"
   },
   "morphometry": {
     "title": "Measured shape",
@@ -8452,7 +8494,12 @@
       "noData": "The elevation data records nothing here"
     },
     "markLabel": "{{value}} of rock overhead",
-    "markLabelAbsent": "Rock overhead not known here"
+    "markLabelAbsent": "Rock overhead not known here",
+    "leastCover": "Least rock cover",
+    "leastCoverAt": "{{value}} at {{distance}} along the passage",
+    "leastCoverNote": "The thinnest of the readings taken along the passage, not the true minimum between them.",
+    "showLeastCover": "Show on the map",
+    "leastCoverMark": "Least cover: {{value}}"
   },
   "altitudeCheck": {
     "title": "Entrance altitudes against the ground",

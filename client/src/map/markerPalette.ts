@@ -246,3 +246,16 @@ export const karstIndexPalette = {
   highlight: '#1f1f1f',
   labelHalo: 'rgba(255, 255, 255, 0.9)',
 } as const;
+
+/**
+ * The depth-coloured passage layer: one colour per class of rock over the passage, from the class
+ * of passage reading at or above its ground (first) through the shallowest to the deepest. A
+ * sequential light-to-dark ramp, so more rock reads as darker, with the first class set apart in
+ * a hue the ramp does not use because it marks a reading to be checked, not a depth. The colours
+ * are the ones the legend draws, so the two cannot disagree.
+ */
+export const passageDepthPalette = {
+  classes: ['#c2185b', '#ffe08a', '#f9b24e', '#ea7a3a', '#c2483f', '#7d2a73', '#3a1a5c'],
+  /** Light stroke under the line, so it stays legible over a dark basemap. */
+  casing: 'rgba(255, 255, 255, 0.75)',
+} as const;

@@ -119,7 +119,7 @@ export const specs = {
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
-    'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
+    'karst-layers.spec.ts', 'passage-depth-layer.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
     'coordinate-converter.spec.ts', 'terrain-profile-tool.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.

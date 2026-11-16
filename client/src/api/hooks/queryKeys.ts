@@ -259,6 +259,8 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  featurePassages: (id: string, distanceM: number) =>
+    ['features', id, 'passages-beneath', distanceM] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
   caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveAltitudeDisagreement: (id: string) => ['caves', id, 'altitude-disagreement'] as const,

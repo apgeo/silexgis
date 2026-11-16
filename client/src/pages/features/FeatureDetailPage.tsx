@@ -33,6 +33,7 @@ import AreaSystemFiguresCard from '../../components/features/AreaSystemFiguresCa
 import AreaPointPatternCard from '../../components/features/AreaPointPatternCard.tsx';
 import AreaStructureCard from '../../components/features/AreaStructureCard.tsx';
 import FeatureMorphometryCard from '../../components/features/FeatureMorphometryCard.tsx';
+import FeaturePassagesCard from '../../components/features/FeaturePassagesCard.tsx';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
@@ -343,6 +344,11 @@ export default function FeatureDetailPage() {
       )}
 
       <FeatureMorphometryCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      <FeaturePassagesCard
+        featureId={id}
+        geometryType={feature.geometry?.type ?? null}
+        kind={envelope.kind}
+      />
 
       {/* An area's two vertical and structural readings sit beside its measured shape: all three
           are asked of the same outline and answered over the same subtree. */}

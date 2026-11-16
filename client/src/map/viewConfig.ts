@@ -57,6 +57,12 @@ export interface ViewConfig {
    * saved views omit it (off).
    */
   karstIndexVisible?: boolean;
+  /**
+   * The depth-coloured passage overlay. Added after v1 shipped; older saved views omit it (off).
+   * Opening a view that has it on asks the server again, so a reader without the terrain right
+   * is refused there rather than shown a stale picture.
+   */
+  passageDepthVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
@@ -153,6 +159,7 @@ export interface WorkspaceUiState {
   karstDensityMode: KarstDensityMode;
   karstDensityBands: KarstDensityBands;
   karstIndexVisible: boolean;
+  passageDepthVisible: boolean;
   photosVisible: boolean;
   tripsVisible: boolean;
   tripsFrom?: string;
@@ -200,6 +207,7 @@ export function captureViewConfig(
     karstDensityMode: ui.karstDensityMode,
     karstDensityBands: ui.karstDensityBands,
     karstIndexVisible: ui.karstIndexVisible,
+    passageDepthVisible: ui.passageDepthVisible,
     photosVisible: ui.photosVisible,
     tripsVisible: ui.tripsVisible,
     tripsFrom: ui.tripsFrom,
@@ -235,6 +243,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     karstDensityMode: isKarstDensityMode(parsed.karstDensityMode) ? parsed.karstDensityMode : 'density',
     karstDensityBands: isKarstDensityBands(parsed.karstDensityBands) ? parsed.karstDensityBands : 'relative',
     karstIndexVisible: parsed.karstIndexVisible ?? false,
+    passageDepthVisible: parsed.passageDepthVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
     tripsVisible: parsed.tripsVisible ?? false,
     tripsFrom: parsed.tripsFrom,

@@ -153,6 +153,23 @@ interval egal, niciodată mai apropiate de 2 m și niciodată mai mult de 400.
 Ai nevoie de dreptul de a citi datele de elevație, pe lângă dreptul de a vedea exact unde este
 peștera. Cere-l unui administrator dacă panoul nu apare.
 
+**Cea mai subțire acoperire de rocă.** Lângă cifre, panoul numește locul unde peștera se apropie
+cel mai mult de suprafață — cea mai subțire dintre citiri, cu distanța de-a lungul galeriei — iar
+**Arată pe hartă** îl marchează pe hartă și în vederea 3D. Este cea mai subțire dintre citirile
+făcute, nu minimul real dintre două citiri. Este o poziție a peșterii, așa că cine nu are voie să
+vadă exact unde este peștera nu primește deloc panoul, și nu există o listă a acestora pentru toate
+peșterile.
+
+### Galerii sub o dolină
+
+O dolină, un sorb sau orice contur desenat are pe pagina lui un card **Galerii sub această
+trăsătură**. Acesta listează peșterile cu galerii la o rază aleasă de tine (50 m la început, până
+la 500 m), de la cea mai apropiată, cu distanța în plan până la cea mai apropiată galerie și roca
+de deasupra în acel loc. Deschis pe un contur, cu raza 0, răspunde invers: ce galerii trec pe sub
+acest poligon. Sunt luate în calcul doar peșterile și trăsăturile pe care le poți localiza exact, iar
+lista are cel mult 25 de peșteri. Ai nevoie de dreptul de a citi datele de elevație, ca pentru
+panoul de mai sus.
+
 ---
 
 ## Adâncime și înălțime între intrări
@@ -265,6 +282,8 @@ galerii a unei peșteri și ce sugerează forma ei, vezi [Analize carstice](kars
 | **Lungime față de adâncime** | Nor de puncte, cu o ajustare care raportează panta și R² |
 | **Rang–mărime** | Cu ajustare de tip lege de putere și exponentul ei |
 | **Pe tipuri** | Numărători |
+
+La **Lungime față de adâncime** un comutator alege pe ce se desenează norul de puncte. **Măsuri alese** este graficul de mai sus, colorat după gruparea peșterilor care se aseamănă. **Axe principale** grupează peșterile după patru măsuri deodată — lungimea cartografiată, adâncimea, extensia proiectată și indicele de ramificare — și desenează fiecare peșteră grupată pe cele două direcții în care aceste peșteri diferă cel mai mult. Titlul fiecărei axe spune cât din variație cuprinde (*„Axa 1 (62 % din variație)”*), iar nota de sub grafic arată din ce este alcătuită fiecare axă: o măsură cu cifră mare și același semn ca alta se mișcă odată cu ea, una cu semn opus se mișcă invers. Semnul întregii axe nu înseamnă nimic — poate fi citită în oricare sens. O măsură pe care toate peșterile grupate o înregistrează identic nu are ce aduce și este numită ca lăsată deoparte. Axele există numai acolo unde gruparea însăși a rulat; când prea puține peșteri înregistrează toate cele patru măsuri, pagina spune asta în loc să le deseneze.
 
 Nota despre domeniu este partea importantă: *„Calculat din cele n din m peșteri de pe această
 pagină care au o lungime măsurată. **Peșterile fără lungime lipsesc, nu sunt numărate ca zero.**"*

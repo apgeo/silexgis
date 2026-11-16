@@ -42,6 +42,11 @@ import {
   attachKarstIndexLoader,
   createKarstIndexLayer,
 } from '../../map/karstIndexLayer.ts';
+import {
+  PASSAGE_DEPTH_LAYER_ID,
+  attachPassageDepthLoader,
+  createPassageDepthLayer,
+} from '../../map/passageDepthLayer.ts';
 import { attachGeofileLoader } from '../../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer } from '../../map/photoLayer.ts';
 import { TRIP_LAYER_ID, attachTripLoader, createTripLayer } from '../../map/tripLayer.ts';
@@ -96,6 +101,8 @@ export function useMapMount() {
       [SURFACE_FEATURE_LAYER_ID, createSurfaceFeatureLayer],
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
+      // Above the plain centrelines: where both are on, the coloured passage is the one to read.
+      [PASSAGE_DEPTH_LAYER_ID, createPassageDepthLayer],
       [PHOTO_LAYER_ID, createPhotoLayer],
     [TRIP_LAYER_ID, createTripLayer],
       // On top of the data it is drawn over: it is one short line answering a question somebody
@@ -128,6 +135,7 @@ export function useMapMount() {
     const detachTripLoader = attachTripLoader(map);
     const detachKarstDensityLoader = attachKarstDensityLoader(map);
     const detachKarstIndexLoader = attachKarstIndexLoader(map);
+    const detachPassageDepthLoader = attachPassageDepthLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
     // The foreign libraries' end of the same two things. Attached unconditionally: both are
     // gated on a layer being switched on, and no library configured means no layer to switch on.
@@ -190,6 +198,7 @@ export function useMapMount() {
       detachTripLoader();
       detachKarstDensityLoader();
       detachKarstIndexLoader();
+      detachPassageDepthLoader();
       detachPhotoPopup();
       detachLibraryPhotoLoader();
       detachLibraryPhotoPopup();

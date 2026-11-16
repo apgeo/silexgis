@@ -140,6 +140,7 @@ public static class CaveOverburdenEndpoints
 
         // Summarised over the readings that got a ground height and over nothing else: counting an
         // unread place as nought would report a cave as shallower the less of it terrain covers.
+        var leastCoverIndex = OverburdenProfile.LeastCoverIndex([.. samples.Select(s => s.OverburdenM)]);
         var covered = samples.Where(s => s.OverburdenM is not null).Select(s => s.OverburdenM!.Value).ToArray();
 
         return TypedResults.Ok(new CaveOverburdenDto(
@@ -154,6 +155,7 @@ public static class CaveOverburdenEndpoints
             covered.Length > 0 ? covered.Min() : null,
             covered.Length > 0 ? covered.Max() : null,
             covered.Length > 0 ? covered.Average() : null,
+            leastCoverIndex is { } least ? samples[least] : null,
             samples,
             await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }

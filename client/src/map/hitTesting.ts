@@ -3,6 +3,7 @@ import type OlLayerBase from 'ol/layer/Base';
 import { isCatalogueLayer } from './baseLayers.ts';
 import { CENTERLINE_LAYER_ID } from './centerlineLayer.ts';
 import { KARST_DENSITY_LAYER_ID } from './karstDensityLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID } from './passageDepthLayer.ts';
 
 /**
  * Layers that answer nothing on a hit test, so asking them is pure cost.
@@ -19,7 +20,11 @@ import { KARST_DENSITY_LAYER_ID } from './karstDensityLayer.ts';
  */
 // The density grid is listed for a second reason: its cells answer nothing a click could open, and
 // up to a few thousand polygons under the cursor's every move would be replayed for nothing.
-const NON_INTERACTIVE_LAYER_IDS: readonly string[] = [CENTERLINE_LAYER_ID, KARST_DENSITY_LAYER_ID];
+const NON_INTERACTIVE_LAYER_IDS: readonly string[] = [
+  CENTERLINE_LAYER_ID,
+  KARST_DENSITY_LAYER_ID,
+  PASSAGE_DEPTH_LAYER_ID,
+];
 
 /**
  * `layerFilter` for `forEachFeatureAtPixel`: skips layers nothing reads a hit from — and every

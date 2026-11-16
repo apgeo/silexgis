@@ -384,6 +384,66 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// Ground rising eastwards over a level passage running east: the rock is thinnest at the west
+    /// end and thickest at the east end, so the least cover is the first reading, and it carries the
+    /// position and the value the summary's minimum names.
+    /// </summary>
+    [Fact]
+    public async Task The_least_cover_is_the_thinnest_reading_with_its_position()
+    {
+        WriteRaster(buildId, (x, y) => (float)(GroundM + (10 * x) + (3 * y)));
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        var body = await ReadAsync(owner, cave);
+        var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+        var least = body.GetProperty("leastCover");
+
+        least.GetProperty("overburdenM").GetDouble()
+            .ShouldBe(body.GetProperty("minOverburdenM").GetDouble(), 1e-9);
+        least.GetProperty("distanceAlongM").GetDouble().ShouldBe(0, 1e-9);
+        least.GetProperty("longitude").GetDouble()
+            .ShouldBe(samples[0].GetProperty("longitude").GetDouble(), 1e-9);
+        least.GetProperty("latitude").GetDouble()
+            .ShouldBe(samples[0].GetProperty("latitude").GetDouble(), 1e-9);
+
+        // Not simply the first or the last reading of every profile: it is the thinner end here.
+        samples[^1].GetProperty("overburdenM").GetDouble()
+            .ShouldBeGreaterThan(least.GetProperty("overburdenM").GetDouble() + 10);
+    }
+
+    /// <summary>
+    /// The least-cover place is a position of the cave, so it is withheld with the rest of the
+    /// profile. The caller holds every terrain right and may read the protected cave, and is shown
+    /// the same figure for an open cave in the same test.
+    /// </summary>
+    [Fact]
+    public async Task The_least_cover_place_is_withheld_from_a_reader_who_may_not_place_the_cave()
+    {
+        var open = await CaveWithPassageAsync(locationProtected: false);
+        var hidden = await CaveWithPassageAsync(locationProtected: true);
+
+        (await ReadAsync(viewer, open)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+        (await viewer.GetAsync($"/api/v1/caves/{hidden}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await viewer.GetAsync($"/api/v1/caves/{hidden}/overburden");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var text = await refused.Content.ReadAsStringAsync();
+        text.ShouldNotContain("leastCover");
+        text.ShouldNotContain("longitude");
+
+        (await ReadAsync(owner, hidden)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    /// <summary>A drawing with no altitudes has no least cover rather than one at nought.</summary>
+    [Fact]
+    public async Task A_plan_drawing_with_no_altitudes_has_no_least_cover()
+    {
+        var plan = await CaveWithPassageAsync(locationProtected: false, withAltitudes: false);
+
+        (await ReadAsync(owner, plan)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();

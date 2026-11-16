@@ -63,6 +63,7 @@ shown as the picture background its installation names in its place.
 | **Entrance heatmap** | Density rather than individual markers |
 | **Cave density (grid)** | How many caves lie in each cell of a grid, counted by the server |
 | **Karstification index (areas)** | Each karst area, massif and hill in view, filled by how karstified it reads |
+| **Rock over the passage** | Cave passage in view, coloured by how much rock lies above it |
 
 ### Karst layers
 
@@ -87,6 +88,23 @@ under the layer list while it is on, with a key to its colours.
 
 Both take an opacity and are kept in a [saved view](saved-views-and-windows.md). Neither is
 drawn in the 3D view or on a shared view's link.
+
+### Rock over the passage
+
+**Rock over the passage** draws the passage of each cave in view as a coloured line, by how much
+rock lies between it and the ground above: one colour for passage that reads above its ground
+(worth checking, not a depth), then bands of 0–10, 10–25, 25–50, 50–100, 100–200 and more than
+200 m, darker for more rock. The row under the layer list carries the key. The figure is the
+same one the cave's own overburden panel gives, read at points along the passage and not
+between them, so a narrow thin place can fall between two readings.
+
+You need permission to read elevation data, as for that panel, and the layer is drawn only for
+caves you may see exactly — a cave you may not place is not drawn and is not counted. A cave
+that was surveyed as a plan with no altitudes is not drawn, nor is passage the elevation model
+does not reach. At most 25 caves are drawn at once; if the view holds more, the row says so —
+zoom in. If no elevation model is built, the row says that instead. The layer takes an opacity
+and is kept in a [saved view](saved-views-and-windows.md); it is not drawn in the 3D view or on
+a shared view's link.
 
 ### Label decluttering
 

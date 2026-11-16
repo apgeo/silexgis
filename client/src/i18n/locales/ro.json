@@ -572,6 +572,23 @@
         "other": "Indicele de carstificare a fost refuzat pentru această imagine."
       }
     },
+    "passageDepth": {
+      "layer": "Rocă deasupra galeriei",
+      "loading": "Se citește galeria din vedere…",
+      "shown": "Peșteri desenate: {{count}}.",
+      "none": "Nicio peșteră cu altitudini în vedere pe care o poți plasa exact.",
+      "failed": "Adâncimea galeriei nu a putut fi citită. Mutarea hărții cere din nou.",
+      "noTerrain": "Aici nu este construit niciun model de elevație, deci galeria nu poate fi colorată.",
+      "truncated": "În vedere sunt mai multe peșteri decât se desenează odată (cel mult {{max}}). Mărește harta pentru a le vedea pe celelalte.",
+      "legendAbove": "Se citește deasupra terenului",
+      "legendBand": "{{from}} – {{to}} m de rocă",
+      "legendOver": "Peste {{from}} m de rocă",
+      "refused": {
+        "window": "Pentru această vedere nu se poate cere un răspuns. Mută harta pentru a cere din nou.",
+        "terrain": "Nu ai dreptul de a citi elevația, de care are nevoie acest strat.",
+        "other": "Adâncimea galeriei a fost refuzată pentru această vedere."
+      }
+    },
     "karstLegend": {
       "band": "{{from}} – {{to}}",
       "bandAbove": "peste {{from}}",
@@ -7730,6 +7747,11 @@
     }
   },
   "karstStats": {
+    "axesNone": "Axele principale nu au putut fi desenate: prea puține peșteri din acest set înregistrează toate măsurile, sau măsurile rămase nu variază.",
+    "axisDropped": "Lăsate în afara axelor pentru că toate peșterile grupate înregistrează aceeași valoare: {{measures}}.",
+    "axisLoadings": "Axa {{axis}} cuprinde {{share}} % din variație și este alcătuită din {{loadings}}. Contează doar semnele relative; axa însăși poate fi citită în oricare sens.",
+    "axisScope": "{{drawn}} din cele {{total}} peșteri de pe această pagină sunt poziționate. Axele și culorile se calculează pe întregul set la care este restrânsă lista, așa că peșterile de pe alte pagini sunt poziționate și ele, dar nu sunt desenate aici.",
+    "axisTitle": "Axa {{axis}} ({{share}} % din variație)",
     "clusterArbitrary": "Gruparea încă muta peșteri când a atins limita de pași, așa că grupul în care a căzut o peșteră aflată la limită este arbitrar în detalii, nu greșit.",
     "clusterCoverage": "{{measure}}: {{missing}} dintre peșterile luate în considerare nu o înregistrează, iar {{soleReason}} dintre acestea ar fi fost grupate dacă această măsură nu ar fi fost cerută.",
     "clusterEmpty": "Nimic nu a putut fi grupat: mai puțin de {{minimum}} peșteri din acest set înregistrează toate măsurile cerute. Punctele de mai jos sunt desenate necolorate, iar cifrele de mai sus rămân valabile.",
@@ -7739,12 +7761,15 @@
     "clusterNoWork": "Toate peșterile grupate au aceeași valoare pentru {{measure}}, așa că acea măsură nu a mutat nicio peșteră în niciun grup.",
     "clusterNotAsked": "Această listă este restrânsă după ceva ce gruparea la nivel de registru nu poate fi întrebată, așa că peșterile sunt desenate necolorate, nu colorate după gruparea altui set de peșteri.",
     "clusterPopulation": "Grupat pe cele {{eligible}} din {{considered}} peșteri pe care le poți citi din întregul set la care este restrânsă această listă — nu doar din pagina desenată mai jos — și care înregistrează toate măsurile cerute. Celelalte {{excluded}} înregistrează mai puține, așa că nicio grupare nu le poate plasa, iar neavând nici lungime, nici adâncime de reprezentat, lipsesc din grafic, nu sunt desenate în el.",
+    "clusterPopulationAxes": "Grupat și poziționat pe cele {{eligible}} din {{considered}} peșteri pe care le poți citi din întregul set la care este restrânsă această listă — nu doar din pagina desenată mai jos — și care înregistrează toate măsurile cerute. Celelalte {{excluded}} înregistrează mai puține, așa că nicio grupare nu le poate plasa și nici poziționa pe axe, iar în grafic lipsesc, nu sunt desenate în el.",
     "clusterUngrouped": "Negrupate",
     "clusterWeak": "Grupurile sunt la fel de late pe cât sunt de depărtate între ele, deci această grupare este slabă. Metoda returnează exact numărul de grupuri cerut, oricare ar fi datele, inclusiv zgomot, așa că mai jos culorile sunt o împărțire a acestor peșteri, nu o descoperire despre ele.",
     "clusterWithheld": "Unele grupuri conțin mai puțin de {{floor}} peșteri. Acelea nu sunt rezumate, iar peșterile lor sunt desenate necolorate, pentru că o medie pe două peșteri sunt chiar valorile acelor două peșteri, nu ceva despre un grup.",
     "count": "Peșteri",
     "depthAxis": "Denivelare (m)",
     "lengthAxis": "Lungime carotată (m)",
+    "modeAxes": "Axe principale",
+    "modeMeasures": "Măsuri alese",
     "nothingMeasured": "Nicio peșteră de pe această pagină nu are lungime măsurată.",
     "powerLawFit": "Ajustare putere (exponent {{exponent}})",
     "rank": "Rang",
@@ -7859,6 +7884,23 @@
     "measured": "Măsurate",
     "box": "P10 · P25 · mediană · P75 · P90",
     "tooFewForABox": "Prea puține peșteri măsurate pentru o cutie"
+  },
+  "featurePassages": {
+    "title": "Galerii sub această trăsătură",
+    "intro": "Peșteri cu galerii la cel mult {{distance}} m de această trăsătură, în plan, de la cea mai apropiată. Sunt luate în calcul doar peșterile pe care le poți localiza exact.",
+    "reach": "Rază (m)",
+    "empty": "Nicio galerie pe care o poți localiza nu se află în această rază.",
+    "noTerrain": "Pe această instalație nu au fost pregătite date de elevație, deci grosimea rocii de deasupra nu se cunoaște; distanțele se cunosc.",
+    "truncated": "Mai multe peșteri se potrivesc decât sunt listate; sunt arătate cele mai apropiate.",
+    "cave": "Peștera",
+    "offset": "Distanță",
+    "offsetUnder": "Sub contur",
+    "altitude": "Altitudinea galeriei",
+    "overburden": "Roca de deasupra",
+    "notMeasured": "—",
+    "unitMetres": "{{value}} m",
+    "approximate": "aproximativ",
+    "noAltitudes": "Fără altitudini măsurate"
   },
   "morphometry": {
     "title": "Formă măsurată",
@@ -8465,7 +8507,12 @@
       "noData": "Datele de elevație nu înregistrează nimic aici"
     },
     "markLabel": "{{value}} de rocă deasupra",
-    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici"
+    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici",
+    "leastCover": "Cea mai subțire acoperire de rocă",
+    "leastCoverAt": "{{value}} la {{distance}} de-a lungul galeriei",
+    "leastCoverNote": "Cea mai subțire dintre citirile făcute de-a lungul galeriei, nu minimul real dintre ele.",
+    "showLeastCover": "Arată pe hartă",
+    "leastCoverMark": "Acoperire minimă: {{value}}"
   },
   "altitudeCheck": {
     "title": "Altitudinile intrărilor față de teren",
