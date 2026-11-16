@@ -244,6 +244,128 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
             .ShouldBe($"Nu este o tura {tag}");
     }
 
+    // ---------- a geology map ----------
+
+    /// <summary>
+    /// A geology map's outlines become geological units, each carrying the rock class its
+    /// lithology column names: recognised on its own where the value is a class's name, through
+    /// the reviewer's mapping where it is not, and unclassified where nothing says. The preview
+    /// lists every distinct value with what it becomes, the unmatched first — the mapping step.
+    /// </summary>
+    [Fact]
+    public async Task A_geology_map_becomes_geological_units_with_their_mapped_lithology()
+    {
+        var geofileId = await UploadAsync("geology.geojson", Encoding.UTF8.GetBytes(GeologyMap(
+            ("Calcar", 25.00), ("CALCAR", 25.02), ("gresie", 25.04), ("Flis carpatic", 25.06), ("Necunoscut", 25.08))), editor);
+
+        var options = GeologyOptions(new Dictionary<string, string>());
+        var first = await PreviewAsync(editor, geofileId, options);
+        first.GetProperty("areaCount").GetInt32().ShouldBe(5);
+        var values = first.GetProperty("lithologyValues").EnumerateArray().ToList();
+        values.Count.ShouldBe(4);
+        values.Take(2).Select(v => v.GetProperty("match").GetString()).ShouldAllBe(m => m == "unmatched");
+        values.Take(2).Select(v => v.GetProperty("code").ValueKind).ShouldAllBe(k => k == JsonValueKind.Null);
+        var limestone = values.Single(v => v.GetProperty("code").GetString() == "limestone");
+        limestone.GetProperty("count").GetInt32().ShouldBe(2);
+        limestone.GetProperty("match").GetString().ShouldBe("recognised");
+        values.Single(v => v.GetProperty("value").GetString() == "gresie")
+            .GetProperty("code").GetString().ShouldBe("sandstone");
+
+        // The reviewer answers one of the two unmatched values and leaves the other.
+        options = GeologyOptions(new Dictionary<string, string> { ["Flis carpatic"] = "shale_marl" });
+        var mapped = await PreviewAsync(editor, geofileId, options);
+        var flysch = mapped.GetProperty("lithologyValues").EnumerateArray()
+            .Single(v => v.GetProperty("value").GetString() == "Flis carpatic");
+        flysch.GetProperty("code").GetString().ShouldBe("shale_marl");
+        flysch.GetProperty("match").GetString().ShouldBe("mapped");
+
+        // Every outline is proposed as a unit, so all of them can be confirmed at once.
+        var selection = ClassifiedSourceIds(mapped);
+        selection.Count.ShouldBe(5);
+        var commit = await CommitAsync(editor, geofileId, selection, options: options);
+        commit.GetProperty("failures").GetArrayLength().ShouldBe(0);
+
+        var batchId = commit.GetProperty("batch").GetProperty("id").GetGuid();
+        var detail = await GetJsonAsync(editor, $"/api/v1/import-batches/{batchId}");
+        var byName = new Dictionary<string, string?>();
+        foreach (var item in detail.GetProperty("items").EnumerateArray())
+        {
+            var feature = (await GetJsonAsync(editor, $"/api/v1/features/{item.GetProperty("featureId").GetGuid()}"))
+                .GetProperty("feature");
+            feature.GetProperty("featureTypeCode").GetString().ShouldBe("geological_unit");
+            var properties = feature.GetProperty("properties");
+            byName[feature.GetProperty("name").GetString()!] = properties.TryGetProperty("lithology", out var code)
+                ? code.GetString()
+                : null;
+        }
+
+        byName.ShouldBe(new Dictionary<string, string?>
+        {
+            [$"Unit Calcar {tag}"] = "limestone",
+            [$"Unit CALCAR {tag}"] = "limestone",
+            [$"Unit gresie {tag}"] = "sandstone",
+            [$"Unit Flis carpatic {tag}"] = "shale_marl",
+            [$"Unit Necunoscut {tag}"] = null,
+        }, ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// The vocabulary is closed: a mapping to any other class is refused with the request, on the
+    /// preview, the saved review and the confirmation alike, rather than stored as a class no
+    /// statistic can call karstifiable or not.
+    /// </summary>
+    [Fact]
+    public async Task A_lithology_mapping_outside_the_vocabulary_is_refused()
+    {
+        var geofileId = await UploadAsync("geology-bad.geojson", Encoding.UTF8.GetBytes(GeologyMap(("Creta", 26.00))), editor);
+        var options = GeologyOptions(new Dictionary<string, string> { ["Creta"] = "chalk" });
+
+        var preview = await editor.PostAsJsonAsync(
+            $"/api/v1/geofiles/{geofileId}/import/preview", new { options, pageSize = 200 });
+        preview.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await preview.Content.ReadAsStringAsync()).ShouldContain("chalk");
+
+        var save = await editor.PutAsJsonAsync(
+            $"/api/v1/geofiles/{geofileId}/import/session", new { options, decisions = new Dictionary<string, object>() });
+        save.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var commit = await editor.PostAsJsonAsync($"/api/v1/geofiles/{geofileId}/import/commit", new
+        {
+            options,
+            selection = new[] { 1L },
+            decisions = new Dictionary<string, object>(),
+            withoutReview = false,
+        });
+        commit.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    private Dictionary<string, object?> GeologyOptions(Dictionary<string, string> lithologyValues)
+    {
+        var options = DefaultOptions();
+        options["areas"] = "importAsArea";
+        options["areaFeatureTypeCode"] = "geological_unit";
+        options["mapping"] = new { lithologyField = "LITOLOGIE", lithologyValues };
+        return options;
+    }
+
+    /// <summary>An invented geology map: one small square per unit, named after its rock column.</summary>
+    private string GeologyMap(params (string Lithology, double West)[] units)
+    {
+        var features = units.Select(u =>
+        {
+            var w = u.West.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var e = (u.West + 0.01).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $$"""
+                {
+                  "type": "Feature",
+                  "properties": { "name": "Unit {{u.Lithology}} {{tag}}", "LITOLOGIE": "{{u.Lithology}}" },
+                  "geometry": { "type": "Polygon", "coordinates": [[[{{w}}, 46.0], [{{e}}, 46.0], [{{e}}, 46.01], [{{w}}, 46.01], [{{w}}, 46.0]]] }
+                }
+                """;
+        });
+        return "{\"type\": \"FeatureCollection\", \"features\": [" + string.Join(",", features) + "]}";
+    }
+
     [Fact]
     public async Task Provenance_says_which_file_which_rule_who_and_when()
     {

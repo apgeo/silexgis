@@ -36,6 +36,14 @@ public static class SourceAttributeReader
     }
 
     /// <summary>
+    /// The rock type a row's lithology column holds, as the file wrote it: the column the
+    /// importer named, or the first of the usual names the row carries.
+    /// </summary>
+    public static string? ReadLithology(
+        IReadOnlyDictionary<string, string?> properties, ImportAttributeMapping mapping) =>
+        Pick(properties, mapping.LithologyField, ImportAttributeMapping.LithologyCandidates);
+
+    /// <summary>
     /// The value of the named field, or of the first candidate the row carries. An explicitly
     /// named field that the row does not have yields nothing rather than falling back — a
     /// mapping the importer chose is an instruction, and quietly substituting a different

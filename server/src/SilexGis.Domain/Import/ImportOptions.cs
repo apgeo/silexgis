@@ -40,6 +40,22 @@ public enum ImportTrackHandling
     ImportAsLine = 1,
 }
 
+/// <summary>What an import does with the outlines (polygons) in a file.</summary>
+/// <remarks>
+/// Term rules read names, and an outline's name says nothing about what it is — a geology map
+/// names its units after formations, a land-use layer after parcels. So an outline is never
+/// proposed by a rule; it becomes something only when the import is told, once, which kind of
+/// area every outline in the file is.
+/// </remarks>
+public enum ImportAreaHandling
+{
+    /// <summary>Leave them where they are: drawn as the file's own map layer, not in the registry.</summary>
+    Ignore = 0,
+
+    /// <summary>Propose every outline as an area feature of the chosen type — a geology map's units, say.</summary>
+    ImportAsArea = 1,
+}
+
 /// <summary>What becomes of a point no term rule claimed.</summary>
 /// <remarks>
 /// The counterpart of <see cref="ImportTrackHandling"/> for points, and it exists for a measured
@@ -96,6 +112,19 @@ public sealed record ImportAttributeMapping
 
     public string? ElevationField { get; init; }
 
+    /// <summary>
+    /// The column holding a geological unit's rock type. Read only for outlines that become
+    /// geological units; any other created object carries no lithology.
+    /// </summary>
+    public string? LithologyField { get; init; }
+
+    /// <summary>
+    /// The reviewer's answer for source values of <see cref="LithologyField"/> that are not
+    /// recognised on their own: source value to lithology vocabulary code. A value left out is
+    /// created unclassified. A code outside the vocabulary is refused with the request.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LithologyValues { get; init; } = new Dictionary<string, string>();
+
     /// <summary>Source keys tried for the name, best first.</summary>
     public static IReadOnlyList<string> NameCandidates { get; } =
         ["name", "Name", "NAME", "title", "cmt", "desc", "label", "id"];
@@ -111,6 +140,10 @@ public sealed record ImportAttributeMapping
     /// <summary>Source keys tried for an altitude, best first.</summary>
     public static IReadOnlyList<string> ElevationCandidates { get; } =
         ["ele", "elevation", "alt", "altitude", "altitudine", "z", "height"];
+
+    /// <summary>Source keys tried for a geological unit's rock type, best first.</summary>
+    public static IReadOnlyList<string> LithologyCandidates { get; } =
+        ["lithology", "litologie", "lithologie", "litho", "lith", "rock_type", "rocktype", "rock"];
 }
 
 /// <summary>
@@ -133,6 +166,12 @@ public sealed record ImportOptions
 
     /// <summary>Feature-type code line work becomes when <see cref="Tracks"/> imports it.</summary>
     public string? TrackFeatureTypeCode { get; init; }
+
+    /// <summary>What becomes of the file's outlines. See <see cref="ImportAreaHandling"/>.</summary>
+    public ImportAreaHandling Areas { get; init; } = ImportAreaHandling.Ignore;
+
+    /// <summary>Feature-type code an outline becomes when <see cref="Areas"/> imports it.</summary>
+    public string? AreaFeatureTypeCode { get; init; }
 
     /// <summary>What to propose for a point no rule claimed. See <see cref="ImportUnmatchedPoints"/>.</summary>
     public ImportUnmatchedPoints UnmatchedPoints { get; init; } = ImportUnmatchedPoints.Ignore;
