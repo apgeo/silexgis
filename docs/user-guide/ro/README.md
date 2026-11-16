@@ -61,6 +61,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Topografii, drumuiri și modele 3D](features/surveys-and-models.md) ·
 [Nori de puncte (scanări LiDAR)](features/point-clouds.md) ·
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
+[Geologie și stereograma](features/geology.md) ·
 [Fișiere de geodate](features/geodata.md) ·
 [Hărți raster georeferențiate](features/georeferenced-maps.md) ·
 [Catalogul național al peșterilor](features/cave-catalogue.md) ·

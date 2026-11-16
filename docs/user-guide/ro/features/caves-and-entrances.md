@@ -111,6 +111,7 @@ Dincolo de formular, pagina adună secțiuni pe măsură ce o hrănești:
 | **Modele topo 3D** | [Topografii și modele](surveys-and-models.md) |
 | **Surse topografice** | [Topografii și modele](surveys-and-models.md#surse-topografice) |
 | **Statistici din cartare** | [Măsurători](measurements-and-statistics.md#ce-măsoară-o-topografie) |
+| **Galeriile față de structura cartată** | [Geologie](geology.md) — cu stereograma măsurătorilor din jurul peșterii |
 | **Fotografii și documente** | [Fotografii](photographs.md) · [Documente](documents-and-cabinets.md) |
 | **Etichete** | Libere, filtrabile în tabele și pe straturile hărții |
 | **Legături** | [Legături între înregistrări](links.md) |

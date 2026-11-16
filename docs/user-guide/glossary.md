@@ -104,10 +104,18 @@ any rule is consulted. It holds no rules.
 **Geofile** — An uploaded vector file (GPX, KML, shapefile…). Becomes a map layer, and can
 then be reviewed into registry records. → [Geodata](features/geodata.md)
 
+**Geological unit** — An outline of ground that is all one rock class, from a geology map, with
+its lithology chosen from a fixed list. Not the same as a cave's declared *rock type*.
+→ [Geology](features/geology.md#geological-units)
+
 **Headline picture** — The starred photograph that represents a cave or a trip.
 
 **History** — A single record's change trail, with per-field restore. Protected values read
 *"Value hidden"*. → [History and audit](features/history-and-audit.md)
+
+**Karstifiable** — Said of a lithology that dissolves readily enough to host caves: the
+carbonates, the evaporites and calcareous conglomerate. Fixed by the application for each class
+of its list. → [Geology](features/geology.md#the-lithology-list)
 
 **Lead** — Something a trip left open. Collected onto a camp's leads board, with a promise
 grade and a state (open, checked, dead end, continues).
@@ -203,6 +211,14 @@ of reports names somebody by it. Empty, the full name is used.
 not the person: somebody in two roles, or somebody who left and came back, has two stays.
 → [Camps](features/camps.md#who-was-there)
 
+**Stereonet** — A circle on which many structural readings are plotted at once, each as the pole
+of its plane (equal-area, lower hemisphere), shaded by how densely the poles crowd.
+→ [Geology](features/geology.md#the-stereonet)
+
+**Structural measurement** — One reading of a plane taken at a point — bedding, a joint, a fault
+plane — stored as dip direction and dip, and enterable as strike and dip by the right-hand rule.
+→ [Geology](features/geology.md#structural-measurements)
+
 **Survey source** — The `.th`, `.svx`, `.thconfig`, `.log` or survey-app `.zip` a compiled
 survey was made from. Archived, never read.
 → [Surveys and models](features/surveys-and-models.md#survey-sources)
@@ -216,6 +232,10 @@ from finished pictures: sharp at every zoom, labels in your language. Carries no
 
 **Visibility** — A record's own audience: private, caving group, authenticated users, public.
 One of the three things that decide access.
+
+**Watson's U²** — The test that compares a cave's passage directions with the strikes of the
+structural readings around it, giving a probability that the two come from one distribution.
+→ [Geology](features/geology.md)
 
 **Work area** — Ground your club works, drawn as an area and nested, shown with what contains
 it so two passages of the same name are told apart. → [Work areas](features/work-areas.md)
