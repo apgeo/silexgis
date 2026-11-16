@@ -15,6 +15,7 @@ import {
   type KarstDensityMode,
 } from '../../map/karstDensityLayer.ts';
 import { KARST_INDEX_LAYER_ID, setKarstIndexEnabled } from '../../map/karstIndexLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID, setPassageDepthEnabled } from '../../map/passageDepthLayer.ts';
 import { PHOTO_LAYER_ID, setPhotosEnabled } from '../../map/photoLayer.ts';
 import { TRIP_LAYER_ID, setTripLayerFilter, setTripsEnabled, type TripLayerFilter } from '../../map/tripLayer.ts';
 import { findOverlayLayer } from '../../map/mapContext.ts';
@@ -32,6 +33,7 @@ export interface OverlayVisibilityInput {
   karstDensityMode: KarstDensityMode;
   karstDensityBands: KarstDensityBands;
   karstIndexVisible: boolean;
+  passageDepthVisible: boolean;
   photosVisible: boolean;
   tripsVisible: boolean;
   tripFilter: TripLayerFilter;
@@ -53,6 +55,7 @@ export function useOverlayVisibility({
   karstDensityMode,
   karstDensityBands,
   karstIndexVisible,
+  passageDepthVisible,
   photosVisible,
   tripsVisible,
   tripFilter,
@@ -103,6 +106,11 @@ export function useOverlayVisibility({
     findOverlayLayer(KARST_INDEX_LAYER_ID)?.setVisible(karstIndexVisible);
     setKarstIndexEnabled(karstIndexVisible); // hidden = no fetches
   }, [karstIndexVisible]);
+
+  useEffect(() => {
+    findOverlayLayer(PASSAGE_DEPTH_LAYER_ID)?.setVisible(passageDepthVisible);
+    setPassageDepthEnabled(passageDepthVisible); // hidden = no fetches
+  }, [passageDepthVisible]);
 
   useEffect(() => {
     findOverlayLayer(PHOTO_LAYER_ID)?.setVisible(photosVisible);

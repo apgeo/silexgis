@@ -46,6 +46,7 @@ import {
   type KarstDensityMode,
 } from '../map/karstDensityLayer.ts';
 import { KARST_INDEX_LAYER_ID, setKarstIndexSelected } from '../map/karstIndexLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID } from '../map/passageDepthLayer.ts';
 import { GEOFILE_LAYER_PREFIX } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID } from '../map/photoLayer.ts';
 import { TRIP_LAYER_ID, type TripLayerFilter } from '../map/tripLayer.ts';
@@ -223,6 +224,7 @@ export default function MapPage() {
   const [karstDensityMode, setKarstDensityModeState] = useState<KarstDensityMode>('density');
   const [karstDensityBands, setKarstDensityBandsState] = useState<KarstDensityBands>('relative');
   const [karstIndexVisible, setKarstIndexVisible] = useState(false);
+  const [passageDepthVisible, setPassageDepthVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
   const [tripsVisible, setTripsVisible] = useState(false);
   // What the trip overlay is asking for. Held here rather than only in the layer module so a
@@ -476,6 +478,7 @@ export default function MapPage() {
     karstDensityMode,
     karstDensityBands,
     karstIndexVisible,
+    passageDepthVisible,
     photosVisible,
     tripsVisible,
     tripFilter,
@@ -502,6 +505,8 @@ export default function MapPage() {
       setKarstDensityVisible(visible);
     } else if (id === KARST_INDEX_LAYER_ID) {
       setKarstIndexVisible(visible);
+    } else if (id === PASSAGE_DEPTH_LAYER_ID) {
+      setPassageDepthVisible(visible);
     } else if (id === PHOTO_LAYER_ID) {
       setPhotosVisible(visible);
     } else if (id === TRIP_LAYER_ID) {
@@ -532,6 +537,7 @@ export default function MapPage() {
       karstDensityMode,
       karstDensityBands,
       karstIndexVisible,
+      passageDepthVisible,
       photosVisible,
       tripsVisible,
       tripsFrom: tripFilter.from,
@@ -597,6 +603,7 @@ export default function MapPage() {
     setKarstDensityModeState(ui.karstDensityMode);
     setKarstDensityBandsState(ui.karstDensityBands);
     setKarstIndexVisible(ui.karstIndexVisible);
+    setPassageDepthVisible(ui.passageDepthVisible);
     setPhotosVisible(ui.photosVisible);
     setTripsVisible(ui.tripsVisible);
     // Only the window is restored, and deliberately not the facet narrowings: those are carried
@@ -705,6 +712,7 @@ export default function MapPage() {
       karstDensityBands={karstDensityBands}
       onKarstDensityBandsChange={setKarstDensityBandsState}
       karstIndexVisible={karstIndexVisible}
+      passageDepthVisible={passageDepthVisible}
       tripFilter={tripFilter}
       onTripFilterChange={setTripFilter}
       unappliedTripFilters={unappliedTripFilters}

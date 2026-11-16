@@ -53,6 +53,8 @@ import { KARST_DENSITY_LAYER_ID, type KarstDensityBands, type KarstDensityMode }
 import KarstDensityControls from './KarstDensityControls.tsx';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
 import KarstIndexControls from './KarstIndexControls.tsx';
+import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
+import PassageDepthControls from './PassageDepthControls.tsx';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
 import {
   TRIP_LAYER_ID,
@@ -166,6 +168,7 @@ interface LayerPanelProps {
   onKarstDensityBandsChange: (bands: KarstDensityBands) => void;
   /** True while the karstification-index choropleth is on — its legend is hidden otherwise. */
   karstIndexVisible: boolean;
+  passageDepthVisible: boolean;
   /** What the trip overlay is currently asking for. */
   tripFilter: TripLayerFilter;
   onTripFilterChange: (filter: TripLayerFilter) => void;
@@ -226,6 +229,7 @@ export default function LayerPanel({
   karstDensityBands,
   onKarstDensityBandsChange,
   karstIndexVisible,
+  passageDepthVisible,
   tripFilter,
   onTripFilterChange,
   unappliedTripFilters,
@@ -416,6 +420,8 @@ export default function LayerPanel({
         return t('map.karstDensity.layer');
       case KARST_INDEX_LAYER_ID:
         return t('map.karstIndex.layer');
+      case PASSAGE_DEPTH_LAYER_ID:
+        return t('map.passageDepth.layer');
       case PHOTO_LAYER_ID:
         return t('map.photos');
       case TRIP_LAYER_ID:
@@ -596,6 +602,7 @@ export default function LayerPanel({
         />
       )}
       {karstIndexVisible && <KarstIndexControls />}
+      {passageDepthVisible && <PassageDepthControls />}
       {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}
       <PhotoCutShortNotice />
       {/* The map-corner notice about withheld lines opens the panel here and moves focus to this

@@ -11,6 +11,7 @@ import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
 import { KARST_DENSITY_LAYER_ID } from '../../map/karstDensityLayer.ts';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
 import { GEOFILE_LAYER_PREFIX, syncGeofileLayers } from '../../map/geofileLayers.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../../map/rasterLayers.ts';
 import { syncTerrainDerivativeLayers, terrainDerivativeIdOf } from '../../map/terrainDerivativeLayers.ts';
@@ -75,6 +76,7 @@ export function useOverlayLayerSync({
       ENTRANCE_HEATMAP_LAYER_ID,
       KARST_DENSITY_LAYER_ID,
       KARST_INDEX_LAYER_ID,
+      PASSAGE_DEPTH_LAYER_ID,
     ]) {
       setLayerOpacity(id, overlayOpacity[id] ?? 1);
     }

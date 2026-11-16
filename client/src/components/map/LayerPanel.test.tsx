@@ -151,6 +151,7 @@ function panel(overrides: PanelOverrides = {}) {
       karstDensityBands="relative"
       onKarstDensityBandsChange={() => {}}
       karstIndexVisible={false}
+      passageDepthVisible={false}
       tripFilter={{}}
       onTripFilterChange={vi.fn()}
       unappliedTripFilters={0}
