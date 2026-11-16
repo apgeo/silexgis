@@ -42,6 +42,13 @@ public static class MessageTemplateCatalog
 
     public const string EmailPasswordReset = "email.password-reset";
 
+    /// <summary>
+    /// Goes to the holder of an address somebody tried to register again. Registration answers
+    /// alike for a new and a taken address, so this message is where the holder learns that the
+    /// account exists and how to get back into it.
+    /// </summary>
+    public const string EmailAlreadyRegistered = "email.already-registered";
+
     /// <summary>Invites somebody an administrator opened an account for to choose a password.</summary>
     public const string EmailAccountInvitation = "email.account-invitation";
 
@@ -392,6 +399,47 @@ public static class MessageTemplateCatalog
 
                     Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă nu
                     tu ai cerut resetarea, ignoră mesajul — parola rămâne neschimbată.
+                    """),
+            }),
+
+        new(
+            EmailAlreadyRegistered,
+            MessageChannel.Email,
+            "Sent to the holder of an address when somebody tries to register it again.",
+            [AppName, DisplayName, "url", "expiresHours"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You already have a {appName} account",
+                    """
+                    Hello {displayName},
+
+                    Somebody, perhaps you, asked to open a new {appName} account with this address.
+                    This address already has an account, so no second one was opened.
+
+                    To get in, sign in with this address as usual. If you do not remember your
+                    password, open this link to choose a new one:
+
+                    {url}
+
+                    The link is valid for {expiresHours} hours and can be used once. If you did not
+                    ask for anything, ignore this message — your account stays as it is.
+                    """),
+                ["ro"] = new(
+                    "Ai deja un cont {appName}",
+                    """
+                    Bună ziua {displayName},
+
+                    Cineva, poate chiar tu, a cerut deschiderea unui cont {appName} nou cu această
+                    adresă. Adresa are deja un cont, așa că nu a fost deschis un al doilea.
+
+                    Ca să intri, autentifică-te cu această adresă ca de obicei. Dacă nu îți amintești
+                    parola, deschide acest link pentru a alege una nouă:
+
+                    {url}
+
+                    Linkul este valabil {expiresHours} ore și poate fi folosit o singură dată. Dacă nu
+                    ai cerut nimic, ignoră mesajul — contul rămâne neschimbat.
                     """),
             }),
 

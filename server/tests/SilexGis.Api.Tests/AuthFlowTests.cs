@@ -134,7 +134,7 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
         var anonymousEmail = $"noname-{Guid.NewGuid():N}@test.local";
         (await CreateClient().PostAsJsonAsync(
             "/api/v1/auth/register", new { email = anonymousEmail, password = "a-long-password-1" }))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var anonymous = await UserInfoAsync(anonymousEmail, "a-long-password-1");
 
@@ -149,7 +149,7 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
         (await CreateClient().PostAsJsonAsync(
             "/api/v1/auth/register",
             new { email = namedEmail, password = "a-long-password-1", displayName = "Ana Pop" }))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var named = await UserInfoAsync(namedEmail, "a-long-password-1");
 
@@ -165,7 +165,7 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
 
         var register = await client.PostAsJsonAsync(
             "/api/v1/auth/register", new { email, password = "a-long-password-1", displayName = "Test User" });
-        register.StatusCode.ShouldBe(HttpStatusCode.Created);
+        register.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var login = await client.PostAsJsonAsync(
             "/api/v1/auth/login", new { email, password = "a-long-password-1" });
@@ -189,7 +189,7 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
         var register = await configured.CreateClient().PostAsJsonAsync(
             "/api/v1/auth/register",
             new { email, password = "a-long-password-1", displayName = "Grouped User" });
-        register.StatusCode.ShouldBe(HttpStatusCode.Created);
+        register.StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         using var scope = configured.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -210,7 +210,7 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
         (await CreateClient().PostAsJsonAsync(
             "/api/v1/auth/register",
             new { email = plainEmail, password = "a-long-password-1", displayName = "Plain User" }))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var plainId = await db.Users.Where(u => u.Email == plainEmail).Select(u => u.Id).SingleAsync();
         var plain = await RosterHelper.AccessContextOfAsync(db, plainId);
         plain.Entries.ShouldNotContain(e => e.Domain == AccessDomain.Features);
