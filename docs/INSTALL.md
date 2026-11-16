@@ -2244,6 +2244,21 @@ For Twilio, point `Url` at
 `ContentType=application/json` and a body such as
 `{"to":"{to}","from":"{from}","message":"{text}"}`.
 
+The gateway has to be a service on the internet. An address on the server itself, or on a private,
+shared (`100.64.0.0/10`, which tailnets use) or link-local network, is refused when the settings
+are saved and again whenever a message is sent, and the gateway's redirects are not followed — so
+the settings page cannot be used to reach what only the server can reach. If your gateway really
+does run beside the installation, allow it here (the settings page cannot change this):
+
+```env
+SILEXGIS__SmsGateway__AllowInternalAddresses=true
+```
+
+Moving the mail settings to another host or port, or the SMS settings to another gateway address,
+drops the stored mail password or the gateway's authorisation header unless the same save types
+it again. The server's answer to that save reports which secret it dropped; type the password or
+header again after such a move.
+
 A configured SMS gateway is also what a charging notification channel needs: with
 `SILEXGIS__Announcements__PaidChannelsEnabled` on, an announcement to a caving group may be
 texted to the members who have confirmed a telephone number, and every such message is charged by
