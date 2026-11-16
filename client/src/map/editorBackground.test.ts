@@ -27,6 +27,18 @@ describe('the background of a map of its own', () => {
     expect(defaultBasemap([layer(5), layer(6)])?.id).toBe(5);
   });
 
+  it('is chosen among the kinds the map accepts, the workspace one and the default alike', () => {
+    const services = [
+      layer(1, { layerKind: 'wms', wms: {} as MapLayerInfo['wms'] }),
+      layer(2, { layerKind: 'wms', wms: {} as MapLayerInfo['wms'], isDefault: true }),
+      layer(4),
+    ];
+    const tilesOnly = (entry: MapLayerInfo) => entry.layerKind === 'xyz';
+    expect(chooseBackground(services, 1, tilesOnly)?.id).toBe(4);
+    expect(chooseBackground(services, undefined, tilesOnly)?.id).toBe(4);
+    expect(chooseBackground(services.slice(0, 2), 1, tilesOnly)).toBeNull();
+  });
+
   it('is none when the installation publishes no background, so the fallback is drawn', () => {
     expect(chooseBackground([], 1)).toBeNull();
     expect(chooseBackground(undefined, undefined)).toBeNull();
