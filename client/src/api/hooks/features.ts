@@ -253,9 +253,19 @@ export function useRevokeFeatureShare() {
   });
 }
 
-/** Imperative fetch for the anonymous shared-feature page (no auth required for public shares). */
-export async function fetchSharedFeature(token: string): Promise<SharedFeatureEnvelope> {
-  return unwrap(api.GET('/api/v1/shared/features/{token}', { params: { path: { token } } }));
+/**
+ * The record a share link names, for the page that link opens. Read without a sign-in for a public
+ * link; a link that needs an account answers 401 until the reader signs in, and then the same read
+ * carries their bearer and their own access decides it. A wrong or withdrawn link answers 404; the
+ * shared retry rule leaves both alone and tries again only after an answer that may change.
+ */
+export function useSharedFeature(token: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.sharedFeature(token ?? ''),
+    queryFn: (): Promise<SharedFeatureEnvelope> =>
+      unwrap(api.GET('/api/v1/shared/features/{token}', { params: { path: { token: token! } } })),
+    enabled: !!token,
+  });
 }
 
 export type CaveQrPublication = components['schemas']['CaveQrPublicationDto'];

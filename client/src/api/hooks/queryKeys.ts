@@ -68,6 +68,7 @@ export const queryKeys = {
   featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
   featureLinks: (id: string) => ['features', id, 'links'] as const,
   featureShares: (id: string) => ['features', id, 'shares'] as const,
+  sharedFeature: (token: string) => ['shared-features', token] as const,
   caveQrPublication: (id: string) => ['caves', id, 'qr-publication'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   geofile: (id: string) => ['geofiles', 'detail', id] as const,
