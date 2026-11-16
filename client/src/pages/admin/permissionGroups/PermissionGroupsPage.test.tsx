@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../../../i18n';
+
+/**
+ * The permission-groups list: the guards on protected groups, the address that opens one group's
+ * editor directly, and what is said when the list cannot be read. The editor is tested on its own.
+ */
+
+const t = i18n.getFixedT('en');
+const refetchGroups = vi.fn();
+let groupsQuery: { data: unknown[] | undefined; isPending: boolean; isError: boolean };
+
+const FULL = { id: 'g-full', name: 'Full Administrators', slug: 'full-administrators', description: null, isProtected: true, isSeeded: true, memberCount: 1, entryCount: 0 };
+const SURVEYORS = { id: 'g-surv', name: 'Surveyors', slug: 'surveyors', description: null, isProtected: false, isSeeded: false, memberCount: 3, entryCount: 2 };
+
+vi.mock('../../../api/hooks.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../api/hooks.ts')>();
+  return {
+    hasAccessAction: actual.hasAccessAction,
+    useCapabilities: () => ({ data: { domains: { permissionGroups: 'read, create, update, delete' } } }),
+    usePermissionGroups: () => ({ ...groupsQuery, refetch: refetchGroups }),
+    useAccessCatalog: () => ({ data: { domains: [], featureSets: [] }, isError: false, refetch: vi.fn() }),
+    useCreatePermissionGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeletePermissionGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  };
+});
+
+vi.mock('./PermissionGroupEditor.tsx', () => ({
+  default: ({ group }: { group: { name: string } }) => <div data-testid="group-editor">{group.name}</div>,
+}));
+
+const { default: PermissionGroupsPage } = await import('./PermissionGroupsPage.tsx');
+
+function show(at = '/admin/permission-groups') {
+  render(
+    <App>
+      <MemoryRouter initialEntries={[at]}>
+        <PermissionGroupsPage />
+      </MemoryRouter>
+    </App>,
+  );
+}
+
+const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
+
+beforeEach(() => {
+  groupsQuery = { data: [FULL, SURVEYORS], isPending: false, isError: false };
+  refetchGroups.mockReset();
+});
+
+afterEach(cleanup);
+
+describe('PermissionGroupsPage', () => {
+  it('offers no delete on a protected group, and offers it on an ordinary one', () => {
+    show();
+
+    expect(within(rowOf('Full Administrators')).getByRole('button', { name: t('iconButtons.delete') })).toBeDisabled();
+    expect(within(rowOf('Surveyors')).getByRole('button', { name: t('iconButtons.delete') })).toBeEnabled();
+  });
+
+  it('opens the editor of the group the address names', () => {
+    show('/admin/permission-groups?group=g-surv');
+
+    expect(screen.getByTestId('group-editor')).toHaveTextContent('Surveyors');
+  });
+
+  it('opens nothing for an address naming a group that is not in the list', () => {
+    show('/admin/permission-groups?group=g-gone');
+
+    expect(screen.queryByTestId('group-editor')).not.toBeInTheDocument();
+  });
+
+  it('says a failed read of the groups, rather than showing none, and reads again on retry', () => {
+    groupsQuery = { data: undefined, isPending: false, isError: true };
+    show();
+
+    expect(screen.getByTestId('permission-groups-load-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: t('common.retry') }));
+    expect(refetchGroups).toHaveBeenCalledOnce();
+  });
+});
