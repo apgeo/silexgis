@@ -610,6 +610,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveSystemFiguresEndpoints();
     api.MapCaveDepthProfileEndpoints();
     api.MapCaveStructureComparisonEndpoints();
+    api.MapStructuralStereonetEndpoints();
     api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
