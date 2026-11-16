@@ -268,8 +268,8 @@ export const queryKeys = {
   areaTerrainStatistics: (id: string) => ['features', id, 'terrain-statistics'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
-  caveStructureComparison: (id: string, areaId: string) =>
-    ['caves', id, 'structure-comparison', areaId] as const,
+  caveStructureComparison: (id: string, areaId: string, measurementType: string) =>
+    ['caves', id, 'structure-comparison', areaId, measurementType] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
   registryDistribution: (params: Record<string, unknown>) =>

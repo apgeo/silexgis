@@ -16,20 +16,40 @@ const { queryCalls, resolved } = vi.hoisted(() => ({
 const hit = (id: string, title: string, subtitle: string) =>
   ({ world: 'feature', id, title, subtitle, symbol: null, placeable: false });
 
-const featureType = (id: string, name: string, requiresParent: boolean) => ({
-  id, name, requiresParent,
+const featureType = (
+  id: string,
+  name: string,
+  requiresParent: boolean,
+  code: string | null = null,
+  propertiesSchema: string | null = null,
+) => ({
+  id, name, requiresParent, code,
   acceptedGeometryClasses: ['point'],
-  propertiesSchema: null,
+  propertiesSchema,
   propertiesSchemaVersion: 0,
 });
 
+// The shipped structural-reading schema, as the server seeds it.
+const READING_SCHEMA = JSON.stringify({
+  type: 'object',
+  required: ['measurement_type', 'dip_direction', 'dip'],
+  properties: {
+    measurement_type: { type: 'string', title: 'Measured plane', enum: ['bedding', 'joint', 'fault', 'cleavage', 'fracture', 'other'] },
+    dip_direction: { type: 'number', title: 'Dip direction (°)', minimum: 0, exclusiveMaximum: 360 },
+    dip: { type: 'number', title: 'Dip (°)', minimum: 0, maximum: 90 },
+    note: { type: 'string', title: 'Note' },
+    measured_on: { type: 'string', title: 'Measured on', format: 'date' },
+  },
+});
+const TYPES = [
+  featureType('1', 'Spring', false),
+  featureType('2', 'Passage marker', true),
+  featureType('3', 'Structural measurement', false, 'structural_measurement', READING_SCHEMA),
+];
+
 vi.mock('../../api/hooks.ts', () => ({
-  useFeatureTypes: () => ({
-    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', true)],
-  }),
-  useGenericFeatureTypes: () => ({
-    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', true)],
-  }),
+  useFeatureTypes: () => ({ data: TYPES }),
+  useGenericFeatureTypes: () => ({ data: TYPES }),
   useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
   useFilterQuery: (body: unknown, enabled: boolean) => {
     queryCalls.push({ body, enabled });
@@ -148,5 +168,30 @@ describe('the feature form parent picker', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ primaryParentId: AREA });
+  });
+});
+
+describe('the structural reading form', () => {
+  it('offers strike entry, and sends a typed strike for the server to convert', async () => {
+    const onSubmit = show({
+      featureTypeId: 3,
+      properties: { measurement_type: 'bedding', dip_direction: 200, dip: 40 },
+    });
+
+    // The plane kind is offered in words, and the fields carry the reader-language labels.
+    await screen.findByText('Bedding');
+    expect(screen.getByText('Dip direction (°)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Strike and dip (right-hand rule)'));
+    const strike = await screen.findByLabelText(/^Strike \(°/);
+    // Switching the convention clears the number typed for the other one.
+    expect(strike).toHaveValue('');
+    fireEvent.change(strike, { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const { properties } = onSubmit.mock.calls[0][0] as FeatureAttributeValues;
+    expect(properties).toMatchObject({ measurement_type: 'bedding', strike: 30, dip: 40 });
+    expect(properties).not.toHaveProperty('dip_direction');
   });
 });
