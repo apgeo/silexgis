@@ -256,6 +256,9 @@ se exportă.
 
 Peste peșterile de pe o pagină de listă: **Distribuții**.
 
+Pentru statisticile unei zone, densitatea și spațierea intrărilor, adâncimea unui sistem, rețeaua de
+galerii a unei peșteri și ce sugerează forma ei, vezi [Analize carstice](karst-analyses.md).
+
 | Vedere | |
 |---|---|
 | **Lungime** | Histogramă a lungimii cartate |
