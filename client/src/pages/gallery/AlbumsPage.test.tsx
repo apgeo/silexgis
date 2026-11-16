@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import en from '../../i18n/locales/en.json';
 import ro from '../../i18n/locales/ro.json';
+import { ApiError } from '../../api/client.ts';
 import { DOCUMENT_VISIBILITIES } from '../../components/attachments/visibilityChoices.ts';
 import AlbumsPage from './AlbumsPage.tsx';
 
@@ -32,7 +33,7 @@ vi.mock('../../api/hooks.ts', async (importActual) => {
   };
 });
 
-function album(id: string, title: string, hasActiveShare = false) {
+function album(id: string, title: string, hasActiveShare = false, canShare = true) {
   return {
     id,
     title,
@@ -46,6 +47,7 @@ function album(id: string, title: string, hasActiveShare = false) {
     ownerUserId: 'u',
     photoCount: 3,
     hasActiveShare,
+    canShare,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
   };
@@ -132,10 +134,14 @@ describe('AlbumsPage', () => {
     expect(unhandled).not.toHaveBeenCalled();
   });
 
-  /** Both cards' action buttons, by name, as drawn for the capability string given. */
-  function cardActions(documents: string) {
+  /** Both cards' action buttons, by name, as drawn for the capability string and albums given. */
+  function cardActions(documents: string, canShare = true) {
     cleanup();
     state.documents = documents;
+    state.albums = {
+      ...state.albums,
+      data: { items: [album('a1', 'Pestera 1 survey', false, canShare), album('a2', 'Camp week', true, canShare)] },
+    };
     renderPage();
     const card = screen.getByText('Pestera 1 survey').closest('.ant-card') as HTMLElement;
     const shared = screen.getByText('Camp week').closest('.ant-card') as HTMLElement;
@@ -144,30 +150,46 @@ describe('AlbumsPage', () => {
     return { card: names(card), shared: names(shared) };
   }
 
-  it('shows the share button to whoever the server lets mint a link, and nothing else to them', () => {
+  it('offers the share-link actions on the album\'s own share right, not on writing documents', () => {
     // The allowed caller first, in the same test: were the actions drawn for nobody, the
     // absences below would prove nothing about the rule they are meant to test.
-    const writer = cardActions('read,write,share');
+    const writer = cardActions('read,write,share', true);
     expect(writer.card).toEqual(expect.arrayContaining(['Edit album', 'Make a share link', 'Delete album']));
     expect(writer.shared).toContain('Revoke the share link');
 
-    // Minting is allowed on the documents domain's share right alone; editing, deleting and
-    // revoking need write on the album.
-    const sharer = cardActions('read,share');
-    expect(sharer.card).toContain('Make a share link');
-    expect(sharer.card).not.toContain('Edit album');
-    expect(sharer.card).not.toContain('Delete album');
-    expect(sharer.shared).not.toContain('Revoke the share link');
+    // A writer of documents the server says may not share this album gets neither link action:
+    // minting and revoking both take the Share right on the album itself.
+    const writerWithoutShare = cardActions('read,write,share', false);
+    expect(writerWithoutShare.card).toEqual(expect.arrayContaining(['Edit album', 'Delete album']));
+    expect(writerWithoutShare.card).not.toContain('Make a share link');
+    expect(writerWithoutShare.shared).not.toContain('Revoke the share link');
+    expect(writerWithoutShare.shared).not.toContain('Make a share link');
   });
 
-  it('shows no card actions to a reader with neither right', () => {
-    const writer = cardActions('read,write,share');
-    expect(writer.card).toEqual(expect.arrayContaining(['Edit album', 'Make a share link', 'Delete album']));
-    expect(writer.shared).toContain('Revoke the share link');
+  it('lets whoever holds the album\'s share right mint and revoke its link, and nothing else', () => {
+    const sharer = cardActions('read', true);
+    expect(sharer.card).toEqual(['Make a share link']);
+    expect(sharer.shared).toEqual(['Revoke the share link']);
 
-    const reader = cardActions('read');
+    const reader = cardActions('read', false);
     expect(reader.card).toEqual([]);
     expect(reader.shared).toEqual([]);
+  });
+
+  it('says that sharing an album takes the share right when the server refuses the link', async () => {
+    state.share.mockResolvedValueOnce({ token: 'tok' });
+    renderPage();
+    const card = () => screen.getByText('Pestera 1 survey').closest('.ant-card') as HTMLElement;
+    fireEvent.click(within(card()).getByRole('button', { name: 'Make a share link' }));
+    expect(await screen.findByDisplayValue(/\/shared\/albums\/tok$/)).toBeTruthy();
+
+    state.share.mockRejectedValueOnce(new ApiError(403, 'album.share_forbidden'));
+    fireEvent.click(within(card()).getByRole('button', { name: 'Make a share link' }));
+    expect(await screen.findByText(en.gallery.shareForbidden)).toBeTruthy();
+    expect(ro.gallery.shareForbidden).toBeTruthy();
+    expect(ro.gallery.shareForbidden).not.toBe(en.gallery.shareForbidden);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(unhandled).not.toHaveBeenCalled();
   });
 
   it('says the albums could not be loaded, not that there are none, and loads them again', () => {
