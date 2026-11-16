@@ -51,17 +51,73 @@ public class PassageNetworkTests
 
     /// <summary>
     /// A ring has no junction and no end, and reducing it to nothing would divide a real loop count
-    /// by zero.
+    /// by zero. It is one branch that closes on itself, cut into three so that it stays a loop in a
+    /// simple graph: three nodes, three edges, one loop — the reading the survey topology is held
+    /// to by its reference output.
     /// </summary>
     [Fact]
-    public void A_closed_ring_reduces_to_one_place_rather_than_to_none()
+    public void A_closed_ring_reduces_to_three_nodes_and_one_loop_rather_than_to_none()
     {
         var figures = PassageNetwork.Measure([("A", "B"), ("B", "C"), ("C", "A")]);
 
         figures.ShouldNotBeNull();
         figures.CyclomaticNumber.ShouldBe(1);
         figures.ExtremityCount.ShouldBe(0);
-        figures.ReducedNodeCount.ShouldBe(1);
+        figures.ReducedNodeCount.ShouldBe(3);
+
+        var reduced = PassageNetwork.Reduce([(0, 1), (1, 2), (2, 0)]);
+        reduced.ShouldNotBeNull();
+        reduced.EdgeCount.ShouldBe(3);
+        reduced.BranchCount.ShouldBe(1);
+        reduced.JunctionCount.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A triangle with a side passage at each corner, the shape worked out by hand for the survey
+    /// topology: three junctions, three dead ends, three branches round the triangle and three
+    /// spurs.
+    /// </summary>
+    [Fact]
+    public void A_triangle_with_a_side_passage_at_each_corner_matches_hand_arithmetic()
+    {
+        var reduced = PassageNetwork.Reduce(
+            [(0, 1), (1, 2), (2, 0), (0, 3), (1, 4), (2, 5)]);
+
+        reduced.ShouldNotBeNull();
+        reduced.NodeCount.ShouldBe(6);
+        reduced.EdgeCount.ShouldBe(6);
+        reduced.ComponentCount.ShouldBe(1);
+        reduced.CyclomaticNumber.ShouldBe(1);
+        reduced.JunctionCount.ShouldBe(3);
+        reduced.ExtremityCount.ShouldBe(3);
+        reduced.BranchCount.ShouldBe(6);
+    }
+
+    /// <summary>
+    /// Stations along a passage change nothing about its shape, so the same network surveyed
+    /// coarsely and finely gives the same reduced figures.
+    /// </summary>
+    [Fact]
+    public void Stations_along_a_passage_do_not_change_the_reduced_figures()
+    {
+        var coarse = PassageNetwork.Reduce([(0, 1), (1, 2), (2, 0), (0, 3)]);
+        var fine = PassageNetwork.Reduce(
+            [(0, 10), (10, 11), (11, 1), (1, 12), (12, 2), (2, 13), (13, 0), (0, 14), (14, 3)]);
+
+        coarse.ShouldNotBeNull();
+        fine.ShouldNotBeNull();
+        fine.NodeCount.ShouldBe(coarse.NodeCount);
+        fine.EdgeCount.ShouldBe(coarse.EdgeCount);
+        fine.CyclomaticNumber.ShouldBe(coarse.CyclomaticNumber);
+        fine.ExtremityCount.ShouldBe(coarse.ExtremityCount);
+    }
+
+    [Fact]
+    public void Legs_that_join_no_two_stations_reduce_to_nothing()
+    {
+        PassageNetwork.Reduce([]).ShouldBeNull();
+        PassageNetwork.Reduce([(4, 4)]).ShouldBeNull();
+        PassageNetwork.MeasureStations([(4, 4)]).ShouldBeNull();
     }
 
     [Fact]
@@ -166,9 +222,11 @@ public class PassageNetworkTests
 
         figures.ShouldNotBeNull();
 
-        // Two junctions, three routes between them: two independent loops.
+        // Two junctions, three routes between them: two independent loops. Each route is cut at a
+        // station along it so that the three do not collapse into one edge, which is why the
+        // reduced network holds five nodes and six edges.
         figures.CyclomaticNumber.ShouldBe(2);
-        figures.ReducedNodeCount.ShouldBe(2);
+        figures.ReducedNodeCount.ShouldBe(5);
         figures.ExtremityCount.ShouldBe(0);
 
         // And no clustering, for want of a pair rather than for want of a junction.

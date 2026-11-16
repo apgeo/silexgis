@@ -73,6 +73,15 @@ Every build carries a **credit** — who the data belongs to — and it is writt
 published surface. A build must never carry a credit that is not its own. If you are
 supplying rasters, you have to say where they came from.
 
+## Accuracy
+
+Every build can record how finely its elevation samples the ground and how far its heights may be
+off, with the kind of figure named (**RMSE**, **LE90** or **LE95**) and where it comes from. Terrain
+obtained from the open thirty-metre dataset records that dataset's published figures; terrain from
+an operator's own rasters shows **Not recorded** until somebody states them. A height read from the
+ground, and each derived picture, carries the figures of the build it came from. See
+[Building terrain](../admin/terrain-builds.md).
+
 ## Heights
 
 A build declares whether its numbers are **above sea level** (orthometric) or **above the

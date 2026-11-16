@@ -109,6 +109,9 @@ then be reviewed into registry records. → [Geodata](features/geodata.md)
 **History** — A single record's change trail, with per-field restore. Protected values read
 *"Value hidden"*. → [History and audit](features/history-and-audit.md)
 
+**Karstification index** — A single reading, *very low* to *very high*, of how karstified an area is: the mean of its cave density and its depression cover, each against a stated reference. A reading that is missing is left out, not counted as nought.
+→ [Karst analyses](features/karst-analyses.md#the-karstification-index)
+
 **Lead** — Something a trip left open. Collected onto a camp's leads board, with a promise
 grade and a state (open, checked, dead end, continues).
 
@@ -131,6 +134,8 @@ computed from the outline (area, circularity, long-axis bearing…).
 
 **Own basemap** — The installation's own vector basemap: OpenStreetMap shapes of a region an
 administrator downloaded, served by the installation alone. → [Own basemap](admin/messaging.md#own-basemap)
+
+**Passage network** — A cave's survey read as stations joined by passage legs, counted for junctions, dead ends, independent loops and the ratios of karst studies. → [Karst analyses](features/karst-analyses.md#passage-network)
 
 **Permission group** — A named ruleset with members. Not a caving group.
 → [Permissions](admin/permissions.md)

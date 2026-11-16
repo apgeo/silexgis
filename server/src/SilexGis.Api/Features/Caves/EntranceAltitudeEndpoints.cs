@@ -237,7 +237,8 @@ public static class EntranceAltitudeEndpoints
             compared.Count(c => c.Comparison.Verdict == EntranceAltitudeVerdict.NotModelled),
             EntranceAltitudes.ToleranceM,
             ranked.Count > MaxRows,
-            dtos);
+            dtos,
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct));
     }
 
     private static async Task<Results<Ok<EntranceDto>, UnauthorizedHttpResult, ProblemHttpResult>> FillAsync(

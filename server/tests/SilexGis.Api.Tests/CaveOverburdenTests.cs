@@ -452,6 +452,44 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         await db.SaveChangesAsync();
     }
 
+    [Fact]
+    public async Task The_overburden_answer_carries_the_recorded_accuracy_of_the_ground_and_nothing_when_none_is_recorded()
+    {
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        await SetAccuracyAsync(null, null, null, null);
+        ShouldCarryNoAccuracy(await ReadAsync(owner, cave));
+
+        await SetAccuracyAsync(1d, 0.3, "RMSE", "A survey report in invented words");
+        ShouldCarryTheRecordedAccuracy(await ReadAsync(owner, cave));
+
+        await SetAccuracyAsync(null, null, null, null);
+    }
+
+    private async Task SetAccuracyAsync(double? resolution, double? error, string? statistic, string? source)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteUpdateAsync(s => s
+            .SetProperty(b => b.SourceResolutionM, resolution)
+            .SetProperty(b => b.VerticalAccuracyM, error)
+            .SetProperty(b => b.VerticalAccuracyStatistic, statistic)
+            .SetProperty(b => b.AccuracySource, source));
+    }
+
+    private static void ShouldCarryNoAccuracy(JsonElement body) =>
+        (!body.TryGetProperty("accuracy", out var none) || none.ValueKind == JsonValueKind.Null)
+            .ShouldBeTrue(body.ToString());
+
+    private static void ShouldCarryTheRecordedAccuracy(JsonElement body)
+    {
+        var accuracy = body.GetProperty("accuracy");
+        accuracy.GetProperty("sourceResolutionM").GetDouble().ShouldBe(1d);
+        accuracy.GetProperty("verticalAccuracyM").GetDouble().ShouldBe(0.3);
+        accuracy.GetProperty("verticalAccuracyStatistic").GetString().ShouldBe("RMSE");
+        accuracy.GetProperty("accuracySource").GetString().ShouldBe("A survey report in invented words");
+    }
+
     private async Task SetDatumAsync(TerrainHeightDatum datum, double geoidHeightM)
     {
         await using var scope = factory.Services.CreateAsyncScope();

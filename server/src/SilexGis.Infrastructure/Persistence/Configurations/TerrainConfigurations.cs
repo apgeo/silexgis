@@ -13,8 +13,20 @@ public sealed class TerrainBuildConfiguration : IEntityTypeConfiguration<Terrain
         // the only place that can hold it to its meaning. A percentage that has escaped its range
         // shows up as a progress bar that is off the end of its track, with nothing to say which
         // step got the arithmetic wrong.
-        builder.ToTable("terrain_builds", t => t.HasCheckConstraint(
-            "ck_terrain_builds_progress_range", "progress >= 0 and progress <= 100"));
+        builder.ToTable("terrain_builds", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_terrain_builds_progress_range", "progress >= 0 and progress <= 100");
+
+            // The accuracy record is typed by people, so the database holds it to its meaning: a
+            // spacing or an error that is not a positive number is a slip, and a figure with no
+            // statistic (or a statistic with no figure) says nothing anyone can interpret.
+            t.HasCheckConstraint(
+                "ck_terrain_builds_accuracy",
+                "(source_resolution_m is null or source_resolution_m > 0) "
+                + "and (vertical_accuracy_m is null or vertical_accuracy_m > 0) "
+                + "and ((vertical_accuracy_m is null) = (vertical_accuracy_statistic is null))");
+        });
         builder.Property(x => x.Id).ValueGeneratedNever(); // uuid v7 generated app-side
 
         builder.Property(x => x.Extent).HasColumnType("geometry(Polygon, 4326)");
@@ -25,6 +37,8 @@ public sealed class TerrainBuildConfiguration : IEntityTypeConfiguration<Terrain
         builder.Property(x => x.ErrorCode).HasMaxLength(100);
         builder.Property(x => x.LogTail).HasMaxLength(8000);
         builder.Property(x => x.PyramidVersion).HasMaxLength(64);
+        builder.Property(x => x.VerticalAccuracyStatistic).HasMaxLength(10);
+        builder.Property(x => x.AccuracySource).HasMaxLength(500);
 
         // Which ground already has terrain over it is a spatial question, and the answer decides
         // whether an area needs building at all.

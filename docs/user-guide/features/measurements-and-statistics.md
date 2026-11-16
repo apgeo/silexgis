@@ -254,6 +254,9 @@ exported.
 
 Over the caves on a cave-list page: **Distributions**.
 
+For an area's own statistics, the density and spacing of entrances, the depth of a system, a
+cave's passage network and what its shape suggests, see [Karst analyses](karst-analyses.md).
+
 | View | |
 |---|---|
 | **Length** | Histogram of surveyed length |

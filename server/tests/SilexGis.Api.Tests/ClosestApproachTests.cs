@@ -55,6 +55,15 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// <summary>Pythagoras over the two above: sqrt(222.3² + 150²).</summary>
     private const double ExpectedDistanceM = 268.2;
 
+    /// <summary>
+    /// A window over every latitude any test here builds at. The table tests do not rely on the
+    /// window being theirs alone — they read the answer through <see cref="Own"/>, which keeps
+    /// only pairs both of whose caves the test itself made — so another test is free to put
+    /// caves anywhere in it. The row limit is at its ceiling so a crowd of other pairs, which
+    /// the table sorts nearest first, cannot push the test's own off the end.
+    /// </summary>
+    private const string Window = "west=23.9&south=45.9&east=24.1&north=46.2&limit=200";
+
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly int workingSrid = new SpatialOptions().WorkingSrid;
@@ -260,15 +269,16 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// it cannot be used to ask the per-pair question about a cave the per-pair route refuses.
     /// </summary>
     /// <remarks>
-    /// Its caves sit in a band of latitude no other test here uses, and the box is drawn round
-    /// that band. Every test in this class shares one database, so a box wide enough to be
-    /// convenient would list caves another test made and turn an ordering assertion into a race.
+    /// Every test in this class shares one database, and the table route takes a box and no ids,
+    /// so a wide window lists caves other tests made. The assertions are therefore made over the
+    /// pairs among this test's own four caves and nothing else: counts, order and the nearest
+    /// pair are all properties of that subset, and stay true whatever else the window holds.
     /// </remarks>
     [Fact]
     public async Task The_table_lists_the_nearest_pairs_and_only_ones_the_caller_may_place()
     {
         const double band = 46.02;
-        const string box = "west=23.9&south=46.015&east=24.1&north=46.035&maxDistanceM=2000";
+        const string box = $"{Window}&maxDistanceM=2000";
 
         var south = await CreateCaveAsync();
         await UploadCenterlineAsync(south, Passage(band, band + 0.001, SouthAltitude));
@@ -283,25 +293,27 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         var guarded = await CreateCaveAsync(locationProtected: true);
         await UploadCenterlineAsync(guarded, Passage(band + 0.0042, band + 0.0043, NorthAltitude));
 
+        Guid[] ours = [south, north, near, guarded];
+
         var forOwner = await Read(owner.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
-        var ownerPairs = forOwner.GetProperty("pairs");
+        var ownerPairs = Own(forOwner.GetProperty("pairs"), ours);
 
         // Four caves make six pairs, and the owner may place all of them.
-        ownerPairs.GetArrayLength().ShouldBe(6);
+        ownerPairs.Count.ShouldBe(6);
         CavesIn(ownerPairs).ShouldContain(guarded);
 
         var forViewer = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
-        var viewerPairs = forViewer.GetProperty("pairs");
+        var viewerPairs = Own(forViewer.GetProperty("pairs"), ours);
 
         // The guarded cave is in no pair at all for the viewer, on either side of one — and the
         // three pairs among the open caves are all there, so this is a protection rule rather than
         // a table that quietly stopped being built.
         CavesIn(viewerPairs).ShouldNotContain(guarded);
-        viewerPairs.GetArrayLength().ShouldBe(3);
+        viewerPairs.Count.ShouldBe(3);
         CavesIn(viewerPairs).ShouldContain(north);
 
         // Nearest first.
-        var distances = viewerPairs.EnumerateArray()
+        var distances = viewerPairs
             .Select(p => p.GetProperty("distanceM").GetDouble())
             .ToList();
         distances.ShouldBe(distances.OrderBy(d => d).ToList());
@@ -317,9 +329,8 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
 
         // A threshold below every gap in the fixture empties the table rather than shortening it,
         // which is what says the threshold is applied to the distance and not to the row count.
-        var tight = await Read(viewer.GetAsync(
-            "/api/v1/caves/closest-approaches?west=23.9&south=46.015&east=24.1&north=46.035&maxDistanceM=10"));
-        tight.GetProperty("pairs").GetArrayLength().ShouldBe(0);
+        var tight = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=10"));
+        Own(tight.GetProperty("pairs"), ours).ShouldBeEmpty();
         tight.GetProperty("maxDistanceM").GetDouble().ShouldBe(10d);
     }
 
@@ -334,10 +345,9 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     [Fact]
     public async Task The_threshold_cuts_on_the_reported_distance_and_not_on_the_plan_one()
     {
-        // A band of its own: the class shares one database, so a window over another test's
-        // latitudes would count that test's caves.
+        // The window is shared with every other test in the class; what this one asserts is read
+        // from the pairs between its own two caves.
         const double band = 46.05;
-        const string window = "west=23.9&south=46.045&east=24.1&north=46.065";
 
         var south = await CreateCaveAsync();
         await UploadCenterlineAsync(south, Passage(band, band + 0.001, SouthAltitude));
@@ -346,16 +356,15 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
 
         // Between the plan distance (222 m) and the reported one (268 m): the two-dimensional
         // pre-filter admits the pair, so only a cut on the reported figure can remove it.
-        var between = await Read(viewer.GetAsync(
-            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=250"));
-        between.GetProperty("pairs").GetArrayLength().ShouldBe(0);
+        Guid[] ours = [south, north];
+        var between = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=250"));
+        Own(between.GetProperty("pairs"), ours).ShouldBeEmpty();
 
         // Just above the reported distance the pair is back, at the figure the cut is made on —
         // which is what says the empty table above was the threshold and not a broken fixture.
-        var above = await Read(viewer.GetAsync(
-            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=300"));
-        var pairs = above.GetProperty("pairs");
-        pairs.GetArrayLength().ShouldBe(1);
+        var above = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=300"));
+        var pairs = Own(above.GetProperty("pairs"), ours);
+        pairs.Count.ShouldBe(1);
         pairs[0].GetProperty("distanceM").GetDouble().ShouldBe(ExpectedDistanceM, 2d);
         new[] { pairs[0].GetProperty("caveAId").GetGuid(), pairs[0].GetProperty("caveBId").GetGuid() }
             .ShouldBe([south, north], ignoreOrder: true);
@@ -454,9 +463,21 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    private static IReadOnlyList<Guid> CavesIn(JsonElement pairs) =>
+    /// <summary>
+    /// The pairs of an answer that join two caves out of <paramref name="ids"/> — the test's own —
+    /// in the answer's order. A pair with one cave of the test's and one of somebody else's is not
+    /// the test's to assert on.
+    /// </summary>
+    private static List<JsonElement> Own(JsonElement pairs, Guid[] ids) =>
     [
-        .. pairs.EnumerateArray().SelectMany(p => new[]
+        .. pairs.EnumerateArray().Where(p =>
+            ids.Contains(p.GetProperty("caveAId").GetGuid())
+            && ids.Contains(p.GetProperty("caveBId").GetGuid())),
+    ];
+
+    private static IReadOnlyList<Guid> CavesIn(IEnumerable<JsonElement> pairs) =>
+    [
+        .. pairs.SelectMany(p => new[]
         {
             p.GetProperty("caveAId").GetGuid(),
             p.GetProperty("caveBId").GetGuid(),

@@ -615,6 +615,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapFeatureEndpoints();
     api.MapFeatureMorphometryEndpoints();
     api.MapAreaKarstStatisticsEndpoints();
+    api.MapAreaSystemFiguresEndpoints();
     api.MapAreaTerrainStatisticsEndpoints();
     api.MapFilterEndpoints();
     api.MapFeatureHierarchyEndpoints();

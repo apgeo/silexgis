@@ -286,6 +286,37 @@ public class TerrainBuild : ITimestamped, IAuditable
     /// </remarks>
     public bool ActivationWasAutomatic { get; set; }
 
+    /// <summary>
+    /// The ground spacing of the elevation this build is made from, in metres, or null when nobody
+    /// has said. Null means "not recorded" and is never read as zero: builds made before this was
+    /// kept, and builds from uploads nobody described, carry nothing, and a figure invented for
+    /// them would be a claim about accuracy that nothing backs.
+    /// </summary>
+    public double? SourceResolutionM { get; set; }
+
+    /// <summary>
+    /// The vertical error of the elevation, in metres, as the statistic named by
+    /// <see cref="VerticalAccuracyStatistic"/>; null when not recorded.
+    /// </summary>
+    /// <remarks>
+    /// One number is meaningless without the statistic it is: a root-mean-square error and a
+    /// ninety-per-cent linear error of the same ground differ by about a factor of 1.6, and the
+    /// open dataset publishes the second while a survey vendor usually publishes the first.
+    /// </remarks>
+    public double? VerticalAccuracyM { get; set; }
+
+    /// <summary>
+    /// Which statistic <see cref="VerticalAccuracyM"/> is, one of
+    /// <see cref="TerrainAccuracyStatistics.All"/>; null exactly when the figure is.
+    /// </summary>
+    public string? VerticalAccuracyStatistic { get; set; }
+
+    /// <summary>
+    /// Where the figures came from, in words: the publication for an obtained dataset, or whatever
+    /// the operator who typed them cites. Null when nothing is recorded.
+    /// </summary>
+    public string? AccuracySource { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>When a worker picked the build up.</summary>
@@ -417,4 +448,20 @@ public class TerrainBuildRaster
 
     /// <summary>When the file was last opened and described, in UTC.</summary>
     public DateTimeOffset DescribedAt { get; set; }
+}
+
+/// <summary>The statistics a vertical accuracy figure may be stated as.</summary>
+public static class TerrainAccuracyStatistics
+{
+    /// <summary>Root-mean-square error.</summary>
+    public const string Rmse = "RMSE";
+
+    /// <summary>The error not exceeded by ninety per cent of points (linear error at 90 %).</summary>
+    public const string Le90 = "LE90";
+
+    /// <summary>The error not exceeded by ninety-five per cent of points.</summary>
+    public const string Le95 = "LE95";
+
+    /// <summary>Every statistic accepted, in the order a screen lists them.</summary>
+    public static readonly IReadOnlyList<string> All = [Rmse, Le90, Le95];
 }

@@ -73,6 +73,15 @@ Fiecare generare poartă un **credit** — cui aparțin datele — și acesta es
 publicată. O generare nu trebuie să poarte niciodată un credit care nu este al ei. Dacă furnizezi
 rastere, trebuie să spui de unde vin.
 
+## Acuratețe
+
+Fiecare generare poate nota cât de des eșantionează elevația ei terenul și cu cât pot greși
+înălțimile, cu felul cifrei numit (**RMSE**, **LE90** sau **LE95**) și cu sursa ei. Terenul obținut
+din setul deschis de treizeci de metri notează cifrele publicate ale acelui set; terenul din
+rasterele proprii ale unui operator arată **Nenotată** până când cineva le spune. O înălțime citită
+din teren și fiecare imagine derivată poartă cifrele generării din care provin. Vezi
+[Generarea reliefului](../admin/terrain-builds.md).
+
 ## Înălțimi
 
 O generare declară dacă numerele ei sunt **peste nivelul mării** (ortometrice) sau **peste

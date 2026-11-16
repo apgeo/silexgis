@@ -42,6 +42,7 @@ public sealed record EntranceAltitudeRowDto(
 /// <param name="Truncated">Whether <paramref name="Entrances"/> is cut short of the whole set.</param>
 /// <param name="Entrances">Compared entrances first, widest gap first; then those that could not be
 /// compared. Cut to a fixed length; the counts above are over the whole set.</param>
+/// <param name="Accuracy">The stated accuracy of the terrain build the heights were read from, or null when none is recorded.</param>
 public sealed record AltitudeDisagreementDto(
     Guid ScopeId,
     bool HasTerrain,
@@ -52,7 +53,8 @@ public sealed record AltitudeDisagreementDto(
     int NotModelledCount,
     double ToleranceM,
     bool Truncated,
-    IReadOnlyList<EntranceAltitudeRowDto> Entrances);
+    IReadOnlyList<EntranceAltitudeRowDto> Entrances,
+    SilexGis.Api.Common.TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>Which cave or area to report on. The routes take nothing else.</summary>
 public sealed record AltitudeDisagreementRequest(Guid Id);

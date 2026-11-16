@@ -1575,6 +1575,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/builds/{id}/accuracy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records or corrects how accurate the elevation of a build is; requires Execute on the Terrain domain. */
+        put: operations["terrainBuildSetAccuracy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terrain/builds/{id}/cancel": {
         parameters: {
             query?: never;
@@ -3453,6 +3470,23 @@ export interface paths {
         };
         /** The same area statistics as a two-column CSV, for a spreadsheet. */
         get: operations["areaKarstStatisticsAreaStatisticsCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/system-figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Highest and lowest entrance, entrance spread, system depth and potential depth across the caves filed under one area. Only caves the caller may place count. */
+        get: operations["areaSystemFiguresSystemFigures"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9638,6 +9672,7 @@ export interface components {
             toleranceM: number;
             truncated: boolean;
             entrances: components["schemas"]["EntranceAltitudeRowDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange" | "tripMoment";
@@ -9760,6 +9795,23 @@ export interface components {
             dolines: null | components["schemas"]["OrientationSummary"];
             structure: null | components["schemas"]["OrientationSummary"];
             divergence: null | components["schemas"]["RoseDivergence"];
+        };
+        AreaSystemFiguresDto: {
+            /** Format: uuid */
+            areaId: string;
+            basis: string;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            surveyedCaveCount: number;
+            truncated: boolean;
+            isApproximation: boolean;
+            hasAltitudes: boolean;
+            figures: components["schemas"]["CaveSystemFiguresSummary"];
+            /** Format: double */
+            surveyHighestM: null | number;
+            /** Format: double */
+            surveyLowestM: null | number;
         };
         AreaTerrainStatisticsDto: {
             /** Format: uuid */
@@ -10339,6 +10391,7 @@ export interface components {
             /** Format: double */
             meanOverburdenM: null | number;
             samples: components["schemas"]["CaveOverburdenSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         CaveOverburdenSampleDto: {
             /** Format: double */
@@ -17688,6 +17741,22 @@ export interface components {
         };
         /** @enum {unknown} */
         TermStripMode: "none" | "leading" | "trailing" | "anywhere";
+        TerrainAccuracyDto: {
+            /** Format: double */
+            sourceResolutionM: null | number;
+            /** Format: double */
+            verticalAccuracyM: null | number;
+            verticalAccuracyStatistic: null | string;
+            accuracySource: null | string;
+        };
+        TerrainAccuracyRequest: {
+            /** Format: double */
+            sourceResolutionM: null | number;
+            /** Format: double */
+            verticalAccuracyM: null | number;
+            verticalAccuracyStatistic: null | string;
+            accuracySource: null | string;
+        };
         TerrainBakeTimeLimitDto: {
             /** Format: int64 */
             elapsedSeconds: number;
@@ -17751,6 +17820,7 @@ export interface components {
             /** Format: date-time */
             cancelRequestedAt: null | string;
             bakeTimeLimit: null | components["schemas"]["TerrainBakeTimeLimitDto"];
+            accuracy: null | components["schemas"]["TerrainAccuracyDto"];
         };
         /** @enum {unknown} */
         TerrainBuildPhase: "pending" | "fetch" | "prepare" | "bake" | "validate" | "publish";
@@ -17791,6 +17861,7 @@ export interface components {
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
             /** Format: uuid */
             baseBuildId?: null | string;
+            accuracy?: null | components["schemas"]["TerrainAccuracyRequest"];
         };
         TerrainClassRowDto: {
             code: string;
@@ -17868,6 +17939,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             rasters: components["schemas"]["TerrainDerivativeRasterDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainDerivativeRasterDto: {
             /** Format: int64 */
@@ -17897,6 +17969,7 @@ export interface components {
         TerrainFeatureProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainFeatureProbeSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainFeatureProbeRequest: {
             featureIds: string[];
@@ -17927,6 +18000,7 @@ export interface components {
         TerrainProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainProbeSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainProbePointRequest: {
             /** Format: double */
@@ -17961,6 +18035,7 @@ export interface components {
             /** Format: double */
             descentM: number;
             samples: components["schemas"]["TerrainProfileSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainProfileRequest: {
             points: components["schemas"]["TerrainProbePointRequest"][];
@@ -23382,6 +23457,50 @@ export interface operations {
             };
         };
     };
+    terrainBuildSetAccuracy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerrainAccuracyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerrainBuildDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     terrainBuildCancel: {
         parameters: {
             query?: never;
@@ -28488,6 +28607,46 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    areaSystemFiguresSystemFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaSystemFiguresDto"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {

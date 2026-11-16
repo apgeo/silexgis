@@ -41,7 +41,7 @@ export const specs = {
   ],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
-    'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
+    'cave-statistics.spec.ts', 'cave-system-figures.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
     'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
     // A cave's declared places are written through the cave's own door and published on a trip's

@@ -85,6 +85,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useDeleteTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useCancelTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useRetryTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useSetTerrainBuildAccuracy: () => ({ mutateAsync: vi.fn(), isPending: false }),
     // The pictures drawn from a build sit under the list and have tests of their own; here they
     // only have to render empty, and to show that the page hands them the right they are held under.
     useTerrainDerivatives: () => ({ data: [], isLoading: false }),

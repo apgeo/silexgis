@@ -42,6 +42,23 @@ public static class CopernicusCoverage
     /// <summary>The terms in a sentence, for the record kept beside the build.</summary>
     public const string Licence = "Free for any use, including commercial, with attribution.";
 
+    /// <summary>The ground spacing of the dataset, one arc-second, about thirty metres.</summary>
+    public const double SourceResolutionM = 30d;
+
+    /// <summary>
+    /// The absolute vertical accuracy the product specification publishes: better than four metres
+    /// at ninety per cent linear error, not a root-mean-square figure.
+    /// </summary>
+    public const double VerticalAccuracyM = 4d;
+
+    /// <summary>The statistic <see cref="VerticalAccuracyM"/> is.</summary>
+    public const string VerticalAccuracyStatistic = "LE90";
+
+    /// <summary>Where those figures are published.</summary>
+    public const string AccuracySource =
+        "Copernicus DEM product handbook: 1 arc-second sampling, absolute vertical accuracy "
+        + "below 4 m at 90 % linear error (LE90)";
+
     /// <summary>The bucket the cells are published in.</summary>
     public const string Bucket = "https://copernicus-dem-30m.s3.amazonaws.com";
 

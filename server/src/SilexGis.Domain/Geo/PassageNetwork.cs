@@ -9,13 +9,15 @@ namespace SilexGis.Domain.Geo;
 /// same pair are one connection: the network is the same shape whether it was walked once or
 /// twice.</param>
 /// <param name="ComponentCount">How many separate pieces the network falls into.</param>
-/// <param name="ReducedNodeCount">Stations where passages meet or end — the network with every run
-/// of through-stations contracted away. This is the denominator a loop count is meaningful against;
-/// the raw station count is a measure of how densely the cave was surveyed.</param>
-/// <param name="CyclomaticNumber">Independent loops, edges minus nodes plus components. Unchanged by
-/// the contraction, which is why it can be counted here without reducing anything.</param>
-/// <param name="ExtremityCount">Stations with exactly one passage — where the survey stopped.
-/// Unchanged by the contraction for the same reason.</param>
+/// <param name="ReducedNodeCount">Nodes of the reduced network: the places passages meet or end,
+/// plus the stations a loop or a pair of parallel passages is cut at so that it survives as a loop
+/// in a simple graph (see <see cref="ReducedPassageNetwork"/>). This is the denominator a loop count
+/// is meaningful against; the raw station count is a measure of how densely the cave was
+/// surveyed.</param>
+/// <param name="CyclomaticNumber">Independent loops, edges minus nodes plus components, taken on the
+/// reduced network. The contraction and the cuts add as many nodes as edges, so it equals the count
+/// on the raw stations.</param>
+/// <param name="ExtremityCount">Stations with exactly one passage — where the survey stopped.</param>
 /// <param name="Clustering">How often two passages leaving one junction are themselves joined,
 /// averaged over the junctions — nought when no junction rings, one when every pair does. Measured
 /// on the contracted network and not on the raw stations, because a survey that put stations along
@@ -40,24 +42,97 @@ public sealed record PassageNetworkFigures(
     double? Clustering);
 
 /// <summary>
+/// The passage network with every run of through-stations contracted into one branch, and then
+/// made a simple graph — the graph the karst literature's network figures are defined over, and
+/// the one place in the application that says what a node, an edge, a component and an independent
+/// loop of a cave are.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A branch cannot become an edge unchanged without losing what the reduction exists to show.
+/// A branch that leaves a junction and returns to it is one loop, but as a single edge it is a
+/// node joined to itself; two branches joining the same pair of junctions are two passages, but as
+/// two edges between one pair they collapse into one and take a loop with them. So a branch that
+/// closes on itself is cut into three at stations a third and two thirds of the way along it, and
+/// each of several branches sharing both ends is cut into two at the station halfway along — and
+/// because the cuts fall on stations the passage really runs through, the reduced graph is still a
+/// graph of real places. A closed ring with no junction therefore reduces to three nodes and three
+/// edges, one loop.
+/// </para>
+/// <para>
+/// A branch too short to be cut is kept whole: one that is a single leg has nowhere to be cut. A
+/// network of distinct legs cannot contain a loop of one or two legs, so in practice every loop is
+/// cut.
+/// </para>
+/// </remarks>
+public sealed class ReducedPassageNetwork
+{
+    private readonly int[] _degree;
+
+    internal ReducedPassageNetwork(
+        IReadOnlyList<(int A, int B)> edges, int componentCount, int branchCount)
+    {
+        Edges = edges;
+        ComponentCount = componentCount;
+        BranchCount = branchCount;
+
+        var degree = new Dictionary<int, int>();
+        foreach (var (a, b) in edges)
+        {
+            degree[a] = degree.GetValueOrDefault(a) + 1;
+            degree[b] = degree.GetValueOrDefault(b) + 1;
+        }
+
+        _degree = [.. degree.Values];
+    }
+
+    /// <summary>The edges of the simple reduced graph, each once, in a stable order. Nodes are the
+    /// caller's own station ids; the ones introduced by the reduction are stations the passages
+    /// run through.</summary>
+    public IReadOnlyList<(int A, int B)> Edges { get; }
+
+    /// <summary>Connected pieces of the network. Unchanged by the reduction.</summary>
+    public int ComponentCount { get; }
+
+    /// <summary>Runs of passage between two places where the network does something, before any
+    /// cutting: one per loop, per dead-end passage, per junction-to-junction passage.</summary>
+    public int BranchCount { get; }
+
+    public int NodeCount => _degree.Length;
+
+    public int EdgeCount => Edges.Count;
+
+    /// <summary>Independent loops: edges minus nodes plus components.</summary>
+    public int CyclomaticNumber => EdgeCount - NodeCount + ComponentCount;
+
+    /// <summary>Nodes with exactly one passage.</summary>
+    public int ExtremityCount => _degree.Count(d => d == 1);
+
+    /// <summary>Nodes where three or more passages meet.</summary>
+    public int JunctionCount => _degree.Count(d => d > 2);
+
+    /// <summary>Edge ends at each node, one entry per node in no particular order.</summary>
+    public IReadOnlyList<int> Degrees => _degree;
+}
+
+/// <summary>
 /// The shape of a passage network, counted from the legs that were surveyed.
 ///
 /// <para>
-/// <b>Only the figures the contraction leaves alone are counted here.</b> Contracting every run of
-/// through-stations into a single branch changes neither the number of independent loops nor the
-/// number of places the survey stopped — a chain of stations between two junctions adds one node and
-/// one edge for each station it holds, and those cancel — so both can be read off the unreduced legs
-/// exactly. The count of junctions and dead ends is likewise just the stations that are not
-/// through-stations.
+/// <b>One definition.</b> Every count of nodes, edges, components and independent loops that the
+/// application reports — the pattern suggestion's and the survey topology's — comes from
+/// <see cref="Reduce"/>, which follows the reference implementation of the published method; the
+/// topology figures are held to its committed output, so this is the definition both features
+/// share. What differs between the two consumers is only which legs they hand in.
 /// </para>
 /// <para>
-/// <b>One figure is not invariant and so the contraction is actually performed for it.</b> How
-/// often two passages leaving one junction are themselves joined depends entirely on the
-/// contraction: a triangle of passage surveyed with stations along its sides is a path between
-/// junctions rather than a ring between neighbours, and reading it off the raw stations would
-/// report nought for a cave whose every junction rings. So the runs of through-stations are walked
-/// out into direct connections between the places passages meet or end, and the figure is measured
-/// there.
+/// <b>One figure is not part of that definition and is measured here for the pattern suggestion
+/// alone.</b> How often two passages leaving one junction are themselves joined depends entirely
+/// on the contraction: a triangle of passage surveyed with stations along its sides is a path
+/// between junctions rather than a ring between neighbours, and reading it off the raw stations
+/// would report nought for a cave whose every junction rings. So the runs of through-stations are
+/// walked out into direct connections between the places passages meet or end, and the figure is
+/// measured there.
 /// </para>
 /// <para>
 /// <b>A leg with an unnamed end joins nothing.</b> Line work that was never a survey file has no
@@ -77,10 +152,69 @@ public static class PassageNetwork
     /// </remarks>
     public static PassageNetworkFigures? Measure(IEnumerable<(string? From, string? To)> legs)
     {
-        var adjacency = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var ids = new Dictionary<string, int>(StringComparer.Ordinal);
+        int Id(string name)
+        {
+            if (!ids.TryGetValue(name, out var id))
+            {
+                id = ids.Count;
+                ids[name] = id;
+            }
+
+            return id;
+        }
+
+        var stationLegs = new List<(int, int)>();
         foreach (var (from, to) in legs)
         {
-            if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to) || StringComparer.Ordinal.Equals(from, to))
+            if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to))
+            {
+                continue;
+            }
+
+            stationLegs.Add((Id(from), Id(to)));
+        }
+
+        return MeasureStations(stationLegs);
+    }
+
+    /// <summary>
+    /// The same figures for legs already identified by station number, or null when there is no
+    /// leg that joins two different stations.
+    /// </summary>
+    public static PassageNetworkFigures? MeasureStations(IEnumerable<(int From, int To)> legs)
+    {
+        var adjacency = Adjacency(legs);
+        var reduced = Reduce(adjacency);
+        if (reduced is null)
+        {
+            return null;
+        }
+
+        return new PassageNetworkFigures(
+            adjacency.Count,
+            adjacency.Values.Sum(n => n.Count) / 2,
+            reduced.ComponentCount,
+            reduced.NodeCount,
+            reduced.CyclomaticNumber,
+            reduced.ExtremityCount,
+            Clustering(adjacency));
+    }
+
+    /// <summary>
+    /// The reduced network for a set of legs, or null when no leg joins two different stations.
+    /// Legs repeated between one pair of stations, in either direction, are one connection, and a
+    /// leg from a station to itself is dropped.
+    /// </summary>
+    public static ReducedPassageNetwork? Reduce(IEnumerable<(int From, int To)> legs) =>
+        Reduce(Adjacency(legs));
+
+    private static Dictionary<int, HashSet<int>> Adjacency(IEnumerable<(int From, int To)> legs)
+    {
+        var adjacency = new Dictionary<int, HashSet<int>>();
+        foreach (var (from, to) in legs)
+        {
+            if (from == to)
             {
                 continue;
             }
@@ -89,61 +223,165 @@ public static class PassageNetwork
             Neighbours(adjacency, to).Add(from);
         }
 
+        return adjacency;
+    }
+
+    private static ReducedPassageNetwork? Reduce(Dictionary<int, HashSet<int>> adjacency)
+    {
         if (adjacency.Count == 0)
         {
             return null;
         }
 
-        var nodeCount = adjacency.Count;
-        var edgeCount = adjacency.Values.Sum(n => n.Count) / 2;
-        var extremityCount = adjacency.Values.Count(n => n.Count == 1);
+        var sorted = adjacency.ToDictionary(kv => kv.Key, kv => kv.Value.Order().ToArray());
 
-        // A component made entirely of through-stations is a closed loop with no junction and no
-        // end. It contracts to a single node rather than to none, and counting it as none would
-        // divide a real loop count by zero.
+        // A branch is found by walking from a station that is not a through-station along one of
+        // its passages. The same branch is found again from its far end, so both of its ends are
+        // recorded as walked the moment it is found.
+        var branches = new List<List<int>>();
+        var walked = new HashSet<(int Start, int Next)>();
+        var seen = new HashSet<int>();
         var componentCount = 0;
-        var reducedNodeCount = 0;
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var start in adjacency.Keys)
+        foreach (var seed in sorted.Keys.Order())
         {
-            if (!seen.Add(start))
+            if (!seen.Add(seed))
             {
                 continue;
             }
 
             componentCount++;
-            var corners = 0;
-            var queue = new Queue<string>();
-            queue.Enqueue(start);
+            var members = new List<int> { seed };
+            var queue = new Queue<int>();
+            queue.Enqueue(seed);
             while (queue.Count > 0)
             {
-                var node = queue.Dequeue();
-                if (adjacency[node].Count != 2)
+                foreach (var next in sorted[queue.Dequeue()])
                 {
-                    corners++;
-                }
-
-                foreach (var neighbour in adjacency[node])
-                {
-                    if (seen.Add(neighbour))
+                    if (seen.Add(next))
                     {
-                        queue.Enqueue(neighbour);
+                        members.Add(next);
+                        queue.Enqueue(next);
                     }
                 }
             }
 
-            reducedNodeCount += corners == 0 ? 1 : corners;
+            members.Sort();
+            var starts = members.Where(m => sorted[m].Length != 2).ToList();
+
+            // A component every station of which has two passages is one closed ring with nothing
+            // to anchor it. Starting at its lowest station gives the one branch it contains; the
+            // choice is arbitrary but has to be made or the ring is lost.
+            if (starts.Count == 0)
+            {
+                starts.Add(members[0]);
+            }
+
+            foreach (var start in starts)
+            {
+                foreach (var first in sorted[start])
+                {
+                    if (walked.Contains((start, first)))
+                    {
+                        continue;
+                    }
+
+                    var path = new List<int> { start, first };
+                    while (path[^1] != start && sorted[path[^1]].Length == 2)
+                    {
+                        var onwards = sorted[path[^1]];
+                        path.Add(onwards[0] == path[^2] ? onwards[1] : onwards[0]);
+                    }
+
+                    walked.Add((path[0], path[1]));
+                    walked.Add((path[^1], path[^2]));
+                    branches.Add(path);
+                }
+            }
         }
 
-        return new PassageNetworkFigures(
-            nodeCount,
-            edgeCount,
-            componentCount,
-            reducedNodeCount,
-            edgeCount - nodeCount + componentCount,
-            extremityCount,
-            Clustering(adjacency));
+        // Ordered by the station each starts from, then the one it ends at; the order only fixes
+        // the order of the edges, not any count.
+        var ordered = branches
+            .Select((path, index) => (path, index))
+            .OrderBy(b => b.path[0]).ThenBy(b => b.path[^1]).ThenBy(b => b.index)
+            .Select(b => b.path)
+            .ToList();
+
+        var siblings = new Dictionary<(int, int), int>();
+        foreach (var path in ordered)
+        {
+            var key = Key(path[0], path[^1]);
+            siblings[key] = siblings.GetValueOrDefault(key) + 1;
+        }
+
+        var pairs = new List<(int, int)>();
+        foreach (var path in ordered)
+        {
+            if (path[0] == path[^1])
+            {
+                CutInThree(path, pairs);
+            }
+            else if (siblings[Key(path[0], path[^1])] > 1)
+            {
+                CutInTwo(path, pairs);
+            }
+            else
+            {
+                pairs.Add((path[0], path[^1]));
+            }
+        }
+
+        var edges = new List<(int A, int B)>();
+        var edgeSet = new HashSet<(int, int)>();
+        foreach (var (a, b) in pairs)
+        {
+            if (edgeSet.Add(Key(a, b)))
+            {
+                edges.Add(Key(a, b));
+            }
+        }
+
+        return new ReducedPassageNetwork(edges, componentCount, ordered.Count);
     }
+
+    /// <summary>Cuts a ring branch into three at the stations a third and two thirds of the way
+    /// along it, into two when it is only three stations long, and leaves a single leg alone.</summary>
+    private static void CutInThree(List<int> path, List<(int, int)> pairs)
+    {
+        if (path.Count == 2)
+        {
+            pairs.Add((path[0], path[1]));
+            return;
+        }
+
+        if (path.Count == 3)
+        {
+            CutInTwo(path, pairs);
+            return;
+        }
+
+        var third = path.Count / 3;
+        pairs.Add((path[0], path[third]));
+        pairs.Add((path[third], path[2 * third]));
+        pairs.Add((path[2 * third], path[^1]));
+    }
+
+    /// <summary>Cuts a branch in two at the station halfway along it, or leaves it alone when it is
+    /// a single leg.</summary>
+    private static void CutInTwo(List<int> path, List<(int, int)> pairs)
+    {
+        if (path.Count == 2)
+        {
+            pairs.Add((path[0], path[1]));
+            return;
+        }
+
+        var middle = path.Count / 2;
+        pairs.Add((path[0], path[middle]));
+        pairs.Add((path[middle], path[^1]));
+    }
+
+    private static (int, int) Key(int a, int b) => a < b ? (a, b) : (b, a);
 
     /// <summary>
     /// How often two passages leaving one junction are themselves joined, averaged over the
@@ -155,7 +393,7 @@ public static class PassageNetwork
     /// clustering coefficient. Dead ends have no pair of passages to compare and take no part —
     /// they are not junctions that fail to ring.
     /// </remarks>
-    private static double? Clustering(Dictionary<string, HashSet<string>> adjacency)
+    private static double? Clustering(Dictionary<int, HashSet<int>> adjacency)
     {
         var reduced = Contract(adjacency);
 
@@ -199,9 +437,9 @@ public static class PassageNetwork
     /// that junction to nothing else, so it is dropped rather than recorded as a station joined to
     /// itself, which would otherwise read as a ring between two passages that do not exist.
     /// </remarks>
-    private static Dictionary<string, HashSet<string>> Contract(Dictionary<string, HashSet<string>> adjacency)
+    private static Dictionary<int, HashSet<int>> Contract(Dictionary<int, HashSet<int>> adjacency)
     {
-        var reduced = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var reduced = new Dictionary<int, HashSet<int>>();
         foreach (var (node, neighbours) in adjacency)
         {
             if (neighbours.Count == 2)
@@ -213,7 +451,7 @@ public static class PassageNetwork
             foreach (var neighbour in neighbours)
             {
                 var far = WalkThrough(adjacency, node, neighbour);
-                if (!StringComparer.Ordinal.Equals(far, node))
+                if (far != node)
                 {
                     joined.Add(far);
                 }
@@ -227,8 +465,7 @@ public static class PassageNetwork
     /// Follow a run of through-stations from <paramref name="from"/> by way of
     /// <paramref name="first"/> and return the place it arrives at.
     /// </summary>
-    private static string WalkThrough(
-        Dictionary<string, HashSet<string>> adjacency, string from, string first)
+    private static int WalkThrough(Dictionary<int, HashSet<int>> adjacency, int from, int first)
     {
         var previous = from;
         var current = first;
@@ -238,7 +475,7 @@ public static class PassageNetwork
         // station that is not a through-station, and every run reaches one.
         for (var step = 0; step < adjacency.Count && adjacency[current].Count == 2; step++)
         {
-            var next = adjacency[current].First(n => !StringComparer.Ordinal.Equals(n, previous));
+            var next = adjacency[current].First(n => n != previous);
             previous = current;
             current = next;
         }
@@ -246,11 +483,11 @@ public static class PassageNetwork
         return current;
     }
 
-    private static HashSet<string> Neighbours(Dictionary<string, HashSet<string>> adjacency, string station)
+    private static HashSet<int> Neighbours(Dictionary<int, HashSet<int>> adjacency, int station)
     {
         if (!adjacency.TryGetValue(station, out var set))
         {
-            set = new HashSet<string>(StringComparer.Ordinal);
+            set = [];
             adjacency[station] = set;
         }
 

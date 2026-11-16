@@ -101,6 +101,9 @@ circularitate, direcția axei lungi…). A nu se confunda cu **morfometria** une
 **Grup de speologie** — Un club, un grup sau o organizație. Contează pentru vizibilitate, pentru
 delimitarea permisiunilor și pentru anunțuri. Nu este același lucru cu un **grup de permisiuni**.
 
+**Indice de carstificare** — O singură citire, de la *foarte scăzut* la *foarte ridicat*, a cât de carstificată este o zonă: media dintre densitatea peșterilor și acoperirea cu depresiuni, fiecare față de o referință declarată. O citire lipsă este lăsată deoparte, nu socotită zero.
+→ [Analize carstice](features/karst-analyses.md#indicele-de-carstificare)
+
 **Invitație** *(cont)* — Felul în care un cont este deschis de altcineva: **Invită pe cineva**
 din *Administrare → Conturi* cere un nume și o adresă de e-mail, iar titularul primește un link
 pentru a-și alege singur parola. Linkul funcționează o singură dată și timp de 24 de ore. Nu este
@@ -175,6 +178,8 @@ membrul de pe toate dispozitivele și îl anunță prin e-mail. Apoi acesta se a
 parola și își configurează din nou un al doilea factor. Refuzată pentru propriul cont.
 → [Conturi](admin/accounts.md) ·
 [Autentificare în doi pași](features/account-and-settings.md#autentificare-în-doi-pași)
+
+**Rețeaua de galerii** — Topografia unei peșteri citită ca puncte unite prin vize de galerie, numărate pe intersecții, fundături, bucle independente și rapoartele studiilor carstice. → [Analize carstice](features/karst-analyses.md#rețeaua-de-galerii)
 
 **Scanare** — Vezi *Nor de puncte*. O *înregistrare brută* este dosarul scris de un scaner
 MANDEYE, pe care serverul îl transformă în nor de puncte.
