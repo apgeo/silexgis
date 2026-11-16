@@ -11,6 +11,13 @@ import {
   sendModel,
 } from '../../caveview/dankezCaveView.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
+import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
+import { SurveyFileRequestError } from '../../caveview/surveyFileDownload.ts';
+import {
+  caveViewerFailure,
+  caveViewerFailureMessage,
+  type CaveViewerFailure,
+} from '../../caveview/viewerLifecycle.ts';
 
 interface DankezCaveViewPaneProps {
   model: ViewerModel;
@@ -20,6 +27,9 @@ interface DankezCaveViewPaneProps {
 type Status =
   | { kind: 'sending' }
   | { kind: 'loaded'; stations: number }
+  /** This pane could not read the file; worded when shown, so a language switch rewords it. */
+  | { kind: 'readFailed'; failure: CaveViewerFailure }
+  /** The viewer's own words, which arrive already written. */
   | { kind: 'error'; message: string };
 
 /**
@@ -42,20 +52,47 @@ export default function DankezCaveViewPane({ model, height }: DankezCaveViewPane
   const [status, setStatus] = useState<Status>({ kind: 'sending' });
   const [station, setStation] = useState<string | null>(null);
   const fileName = viewerFileName(model);
-
-  // Read once per model. A failure is shown here: the viewer would only ever be sent nothing.
+  // Keyed on the file, not on its address: whatever lists the survey signs the address again every
+  // few minutes, and the viewer, which is sent bytes only when it says it is ready, would never be
+  // sent the second read — the pane would read the whole file again and sit on "sending" for good.
+  const fileIdentity = modelDeliveryIdentity(model.modelUrl);
+  const modelUrlRef = useRef(model.modelUrl);
+  modelUrlRef.current = model.modelUrl;
+  // Bumped by "Try again", and by a new signature arriving while the last read had failed: a read
+  // that failed because its address lapsed, or because the connection dropped, is not final, and
+  // the identity key alone would never read the file again.
+  const [attempt, setAttempt] = useState(0);
+  const failedRef = useRef(false);
   useEffect(() => {
+    if (failedRef.current) {
+      setAttempt((count) => count + 1);
+    }
+  }, [model.modelUrl]);
+
+  // Read once per model and attempt. A failure is shown here: the viewer would only ever be sent
+  // nothing.
+  useEffect(() => {
+    let current = true;
+    failedRef.current = false;
     setStatus({ kind: 'sending' });
     setStation(null);
-    const bytes = fetch(model.modelUrl).then((response) => {
+    const bytes = fetch(modelUrlRef.current).then((response) => {
       if (!response.ok) {
-        throw new Error(`survey file request failed (${response.status})`);
+        throw new SurveyFileRequestError(response.status);
       }
       return response.arrayBuffer();
     });
-    bytes.catch(() => setStatus({ kind: 'error', message: t('caveview.loadError') }));
+    bytes.catch((error: unknown) => {
+      if (current) {
+        failedRef.current = true;
+        setStatus({ kind: 'readFailed', failure: caveViewerFailure(error) });
+      }
+    });
     bytesRef.current = bytes;
-  }, [model.modelUrl, t]);
+    return () => {
+      current = false;
+    };
+  }, [fileIdentity, attempt]);
 
   useEffect(() => {
     // Served from this application's own origin; the one place that would change if it moved.
@@ -97,7 +134,9 @@ export default function DankezCaveViewPane({ model, height }: DankezCaveViewPane
       ? t('caveview.dankezCaveView.sending')
       : status.kind === 'loaded'
         ? t('caveview.dankezCaveView.loaded', { count: status.stations })
-        : status.message;
+        : status.kind === 'readFailed'
+          ? caveViewerFailureMessage(status.failure, t)
+          : status.message;
 
   return (
     <Flex vertical gap="small">
@@ -122,11 +161,16 @@ export default function DankezCaveViewPane({ model, height }: DankezCaveViewPane
       />
       <Flex gap="middle" wrap>
         <Typography.Text
-          type={status.kind === 'error' ? 'danger' : 'secondary'}
+          type={status.kind === 'error' || status.kind === 'readFailed' ? 'danger' : 'secondary'}
           data-testid="dankez-caveview-status"
         >
           {statusText}
         </Typography.Text>
+        {status.kind === 'readFailed' && (
+          <Button size="small" onClick={() => setAttempt((count) => count + 1)}>
+            {t('caveview.tryAgain')}
+          </Button>
+        )}
         {station !== null && (
           <Typography.Text data-testid="dankez-caveview-station">
             {t('caveview.dankezCaveView.station', { name: station })}
