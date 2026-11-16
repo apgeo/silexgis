@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
@@ -72,10 +72,20 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
 
   // Loaded rather than initial values: the drawer stays mounted while a different picture is
   // opened from the viewer behind it, so the form has to be refilled rather than constructed.
+  // Refilled once per picture, though, not on every answer: switching the public-gallery flag
+  // or a refetch hands back an equal photograph as a new object, and refilling then would put
+  // the stored words back over whatever is being typed.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!photo) {
+    if (documentId === null) {
+      filledFor.current = null;
+    }
+  }, [documentId]);
+  useEffect(() => {
+    if (!photo || filledFor.current === photo.documentId) {
       return;
     }
+    filledFor.current = photo.documentId;
 
     form.setFieldsValue({
       attribution: photo.credit.photographerCaverId ? 'roster' : 'other',
@@ -92,7 +102,13 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       return;
     }
 
-    const values = await form.validateFields();
+    let values: CreditForm;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The fields say what is wrong with them; there is nothing to send.
+      return;
+    }
     try {
       await updateCredit.mutateAsync({
         documentId,

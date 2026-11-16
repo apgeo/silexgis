@@ -1014,7 +1014,9 @@
       "other": "Altele"
     },
     "makePrimary": "Folosește ca fotografie reprezentativă",
-    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă"
+    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă",
+    "primarySet": "Aceasta este acum fotografia reprezentativă.",
+    "primaryCleared": "Nu mai este fotografia reprezentativă."
   },
   "documents": {
     "deletion": {
@@ -1405,6 +1407,11 @@
     "duplicateUnknown": "Acest conținut este deja salvat. Salvezi și această copie?",
     "duplicateStoreAnyway": "Salvează oricum",
     "duplicateSkip": "Sari peste",
+    "stop": "Oprește încărcarea",
+    "stopTitle": "Oprești această încărcare?",
+    "stopContent": "{{stored}} din {{total}} fișiere sunt salvate și rămân acolo unde sunt. Celelalte {{rest}} nu vor mai fi trimise.",
+    "stopConfirm": "Oprește",
+    "keepGoing": "Continuă încărcarea",
     "batches": "Încărcări",
     "batchesEmpty": "Nu s-a încărcat încă nimic în loturi.",
     "batchSource": "Sursă",
@@ -1422,6 +1429,7 @@
       "failed": "Eșuat"
     },
     "batchCounts": "{{stored}} salvate · {{skipped}} sărite · {{failed}} eșuate",
+    "batchCountsTitle": "Fișiere",
     "batchReport": "Raport",
     "importDirectory": "Importă dintr-un director de pe server",
     "importDirectoryHint": "Copiază fișiere la care serverul are deja acces, fără a le trimite prin rețea. Folderele devin dulapuri.",
@@ -1438,7 +1446,19 @@
       "pathRefused": "Această cale de folder nu poate fi depusă",
       "filingRefused": "Nu ai voie să depui în acel dulap",
       "unreadable": "Fișierul nu a putut fi citit",
-      "failed": "Încărcarea a eșuat"
+      "failed": "Încărcarea a eșuat",
+      "lengthRequired": "Serverul nu a aflat lungimea unei bucăți; ceva între tine și server o poate elimina",
+      "sessionEnded": "Încărcarea s-a încheiat înainte ca fișierul să fie confirmat. Poate e deja salvat: verifică înainte să-l trimiți din nou",
+      "outOfStep": "Copia de pe server și acest fișier nu mai corespund",
+      "connectionLost": "Conexiunea s-a pierdut înainte ca fișierul să ajungă",
+      "serverFault": "Serverul nu a putut salva fișierul; poate nu mai are spațiu",
+      "archiveUnreadable": "Arhiva nu a putut fi deschisă",
+      "archiveTooManyEntries": "Arhiva conține mai multe fișiere decât acceptă această instalare",
+      "archiveTooLarge": "Arhiva despachetată depășește cât acceptă această instalare",
+      "archiveSuspicious": "Arhiva este comprimată într-un mod care pare nesigur, așa că nu a fost despachetată",
+      "importDirectoryNotFound": "Directorul nu a fost găsit pe server",
+      "importPathNotAllowed": "Directorul este în afara celor din care această instalare poate importa",
+      "importNoRoots": "Această instalare nu are configurat niciun director de import"
     },
     "batchStarted": "Încărcat"
   },
@@ -1503,6 +1523,11 @@
     "shareTitle": "Link de partajare",
     "shareOnce": "Copiază-l acum — linkul se arată o singură dată și nu mai poate fi recuperat. Dacă se pierde, revocă-l și creează altul.",
     "revokeConfirm": "Revoci linkul de partajare al acestui album?",
+    "shareAlbum": "Creează un link de partajare",
+    "revokeShare": "Revocă linkul de partajare",
+    "deleteAlbum": "Șterge albumul",
+    "shareRevoked": "Linkul de partajare a fost revocat.",
+    "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
     "licences": {
       "cc0": "Domeniu public (CC0)",
@@ -3077,6 +3102,8 @@
   "history": {
     "title": "Istoric",
     "empty": "Nicio modificare înregistrată încă.",
+    "loadFailed": "Istoricul nu a putut fi încărcat.",
+    "partial": "Se arată ultimele {{shown}} din {{total}} modificări.",
     "hidden": "Valoare ascunsă (locație protejată)",
     "geometrySummary": "Geometrie cu {{points}} puncte (prea mare pentru a fi înregistrată integral)",
     "systemUser": "Sistem",
@@ -8653,7 +8680,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Părți legate din această imagine: {{count}}"
+    "regionCount": "Părți legate din această imagine: {{count}}",
+    "linksCutOff": "Pe această imagine sunt desenate doar primele {{shown}} din {{total}} legături."
   },
   "tripStats": {
     "title": "Sinteza turelor",

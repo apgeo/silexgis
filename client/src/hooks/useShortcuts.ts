@@ -55,7 +55,7 @@ export function useShortcuts(shortcuts: Shortcut[], enabled = true) {
 }
 
 /** Whether the event came from somewhere a keystroke means a character. */
-function isTyping(target: EventTarget | null): boolean {
+export function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
   }

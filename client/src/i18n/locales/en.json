@@ -1014,7 +1014,9 @@
       "other": "Other"
     },
     "makePrimary": "Use as the headline picture",
-    "clearPrimary": "Stop using as the headline picture"
+    "clearPrimary": "Stop using as the headline picture",
+    "primarySet": "This is now the headline picture.",
+    "primaryCleared": "It is no longer the headline picture."
   },
   "documents": {
     "deletion": {
@@ -1405,6 +1407,11 @@
     "duplicateUnknown": "These contents are already stored. Store this copy as well?",
     "duplicateStoreAnyway": "Store anyway",
     "duplicateSkip": "Skip it",
+    "stop": "Stop uploading",
+    "stopTitle": "Stop this upload?",
+    "stopContent": "{{stored}} of {{total}} files are stored and stay where they are. The other {{rest}} will not be sent.",
+    "stopConfirm": "Stop",
+    "keepGoing": "Keep uploading",
     "batches": "Uploads",
     "batchesEmpty": "Nothing has been uploaded in a batch yet.",
     "batchSource": "From",
@@ -1422,6 +1429,7 @@
       "failed": "Failed"
     },
     "batchCounts": "{{stored}} stored · {{skipped}} skipped · {{failed}} failed",
+    "batchCountsTitle": "Files",
     "batchReport": "Report",
     "importDirectory": "Import from a server directory",
     "importDirectoryHint": "Copies files the server can already reach, without sending them over the network. Folders become cabinets.",
@@ -1438,7 +1446,19 @@
       "pathRefused": "This folder path cannot be filed",
       "filingRefused": "You may not file into that cabinet",
       "unreadable": "The file could not be read",
-      "failed": "Upload failed"
+      "failed": "Upload failed",
+      "lengthRequired": "The server was not told how long a piece was; something between you and it may be removing that",
+      "sessionEnded": "The upload ended before the file was confirmed. It may already be stored: check before sending it again",
+      "outOfStep": "The server's copy and this file got out of step",
+      "connectionLost": "The connection was lost before the file arrived",
+      "serverFault": "The server could not store the file; it may be out of room",
+      "archiveUnreadable": "The archive could not be opened",
+      "archiveTooManyEntries": "The archive holds more files than this installation accepts",
+      "archiveTooLarge": "The archive unpacks to more than this installation accepts",
+      "archiveSuspicious": "The archive is compressed in a way that looks unsafe, so it was not unpacked",
+      "importDirectoryNotFound": "The directory was not found on the server",
+      "importPathNotAllowed": "The directory is outside the ones this installation may import from",
+      "importNoRoots": "No import directories are configured on this installation"
     },
     "batchStarted": "Uploaded"
   },
@@ -1503,6 +1523,11 @@
     "shareTitle": "Share link",
     "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. Revoke and mint a new one if it is lost.",
     "revokeConfirm": "Revoke this album’s share link?",
+    "shareAlbum": "Make a share link",
+    "revokeShare": "Revoke the share link",
+    "deleteAlbum": "Delete album",
+    "shareRevoked": "Share link revoked.",
+    "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
       "cc0": "Public domain (CC0)",
@@ -3077,6 +3102,8 @@
   "history": {
     "title": "History",
     "empty": "No changes recorded yet.",
+    "loadFailed": "The history could not be loaded.",
+    "partial": "Showing the latest {{shown}} of {{total}} changes.",
     "hidden": "Value hidden (protected location)",
     "geometrySummary": "Geometry of {{points}} points (too large to record in full)",
     "systemUser": "System",
@@ -8640,7 +8667,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Linked parts of this picture: {{count}}"
+    "regionCount": "Linked parts of this picture: {{count}}",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are drawn on this picture."
   },
   "tripStats": {
     "title": "Trip insights",

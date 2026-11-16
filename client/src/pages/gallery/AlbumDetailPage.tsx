@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
-import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography } from 'antd';
+import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -51,6 +51,7 @@ const PageSize = 500;
 export default function AlbumDetailPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const { id } = useParams<{ id: string }>();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
@@ -104,6 +105,14 @@ export default function AlbumDetailPage() {
       message.error(t('common.saveFailed'));
     } finally {
       setPending(null);
+    }
+  };
+
+  const makeCover = async (albumId: string, documentId: string) => {
+    try {
+      await setCover.mutateAsync({ id: albumId, documentId });
+    } catch {
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -199,14 +208,12 @@ export default function AlbumDetailPage() {
                         data-cover={album.coverDocumentId === photo.documentId}
                         icon={
                           album.coverDocumentId === photo.documentId ? (
-                            <StarFilled style={{ color: '#faad14' }} />
+                            <StarFilled style={{ color: token.colorWarning }} />
                           ) : (
                             <StarOutlined />
                           )
                         }
-                        onClick={() =>
-                          void setCover.mutateAsync({ id: album.id, documentId: photo.documentId })
-                        }
+                        onClick={() => void makeCover(album.id, photo.documentId)}
                       />
                     </Tooltip>
                     <Tooltip title={t('gallery.editCredit')}>
