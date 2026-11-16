@@ -175,6 +175,8 @@ export const specs = {
     'scene3d-flyby-relief.spec.ts',
     // The relief setting over served relief: a marker on the ground stays on the stretched ground.
     'scene3d-relief.spec.ts',
+    // The engine's download dropped: asked for again, and said to be a download when it never arrives.
+    'scene3d-download.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [

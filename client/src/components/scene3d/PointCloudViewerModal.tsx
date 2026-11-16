@@ -4,6 +4,7 @@ import { Alert, Checkbox, Flex, Modal, Radio, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../Button.tsx';
 import { coarsePointer } from '../../map/pointer.ts';
+import { importWithRetry } from '../../codeLoading.ts';
 import { defaultColoring } from '../../scene3d/pointCloudColoring.ts';
 import { pointCloudDetailInForce } from '../../scene3d/pointCloudDetail.ts';
 import type {
@@ -101,12 +102,18 @@ export default function PointCloudViewerModal({
     setMeasuring(false);
     setMeasurement(undefined);
     void (async () => {
-      const { createLocalScan3D } = await import('../../scene3d/scene3dContext.ts');
+      // A viewer whose code did not arrive is a scan that could not be shown, which the dialog already
+      // says, rather than a spinner left turning for good.
+      const code = await importWithRetry(() => import('../../scene3d/scene3dContext.ts')).catch(() => null);
       if (cancelled) {
         return;
       }
+      if (!code) {
+        setStatus('failed');
+        return;
+      }
       try {
-        built = createLocalScan3D(element);
+        built = code.createLocalScan3D(element);
       } catch {
         setStatus('failed');
         return;

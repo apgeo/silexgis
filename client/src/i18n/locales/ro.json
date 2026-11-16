@@ -488,7 +488,9 @@
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",
     "description": "Pagina nu a mai putut fi afișată. De obicei reîncărcarea o aduce înapoi.",
-    "reload": "Reîncarcă pagina"
+    "reload": "Reîncarcă pagina",
+    "downloadTitle": "Acest ecran nu s-a descărcat complet",
+    "downloadDescription": "Conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă această parte din SilexGIS, ori SilexGIS a fost actualizat de când a fost deschisă pagina. Datele tale nu au nicio problemă. Verifică conexiunea și reîncarcă pagina."
   },
   "map": {
     "baseLayers": "Hărți de bază",
@@ -3874,6 +3876,9 @@
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
     "startFailed": "Vizualizarea 3D nu a putut fi pornită",
+    "downloadFailedTitle": "Vizualizarea 3D nu s-a descărcat complet",
+    "downloadFailedHint": "Vizualizarea 3D este o descărcare mare (aproximativ un megaoctet), iar conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă. Harta și datele nu au nicio problemă. Încearcă din nou sau reîncarcă pagina dacă SilexGIS a fost actualizat de când ai deschis-o.",
+    "downloadFailedRetry": "Încearcă din nou",
     "centerlinesFlat": "{{count}} drumuiri desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate.",
     "surfaceTitle": "Terenul de deasupra peșterii",
     "surfaceOverlay": "Arată peștera prin el",
@@ -4093,7 +4098,7 @@
       "previewError": "Modelul nu a putut fi încărcat pentru previzualizare.",
       "opening": "Se deschide realizarea filmului…",
       "openFailed": "Realizarea filmului nu s-a putut deschide.",
-      "openFailedStale": "Aplicația a fost actualizată după ce ai deschis această pagină, iar pagina cere încă fișierele versiunii vechi. Reîncarcă pagina ca să folosești versiunea nouă.",
+      "openFailedStale": "Realizarea filmului nu s-a descărcat complet: conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă, ori aplicația a fost actualizată după ce ai deschis această pagină. Datele tale nu au nicio problemă. Reîncarcă pagina ca să încerci din nou.",
       "previewLoadingSoFar": "Se încarcă modelul pentru previzualizare… {{received}} până acum",
       "previewLoadingOf": "Se încarcă modelul pentru previzualizare… {{received}} din {{total}}",
       "previewStalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",

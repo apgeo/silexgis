@@ -51,6 +51,7 @@ const DRAWS_A_3D_SCENE = [
   'scene3d-flyby-features.spec.ts',
   'scene3d-flyby-relief.spec.ts',
   'scene3d-relief.spec.ts',
+  'scene3d-download.spec.ts',
   'scene3d-walls.spec.ts',
   'terrain.spec.ts',
   'terrain-derivatives.spec.ts',

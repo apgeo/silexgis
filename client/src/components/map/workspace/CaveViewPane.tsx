@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { Spin, Tooltip } from 'antd';
 import { ExpandOutlined, ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -9,12 +9,13 @@ import type { useCompareOffer } from '../../../caveview/useCompareOffer.ts';
 import { viewerFileName } from '../../../caveview/viewerFileName.ts';
 import type { PanePlace } from '../../../stores/workspacePrefs.ts';
 import Button from '../../Button.tsx';
+import { lazyRetrying } from '../../../codeLoading.ts';
 import PaneHeader, { type PaneDestination } from './PaneHeader.tsx';
 import type { PaneRoot } from './paneRoot.ts';
 import SurveyModelChooser from './SurveyModelChooser.tsx';
 
 // Loaded on demand: it is a survey-viewer bundle that most visits to the map never open.
-const CaveViewPanel = lazy(() => import('../../caveview/CaveViewPanel.tsx'));
+const CaveViewPanel = lazyRetrying(() => import('../../caveview/CaveViewPanel.tsx'));
 
 export interface CaveViewPaneProps {
   paneRoot: PaneRoot;

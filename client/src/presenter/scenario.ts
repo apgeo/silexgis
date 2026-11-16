@@ -74,10 +74,23 @@ export type ScenarioItem = ScenarioAction & { at: number; duration?: number };
 export interface ScenarioSetup {
   /** The cave whose 3D view is opened with its walls drawn, found by name. */
   cave?: string;
+  /**
+   * An imported geodata file to fly around instead of a cave model, found by its name: the 3D view
+   * is opened over it with the file drawn, and every camera pose is described around its extent —
+   * the middle of the extent on the ground, one radius being half its diagonal.
+   */
+  file?: string;
+  /**
+   * The terrain build to draw, chosen in the layer panel's Ground list by text its row contains (a
+   * build's row names its level, the day it finished and its size), when it is not the default.
+   */
+  ground?: string;
   /** The basemap chosen before the first frame. */
   basemap?: { name: string; group?: string };
   /** Layers (by their row label in the 3D layer panel) switched off before the first frame. */
   layersOff?: string[];
+  /** Layers (by their row label in the 3D layer panel) switched on before the first frame. */
+  layersOn?: string[];
   /** Parts of the page left out of the picture, as CSS selectors. */
   hide?: string[];
 }

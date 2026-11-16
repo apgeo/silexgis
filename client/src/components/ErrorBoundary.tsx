@@ -4,6 +4,7 @@ import { Result, Typography } from 'antd';
 import Button from './Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { reportError } from '../diagnostics/reporter.ts';
+import { isCodeDownloadFailure } from '../codeLoading.ts';
 
 /**
  * What is shown when a screen stops rendering.
@@ -20,11 +21,14 @@ import { reportError } from '../diagnostics/reporter.ts';
  */
 export function ErrorFallback({ detail }: { detail: string }) {
   const { t } = useTranslation();
+  // A screen whose code never arrived has not "gone wrong": the connection or an update since the
+  // page was opened is the cause, and saying so keeps it from reading as a bug in the application.
+  const download = isCodeDownloadFailure(detail);
   return (
     <Result
-      status="error"
-      title={t('errorBoundary.title')}
-      subTitle={t('errorBoundary.description')}
+      status={download ? 'warning' : 'error'}
+      title={t(download ? 'errorBoundary.downloadTitle' : 'errorBoundary.title')}
+      subTitle={t(download ? 'errorBoundary.downloadDescription' : 'errorBoundary.description')}
       extra={
         <Button type="primary" onClick={() => window.location.reload()}>
           {t('errorBoundary.reload')}
