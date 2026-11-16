@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
+using SilexGis.Domain.Auth;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
@@ -27,6 +31,9 @@ public sealed record ExternalFederationResult(SilexGisUser? User, string? ErrorC
 ///   <item>Auto-linking to an existing same-email account requires a provider-verified
 ///   email — otherwise an attacker who controls an unverified provider account bearing a
 ///   victim's address could seize it. Unverified matches must link manually while signed in.</item>
+///   <item>A same-email account whose address was never confirmed is taken over by the person
+///   the provider vouches for: the address is marked confirmed and every way in its unproven
+///   holder set up is removed.</item>
 ///   <item>Creating a new local account happens only when the provider allows it AND the
 ///   email is provider-verified.</item>
 /// </list>
@@ -36,7 +43,10 @@ public sealed record ExternalFederationResult(SilexGisUser? User, string? ErrorC
 public sealed class ExternalAuthService(
     UserManager<SilexGisUser> userManager,
     IOptions<AuthOptions> authOptions,
-    SilexGisDbContext db)
+    SilexGisDbContext db,
+    IOpenIddictTokenManager issuedTokens,
+    IOpenIddictAuthorizationManager grants,
+    TimeProvider clock)
 {
     public async Task<ExternalFederationResult> FederateAsync(
         string loginProvider, string providerKey, ClaimsPrincipal principal, ExternalProviderOptions provider)
@@ -63,6 +73,11 @@ public sealed class ExternalAuthService(
             if (!emailVerified)
             {
                 return ExternalFederationResult.Error("auth.external_link_required");
+            }
+
+            if (!existing.EmailConfirmed)
+            {
+                return await TakeOverUnconfirmedAsync(existing, login);
             }
 
             var linkResult = await userManager.AddLoginAsync(existing, login);
@@ -107,6 +122,87 @@ public sealed class ExternalAuthService(
         return addLogin.Succeeded
             ? ExternalFederationResult.Success(user)
             : ExternalFederationResult.Error("auth.external_link_failed");
+    }
+
+    /// <summary>
+    /// Links the provider to an account whose address nobody ever proved, and makes the account
+    /// the provider-proven holder's alone.
+    /// </summary>
+    /// <remarks>
+    /// With open registration anyone can open an account under somebody else's address and choose
+    /// its password, and until the address is confirmed nothing says the account is theirs. The
+    /// provider has just proved the address belongs to the person signing in. Linking alone would
+    /// let them work inside an account whose password, second factor, provider sign-ins, sessions
+    /// and access keys somebody else may hold, so all of those go: the password is removed (which
+    /// also rotates the security stamp, ending cookie sessions), every provider identity linked
+    /// before this one is unlinked (an unconfirmed account may sign in and link its holder's own
+    /// provider identity, and a link signs in whatever the address), every second factor is
+    /// switched off and its secrets replaced, and every issued token, grant and access key is
+    /// revoked. The address is marked
+    /// confirmed, since the provider has just vouched for it. All of it commits together with the
+    /// login and an audit row, or none of it does.
+    /// </remarks>
+    private async Task<ExternalFederationResult> TakeOverUnconfirmedAsync(SilexGisUser account, UserLoginInfo login)
+    {
+        var hadPassword = await userManager.HasPasswordAsync(account);
+        var hadSecondFactor = account.TwoFactorEnabled || TwoFactorPolicy.AnyEnabled(account.ToTwoFactorState());
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        // None of these is the incoming login: an existing link to it would have signed in
+        // before an address was ever looked up.
+        var unprovenLogins = await userManager.GetLoginsAsync(account);
+        foreach (var unproven in unprovenLogins)
+        {
+            var unlinked = await userManager.RemoveLoginAsync(account, unproven.LoginProvider, unproven.ProviderKey);
+            if (!unlinked.Succeeded)
+            {
+                return ExternalFederationResult.Error("auth.external_link_failed");
+            }
+        }
+
+        var linked = await userManager.AddLoginAsync(account, login);
+        if (!linked.Succeeded)
+        {
+            return ExternalFederationResult.Error("auth.external_link_failed");
+        }
+
+        // Staged before the saves below, so the first of them writes it inside the transaction.
+        // Account rows are not recorded field by field, so this row is the record that the account
+        // changed hands, and what it lost.
+        db.AuditEntries.Add(new AuditEntry
+        {
+            UserId = account.Id,
+            Action = AuditActions.ExternalAccountLinked,
+            EntityType = nameof(SilexGisUser),
+            EntityId = account.Id.ToString(),
+            Changes = JsonSerializer.Serialize(new Dictionary<string, Dictionary<string, object?>>
+            {
+                [nameof(SilexGisUser.EmailConfirmed)] = Change(false, true),
+                ["HasPassword"] = Change(hadPassword, false),
+                [nameof(SilexGisUser.TwoFactorEnabled)] = Change(hadSecondFactor, false),
+                ["LoginProvider"] = Change(null, login.LoginProvider),
+                ["RemovedLogins"] = Change(
+                    unprovenLogins.Select(l => l.LoginProvider).Order(StringComparer.Ordinal).ToList(), null),
+            }),
+        });
+
+        account.EmailConfirmed = true;
+        var saved = hadPassword
+            ? await userManager.RemovePasswordAsync(account)
+            : await userManager.UpdateSecurityStampAsync(account);
+        if (!saved.Succeeded)
+        {
+            return ExternalFederationResult.Error("auth.external_link_failed");
+        }
+
+        await TwoFactorSwitch.SwitchAllOffAsync(account, userManager, db, CancellationToken.None);
+        await SessionRevocation.EndAllSessionsAsync(
+            issuedTokens, grants, db, clock.GetUtcNow(), account.Id, revokeAccessKeys: true, CancellationToken.None);
+        await transaction.CommitAsync();
+        return ExternalFederationResult.Success(account);
+
+        static Dictionary<string, object?> Change(object? was, object? now) => new() { ["old"] = was, ["new"] = now };
     }
 
     /// <summary>
