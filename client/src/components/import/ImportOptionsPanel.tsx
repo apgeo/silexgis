@@ -187,7 +187,17 @@ export default function ImportOptionsPanel({ options, onChange, geofileId, isDel
                   <Form.Item label={t('vectorImport.unmatched')} style={{ marginBottom: 8 }}>
                     <Select
                       value={options.unmatchedPoints ?? 'ignore'}
-                      onChange={(value) => set('unmatchedPoints', value)}
+                      // The type below names a type of what the points become; a feature type
+                      // kept for points now made entrances (or the reverse) is a code from the
+                      // wrong list, which the server would refuse or misread.
+                      onChange={(value) =>
+                        onChange({
+                          ...options,
+                          unmatchedPoints: value,
+                          unmatchedTypeCode:
+                            value === options.unmatchedPoints ? options.unmatchedTypeCode : null,
+                        })
+                      }
                       data-testid="import-unmatched"
                       options={[
                         { value: 'ignore', label: t('vectorImport.unmatchedIgnore') },

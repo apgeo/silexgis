@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined } from '@ant-design/icons';
 import {
   App,
@@ -18,6 +19,7 @@ import {
 } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../api/client.ts';
 import {
   useCaveTypes,
   useCreateTermRuleSet,
@@ -51,6 +53,36 @@ function blankRule(index: number): TermRule {
   };
 }
 
+/** Refusals of a rule set that have a sentence of their own here. */
+const REFUSALS: Readonly<Record<string, string>> = {
+  'term_rules.not_editable': 'termRules.errors.notEditable',
+  'term_rules.not_found': 'termRules.errors.notFound',
+  'term_rules.group_not_found': 'termRules.errors.groupNotFound',
+};
+
+/**
+ * Why a set could not be saved. The server checks the whole document — a pattern that cannot be
+ * compiled, a rule naming a taxonomy its target does not use — and for that its own sentence is
+ * the useful one, since it names the rule that is wrong; no wording here could. Other refusals
+ * are worded by their code, and a failure that says nothing is a failed save.
+ */
+function saveProblem(error: unknown, t: TFunction): string {
+  if (!(error instanceof ApiError)) {
+    return t('common.saveFailed');
+  }
+  const known = error.code ? REFUSALS[error.code] : undefined;
+  if (known) {
+    return t(known);
+  }
+  if (error.status === 403) {
+    return t('termRules.errors.forbidden');
+  }
+  if (error.status >= 400 && error.status < 500 && error.detail) {
+    return error.detail;
+  }
+  return t('common.saveFailed');
+}
+
 /**
  * The rule editor.
  *
@@ -60,7 +92,7 @@ function blankRule(index: number): TermRule {
  */
 export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const detail = useTermRuleSet(setId ?? undefined);
   const create = useCreateTermRuleSet();
   const update = useUpdateTermRuleSet();
@@ -72,33 +104,66 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   const [description, setDescription] = useState('');
   const [rules, setRules] = useState<TermRule[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Whether anything was changed since the set was filled in, so closing can ask first.
+  const [dirty, setDirty] = useState(false);
+  // Which set the fields were filled in from. They are filled once per opening: the set read
+  // again while it is being edited — the window regaining focus, another change invalidating the
+  // sets — is the same set, and filling the fields from it would throw away what was typed.
+  const filledFrom = useRef<string | null>(null);
 
   const open = setId !== null || creating;
 
   useEffect(() => {
     if (!open) {
+      filledFrom.current = null;
+      return;
+    }
+    const target = creating ? '' : setId;
+    if (filledFrom.current === target) {
       return;
     }
     if (creating) {
       setName('');
       setDescription('');
       setRules([blankRule(0)]);
-      setError(null);
-      return;
-    }
-    if (detail.data) {
+    } else if (detail.data && detail.data.set.id === setId) {
       setName(detail.data.set.name);
       setDescription(detail.data.set.description ?? '');
       setRules(detail.data.rules);
-      setError(null);
+    } else {
+      return;
     }
-  }, [open, creating, detail.data]);
+    filledFrom.current = target;
+    setError(null);
+    setDirty(false);
+  }, [open, creating, setId, detail.data]);
+
+  /** Every change to the set goes through here, which is what makes the closing question honest. */
+  const changeRules = (change: (current: TermRule[]) => TermRule[]) => {
+    setRules(change);
+    setDirty(true);
+  };
+
+  const requestClose = () => {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    modal.confirm({
+      title: t('termRules.discardTitle'),
+      content: t('termRules.discardBody'),
+      okText: t('termRules.discardOk'),
+      okButtonProps: { danger: true },
+      cancelText: t('termRules.keepEditing'),
+      onOk: onClose,
+    });
+  };
 
   const patch = (index: number, changes: Partial<TermRule>) =>
-    setRules((current) => current.map((rule, i) => (i === index ? { ...rule, ...changes } : rule)));
+    changeRules((current) => current.map((rule, i) => (i === index ? { ...rule, ...changes } : rule)));
 
   const move = (index: number, delta: number) =>
-    setRules((current) => {
+    changeRules((current) => {
       const next = [...current];
       const target = index + delta;
       if (target < 0 || target >= next.length) {
@@ -127,11 +192,10 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
         await update.mutateAsync({ id: setId, body: { name, description: description || null, rules } });
       }
       message.success(t('common.saved'));
+      setDirty(false);
       onClose();
     } catch (e) {
-      // The server checks the whole document — a pattern that cannot be compiled, a rule
-      // naming a taxonomy its target does not use — and its sentences are the useful ones.
-      setError(e instanceof Error ? e.message : t('common.saveFailed'));
+      setError(saveProblem(e, t));
     }
   };
 
@@ -142,11 +206,11 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
       // like "large" reaches the style as an invalid width and is silently ignored.
       size="min(900px, 96vw)"
       title={creating ? t('termRules.newSet') : t('termRules.edit')}
-      onClose={onClose}
+      onClose={requestClose}
       destroyOnHidden
       extra={
         <Space>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={requestClose}>{t('common.cancel')}</Button>
           <Button
             type="primary"
             loading={create.isPending || update.isPending}
@@ -163,14 +227,24 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
 
         <Form layout="vertical">
           <Form.Item label={t('termRules.name')} required>
-            <Input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+            <Input
+              value={name}
+              maxLength={200}
+              onChange={(e) => {
+                setName(e.target.value);
+                setDirty(true);
+              }}
+            />
           </Form.Item>
           <Form.Item label={t('features.description')}>
             <Input.TextArea
               rows={2}
               value={description}
               maxLength={2000}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                setDirty(true);
+              }}
             />
           </Form.Item>
         </Form>
@@ -208,7 +282,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
                   danger
                   icon={<DeleteOutlined />}
                   aria-label={t('iconButtons.delete')}
-                  onClick={() => setRules((current) => current.filter((_, i) => i !== index))}
+                  onClick={() => changeRules((current) => current.filter((_, i) => i !== index))}
                 />
               </Space.Compact>
             }
@@ -331,7 +405,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
 
         <Button
           icon={<PlusOutlined />}
-          onClick={() => setRules((current) => [...current, blankRule(current.length)])}
+          onClick={() => changeRules((current) => [...current, blankRule(current.length)])}
         >
           {t('termRules.addRule')}
         </Button>
