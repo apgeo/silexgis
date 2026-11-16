@@ -26,6 +26,7 @@ export const TERRAIN_DERIVATIVE_KINDS: readonly TerrainDerivativeKind[] = [
   'roughness',
   'colourRelief',
   'contours',
+  'geomorphons',
 ];
 
 export const HILLSHADE_LIGHTINGS: readonly TerrainHillshadeLighting[] = [
@@ -66,6 +67,17 @@ export const MAX_Z_FACTOR = 100;
 export const DEFAULT_CONTOUR_INTERVAL = 20;
 export const MIN_CONTOUR_INTERVAL = 1;
 export const MAX_CONTOUR_INTERVAL = 1000;
+
+/**
+ * The landform picture's settings as the server bounds them, and the values a request naming
+ * none is given: half a kilometre of look-out, nothing looked past, a one-degree flatness angle.
+ * Distances are metres over the ground, which the server turns into each raster's own cells.
+ */
+export const DEFAULT_LANDFORM_SEARCH = 500;
+export const MAX_LANDFORM_SEARCH = 10000;
+export const DEFAULT_LANDFORM_SKIP = 0;
+export const DEFAULT_LANDFORM_FLATNESS = 1;
+export const MAX_LANDFORM_FLATNESS = 45;
 
 /** The server's cap on a picture's name. */
 export const MAX_NAME_LENGTH = 200;
@@ -111,6 +123,10 @@ export function readsContourInterval(kind: TerrainDerivativeKind): boolean {
   return kind === 'contours';
 }
 
+export function readsLandformSettings(kind: TerrainDerivativeKind): boolean {
+  return kind === 'geomorphons';
+}
+
 /**
  * Whether the kind has an outermost ring of cells to compute or leave blank.
  *
@@ -118,7 +134,7 @@ export function readsContourInterval(kind: TerrainDerivativeKind): boolean {
  * there is no such ring, and the choice is neither offered nor sent for them.
  */
 export function readsEdges(kind: TerrainDerivativeKind): boolean {
-  return kind !== 'contours';
+  return kind !== 'contours' && kind !== 'geomorphons';
 }
 
 /*
@@ -141,6 +157,21 @@ export function zFactorValid(factor: number): boolean {
 export function contourIntervalValid(metres: number): boolean {
   return (
     Number.isFinite(metres) && metres >= MIN_CONTOUR_INTERVAL && metres <= MAX_CONTOUR_INTERVAL
+  );
+}
+
+/** The server's bounds on a landform picture's three settings, together: skip is shorter than search. */
+export function landformSettingsValid(search: number, skip: number, flatness: number): boolean {
+  return (
+    Number.isFinite(search) &&
+    search > 0 &&
+    search <= MAX_LANDFORM_SEARCH &&
+    Number.isFinite(skip) &&
+    skip >= 0 &&
+    skip < search &&
+    Number.isFinite(flatness) &&
+    flatness >= 0 &&
+    flatness <= MAX_LANDFORM_FLATNESS
   );
 }
 
@@ -223,6 +254,9 @@ export interface StoredDerivativeSettings {
   computeEdges?: boolean;
   colourRamp?: unknown[];
   contourIntervalMetres?: number;
+  geomorphonSearchMetres?: number;
+  geomorphonSkipMetres?: number;
+  geomorphonFlatnessDegrees?: number;
 }
 
 /**
@@ -275,6 +309,9 @@ export function parseDerivativeSettings(settings: string): StoredDerivativeSetti
     computeEdges: typeof record.computeEdges === 'boolean' ? record.computeEdges : undefined,
     colourRamp: Array.isArray(record.colourRamp) ? record.colourRamp : undefined,
     contourIntervalMetres: finite(record.contourIntervalMetres),
+    geomorphonSearchMetres: finite(record.geomorphonSearchMetres),
+    geomorphonSkipMetres: finite(record.geomorphonSkipMetres),
+    geomorphonFlatnessDegrees: finite(record.geomorphonFlatnessDegrees),
   };
 }
 
@@ -322,6 +359,17 @@ export function describeDerivativeSettings(
   }
   if (readsContourInterval(kind) && stored.contourIntervalMetres !== undefined) {
     parts.push(t('terrain.derivativeList.params.interval', { metres: stored.contourIntervalMetres }));
+  }
+  if (readsLandformSettings(kind)) {
+    if (stored.geomorphonSearchMetres !== undefined) {
+      parts.push(t('terrain.derivativeList.params.search', { metres: stored.geomorphonSearchMetres }));
+    }
+    if (stored.geomorphonSkipMetres !== undefined && stored.geomorphonSkipMetres > 0) {
+      parts.push(t('terrain.derivativeList.params.skip', { metres: stored.geomorphonSkipMetres }));
+    }
+    if (stored.geomorphonFlatnessDegrees !== undefined) {
+      parts.push(t('terrain.derivativeList.params.flatness', { degrees: stored.geomorphonFlatnessDegrees }));
+    }
   }
   if (readsEdges(kind) && stored.computeEdges === false) {
     parts.push(t('terrain.derivativeList.params.edgesOff'));

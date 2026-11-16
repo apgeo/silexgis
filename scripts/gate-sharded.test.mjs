@@ -13,6 +13,8 @@ import {
   sharesFor,
   summaryLineOf,
   therionRequirementOf,
+  whiteboxNoticeOf,
+  whiteboxRequirementOf,
   threadsFor,
   whereApplicationsWereBuilt,
 } from './gate-sharded.mjs';
@@ -229,6 +231,22 @@ test('a run can be of the classes a change selects, and not of those and named o
   assert.equal(parseArguments(['--affected', 'master']).affected, 'master');
   assert.throws(() => parseArguments(['--affected']), /unknown or incomplete/);
   assert.throws(() => parseArguments(['--affected', 'master', '--classes', 'CalendarTests']), /say one of them/);
+});
+
+test('the real WhiteboxTools tests are required on Linux where the program is found, and said to be skipped elsewhere', () => {
+  const found = () => true;
+  const absent = () => false;
+  assert.equal(whiteboxRequirementOf({}, 'linux', found), 'require');
+  assert.equal(whiteboxRequirementOf({}, 'linux', absent), undefined);
+  assert.equal(whiteboxRequirementOf({}, 'win32', found), undefined);
+  assert.equal(whiteboxRequirementOf({ SILEXGIS_TEST_WHITEBOX: '/opt/whitebox/whitebox_tools' }, 'linux', absent),
+    '/opt/whitebox/whitebox_tools');
+  assert.equal(whiteboxRequirementOf({ SILEXGIS_TEST_WHITEBOX: 'skip' }, 'linux', found), 'skip');
+
+  assert.equal(whiteboxNoticeOf('require'), null);
+  assert.equal(whiteboxNoticeOf('/opt/whitebox/whitebox_tools'), null);
+  assert.match(whiteboxNoticeOf(undefined), /SKIPPED/);
+  assert.match(whiteboxNoticeOf('skip'), /SKIPPED/);
 });
 
 test('the real-compiler tests are required on Linux unless the environment says otherwise', () => {

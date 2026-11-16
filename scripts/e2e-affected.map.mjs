@@ -23,6 +23,8 @@ export const always = ['smoke.spec.ts'];
 /** Area name → the specs that answer for it. An empty list means "nothing narrower than everything". */
 export const specs = {
   about: [],
+  // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
+  analysis: ['terrain-derivatives.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
@@ -102,6 +104,8 @@ export const specs = {
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
     'feature-sets.spec.ts',
+    // An area page's terrain card.
+    'area-terrain-statistics.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts', 'geodata-filters.spec.ts'],
   georeferencedMaps: [
@@ -188,6 +192,8 @@ export const specs = {
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
     'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
+    // The terrain class charts on an area page.
+    'area-terrain-statistics.spec.ts',
   ],
   // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
   storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
@@ -220,6 +226,8 @@ export const specs = {
   terrain: [
     'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts', 'terrain-profile-tool.spec.ts',
     'scene3d.spec.ts',
+    // An area's entrances and sinkholes against slope, facing, position and landform classes.
+    'area-terrain-statistics.spec.ts',
   ],
   trips: [
     'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts',

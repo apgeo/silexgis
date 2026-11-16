@@ -263,6 +263,18 @@ Orientarea se numără doar unde panta este de cel puțin 2°, pentru că terenu
 nicăieri. Terenul zonei este eșantionat într-o grilă regulată peste contur, deci ponderile sunt
 estimări, bune până la aproximativ un procent.
 
+O a patra măsurătoare, **forma de relief**, pune aceleași intrări și doline față de cele zece forme
+ale terenului — plan, vârf, creastă, umăr, pinten, versant, scobitură, bază de versant, vale și
+depresiune — citite din cea mai nouă imagine a formelor de relief calculată pentru generarea
+activă, ca bare perechi și un tabel, la fel ca celelalte. Distanța de căutare la care a fost
+desenată imaginea stabilește scara formelor ei (același versant este pantă la 100 m și umăr la
+1 km), așa că un câmp de doline citit la 500 m și la 2 km poate spune două povești diferite;
+setările imaginii se văd în registrul din pagina de relief. Terenul pe care imaginea l-a lăsat
+neclasificat, cum sunt celulele de la marginea unui rastru, nu se numără. Imaginile formelor de
+relief sunt desenate de un program de analiză separat, pe care o instalare poate să nu îl ruleze:
+unde nu îl rulează și nu a fost desenată niciuna mai devreme, măsurătoarea spune asta, nu că nicio
+imagine nu a fost calculată încă.
+
 Se numără doar intrările și dolinele pe care le poți localiza, deci cifrele nu se schimbă când se
 adaugă una protejată. Cere dreptul de a citi datele de elevație. Nimic de aici nu se publică și nu
 se exportă.

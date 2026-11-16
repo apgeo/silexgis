@@ -6,6 +6,7 @@ import type { EChartsOption } from 'echarts';
 
 import type { TerrainMeasure } from '../../api/hooks/karstProfiles.ts';
 import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
+import { terrainClassKey } from './terrainClassLabels.ts';
 import { useECharts } from './useECharts.ts';
 
 type ClassRow = TerrainMeasure['classes'][number];
@@ -36,7 +37,7 @@ export function TerrainClassBars({ measure, height = 220 }: { measure: TerrainMe
     return {
       xAxis: {
         type: 'category',
-        data: measure.classes.map((c) => t(`terrainStats.classes.${c.code}`)),
+        data: measure.classes.map((c) => t(terrainClassKey(measure.measure, c.code))),
         ...axisStyle(token),
       },
       yAxis: { type: 'value', name: '%', min: 0, ...axisStyle(token) },

@@ -205,6 +205,24 @@ export function useTerrainDerivatives(enabled = true) {
   });
 }
 
+export type TerrainDerivativeKindInfo = components['schemas']['TerrainDerivativeKindDto'];
+
+/**
+ * Which kinds of picture this installation can compute, and why not where it cannot.
+ *
+ * The landform classes are drawn by a separate analysis program the installation may not run,
+ * and that is a fact about the server which changes only when its operator restarts it — so this
+ * is read once and kept.
+ */
+export function useTerrainDerivativeKinds(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.terrainDerivativeKinds,
+    queryFn: () => unwrap(api.GET('/api/v1/terrain/derivatives/kinds')),
+    enabled,
+    staleTime: Infinity,
+  });
+}
+
 /** A picture that is still being drawn, or waiting its turn to be. */
 export function terrainDerivativeUnsettled(status: TerrainDerivativeLayerInfo['status']): boolean {
   return status === 'queued' || status === 'computing';

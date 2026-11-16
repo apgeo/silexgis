@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAreaTerrainStatistics, type TerrainMeasure } from '../../api/hooks/karstProfiles.ts';
 import { TerrainClassBars, TerrainFacingRose } from '../statistics/TerrainClassCharts.tsx';
+import { terrainClassKey } from '../statistics/terrainClassLabels.ts';
 
 type ClassRow = TerrainMeasure['classes'][number];
 
@@ -15,7 +16,8 @@ const ratio = (value: number | null | undefined) =>
 
 /**
  * Where in the ground an area's entrances and sinkholes sit: one figure and one table per measure
- * (slope classes as paired bars, facing as a rose, position on the relief as paired bars), each class set beside the same class's share of the area's own
+ * (slope classes as paired bars, facing as a rose, position on the relief and landform as paired
+ * bars), each class set beside the same class's share of the area's own
  * ground, with the ratio between them. Above one the caves sit there more often than the terrain
  * alone would suggest — the figure that guides prospecting.
  *
@@ -46,6 +48,8 @@ export default function AreaTerrainStatisticsCard({
         return t('terrainStats.needsSlope');
       case 'slope_unit':
         return t('terrainStats.slopeUnit');
+      case 'analysis_unavailable':
+        return t('terrainStats.analysisUnavailable');
       default:
         return t('terrainStats.noLayer');
     }
@@ -70,7 +74,7 @@ export default function AreaTerrainStatisticsCard({
           {
             title: t('terrainStats.class'),
             dataIndex: 'code',
-            render: (code: string) => t(`terrainStats.classes.${code}`),
+            render: (code: string) => t(terrainClassKey(measure.measure, code)),
           },
           {
             title: t('terrainStats.entrances'),
@@ -88,6 +92,11 @@ export default function AreaTerrainStatisticsCard({
       {measure.measure === 'aspect' && (
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
           {t('terrainStats.flatNote')}
+        </Typography.Paragraph>
+      )}
+      {measure.measure === 'landform' && (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+          {t('terrainStats.landformNote')}
         </Typography.Paragraph>
       )}
     </>

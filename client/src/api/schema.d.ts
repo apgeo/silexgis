@@ -1712,6 +1712,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/derivatives/kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every kind of picture of the ground, each saying whether this installation can compute it and why not; requires Read on the Terrain domain. */
+        get: operations["terrainDerivativeKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terrain/derivatives/{id}": {
         parameters: {
             query?: never;
@@ -3536,7 +3553,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Slope, aspect and position classes of an area's entrances and sinkholes beside the same classes over the area's ground. Requires Read on the Terrain domain; counts only what the caller may place. */
+        /** Slope, aspect, position and landform classes of an area's entrances and sinkholes beside the same classes over the area's ground. Requires Read on the Terrain domain; counts only what the caller may place. */
         get: operations["areaTerrainStatisticsStatistics"];
         put?: never;
         post?: never;
@@ -18000,7 +18017,7 @@ export interface components {
             alpha?: number;
         };
         /** @enum {unknown} */
-        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief" | "contours";
+        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief" | "contours" | "geomorphons";
         TerrainDerivativeCreateRequest: {
             /** Format: uuid */
             terrainBuildId: string;
@@ -18020,6 +18037,17 @@ export interface components {
             colourRamp: null | components["schemas"]["TerrainColourStop"][];
             /** Format: double */
             contourIntervalMetres: null | number;
+            /** Format: double */
+            geomorphonSearchMetres?: null | number;
+            /** Format: double */
+            geomorphonSkipMetres?: null | number;
+            /** Format: double */
+            geomorphonFlatnessDegrees?: null | number;
+        };
+        TerrainDerivativeKindDto: {
+            derivative: components["schemas"]["TerrainDerivative"];
+            available: boolean;
+            unavailableReason: null | string;
         };
         TerrainDerivativeLayerDto: {
             /** Format: uuid */
@@ -23894,6 +23922,35 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    terrainDerivativeKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerrainDerivativeKindDto"][];
                 };
             };
             /** @description Unauthorized */

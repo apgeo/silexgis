@@ -439,6 +439,9 @@ export const groups = {
     'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests', 'ScanStepSchemaTests',
     'ScanExternalOutputCheckTests', 'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests',
     'ProcessingProfileUseTests',
+    // The scan worker's hand-off directory and the check a product made elsewhere passes before
+    // it is kept.
+    'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests', 'ScanExternalOutputCheckTests',
     // The real compiler in its sandbox, where the machine has it.
     'SurveyUploadTherionTests',
     // The compiler service, and the application handing it a project.
@@ -479,6 +482,15 @@ export const groups = {
     'TerrainPreparePhaseTests', 'AreaTerrainStatisticsTests', 'TerrainProbeTests', 'TerrainProfileTests', 'TerrainPublishPhaseTests',
     'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainRasterTokenServiceTests', 'TerrainSourceTests',
     'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
+    // The landform picture, computed through WhiteboxTools.
+    'TerrainLandformsTests', 'TerrainLandformApiTests',
+  ],
+  // Terrain analysis run by WhiteboxTools — started in a sandbox by the application itself or by
+  // the analysis service in a container of its own — and the settings that choose which.
+  analysis: [
+    'LocalWhiteboxToolsTests', 'WhiteboxServiceTests', 'OptionsDocumentationTests',
+    // The landform picture, which is computed through it.
+    'TerrainLandformsTests', 'TerrainLandformApiTests',
   ],
 };
 
@@ -613,6 +625,9 @@ export const areas = {
   'server/src/SilexGis.TherionService/': 'surveyUploads',
   'server/src/SilexGis.Infrastructure/TestData/': 'testData',
   'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
+  // WhiteboxTools, and the analysis service that runs it in a container of its own.
+  'server/src/SilexGis.Infrastructure/Analysis/': 'analysis',
+  'server/src/SilexGis.WhiteboxService/': 'analysis',
   'server/src/SilexGis.Infrastructure/Statistics/': 'statistics',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
 };
@@ -706,7 +721,7 @@ export const crossCutting = {
     'SyncStagedUploadTests', 'SyncTripRecordingTests', 'SyncUploadHoldTests',
     'TagEndpointTests', 'TermRuleSetTests', 'TerrainAccuracyTests', 'TerrainActivationTests',
     'TerrainBuildApiTests', 'TerrainBuildCancelRetryTests', 'TerrainBuildPipelineTests',
-    'TerrainDerivativeApiTests', 'TerrainProbeTests', 'TerrainProfileTests',
+    'TerrainDerivativeApiTests', 'TerrainLandformApiTests', 'TerrainProbeTests', 'TerrainProfileTests',
     'TerrainSourceTests', 'TestDataGeneratorTests', 'TextExtractionPipelineTests',
     'TrackingCsvImportTests', 'TripAndTagTests', 'TripAttendanceLimitTests',
     'TripCalloutStandDownTests', 'TripChecklistTickTests', 'TripImportCommitTests',

@@ -52,9 +52,9 @@
 // one's was.
 
 import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 
@@ -195,6 +195,48 @@ export function therionRequirementOf(environment = process.env, platform = proce
 }
 
 /**
+ * Whether the tests that run the real WhiteboxTools program must run. The environment's word wins
+ * (a path to the program, `require`, or `skip`). Otherwise they are required on Linux wherever the
+ * program is on the search path, so that a machine that has it cannot pass them by not running
+ * them — a missing sandbox, for one, is then a failure rather than a skip. Unlike the survey
+ * compiler the program is not expected on every gate machine, so where it is absent the run says
+ * that those tests were skipped (see {@link whiteboxNoticeOf}) instead of failing them.
+ */
+export function whiteboxRequirementOf(
+  environment = process.env,
+  platform = process.platform,
+  onPath = programOnPath,
+) {
+  if (environment.SILEXGIS_TEST_WHITEBOX !== undefined) return environment.SILEXGIS_TEST_WHITEBOX;
+  return platform === 'linux' && onPath('whitebox_tools', environment) ? 'require' : undefined;
+}
+
+/** The line a run prints when the real-program WhiteboxTools tests will be skipped, or null. */
+export function whiteboxNoticeOf(requirement) {
+  if (requirement !== undefined && requirement.trim() !== '' && requirement.trim().toLowerCase() !== 'skip') {
+    return null;
+  }
+  return 'WhiteboxTools: no whitebox_tools on the search path and SILEXGIS_TEST_WHITEBOX not naming one; '
+    + 'the tests that run the real program are SKIPPED in this run';
+}
+
+function programOnPath(name, environment) {
+  const extensions = process.platform === 'win32' ? ['.exe', ''] : [''];
+  for (const directory of (environment.PATH ?? '').split(delimiter)) {
+    if (!directory) continue;
+    for (const extension of extensions) {
+      const candidate = join(directory, name + extension);
+      try {
+        if (statSync(candidate).isFile()) return true;
+      } catch {
+        // Not here.
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * What the test processes say they did, added up: applications built, and times a test was
  * handed one already running. Null where a process left no account — an older test project, or
  * one that died.
@@ -304,6 +346,7 @@ function run({ name, classes, project, results, threads, startedAt, mode }) {
         SILEXGIS_TEST_MODE: mode,
         SILEXGIS_TEST_HOST_STATS: account,
         ...(therionRequirementOf() === undefined ? {} : { SILEXGIS_TEST_THERION: therionRequirementOf() }),
+        ...(whiteboxRequirementOf() === undefined ? {} : { SILEXGIS_TEST_WHITEBOX: whiteboxRequirementOf() }),
       },
     },
   );
@@ -376,6 +419,8 @@ async function main() {
       + `; results in ${results}`,
   );
   console.log(`test mode: ${mode}`);
+  const whiteboxNotice = whiteboxNoticeOf(whiteboxRequirementOf());
+  if (whiteboxNotice) console.log(whiteboxNotice);
   const startedAt = Date.now();
 
   const running = [];

@@ -366,6 +366,7 @@ const terrainDerivativeKinds: Record<TerrainDerivativeKind, true> = {
   roughness: true,
   colourRelief: true,
   contours: true,
+  geomorphons: true,
 };
 
 const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], true> = {
@@ -430,9 +431,10 @@ const entranceAltitudeVerdicts: Record<components['schemas']['EntranceAltitudeVe
  * The terrain measures and their class codes, as the server's terrain statistics name them. Both
  * cross the boundary as plain strings, so this is the only place they are closed: a class or a
  * measure added there would reach the charts and tables as its own lookup key. Keep in step with
- * the server's list of class codes per measure.
+ * the server's list of class codes per measure. Landform classes are the exception: they are named
+ * by the landform picture's own legend keys, which are not repeated here.
  */
-const TERRAIN_STAT_MEASURES = ['slope', 'aspect', 'position'];
+const TERRAIN_STAT_MEASURES = ['slope', 'aspect', 'position', 'landform'];
 const TERRAIN_STAT_CLASSES = [
   ...['lt5', '5to15', '15to30', '30to45', 'gt45'],
   ...['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'],

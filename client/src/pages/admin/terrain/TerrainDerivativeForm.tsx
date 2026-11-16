@@ -21,6 +21,7 @@ import i18n from '../../../i18n';
 import {
   useRequestTerrainDerivative,
   useTerrainBuilds,
+  useTerrainDerivativeKinds,
   type TerrainBuild,
   type TerrainDerivativeCreate,
 } from '../../../api/hooks.ts';
@@ -31,10 +32,15 @@ import {
   DEFAULT_AZIMUTH,
   DEFAULT_COLOUR_RAMP,
   DEFAULT_CONTOUR_INTERVAL,
+  DEFAULT_LANDFORM_FLATNESS,
+  DEFAULT_LANDFORM_SEARCH,
+  DEFAULT_LANDFORM_SKIP,
   DEFAULT_Z_FACTOR,
   DERIVATIVE_BUILD_CHOICES,
   HILLSHADE_LIGHTINGS,
   MAX_CONTOUR_INTERVAL,
+  MAX_LANDFORM_FLATNESS,
+  MAX_LANDFORM_SEARCH,
   MAX_NAME_LENGTH,
   MAX_Z_FACTOR,
   MIN_CONTOUR_INTERVAL,
@@ -48,9 +54,11 @@ import {
   contourIntervalValid,
   defaultDerivativeName,
   hexToRgb,
+  landformSettingsValid,
   readsColourRamp,
   readsContourInterval,
   readsEdges,
+  readsLandformSettings,
   readsLight,
   readsRuggednessFit,
   readsSlopeUnit,
@@ -79,6 +87,9 @@ interface FormValues {
   computeEdges: boolean;
   colourRamp: ColourStopDraft[];
   contourIntervalMetres: number;
+  geomorphonSearchMetres: number;
+  geomorphonSkipMetres: number;
+  geomorphonFlatnessDegrees: number;
 }
 
 interface Props {
@@ -104,6 +115,7 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const request = useRequestTerrainDerivative();
+  const { data: kinds } = useTerrainDerivativeKinds();
   const { data: builds } = useTerrainBuilds({ page: 1, pageSize: DERIVATIVE_BUILD_CHOICES });
 
   const finished = (builds?.items ?? []).filter((build) => build.status === 'succeeded');
@@ -128,7 +140,19 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
     computeEdges: true,
     colourRamp: DEFAULT_COLOUR_RAMP.map((stop) => ({ ...stop })),
     contourIntervalMetres: DEFAULT_CONTOUR_INTERVAL,
+    geomorphonSearchMetres: DEFAULT_LANDFORM_SEARCH,
+    geomorphonSkipMetres: DEFAULT_LANDFORM_SKIP,
+    geomorphonFlatnessDegrees: DEFAULT_LANDFORM_FLATNESS,
   };
+
+  // A kind the server says it cannot compute here stays in the list, marked, with the reason
+  // under the field: an option that silently vanished would read as a feature that does not exist.
+  // Until the answer arrives every kind is offered; the server refuses a request it cannot run.
+  const unavailable = (each: TerrainDerivativeKind): string | null => {
+    const known = kinds?.find((entry) => entry.derivative === each);
+    return known && !known.available ? (known.unavailableReason ?? 'analysis.not_configured') : null;
+  };
+  const kindUnavailable = unavailable(kind);
 
   const buildLabel = (build: TerrainBuild): string => {
     const bbox = geometryBbox(build.extent);
@@ -174,6 +198,14 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
       ruggednessFit: readsRuggednessFit(chosen) ? values.ruggednessFit : null,
       computeEdges: readsEdges(chosen) ? values.computeEdges : null,
       contourIntervalMetres: readsContourInterval(chosen) ? values.contourIntervalMetres : null,
+      // Sent only with the one picture that reads them, and left out of every other request.
+      ...(readsLandformSettings(chosen)
+        ? {
+            geomorphonSearchMetres: values.geomorphonSearchMetres,
+            geomorphonSkipMetres: values.geomorphonSkipMetres,
+            geomorphonFlatnessDegrees: values.geomorphonFlatnessDegrees,
+          }
+        : {}),
       colourRamp: readsColourRamp(chosen)
         ? values.colourRamp.map((stop) => ({
             elevation: stop.elevation ?? 0,
@@ -244,6 +276,15 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
           <Form.Item
             name="derivative"
             label={t('terrain.derivativeForm.kind')}
+            extra={
+              kindUnavailable === null ? undefined : (
+                <span data-testid="terrain-derivative-kind-unavailable">
+                  {t(`terrain.derivativeForm.unavailable.${kindUnavailable.replace(/^analysis\./, '')}`, {
+                    defaultValue: t('terrain.derivativeForm.unavailable.not_configured'),
+                  })}
+                </span>
+              )
+            }
             style={{ flex: '1 1 240px' }}
           >
             <Select
@@ -251,7 +292,12 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
               onChange={changeKind}
               options={TERRAIN_DERIVATIVE_KINDS.map((each) => ({
                 value: each,
-                label: t(`terrain.derivatives.kinds.${each}`),
+                label:
+                  unavailable(each) === null
+                    ? t(`terrain.derivatives.kinds.${each}`)
+                    : t('terrain.derivativeForm.kindUnavailable', {
+                        kind: t(`terrain.derivatives.kinds.${each}`),
+                      }),
               }))}
             />
           </Form.Item>
@@ -514,6 +560,73 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
           </Form.Item>
         )}
 
+        {readsLandformSettings(kind) && (
+          <Flex gap={16} wrap>
+            <Form.Item
+              name="geomorphonSearchMetres"
+              label={t('terrain.derivativeForm.landformSearch')}
+              extra={t('terrain.derivativeForm.landformSearchHint')}
+              dependencies={['geomorphonSkipMetres', 'geomorphonFlatnessDegrees']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator: (_, value: number) =>
+                    landformSettingsValid(
+                      value,
+                      getFieldValue('geomorphonSkipMetres') as number,
+                      getFieldValue('geomorphonFlatnessDegrees') as number,
+                    )
+                      ? Promise.resolve()
+                      : Promise.reject(
+                          new Error(
+                            t('terrain.derivativeForm.landformInvalid', {
+                              search: MAX_LANDFORM_SEARCH,
+                              flatness: MAX_LANDFORM_FLATNESS,
+                            }),
+                          ),
+                        ),
+                }),
+              ]}
+              style={{ flex: '1 1 200px' }}
+            >
+              <InputNumber
+                data-testid="terrain-derivative-landform-search"
+                min={1}
+                max={MAX_LANDFORM_SEARCH}
+                step={50}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="geomorphonSkipMetres"
+              label={t('terrain.derivativeForm.landformSkip')}
+              extra={t('terrain.derivativeForm.landformSkipHint')}
+              style={{ flex: '1 1 200px' }}
+            >
+              <InputNumber
+                data-testid="terrain-derivative-landform-skip"
+                min={0}
+                max={MAX_LANDFORM_SEARCH}
+                step={10}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="geomorphonFlatnessDegrees"
+              label={t('terrain.derivativeForm.landformFlatness')}
+              extra={t('terrain.derivativeForm.landformFlatnessHint')}
+              style={{ flex: '1 1 200px' }}
+            >
+              <InputNumber
+                data-testid="terrain-derivative-landform-flatness"
+                min={0}
+                max={MAX_LANDFORM_FLATNESS}
+                step={0.5}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </Flex>
+        )}
+
         {readsEdges(kind) && (
           <Form.Item
             name="computeEdges"
@@ -532,7 +645,7 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
           icon={<PictureOutlined />}
           data-testid="terrain-derivative-submit"
           loading={request.isPending}
-          disabled={!canExecute || finished.length === 0}
+          disabled={!canExecute || finished.length === 0 || kindUnavailable !== null}
         >
           {t('terrain.derivativeForm.submit')}
         </Button>

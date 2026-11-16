@@ -4,6 +4,7 @@
     <Project Path="src/SilexGis.Domain/SilexGis.Domain.csproj" />
     <Project Path="src/SilexGis.Infrastructure/SilexGis.Infrastructure.csproj" />
     <Project Path="src/SilexGis.TherionService/SilexGis.TherionService.csproj" />
+    <Project Path="src/SilexGis.WhiteboxService/SilexGis.WhiteboxService.csproj" />
   </Folder>
   <Folder Name="/external/">
     <!-- Named here as well as referenced, because a Release build of the solution emits Debug

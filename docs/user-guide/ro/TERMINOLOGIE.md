@@ -361,6 +361,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Being cancelled / Cancelled (a terrain build) | Se anulează / Anulată |
 | Ground pictures | Imagini ale terenului |
 | Out of date (a ground picture) | Depășită |
+| Landform classes (a ground picture) | Forme de relief |
+| Flat / Peak / Ridge / Shoulder / Spur / Slope / Hollow / Footslope / Valley / Pit (landform classes) | Plan / Vârf / Creastă / Umăr / Pinten / Versant / Scobitură / Bază de versant / Vale / Depresiune |
+| Search distance / Look past / Flatness angle (a landform picture) | Distanța de căutare / Ignoră până la / Unghi de planeitate |
+| (not available here) (a kind of ground picture) | (indisponibil aici) |
+| Landform (a measure on the area terrain statistics) | Forma de relief |
 | Photographs at their stations (a 3D view layer) | Fotografii la stațiile lor |
 | Download them (cave walls in the 3D view) | Descarcă-i |
 | Ask above (MB) | Întreabă peste (MB) |

@@ -74,6 +74,50 @@ describe('AreaTerrainStatisticsCard', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
+  it('names landform classes as the landform legend does, not as the position classes', () => {
+    const landform: AreaTerrainStatistics['measures'][number] = {
+      measure: 'landform',
+      available: true,
+      reason: null,
+      entrancesRead: 3,
+      sinkholesRead: 0,
+      backgroundRead: 100,
+      classes: [row('hollow', 2, 2.5), row('valley', 1, 0.4)],
+    };
+    show({ ...stats, measures: [landform] });
+    const card = screen.getByTestId('area-terrain-statistics');
+    expect(screen.getByRole('tab', { name: 'Landform' })).toBeTruthy();
+    expect(screen.getByTestId('chart-terrain-landform')).toBeTruthy();
+    const cells = Array.from(card.querySelectorAll('td')).map((td) => td.textContent);
+    // "Hollow" is the landform; the position class of the same code reads "hollow".
+    expect(cells).toContain('Hollow');
+    expect(cells).toContain('Valley');
+    expect(cells).not.toContain('hollow');
+    expect(card.textContent).toContain('2.50');
+    expect(card.textContent).toMatch(/newest landform picture/);
+  });
+
+  it('says landforms cannot be drawn here when the analysis program is not run', () => {
+    show({
+      ...stats,
+      measures: [
+        {
+          measure: 'landform',
+          available: false,
+          reason: 'analysis_unavailable',
+          entrancesRead: 0,
+          sinkholesRead: 0,
+          backgroundRead: 0,
+          classes: [],
+        },
+      ],
+    });
+    const text = screen.getByTestId('area-terrain-statistics').textContent ?? '';
+    expect(text).toMatch(/WhiteboxTools/);
+    expect(text).not.toMatch(/No picture of the terrain/);
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
   it('renders nothing for a refusal or for a feature that is not an outline', () => {
     show(undefined, true);
     expect(screen.queryByTestId('area-terrain-statistics')).toBeNull();

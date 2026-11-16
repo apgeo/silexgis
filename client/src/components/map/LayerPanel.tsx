@@ -68,6 +68,7 @@ import { filterLayerSavedIdOf, MAX_FILTER_LAYERS, type FilterLayerSymbol } from 
 import type { FilterLayerColor } from '../../map/markerPalette.ts';
 import { FilterLayerRowTitle, type FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
+import LandformLegend from './LandformLegend.tsx';
 
 /**
  * The refusal a library gives when it will not accept the credential this installation is
@@ -1035,7 +1036,7 @@ export default function LayerPanel({
               <div
                 key={derivative.id}
                 data-testid={`terrain-derivative-${derivative.id}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
               >
                 <Checkbox
                   disabled={derivative.status !== 'ready'}
@@ -1069,6 +1070,8 @@ export default function LayerPanel({
                     {t(`terrain.derivatives.statuses.${derivative.status}`)}
                   </Tag>
                 )}
+                {derivative.derivative === 'geomorphons' &&
+                  visibleTerrainDerivativeIds.includes(derivative.id) && <LandformLegend />}
               </div>
             ))}
           </div>

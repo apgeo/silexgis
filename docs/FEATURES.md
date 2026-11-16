@@ -271,13 +271,18 @@ feature and walkthroughs of whole jobs.
   drawn from, so **activating a different build marks every picture of the old one as out of date**,
   where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
   beneath it otherwise looks like a fault in the cave data. They live under their build and are
-  deleted with it. Some relief measures the elevation library cannot produce — geomorphons,
-  curvature, and flow direction, accumulation and the wetness index — are simply absent rather than
+  deleted with it. **Landform classes** (geomorphons: flat, peak, ridge, shoulder, spur, slope,
+  hollow, footslope, valley and pit, at a search distance the administrator chooses) are drawn by
+  WhiteboxTools, an optional analysis program the installation runs in a locked-down container of
+  its own or natively beside the server, and handed nothing but elevation; without it they are
+  listed as not available, saying why. Other relief measures that neither produces here — curvature,
+  and flow direction, accumulation and the wetness index — are simply absent rather than
   approximated under a borrowed name.
 - **The ground and the cave measured against each other** — a cave's depth profile along its
   passages, a terrain profile along any line drawn on the map, the depth and height of a system
   across all its entrances, entrance altitudes compared with the ground beneath them, and an area's
-  entrances and sinkholes set against its own ground by slope, facing and position on the relief —
+  entrances and sinkholes set against its own ground by slope, facing, position on the relief and
+  landform —
   a ratio above 1 says where caves sit more often than the terrain alone would suggest. Every one is answered only over
   what the reader may place; a cave whose position is protected is refused whole.
 - **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it

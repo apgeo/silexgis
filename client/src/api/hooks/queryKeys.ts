@@ -350,6 +350,7 @@ export const queryKeys = {
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
   terrainDerivatives: ['terrain', 'derivatives'] as const,
+  terrainDerivativeKinds: ['terrain', 'derivative-kinds'] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,

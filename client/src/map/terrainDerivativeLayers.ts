@@ -2,6 +2,7 @@
 import WebGLTileLayer, { type Style as WebGLTileStyle } from 'ol/layer/WebGLTile';
 import GeoTIFF from 'ol/source/GeoTIFF';
 import type { TerrainDerivativeLayerInfo } from '../api/hooks.ts';
+import { LANDFORM_CLASSES, LANDFORM_COLOURS } from './landformClasses.ts';
 import { getOverlayGroup } from './mapContext.ts';
 
 /**
@@ -114,9 +115,22 @@ const ASPECT_RAMP = [
 ];
 
 /**
+ * Landform classes are names, stored as their numbers 1 to 10, so each number is painted its own
+ * colour and nothing is blended between them; zero, the hole, and anything else is left clear.
+ */
+const LANDFORM_STYLE: WebGLTileStyle = {
+  color: [
+    'match',
+    ['band', 1],
+    ...LANDFORM_CLASSES.flatMap((name, index) => [index + 1, LANDFORM_COLOURS[name]]),
+    [0, 0, 0, 0],
+  ],
+};
+
+/**
  * How one raster of one picture is turned into a map layer.
  *
- * The three families are drawn differently and must be. Shaded relief comes back as whole bytes and
+ * The families are drawn differently and must be. Shaded relief comes back as whole bytes and
  * coloured relief as red, green and blue, so both are read as a picture and shown as one. Steepness,
  * facing, ruggedness, topographic position and roughness come back as one band of floating-point
  * measurements — degrees, metres — and reading those as a picture asks the reader's browser to
@@ -127,6 +141,10 @@ const ASPECT_RAMP = [
  * all, and are read exactly as stored. The conversion the other pictures go through reads three
  * colours and stops, which would leave the fourth band unread — and the fourth band is the only
  * thing that says where the lines are and where the map beneath them shows through.
+ *
+ * Landform classes come back as one band of whole class numbers and are read as those numbers,
+ * neither stretched nor blended between neighbouring cells: a value halfway between a ridge and a
+ * valley is no class at all, and the style paints each class only where the value is exactly it.
  */
 function sourceFor(derivative: TerrainDerivativeLayerInfo, url: string): {
   source: GeoTIFF;
@@ -134,6 +152,16 @@ function sourceFor(derivative: TerrainDerivativeLayerInfo, url: string): {
 } {
   if (derivative.derivative === 'contours') {
     return { source: new GeoTIFF({ sources: [{ url }] }) };
+  }
+
+  // Read as the stored class numbers rather than stretched, which would turn a class into a shade,
+  // and sampled at the nearest cell: the default blends neighbouring cells on screen and while
+  // reprojecting, and a blended class matches no colour, so every boundary would be drawn clear.
+  if (derivative.derivative === 'geomorphons') {
+    return {
+      source: new GeoTIFF({ sources: [{ url }], normalize: false, interpolate: false }),
+      style: LANDFORM_STYLE,
+    };
   }
 
   const range = displayRangeOf(derivative);
@@ -158,6 +186,7 @@ function sourceFor(derivative: TerrainDerivativeLayerInfo, url: string): {
 export function terrainDerivativeStyle(
   kind: TerrainDerivativeLayerInfo['derivative'],
 ): WebGLTileStyle | undefined {
+  if (kind === 'geomorphons') return LANDFORM_STYLE;
   if (!DISPLAY_RANGE[kind]) return undefined;
   return { color: kind === 'aspect' ? ASPECT_RAMP : GREY_RAMP };
 }
