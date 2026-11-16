@@ -181,6 +181,22 @@ public sealed class CavePassageShapeTests : IAsyncLifetime, IDisposable, IClassF
         branchwork.GetProperty("network").GetProperty("extremityCount").GetInt32()
             .ShouldBeGreaterThan(maze.GetProperty("network").GetProperty("extremityCount").GetInt32());
 
+        // The topology route reads the same survey and counts with the same routine, so the figures
+        // the suggestion's rules read are the figures the topology page shows for the same cave.
+        // Two definitions of a node or a loop would show up here as one cave with two answers.
+        foreach (var (cave, answer) in new[] { (mazeCave, maze), (branchCave, branchwork) })
+        {
+            var topology = await OkAsync(owner, $"/api/v1/caves/{cave}/topology");
+            var network = answer.GetProperty("network");
+            foreach (var figure in new[] { "nodeCount", "edgeCount", "componentCount", "cyclomaticNumber", "extremityCount" })
+            {
+                network.GetProperty(figure).GetInt32().ShouldBe(topology.GetProperty(figure).GetInt32(), figure);
+            }
+
+            network.GetProperty("reducedNodeCount").GetInt32()
+                .ShouldBe(topology.GetProperty("reducedNodeCount").GetInt32(), "reducedNodeCount");
+        }
+
         // The ring-closure rule is fed by the request path and not only by a hand-built figure. A
         // rule the shipped route can never assess is a constant wearing a rule's name, and only a
         // check through the route says which of the two this is.

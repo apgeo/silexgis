@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using Therion.Blender.Geometry;
-
 namespace SilexGis.Infrastructure.Surveys;
 
 /// <summary>
@@ -42,43 +40,12 @@ internal sealed class SimpleGraph
     public int[] Degrees() => _degree;
 
     /// <summary>
-    /// The reduced graph as a simple graph, built from the branch list.
+    /// A simple graph over the edges of a reduced passage network, which the shared network
+    /// routine has already made simple: loops and parallel passages cut at stations along them so
+    /// that they survive as loops. Nodes are numbered in the order the edges first mention them.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A branch cannot become an edge unchanged without losing what the reduction exists to show.
-    /// A branch that leaves a junction and returns to it is one loop, but as a single edge it is a
-    /// node joined to itself; two branches joining the same pair of junctions are two passages,
-    /// but as two edges between one pair they collapse into one and take a loop with them. So a
-    /// branch that closes on itself is cut into three at two of the stations along it, and each of
-    /// several branches sharing both ends is cut into two — and because the cuts fall on stations
-    /// the passage really runs through, the reduced graph is still a graph of real places.
-    /// </para>
-    /// <para>
-    /// A branch too short to be cut is kept whole: one that is a single leg has nowhere to be cut,
-    /// and one of two legs can only be cut once. That leaves a node genuinely joined to itself, or
-    /// two passages genuinely indistinguishable, in the rare case of a loop or a cycle surveyed in
-    /// one or two shots — reported as it is rather than papered over with invented stations, which
-    /// would make the network larger than the cave.
-    /// </para>
-    /// </remarks>
-    public static SimpleGraph FromBranches(IReadOnlyList<CenterlineBranch> branches)
+    public static SimpleGraph FromEdges(IReadOnlyList<(int A, int B)> reducedEdges)
     {
-        var siblings = new Dictionary<(int, int), int>();
-        foreach (var branch in branches)
-        {
-            var key = Key(branch.First, branch.Last);
-            siblings[key] = siblings.GetValueOrDefault(key) + 1;
-        }
-
-        var pairs = new List<(int, int)>();
-        foreach (var branch in branches)
-        {
-            if (branch.IsLoop) { CutInThree(branch.StationIndices, pairs); }
-            else if (siblings[Key(branch.First, branch.Last)] > 1) { CutInTwo(branch.StationIndices, pairs); }
-            else { pairs.Add((branch.First, branch.Last)); }
-        }
-
         var index = new Dictionary<int, int>();
         int Node(int station)
         {
@@ -91,7 +58,7 @@ internal sealed class SimpleGraph
         }
 
         var edges = new HashSet<(int, int)>();
-        foreach (var (a, b) in pairs) { edges.Add(Key(Node(a), Node(b))); }
+        foreach (var (a, b) in reducedEdges) { edges.Add(Key(Node(a), Node(b))); }
 
         var adjacency = new List<int>[index.Count];
         var degree = new int[index.Count];
@@ -111,31 +78,6 @@ internal sealed class SimpleGraph
         }
 
         return new SimpleGraph(adjacency, degree, edges);
-    }
-
-    /// <summary>Cuts a branch into three at the stations a third and two thirds of the way along
-    /// it, or into two when it is only three stations long, or leaves it alone when it is a single
-    /// leg with nowhere to be cut.</summary>
-    private static void CutInThree(IReadOnlyList<int> path, List<(int, int)> pairs)
-    {
-        if (path.Count == 2) { pairs.Add((path[0], path[1])); return; }
-        if (path.Count == 3) { CutInTwo(path, pairs); return; }
-
-        int third = path.Count / 3;
-        pairs.Add((path[0], path[third]));
-        pairs.Add((path[third], path[2 * third]));
-        pairs.Add((path[2 * third], path[^1]));
-    }
-
-    /// <summary>Cuts a branch in two at the station halfway along it, or leaves it alone when it
-    /// is a single leg.</summary>
-    private static void CutInTwo(IReadOnlyList<int> path, List<(int, int)> pairs)
-    {
-        if (path.Count == 2) { pairs.Add((path[0], path[1])); return; }
-
-        int middle = path.Count / 2;
-        pairs.Add((path[0], path[middle]));
-        pairs.Add((path[middle], path[^1]));
     }
 
     private static (int, int) Key(int a, int b) => a < b ? (a, b) : (b, a);
