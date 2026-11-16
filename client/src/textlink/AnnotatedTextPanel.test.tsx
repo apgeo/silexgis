@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
@@ -60,12 +60,24 @@ const link = {
   ],
 };
 
+// How the document's link read answers: how many links the document has in all, and whether the
+// read failed.
+const linkRead = { totalItems: 1, isError: false };
+const refetchLinks = vi.fn();
+
 vi.mock('../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../api/hooks.ts')>('../api/hooks.ts');
   return {
     ...actual,
     useAnnotatedText: () => ({ data: annotatedText, isPending: false, isError: false, error: null }),
-    useResLinksForTarget: () => ({ data: { items: [link], page: 1, pageSize: 200, totalItems: 1 } }),
+    useResLinksForTarget: () =>
+      linkRead.isError
+        ? { data: undefined, isError: true, refetch: refetchLinks }
+        : {
+            data: { items: [link], page: 1, pageSize: 200, totalItems: linkRead.totalItems },
+            isError: false,
+            refetch: refetchLinks,
+          },
     useDeleteResLink: () => ({ mutateAsync: vi.fn() }),
   };
 });
@@ -85,6 +97,9 @@ function renderPanel() {
 }
 
 beforeEach(() => {
+  linkRead.totalItems = 1;
+  linkRead.isError = false;
+  refetchLinks.mockReset();
   resetViewControlsForTests();
   useWorkspaceStore.setState({ selection: null });
 });
@@ -126,5 +141,36 @@ describe('following a passage', () => {
     renderPanel();
     const passage = await screen.findByTestId('tl-passage');
     expect(passage).toHaveTextContent('Dolina Demo');
+  });
+});
+
+describe('the links the reader could not draw', () => {
+  it('says when the document has more links than were read, and says nothing when it has not', async () => {
+    renderPanel();
+    await screen.findByTestId('tl-passage');
+    expect(screen.queryByTestId('tl-links-cut-off')).toBeNull();
+    cleanup();
+
+    // More links than one read brings back: a passage among the rest would show no highlight,
+    // which reads as "nothing is linked here".
+    linkRead.totalItems = 250;
+    renderPanel();
+    expect(await screen.findByTestId('tl-links-cut-off')).toHaveTextContent(
+      'Only the first 1 of 250 links are highlighted in this text.',
+    );
+  });
+
+  it('says the links could not be read rather than showing the text as unlinked, and offers a retry', async () => {
+    renderPanel();
+    await screen.findByTestId('tl-passage');
+    expect(screen.queryByTestId('tl-links-failed')).toBeNull();
+    cleanup();
+
+    linkRead.isError = true;
+    renderPanel();
+    const notice = await screen.findByTestId('tl-links-failed');
+    expect(notice).toHaveTextContent("The links of this text could not be loaded");
+    fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }));
+    expect(refetchLinks).toHaveBeenCalled();
   });
 });

@@ -57,6 +57,17 @@ export interface FilterLayer3DSpec {
   savedFilterId?: string;
 }
 
+/** What the layers' loading came to, for the chrome that says when something could not be read. */
+export interface FilterLayers3DState {
+  /**
+   * True when the latest request of a shown, readable layer failed. What the layer drew stays
+   * drawn, so without this a layer that never arrived would look like a filter nothing matches.
+   */
+  loadFailed: boolean;
+}
+
+export const EMPTY_FILTER_LAYERS_3D_STATE: FilterLayers3DState = { loadFailed: false };
+
 export interface FilterLayers3DHandle {
   /**
    * Draws exactly these layers: one is added, removed, restyled, switched on or off, faded or
@@ -76,6 +87,9 @@ export interface FilterLayers3DHandle {
   reload(): void;
   /** The payload now drawn for the same thing, if one of these layers still draws it. */
   currentPick(payload: Scene3DPickPayload): Scene3DPickPayload | undefined;
+  getState(): FilterLayers3DState;
+  /** Calls `listener` whenever the state changes; returns the unsubscribe. */
+  subscribe(listener: (state: FilterLayers3DState) => void): () => void;
   detach(): void;
 }
 
@@ -92,13 +106,31 @@ interface Drawn {
   drawnLines: readonly Scene3DPolyline[];
   requestSeq: number;
   blocked: boolean;
+  /** Whether the latest request for this layer failed for a reason other than a refusal. */
+  failed: boolean;
 }
 
 export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers3DHandle {
   const layers = new Map<string, Drawn>();
   let settleTimer: number | undefined;
   let detached = false;
+  let state: FilterLayers3DState = { ...EMPTY_FILTER_LAYERS_3D_STATE };
+  const listeners = new Set<(next: FilterLayers3DState) => void>();
 
+  // Only a layer that is shown and may be run counts: a hidden one is not being looked at, and an
+  // unreadable one is said to be so by the flat map's copy of the layer.
+  const publish = () => {
+    const loadFailed = [...layers.values()].some(
+      (layer) => layer.failed && layer.spec.visible && !layer.blocked,
+    );
+    if (detached || loadFailed === state.loadFailed) {
+      return;
+    }
+    state = { loadFailed };
+    for (const listener of [...listeners]) {
+      listener(state);
+    }
+  };
 
   const empty = (layer: Drawn) => {
     layer.drawnMarkers = [];
@@ -124,11 +156,19 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       // Never the unfiltered layer under the filter's name, and never what it drew before. The
       // flat map's copy of the layer is what says so; this one only stops drawing.
       empty(layer);
+      layer.failed = false;
+      publish();
       return;
     }
     if (entrances.status !== 'fulfilled' || features.status !== 'fulfilled') {
-      return; // a dropped request keeps what was drawn; the next move asks again
+      // A dropped request keeps what was drawn and the next move asks again; it is still said,
+      // because a layer that never arrived draws nothing at all.
+      layer.failed = true;
+      publish();
+      return;
     }
+    layer.failed = false;
+    publish();
     const { color, symbol, savedFilterId } = layer.spec;
     layer.drawnMarkers = [
       ...filterLayerEntranceMarkers(entrances.value, zoom, color, symbol, savedFilterId),
@@ -189,7 +229,7 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
         // Lines first so a layer's markers are added on top of its own lines.
         const lines = engine.createPolylineSource(`${id}:lines`);
         const markers = engine.createMarkerSource(id);
-        layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked };
+        layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked, failed: false };
         layers.set(id, layer);
         toLoad.push(layer);
       }
@@ -208,6 +248,7 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       layer.lines.setOpacity(spec.opacity);
       if (blocked) {
         layer.requestSeq++;
+        layer.failed = false;
         empty(layer);
       } else if ((restyled || unblocked || (spec.visible && !previous.visible)) && !toLoad.includes(layer)) {
         toLoad.push(layer);
@@ -223,6 +264,7 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
         }
       }
     }
+    publish();
   };
 
   return {
@@ -261,8 +303,18 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       }
       return undefined;
     },
+    getState() {
+      return state;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     detach() {
       detached = true;
+      listeners.clear();
       window.clearTimeout(settleTimer);
       unsubscribeView();
       for (const id of [...layers.keys()]) {
