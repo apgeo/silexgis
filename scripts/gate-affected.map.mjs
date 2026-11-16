@@ -438,6 +438,8 @@ export const groups = {
     'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests', 'ScanStepSchemaTests',
     'ProcessingProfileUseTests',
+    // The scan worker's hand-off directory and the check a product sent back passes before it is kept.
+    'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests', 'ScanExternalOutputCheckTests',
     // The real compiler in its sandbox, where the machine has it.
     'SurveyUploadTherionTests',
     // The compiler service, and the application handing it a project.
