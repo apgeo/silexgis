@@ -162,18 +162,39 @@ export interface ConsoleErrorGuard {
    *
    * May be called at any point in the test, including after the error has already appeared:
    * what was allowed is applied when the test ends, not when the error arrives.
+   *
+   * The pattern is tried against the error's text and, for a console line, against the address
+   * the browser says it came from (`url:line:column`). A failed request is reported only as
+   * "status of 404" with the route in its location, so naming the route is the only way to
+   * declare that one request's failure without excusing every other 404 in the test.
    */
   allow(pattern: RegExp, reason: string): void;
   /** Everything captured so far that no `allow` and no global entry accounts for. */
   captured(): readonly CapturedError[];
 }
 
+/**
+ * Where the browser said a console line came from, unstripped, kept beside the record rather than
+ * in it: the record is what gets filed, and its stack has addresses removed so that the same defect
+ * reads the same on every run, while a declaration needs the address itself.
+ */
+const reportedFrom = new WeakMap<CapturedError, string>();
+
+/** Whether a declared pattern accounts for an error, by its text or by where it was reported from. */
+function accountsFor(pattern: RegExp, error: CapturedError): boolean {
+  if (pattern.test(error.message)) {
+    return true;
+  }
+  const where = reportedFrom.get(error);
+  return where !== undefined && pattern.test(where);
+}
+
 /** A page's console and its uncaught errors, recorded into `into`. */
 function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
-  const record = (kind: ErrorKind, name: string, message: string, stack: string) => {
+  const record = (kind: ErrorKind, name: string, message: string, stack: string, where?: string) => {
     const normalized = normalizeMessage(message);
     const frame = topAppFrame(stack || message);
-    into.push({
+    const entry: CapturedError = {
       fingerprint: fingerprintOf({ kind, name, normalized, frame }),
       source: 'sweep',
       kind,
@@ -189,7 +210,11 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
       spec: testInfo.titlePath[0] ?? '',
       test: testInfo.title,
       at: new Date().toISOString(),
-    });
+    };
+    if (where) {
+      reportedFrom.set(entry, where);
+    }
+    into.push(entry);
   };
 
   // A throw and a rejection nothing handled both arrive here, which is why this is not just a
@@ -208,12 +233,8 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
     // code. It is recorded anyway and dropped when the test ends — see `withoutEchoes`, which can
     // compare the two without depending on which event the browser raises first.
     const where = message.location();
-    record(
-      'console',
-      '',
-      message.text(),
-      where.url ? `\n    at ${where.url}:${where.lineNumber}:${where.columnNumber}` : '',
-    );
+    const address = where.url ? `${where.url}:${where.lineNumber}:${where.columnNumber}` : '';
+    record('console', '', message.text(), address ? `\n    at ${address}` : '', address);
   });
 }
 
@@ -383,8 +404,8 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
       const unexplained = () =>
         withoutEchoes(captured).filter(
           (error) =>
-            !allowed.some((entry) => entry.pattern.test(error.message)) &&
-            !ALLOWED_EVERYWHERE.some((entry) => entry.pattern.test(error.message)),
+            !allowed.some((entry) => accountsFor(entry.pattern, error)) &&
+            !ALLOWED_EVERYWHERE.some((entry) => accountsFor(entry.pattern, error)),
         );
 
       await use({
@@ -418,7 +439,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
       // follows such a change — a route that failed to load, a request that never came back — is
       // a failure with no cause in sight unless the change is named beside it.
       const passedOver = withoutEchoes(captured).filter((error) =>
-        ALLOWED_EVERYWHERE.some((entry) => entry.pattern.test(error.message)),
+        ALLOWED_EVERYWHERE.some((entry) => accountsFor(entry.pattern, error)),
       );
       if (passedOver.length > 0) {
         const note = `${passedOver.length} console error(s) passed over by the global list`;
