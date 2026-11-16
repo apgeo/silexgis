@@ -53,7 +53,11 @@ export default function SelfHostedBasemapPanel() {
   const { message, modal } = App.useApp();
   const { data: status, isError } = useBasemapStatus();
   const [region, setRegion] = useState<RegionChoice>('apuseni');
-  const [custom, setCustom] = useState<BasemapRegion>({ west: 22.2, south: 46.2, east: 23.4, north: 47.0 });
+  // A cleared side stays cleared rather than turning into 0, which is a real meridian or the equator
+  // and would quietly ask for a very different box.
+  const [custom, setCustom] = useState<Record<keyof BasemapRegion, number | null>>({
+    west: 22.2, south: 46.2, east: 23.4, north: 47.0,
+  });
   const [maxZoom, setMaxZoom] = useState(15);
   const [build, setBuild] = useState<string | null>(null);
   const [buildsWanted, setBuildsWanted] = useState(false);
@@ -73,18 +77,36 @@ export default function SelfHostedBasemapPanel() {
     }
   }, [finished, queryClient]);
 
+  // What is wrong with the box of one's own, said before anything is asked of the server.
+  const customProblem =
+    region !== 'custom'
+      ? null
+      : custom.west === null || custom.south === null || custom.east === null || custom.north === null
+        ? t('admin.basemap.boxIncomplete')
+        : custom.west >= custom.east || custom.south >= custom.north
+          ? t('admin.basemap.boxInverted')
+          : null;
   const chosen = useMemo<BasemapRegion>(() => {
     const preset = status?.presets.find((p) => p.key === region);
-    return preset?.region ?? custom;
+    return preset?.region ?? {
+      west: custom.west ?? 0, south: custom.south ?? 0, east: custom.east ?? 0, north: custom.north ?? 0,
+    };
   }, [status, region, custom]);
   const request = { region: chosen, maxZoom, build };
   const download = status?.download ?? null;
   const underway = isUnderway(download);
   const date = (value: string | null | undefined) => (value ? new Date(value).toLocaleString(i18n.resolvedLanguage) : '—');
+  // A code with words of its own is said in them; anything else — a refusal nobody has worded, or
+  // a request that never reached the server — is said as a failure of the request, not as an
+  // extract that was attempted and failed.
   const refusal = (code: string | null | undefined) =>
     code && (REFUSALS as readonly string[]).includes(code)
       ? t(`admin.basemap.refusal.${code.slice('basemap.'.length)}`)
-      : t('admin.basemap.refusal.extract_failed');
+      : t('admin.basemap.requestFailed');
+  // A download that ended in failure did attempt the extract, so a failure with no worded code is
+  // said as the extract's.
+  const downloadRefusal = (code: string | null | undefined) =>
+    code && (REFUSALS as readonly string[]).includes(code) ? refusal(code) : t('admin.basemap.refusal.extract_failed');
 
   if (isError) {
     return <Alert type="error" showIcon title={t('admin.basemap.loadFailed')} />;
@@ -100,6 +122,23 @@ export default function SelfHostedBasemapPanel() {
     } catch (e) {
       message.error(refusal(e instanceof ApiError ? e.code : null));
     }
+  };
+
+  // Stopping a download that may be hours and gigabytes in is asked once, and its failure said.
+  const stop = (id: BasemapDownload['id']) => {
+    modal.confirm({
+      title: t('admin.basemap.cancelTitle'),
+      content: t('admin.basemap.cancelBody'),
+      okText: t('admin.basemap.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await cancel.mutateAsync(id);
+        } catch (e) {
+          message.error(e instanceof ApiError && e.code ? refusal(e.code) : t('admin.basemap.cancelFailed'));
+        }
+      },
+    });
   };
 
   const begin = () => {
@@ -169,7 +208,7 @@ export default function SelfHostedBasemapPanel() {
           />
         )}
 
-        {download && <DownloadState download={download} refusal={refusal} onCancel={() => void cancel.mutateAsync(download.id)} />}
+        {download && <DownloadState download={download} refusal={downloadRefusal} onCancel={() => stop(download.id)} />}
 
         {status.selfHosted && (
           <Flex vertical gap={12} data-testid="basemap-form">
@@ -198,7 +237,7 @@ export default function SelfHostedBasemapPanel() {
                       max={side === 'west' || side === 'east' ? 180 : 85}
                       step={0.1}
                       onChange={(value) => {
-                        setCustom((c) => ({ ...c, [side]: value ?? 0 }));
+                        setCustom((c) => ({ ...c, [side]: value ?? null }));
                         setWeighed(null);
                       }}
                       aria-label={t(`admin.basemap.side.${side}`)}
@@ -206,6 +245,11 @@ export default function SelfHostedBasemapPanel() {
                     />
                   </Labelled>
                 ))}
+                {customProblem && (
+                  <Typography.Text type="danger" data-testid="basemap-box-problem">
+                    {customProblem}
+                  </Typography.Text>
+                )}
               </Flex>
             )}
             <Flex gap={12} wrap align="center">
@@ -246,7 +290,7 @@ export default function SelfHostedBasemapPanel() {
               <Button
                 onClick={() => void weigh()}
                 loading={estimate.isPending}
-                disabled={underway}
+                disabled={underway || customProblem !== null}
                 data-testid="basemap-estimate"
               >
                 {t('admin.basemap.estimate')}
@@ -255,7 +299,7 @@ export default function SelfHostedBasemapPanel() {
                 type="primary"
                 onClick={begin}
                 loading={start.isPending}
-                disabled={underway || weighed?.refusalCode != null}
+                disabled={underway || customProblem !== null || weighed?.refusalCode != null}
                 data-testid="basemap-download"
               >
                 {t('admin.basemap.download')}

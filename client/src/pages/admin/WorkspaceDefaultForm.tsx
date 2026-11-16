@@ -8,6 +8,7 @@ import { api } from '../../api/client.ts';
 import { queryKeys, type AdminSettings } from '../../api/hooks.ts';
 import { installationPresetOf, WORKSPACE_PRESETS } from '../../components/map/workspace/workspacePresets.ts';
 import { readPanelDefaults, withStartingPreset } from './workspaceDefault.ts';
+import { settingsSaveProblem } from './settingsProblems.ts';
 
 const BUILT_IN = 'built-in';
 
@@ -43,13 +44,16 @@ export default function WorkspaceDefaultForm({
         body: { panelDefaults: withStartingPreset(defaults, choice === BUILT_IN ? null : choice) },
       });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       // Every page reads the starting arrangement through its own query, cached for minutes.
       await queryClient.invalidateQueries({ queryKey: queryKeys.uiDefaults });
       message.success(t('workspace.admin.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

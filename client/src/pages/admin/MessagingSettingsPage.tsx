@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   AimOutlined,
   AppstoreOutlined,
@@ -58,6 +58,8 @@ import {
   type SecuritySettings,
   type SmsSettingsWrite,
 } from '../../api/hooks.ts';
+import { useSectionFields } from './useSectionFields.ts';
+import { settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
 
 /** Stands in for a secret that is already stored; the real one is never sent to the browser. */
 const SECRET_KEPT = '••••••••';
@@ -249,7 +251,7 @@ export default function MessagingSettingsPage() {
   );
 }
 
-function MailForm({
+export function MailForm({
   settings,
   onSaved,
   defaultTestRecipient,
@@ -261,10 +263,8 @@ function MailForm({
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState(defaultTestRecipient);
 
-  useEffect(() => {
-    // The password is deliberately left blank: an empty field means "leave the stored one alone".
-    form.setFieldsValue({ ...settings.mail, password: undefined });
-  }, [settings, form]);
+  // The password is deliberately left blank: an empty field means "leave the stored one alone".
+  useSectionFields(form, settings.mail, 'password');
 
   const save = async (values: MailSettingsWrite & { password?: string }) => {
     setSaving(true);
@@ -278,12 +278,15 @@ function MailForm({
         },
       });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       form.setFieldValue('password', undefined);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -296,7 +299,7 @@ function MailForm({
         body: { recipient: testTo },
       });
       if (error !== undefined || !data) {
-        message.error(t('admin.messaging.testNotConfigured'));
+        message.error(testSendProblem(error, t));
         return;
       }
       if (data.sent) {
@@ -304,6 +307,9 @@ function MailForm({
       } else {
         message.error(t('admin.messaging.testFailed', { error: data.error ?? '' }));
       }
+    } catch {
+      // The request never reached the server: said, not left as an unhandled rejection.
+      message.error(t('admin.messaging.testRequestFailed'));
     } finally {
       setTesting(false);
     }
@@ -390,7 +396,7 @@ function MailForm({
   );
 }
 
-function SmsForm({ settings, onSaved }: SectionProps) {
+export function SmsForm({ settings, onSaved }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<SmsSettingsWrite & { authHeader?: string }>();
@@ -398,9 +404,7 @@ function SmsForm({ settings, onSaved }: SectionProps) {
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState('');
 
-  useEffect(() => {
-    form.setFieldsValue({ ...settings.sms, authHeader: undefined });
-  }, [settings, form]);
+  useSectionFields(form, settings.sms, 'authHeader');
 
   const save = async (values: SmsSettingsWrite & { authHeader?: string }) => {
     setSaving(true);
@@ -415,12 +419,15 @@ function SmsForm({ settings, onSaved }: SectionProps) {
         },
       });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       form.setFieldValue('authHeader', undefined);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -433,7 +440,7 @@ function SmsForm({ settings, onSaved }: SectionProps) {
         body: { recipient: testTo },
       });
       if (error !== undefined || !data) {
-        message.error(t('admin.messaging.testNotConfigured'));
+        message.error(testSendProblem(error, t));
         return;
       }
       if (data.sent) {
@@ -441,6 +448,9 @@ function SmsForm({ settings, onSaved }: SectionProps) {
       } else {
         message.error(t('admin.messaging.testFailed', { error: data.error ?? '' }));
       }
+    } catch {
+      // The request never reached the server: said, not left as an unhandled rejection.
+      message.error(t('admin.messaging.testRequestFailed'));
     } finally {
       setTesting(false);
     }
@@ -527,20 +537,21 @@ function PolicyForm({ settings, onSaved }: SectionProps) {
   const [form] = Form.useForm<SecuritySettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.security);
-  }, [settings, form]);
+  useSectionFields(form, settings.security);
 
   const save = async (values: SecuritySettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/security', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -616,20 +627,21 @@ export function ProtectionForm({ settings, onSaved }: SectionProps) {
   const [form] = Form.useForm<ProtectionSettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.protection);
-  }, [settings, form]);
+  useSectionFields(form, settings.protection);
 
   const save = async (values: ProtectionSettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/protection', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -703,20 +715,21 @@ function ImportForm({ settings, onSaved }: SectionProps) {
   const [form] = Form.useForm<ImportSettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.import);
-  }, [settings, form]);
+  useSectionFields(form, settings.import);
 
   const save = async (values: ImportSettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/import', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -765,20 +778,21 @@ function NotificationsForm({ settings, onSaved }: SectionProps) {
   const [form] = Form.useForm<NotificationSettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.notifications);
-  }, [settings, form]);
+  useSectionFields(form, settings.notifications);
 
   const save = async (values: NotificationSettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -817,20 +831,21 @@ function AnnouncementsForm({ settings, onSaved }: SectionProps) {
   const [form] = Form.useForm<AnnouncementSettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.announcements);
-  }, [settings, form]);
+  useSectionFields(form, settings.announcements);
 
   const save = async (values: AnnouncementSettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/announcements', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -936,7 +951,7 @@ export function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
       };
       const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', { body });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AuditOutlined,
   DeleteOutlined,
@@ -129,6 +129,15 @@ export default function UsersPage() {
   const remove = useDeleteAdminUser();
   const resetTwoFactor = useResetAdminUserTwoFactor();
 
+  // A page that comes back empty while accounts remain — the last one on it was deleted, here
+  // or by someone else — steps back to the last page that still has rows.
+  const listed = users.data;
+  useEffect(() => {
+    if (listed && listed.items.length === 0 && listed.totalItems > 0 && listed.page > 1) {
+      setPage(Math.max(1, Math.ceil(listed.totalItems / listed.pageSize)));
+    }
+  }, [listed]);
+
   const day = (value: string) => new Date(value).toLocaleDateString(i18n.resolvedLanguage);
 
   /** What a finished invitation leaves on screen: a note if it was mailed, the link if it was not. */
@@ -216,6 +225,8 @@ export default function UsersPage() {
   if (users.error instanceof ApiError && users.error.status === 403) {
     return <Result status="403" title={t('admin.forbidden')} />;
   }
+  // Any other failure is said as one: an empty register would read as "no accounts".
+  const loadFailed = users.isError;
 
   return (
     <Flex vertical gap={16} style={{ padding: 16 }}>
@@ -244,6 +255,19 @@ export default function UsersPage() {
           </Button>
         )}
       </Flex>
+
+      {loadFailed && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('admin.users.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void users.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
 
       <Table<AdminUser>
         rowKey="id"
@@ -308,7 +332,12 @@ export default function UsersPage() {
             title: t('admin.users.actions'),
             key: 'actions',
             render: (_: unknown, user: AdminUser) => {
-              const self = user.id === me?.id;
+              // Until the caller's own account is known no row can be told apart from it, so
+              // nothing that the server refuses on oneself is offered on any row yet.
+              if (me === undefined) {
+                return null;
+              }
+              const self = user.id === me.id;
               // A right over accounts below full administration stops at a full administrator's
               // account; the server refuses it as well (a locked one is not flagged here, so for
               // that case the refusal is what the operator sees).

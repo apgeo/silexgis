@@ -17,6 +17,14 @@ const resetMutate = vi.fn();
 let rights = 'read, write, delete, create';
 let callerIsFullAdmin = true;
 let groupRights = 'read';
+type UsersPageAnswer = { items: AdminUser[]; page: number; pageSize: number; totalItems: number };
+// What the account list answers for the page asked; null stands for a read that failed.
+let usersAnswer: (params: { page: number; pageSize: number }) => UsersPageAnswer | null;
+let usersError: unknown = null;
+const usersRefetch = vi.fn();
+// Every page the register asked for, in order.
+const pagesAsked: number[] = [];
+let meKnown = true;
 
 function account(overrides: Partial<AdminUser>): AdminUser {
   return {
@@ -74,12 +82,18 @@ vi.mock('../../api/hooks.ts', async () => {
     }),
     useAdminUser: () => ({ data: danaDetail, isPending: false, isError: false }),
     useResetAdminUserTwoFactor: () => ({ mutateAsync: resetMutate, isPending: false }),
-    useMe: () => ({ data: { id: 'me' } }),
-    useAdminUsers: () => ({
-      data: { items: accounts, page: 1, pageSize: 25, totalItems: accounts.length },
-      isFetching: false,
-      error: null,
-    }),
+    useMe: () => ({ data: meKnown ? { id: 'me' } : undefined }),
+    useAdminUsers: (params: { page: number; pageSize: number }) => {
+      pagesAsked.push(params.page);
+      const data = usersAnswer(params);
+      return {
+        data: data ?? undefined,
+        isFetching: false,
+        isError: data === null,
+        error: data === null ? usersError : null,
+        refetch: usersRefetch,
+      };
+    },
     useCreateAdminUser: () => ({ mutateAsync: createMutate, isPending: false }),
     useReinviteAdminUser: () => ({ mutateAsync: reinviteMutate, isPending: false }),
     useSetAdminUserLocked: () => ({ mutateAsync: lockMutate, isPending: false }),
@@ -102,6 +116,11 @@ beforeEach(async () => {
   lockMutate.mockReset().mockResolvedValue({});
   uploadReviewMutate.mockReset().mockResolvedValue({});
   deleteMutate.mockReset().mockResolvedValue(undefined);
+  usersAnswer = () => ({ items: accounts, page: 1, pageSize: 25, totalItems: accounts.length });
+  usersError = null;
+  usersRefetch.mockReset();
+  pagesAsked.length = 0;
+  meKnown = true;
 });
 afterEach(cleanup);
 
@@ -359,5 +378,55 @@ describe('UsersPage', () => {
       expect(words, code).not.toBe(generic);
       expect(words, code).not.toMatch(/^admin\./);
     }
+  });
+});
+
+describe('UsersPage when the register cannot be shown as asked', () => {
+  // A failure that is not a refusal must not look like an installation without accounts.
+  it('says the accounts could not be loaded and offers to load them again', () => {
+    usersError = new ApiError(500, 'internal');
+    usersAnswer = () => null;
+    show();
+
+    expect(screen.getByText('The accounts could not be loaded.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(usersRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  // Deleting the only account on the last page leaves that page empty: the register steps back
+  // to the last page that still has rows rather than showing an empty one.
+  it('steps back to the last page with accounts when the page shown comes back empty', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => account({ id: `a-${i}`, label: `Account ${i}` }));
+    let total = 30;
+    usersAnswer = ({ page, pageSize }) => ({
+      items: many.slice((page - 1) * pageSize, Math.min(total, page * pageSize)),
+      page,
+      pageSize,
+      totalItems: total,
+    });
+    const view = show();
+    fireEvent.click(screen.getByTitle('2'));
+    expect(pagesAsked.at(-1)).toBe(2);
+
+    // The five accounts of page two are deleted elsewhere; the list is read again.
+    total = 25;
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <UsersPage />
+        </App>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(pagesAsked.at(-1)).toBe(1));
+  });
+
+  // Until the caller's own account is known no row can be told apart from it, and the server
+  // refuses locking or deleting oneself; nothing is offered that may turn out to be that.
+  it('offers no action on any row before the caller\'s own account is known', () => {
+    meKnown = false;
+    show();
+
+    expect(within(row('Operator')).queryByRole('button', { name: /Lock/ })).toBeNull();
+    expect(within(row('Operator')).queryByRole('button', { name: /Delete/ })).toBeNull();
   });
 });

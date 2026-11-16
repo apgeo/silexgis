@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, App, Form, Switch, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
 import { api } from '../../api/client.ts';
 import type { AdminSettings, SurveyUploadSettings } from '../../api/hooks.ts';
+import { useSectionFields } from './useSectionFields.ts';
+import { settingsSaveProblem } from './settingsProblems.ts';
 
 /**
  * What the installation decides about surveys sent from a field device.
@@ -26,9 +28,7 @@ export default function SurveyUploadsSettingsForm({
   const [form] = Form.useForm<SurveyUploadSettings>();
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.surveyUploads);
-  }, [settings, form]);
+  useSectionFields(form, settings.surveyUploads);
 
   const save = async (values: SurveyUploadSettings) => {
     setSaving(true);
@@ -37,11 +37,14 @@ export default function SurveyUploadsSettingsForm({
         body: { ...settings.surveyUploads, ...values },
       });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }
