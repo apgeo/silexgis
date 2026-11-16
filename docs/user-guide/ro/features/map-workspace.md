@@ -66,6 +66,7 @@ numește în locul lui.
 | **Hartă de căldură (intrări)** | Densitate în loc de puncte individuale |
 | **Densitatea peșterilor (grilă)** | Câte peșteri se află în fiecare celulă a unei grile, numărate de server |
 | **Indice de carstificare (zone)** | Fiecare zonă carstică, masiv și deal din imagine, colorat după cât de carstificat apare |
+| **Rocă deasupra galeriei** | Galeriile peșterilor din imagine, colorate după câtă rocă se află deasupra lor |
 
 ### Straturile carstice
 
@@ -92,6 +93,24 @@ timp e pornit, fiecare are un rând sub lista de straturi, cu o legendă a culor
 
 Amândouă au opacitate și se păstrează într-o [vedere salvată](saved-views-and-windows.md).
 Niciunul nu se desenează în vederea 3D sau pe linkul unei vederi partajate.
+
+### Rocă deasupra galeriei
+
+**Rocă deasupra galeriei** desenează galeria fiecărei peșteri din imagine ca o linie colorată,
+după câtă rocă se află între ea și terenul de deasupra: o culoare pentru galeria care se citește
+deasupra terenului (de verificat, nu o adâncime), apoi trepte de 0–10, 10–25, 25–50, 50–100,
+100–200 și peste 200 m, mai închis pentru mai multă rocă. Rândul de sub lista de straturi are
+legenda. Valoarea este cea din panoul de acoperire al peșterii, citită în puncte de-a lungul
+galeriei și nu între ele, deci un loc subțire și îngust poate cădea între două citiri.
+
+Ai nevoie de dreptul de a citi elevația, ca pentru acel panou, iar stratul se desenează doar
+pentru peșterile pe care le poți vedea exact — o peșteră pe care nu o poți plasa nu se
+desenează și nu se numără. O peșteră ridicată doar ca plan, fără altitudini, nu se desenează,
+nici galeria până unde nu ajunge modelul de elevație. Se desenează cel mult 25 de peșteri
+deodată; dacă imaginea cuprinde mai multe, rândul o spune — mărește harta. Dacă nu e construit
+niciun model de elevație, rândul spune asta. Stratul are opacitate și se păstrează într-o
+[vedere salvată](saved-views-and-windows.md); nu se desenează în vederea 3D sau pe linkul unei
+vederi partajate.
 
 ### Rărirea etichetelor
 

@@ -387,6 +387,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Needs placement (a map sheet's state) | De poziționat |
 | Redraw… (a map sheet) | Redesenează… |
 | Clear finished (upload rows) | Șterge cele terminate |
+| Rock overhead (a cave's overburden panel) | Roca de deasupra |
+| Least rock cover | Cea mai subțire acoperire de rocă |
+| Rock over the passage (map layer) | Rocă deasupra galeriei |
+| Passages beneath this feature | Galerii sub această trăsătură |
+| Chosen measures / Principal axes (cave scatter) | Măsuri alese / Axe principale |
 
 ## Nori de puncte și spațiu de stocare
 
