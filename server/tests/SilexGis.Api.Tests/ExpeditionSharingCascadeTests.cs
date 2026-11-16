@@ -525,6 +525,54 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
     }
 
     /// <summary>
+    /// A camp's sharing can carry a deny, and withdrawing it lifts that deny on every member trip,
+    /// so the withdrawal is bounded like removing a deny anywhere else: somebody who may administer
+    /// the camp's rules but does not hold, on the trip, what the deny withholds is refused, and the
+    /// rule stays where it was. The organiser, who holds those actions on the trip, withdraws it.
+    /// </summary>
+    [Fact]
+    public async Task Withdrawing_a_camps_deny_takes_the_rights_it_withholds_on_each_trip()
+    {
+        var camp = await CreateCampAsync();
+        var trip = await CreateTripAsync(organiser, "A trip the camp closes to somebody");
+        await JoinAsync(camp, trip);
+
+        // Delete is the flag the seeded editor ruleset does not carry, so only the trip's owner
+        // holds it there.
+        var closed = await CascadeAsync(camp, organiserId, new ExpeditionShareEntryWrite(
+            AccessSubjectKind.User, readerId, AccessEffect.Deny, AccessAction.Read | AccessAction.Delete));
+        closed.Problem.ShouldBeNull();
+        (await CampRuleOnAsync(trip, camp)).Effect.ShouldBe(AccessEffect.Deny);
+
+        // A second administrator of the camp's rules, holding nothing of the kind on the trip.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            db.AccessEntries.Add(new AccessEntry
+            {
+                SubjectKind = AccessSubjectKind.User,
+                SubjectId = strangerId,
+                Effect = AccessEffect.Allow,
+                Domain = AccessDomain.Expeditions,
+                Actions = AccessAction.Read | AccessAction.ManagePermissions,
+                ScopeKind = AccessScopeKind.Object,
+                ScopeId = camp,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await stranger.DeleteAsync($"/api/v1/expeditions/{camp}/sharing");
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, refusedBody);
+        refusedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+        (await CampRuleOnAsync(trip, camp)).Effect.ShouldBe(AccessEffect.Deny, "a refused withdrawal changes nothing");
+
+        var withdrawn = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}/sharing");
+        withdrawn.StatusCode.ShouldBe(HttpStatusCode.NoContent, await withdrawn.Content.ReadAsStringAsync());
+        (await RulesOnAsync(trip)).ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// A deleted trip keeps every rule written on it — its own and the camp's alike — so that
     /// putting it back is exact, and the integrity check does not call them orphans meanwhile:
     /// their anchor is still there. They go when the trip is removed for good, and leave nothing
