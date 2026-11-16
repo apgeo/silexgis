@@ -437,7 +437,7 @@ export const groups = {
     'AccessKeySurfaceTests', 'AccessKeyTests', 'OptionsDocumentationTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests', 'ScanStepSchemaTests',
-    'ProcessingProfileUseTests',
+    'ProcessingProfileUseTests', 'ScanExternalOutputCheckTests', 'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests',
     // The real compiler in its sandbox, where the machine has it.
     'SurveyUploadTherionTests',
     // The compiler service, and the application handing it a project.
