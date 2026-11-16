@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { PlusOutlined } from '@ant-design/icons';
-import { DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
+import { Alert, DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
@@ -52,7 +52,7 @@ export default function EventListPage() {
   const [searchInput, setSearchInput] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useEvents({ ...params, search: search || undefined });
+  const { data, isFetching, isError, refetch } = useEvents({ ...params, search: search || undefined });
   // Whether to offer the button at all. What a caller may actually do is settled per row on the
   // server, so this decides the offer and never the answer.
   const canCreate = useCan('events', 'create');
@@ -68,7 +68,7 @@ export default function EventListPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('events.title')}
         </Typography.Title>
@@ -137,6 +137,21 @@ export default function EventListPage() {
           onChange={(range) => narrow({ from: asDate(range?.[0]), to: asDate(range?.[1]) })}
         />
       </Flex>
+      {isError && !data && (
+        // Without this an empty table would read as "there are no events".
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="event-list-unavailable"
+          title={t('events.listUnavailable')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <Table<EventInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"

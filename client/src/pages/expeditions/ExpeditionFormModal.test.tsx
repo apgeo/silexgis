@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import type { ExpeditionInfo, ExpeditionWrite } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 
@@ -183,5 +184,15 @@ describe('ExpeditionFormModal', () => {
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByTestId('expedition-form-name')).toHaveValue('Bihor summer camp');
+  });
+
+  it('words a refusal the camp area has words for, rather than a bare "save failed"', async () => {
+    updateCamp.mockRejectedValue(new ApiError(403, 'access.caving_group_binding_forbidden'));
+    show(camp());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateCamp).toHaveBeenCalled());
+    expect(await screen.findByText(i18n.t('expeditions.problems.cavingGroupForbidden'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 });

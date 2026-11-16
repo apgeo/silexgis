@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Empty, Spin, Typography } from 'antd';
+import { Alert, Empty, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useTripLogs } from '../../api/hooks.ts';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
@@ -19,12 +20,25 @@ import { EXPEDITION_TRIPS_PAGE_SIZE } from './expeditionTrips.ts';
  */
 export default function ExpeditionTripsTab({ expeditionId }: { expeditionId: string }) {
   const { t, i18n } = useTranslation();
-  const { data, isPending } = useTripLogs({ expeditionId, page: 1, pageSize: EXPEDITION_TRIPS_PAGE_SIZE });
+  const { data, isPending, isError, refetch } = useTripLogs({ expeditionId, page: 1, pageSize: EXPEDITION_TRIPS_PAGE_SIZE });
 
   return (
     <div data-testid="expedition-trips-tab">
       {isPending ? (
         <Spin />
+      ) : isError && !data ? (
+        // A read that failed says nothing about the camp's trips, so it is never drawn as none.
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="expedition-trips-unavailable"
+          title={t('expeditions.tripsUnavailable')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : !data || data.items.length === 0 ? (
         <Empty description={t('expeditions.noTripsVisible')} />
       ) : (

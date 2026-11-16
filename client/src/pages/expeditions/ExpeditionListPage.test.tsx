@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import type { ExpeditionInfo, ExpeditionListParams } from '../../api/hooks.ts';
 
 const { listSpy, canCreate } = vi.hoisted(() => ({ listSpy: vi.fn(), canCreate: { value: false } }));
@@ -124,5 +125,19 @@ describe('the camps', () => {
     show();
     fireEvent.click(screen.getByTestId('expedition-new'));
     expect(screen.getByText('the camp form')).toBeTruthy();
+  });
+});
+
+describe('a list of camps that could not be read', () => {
+  it('says the camps could not be read and offers to ask again, rather than drawing an empty table', () => {
+    const refetch = vi.fn();
+    listSpy.mockReturnValue({ data: undefined, isFetching: false, isError: true, refetch });
+    show();
+
+    expect(screen.getByTestId('expedition-list-unavailable').textContent).toContain(
+      i18n.t('expeditions.listUnavailable'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

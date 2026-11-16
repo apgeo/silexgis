@@ -13,6 +13,7 @@ import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useExpeditionMap } from '../../api/hooks.ts';
+import Button from '../../components/Button.tsx';
 import { tripPalette as palette } from '../../map/markerPalette.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
@@ -79,7 +80,7 @@ interface Props {
  */
 export default function ExpeditionMapTab({ expeditionId, active, height = 420 }: Props) {
   const { t } = useTranslation();
-  const { data, isPending } = useExpeditionMap(expeditionId, active);
+  const { data, isPending, isError, refetch } = useExpeditionMap(expeditionId, active);
   const target = useRef<HTMLDivElement | null>(null);
   const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource());
@@ -158,15 +159,31 @@ export default function ExpeditionMapTab({ expeditionId, active, height = 420 }:
   );
 
   const nothingToDraw = !isPending && data?.features.length === 0;
+  // A read that failed leaves nothing on the map; the empty frame is hidden and the failure said,
+  // so a blank map is never read as a camp that went nowhere.
+  const readFailed = isError && !data;
 
   return (
     <div data-testid="expedition-map-tab">
       {isPending && <Spin />}
+      {readFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="expedition-map-unavailable"
+          title={t('expeditions.mapUnavailable')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       {nothingToDraw && <Empty description={t('expeditions.mapEmpty')} />}
       <div
         ref={onTargetRef}
         data-testid="expedition-map"
-        style={{ width: '100%', height, display: nothingToDraw ? 'none' : undefined }}
+        style={{ width: '100%', height, display: nothingToDraw || readFailed ? 'none' : undefined }}
       />
       {/* A yes or no and never a number: how many entrances were left off would say how many
           caves the camp reached, which for a protected cave is exactly what is withheld. */}

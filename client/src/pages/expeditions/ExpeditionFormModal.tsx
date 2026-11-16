@@ -11,6 +11,7 @@ import {
   type ExpeditionWrite,
 } from '../../api/hooks.ts';
 import { isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
+import { expeditionProblemKey } from './expeditionProblems.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
@@ -127,7 +128,7 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
       // A stale version is worded once for every save, by the application's conflict warning; a
       // generic "failed" beside it would contradict it. The dialog stays open with what was typed.
       if (!isConcurrencyConflict(error)) {
-        message.error(t('common.saveFailed'));
+        message.error(t(expeditionProblemKey(error, 'common.saveFailed')));
       }
     }
   };
