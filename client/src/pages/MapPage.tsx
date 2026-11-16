@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import { Drawer, Tabs } from 'antd';
+import { useUnsavedEditsGuard } from '../components/map/useUnsavedEditsGuard.ts';
 import { useSelectionInUrl } from '../components/map/useSelectionInUrl.ts';
 import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import type BaseLayer from 'ol/layer/Base';
@@ -322,6 +323,7 @@ export default function MapPage() {
   // can warn even while the edit toolbar is hidden with the rest of the chrome.
   const [editDirty, setEditDirty] = useState(0);
   useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
+  useUnsavedEditsGuard(editDirty);
 
   const { canEdit, toolbarShown, mayReshapeSaved, rightsPending } = useEditScope({
     controller: editController,

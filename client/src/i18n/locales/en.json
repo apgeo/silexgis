@@ -1752,6 +1752,24 @@
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
     "discard": "Discard edits",
+    "discardConfirm": "Throw away {{count}} unsaved edits? Drawings disappear and reshaped features go back to their saved shape. This cannot be undone.",
+    "discardConfirmOk": "Discard",
+    "leaveTitle": "Leave the map with unsaved edits?",
+    "leaveBody": "{{count}} edits on the map are not saved. Leaving the map throws them away.",
+    "leaveOk": "Leave and discard",
+    "leaveStay": "Stay on the map",
+    "saveIncomplete": "{{saved}} saved, {{failed}} not saved. What was not saved is still on the map, marked in red; correct it and press Save again. First problem: {{reason}}",
+    "typeUnresolved": "The type of this feature could not be found in the list of feature types, so its new shape was not sent. Reload the page and try again.",
+    "problems": {
+      "geometryInvalid": "A shape is not one the server accepts, for example an outline that crosses itself.",
+      "typeRequired": "A feature has no type, or a type this installation does not have.",
+      "typeNotAllowed": "You may not create or change features of that type.",
+      "propertiesInvalid": "A feature’s attributes do not fit what its type asks for.",
+      "parentRequired": "A feature of this type has to sit inside another feature. Choose the one it belongs to.",
+      "parentUnavailable": "The feature chosen to contain it is no longer there, or you cannot see it.",
+      "forbidden": "You are not allowed to make that change.",
+      "notFound": "That feature is no longer there. It may have been deleted."
+    },
     "finishDrawing": "Finish",
     "finishDrawingHint": "Place more points before finishing this shape.",
     "removeLastPoint": "Point",
@@ -3798,7 +3816,15 @@
     "shareExplain": "Anyone with this link can open the view without an account. It shows the area the view looks at over a public background, with the layers the view had on — limited to what is public in its own right, with protected caves and features left out entirely.",
     "shareWithoutData": "This view is narrowed by a saved filter or by a filter from a link, which a link cannot run — so the link shows the area and its background without the caves and features. Layers drawn from saved filters are never shown through a link either.",
     "shareWithoutFilterLayers": "Layers drawn from saved filters are never shown through a link; the link shows the view's other layers.",
-    "shareQr": "The link to the view {{name}} as a QR code"
+    "deleteConfirm": "Delete this saved view? This cannot be undone.",
+    "shareQr": "The link to the view {{name}} as a QR code",
+    "problems": {
+      "createForbidden": "You may not save map views on this installation. Ask an administrator for the right to create them.",
+      "groupForbidden": "You may not share a view with that caving group.",
+      "notFound": "This saved view is no longer there. Somebody may have deleted it.",
+      "invalid": "The view's name is missing or longer than 200 characters.",
+      "forbidden": "You are not allowed to change this saved view."
+    }
   },
   "panel": {
     "unknown": "Unknown panel.",
