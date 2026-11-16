@@ -219,4 +219,20 @@ describe('TripStateControl', () => {
       expect(screen.getByText('The operation failed. Please try again.')).toBeInTheDocument(),
     );
   });
+
+  // A move refused because the trip changed since the page read it is worded once, by the
+  // application's own conflict warning; "the operation failed" beside it would contradict it.
+  it('leaves a stale-version refusal to the conflict warning', async () => {
+    const { ApiError } = await import('../../api/client.ts');
+    move.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    show('published');
+
+    fireEvent.click(draftButton()!);
+
+    await vi.waitFor(() => expect(move).toHaveBeenCalledTimes(1));
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(document.querySelector('.ant-message-success')).toBeNull();
+  });
 });

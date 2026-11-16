@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { App, DatePicker, Flex, Form, Input, Modal, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import {
   type ExpeditionInfo,
   type ExpeditionWrite,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
@@ -57,8 +58,15 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
   // content in the document — a map built against a container with no size renders nothing.
   const [shown, setShown] = useState(false);
 
+  // The version of the camp the fields were filled from. They are filled once, when the dialog
+  // opens, while the page behind it goes on reading the camp and filing each newer version for
+  // the next save. Carrying that one would tell the server this form had seen a change it never
+  // showed, and somebody else's dates or description would be written back with nobody told.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     if (open) {
+      openedAtVersion.current = camp ? lastReadETag(`/api/v1/expeditions/${camp.id}`) : undefined;
       form.resetFields();
       if (camp) {
         form.setFieldsValue({
@@ -111,12 +119,16 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
 
     try {
       const saved = camp
-        ? await updateCamp.mutateAsync({ id: camp.id, body })
+        ? await updateCamp.mutateAsync({ id: camp.id, body, ifMatch: openedAtVersion.current })
         : await createCamp.mutateAsync(body);
       message.success(t('common.saved'));
       onClose(saved.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once for every save, by the application's conflict warning; a
+      // generic "failed" beside it would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('common.saveFailed'));
+      }
     }
   };
 

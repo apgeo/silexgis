@@ -8,6 +8,7 @@ import { useWorkspaceStore, type WorkspaceSelection } from '../../stores/workspa
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera, type ViewCameraTarget } from '../../workspace/viewCamera.ts';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import SelectionPanel from './SelectionPanel.tsx';
 
 // What this panel does to the rest of the application, rather than what it renders.
@@ -50,7 +51,7 @@ const entrances = [
 
 const featureGeometry = { type: 'LineString', coordinates: [[25.1, 45.2], [25.2, 45.3]] };
 
-const featureEnvelope = {
+const aFeatureEnvelope = {
   kind: 'generic',
   feature: {
     id: 'feature-1',
@@ -67,6 +68,16 @@ const featureEnvelope = {
     approximateLocation: false,
   },
 };
+
+/** The feature as the panel's read of it answers at this moment; reassigned to stand for a re-read. */
+let featureEnvelope: typeof aFeatureEnvelope = aFeatureEnvelope;
+
+/** The feature as a read answered at `version` carried it. */
+function aFeatureAt(version: string) {
+  const envelope = { ...aFeatureEnvelope, feature: { ...aFeatureEnvelope.feature } };
+  noteVersionOfReading(envelope, new Response(null, { headers: { ETag: version } }));
+  return envelope;
+}
 
 const deleteFeature = vi.fn().mockResolvedValue(undefined);
 const updateFeature = vi.fn().mockResolvedValue(undefined);
@@ -122,7 +133,34 @@ vi.mock('../../api/hooks/access.ts', async () => {
 // composes its sections from a registry now, so the sections it can draw are mocked at their own
 // modules rather than by mocking every hook they happen to call.
 vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
-vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
+// The edit dialog is drawn only as the one act these tests need of it: handing its values back.
+vi.mock('../features/FeatureEditModal.tsx', () => ({
+  default: (props: { open: boolean; onSubmit: (values: Record<string, unknown>) => void }) =>
+    props.open ? (
+      <button
+        type="button"
+        data-testid="feature-edit-submit"
+        onClick={() =>
+          props.onSubmit({
+            name: 'Fracture',
+            featureTypeId: 1,
+            description: null,
+            properties: {},
+            locationProtected: false,
+            visibility: 'public',
+          })
+        }
+      />
+    ) : null,
+}));
+
+// The newest version the transport has filed for a resource at this moment. It can be ahead of the
+// copy the panel holds: a save, or a read made elsewhere, files one before the panel's re-read lands.
+const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+}));
 vi.mock('../tags/TagChips.tsx', () => ({
   default: (props: { canEdit: boolean }) => <div data-testid="tag-chips" data-can-edit={String(props.canEdit)} />,
 }));
@@ -163,6 +201,9 @@ beforeEach(() => {
   camera = recorder();
   detachCamera = setActiveViewCamera(camera);
   deleteFeature.mockClear();
+  updateFeature.mockReset().mockResolvedValue(undefined);
+  versionOnFile.mockReset().mockReturnValue(undefined);
+  featureEnvelope = aFeatureEnvelope;
   linksMounted.mockReset();
   caveSummary = { headlinePicture: null };
   installationWide = true;
@@ -354,5 +395,69 @@ describe('the edit affordances of a selected feature', () => {
 
     await screen.findByText('Fracture', { selector: 'h5' });
     expect(editAffordances()).toMatchObject({ edit: false, delete: false, tags: 'false' });
+  });
+});
+
+/**
+ * The edit dialog is filled when it opens, while the panel behind it goes on reading the feature —
+ * a return to the browser tab is a read — and every read files a newer version. A save carrying
+ * that one would present somebody else's rename as already seen and write the older values over it.
+ */
+describe('editing a feature from a dialog opened before it was read again', () => {
+  const path = '/api/v1/features/feature-1';
+
+  it('saves against the version the dialog opened with', async () => {
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    featureEnvelope = aFeatureAt('"1"');
+    const view = renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    featureEnvelope = aFeatureAt('"2"');
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SelectionPanel />
+        </App>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    expect(updateFeature.mock.calls[0][0]).toMatchObject({ id: 'feature-1', ifMatch: '"1"' });
+  });
+
+  // The panel can hold an older copy than the newest version filed: re-clicking a feature on the
+  // map reads it outside the panel's cache, and a save files its version before its re-read lands.
+  // The dialog is filled from the copy the panel holds, so the save names that copy's version.
+  it('saves under the version of the copy it was filled from, though a newer one is on file', async () => {
+    featureEnvelope = aFeatureAt('"1"');
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    expect(updateFeature.mock.calls[0][0]).toMatchObject({ id: 'feature-1', ifMatch: '"1"' });
+  });
+
+  it('leaves a stale-version refusal to the one conflict warning', async () => {
+    updateFeature.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    // Still open, holding what was typed.
+    expect(screen.getByTestId('feature-edit-submit')).toBeTruthy();
   });
 });

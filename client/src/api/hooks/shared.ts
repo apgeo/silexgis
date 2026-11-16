@@ -2,6 +2,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { Query, QueryClient } from '@tanstack/react-query';
 import { ApiError, retryAfterOf, retryQuery } from '../client.ts';
+import { noteVersionOfReading } from '../readingVersion.ts';
 
 export async function unwrap<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
@@ -20,6 +21,18 @@ export async function unwrap<T>(
       retryAfterOf(response),
     );
   }
+  return data;
+}
+
+/**
+ * unwrap for a read a form may be filled from: the version the answer was given at is kept
+ * against the values it carried, for `versionReadWith` to hand to the save.
+ */
+export async function unwrapVersioned<T>(
+  call: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T> {
+  const data = await unwrap(call);
+  noteVersionOfReading(data, (await call).response);
   return data;
 }
 
@@ -105,6 +118,26 @@ export function invalidateAfterDelete(queryClient: QueryClient, scope: readonly 
     queryKey: scope,
     predicate: (query) => !ofTheRecord(query),
   });
+}
+
+/**
+ * Marks stale what a write on a dated record moves outside its own family's caches.
+ *
+ * Trips, camps and events are rows on the calendar, and trips and camps are shapes on the map;
+ * neither cache is held under the record's own prefix, so invalidating the family alone left the
+ * calendar on the old days and the map on the old shape until each was next asked again. Which
+ * caches a dated write reaches is decided here, once, rather than in each family's hooks, where
+ * the copies had already drifted apart. `mapLayer` is the family's map layer, for those that have
+ * one. The re-reads are handed back for a caller that waits on them; most do not.
+ */
+export function invalidateDatedRows(
+  queryClient: QueryClient,
+  mapLayer?: 'trip-logs' | 'expeditions',
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    mapLayer ? queryClient.invalidateQueries({ queryKey: ['map', mapLayer] }) : undefined,
+  ]);
 }
 
 export function useInvalidateAttachments() {

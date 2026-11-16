@@ -366,6 +366,64 @@ describe('TrackingConfigCard', () => {
     expect(screen.queryByTestId('trip-tracking-positions-other-model')).not.toBeInTheDocument();
   });
 
+  // A save refused because somebody else wrote the watch since this card read it is nobody's
+  // fault: the card reads the watch again, says so as a warning, and does not call it a failure.
+  it('reads the watch again and warns, once, when its save meets somebody else\'s change', async () => {
+    const onStale = vi.fn();
+    const { ApiError } = await import('../../api/client.ts');
+    setTracking.mockReset().mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    render(
+      <App>
+        <TrackingConfigCard
+          tripLogId="trip-1"
+          caveIds={['cave-1']}
+          cavesWithheld={0}
+          tracking={state()}
+          canEdit
+          calloutState="none"
+          onStale={onStale}
+        />
+      </App>,
+    );
+    fireEvent.change(screen.getByTestId('trip-tracking-reference'), { target: { value: 'Q9' } });
+    fireEvent.click(screen.getByTestId('trip-tracking-save'));
+
+    await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1));
+    // The message is drawn a render after onStale is called, so wait for it.
+    await waitFor(() => expect(document.querySelector('.ant-message-warning')).not.toBeNull());
+    expect(document.querySelector('.ant-message-error')).toBeNull();
+  });
+
+  // The watch is read again every half minute and after a refused save, while the card stays
+  // mounted. A field nobody here has touched has to follow what the server now holds, or the card
+  // goes on showing another coordinator's change as unmade — and then warns about a survey swap
+  // this person is not making.
+  it('follows a change somebody else made in every field this person has not touched', async () => {
+    const { rerender } = show();
+    fireEvent.change(screen.getByTestId('trip-tracking-reference'), { target: { value: 'Q9' } });
+
+    await act(async () => {
+      rerender(
+        <App>
+          <TrackingConfigCard
+            tripLogId="trip-1"
+            caveIds={['cave-1']}
+            cavesWithheld={0}
+            tracking={state({ surveyModelId: OTHER_MODEL, referenceStationName: 'R1' })}
+            canEdit
+            calloutState="none"
+            onStale={() => {}}
+          />
+        </App>,
+      );
+    });
+
+    expect(screen.getByTestId('trip-tracking-model')).toHaveTextContent('Corrected survey');
+    // What was typed here is this person's, and is kept.
+    expect(screen.getByTestId('trip-tracking-reference')).toHaveValue('Q9');
+    expect(screen.queryByTestId('trip-tracking-model-swap-clears-datum')).not.toBeInTheDocument();
+  });
+
   /**
    * The half of a mid-trip survey swap that was silent, and whose bill arrives during a callout.
    *

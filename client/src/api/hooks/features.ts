@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { components } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
+import {
+  invalidateAfterDelete,
+  unwrap,
+  unwrapVersioned,
+  unwrapVoid,
+  useInvalidateHistory,
+} from './shared.ts';
 import type { FeatureChildrenParams, FeatureListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -21,8 +28,23 @@ export async function createFeature(body: FeatureCreate): Promise<FeatureDetail>
   return unwrap(api.POST('/api/v1/features', { body }));
 }
 
-export async function updateFeature(id: string, body: FeatureUpdate): Promise<FeatureDetail> {
-  return unwrap(api.PUT('/api/v1/features/{id}', { params: { path: { id } }, body }));
+/**
+ * `ifMatch` names the version the caller's values were read at — an edit dialog's, taken when it
+ * opened — so a change somebody else saved meanwhile is refused instead of overwritten. Left out,
+ * the newest version read is sent, which is right for a write made from what is on screen now.
+ */
+export async function updateFeature(
+  id: string,
+  body: FeatureUpdate,
+  ifMatch?: string,
+): Promise<FeatureDetail> {
+  return unwrap(
+    api.PUT('/api/v1/features/{id}', {
+      params: { path: { id } },
+      headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+      body,
+    }),
+  );
 }
 
 export function useFeatures(params: FeatureListParams, enabled = true) {
@@ -51,7 +73,9 @@ export function useFeature(id: string | undefined) {
 export function featureQuery(id: string) {
   return {
     queryKey: queryKeys.feature(id),
-    queryFn: () => unwrap(api.GET('/api/v1/features/{id}', { params: { path: { id } } })),
+    // The edit dialogs are filled from this reading, and save under the version it was answered at.
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/features/{id}', { params: { path: { id } } })),
+    structuralSharing: sharesKeepingVersion,
   };
 }
 
@@ -69,13 +93,19 @@ export function useCreateFeature() {
 }
 
 export function useUpdateFeature() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeatures();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: FeatureUpdate }) => updateFeature(id, body),
-    onSuccess: () => {
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: FeatureUpdate; ifMatch?: string }) =>
+      updateFeature(id, body, ifMatch),
+    // The save is finished once the feature has been read again. Until then the cache holds the
+    // feature as it was before the save, and a dialog opened on it at once would be filled from
+    // that copy.
+    onSuccess: (_saved, { id }) => {
       invalidate();
       invalidateHistory();
+      return queryClient.invalidateQueries({ queryKey: queryKeys.feature(id), exact: true });
     },
   });
 }
@@ -126,7 +156,7 @@ export function useRestoreFeature() {
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: (id: string) =>
-      unwrap(api.POST('/api/v1/features/{id}/restore', { params: { path: { id } } })),
+      unwrapVersioned(api.POST('/api/v1/features/{id}/restore', { params: { path: { id } } })),
     onSuccess: (envelope, id) => {
       queryClient.setQueryData(queryKeys.feature(id), envelope);
       void queryClient.invalidateQueries({

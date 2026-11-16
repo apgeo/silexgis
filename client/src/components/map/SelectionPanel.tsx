@@ -20,6 +20,8 @@ import {
   useTripTypes,
   useUpdateFeature,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import OtherFormats from '../coordinates/OtherFormats.tsx';
@@ -362,6 +364,16 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   const updateFeatureM = useUpdateFeature();
   const deleteFeatureM = useDeleteFeature();
   const [editing, setEditing] = useState(false);
+  // The version of the feature the edit dialog was filled from, taken when it opens: the version
+  // the cached reading was answered at, not the newest one filed for the feature. A read made
+  // elsewhere, or a save whose re-read has not landed, files a newer one while the dialog is filled
+  // from the older copy; a save that carried it would present that change as already seen and
+  // write the older values over it.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+  const startEditing = () => {
+    openedAtVersion.current = versionReadWith(envelope);
+    setEditing(true);
+  };
   // The editor is removed the moment it closes (see below), which takes antd's return of focus
   // with it; the button that opened it is focused again by hand, so a keyboard user carries on
   // from where they were rather than from the top of the page.
@@ -434,6 +446,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     try {
       await updateFeatureM.mutateAsync({
         id: feature.id,
+        ifMatch: openedAtVersion.current,
         body: {
           name: values.name,
           featureTypeId: values.featureTypeId,
@@ -448,8 +461,12 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       surfaceFeaturesChanged();
       stopEditing();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a "save failed"
+      // beside it would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('common.saveFailed'));
+      }
     }
   };
 
@@ -518,7 +535,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             icon={<EditOutlined />}
             size="small"
             disabled={!rights.settled}
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
           >
             {t('features.edit')}
           </Button>

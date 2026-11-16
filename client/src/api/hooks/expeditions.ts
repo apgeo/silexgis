@@ -4,6 +4,7 @@ import { api, ApiError, lastReadETag } from '../client.ts';
 import type { components } from '../schema';
 import {
   invalidateAfterDelete,
+  invalidateDatedRows,
   unwrap,
   unwrapVoid,
   useInvalidateAttachments,
@@ -50,7 +51,10 @@ export type ExpeditionWrite = components['schemas']['ExpeditionWriteRequest'];
 
 function useInvalidateExpeditions() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'expeditions');
+    return queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
 }
 
 /**
@@ -63,7 +67,10 @@ function useInvalidateExpeditions() {
  */
 function useReadExpeditionsBack() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'expeditions');
+    return queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
 }
 
 export function useCreateExpedition() {
@@ -78,8 +85,17 @@ export function useUpdateExpedition() {
   const readBack = useReadExpeditionsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: ExpeditionWrite }) =>
-      unwrap(api.PUT('/api/v1/expeditions/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` names the version the caller's values were read at — the edit form's, taken when
+    // it opened — so a change saved by somebody else meanwhile is refused instead of overwritten.
+    // Left out, the save carries the newest version read.
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: ExpeditionWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/expeditions/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: () => {
       invalidateHistory();
       return readBack();
@@ -92,7 +108,10 @@ export function useDeleteExpedition() {
   return useMutation({
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
-    onSuccess: (_, id) => invalidateAfterDelete(queryClient, ['expeditions'], id),
+    onSuccess: (_, id) => {
+      void invalidateDatedRows(queryClient, 'expeditions');
+      return invalidateAfterDelete(queryClient, ['expeditions'], id);
+    },
   });
 }
 

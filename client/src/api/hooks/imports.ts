@@ -36,7 +36,7 @@ export function useImportTripTrack() {
     },
     onSuccess: (trip) => {
       invalidateHistory();
-      written(trip);
+      return written(trip);
     },
   });
 }

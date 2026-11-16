@@ -4,13 +4,24 @@ import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { EventDefaults, EventInfo } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 import EventFormModal from './EventFormModal.tsx';
 
-const { defaultsSpy, createSpy, updateSpy, followingSpy } = vi.hoisted(() => ({
-  defaultsSpy: vi.fn(),
-  createSpy: vi.fn(),
-  updateSpy: vi.fn(),
-  followingSpy: vi.fn(),
+const { defaultsSpy, createSpy, updateSpy, followingSpy, versionOnFile, runVersionOnFile } =
+  vi.hoisted(() => ({
+    defaultsSpy: vi.fn(),
+    createSpy: vi.fn(),
+    updateSpy: vi.fn(),
+    followingSpy: vi.fn(),
+    // The versions on file for the event and for its run, as the transport would answer them now.
+    versionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
+    runVersionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
+  }));
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+  lastReadRunVersion: (path: string) => runVersionOnFile(path),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -59,6 +70,8 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   defaultsSpy.mockReturnValue({ data: undefined });
+  versionOnFile.mockReturnValue(undefined);
+  runVersionOnFile.mockReturnValue(undefined);
 });
 
 describe('writing an event down', () => {
@@ -211,5 +224,66 @@ describe('an event that comes round again', () => {
     await waitFor(() => expect(followingSpy).toHaveBeenCalled());
     const changed = followingSpy.mock.calls[0][0] as { body: { seriesFrequency?: string } };
     expect(changed.body.seriesFrequency).toBe('fortnightly');
+  });
+});
+
+/**
+ * The page behind the dialog goes on reading the event — on a return to the browser tab, after
+ * anything that refreshes events — and every read files a newer version. A save that carried that
+ * one with the values the form was filled from would present somebody else's change as already
+ * seen and write over it; the save has to carry the version the dialog opened with.
+ */
+describe('a save from a dialog opened before the event was read again', () => {
+  const path = `/api/v1/events/${anOccurrence().id}`;
+
+  function reopenAfterARead() {
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-1"' : undefined));
+    const view = show(anOccurrence());
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-2"' : undefined));
+    view.rerender(
+      <App>
+        <EventFormModal open event={anOccurrence({ title: 'Renamed by somebody else' })} onClose={() => {}} />
+      </App>,
+    );
+  }
+
+  it('sends the version of the occurrence the dialog opened with', async () => {
+    updateSpy.mockResolvedValue(anOccurrence());
+    reopenAfterARead();
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const sent = updateSpy.mock.calls[0][0] as { ifMatch?: string; body: { title: string } };
+    expect(sent.ifMatch).toBe('"1"');
+    expect(sent.body.title).toBe('Committee night');
+  });
+
+  it('sends the version of the run the dialog opened with when the rest of the run is edited', async () => {
+    followingSpy.mockResolvedValue({ seriesId: 'series-1', changed: 2, anchor: anOccurrence() });
+    reopenAfterARead();
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('event-scope-following'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(followingSpy).toHaveBeenCalled());
+    expect((followingSpy.mock.calls[0][0] as { runVersion?: string }).runVersion).toBe('"run-1"');
+  });
+
+  it('leaves a stale-version refusal to the one conflict warning', async () => {
+    updateSpy.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    show(anOccurrence());
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -495,6 +495,30 @@ export default function TrackingConfigCard({
       && (tracking.referenceStationName !== null || tracking.depthFilter.length > 0)
     );
   };
+
+  // The form is built from the watch once, and the watch is read again while the card stays
+  // mounted: every half minute, and at once after a save refused for being made against an older
+  // version. A field this person has not touched follows what the server now holds, so another
+  // coordinator's change is shown rather than drawn as unmade — and the swap warning, which
+  // compares the chosen survey with the stored one, is not raised for a swap nobody is making.
+  // What has been typed here is left alone: it is this person's, and the save sends only that.
+  const storedFilter = JSON.stringify(tracking.depthFilter);
+  useEffect(() => {
+    const stored = {
+      surveyModelId: tracking.surveyModelId,
+      referenceStationName: tracking.referenceStationName ?? '',
+      depthFilter: JSON.parse(storedFilter) as string[],
+    };
+    const fields = (Object.keys(stored) as (keyof ConfigForm)[])
+      .filter((name) => !form.isFieldTouched(name))
+      .map((name) => ({ name, value: stored[name], touched: false }));
+    if (fields.length > 0) {
+      form.setFields(fields);
+    }
+    setModelSwapClearsDatum(swapWouldClearDatum());
+    // Keyed on the stored values themselves: a re-read that changed nothing leaves the form alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracking.surveyModelId, tracking.referenceStationName, storedFilter, form]);
 
   // One notice for one fact — the surveys of a cave this reader may not place are kept from them —
   // reached two ways: the cave is shown and its survey list arrives empty, or the cave itself is

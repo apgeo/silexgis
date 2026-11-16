@@ -7,8 +7,15 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from '../client.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { components, paths } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
+import {
+  invalidateAfterDelete,
+  unwrap,
+  unwrapVersioned,
+  unwrapVoid,
+  useInvalidateHistory,
+} from './shared.ts';
 import type { CaveListParams, CaveWrite, EntranceWrite } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -175,7 +182,9 @@ export function useCaves(params: CaveListParams) {
 export function caveQuery(id: string) {
   return {
     queryKey: queryKeys.cave(id),
-    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+    // The cave form is filled from this reading, and saves under the version it was answered at.
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+    structuralSharing: sharesKeepingVersion,
   };
 }
 
@@ -196,8 +205,7 @@ export function useCave(id: string | undefined) {
 export function useCaveNames(ids: readonly string[]) {
   return useQueries({
     queries: ids.map((id) => ({
-      queryKey: queryKeys.cave(id),
-      queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+      ...caveQuery(id),
       staleTime: 300_000,
       retry: false,
     })),
@@ -249,14 +257,26 @@ export function useCreateCave() {
 }
 
 export function useUpdateCave(id: string) {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: (body: CaveWrite) =>
-      unwrap(api.PUT('/api/v1/caves/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` names the version the form was filled from, so a change somebody else saved
+    // meanwhile is refused instead of overwritten. Left out, the newest version read is sent.
+    mutationFn: ({ body, ifMatch }: { body: CaveWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
+    // The save is finished once the cave has been read again. Until then the cache holds the cave
+    // as it was before the save, and a form opened on it at once would be filled from that copy.
     onSuccess: () => {
       invalidate(id);
       invalidateHistory();
+      return queryClient.invalidateQueries({ queryKey: queryKeys.cave(id), exact: true });
     },
   });
 }

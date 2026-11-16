@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Alert,
   App,
@@ -28,6 +28,7 @@ import {
   type EventWrite,
   type Visibility,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict, lastReadETag, lastReadRunVersion } from '../../api/client.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
 import { eventRefusalKey } from './eventRefusals.ts';
@@ -126,10 +127,22 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
   // audience arrives after the dialog is already on screen, and a reset that ran when it landed
   // would clear the title, the dates and the times somebody had spent the intervening moment
   // typing — with nothing said about where they went.
+  // The versions of the event and of its run the fields were filled from. The page behind the
+  // dialog goes on reading the event and filing each newer version for the next save; a save that
+  // carried that one would tell the server this form had seen a change it never showed, and
+  // somebody else's edit would be written back with nobody told. So they are taken here, once.
+  const openedAt = useRef<{ version?: string; runVersion?: string }>({});
+
   useEffect(() => {
     if (!open) {
       return;
     }
+    openedAt.current = event
+      ? {
+          version: lastReadETag(`/api/v1/events/${event.id}`),
+          runVersion: lastReadRunVersion(`/api/v1/events/${event.id}`),
+        }
+      : {};
     form.resetFields();
     if (event) {
       form.setFieldsValue({
@@ -220,14 +233,18 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
         // The whole of the rest of the run in one act. It answers with how many occurrences it
         // really reached and with the addressed one as it now stands, so the page behind this
         // dialog can redraw without a second read.
-        const result = await editFollowing.mutateAsync({ id: event.id, body });
+        const result = await editFollowing.mutateAsync({
+          id: event.id,
+          body,
+          runVersion: openedAt.current.runVersion,
+        });
         message.success(t('events.seriesEdited', { count: result.changed }));
         onSaved?.(result.anchor);
         onClose();
         return;
       }
       const saved = event
-        ? await update.mutateAsync({ id: event.id, body })
+        ? await update.mutateAsync({ id: event.id, body, ifMatch: openedAt.current.version })
         : await create.mutateAsync(body);
       message.success(t('common.saved'));
       onSaved?.(saved);
@@ -237,7 +254,12 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
       // failed" would leave the author with no idea what to change — an event people have already
       // answered cannot be turned into a kind nobody is asked to, and a run asked for with no end
       // is refused entire rather than trimmed to whatever length somebody else would have guessed.
-      message.error(t(eventRefusalKey(error, 'common.saveFailed')));
+      //
+      // A stale version is the exception: the application words it once for every save, and a
+      // "save failed" beside that would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(eventRefusalKey(error, 'common.saveFailed')));
+      }
     }
   };
 
