@@ -2,6 +2,8 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './schema';
 import { userManager } from '../auth/auth.tsx';
+import { renewSignIn } from '../auth/renewSignIn.ts';
+import { signInLapsed } from '../auth/signInLapsed.ts';
 import { recordBreadcrumb } from '../diagnostics/breadcrumbs.ts';
 import i18n from '../i18n';
 
@@ -176,7 +178,67 @@ export function retryDelay(failureCount: number, error: unknown): number {
  * Typed API client generated from the server OpenAPI contract.
  * `schema.d.ts` is generated — regenerate with `npm run generate:api`, never hand-edit.
  */
-export const api = createClient<paths>({ baseUrl: '/' });
+/**
+ * Sends `request`, and when the server refuses its bearer, renews the sign-in once and asks again.
+ *
+ * <b>Why the transport does this rather than each screen.</b> The sign-in is held in memory and its
+ * token lasts minutes. It is renewed once, shortly before it runs out, and a renewal that finds no
+ * connection is never tried again — so a laptop that slept, or a phone that lost its signal, across
+ * that moment wakes holding a token the server refuses. Without this every read and every save from
+ * then on is refused as coming from nobody, and only a reload, which throws away an open form, gets
+ * out of it. This is the one place every request passes through, so it is the one place to mend it.
+ *
+ * <ul>
+ * <li>Renewed: the request is sent again, once, with the new bearer. Its body is held from the
+ * first send, because a request's body can be read only once; it carries every header the first
+ * send had, the version a save opened with among them.</li>
+ * <li>Lapsed — nothing to renew with, or the server said no: the refusal goes to the caller, and
+ * the shell is told the sign-in has ended, so that it can offer signing in again. It is not begun
+ * from here: it is a full redirect, and the request may be a refetch nobody asked for or a save
+ * whose form holds the only copy of what was typed. The person leaves when they choose to.</li>
+ * <li>No answer: the refusal goes to the caller; nothing more can be done until the network is
+ * back.</li>
+ * </ul>
+ *
+ * A request that carried no bearer is left alone: a visitor without an account opening a link that
+ * needs one is not a sign-in that ran out, and the page that made it says so and offers signing in.
+ */
+export async function renewsALapsedSignIn(request: Request): Promise<Response> {
+  if (!request.headers.has('Authorization')) {
+    return fetch(request);
+  }
+
+  // The body is read into memory once and each send gets a request of its own around it. Not
+  // `request.clone()`: a clone splits the body into a stream, and a request sent with a streamed
+  // body carries no body the browser's own tools can show — the network panel, and every check
+  // that reads what a write sent, would see an empty one.
+  const body = request.body ? await request.arrayBuffer() : undefined;
+  const send = (authorization?: string) => {
+    const copy = new Request(request, body === undefined ? {} : { body });
+    if (authorization) {
+      copy.headers.set('Authorization', authorization);
+    }
+    return fetch(copy);
+  };
+
+  const response = await send();
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const renewal = await renewSignIn();
+  if (renewal === 'renewed') {
+    const user = await userManager.getUser();
+    return send(user?.access_token ? `Bearer ${user.access_token}` : undefined);
+  }
+
+  if (renewal === 'lapsed') {
+    signInLapsed();
+  }
+  return response;
+}
+
+export const api = createClient<paths>({ baseUrl: '/', fetch: renewsALapsedSignIn });
 
 // The signed-in account, on every request. Named and exported rather than written inline, because
 // one other caller has to make a request the same way this client does — see the read below.
@@ -222,6 +284,15 @@ const etags = new Map<string, string>();
 // and every later one — which the server answers with beside the ordinary tag. A write that
 // reaches the whole run sends this one: the ordinary tag speaks for one row only.
 const runVersions = new Map<string, string>();
+
+// When each read still on its way was sent, and when a write last filed a version for each
+// resource, on one counter. A read sent before a write and answered after it speaks for the record
+// as it stood before the write: its tag is older than the one the write filed, though it arrives
+// later, and filing it would make the next save carry a version the server has moved past — to be
+// refused as somebody else's change when nobody else made one. Such a read files nothing.
+let versionClock = 0;
+const readsSentAt = new Map<string, number>();
+const writtenAt = new Map<string, number>();
 
 function resourcePath(url: string): string {
   try {
@@ -271,7 +342,10 @@ function versionedResource(request: Request, response: Response): string | undef
  * version it started from, and this must not replace it.
  */
 export const threadsVersions = {
-  onRequest({ request }: { request: Request }) {
+  onRequest({ request, id }: { request: Request; id?: string }) {
+    if (request.method === 'GET' && id) {
+      readsSentAt.set(id, ++versionClock);
+    }
     if (
       (request.method === 'PUT' || request.method === 'DELETE') &&
       !request.headers.has('If-Match')
@@ -283,12 +357,24 @@ export const threadsVersions = {
     }
     return request;
   },
-  onResponse({ request, response }: { request: Request; response: Response }) {
+  onResponse({ request, response, id }: { request: Request; response: Response; id?: string }) {
+    const sentAt = id === undefined ? undefined : readsSentAt.get(id);
+    if (id !== undefined) {
+      readsSentAt.delete(id);
+    }
     const etag = response.headers.get('ETag');
     const runVersion = response.headers.get('X-Series-Version');
     if (etag || runVersion) {
       const resource = versionedResource(request, response);
-      if (resource) {
+      if (request.method !== 'GET' && resource) {
+        writtenAt.set(resource, ++versionClock);
+      }
+      const overtaken =
+        request.method === 'GET' &&
+        resource !== undefined &&
+        sentAt !== undefined &&
+        (writtenAt.get(resource) ?? 0) > sentAt;
+      if (resource && !overtaken) {
         if (etag) {
           etags.set(resource, etag);
         }
@@ -302,6 +388,11 @@ export const threadsVersions = {
       }
     }
     return response;
+  },
+  onError({ id }: { id?: string }) {
+    if (id !== undefined) {
+      readsSentAt.delete(id);
+    }
   },
 };
 
@@ -412,7 +503,7 @@ export async function readJson<T>(path: string): Promise<T> {
   await carriesTheAccountsBearer.onRequest({ request });
   sendsTheReadingLanguage.onRequest({ request });
 
-  const response = await fetch(request);
+  const response = await renewsALapsedSignIn(request);
 
   if (import.meta.env.DEV) {
     recordBreadcrumb(

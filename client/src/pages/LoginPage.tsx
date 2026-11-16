@@ -5,6 +5,7 @@ import { Alert, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography
 import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { authTransportProblem, fetchOrNull } from '../auth/authTransportProblem.ts';
 
 type TwoFactorMethod = 'authenticator' | 'email' | 'sms';
 
@@ -137,8 +138,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     // A failed external sign-in bounces back with ?error=<code>.
-    if (params.get('error')) {
-      setError(t('auth.externalFailed'));
+    const bounced = params.get('error');
+    if (bounced) {
+      // A locked account is said as such: "try again or use your password" would send the person
+      // to a password sign-in that the same lock refuses.
+      setError(bounced === 'auth.locked_out' ? t('auth.lockedOut') : t('auth.externalFailed'));
     }
     void fetch('/api/v1/auth/config')
       .then((r) => (r.ok ? (r.json() as Promise<AuthConfig>) : null))
@@ -155,12 +159,20 @@ export default function LoginPage() {
     }
     pendingAsked.current = true;
     void (async () => {
-      const response = await fetch('/api/v1/auth/2fa/verify', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
-      }).catch(() => null);
-      const problem = (await response?.json().catch(() => null)) as AuthProblemBody | null;
+      });
+      // No answer, a full rate window or a failed server says nothing about the waiting sign-in:
+      // calling it expired would send the person to start over, spending another request against
+      // the same window.
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
+      const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
       if (problem?.code === 'auth.mfa_required') {
         beginChallenge(problem);
       } else {
@@ -194,24 +206,36 @@ export default function LoginPage() {
     return t('auth.mfaInvalid');
   };
 
+  // A send refused for a reason it names is said in those words: a method the account does not
+  // have, or a sign-in no longer waiting for a code, is not cured by trying another method.
+  const sendError = (status: number, code: string | undefined) => {
+    if (status === 401) return t('auth.mfaPendingExpired');
+    if (code === 'auth.mfa_resend_too_soon') return t('auth.mfaResendTooSoon');
+    if (code === 'auth.mfa_method_unavailable') return t('auth.mfaMethodUnavailable');
+    return t('auth.mfaSendFailed');
+  };
+
   const sendCode = async (target: TwoFactorMethod) => {
     setSending(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch('/api/v1/auth/2fa/send', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method: target }),
       });
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
       const body = (await response.json().catch(() => null)) as
         | { destination?: string; expiresMinutes?: number; code?: string }
         | null;
 
       if (!response.ok) {
-        setError(
-          body?.code === 'auth.mfa_resend_too_soon' ? t('auth.mfaResendTooSoon') : t('auth.mfaSendFailed'),
-        );
+        setError(sendError(response.status, body?.code));
         return;
       }
       setNotice(t('auth.mfaCodeSent', { destination: body?.destination ?? '' }));
@@ -245,11 +269,18 @@ export default function LoginPage() {
   const resendConfirmation = async (email: string) => {
     setSending(true);
     try {
-      await fetch('/api/v1/auth/email/resend', {
+      const response = await fetchOrNull('/api/v1/auth/email/resend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      // A request that never reached the server, or that it could not complete, sent nothing:
+      // saying "on its way" then would have the person wait for a mail that is not coming.
+      const transportProblem = authTransportProblem(response, t);
+      if (transportProblem) {
+        setError(transportProblem);
+        return;
+      }
       // Always reported as sent: the endpoint deliberately does not say whether the address has
       // an account, and the page must not leak what the API withholds.
       setNotice(t('auth.confirmationResent'));
@@ -264,7 +295,7 @@ export default function LoginPage() {
     setNotice(null);
     try {
       const code = values.twoFactorCode?.trim();
-      const response = await fetch('/api/v1/auth/login', {
+      const response = await fetchOrNull('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,6 +305,14 @@ export default function LoginPage() {
           twoFactorMethod: code && !useRecovery ? (method ?? 'authenticator') : undefined,
         }),
       });
+
+      // No answer, a full rate window or a failed server says nothing about the password, so it
+      // must not be reported as a wrong one.
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
@@ -308,7 +347,7 @@ export default function LoginPage() {
     setNotice(null);
     try {
       const code = values.twoFactorCode?.trim();
-      const response = await fetch('/api/v1/auth/2fa/verify', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -316,6 +355,11 @@ export default function LoginPage() {
           method: code && !useRecovery ? (method ?? 'authenticator') : undefined,
         }),
       });
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
         setError(verifyError(problem?.code));

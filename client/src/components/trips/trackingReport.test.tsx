@@ -622,6 +622,26 @@ describe('sending a tracking report', () => {
       });
     });
 
+    // A report refused because the watch moved since the form read it is nobody's fault: it is
+    // said as a warning, not as a failure, and like every other answer about the report it is not
+    // held to be sent again under a version the server has already moved past.
+    it('says a stale-version refusal as a warning, and holds nothing', async () => {
+      recordEvents.mockImplementation(refusal(412, 'concurrency.version_mismatch'));
+      const send = hook().current.send;
+
+      const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+      expect(outcome).toEqual({
+        recorded: false,
+        held: false,
+        code: 'concurrency.version_mismatch',
+      });
+      expect(heldReportsOf(ANA)).toEqual([]);
+      expect(Object.keys(window.localStorage)).toEqual([]);
+      expect(document.querySelector('.ant-message-warning')).not.toBeNull();
+      expect(document.querySelector('.ant-message-error')).toBeNull();
+    });
+
     it('words the refusal as it always did', async () => {
       recordEvents.mockImplementation(refusal(409, 'tracking.not_writable'));
       const send = hook().current.send;

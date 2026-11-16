@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import type { Query, QueryClient } from '@tanstack/react-query';
-import { ApiError, retryAfterOf } from '../client.ts';
+import { ApiError, retryAfterOf, retryQuery } from '../client.ts';
+import { noteVersionOfReading } from '../readingVersion.ts';
 
 export async function unwrap<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
@@ -24,11 +25,27 @@ export async function unwrap<T>(
 }
 
 /**
- * A query's retry rule for an answer where a refusal is itself the answer: a 4xx is settled and
- * not asked again; a failure to reach the server is asked again, up to three times.
+ * unwrap for a read a form may be filled from: the version the answer was given at is kept
+ * against the values it carried, for `versionReadWith` to hand to the save.
+ */
+export async function unwrapVersioned<T>(
+  call: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T> {
+  const data = await unwrap(call);
+  noteVersionOfReading(data, (await call).response);
+  return data;
+}
+
+/**
+ * A query's retry rule for an answer where a refusal is itself the answer: a settled refusal is not
+ * asked again; a failure to reach the server, a failed server and a 429 are, up to three times (a
+ * 429 after the wait it names). This is the installation-wide default rule, delegated rather than
+ * restated, so a hook that names it explicitly cannot drift from the screens that rely on the
+ * default — it once treated a 429 as settled, and a rate-limited read then stayed in its error
+ * state instead of recovering after the named wait.
  */
 export function retryUnlessRefused(failureCount: number, error: unknown): boolean {
-  return !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 3;
+  return retryQuery(failureCount, error);
 }
 
 /** unwrap for endpoints with no response body (DELETE / 204). */
@@ -101,6 +118,26 @@ export function invalidateAfterDelete(queryClient: QueryClient, scope: readonly 
     queryKey: scope,
     predicate: (query) => !ofTheRecord(query),
   });
+}
+
+/**
+ * Marks stale what a write on a dated record moves outside its own family's caches.
+ *
+ * Trips, camps and events are rows on the calendar, and trips and camps are shapes on the map;
+ * neither cache is held under the record's own prefix, so invalidating the family alone left the
+ * calendar on the old days and the map on the old shape until each was next asked again. Which
+ * caches a dated write reaches is decided here, once, rather than in each family's hooks, where
+ * the copies had already drifted apart. `mapLayer` is the family's map layer, for those that have
+ * one. The re-reads are handed back for a caller that waits on them; most do not.
+ */
+export function invalidateDatedRows(
+  queryClient: QueryClient,
+  mapLayer?: 'trip-logs' | 'expeditions',
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    mapLayer ? queryClient.invalidateQueries({ queryKey: ['map', mapLayer] }) : undefined,
+  ]);
 }
 
 export function useInvalidateAttachments() {

@@ -13,40 +13,32 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client.ts';
-import { fetchSharedFeature, type SharedFeatureEnvelope } from '../api/hooks.ts';
+import { useSharedFeature } from '../api/hooks.ts';
+import { useAuth } from '../auth/auth.tsx';
 
 /**
  * Anonymous read-only page for a shared feature. The share token resolves server-side to a
  * redacted envelope — protected coordinates and internal ownership fields never reach this
  * page, and login-required shares answer 401 until the viewer signs in. Follows the shared
  * map-view page pattern: chrome-less, public base map, no workspace access.
+ *
+ * A link that needs an account is opened from a message, in a tab that holds no sign-in (the
+ * sign-in lives in the memory of the tab that made it). So signing in from here runs the full
+ * sign-in and comes back to this same address, where the read is made again with the bearer.
+ * The password page would not do: it ends on the home page, and the link would be lost.
  */
 export default function SharedFeaturePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
+  const location = useLocation();
+  const { signIn } = useAuth();
   const mapTarget = useRef<HTMLDivElement>(null);
-  const [envelope, setEnvelope] = useState<SharedFeatureEnvelope | null>(null);
-  const [failure, setFailure] = useState<'notFound' | 'loginRequired' | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    fetchSharedFeature(token!)
-      .then((data) => {
-        if (!disposed) {
-          setEnvelope(data);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!disposed) {
-          setFailure(error instanceof ApiError && error.status === 401 ? 'loginRequired' : 'notFound');
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [token]);
+  const { data: envelope, error, refetch, isFetching } = useSharedFeature(token);
+  // Beginning the sign-in first reads the sign-in server's own description, so it fails when that
+  // server cannot be reached; said here, because the button would otherwise seem to do nothing.
+  const [signInUnreachable, setSignInUnreachable] = useState(false);
 
   // The mini map exists only when the shared envelope carries geometry (protected non-point
   // shapes arrive as null); built after the data lands because its target div mounts with it.
@@ -87,24 +79,55 @@ export default function SharedFeaturePage() {
     return () => map.setTarget(undefined);
   }, [envelope]);
 
-  if (failure) {
+  if (error) {
+    // Only the two answers the server gives about the link itself are said as such. Anything else —
+    // no connection, a server error, too many requests — is a read that failed and may succeed if
+    // asked again, never "this link does not exist".
+    const status = error instanceof ApiError ? error.status : undefined;
     return (
       <Flex align="center" justify="center" style={{ height: '100vh' }}>
-        {failure === 'loginRequired' ? (
+        {status === 401 ? (
           <Alert
             type="info"
             showIcon
+            data-testid="shared-feature-login-required"
             title={t('shares.loginRequired')}
+            description={signInUnreachable ? t('auth.serverUnreachable') : undefined}
             action={
-              <Link to="/login">
-                <Button size="small" type="primary">
-                  {t('shares.signIn')}
-                </Button>
-              </Link>
+              <Button
+                size="small"
+                type="primary"
+                data-testid="shared-feature-sign-in"
+                onClick={() => {
+                  setSignInUnreachable(false);
+                  signIn(location.pathname + location.search + location.hash).catch(() =>
+                    setSignInUnreachable(true),
+                  );
+                }}
+              >
+                {t('shares.signIn')}
+              </Button>
             }
           />
+        ) : status === 404 ? (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="shared-feature-not-found"
+            title={t('shares.sharedNotFound')}
+          />
         ) : (
-          <Alert type="warning" showIcon title={t('shares.sharedNotFound')} />
+          <Alert
+            type="error"
+            showIcon
+            data-testid="shared-feature-load-failed"
+            title={t('common.loadFailed')}
+            action={
+              <Button size="small" loading={isFetching} onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
         )}
       </Flex>
     );
@@ -127,6 +150,10 @@ export default function SharedFeaturePage() {
       </Descriptions.Item>
     );
 
+  // A named value in words, or nothing: a value this build has no words for — a server that has grown
+  // a new one, or sent none — is left out rather than shown as its lookup key.
+  const named = (key: string) => (i18n.exists(key) ? t(key) : null);
+
   // Typed-properties document: only primitive entries render; nested structure is not
   // meaningful without the type's schema and stays hidden rather than dumped as JSON.
   const propertyEntries = Object.entries(
@@ -147,7 +174,8 @@ export default function SharedFeaturePage() {
         <Typography.Text type="secondary">{t('app.name')}</Typography.Text>
       </Flex>
 
-      <div style={{ padding: 16, maxWidth: 900, width: '100%', margin: '0 auto' }}>
+      {/* Border-box: the padding sits inside the full width, or a phone scrolls sideways by it. */}
+      <div style={{ padding: 16, maxWidth: 900, width: '100%', boxSizing: 'border-box', margin: '0 auto' }}>
         <Alert
           type="info"
           showIcon
@@ -160,7 +188,7 @@ export default function SharedFeaturePage() {
         )}
 
         {feature.geometry && (
-          <div ref={mapTarget} style={{ height: 320, marginBottom: 16, background: '#e8ecef' }} />
+          <div ref={mapTarget} data-testid="shared-feature-map" style={{ height: 320, marginBottom: 16, background: '#e8ecef' }} />
         )}
 
         {feature.description && (
@@ -183,7 +211,7 @@ export default function SharedFeaturePage() {
               {detailItem(t('caves.fields.discoverer'), cave.discoverer)}
               {detailItem(
                 t('caves.fields.explorationStatus'),
-                t(`caves.explorationValues.${cave.explorationStatus}`),
+                named(`caves.explorationValues.${cave.explorationStatus}`),
               )}
             </Descriptions>
           </Card>
@@ -196,11 +224,10 @@ export default function SharedFeaturePage() {
               {entrance.isMain && (
                 <Descriptions.Item label={t('entrances.main')}>✓</Descriptions.Item>
               )}
-              {entrance.positionQuality &&
-                detailItem(
-                  t('entrances.positionQuality'),
-                  t(`entrances.qualityValues.${entrance.positionQuality}`),
-                )}
+              {detailItem(
+                t('entrances.positionQuality'),
+                named(`entrances.qualityValues.${entrance.positionQuality}`),
+              )}
               {detailItem(t('entrances.surveyedAt'), entrance.surveyedAt)}
             </Descriptions>
           </Card>
@@ -214,7 +241,7 @@ export default function SharedFeaturePage() {
                 centerline.lengthM == null ? null : `${Number(centerline.lengthM).toLocaleString()} m`,
               )}
               {detailItem(t('centerlines.paths'), centerline.pathCount)}
-              {detailItem(t('centerlines.source'), t(`centerlines.sourceValues.${centerline.source}`))}
+              {detailItem(t('centerlines.source'), named(`centerlines.sourceValues.${centerline.source}`))}
               {centerline.isDefault && (
                 <Descriptions.Item label={t('centerlines.default')}>✓</Descriptions.Item>
               )}

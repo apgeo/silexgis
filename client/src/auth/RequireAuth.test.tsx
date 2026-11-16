@@ -18,12 +18,10 @@ function renderGuarded() {
   );
 }
 
-function mockAuth(signIn: () => Promise<void>) {
+function mockAuth(signIn: () => Promise<void>, state: Pick<ReturnType<typeof auth.useAuth>, 'user' | 'loading'> = { user: null, loading: false }) {
   vi.spyOn(auth, 'useAuth').mockReturnValue({
-    user: null,
-    loading: false,
+    ...state,
     signIn,
-    signOut: () => Promise.resolve(),
     refreshSession: () => Promise.resolve(),
   });
 }
@@ -66,5 +64,28 @@ describe('RequireAuth', () => {
 
     await waitFor(() => expect(signIn).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('Cannot reach the server')).not.toBeInTheDocument();
+  });
+
+  it('shows the page to a signed-in account and does not start a sign-in', async () => {
+    const signIn = vi.fn().mockResolvedValue(undefined);
+    mockAuth(signIn, { user: { profile: { sub: 'u1' }, expired: false } as never, loading: false });
+
+    renderGuarded();
+
+    expect(await screen.findByText('the caves page')).toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  // While the held session is still being read, nobody is known to be signed out: starting a
+  // redirect then would throw away a session that was about to be found.
+  it('waits, without a sign-in and without the page, while the session is being read', async () => {
+    const signIn = vi.fn().mockResolvedValue(undefined);
+    mockAuth(signIn, { user: null, loading: true });
+
+    renderGuarded();
+
+    await Promise.resolve();
+    expect(screen.queryByText('the caves page')).not.toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
   });
 });

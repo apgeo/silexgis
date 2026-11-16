@@ -411,6 +411,17 @@
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
     "serverUnreachable": "Cannot reach the server",
     "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
+    "unreachable": "The server could not be reached. Check the connection, then try again.",
+    "serverFailed": "The server could not complete this right now. Try again in a moment.",
+    "tooManyAttempts": "Too many sign-in requests from this network. Wait a minute, then try again.",
+    "tooManyAttemptsWait": "Too many sign-in requests from this network. Try again in {{seconds}} s.",
+    "callbackFailed": "Signing in could not be completed.",
+    "callbackFailedHint": "The return from the sign-in page was not accepted. This can happen when the device's clock is wrong or the sign-in took too long. Check the clock, then try again.",
+    "signInLapsedTitle": "Your sign-in has ended",
+    "signInLapsedBody": "The server no longer accepts this sign-in, so nothing can be read or saved until you sign in again. Signing in leaves this page and comes back to it: copy anything you have typed and not yet saved first.",
+    "signInLapsedSignIn": "Sign in again",
+    "signInLapsedStay": "Stay on this page",
+    "mfaMethodUnavailable": "That method is not available on this account. Choose another.",
     "mfaMethod": "Send the code by",
     "mfaMethod_authenticator": "Authenticator",
     "mfaMethod_email": "Email",
@@ -7127,7 +7138,18 @@
       "authenticated": "Anyone signed in",
       "public": "Everyone"
     },
-    "delete": "Delete this checklist"
+    "delete": "Delete this checklist",
+    "loadFailed": "The checklists could not be loaded.",
+    "changedSinceShown": "Somebody changed this checklist since the page showed it. Look at it again before deleting it.",
+    "problems": {
+      "openFailed": "That checklist could not be opened. Try again.",
+      "deleteFailed": "That checklist could not be deleted.",
+      "notFound": "That checklist is no longer there, or you may no longer see it.",
+      "forbidden": "You may not change this checklist.",
+      "createForbidden": "You may not create a checklist for that caving group. Choose another group, or ask its administrator.",
+      "groupNotAllowed": "You may not hand a checklist to that caving group.",
+      "invalid": "Something in the checklist is not valid: check the title, the description and every line."
+    }
   },
   "workAreas": {
     "title": "Work areas",

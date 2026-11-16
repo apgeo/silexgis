@@ -411,6 +411,17 @@
     "externalFailed": "Autentificarea externă nu a fost finalizată. Încearcă din nou sau folosește parola.",
     "serverUnreachable": "Serverul nu poate fi contactat",
     "serverUnreachableHint": "Autentificarea nu a putut fi inițiată. Verifică dacă serverul funcționează, apoi încearcă din nou.",
+    "unreachable": "Serverul nu a putut fi contactat. Verifică conexiunea, apoi încearcă din nou.",
+    "serverFailed": "Serverul nu a putut finaliza acum această operație. Încearcă din nou peste câteva momente.",
+    "tooManyAttempts": "Prea multe cereri de autentificare din această rețea. Așteaptă un minut, apoi încearcă din nou.",
+    "tooManyAttemptsWait": "Prea multe cereri de autentificare din această rețea. Încearcă din nou peste {{seconds}} s.",
+    "callbackFailed": "Autentificarea nu a putut fi finalizată.",
+    "callbackFailedHint": "Revenirea de la pagina de autentificare nu a fost acceptată. Se poate întâmpla când ceasul dispozitivului este greșit sau autentificarea a durat prea mult. Verifică ceasul, apoi încearcă din nou.",
+    "signInLapsedTitle": "Autentificarea ta a expirat",
+    "signInLapsedBody": "Serverul nu mai acceptă această autentificare, așa că nu se poate citi sau salva nimic până nu te autentifici din nou. Autentificarea părăsește această pagină și revine la ea: copiază mai întâi orice ai scris și nu ai salvat încă.",
+    "signInLapsedSignIn": "Autentifică-te din nou",
+    "signInLapsedStay": "Rămâi pe această pagină",
+    "mfaMethodUnavailable": "Această metodă nu este disponibilă pentru acest cont. Alege alta.",
     "mfaMethod": "Trimite codul prin",
     "mfaMethod_authenticator": "Aplicație de autentificare",
     "mfaMethod_email": "E-mail",
@@ -7140,7 +7151,18 @@
       "authenticated": "Oricine este autentificat",
       "public": "Toată lumea"
     },
-    "delete": "Șterge această listă"
+    "delete": "Șterge această listă",
+    "loadFailed": "Listele de verificare nu au putut fi încărcate.",
+    "changedSinceShown": "Cineva a modificat această listă după ce pagina a afișat-o. Uită-te din nou la ea înainte s-o ștergi.",
+    "problems": {
+      "openFailed": "Lista nu a putut fi deschisă. Încearcă din nou.",
+      "deleteFailed": "Lista nu a putut fi ștearsă.",
+      "notFound": "Lista nu mai există sau nu o mai poți vedea.",
+      "forbidden": "Nu ai voie să modifici această listă.",
+      "createForbidden": "Nu ai voie să creezi o listă pentru acel club de speologie. Alege alt club sau cere-i administratorului clubului.",
+      "groupNotAllowed": "Nu ai voie să dai o listă acelui club de speologie.",
+      "invalid": "Ceva din listă nu este valid: verifică titlul, descrierea și fiecare linie."
+    }
   },
   "workAreas": {
     "title": "Zone de lucru",

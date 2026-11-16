@@ -23,8 +23,7 @@ import ErrorBoundary from './ErrorBoundary.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import HeldReportsSentinel from './trips/HeldReportsSentinel.tsx';
 import AccountPrefsGate from './AccountPrefsGate.tsx';
-import { flushAccountPreferences } from '../api/hooks/accountPrefs.ts';
-import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
+import { signOutOfThisBrowser } from '../auth/signOut.ts';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
@@ -47,7 +46,7 @@ export default function AppLayout() {
 function AppShell() {
   const { t } = useTranslation();
   const { language, choose } = useLanguageChoice();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -258,14 +257,7 @@ function AppShell() {
                   icon: <LogoutOutlined />,
                   label: t('auth.signOut'),
                   onClick: () => {
-                    void (async () => {
-                      // The arrangement this browser holds is the member's, not the browser's: a
-                      // change still waiting to be written goes to their account first, then it
-                      // goes with them, and the next person to sign in here starts from the defaults.
-                      await flushAccountPreferences();
-                      useUiPrefsStore.getState().releaseAccount();
-                      await signOut();
-                    })();
+                    void signOutOfThisBrowser('/');
                   },
                 },
               ],

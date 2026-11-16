@@ -60,7 +60,7 @@ export function objectRightsFrom(
  * for this caller — which holds no right on it. Anything else (the server unreachable, a session
  * that lapsed) is no answer yet.
  */
-export function isSettledRefusal(error: unknown): boolean {
+export function isObjectAnswer(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 403 || error.status === 404);
 }
 
@@ -81,6 +81,6 @@ export function useFeatureRights(featureId: string | undefined, options: { enabl
     managePermissions: useCan('features', 'managePermissions'),
   };
   const { data, error } = useEffectiveAccess('feature', featureId, { enabled: options.enabled ?? true });
-  const actions = data ? (data.actions ?? '') : isSettledRefusal(error) ? '' : undefined;
+  const actions = data ? (data.actions ?? '') : isObjectAnswer(error) ? '' : undefined;
   return objectRightsFrom(actions, installationWide);
 }

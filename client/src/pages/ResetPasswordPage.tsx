@@ -4,6 +4,7 @@ import { Alert, Card, Flex, Form, Input, Switch, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { authTransportProblem, fetchOrNull } from '../auth/authTransportProblem.ts';
 
 interface ResetFormValues {
   newPassword: string;
@@ -42,7 +43,7 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/auth/password/reset', {
+      const response = await fetchOrNull('/api/v1/auth/password/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -53,6 +54,13 @@ export default function ResetPasswordPage() {
         }),
       });
 
+      // No answer or a failed server says nothing about the link: calling it invalid would send
+      // the person to ask for a new one while this one still works.
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as
           | { code?: string; errors?: Record<string, string> }
@@ -74,7 +82,7 @@ export default function ResetPasswordPage() {
 
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
-      <Card style={{ width: 400 }}>
+      <Card style={{ width: 400, maxWidth: '100%' }}>
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
           {invite ? t('auth.invitePasswordTitle') : t('auth.resetPasswordTitle')}
         </Typography.Title>

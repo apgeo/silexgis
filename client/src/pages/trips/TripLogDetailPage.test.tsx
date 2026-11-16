@@ -25,6 +25,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useDeleteTripLog: () => ({ mutateAsync: vi.fn() }),
   useStandDownTripCallout: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArrangeTripCallout: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useReadTripLogAgain: () => vi.fn(),
   useUpdateTripLog: () => ({ mutateAsync: vi.fn() }),
   useImportTripTrack: () => ({ mutateAsync: importTrack, isPending: false }),
   useEffectiveAccess: () => ({ data: undefined }),

@@ -5,6 +5,8 @@ import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './auth.tsx';
+import { useRenewSignInOnReturn } from './renewSignIn.ts';
+import SignInLapsedNotice from './SignInLapsedNotice.tsx';
 
 /**
  * Gate for authenticated routes: without tokens it starts the OIDC redirect, which lands
@@ -12,6 +14,9 @@ import { useAuth } from './auth.tsx';
  */
 export default function RequireAuth() {
   const { user, loading, signIn } = useAuth();
+  // Every signed-in page sits under this guard, so this is where the held sign-in is renewed
+  // when the tab returns from sleep or an outage.
+  useRenewSignInOnReturn();
   const location = useLocation();
   const { t } = useTranslation();
   const [unreachable, setUnreachable] = useState(false);
@@ -53,5 +58,10 @@ export default function RequireAuth() {
     return <Spin size="large" fullscreen />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <SignInLapsedNotice />
+    </>
+  );
 }

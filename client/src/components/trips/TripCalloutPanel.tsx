@@ -3,13 +3,16 @@ import { CheckCircleOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-
 import { Alert, App, DatePicker, Descriptions, Flex, Form, Modal, Space, Tag } from 'antd';
 import Button from '../Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useArrangeTripCallout,
+  useReadTripLogAgain,
   useStandDownTripCallout,
   type TripCalloutState,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
+import { useNow } from '../../hooks/useNow.ts';
 
 interface Props {
   tripId: string;
@@ -74,6 +77,7 @@ export default function TripCalloutPanel({
   const { message } = App.useApp();
   const standDown = useStandDownTripCallout();
   const arrange = useArrangeTripCallout();
+  const readTripAgain = useReadTripLogAgain();
   const [arranging, setArranging] = useState(false);
   const [form] = Form.useForm<ArrangeForm>();
 
@@ -84,9 +88,12 @@ export default function TripCalloutPanel({
   // the installation, which is how a real one stops being read.
   const arranged = live || state === 'stoodDown';
 
+  // Measured against a clock that redraws the panel by itself: on a page left open and only
+  // watched, nothing else would, and the hour passing is exactly the change that has to show.
+  const now = useNow();
   const lastChecked = calloutLastCheckedAt ? new Date(calloutLastCheckedAt) : null;
   const unchecked =
-    live && (lastChecked === null || Date.now() - lastChecked.getTime() > STALE_AFTER_MS);
+    live && (lastChecked === null || now - lastChecked.getTime() > STALE_AFTER_MS);
 
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
@@ -100,11 +107,25 @@ export default function TripCalloutPanel({
     }
   };
 
-  const openArrange = () => {
+  // The version of the trip the dialog was filled from. The page behind it goes on reading the
+  // trip — a return from the phone app used to ring the party is one such read — and each read
+  // files a newer version. Sending that one would put the times the dialog opened with back over
+  // whatever another coordinator set meanwhile, with nobody told; so the save names this one.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+
+  const fill = (
+    times: { expectedReturnAt: string | null; calloutAlarmAt: string | null },
+    version: string | undefined,
+  ) => {
+    openedAtVersion.current = version;
     form.setFieldsValue({
-      expectedReturnAt: expectedReturnAt ? dayjs(expectedReturnAt) : null,
-      calloutAlarmAt: calloutAlarmAt ? dayjs(calloutAlarmAt) : null,
+      expectedReturnAt: times.expectedReturnAt ? dayjs(times.expectedReturnAt) : null,
+      calloutAlarmAt: times.calloutAlarmAt ? dayjs(times.calloutAlarmAt) : null,
     });
+  };
+
+  const openArrange = () => {
+    fill({ expectedReturnAt, calloutAlarmAt }, lastReadETag(`/api/v1/trip-logs/${tripId}`));
     setArranging(true);
   };
 
@@ -124,11 +145,27 @@ export default function TripCalloutPanel({
         id: tripId,
         expectedReturnAt: values.expectedReturnAt ? values.expectedReturnAt.toISOString() : null,
         calloutAlarmAt: alarm,
+        ifMatch: openedAtVersion.current,
       });
       message.success(alarm ? t('trips.calloutSaved') : t('trips.calloutCleared'));
       setArranging(false);
-    } catch {
-      message.error(t('trips.calloutSaveFailed'));
+    } catch (error) {
+      if (isConcurrencyConflict(error)) {
+        // Somebody else arranged this callout since the dialog opened, and the application's
+        // conflict warning says so. The trip is read again and the dialog refilled with the times
+        // as they now stand, under the version of that read, so what is saved next is a deliberate
+        // change of those rather than of what was there before. The copy the page holds is the
+        // one the refused save came from: refilled from it, the next save would be refused too.
+        try {
+          const { trip, version } = await readTripAgain(tripId);
+          fill(trip, version);
+        } catch {
+          // The dialog keeps what was typed; the next save is refused again until a read lands.
+          message.error(t('trips.calloutSaveFailed'));
+        }
+      } else {
+        message.error(t('trips.calloutSaveFailed'));
+      }
     }
   };
 

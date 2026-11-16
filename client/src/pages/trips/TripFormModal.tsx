@@ -17,7 +17,7 @@ import {
 import Button from '../../components/Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { ApiError, lastReadETag } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
 import {
   useCreateDoor,
   useCreateTripLog,
@@ -471,7 +471,11 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
       // rather than an error, and with what to do — the form still holds the roster as it was
       // before the other save, so saving it again unread would undo what the other person did.
       const code = error instanceof ApiError ? error.code : undefined;
-      if (code === 'trip_log.concurrent_roster_write') {
+      if (isConcurrencyConflict(error)) {
+        // Saved against a version somebody else has moved past: the application's conflict
+        // warning words it, and a "save failed" beside it would contradict it. The form stays
+        // open with what was typed in it.
+      } else if (code === 'trip_log.concurrent_roster_write') {
         message.warning({ content: t('trips.rosterChangedMeanwhile'), duration: 8 });
       } else {
         message.error(
