@@ -865,11 +865,39 @@ export function useCreateChecklist() {
   });
 }
 
+/**
+ * Reads one list afresh, bypassing whatever is cached, so that an editor opens on the list as it
+ * is stored now. The answer carries the list's version, which the client files under the list's
+ * path; {@link checklistVersion} hands it to the write that follows.
+ */
+export function useReadChecklist() {
+  const queryClient = useQueryClient();
+  return (id: string) =>
+    queryClient.fetchQuery({
+      queryKey: queryKeys.checklist(id),
+      queryFn: () => unwrap(api.GET('/api/v1/checklists/{id}', { params: { path: { id } } })),
+      staleTime: 0,
+    });
+}
+
+/** The version of a list last read, for a write that must not land on a list changed since. */
+export function checklistVersion(id: string): string | undefined {
+  return lastReadETag(`/api/v1/checklists/${id}`);
+}
+
+/**
+ * A write to a list sends the version it was opened at, so a list somebody else changed in the
+ * meantime is refused as a conflict instead of being overwritten or removed unseen. Named by the
+ * caller rather than replayed from the newest read: a read made while the editor was open must not
+ * stand for a change the editor never saw.
+ */
+const ifMatch = (version: string | undefined) => (version ? { 'If-Match': version } : undefined);
+
 export function useUpdateChecklist() {
   const invalidate = useInvalidateChecklists();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: ChecklistWrite }) =>
-      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, body, version }: { id: string; body: ChecklistWrite; version?: string }) =>
+      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body, headers: ifMatch(version) })),
     onSuccess: (_data, variables) => invalidate(variables.id),
   });
 }
@@ -879,8 +907,8 @@ export function useDeleteChecklist() {
   return useMutation({
     // The refusal travels whole — its code, its sentence and its members — as every other
     // write's does.
-    mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/checklists/{id}', { params: { path: { id } } })),
+    mutationFn: ({ id, version }: { id: string; version?: string }) =>
+      unwrapVoid(api.DELETE('/api/v1/checklists/{id}', { params: { path: { id } }, headers: ifMatch(version) })),
     onSuccess: () => invalidate(),
   });
 }

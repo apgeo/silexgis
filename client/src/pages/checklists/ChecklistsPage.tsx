@@ -18,20 +18,23 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
+  checklistVersion,
   useCan,
   useCavingGroups,
   useChecklists,
   useCreateChecklist,
   useDeleteChecklist,
   useMe,
+  useReadChecklist,
   useUpdateChecklist,
   type ChecklistInfo,
   type ChecklistWrite,
 } from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import { checklistProblem } from './checklistProblems.ts';
 
 /** The audience a list is given, in the order they widen. */
 const visibilities = ['private', 'cavingGroup', 'authenticated', 'public'] as const;
@@ -73,13 +76,51 @@ export default function ChecklistsPage() {
   const create = useCreateChecklist();
   const update = useUpdateChecklist();
   const remove = useDeleteChecklist();
+  const readChecklist = useReadChecklist();
   const [editing, setEditing] = useState<ChecklistInfo | null>(null);
+  // The version of the list the editor was filled from, sent with its save.
+  const [openedAt, setOpenedAt] = useState<string | undefined>(undefined);
+  const [opening, setOpening] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [initial, setInitial] = useState<FormValues | undefined>(undefined);
   const [form] = Form.useForm<FormValues>();
 
-  const openFor = (list: ChecklistInfo | null) => {
+  // An existing list is read afresh before the editor opens: the form starts from the list as it
+  // is stored now and remembers that version, so a save over somebody else's later change is
+  // refused as a conflict rather than writing the older lines back over theirs.
+  const edit = async (list: ChecklistInfo) => {
+    setOpening(list.id);
+    try {
+      const fresh = await readChecklist(list.id);
+      openFor(fresh, checklistVersion(list.id));
+    } catch (error) {
+      void message.error(checklistProblem(error, t));
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  // A list is removed only as it was shown: one changed since the page was drawn is not removed
+  // unseen. The fresh read files the version the delete then names.
+  const removeList = async (list: ChecklistInfo) => {
+    try {
+      const fresh = await readChecklist(list.id);
+      if (fresh.updatedAt !== list.updatedAt) {
+        void message.warning(t('checklists.changedSinceShown'));
+        return;
+      }
+      await remove.mutateAsync({ id: list.id, version: checklistVersion(list.id) });
+    } catch (error) {
+      // A conflict is answered by the prompt every write shares.
+      if (!isConcurrencyConflict(error)) {
+        void message.error(checklistProblem(error, t));
+      }
+    }
+  };
+
+  const openFor = (list: ChecklistInfo | null, version?: string) => {
     setEditing(list);
+    setOpenedAt(version);
     // Handed to the form as it mounts rather than written into it here. The dialog's body is
     // destroyed while it is shut, so at this moment the form instance is attached to no form, and
     // writing into it then made the form library report an error in the console on every opening.
@@ -106,14 +147,18 @@ export default function ChecklistsPage() {
     };
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, body });
+        await update.mutateAsync({ id: editing.id, body, version: openedAt });
       } else {
         await create.mutateAsync(body);
       }
       setOpen(false);
       void message.success(t('checklists.saved'));
     } catch (error) {
-      void message.error(error instanceof ApiError ? error.detail : t('checklists.saveFailed'));
+      // A conflict is answered by the prompt every write shares; the editor stays open with what
+      // was typed, so it can be copied before the list is opened again.
+      if (!isConcurrencyConflict(error)) {
+        void message.error(checklistProblem(error, t));
+      }
     }
   };
 
@@ -162,19 +207,13 @@ export default function ChecklistsPage() {
                   )}
                   <Button
                     icon={<EditOutlined />}
-                    onClick={() => openFor(list)}
+                    onClick={() => void edit(list)}
+                    loading={opening === list.id}
                     aria-label={t('common.edit')}
                   />
                   <Popconfirm
                     title={t('checklists.deleteConfirm')}
-                    onConfirm={() => {
-                      remove.mutate(list.id, {
-                        onError: (error) =>
-                          void message.error(
-                            error instanceof ApiError ? error.detail : t('checklists.saveFailed'),
-                          ),
-                      });
-                    }}
+                    onConfirm={() => removeList(list)}
                   >
                     <Button danger icon={<DeleteOutlined />} aria-label={t('checklists.delete')} />
                   </Popconfirm>
