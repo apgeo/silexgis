@@ -133,6 +133,29 @@ describe('the saved filters screen', () => {
     expect(screen.getByTestId('saved-filter-delete-f-3')).toBeInTheDocument();
   });
 
+  it('Save with an emptied name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      filters.current = [filter({})];
+      show();
+      fireEvent.click(screen.getByTestId('saved-filter-edit-f-1'));
+      const dialog = await screen.findByRole('dialog');
+      const name = within(dialog).getByTestId('saved-filter-edit-name');
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      expect(updateSpy).not.toHaveBeenCalled();
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
   it('keeps the group an administrator is not in on offer when they rename a filter shared with it', async () => {
     filters.current = [filter({
       id: 'f-3', mine: false, visibility: 'cavingGroup', cavingGroupId: 'g-elsewhere',
