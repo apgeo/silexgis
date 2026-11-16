@@ -325,7 +325,7 @@ test('caving groups and per-object permission grants', async ({ page }) => {
   await expect(modal.getByText(cavingGroupName)).toBeVisible({ timeout: 15_000 });
   const e2eGrantRows = modal.getByRole('row', { name: /E2E Caving Group/ });
   while ((await e2eGrantRows.count()) > 0) {
-    await e2eGrantRows.first().getByRole('button', { name: 'delete' }).click();
+    await e2eGrantRows.first().getByRole('button', { name: /^Remove the rule for / }).click();
   }
   await modal.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });

@@ -651,9 +651,45 @@ export async function entranceToPick(page: Page, { nothingDrawnOver = false } = 
         break;
       }
     }
+    // A short, wide screen framed on the demo cave can be served a single named entrance — the
+    // cave's own, which its survey starts from — with every other one counted into a cell. The
+    // neighbourhood is then asked for directly, at a zoom where the server names entrances one by
+    // one, nearest first so the same run picks the same place.
+    let asked = 0;
+    if (!clear && ranked.length > 0) {
+      const [lon, lat] = ranked[0].geometry.coordinates;
+      const reach = 0.05;
+      const bbox = [lon - reach, lat - reach, lon + reach, lat + reach].map((n) => n.toFixed(5)).join(',');
+      const response = await page.request.get(`/api/v1/map/cave-entrances?bbox=${bbox}&zoom=16`, {
+        headers: { Authorization: `Bearer ${await bearerToken(page)}` },
+      });
+      expect(response.ok(), `the entrances near the demo cave answered ${response.status()}`).toBeTruthy();
+      const nearby = (((await response.json()) as { features?: Entrance[] }).features ?? [])
+        .filter(
+          (f) =>
+            f.properties.cluster !== true &&
+            f.geometry.type === 'Point' &&
+            typeof f.properties.name === 'string' &&
+            f.properties.name !== '',
+        )
+        .map((f) => ({
+          f,
+          distance: Math.hypot(f.geometry.coordinates[0] - lon, f.geometry.coordinates[1] - lat),
+        }))
+        .sort((a, b) => a.distance - b.distance || a.f.geometry.coordinates.join().localeCompare(b.f.geometry.coordinates.join()))
+        .map(({ f }) => f);
+      asked = nearby.length;
+      for (const candidate of nearby) {
+        if (!(await surveyDrawnNear(page, candidate.geometry.coordinates))) {
+          clear = candidate;
+          break;
+        }
+      }
+    }
     expect(
       clear,
-      `every one of the ${ranked.length} named entrances served has a survey drawn over it`,
+      `every one of the ${ranked.length} named entrances served, and the ${asked} named around them, ` +
+        'has a survey drawn over it',
     ).toBeDefined();
     feature = clear!;
   }
