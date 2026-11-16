@@ -285,6 +285,15 @@ const etags = new Map<string, string>();
 // reaches the whole run sends this one: the ordinary tag speaks for one row only.
 const runVersions = new Map<string, string>();
 
+// When each read still on its way was sent, and when a write last filed a version for each
+// resource, on one counter. A read sent before a write and answered after it speaks for the record
+// as it stood before the write: its tag is older than the one the write filed, though it arrives
+// later, and filing it would make the next save carry a version the server has moved past — to be
+// refused as somebody else's change when nobody else made one. Such a read files nothing.
+let versionClock = 0;
+const readsSentAt = new Map<string, number>();
+const writtenAt = new Map<string, number>();
+
 function resourcePath(url: string): string {
   try {
     return new URL(url, window.location.origin).pathname;
@@ -333,7 +342,10 @@ function versionedResource(request: Request, response: Response): string | undef
  * version it started from, and this must not replace it.
  */
 export const threadsVersions = {
-  onRequest({ request }: { request: Request }) {
+  onRequest({ request, id }: { request: Request; id?: string }) {
+    if (request.method === 'GET' && id) {
+      readsSentAt.set(id, ++versionClock);
+    }
     if (
       (request.method === 'PUT' || request.method === 'DELETE') &&
       !request.headers.has('If-Match')
@@ -345,12 +357,24 @@ export const threadsVersions = {
     }
     return request;
   },
-  onResponse({ request, response }: { request: Request; response: Response }) {
+  onResponse({ request, response, id }: { request: Request; response: Response; id?: string }) {
+    const sentAt = id === undefined ? undefined : readsSentAt.get(id);
+    if (id !== undefined) {
+      readsSentAt.delete(id);
+    }
     const etag = response.headers.get('ETag');
     const runVersion = response.headers.get('X-Series-Version');
     if (etag || runVersion) {
       const resource = versionedResource(request, response);
-      if (resource) {
+      if (request.method !== 'GET' && resource) {
+        writtenAt.set(resource, ++versionClock);
+      }
+      const overtaken =
+        request.method === 'GET' &&
+        resource !== undefined &&
+        sentAt !== undefined &&
+        (writtenAt.get(resource) ?? 0) > sentAt;
+      if (resource && !overtaken) {
         if (etag) {
           etags.set(resource, etag);
         }
@@ -364,6 +388,11 @@ export const threadsVersions = {
       }
     }
     return response;
+  },
+  onError({ id }: { id?: string }) {
+    if (id !== undefined) {
+      readsSentAt.delete(id);
+    }
   },
 };
 
