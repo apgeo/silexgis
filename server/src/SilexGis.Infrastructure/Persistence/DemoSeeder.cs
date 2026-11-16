@@ -9,6 +9,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
 using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -68,6 +69,12 @@ public static class DemoSeeder
         // Every kind of thing the selector offers needs something to find, or its button looks
         // broken rather than empty. Trips and saved views had nothing at all until now.
         await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
+        // The shapes the measuring features need before they can show anything: an outlined
+        // doline for the morphometry, and drawn passages for two caves that come near each other
+        // for the closest-approach table. After the caves, because the passages belong to them.
+        await SeedKarstShapesAsync(db, writer, ownerUserId, ct);
         await db.SaveChangesAsync(ct);
 
         await SeedTripLogsAsync(db, ownerUserId, ct);
@@ -742,6 +749,115 @@ public static class DemoSeeder
                 Visibility = Visibility.Public,
             },
             parents: [], ct);
+    }
+
+    /// <summary>
+    /// One outlined doline and a drawn passage for each of two demo caves whose passages come
+    /// within a couple of hundred metres of each other, so the shape measurements and the
+    /// closest-approach table have something to answer on a demo installation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every figure here is invented. The outline is a turned ellipse a few tens of metres
+    /// across over the first cave's gallery, joined to the demonstration karst area so the area's
+    /// statistics count it. Each passage is three stations with altitudes — the table leaves out
+    /// line work with none — descending from the cave's own entrance, and the two end about a
+    /// hundred metres apart in plan and a few tens of metres apart in height.
+    /// </para>
+    /// <para>
+    /// Each row is on a guard of its own, like the rest of the dataset, so a lost outline or
+    /// passage comes back on the next run. A cave that already has line work — from a survey the
+    /// demo trip was followed on, say — keeps it and gets nothing here, so a cave never carries
+    /// two competing default centerlines.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedKarstShapesAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync(ct);
+        var areaId = await db.Features
+            .Where(f => f.Name == "Platoul Demo").Select(f => (Guid?)f.Id).FirstOrDefaultAsync(ct);
+
+        if (!await db.Features.AnyAsync(f => f.Name == "Dolina Demo Mare", ct))
+        {
+            const double centreLongitude = 25.4448;
+            const double centreLatitude = 45.5292;
+            const double semiMajorDegrees = 0.0004; // about 31 m of longitude at this latitude
+            const double semiMinorDegrees = 0.0002; // about 22 m of latitude
+            const double turnRadians = 0.5;
+            const int vertices = 16;
+
+            var ring = new Coordinate[vertices + 1];
+            for (var i = 0; i < vertices; i++)
+            {
+                var angle = 2 * Math.PI * i / vertices;
+                var u = semiMajorDegrees * Math.Cos(angle);
+                var v = semiMinorDegrees * Math.Sin(angle);
+                ring[i] = new Coordinate(
+                    centreLongitude + u * Math.Cos(turnRadians) - v * Math.Sin(turnRadians),
+                    centreLatitude + u * Math.Sin(turnRadians) + v * Math.Cos(turnRadians));
+            }
+
+            ring[vertices] = ring[0].Copy();
+
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = "Dolina Demo Mare",
+                    FeatureTypeId = sinkholeTypeId,
+                    Geom = new Polygon(new LinearRing(ring)) { SRID = 4326 },
+                    Description = "Demo sinkhole drawn as an outline, over the first demo cave's gallery.",
+                    Properties = """{"depth_m": 18, "diameter_m": 62}""",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: areaId is null ? [] : [new ParentSpec(areaId.Value, IsPrimary: true)], ct);
+        }
+
+        (string Code, (double Lon, double Lat, double Alt)[] Stations)[] passages =
+        [
+            ("DEMO-0001",
+                [(25.4472, 45.5312, 952), (25.4455, 45.5298, 905), (25.4435, 45.5284, 860)]),
+            ("DEMO-0003",
+                [(25.4390, 45.5265, 880), (25.4408, 45.5273, 850), (25.4422, 45.5280, 835)]),
+        ];
+
+        foreach (var (code, stations) in passages)
+        {
+            var caveId = await db.Caves
+                .Where(c => c.IdentificationCode == code)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (caveId is null || await db.Centerlines.AnyAsync(c => c.CaveFeatureId == caveId, ct))
+            {
+                continue;
+            }
+
+            var geometry = new MultiLineString(
+            [
+                new LineString([.. stations.Select(s => (Coordinate)new CoordinateZ(s.Lon, s.Lat, s.Alt))]),
+            ])
+            { SRID = 4326 };
+
+            // Built the way an uploaded centerline is, so the stored skeleton and length are the
+            // ones every other reader of this cave's line work expects.
+            var skeleton = CenterlineSkeleton.Build(geometry);
+            var storeSkeleton = CenterlineSkeleton.IsWorthStoring(geometry, skeleton);
+            var pathCount = CenterlineSkeleton.PathCount(geometry);
+
+            await writer.CreateCenterlineAsync(
+                new Feature { Name = "Demo passage", Geom = geometry },
+                new Centerline
+                {
+                    CaveFeatureId = caveId.Value,
+                    Skeleton = storeSkeleton ? skeleton : null,
+                    PathCount = pathCount,
+                    SkeletonPathCount = storeSkeleton ? CenterlineSkeleton.PathCount(skeleton) : pathCount,
+                    LengthM = await CenterlineSql.GeodesicLengthMetersAsync(
+                        db, CenterlineSkeleton.Build3D(geometry), ct),
+                },
+                ct: ct);
+        }
     }
 
     /// <summary>
