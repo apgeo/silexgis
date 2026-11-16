@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import '../../i18n';
+import i18n from '../../i18n';
 
 /**
  * What a shelf says about whatever lands on it. Every cabinet carries this — the server
@@ -100,12 +100,16 @@ const fileMutate = vi.fn(() => Promise.resolve());
 // readable, none of the controls that move access are offered.
 let capabilities = { domains: { documents: 'read' } };
 
+const refetchCabinets = vi.fn();
+const cabinetsLoaded = () => ({ data: cabinets, isPending: false, isError: false, refetch: refetchCabinets });
+let cabinetsRead: () => unknown = cabinetsLoaded;
+
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
-    useCabinets: () => ({ data: cabinets, isPending: false }),
+    useCabinets: () => cabinetsRead(),
     useCabinetDocuments: (id: string | undefined) => ({
       data: id ? shelf : undefined,
       isFetching: false,
@@ -126,7 +130,11 @@ vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
 
 const { default: CabinetsPage } = await import('./CabinetsPage.tsx');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  cabinetsRead = cabinetsLoaded;
+  refetchCabinets.mockReset();
+});
 
 function renderPage() {
   return render(
@@ -252,6 +260,28 @@ describe('CabinetsPage', () => {
     });
   });
 
+  it('OK with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    createMutate.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      renderPage();
+      fireEvent.click(screen.getByText('New'));
+      const name = await screen.findByLabelText('Name');
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+      await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(createMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
   it('offers a cabinet the four audiences the server knows, each named', async () => {
     capabilities = { domains: { documents: 'read, write' } };
     renderPage();
@@ -276,5 +306,23 @@ describe('CabinetsPage', () => {
 
     await waitFor(() => expect(screen.getAllByTitle('Club archive / Bulletins').length).toBeGreaterThan(0));
     expect(screen.getAllByTitle('Bulletins').length).toBeGreaterThan(0);
+  });
+
+  // A tree that could not be read is not an empty one: drawn as nothing but the inbox, it reads as
+  // an archive with no shelves in it.
+  it('says the cabinets could not be read, keeps the inbox, and asks again on Retry', () => {
+    cabinetsRead = () => ({ data: undefined, isPending: false, isError: true, error: new Error('offline'), refetch: refetchCabinets });
+    renderPage();
+    expect(screen.getByTestId('cabinets-load-failed')).toBeTruthy();
+    expect(screen.getByText(i18n.t('cabinets.unfiled'))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetchCabinets).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a tree already shown when a later read fails, and says it may be out of date', () => {
+    cabinetsRead = () => ({ data: cabinets, isPending: false, isError: true, error: new Error('offline'), refetch: refetchCabinets });
+    renderPage();
+    expect(screen.getByText('Club archive (3)')).toBeTruthy();
+    expect(screen.getByText(i18n.t('common.refreshFailed'))).toBeTruthy();
   });
 });
