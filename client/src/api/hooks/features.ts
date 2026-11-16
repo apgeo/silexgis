@@ -21,8 +21,29 @@ export async function createFeature(body: FeatureCreate): Promise<FeatureDetail>
   return unwrap(api.POST('/api/v1/features', { body }));
 }
 
-export async function updateFeature(id: string, body: FeatureUpdate): Promise<FeatureDetail> {
-  return unwrap(api.PUT('/api/v1/features/{id}', { params: { path: { id } }, body }));
+/**
+ * The version a feature is at now, as the entity tag its read answers with — for a write that has
+ * to name the version its change was made against rather than whichever one was read last.
+ */
+export async function fetchFeatureVersion(id: string): Promise<string | undefined> {
+  const call = api.GET('/api/v1/features/{id}', { params: { path: { id } } });
+  await unwrap(call);
+  return (await call).response.headers.get('ETag') ?? undefined;
+}
+
+/**
+ * `ifMatch` is for a caller whose change was made against a version read some time before the
+ * save — a shape reshaped on the map: naming it has a change somebody else saved in between
+ * refused instead of overwritten. Left out, the save carries the newest version read.
+ */
+export async function updateFeature(id: string, body: FeatureUpdate, ifMatch?: string): Promise<FeatureDetail> {
+  return unwrap(
+    api.PUT('/api/v1/features/{id}', {
+      params: { path: { id } },
+      headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+      body,
+    }),
+  );
 }
 
 export function useFeatures(params: FeatureListParams, enabled = true) {
