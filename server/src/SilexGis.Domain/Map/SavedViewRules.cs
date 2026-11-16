@@ -4,9 +4,18 @@ using SilexGis.Domain.Filters;
 
 namespace SilexGis.Domain.Map;
 
-/// <summary>What a saved view's document may not hold.</summary>
+/// <summary>What a saved view's document may not hold, and whose home a view is.</summary>
 public static class SavedViewRules
 {
+    /// <summary>
+    /// Whether <paramref name="readerId"/> should be told the view is their home view. Home is one
+    /// view per owner and only the owner's: a view somebody else marked as their own starting point
+    /// and shared with the reader is never the reader's home, or the reader's map would open on a
+    /// colleague's place and layers.
+    /// </summary>
+    public static bool IsHomeOf(bool isHome, Guid ownerUserId, Guid readerId) =>
+        isHome && ownerUserId == readerId;
+
     /// <summary>The detail sent with the refusal of a view whose filter holds a position.</summary>
     public const string FilterHoldsPositionDetail = "A saved view never stores a place in its filter.";
 
