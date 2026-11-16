@@ -34,7 +34,11 @@ import {
 import CataloguePlacementMap, {
   type PlacedCave,
 } from '../../components/catalogue/CataloguePlacementMap.tsx';
-import { speologieErrorMessage } from '../../components/catalogue/errorMessage.ts';
+import {
+  speologieErrorMessage,
+  speologieFailureReason,
+  speologieImportErrorMessage,
+} from '../../components/catalogue/errorMessage.ts';
 
 /** What one row of the review has been decided to be. */
 interface RowDecision {
@@ -92,13 +96,19 @@ export default function SpeologieImportPage() {
   const loading = caves.some((q) => q.isPending);
   const failed = caves.find((q) => q.error)?.error;
 
-  const decisionOf = (cave: SpeologieCave): RowDecision =>
-    decisions[cave.id] ?? { action: cave.alreadyImported ? 'update' : 'create' };
+  // A row nobody has touched proposes refreshing a cave that is already here and creating one
+  // that is not. The first change to a row (a cave type, a placed or cleared position) starts from
+  // that same proposal, so it never turns a refresh into a second copy of the cave.
+  const proposedDecision = (cave: SpeologieCave): RowDecision => ({
+    action: cave.alreadyImported ? 'update' : 'create',
+  });
 
-  const setDecision = (id: number, patch: Partial<RowDecision>) =>
+  const decisionOf = (cave: SpeologieCave): RowDecision => decisions[cave.id] ?? proposedDecision(cave);
+
+  const setDecision = (cave: SpeologieCave, patch: Partial<RowDecision>) =>
     setDecisions((current) => ({
       ...current,
-      [id]: { ...(current[id] ?? { action: 'create' }), ...patch },
+      [cave.id]: { ...(current[cave.id] ?? proposedDecision(cave)), ...patch },
     }));
 
   const placed: PlacedCave[] = loaded
@@ -141,7 +151,7 @@ export default function SpeologieImportPage() {
         setResult(answer);
       }
     } catch (error) {
-      message.error(speologieErrorMessage(error, t) ?? t('speologie.errors.importFailed'));
+      message.error(speologieImportErrorMessage(error, t));
     }
   };
 
@@ -181,7 +191,7 @@ export default function SpeologieImportPage() {
             size="small"
             style={{ width: 160 }}
             value={decisionOf(cave).action}
-            onChange={(action) => setDecision(cave.id, { action })}
+            onChange={(action) => setDecision(cave, { action })}
             data-testid={`speologie-action-${cave.id}`}
             options={[
               { value: 'create', label: t('speologie.wizard.actionCreate'), disabled: cave.alreadyImported },
@@ -207,8 +217,9 @@ export default function SpeologieImportPage() {
           allowClear
           style={{ width: 170 }}
           value={decisionOf(cave).caveTypeCode}
-          onChange={(caveTypeCode) => setDecision(cave.id, { caveTypeCode })}
+          onChange={(caveTypeCode) => setDecision(cave, { caveTypeCode })}
           placeholder={t('speologie.wizard.caveTypeDerived')}
+          data-testid={`speologie-cave-type-${cave.id}`}
           options={(caveTypes.data ?? []).map((x) => ({ value: x.code, label: x.name }))}
         />
       ),
@@ -242,7 +253,7 @@ export default function SpeologieImportPage() {
               <Button
                 size="small"
                 type="link"
-                onClick={() => setDecision(cave.id, { longitude: undefined, latitude: undefined })}
+                onClick={() => setDecision(cave, { longitude: undefined, latitude: undefined })}
               >
                 {t('speologie.wizard.clearPosition')}
               </Button>
@@ -342,7 +353,8 @@ export default function SpeologieImportPage() {
             placed={placed}
             placingId={placingId}
             onPlace={(id, [lon, lat]) => {
-              setDecision(id, { longitude: lon, latitude: lat });
+              const cave = loaded.find((c) => c.id === id);
+              if (cave) setDecision(cave, { longitude: lon, latitude: lat });
               setPlacingId(null);
             }}
           />
@@ -373,7 +385,7 @@ export default function SpeologieImportPage() {
                 <ul>
                   {result.failures.map((f) => (
                     <li key={f.speologieId}>
-                      {f.title ?? f.speologieId}: {f.reason}
+                      {f.title ?? f.speologieId}: {speologieFailureReason(f, t)}
                     </li>
                   ))}
                 </ul>

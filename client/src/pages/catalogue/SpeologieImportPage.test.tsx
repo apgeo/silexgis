@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { SpeologieCave } from '../../api/hooks.ts';
 
 const fresh: SpeologieCave = {
@@ -172,6 +173,49 @@ describe('SpeologieImportPage', () => {
     expect(body.decisions['64'].longitude).toBeNull();
   });
 
+  it('keeps refreshing a cave already here when it is placed or given a cave type', async () => {
+    show();
+
+    // A placement on the already-imported row is the first change it gets.
+    fireEvent.click(screen.getByTestId('speologie-place-64'));
+    act(() => placeHandler?.(64, [22.7, 46.6]));
+
+    // Then a cave type, picked from the row's own select.
+    const typeSelect = screen.getByTestId('speologie-cave-type-64');
+    fireEvent.mouseDown(typeSelect.querySelector('.ant-select-selector') ?? typeSelect);
+    fireEvent.click(await screen.findByTitle('Pit / Aven'));
+
+    // The row still says it refreshes the cave rather than offering a disabled "create".
+    expect(screen.getByTestId('speologie-action-64').textContent).toContain('Refresh');
+
+    fireEvent.click(screen.getByTestId('speologie-commit'));
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+
+    const body = commitMutate.mock.calls[0][0];
+    expect(body.decisions['64']).toEqual({
+      action: 'update',
+      caveTypeCode: 'pit',
+      longitude: 22.7,
+      latitude: 46.6,
+    });
+    // The untouched new row keeps its own proposal.
+    expect(body.decisions['63'].action).toBe('create');
+  });
+
+  it('keeps refreshing a cave already here when its position is cleared again', async () => {
+    show();
+
+    act(() => placeHandler?.(64, [22.7, 46.6]));
+    fireEvent.click(screen.getByText('Remove the position'));
+
+    fireEvent.click(screen.getByTestId('speologie-commit'));
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+
+    const body = commitMutate.mock.calls[0][0];
+    expect(body.decisions['64'].action).toBe('update');
+    expect(body.decisions['64'].longitude).toBeNull();
+  });
+
   it('shows what the import did, and points at the caves that arrived without a position', async () => {
     show();
     fireEvent.click(screen.getByTestId('speologie-commit'));
@@ -200,6 +244,44 @@ describe('SpeologieImportPage', () => {
     show();
     fireEvent.click(screen.getByTestId('speologie-commit'));
 
-    await waitFor(() => expect(screen.getByText(/You may not change that cave/)).toBeTruthy());
+    // The row's code is worded in the reader's language rather than repeating the server's sentence.
+    await waitFor(() => expect(screen.getByText(/You may not change the cave this entry was imported as/)).toBeTruthy());
+  });
+
+  it('words a refused row from its code, and falls back to the server sentence for a code it does not know', async () => {
+    commitMutate.mockResolvedValue({
+      batchId: 'batch-1',
+      createdCount: 0,
+      updatedCount: 0,
+      skippedCount: 0,
+      failures: [
+        { speologieId: 63, title: 'Sistemul Vărășoaia', code: 'speologie.position_invalid', reason: 'Server sentence A.' },
+        { speologieId: 64, title: 'Peștera Urșilor', code: 'feature.something_new', reason: 'Server sentence B.' },
+      ],
+    });
+    show();
+    fireEvent.click(screen.getByTestId('speologie-commit'));
+
+    await waitFor(() => expect(screen.getByText(/The position given for this cave is not on the earth/)).toBeTruthy());
+    expect(screen.queryByText(/Server sentence A/)).toBeNull();
+    expect(screen.getByText(/Server sentence B/)).toBeTruthy();
+  });
+
+  it('says an account may not create caves when the import is refused for that, not that the catalogue is down', async () => {
+    commitMutate.mockRejectedValue(new ApiError(403, 'access.create_forbidden', 'An English sentence.'));
+    show();
+    fireEvent.click(screen.getByTestId('speologie-commit'));
+
+    expect(await screen.findByText(/Your account may not create caves/)).toBeTruthy();
+    expect(screen.queryByText(/The catalogue could not be reached/)).toBeNull();
+  });
+
+  it('reports an import that failed for no reason it can name as a failed import', async () => {
+    commitMutate.mockRejectedValue(new ApiError(500));
+    show();
+    fireEvent.click(screen.getByTestId('speologie-commit'));
+
+    expect(await screen.findByText('The import could not be completed.')).toBeTruthy();
+    expect(screen.queryByText(/The catalogue could not be reached/)).toBeNull();
   });
 });
