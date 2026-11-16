@@ -38,9 +38,11 @@ let events: HistoryEvent[] = [
 ];
 
 const restoreOnServer = vi.fn();
+// Null answers with the events above; a test sets another answer (a failure, a cut-off page).
+let historyAnswer: () => unknown = () => null;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useHistory: () => ({ data: { items: events }, isLoading: false }),
+  useHistory: () => historyAnswer() ?? { data: { items: events, totalItems: events.length }, isLoading: false },
   useRestoreFromHistory: () => ({ mutateAsync: restoreOnServer }),
 }));
 
@@ -289,5 +291,38 @@ describe('HistoryPanel', () => {
         },
       );
     });
+  });
+  it('says the history could not be loaded, and retries, instead of calling it empty', () => {
+    const refetch = vi.fn();
+    historyAnswer = () => ({ data: undefined, isLoading: false, isError: true, refetch });
+    try {
+      render(
+        <App>
+          <HistoryPanel entityType="cave" entityId="c1" />
+        </App>,
+      );
+      expect(screen.getByText('The history could not be loaded.')).toBeInTheDocument();
+      expect(screen.queryByText('No changes recorded yet.')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
+
+  it('says when only the latest part of a long history is shown', () => {
+    historyAnswer = () => ({ data: { items: events, totalItems: 250 }, isLoading: false });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      expect(screen.getByText(`Showing the latest ${events.length} of 250 changes.`)).toBeInTheDocument();
+    } finally {
+      historyAnswer = () => null;
+    }
   });
 });

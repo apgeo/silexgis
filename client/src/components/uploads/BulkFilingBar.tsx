@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { App, Flex, Modal, Select, Space, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { cabinetPathOptions } from '../documents/cabinetChoices.ts';
 import { useBulkFiling, type CabinetInfo } from '../../api/hooks.ts';
 
 export interface BulkFilingBarProps {
@@ -119,9 +120,7 @@ export default function BulkFilingBar({
           placeholder={t('cabinets.pickCabinet')}
           value={target}
           onChange={setTarget}
-          options={cabinets
-            .filter((cabinet) => cabinet.id !== currentCabinetId)
-            .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+          options={cabinetPathOptions(cabinets).filter((option) => option.value !== currentCabinetId)}
         />
       </Modal>
     </>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ProfileOutlined } from '@ant-design/icons';
 import { App, Flex, Input, Popover, Select, Typography } from 'antd';
 import Button from '../Button.tsx';
@@ -14,15 +14,14 @@ import {
   useDocumentTypes,
   useFileDocument,
   useUpdateDocument,
-  type CabinetInfo,
   type Visibility,
 } from '../../api/hooks.ts';
 import TextState from '../documents/TextState.tsx';
+import { visibilityOptions } from './visibilityChoices.ts';
+import { cabinetPathOptions } from '../documents/cabinetChoices.ts';
 import LinksSection from '../reslinks/LinksSection.tsx';
 import TypedField from '../typedProperties/TypedField.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
-
-const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
 
 /**
  * The languages this installation indexes with a stemmer of their own. Anything else — and
@@ -30,21 +29,6 @@ const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', '
  * so the list is a list of the choices that change something rather than of world languages.
  */
 const languages = ['ro', 'en'] as const;
-
-/**
- * A cabinet named by its whole path. Names are unique only among siblings — "1987" sits
- * under many archives — so a bare name would be ambiguous away from the tree that gives
- * it context, which is exactly the situation here.
- */
-function cabinetOptions(cabinets: CabinetInfo[]) {
-  const names = new Map(cabinets.map((cabinet) => [cabinet.id, cabinet.name]));
-  return cabinets
-    .map((cabinet) => ({
-      value: cabinet.id,
-      label: cabinet.ancestorIds.map((id) => names.get(id) ?? '…').join(' / '),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -71,7 +55,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [open, setOpen] = useState(false);
-  const { data: document } = useDocument(documentId, open);
+  const { data: document, isFetching: documentFetching } = useDocument(documentId, open);
   const { data: types } = useDocumentTypes();
   const { data: cavingGroups } = useCavingGroups();
   const updateDocument = useUpdateDocument();
@@ -93,26 +77,41 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
-  // Re-sync from server state whenever the popover opens, or when the fetch that the
-  // opening started arrives — another edit may have landed since it was last read.
+  // Refill from server state when the popover opens, and again when the fetch that the
+  // opening started arrives — another edit may have landed since the cached copy was read.
+  // After that, never: filing from this panel invalidates the document and a document being
+  // read is polled, and each equal answer arriving as a new object would otherwise put the
+  // stored title back over whatever is being typed.
+  const filled = useRef<{ id: string; settled: boolean } | null>(null);
   useEffect(() => {
-    if (open && document) {
-      setTitle(document.title);
-      setTypeId(document.documentTypeId);
-      setVisibility(document.visibility);
-      setCavingGroupId(document.cavingGroupId);
-      setLanguage(document.language);
-      setFiledIn(document.cabinetIds);
-      setValues((document.metadata as Record<string, unknown> | null) ?? {});
+    if (!open) {
+      filled.current = null;
+      return;
     }
-  }, [open, document]);
+    if (!document) {
+      return;
+    }
+    const settled = !documentFetching;
+    const already = filled.current;
+    if (already && already.id === document.id && (already.settled || !settled)) {
+      return;
+    }
+    filled.current = { id: document.id, settled };
+    setTitle(document.title);
+    setTypeId(document.documentTypeId);
+    setVisibility(document.visibility);
+    setCavingGroupId(document.cavingGroupId);
+    setLanguage(document.language);
+    setFiledIn(document.cabinetIds);
+    setValues((document.metadata as Record<string, unknown> | null) ?? {});
+  }, [open, document, documentFetching]);
 
   const selectedType = types?.find((type) => type.id === typeId);
   const fields = useMemo(
     () => parsePropertiesSchema(selectedType?.metadataSchema),
     [selectedType],
   );
-  const shelves = useMemo(() => cabinetOptions(cabinets ?? []), [cabinets]);
+  const shelves = useMemo(() => cabinetPathOptions(cabinets ?? []), [cabinets]);
 
   /**
    * Filing is its own request rather than part of Save: it is guarded separately (write on
@@ -204,10 +203,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         <Select
           value={visibility}
           onChange={setVisibility}
-          options={visibilities.map((value) => ({
-            value,
-            label: t(`caves.visibilityValues.${value}`),
-          }))}
+          options={visibilityOptions(t)}
         />
       </Field>
       <Field label={t('documents.language')}>

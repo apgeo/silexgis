@@ -66,9 +66,11 @@ const mutateAsync = vi.fn((update: DocumentUpdate) => Promise.resolve(update));
 const fileAsync = vi.fn((filing: { cabinetId: string; documentId: string; filed: boolean }) =>
   Promise.resolve(filing));
 let documentActions = 'read, write';
+// What the document query answers; a test swaps in an equal copy to stand for a refetch.
+const served: { document: typeof document; fetching: boolean } = { document, fetching: false };
 
 vi.mock('../../api/hooks.ts', () => ({
-  useDocument: () => ({ data: document }),
+  useDocument: () => ({ data: served.document, isFetching: served.fetching }),
   useDocumentTypes: () => ({ data: documentTypes }),
   useCavingGroups: () => ({ data: cavingGroups }),
   useUpdateDocument: () => ({ mutateAsync, isPending: false }),
@@ -86,7 +88,11 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const { default: DocumentMetadata } = await import('./DocumentMetadata.tsx');
 
-afterEach(cleanup);
+afterEach(() => {
+  served.document = document;
+  served.fetching = false;
+  cleanup();
+});
 
 /** Every sentence the panel can say about the reading — one of them, and only one, per state. */
 const sentences = [
@@ -231,6 +237,49 @@ describe('DocumentMetadata', () => {
       documentId: 'doc-1',
       filed: true,
     });
+  });
+
+  it('keeps an unsaved title when filing refetches the document as a new object', async () => {
+    const { rerender } = render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.change(await screen.findByDisplayValue('Ridicare topografică'), {
+      target: { value: 'Ridicare 2024' },
+    });
+
+    // Filing invalidates the document; its answer comes back equal but as a new object.
+    served.document = { ...document, cabinetIds: ['cab-2'] };
+    rerender(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    expect(screen.getByDisplayValue('Ridicare 2024')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Ridicare topografică')).not.toBeInTheDocument();
+  });
+
+  it('fills from a cached copy on opening, then once more from the answer the opening asked for', async () => {
+    served.document = { ...document, title: 'Cached title' };
+    served.fetching = true;
+    const { rerender } = render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(await screen.findByDisplayValue('Cached title')).toBeInTheDocument();
+
+    served.document = { ...document };
+    served.fetching = false;
+    rerender(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    expect(await screen.findByDisplayValue('Ridicare topografică')).toBeInTheDocument();
   });
 
   it('offers no filing control to someone who may not write documents', async () => {
