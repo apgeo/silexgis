@@ -28,6 +28,27 @@ public sealed class TerrainGeomorphonsTests
     }
 
     [Fact]
+    public void Entrances_are_classed_by_the_landform_they_sit_on_and_unclassified_cells_count_nowhere()
+    {
+        TerrainClassStatistics.Codes(TerrainMeasure.Landform).ShouldBe(TerrainGeomorphons.Classes);
+        TerrainClassStatistics.ClassOf(TerrainMeasure.Landform, 1).ShouldBe(0);
+        TerrainClassStatistics.ClassOf(TerrainMeasure.Landform, 7).ShouldBe(6);
+        TerrainClassStatistics.ClassOf(TerrainMeasure.Landform, 10).ShouldBe(9);
+        TerrainClassStatistics.ClassOf(TerrainMeasure.Landform, 0).ShouldBeNull();
+        TerrainClassStatistics.ClassOf(TerrainMeasure.Landform, 3.5).ShouldBeNull();
+
+        // Two slopes, a valley, and three cells the program left unclassified (the edge marker zero,
+        // an out-of-range value and a hole): six readings, three counted.
+        var counts = TerrainClassStatistics.Histogram(
+            TerrainMeasure.Landform, [6, 6, 9, 0, 255, double.NaN]);
+
+        counts.Length.ShouldBe(10);
+        counts.Sum().ShouldBe(3);
+        counts[5].ShouldBe(2);
+        counts[8].ShouldBe(1);
+    }
+
+    [Fact]
     public void Settings_are_checked_with_the_picture_they_belong_to()
     {
         static string? Problem(double? search = null, double? skip = null, double? flatness = null) =>

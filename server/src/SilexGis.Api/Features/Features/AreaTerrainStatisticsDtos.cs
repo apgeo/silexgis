@@ -5,7 +5,9 @@ namespace SilexGis.Api.Features.Features;
 /// One class of one terrain measure: how many entrances and sinkholes fall in it, how much of the
 /// background does, and how the two compare.
 /// </summary>
-/// <param name="Code">Stable code of the class (for slope <c>lt5</c>, for aspect <c>n</c>, …).</param>
+/// <param name="Code">Stable code of the class (for slope <c>lt5</c>, for aspect <c>n</c>, for
+/// landform <c>flat</c> through <c>pit</c>, …). Codes are unique within a measure, not across measures:
+/// position and landform both have a <c>hollow</c>, and they are different things.</param>
 /// <param name="Entrances">Placeable cave entrances in this class.</param>
 /// <param name="EntranceShare">Their share of the entrances read, 0 to 1; null with none read.</param>
 /// <param name="EntranceRatio">Entrance share divided by background share: above one the entrances
@@ -29,11 +31,13 @@ public sealed record TerrainClassRowDto(
 /// <summary>
 /// One measure, entrances and sinkholes against the background.
 /// </summary>
-/// <param name="Measure"><c>slope</c>, <c>aspect</c> or <c>position</c>.</param>
+/// <param name="Measure"><c>slope</c>, <c>aspect</c>, <c>position</c> or <c>landform</c>.</param>
 /// <param name="Available">False when no computed picture could answer; <see cref="Reason"/> says why.</param>
 /// <param name="Reason"><c>no_layer</c> when no current picture of that measure is computed for the
 /// active terrain; <c>needs_slope</c> for facing without a steepness picture to tell flat ground
-/// from sloping ground; <c>slope_unit</c> when the only steepness picture is in percent.</param>
+/// from sloping ground; <c>slope_unit</c> when the only steepness picture is in percent;
+/// <c>analysis_unavailable</c> for landform when no picture exists and this installation does not run
+/// the analysis program that draws one.</param>
 /// <param name="EntrancesRead">Entrances that got a value.</param>
 /// <param name="SinkholesRead">Sinkholes that got a value.</param>
 /// <param name="BackgroundRead">Background points that got a value.</param>
@@ -57,7 +61,7 @@ public sealed record TerrainMeasureDto(
 /// <param name="Sinkholes">How many sinkholes the caller may place in the area.</param>
 /// <param name="BackgroundPoints">How many grid points inside the outline the background was read
 /// at. The background is a regular grid sample of the outline, not a count of every cell.</param>
-/// <param name="Measures">Slope, aspect and position.</param>
+/// <param name="Measures">Slope, aspect, position and landform.</param>
 public sealed record AreaTerrainStatisticsDto(
     Guid AreaId,
     bool HasTerrain,

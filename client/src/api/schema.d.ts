@@ -3485,7 +3485,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Slope, aspect and position classes of an area's entrances and sinkholes beside the same classes over the area's ground. Requires Read on the Terrain domain; counts only what the caller may place. */
+        /** Slope, aspect, position and landform classes of an area's entrances and sinkholes beside the same classes over the area's ground. Requires Read on the Terrain domain; counts only what the caller may place. */
         get: operations["areaTerrainStatisticsStatistics"];
         put?: never;
         post?: never;

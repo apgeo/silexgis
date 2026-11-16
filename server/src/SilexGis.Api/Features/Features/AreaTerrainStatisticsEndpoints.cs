@@ -17,16 +17,21 @@ namespace SilexGis.Api.Features.Features;
 
 /// <summary>
 /// Where in the ground an area's entrances and sinkholes sit, set against the ground itself: slope
-/// classes, the direction the ground faces and whether it is hollow, level or a rise, each beside the
-/// same distribution over the area's whole outline. A class where the entrances outnumber the
+/// classes, the direction the ground faces, whether it is hollow, level or a rise, and the landform it
+/// forms (peak, ridge, valley, pit and the rest), each beside the same distribution over the area's
+/// whole outline. A class where the entrances outnumber the
 /// ground's share is where the area's caves prefer to be — the figure that guides prospecting.
 /// Derived on every request; nothing is stored.
 ///
 /// <para>
-/// <b>Reads only pictures an administrator has already computed.</b> Steepness, facing and position
-/// are made by a background job; this route never starts one. A measure whose picture is absent says
-/// so (<c>no_layer</c>) and carries no classes, rather than an empty histogram that reads as "no
-/// caves on steep ground".
+/// <b>Reads only pictures an administrator has already computed.</b> Steepness, facing, position and
+/// landform are made by a background job; this route never starts one. A measure whose picture is
+/// absent says so (<c>no_layer</c>) and carries no classes, rather than an empty histogram that reads
+/// as "no caves on steep ground". The landform picture is drawn by a separate analysis program the
+/// installation may not run; where it has none and none was drawn earlier, the reason says that
+/// instead (<c>analysis_unavailable</c>), since no administrator can compute one from the terrain page.
+/// A landform picture drawn while the program ran is still read after it is switched off: it is
+/// elevation already turned into classes, and nothing about it depends on the program any more.
 /// </para>
 /// <para>
 /// <b>Protection.</b> The terrain right is required (a computed picture of the ground is elevation
@@ -60,9 +65,9 @@ public static class AreaTerrainStatisticsEndpoints
             .MapGet("/{id:guid}/terrain-statistics", StatisticsAsync)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
-                "Slope, aspect and position classes of an area's entrances and sinkholes beside the "
-                + "same classes over the area's ground. Requires Read on the Terrain domain; counts "
-                + "only what the caller may place.");
+                "Slope, aspect, position and landform classes of an area's entrances and sinkholes "
+                + "beside the same classes over the area's ground. Requires Read on the Terrain domain; "
+                + "counts only what the caller may place.");
 
         return api;
     }
@@ -75,6 +80,7 @@ public static class AreaTerrainStatisticsEndpoints
             FeatureProtection protection,
             TerrainDerivativeCatalogue catalogue,
             IDerivativeSampleService sampler,
+            TerrainLandforms landforms,
             CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -126,6 +132,7 @@ public static class AreaTerrainStatisticsEndpoints
         var slope = layers.Slope is null ? null : await ReadAsync(sampler, layers.Slope, all, ct);
         var aspect = layers.Aspect is null ? null : await ReadAsync(sampler, layers.Aspect, all, ct);
         var position = layers.Position is null ? null : await ReadAsync(sampler, layers.Position, all, ct);
+        var landform = layers.Landform is null ? null : await ReadAsync(sampler, layers.Landform, all, ct);
 
         // Facing is meaningless on flat ground, and the picture writes a bearing of zero there, so
         // each facing reading counts only where the steepness picture says the ground slopes.
@@ -161,6 +168,8 @@ public static class AreaTerrainStatisticsEndpoints
                 aspect is null ? "no_layer" : aspectReason, counts),
             Measure(TerrainMeasure.Position, "position", position,
                 position is null ? "no_layer" : null, counts),
+            Measure(TerrainMeasure.Landform, "landform", landform,
+                landform is null ? (landforms.IsAvailable ? "no_layer" : "analysis_unavailable") : null, counts),
         };
 
         return TypedResults.Ok(new AreaTerrainStatisticsDto(
@@ -256,7 +265,9 @@ public static class AreaTerrainStatisticsEndpoints
 
     /// <summary>
     /// The current computed picture of each measure for the active terrain: the newest that is ready
-    /// and not out of date. Steepness is used only in degrees, the unit the classes are cut in.
+    /// and not out of date. Steepness is used only in degrees, the unit the classes are cut in. Of
+    /// several landform pictures (drawn at different search distances, say) the newest is read, the
+    /// same rule as for every other measure.
     /// </summary>
     private static async Task<Layers> LayersAsync(
         SilexGisDbContext db, TerrainDerivativeCatalogue catalogue, CancellationToken ct)
@@ -267,7 +278,7 @@ public static class AreaTerrainStatisticsEndpoints
             .FirstOrDefaultAsync(ct);
         if (buildId is not { } build)
         {
-            return new Layers(false, null, null, null, false);
+            return new Layers(false, null, null, null, null, false);
         }
 
         var views = (await catalogue.ForBuildAsync(build, ct))
@@ -283,6 +294,7 @@ public static class AreaTerrainStatisticsEndpoints
             await RastersAsync(db, inDegrees?.Id, ct),
             await RastersAsync(db, views.FirstOrDefault(v => v.Derivative == TerrainDerivative.Aspect)?.Id, ct),
             await RastersAsync(db, views.FirstOrDefault(v => v.Derivative == TerrainDerivative.PositionIndex)?.Id, ct),
+            await RastersAsync(db, views.FirstOrDefault(v => v.Derivative == TerrainDerivative.Geomorphons)?.Id, ct),
             inDegrees is null && slopes.Count > 0);
     }
 
@@ -336,5 +348,6 @@ public static class AreaTerrainStatisticsEndpoints
         IReadOnlyList<PreparedTerrainRaster>? Slope,
         IReadOnlyList<PreparedTerrainRaster>? Aspect,
         IReadOnlyList<PreparedTerrainRaster>? Position,
+        IReadOnlyList<PreparedTerrainRaster>? Landform,
         bool SlopeInPercentOnly);
 }

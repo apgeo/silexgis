@@ -12,6 +12,12 @@ public enum TerrainMeasure
 
     /// <summary>Height relative to the neighbouring cells: hollow, level or rise.</summary>
     Position = 2,
+
+    /// <summary>
+    /// The landform the ground forms at the scale of a search distance — flat, peak, ridge, shoulder,
+    /// spur, slope, hollow, footslope, valley or pit — read from a landform (geomorphons) picture.
+    /// </summary>
+    Landform = 3,
 }
 
 /// <summary>
@@ -23,6 +29,7 @@ public enum TerrainMeasure
 /// what a reader needs to compare two numbers, not a claim about caves. Slope uses the usual
 /// geomorphological bands; position uses a one-metre band around level, which is below the noise of
 /// the elevation models prepared here and so reads as "level" for anything the model cannot resolve.
+/// Landform has no edges to choose: the picture already stores one of ten class numbers per cell.
 /// </para>
 /// </summary>
 public static class TerrainClassStatistics
@@ -45,11 +52,21 @@ public static class TerrainClassStatistics
         TerrainMeasure.Slope => ["lt5", "5to15", "15to30", "30to45", "gt45"],
         TerrainMeasure.Aspect => ["n", "ne", "e", "se", "s", "sw", "w", "nw"],
         TerrainMeasure.Position => ["hollow", "level", "rise"],
+        TerrainMeasure.Landform => TerrainGeomorphons.Classes,
         _ => throw new ArgumentOutOfRangeException(nameof(measure)),
     };
 
-    /// <summary>Which class a reading falls in, as an index into <see cref="Codes"/>.</summary>
-    public static int ClassOf(TerrainMeasure measure, double value)
+    /// <summary>
+    /// Which class a reading falls in, as an index into <see cref="Codes"/>; null for a reading that
+    /// is no class of the measure.
+    /// </summary>
+    /// <remarks>
+    /// Every reading of steepness, facing or position has a class. A landform reading has one only
+    /// when it is one of the ten class numbers: anything else is a cell the program left without a
+    /// landform (the outermost cells, where a line of sight runs off the raster, or a hole in the
+    /// elevation), and counting it under any class would invent ground that was never classified.
+    /// </remarks>
+    public static int? ClassOf(TerrainMeasure measure, double value)
     {
         switch (measure)
         {
@@ -61,6 +78,8 @@ public static class TerrainClassStatistics
             case TerrainMeasure.Position:
                 // Both edges belong to the level class.
                 return value < PositionEdgesM[0] ? 0 : value > PositionEdgesM[1] ? 2 : 1;
+            case TerrainMeasure.Landform:
+                return TerrainGeomorphons.ClassOf(value) is null ? null : (int)value - TerrainGeomorphons.FirstClass;
             default:
                 throw new ArgumentOutOfRangeException(nameof(measure));
         }
@@ -77,7 +96,7 @@ public static class TerrainClassStatistics
         return index;
     }
 
-    /// <summary>Counts of readings per class.</summary>
+    /// <summary>Counts of readings per class; a reading that is no class of the measure is not counted.</summary>
     public static int[] Histogram(TerrainMeasure measure, IEnumerable<double> values)
     {
         ArgumentNullException.ThrowIfNull(values);
@@ -85,7 +104,10 @@ public static class TerrainClassStatistics
         var counts = new int[Codes(measure).Count];
         foreach (var value in values.Where(double.IsFinite))
         {
-            counts[ClassOf(measure, value)]++;
+            if (ClassOf(measure, value) is { } index)
+            {
+                counts[index]++;
+            }
         }
 
         return counts;
