@@ -31,6 +31,8 @@ export * from './hooks/expeditions.ts';
 export * from './hooks/tracking.ts';
 export * from './hooks/imports.ts';
 export * from './hooks/karst.ts';
+export * from './hooks/featurePassages.ts';
+export * from './hooks/passageDepth.ts';
 export * from './hooks/statistics.ts';
 export * from './hooks/terrain.ts';
 export * from './hooks/resLinks.ts';

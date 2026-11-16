@@ -855,6 +855,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/passage-depth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cave passage in a bbox, as lines coloured by the rock cover over them. Requires Read on the Terrain domain; only caves the caller may place exactly are drawn. */
+        get: operations["mapPassageDepthPassageDepth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/point-pattern": {
         parameters: {
             query?: never;
@@ -3161,6 +3178,23 @@ export interface paths {
         };
         /** How much rock lies over one cave's passages, along their length. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. */
         get: operations["caveOverburdenOverburden"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/passages-beneath": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caves whose passage lies beneath or near a doline, sinkhole or outline, with the rock overhead and the plan offset. Requires Read on the Terrain domain; only caves and features the caller may place exactly are considered. */
+        get: operations["featurePassagesPassages"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10338,6 +10372,7 @@ export interface components {
             maxOverburdenM: null | number;
             /** Format: double */
             meanOverburdenM: null | number;
+            leastCover: null | components["schemas"]["CaveOverburdenSampleDto"];
             samples: components["schemas"]["CaveOverburdenSampleDto"][];
         };
         CaveOverburdenSampleDto: {
@@ -11937,6 +11972,38 @@ export interface components {
             id: string;
             name: null | string;
             isPrimary: boolean;
+        };
+        FeaturePassageDto: {
+            /** Format: uuid */
+            caveId: string;
+            caveName: null | string;
+            /** Format: double */
+            lateralOffsetM: number;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            hasAltitudes: boolean;
+            /** Format: double */
+            passageLongitude: null | number;
+            /** Format: double */
+            passageLatitude: null | number;
+            /** Format: double */
+            passageAltitudeM: null | number;
+            outcome: null | components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            groundAltitudeM: null | number;
+            /** Format: double */
+            overburdenM: null | number;
+        };
+        FeaturePassagesDto: {
+            /** Format: uuid */
+            featureId: string;
+            featureName: null | string;
+            isPolygon: boolean;
+            /** Format: double */
+            distanceM: number;
+            hasTerrain: boolean;
+            truncated: boolean;
+            passages: components["schemas"]["FeaturePassageDto"][];
         };
         FeaturePositionFromPhotoRequest: {
             /** Format: uuid */
@@ -13951,6 +14018,23 @@ export interface components {
             /** Format: double */
             kolmogorovSmirnov: number;
         };
+        PassageDepthLineDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: int32 */
+            depthClass: number;
+            paths: number[][][];
+        };
+        PassageDepthWindowDto: {
+            hasTerrain: boolean;
+            classEdgesM: number[];
+            lines: components["schemas"]["PassageDepthLineDto"][];
+            /** Format: int32 */
+            caveCount: number;
+            truncated: boolean;
+            /** Format: int32 */
+            maxCaves: number;
+        };
         PassageNetworkFigures: {
             /** Format: int32 */
             nodeCount: number;
@@ -15062,6 +15146,7 @@ export interface components {
             iterations: number;
             converged: boolean;
             basis: string;
+            projection: null | components["schemas"]["RegistryClusterProjectionDto"];
         };
         RegistryClusterPopulationDto: {
             /** Format: int32 */
@@ -15071,6 +15156,13 @@ export interface components {
             /** Format: int32 */
             excluded: number;
             measures: components["schemas"]["RegistryClusterCoverageDto"][];
+        };
+        RegistryClusterProjectionDto: {
+            measures: components["schemas"]["RegistryMeasure"][];
+            droppedMeasures: components["schemas"]["RegistryMeasure"][];
+            first: components["schemas"]["RegistryProjectionAxisDto"];
+            second: components["schemas"]["RegistryProjectionAxisDto"];
+            positions: components["schemas"]["RegistryProjectionPositionDto"][];
         };
         RegistryClusterScalingDto: {
             measure: components["schemas"]["RegistryMeasure"];
@@ -15128,6 +15220,19 @@ export interface components {
             fraction: number;
             /** Format: double */
             value: null | number;
+        };
+        RegistryProjectionAxisDto: {
+            loadings: number[];
+            /** Format: double */
+            explainedShare: number;
+        };
+        RegistryProjectionPositionDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         RegistryRegionBreakdownDto: {
             /** Format: int32 */
@@ -21764,6 +21869,46 @@ export interface operations {
             };
         };
     };
+    mapPassageDepthPassageDepth: {
+        parameters: {
+            query?: {
+                bbox?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageDepthWindowDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     mapPointPatternPointPattern: {
         parameters: {
             query?: {
@@ -27695,6 +27840,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaveOverburdenDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    featurePassagesPassages: {
+        parameters: {
+            query?: {
+                DistanceM?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeaturePassagesDto"];
                 };
             };
             /** @description Bad Request */

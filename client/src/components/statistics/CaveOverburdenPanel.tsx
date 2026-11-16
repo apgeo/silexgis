@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCaveOverburden, type CaveOverburdenSample } from '../../api/hooks.ts';
+import Button from '../Button.tsx';
 import { setOverburdenHighlight } from '../../workspace/overburdenHighlight.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
@@ -107,6 +108,22 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
     [samples, caveId, metres, t],
   );
 
+  // The place where this cave comes nearest the surface. Marked like a pressed reading — one mark
+  // at a time, on the one channel — but named for what it is, so a reader who pressed it does not
+  // mistake it for a point they chose.
+  const markLeastCover = useCallback(() => {
+    const least = data?.leastCover;
+    if (!least) return;
+    setPicked(samples.findIndex((s) => s.distanceAlongM === least.distanceAlongM));
+    setOverburdenHighlight({
+      caveId,
+      longitude: least.longitude,
+      latitude: least.latitude,
+      altitudeM: least.passageAltitudeM,
+      label: t('overburden.leastCoverMark', { value: metres(least.overburdenM) }),
+    });
+  }, [data, samples, caveId, metres, t]);
+
   const clearPick = useCallback(() => {
     setPicked(null);
     setOverburdenHighlight(null);
@@ -209,6 +226,25 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
           style={{ marginTop: 16 }}
           items={[
             { key: 'min', label: t('overburden.thinnest'), children: metres(data.minOverburdenM) },
+            ...(data.leastCover
+              ? [
+                  {
+                    key: 'least',
+                    label: t('overburden.leastCover'),
+                    children: (
+                      <span data-testid="overburden-least-cover">
+                        {t('overburden.leastCoverAt', {
+                          value: metres(data.leastCover.overburdenM),
+                          distance: metres(data.leastCover.distanceAlongM),
+                        })}{' '}
+                        <Button size="small" type="link" onClick={markLeastCover}>
+                          {t('overburden.showLeastCover')}
+                        </Button>
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
             { key: 'max', label: t('overburden.thickest'), children: metres(data.maxOverburdenM) },
             { key: 'mean', label: t('overburden.mean'), children: metres(data.meanOverburdenM) },
             {
@@ -229,6 +265,10 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
 
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
           {t('overburden.distanceNote')}
+        </Typography.Paragraph>
+
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+          {t('overburden.leastCoverNote')}
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
