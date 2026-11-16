@@ -47,8 +47,10 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
     }
   }, [open, value]);
 
+  // Disposed, not only detached: a detached map keeps its layers, listeners and tile loads alive,
+  // and every opening of the dialog builds a new one.
   const teardown = () => {
-    pickerMap.current?.setTarget(undefined);
+    pickerMap.current?.dispose();
     pickerMap.current = null;
   };
 

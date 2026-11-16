@@ -44,9 +44,14 @@ export default function TwoFactorMethods({ status }: Props) {
     setCode('');
   };
 
+  // A request that never reached the server (a dropped connection) rejects instead of answering
+  // a refusal; it is said like any other failed step rather than left as an unhandled error.
+  const failed = () => message.error(t('common.saveFailed'));
+
+  // The recovery codes are not cleared here: they are shown once, and starting another method —
+  // or asking for its code again — must not take away the only copy before it has been kept.
   const start = async (method: TwoFactorMethod) => {
     setBusy(true);
-    setRecoveryCodes(null);
     try {
       if (method === 'authenticator') {
         const { data, error } = await api.POST('/api/v1/me/mfa/enroll');
@@ -68,6 +73,8 @@ export default function TwoFactorMethods({ status }: Props) {
       }
       setEnrolling(method);
       setCode('');
+    } catch {
+      failed();
     } finally {
       setBusy(false);
     }
@@ -100,30 +107,40 @@ export default function TwoFactorMethods({ status }: Props) {
       reset();
       refresh();
       message.success(t('security.enabled'));
+    } catch {
+      failed();
     } finally {
       setBusy(false);
     }
   };
 
   const disable = async (method: TwoFactorMethod) => {
-    const { error } = await api.DELETE('/api/v1/me/mfa/methods/{method}', {
-      params: { path: { method } },
-    });
-    if (error !== undefined) {
-      message.error(t('common.saveFailed'));
-      return;
+    try {
+      const { error } = await api.DELETE('/api/v1/me/mfa/methods/{method}', {
+        params: { path: { method } },
+      });
+      if (error !== undefined) {
+        failed();
+        return;
+      }
+      refresh();
+      message.success(t('security.methodDisabled'));
+    } catch {
+      failed();
     }
-    refresh();
-    message.success(t('security.methodDisabled'));
   };
 
   const setPreferred = async (method: TwoFactorMethod) => {
-    const { error } = await api.PUT('/api/v1/me/mfa/preferred', { body: { method } });
-    if (error !== undefined) {
-      message.error(t('common.saveFailed'));
-      return;
+    try {
+      const { error } = await api.PUT('/api/v1/me/mfa/preferred', { body: { method } });
+      if (error !== undefined) {
+        failed();
+        return;
+      }
+      refresh();
+    } catch {
+      failed();
     }
-    refresh();
   };
 
   /** Why a method cannot be switched on yet, or null when it can. */
@@ -251,6 +268,12 @@ export default function TwoFactorMethods({ status }: Props) {
             <Typography.Paragraph copyable={{ text: recoveryCodes.join('\n') }} style={{ margin: 0 }}>
               <pre style={{ margin: 0 }}>{recoveryCodes.join('\n')}</pre>
             </Typography.Paragraph>
+          }
+          // The only way the codes leave the screen: they cannot be shown again.
+          action={
+            <Button size="small" onClick={() => setRecoveryCodes(null)}>
+              {t('security.recoveryKept')}
+            </Button>
           }
         />
       )}
