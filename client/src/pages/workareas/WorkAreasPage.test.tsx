@@ -13,21 +13,40 @@ vi.mock('react-router-dom', async () => ({
 
 let areas: WorkArea[] = [];
 let truncated = false;
+let loading = false;
+let failed = false;
+const refetch = vi.fn();
 vi.mock('../../api/hooks.ts', () => ({
-  useWorkAreas: () => ({ data: { items: areas, truncated }, isLoading: false, isError: false }),
+  useWorkAreas: () =>
+    failed
+      ? { data: undefined, isLoading: false, isError: true, refetch }
+      : loading
+        ? { data: undefined, isLoading: true, isError: false, refetch }
+        : { data: { items: areas, truncated }, isLoading: false, isError: false, refetch },
   useMapLayers: () => ({ data: [] }),
 }));
 
 // The canvas is not what these assertions are about, and jsdom has no WebGL or layout for it.
-// Stubbed to the smallest surface the page actually calls, so a real render still runs.
+// Stubbed to the smallest surface the page actually calls, so a real render still runs; each
+// instance records the container it was built into and whether it was disposed.
+const maps = vi.hoisted(() => [] as { target: unknown; disposed: boolean }[]);
 vi.mock('ol/Map', () => ({
   default: class {
-    setTarget() {}
-    getLayers() { return { getArray: () => [] }; }
+    record: { target: unknown; disposed: boolean };
+    constructor(options: { target?: unknown } = {}) {
+      this.record = { target: options.target, disposed: false };
+      maps.push(this.record);
+    }
+    setTarget(target: unknown) { this.record.target = target; }
+    getLayers() { return { getArray: () => [], clear() {}, insertAt() {}, remove() {} }; }
+    getAllLayers() { return []; }
     addLayer() {}
+    addControl() {}
+    getSize() { return undefined; }
     getView() { return { fit: () => {} }; }
     on() {}
     un() {}
+    dispose() { this.record.disposed = true; }
     forEachFeatureAtPixel() { return undefined; }
   },
 }));
@@ -50,7 +69,11 @@ function renderPage() {
 beforeEach(() => {
   navigate.mockClear();
   truncated = false;
+  loading = false;
+  failed = false;
+  refetch.mockClear();
   areas = [];
+  maps.length = 0;
 });
 
 afterEach(cleanup);
@@ -107,5 +130,31 @@ describe('the work-area overview', () => {
     renderPage();
 
     expect(screen.getByText('Unmapped')).toBeInTheDocument();
+  });
+
+  it('draws its map once the areas arrive on a cold cache, and lets it go when the page closes', () => {
+    loading = true;
+    const { rerender, unmount } = renderPage();
+    expect(screen.queryByTestId('work-areas-map')).toBeNull();
+
+    loading = false;
+    areas = [area('a', 'Bucegi', null, 0)];
+    rerender(<MemoryRouter><WorkAreasPage /></MemoryRouter>);
+
+    const container = screen.getByTestId('work-areas-map');
+    const drawn = maps.filter((map) => map.target === container);
+    expect(drawn).toHaveLength(1);
+
+    unmount();
+    expect(drawn[0].disposed).toBe(true);
+  });
+
+  it('says the areas could not be read and offers to ask again', () => {
+    failed = true;
+    renderPage();
+
+    expect(screen.getByText('The work areas could not be loaded.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

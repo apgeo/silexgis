@@ -27,15 +27,18 @@ export function defaultBasemap(layers: readonly MapLayerInfo[] | undefined): Map
 
 /**
  * The catalogue entry a small map of its own should draw under its work: the background the reader
- * has on the workspace map right now, else the installation's default, else none.
+ * has on the workspace map right now, else the installation's default, else none — of the entries
+ * `accepts` lets it draw.
  */
 export function chooseBackground(
   layers: readonly MapLayerInfo[] | undefined,
   activeId: number | undefined,
+  accepts: (entry: MapLayerInfo) => boolean = () => true,
 ): MapLayerInfo | null {
+  const usable = (layers ?? []).filter(accepts);
   const active =
-    activeId === undefined ? undefined : (layers ?? []).find((l) => l.id === activeId && l.isBase && isDrawableOnMap(l));
-  return active ?? defaultBasemap(layers);
+    activeId === undefined ? undefined : usable.find((l) => l.id === activeId && l.isBase && isDrawableOnMap(l));
+  return active ?? defaultBasemap(usable);
 }
 
 /** The id of the background showing on the workspace map, or undefined before it has drawn any. */

@@ -29,6 +29,16 @@ export async function createFeature(body: FeatureCreate): Promise<FeatureDetail>
 }
 
 /**
+ * The version a feature is at now, as the entity tag its read answers with — for a write that has
+ * to name the version its change was made against rather than whichever one was read last.
+ */
+export async function fetchFeatureVersion(id: string): Promise<string | undefined> {
+  const call = api.GET('/api/v1/features/{id}', { params: { path: { id } } });
+  await unwrap(call);
+  return (await call).response.headers.get('ETag') ?? undefined;
+}
+
+/**
  * `ifMatch` names the version the caller's values were read at — an edit dialog's, taken when it
  * opened — so a change somebody else saved meanwhile is refused instead of overwritten. Left out,
  * the newest version read is sent, which is right for a write made from what is on screen now.

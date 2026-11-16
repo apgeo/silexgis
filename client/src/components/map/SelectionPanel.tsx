@@ -44,6 +44,7 @@ import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
 import PanelDock from './PanelDock.tsx';
 import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
+import { featureWriteProblem } from './featureWriteProblems.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import type { PanelScope } from '../../stores/panelPrefs.ts';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
@@ -465,7 +466,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       // A stale version is worded once, by the application's conflict warning; a "save failed"
       // beside it would contradict it. The dialog stays open with what was typed.
       if (!isConcurrencyConflict(error)) {
-        message.error(t('common.saveFailed'));
+        message.error(featureWriteProblem(error, t));
       }
     }
   };
@@ -476,8 +477,8 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       surfaceFeaturesChanged();
       setSelection(null);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(featureWriteProblem(error, t, 'common.deleteFailed'));
     }
   };
 

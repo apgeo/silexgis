@@ -230,6 +230,8 @@ async function pinnedShortcutsAndChromeToggle(page: Page, account: Account) {
 
   // Discard the pending edit; unpinning removes the shortcut.
   await toolbar.getByRole('button', { name: 'Discard edits' }).click();
+  // Discarding asks first, naming how many edits go.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Discard', exact: true }).click();
   await paletteTrigger.click();
   await paletteItem.hover();
   await paletteItem.getByRole('button', { name: 'Unpin from toolbar' }).click();
@@ -423,3 +425,57 @@ async function editFeatureDescription(page: Page, value: string) {
   await modal.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.locator('.ant-descriptions').getByText(value)).toBeVisible({ timeout: 15_000 });
 }
+
+// A pan reloads the surface-feature layer; a drawing that is not saved yet has to come through
+// that reload, and the save that follows has to create it once — where it was drawn.
+test('a drawing survives a pan and its reload, and the save creates it once', async ({ page }, testInfo) => {
+  const spot = ownMapPoint(testInfo.parallelIndex);
+  const featureName = `E2E Panned ${Date.now()}`;
+  await login(page);
+
+  const toolbar = page.locator('.map-edit-overlay');
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole('button', { name: /Feature type/ }).click();
+  await paletteEntry(page, 'Sinkhole / Doline').click();
+  await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
+  const canvas = page.locator('.map-canvas');
+  await canvas.click({ position: spot });
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('New feature')).toBeVisible();
+  await modal.getByLabel('Name').fill(featureName);
+  await modal.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(modal).toBeHidden();
+
+  // Pan away and back with the arrow keys: each pan settles into a reload of the layer from the
+  // server, and the way back puts the drawing under the pixel it was drawn at again.
+  const map = page.getByRole('application', { name: /^Map\./ });
+  await map.focus();
+  for (const key of ['ArrowRight', 'ArrowLeft']) {
+    const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
+    await page.keyboard.press(key);
+    await reloaded;
+  }
+
+  // Still one unsaved edit after the layer was refilled from the server.
+  const save = toolbar.getByRole('button', { name: /Save/ });
+  await expect(save).toBeEnabled();
+  await expect(toolbar.locator('.ant-badge').filter({ has: page.getByRole('button', { name: /Save/ }) })).toContainText('1');
+
+  const creates: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/features') {
+      creates.push(r.url());
+    }
+  });
+  const reloadedAfterSave = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
+  await save.click();
+  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await reloadedAfterSave;
+  expect(creates).toHaveLength(1);
+
+  // The saved feature is where it was drawn.
+  await canvas.click({ position: spot });
+  await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
+
+  await deleteFeature(page, featureName);
+});

@@ -248,7 +248,7 @@ export const specs = {
   // Which protected rows a window holds, decided on the position each reader is shown — the
   // workspace map's entrance and feature layers, and a shared view's link.
   windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts', 'shared-view.spec.ts'],
-  workAreas: ['karst-density.spec.ts'],
+  workAreas: ['karst-density.spec.ts', 'work-areas.spec.ts'],
 };
 
 /** Client path prefix → the area, or areas, it belongs to. Longest prefix wins. */

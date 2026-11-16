@@ -2,20 +2,17 @@
 import { DownloadOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { Alert, Card, Checkbox, Flex, Input, Radio, Select, Table, Typography } from 'antd';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import Point from 'ol/geom/Point';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { saveBlob } from '../../api/download.ts';
 import Button from '../../components/Button.tsx';
+import { useSmallMap } from '../../components/map/useSmallMap.ts';
 import { assumptionLabel, formatLabel, parseErrorLabel } from '../../components/coordinates/formatLabels.ts';
 import {
   batchCsv,
@@ -205,50 +202,31 @@ function SingleConverter() {
  * the workspace map, and nothing is saved — it disappears with the page.
  */
 function PositionMap({ lon, lat }: { lon: number; lat: number }) {
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
   const marker = useRef(new Feature<Point>());
-
-  useEffect(() => {
-    if (!target.current) {
-      return undefined;
-    }
-    const built = new Map({
-      target: target.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
+  const { targetRef, map, ready } = useSmallMap({
+    center: [lon, lat],
+    zoom: 14,
+    layers: () => [
+      new VectorLayer({
+        source: new VectorSource({ features: [marker.current] }),
+        style: new Style({
+          image: new CircleStyle({
+            radius: 8,
+            fill: new Fill({ color: '#146262' }),
+            stroke: new Stroke({ color: '#fff', width: 2 }),
           }),
         }),
-        new VectorLayer({
-          source: new VectorSource({ features: [marker.current] }),
-          style: new Style({
-            image: new CircleStyle({
-              radius: 8,
-              fill: new Fill({ color: '#146262' }),
-              stroke: new Stroke({ color: '#fff', width: 2 }),
-            }),
-          }),
-        }),
-      ],
-      view: new View({ zoom: 14 }),
-    });
-    map.current = built;
-    return () => {
-      built.setTarget(undefined);
-      map.current = null;
-    };
-  }, []);
+      }),
+    ],
+  });
 
   useEffect(() => {
     const at = fromLonLat([lon, lat]);
     marker.current.setGeometry(new Point(at));
     map.current?.getView().setCenter(at);
-  }, [lon, lat]);
+  }, [lon, lat, ready, map]);
 
-  return <div ref={target} style={{ height: 320, width: '100%' }} data-testid="converter-map" />;
+  return <div ref={targetRef} style={{ height: 320, width: '100%' }} data-testid="converter-map" />;
 }
 
 const SEPARATOR_OPTIONS: { value: Separator | 'auto'; key: string }[] = [

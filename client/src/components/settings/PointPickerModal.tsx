@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Flex, InputNumber, Modal, Typography } from 'antd';
+import { Flex, InputNumber, Modal, Typography, theme } from 'antd';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import Point from 'ol/geom/Point';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { clampLonLat } from '../../geo/coords.ts';
 import PositionTextInput from '../coordinates/PositionTextInput.tsx';
+import { useSmallMap } from '../map/useSmallMap.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
@@ -34,9 +31,11 @@ interface Props {
  */
 export default function PointPickerModal({ open, value, onCancel, onPick }: Props) {
   const { t } = useTranslation();
-  const mapTarget = useRef<HTMLDivElement | null>(null);
-  const pickerMap = useRef<Map | null>(null);
   const marker = useRef(new Feature<Point>());
+  // OpenLayers draws outside React, so the marker reads the theme's colour through a ref.
+  const { token } = theme.useToken();
+  const markerColour = useRef(token.colorPrimary);
+  markerColour.current = token.colorPrimary;
   const [lon, setLon] = useState(value?.[0] ?? DEFAULT_CENTER[0]);
   const [lat, setLat] = useState(value?.[1] ?? DEFAULT_CENTER[1]);
 
@@ -47,21 +46,6 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
     }
   }, [open, value]);
 
-  const teardown = () => {
-    pickerMap.current?.setTarget(undefined);
-    pickerMap.current = null;
-  };
-
-  // Detach if the page navigates away while the dialog is open.
-  useEffect(() => () => teardown(), []);
-
-  const onMapTargetRef = (el: HTMLDivElement | null) => {
-    mapTarget.current = el;
-    if (!el) {
-      teardown();
-    }
-  };
-
   const placeMarker = (nextLon: number, nextLat: number, recentre: boolean) => {
     marker.current.setGeometry(new Point(fromLonLat([nextLon, nextLat])));
     if (recentre) {
@@ -69,48 +53,35 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
     }
   };
 
-  // The dialog mounts its children lazily, so the target div does not exist when `open` flips —
-  // the map can only be built once the open transition has put the content in the document.
-  const onAfterOpenChange = (visible: boolean) => {
-    if (!visible) {
-      teardown();
-      return;
-    }
-    if (pickerMap.current || !mapTarget.current) {
-      return;
-    }
+  // Built once the dialog's content is mounted, kept through re-renders, and disposed with its
+  // layers when the dialog closes.
+  const { targetRef, map: pickerMap, ready } = useSmallMap({
+    center: value ?? DEFAULT_CENTER,
+    zoom: value ? 14 : 9,
+    active: open,
+    layers: () => [
+      new VectorLayer({
+        source: new VectorSource({ features: [marker.current] }),
+        style: () => markerStyle(markerColour.current),
+      }),
+    ],
+    onCreate: (map) => {
+      map.on('singleclick', (event) => {
+        const [clickLon, clickLat] = toLonLat(event.coordinate);
+        setLon(Number(clickLon.toFixed(6)));
+        setLat(Number(clickLat.toFixed(6)));
+        placeMarker(clickLon, clickLat, false);
+      });
+    },
+  });
 
-    const map = new Map({
-      target: mapTarget.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({
-          source: new VectorSource({ features: [marker.current] }),
-          style: new Style({
-            image: new CircleStyle({
-              radius: 8,
-              fill: new Fill({ color: '#146262' }),
-              stroke: new Stroke({ color: '#fff', width: 2 }),
-            }),
-          }),
-        }),
-      ],
-      view: new View({ center: fromLonLat([lon, lat]), zoom: value ? 14 : 9 }),
-    });
-    map.on('singleclick', (event) => {
-      const [clickLon, clickLat] = toLonLat(event.coordinate);
-      setLon(Number(clickLon.toFixed(6)));
-      setLat(Number(clickLat.toFixed(6)));
-      placeMarker(clickLon, clickLat, false);
-    });
-    pickerMap.current = map;
-    placeMarker(lon, lat, true);
-  };
+  // A new map shows the point the dialog opened with.
+  useEffect(() => {
+    if (ready) {
+      placeMarker(lon, lat, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per map built
+  }, [ready]);
 
   return (
     <Modal
@@ -118,14 +89,13 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
       title={t('settings.pointPicker.title')}
       width={720}
       destroyOnHidden
-      afterOpenChange={onAfterOpenChange}
       onCancel={onCancel}
       onOk={() => onPick(clampLonLat(lon, lat))}
       okText={t('settings.pointPicker.use')}
     >
       <Flex vertical gap={12}>
         <Typography.Text type="secondary">{t('settings.pointPicker.hint')}</Typography.Text>
-        <div ref={onMapTargetRef} style={{ height: 360, width: '100%' }} data-testid="point-picker-map" />
+        <div ref={targetRef} style={{ height: 360, width: '100%' }} data-testid="point-picker-map" />
         <PositionTextInput
           onPosition={([typedLon, typedLat]) => {
             const [nextLon, nextLat] = clampLonLat(Number(typedLon.toFixed(7)), Number(typedLat.toFixed(7)));
@@ -139,10 +109,15 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
             {t('entrances.longitude')}
             <InputNumber
               value={lon}
+              min={-180}
+              max={180}
               onChange={(next) => {
-                const nextLon = next ?? 0;
-                setLon(nextLon);
-                placeMarker(nextLon, lat, true);
+                // A cleared field is a reader mid-edit, not a request for the prime meridian.
+                if (typeof next !== 'number') {
+                  return;
+                }
+                setLon(next);
+                placeMarker(next, lat, true);
               }}
               step={0.0001}
               style={{ width: 180, marginInlineStart: 8 }}
@@ -152,10 +127,14 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
             {t('entrances.latitude')}
             <InputNumber
               value={lat}
+              min={-90}
+              max={90}
               onChange={(next) => {
-                const nextLat = next ?? 0;
-                setLat(nextLat);
-                placeMarker(lon, nextLat, true);
+                if (typeof next !== 'number') {
+                  return;
+                }
+                setLat(next);
+                placeMarker(lon, next, true);
               }}
               step={0.0001}
               style={{ width: 180, marginInlineStart: 8 }}
@@ -165,4 +144,14 @@ export default function PointPickerModal({ open, value, onCancel, onPick }: Prop
       </Flex>
     </Modal>
   );
+}
+
+function markerStyle(colour: string) {
+  return new Style({
+    image: new CircleStyle({
+      radius: 8,
+      fill: new Fill({ color: colour }),
+      stroke: new Stroke({ color: '#fff', width: 2 }),
+    }),
+  });
 }

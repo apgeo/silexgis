@@ -887,7 +887,12 @@
       "map": "De pe hartă",
       "estimated": "Estimată"
     },
-    "surveyedAt": "Cartată"
+    "surveyedAt": "Cartată",
+    "problems": {
+      "locationForbidden": "Nu poți alege intrarea principală a unei peșteri a cărei locație exactă îți este ascunsă. Salveaz-o ca intrare suplimentară sau roagă pe cineva care poate vedea poziția peșterii.",
+      "notFound": "Această intrare nu mai există. Poate a fost ștearsă.",
+      "caveNotFound": "Peștera căreia îi aparține această intrare nu mai există sau nu o mai poți vedea."
+    }
   },
   "features": {
     "title": "Obiecte",
@@ -1765,6 +1770,24 @@
     "measureDistance": "Măsoară distanța",
     "measureArea": "Măsoară aria",
     "discard": "Renunță la editări",
+    "discardConfirm": "Renunți la {{count}} editări nesalvate? Desenele dispar, iar obiectele remodelate revin la forma salvată. Acțiunea nu poate fi anulată.",
+    "discardConfirmOk": "Renunță",
+    "leaveTitle": "Părăsești harta cu editări nesalvate?",
+    "leaveBody": "{{count}} editări de pe hartă nu sunt salvate. Dacă părăsești harta, se pierd.",
+    "leaveOk": "Pleacă și renunță",
+    "leaveStay": "Rămâi pe hartă",
+    "saveIncomplete": "{{saved}} salvate, {{failed}} nesalvate. Ce nu s-a salvat este încă pe hartă, marcat cu roșu; corectează și apasă din nou Salvează. Prima problemă: {{reason}}",
+    "typeUnresolved": "Tipul acestui obiect nu a fost găsit în lista tipurilor de obiecte, așa că forma lui nouă nu a fost trimisă. Reîncarcă pagina și încearcă din nou.",
+    "problems": {
+      "geometryInvalid": "O formă nu este acceptată de server, de exemplu un contur care se intersectează singur.",
+      "typeRequired": "Un obiect nu are tip sau are un tip pe care această instalare nu îl are.",
+      "typeNotAllowed": "Nu ai voie să creezi sau să modifici obiecte de acest tip.",
+      "propertiesInvalid": "Atributele unui obiect nu corespund cu ce cere tipul lui.",
+      "parentRequired": "Un obiect de acest tip trebuie să fie în interiorul altui obiect. Alege-l pe cel căruia îi aparține.",
+      "parentUnavailable": "Obiectul ales să îl conțină nu mai există sau nu îl poți vedea.",
+      "forbidden": "Nu ai voie să faci această modificare.",
+      "notFound": "Obiectul nu mai există. Poate a fost șters."
+    },
     "finishDrawing": "Încheie",
     "finishDrawingHint": "Mai adaugă puncte înainte de a încheia forma.",
     "removeLastPoint": "Punct",
@@ -3811,7 +3834,15 @@
     "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată zona spre care privește vederea, peste un fundal public, cu straturile pe care vederea le avea pornite — doar ce este public în sine, iar peșterile și obiectele protejate lipsesc cu totul.",
     "shareWithoutData": "Această vedere este restrânsă de un filtru salvat sau de un filtru venit dintr-un link, pe care un link nu îl poate aplica — așa că linkul arată zona și fundalul ei, fără peșteri și obiecte. Nici straturile desenate din filtre salvate nu apar vreodată printr-un link.",
     "shareWithoutFilterLayers": "Straturile desenate din filtre salvate nu apar niciodată printr-un link; linkul arată celelalte straturi ale vederii.",
-    "shareQr": "Linkul către vederea {{name}} ca cod QR"
+    "deleteConfirm": "Ștergi această vedere salvată? Acțiunea nu poate fi anulată.",
+    "shareQr": "Linkul către vederea {{name}} ca cod QR",
+    "problems": {
+      "createForbidden": "Nu poți salva vederi de hartă pe această instalare. Cere unui administrator dreptul de a le crea.",
+      "groupForbidden": "Nu poți partaja o vedere cu acel grup speologic.",
+      "notFound": "Această vedere salvată nu mai există. Poate a șters-o altcineva.",
+      "invalid": "Numele vederii lipsește sau are mai mult de 200 de caractere.",
+      "forbidden": "Nu ai voie să modifici această vedere salvată."
+    }
   },
   "panel": {
     "unknown": "Panou necunoscut.",
