@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Map;
@@ -252,6 +253,31 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         point["properties"]!.AsObject().ContainsKey("approximate").ShouldBeFalse();
         (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox={Window(snappedLon - 0.01, snappedLat - 0.01, snappedLon + 0.01, snappedLat + 0.01)}"))["features"]!
             .AsArray().ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A public structural reading is drawn on a link turned to its plane, as on the signed-in map:
+    /// without its orientation the tick would point east and misstate the plane. Every other kind
+    /// carries no orientation.
+    /// </summary>
+    [Fact]
+    public async Task A_link_draws_a_structural_reading_turned_to_its_plane()
+    {
+        await CreateFeatureAsync(
+            "Link Reading", new { type = "Point", coordinates = new[] { 17.111, 64.111 } },
+            FeatureTypeSeeds.StructuralMeasurement, "public", locationProtected: false,
+            properties: new { measurement_type = "bedding", strike = 30, dip = 40 });
+        await CreatePointFeatureAsync("Link Reading Sinkhole", 17.121, 64.111, "public", locationProtected: false);
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: true, 17.1, 64.1));
+        var features = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox=17.0,64.0,17.2,64.2"))["features"]!
+            .AsArray().Select(f => f!["properties"]!.AsObject()).ToList();
+
+        features.Count.ShouldBe(2);
+        var reading = features.Single(f => f["typeCode"]!.GetValue<string>() == FeatureTypeSeeds.StructuralMeasurement);
+        reading["dipDirection"]!.GetValue<double>().ShouldBe(120);
+        reading["dip"]!.GetValue<double>().ShouldBe(40);
+        features.Single(f => f["typeCode"]!.GetValue<string>() == "sinkhole").ContainsKey("dipDirection").ShouldBeFalse();
     }
 
     [Fact]
@@ -685,7 +711,8 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         CreateFeatureAsync(name, new { type = "Point", coordinates = new[] { lon, lat } }, "sinkhole", visibility, locationProtected);
 
     private async Task<Guid> CreateFeatureAsync(
-        string name, object geometry, string typeCode, string visibility, bool locationProtected, Guid? parentId = null)
+        string name, object geometry, string typeCode, string visibility, bool locationProtected, Guid? parentId = null,
+        object? properties = null)
     {
         long typeId;
         using (var scope = factory.Services.CreateScope())
@@ -705,6 +732,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             visibility,
             locationProtected,
             parents = parentId is { } parent ? new[] { new { parentId = parent, isPrimary = true } } : null,
+            properties,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

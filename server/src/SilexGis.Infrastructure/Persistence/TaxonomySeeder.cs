@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Infrastructure.Persistence;
@@ -646,6 +647,18 @@ public static class TaxonomySeeder
 
             // A hill is an outline on the surface and nothing more, exactly like a massif.
             (FeatureTypeSeeds.Hill, "Hill", FeatureCategory.Area, area, false, snap, null, null),
+
+            // A geological unit: one rock class's outline from a geology map, the ground an area's
+            // statistics are split by. Its schema is built from the lithology vocabulary in code,
+            // which stays the authority on which classes are karstifiable even after an
+            // administrator edits the stored schema. Snapped like every other area kind.
+            (FeatureTypeSeeds.GeologicalUnit, "Geological unit", FeatureCategory.Area, area, false, snap, null, Lithology.PropertiesSchemaJson()),
+
+            // A structural reading: bedding, a joint, a fault plane, measured at one point on the
+            // surface or in a cave. Linked to a cave, it inherits that cave's protection through the
+            // ordinary hierarchy, and like every point kind it is snapped where its reader may not
+            // place it exactly. It needs no parent: most readings are taken at outcrops.
+            (FeatureTypeSeeds.StructuralMeasurement, "Structural measurement", FeatureCategory.Surface, point, false, snap, "fgdc_bedding_inclined.svg", StructuralMeasurement.PropertiesSchemaJson()),
         ];
     }
 }
