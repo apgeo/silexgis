@@ -1823,7 +1823,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates an account (enabled per installation via Auth:OpenRegistration). */
+        /** Creates an account (enabled per installation via Auth:OpenRegistration). Returns 202 alike whether or not the address already has an account; its holder is mailed instead. */
         post: operations["authRegister"];
         delete?: never;
         options?: never;
@@ -9505,6 +9505,7 @@ export interface components {
             mapSymbols: components["schemas"]["MapSymbolSettingsDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
+            notices: string[];
         };
         AdminUserCavingGroupRefDto: {
             /** Format: uuid */
@@ -9591,6 +9592,7 @@ export interface components {
             /** Format: int32 */
             photoCount: number;
             hasActiveShare: boolean;
+            canShare: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
