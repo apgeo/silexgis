@@ -5,11 +5,12 @@ import { ApiError } from '../../api/client.ts';
 import type { UploadItem } from './uploadPlan.ts';
 import { useUploadQueue } from './useUploadQueue.ts';
 
-const uploadOne = vi.hoisted(() => vi.fn());
+const { uploadOne, abandonSession } = vi.hoisted(() => ({ uploadOne: vi.fn(), abandonSession: vi.fn() }));
 
 vi.mock('./uploadTransport.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./uploadTransport.ts')>()),
   uploadOne,
+  abandonSession,
 }));
 
 const limits = { chunkBytes: 1024, resumableThresholdBytes: 0 };
@@ -19,6 +20,7 @@ function files(...names: string[]): File[] {
 }
 
 beforeEach(() => {
+  abandonSession.mockReset();
   uploadOne.mockReset();
   uploadOne.mockResolvedValue({ fileId: 'f', documentId: 'd' });
 });
@@ -121,13 +123,72 @@ describe('useUploadQueue', () => {
     expect(new Set(result.current.items.map((i: UploadItem) => i.id)).size).toBe(2);
   });
 
-  it('empties the list and stops what is in flight', async () => {
+  it('retries a resumable file from the session its failed attempt kept', async () => {
+    // Without the session a retry sends a 500 MB scan again from its first byte.
+    uploadOne.mockImplementationOnce((_file: File, _target: unknown, _limits: unknown, options: { onSession?: (id: string) => void }) => {
+      options.onSession?.('kept-session');
+      return Promise.reject(new TypeError('Failed to fetch'));
+    });
+
     const { result } = renderHook(() => useUploadQueue(limits, () => ({})));
-    act(() => result.current.add(files('a.txt')));
-    await waitFor(() => expect(result.current.summary.running).toBe(false));
+    act(() => result.current.add(files('scan.bin')));
+    await waitFor(() => expect(result.current.summary.failed).toBe(1));
+    // A connection that dropped is told apart from a refusal, which carries an HTTP status.
+    expect(result.current.items[0]).toMatchObject({ sessionId: 'kept-session', errorStatus: 0 });
+
+    act(() => result.current.retryFailed());
+    await waitFor(() => expect(result.current.summary.stored).toBe(1));
+
+    expect(uploadOne.mock.calls[1]![3]).toMatchObject({ resumeSession: 'kept-session' });
+  });
+
+  it('abandons the sessions of files it discards, so their bytes are not left on the server', async () => {
+    uploadOne.mockImplementationOnce((_file: File, _target: unknown, _limits: unknown, options: { onSession?: (id: string) => void }) => {
+      options.onSession?.('kept-session');
+      return Promise.reject(new ApiError(500));
+    });
+
+    const { result } = renderHook(() => useUploadQueue(limits, () => ({})));
+    act(() => result.current.add(files('scan.bin')));
+    await waitFor(() => expect(result.current.summary.failed).toBe(1));
+    expect(result.current.items[0]?.errorStatus).toBe(500);
 
     act(() => result.current.clear());
+
+    expect(abandonSession).toHaveBeenCalledWith('kept-session');
+  });
+
+  it('empties the list and stops what is in flight', async () => {
+    // A transfer that never finishes on its own, so the only way it can stop is clear().
+    const signals: AbortSignal[] = [];
+    uploadOne.mockImplementation((_file: File, _target: unknown, _limits: unknown, options: { signal: AbortSignal }) => {
+      signals.push(options.signal);
+      return new Promise(() => undefined);
+    });
+    const { result } = renderHook(() => useUploadQueue(limits, () => ({})));
+    act(() => result.current.add(files('a.txt', 'b.txt')));
+    await waitFor(() => expect(signals.length).toBeGreaterThan(0));
+    expect(result.current.summary.running).toBe(true);
+
+    act(() => result.current.clear());
+
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
     expect(result.current.items).toEqual([]);
     expect(result.current.summary).toMatchObject({ total: 0, running: false });
+  });
+
+  it('stops its transfers when the screen that owns it goes away', async () => {
+    const signals: AbortSignal[] = [];
+    uploadOne.mockImplementation((_file: File, _target: unknown, _limits: unknown, options: { signal: AbortSignal }) => {
+      signals.push(options.signal);
+      return new Promise(() => undefined);
+    });
+    const { result, unmount } = renderHook(() => useUploadQueue(limits, () => ({})));
+    act(() => result.current.add(files('a.txt')));
+    await waitFor(() => expect(signals.length).toBe(1));
+
+    unmount();
+
+    expect(signals[0].aborted).toBe(true);
   });
 });

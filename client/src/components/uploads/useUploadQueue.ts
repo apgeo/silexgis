@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../../api/client.ts';
 import {
   UploadConcurrency,
@@ -11,6 +11,7 @@ import {
   type UploadSummary,
 } from './uploadPlan.ts';
 import {
+  abandonSession,
   DuplicateUploadError,
   uploadOne,
   type UploadLimits,
@@ -102,6 +103,8 @@ export function useUploadQueue(
             onProgress: (fraction) =>
               apply((current) => withItem(current, next.id, { progress: fraction })),
             onDuplicate: duplicateRef.current,
+            resumeSession: next.sessionId,
+            onSession: (sessionId) => apply((current) => withItem(current, next.id, { sessionId })),
           });
           apply((current) =>
             withItem(current, next.id, {
@@ -122,6 +125,7 @@ export function useUploadQueue(
               status: error instanceof DuplicateUploadError ? 'skipped' : 'failed',
               progress: 0,
               errorCode: error instanceof ApiError ? error.code : undefined,
+              errorStatus: error instanceof ApiError ? error.status : 0,
             }),
           );
         }
@@ -161,9 +165,22 @@ export function useUploadQueue(
 
   const clear = useCallback(() => {
     abortRef.current?.abort();
+    // A file that is discarded will not be retried, so the partial bytes its session holds on
+    // the server would only wait there for the expiry sweep.
+    for (const item of itemsRef.current) {
+      if (item.sessionId && item.status !== 'stored') {
+        void abandonSession(item.sessionId);
+      }
+    }
     runningRef.current = false;
     apply(() => []);
   }, [apply]);
+
+  // A queue whose screen has gone (a route change, a parent that unmounted the drawer) has
+  // nobody left to report to, so its transfers stop rather than run on unseen. Sessions are
+  // kept, not abandoned: nothing was discarded on purpose, and the server's expiry sweep
+  // collects them.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const summary = summarise(items);
   return { items, summary, add, retryFailed, clear, running: summary.running };
