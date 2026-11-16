@@ -4,7 +4,8 @@ import { DeleteOutlined, EditOutlined, StarFilled } from '@ant-design/icons';
 import { App, Card, Flex, Modal, Radio, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ApiError } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import {
   useFeatureChildren,
   useFeatureParents,
@@ -105,13 +106,12 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
       setEditing(false);
       message.success(t('common.saved'));
     } catch (error) {
-      // The one refusal that is not worth retrying says why, in words; anything else is the
-      // general failure it always was.
-      message.error(
-        error instanceof ApiError && error.code === 'feature.parent_fixed'
-          ? t('features.parentFixed')
-          : t('common.saveFailed'),
-      );
+      // A refusal that retrying will not cure says why, in words; anything else is the general
+      // failure it always was. A stale version is answered by the application's conflict warning
+      // alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 

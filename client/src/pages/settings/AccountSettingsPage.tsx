@@ -38,17 +38,22 @@ export default function AccountSettingsPage() {
   const submitUsername = async (values: { username: string }) => {
     try {
       await changeUsername.mutateAsync(values.username);
-      // Renaming invalidates the session behind the tokens; renew before it lapses.
-      await refreshSession();
-      message.success(t('settings.account.usernameChanged'));
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       message.error(
         code === 'me.username_taken'
           ? t('settings.account.usernameTaken')
-          : t('settings.account.usernameInvalid'),
+          : code === 'me.username_invalid'
+            ? t('settings.account.usernameInvalid')
+            : t('common.saveFailed'),
       );
+      return;
     }
+    // Renaming invalidates the session behind the tokens; renew before it lapses. The renewal is
+    // best effort and never throws, and it stays outside the rename's catch so that nothing it does
+    // could be reported as a refused name.
+    await refreshSession();
+    message.success(t('settings.account.usernameChanged'));
   };
 
   const ready = dataExport?.status === 'ready';

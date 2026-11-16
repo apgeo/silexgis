@@ -8,7 +8,7 @@ import {
   LoginOutlined,
   SafetyOutlined,
 } from '@ant-design/icons';
-import { App, Card, Flex, Popconfirm, Tag, Typography } from 'antd';
+import { Alert, App, Card, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import { useQueryClient } from '@tanstack/react-query';
@@ -42,13 +42,21 @@ export default function SecuritySettingsPage() {
   const queryClient = useQueryClient();
   const { data: status } = useMfaStatus();
   const [linked, setLinked] = useState<LinkedLogin[]>([]);
-  const [hasPassword, setHasPassword] = useState(true);
+  // Unknown until the account's sign-in methods have been read: a password card shown on a guess
+  // would offer a passwordless account a change it cannot make.
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+  const [loginsState, setLoginsState] = useState<'loading' | 'failed' | 'loaded'>('loading');
   const [available, setAvailable] = useState<LinkedLogin[]>([]);
   const [params, setParams] = useSearchParams();
 
   const disableAll = async () => {
-    const { error } = await api.POST('/api/v1/me/mfa/disable');
-    if (error !== undefined) {
+    try {
+      const { error } = await api.POST('/api/v1/me/mfa/disable');
+      if (error !== undefined) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+    } catch {
       message.error(t('common.saveFailed'));
       return;
     }
@@ -57,16 +65,22 @@ export default function SecuritySettingsPage() {
   };
 
   const loadLogins = useCallback(async () => {
-    const [logins, config] = await Promise.all([
-      api.GET('/api/v1/me/external-logins'),
-      api.GET('/api/v1/auth/config'),
-    ]);
-    if (logins.data) {
+    setLoginsState('loading');
+    try {
+      const [logins, config] = await Promise.all([
+        api.GET('/api/v1/me/external-logins'),
+        api.GET('/api/v1/auth/config'),
+      ]);
+      if (!logins.data || !config.data) {
+        setLoginsState('failed');
+        return;
+      }
       setLinked(logins.data.logins);
       setHasPassword(logins.data.hasPassword);
-    }
-    if (config.data) {
       setAvailable(config.data.providers.map((p) => ({ provider: p.name, displayName: p.displayName })));
+      setLoginsState('loaded');
+    } catch {
+      setLoginsState('failed');
     }
   }, []);
 
@@ -93,10 +107,16 @@ export default function SecuritySettingsPage() {
     `/api/v1/auth/external/${encodeURIComponent(name)}?mode=link&returnUrl=${encodeURIComponent('/settings/security')}`;
 
   const unlink = async (provider: string) => {
-    const { error } = await api.DELETE('/api/v1/me/external-logins/{provider}', {
-      params: { path: { provider } },
-    });
-    if (error !== undefined) {
+    let failed: boolean;
+    try {
+      const { error } = await api.DELETE('/api/v1/me/external-logins/{provider}', {
+        params: { path: { provider } },
+      });
+      failed = error !== undefined;
+    } catch {
+      failed = true;
+    }
+    if (failed) {
       message.error(t('security.unlinkFailed'));
       return;
     }
@@ -137,7 +157,22 @@ export default function SecuritySettingsPage() {
         </Flex>
       </Card>
 
-      {hasPassword && <PasswordChangeCard />}
+      {loginsState === 'loading' && hasPassword === null && <Spin data-testid="security-logins-loading" />}
+
+      {loginsState === 'failed' && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('security.loginsLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void loadLogins()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+
+      {hasPassword === true && <PasswordChangeCard />}
 
       <PhoneNumberCard />
 
@@ -152,7 +187,7 @@ export default function SecuritySettingsPage() {
               dataSource={linked}
               renderItem={(item) => {
                 // Never let a passwordless account drop its only sign-in method.
-                const isLastLogin = !hasPassword && linked.length <= 1;
+                const isLastLogin = hasPassword !== true && linked.length <= 1;
                 return (
                   <List.Item
                     actions={[

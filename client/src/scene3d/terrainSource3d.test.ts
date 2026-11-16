@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   checkTerrainSource,
   describeTerrainLayer,
   looksGzipped,
+  TERRAIN_CHECK_TIMEOUT_MILLISECONDS,
 } from './terrainSource3d.ts';
 
 // The four ways a terrain pyramid and the web server serving it can be paired, and what each one
@@ -269,5 +270,39 @@ describe('addressing the pyramid', () => {
     await checkTerrainSource('/terrain/', record);
 
     expect(modes).toEqual(['no-store', 'no-store']);
+  });
+});
+
+describe('a pyramid that never answers', () => {
+  /** A server that takes the request and never replies, until the request is called off. */
+  const hanging: typeof fetch = ((_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    })) as typeof fetch;
+
+  it('gives up after a bounded wait and calls it unreachable, instead of resolving for ever', async () => {
+    vi.useFakeTimers();
+    try {
+      const verdict = checkTerrainSource('/terrain/', hanging);
+      await vi.advanceTimersByTimeAsync(TERRAIN_CHECK_TIMEOUT_MILLISECONDS);
+      await expect(verdict).resolves.toBe('unreachable');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops waiting when the scene that asked has gone', async () => {
+    const leaving = new AbortController();
+    const asked: (AbortSignal | undefined)[] = [];
+    const recording: typeof fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      asked.push(init?.signal ?? undefined);
+      return hanging(input, init);
+    }) as typeof fetch;
+
+    const verdict = checkTerrainSource('/terrain/', recording, leaving.signal);
+    leaving.abort();
+
+    await expect(verdict).resolves.toBe('unreachable');
+    expect(asked[0]?.aborted).toBe(true);
   });
 });

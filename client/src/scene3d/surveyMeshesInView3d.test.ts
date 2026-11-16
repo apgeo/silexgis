@@ -567,6 +567,29 @@ describe('attachSurveyMeshesInView3d', () => {
     expect(second.getState()).toMatchObject({ status: 'failed', shown: 0 });
   });
 
+  it('releases every wall it holds when the map filter is refused, and says it was refused', async () => {
+    vi.useFakeTimers();
+    const { onMapFilterRefusal } = await import('../map/mapFilters.ts');
+    const heard: string[] = [];
+    const off = onMapFilterRefusal((code) => heard.push(code));
+    const scene = new FakeScene();
+    await startedWithFakeTimers(scene, answer([mesh('a'), mesh('b')]));
+    scene.reads[0].land();
+    scene.reads[1].land();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(scene.heldCaves()).toHaveLength(2);
+
+    // Walls chosen without the filter are not the walls it selects; a dropped request would keep
+    // them, a refusal cannot.
+    respond = () => Promise.reject({ code: 'filter.unknown_field', status: 400 });
+    scene.move();
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(scene.heldCaves()).toEqual([]);
+    expect(heard).toEqual(['filter.unknown_field']);
+    off();
+  });
+
   it('says a listing is in the air, so chrome can wait for the view to finish filling in', async () => {
     const scene = new FakeScene();
     let deliver: (value: CaveMeshesInView) => void = () => {};

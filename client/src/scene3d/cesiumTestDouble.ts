@@ -902,6 +902,22 @@ interface FakeViewOptions {
   orientation?: { heading: number; pitch: number; roll: number };
 }
 
+function rectangleCameraPosition(
+  rectangle: { west: number; south: number; east: number; north: number },
+  frustum: PerspectiveFrustum | OrthographicFrustum,
+): FakeCartesian3 {
+  const latitude = (rectangle.south + rectangle.north) / 2;
+  const across =
+    Math.abs(rectangle.east - rectangle.west) * METERS_PER_DEGREE * Math.cos((latitude * Math.PI) / 180);
+  const along = Math.abs(rectangle.north - rectangle.south) * METERS_PER_DEGREE;
+  const fovy = frustum instanceof PerspectiveFrustum ? frustum.fovy : Math.PI / 3;
+  return {
+    longitudeDegrees: (rectangle.west + rectangle.east) / 2,
+    latitudeDegrees: latitude,
+    height: Math.max(across, along) / 2 / Math.tan(fovy / 2),
+  };
+}
+
 class FakeCamera {
   frustum: PerspectiveFrustum | OrthographicFrustum = new PerspectiveFrustum();
   positionWC: FakeCartesian3 = { longitudeDegrees: 0, latitudeDegrees: 0, height: 0 };
@@ -1014,12 +1030,33 @@ class FakeCamera {
     this.flightsCancelled += 1;
   }
 
+  /**
+   * Where the real library stands a camera looking straight down to show a rectangle: over its
+   * middle, as high above the ELLIPSOID as the wider side needs. The library knows nothing of the
+   * ground for this, which is why a small box over high terrain comes out underground, and why
+   * the stand-in places the camera rather than only recording the box.
+   */
+  getRectangleCameraCoordinates(rectangle: { west: number; south: number; east: number; north: number }) {
+    this.framed.push(rectangle);
+    return rectangleCameraPosition(rectangle, this.frustum);
+  }
+
   private apply(options: FakeViewOptions) {
     const destination = options.destination as Partial<FakeCartesian3>;
     if (typeof destination?.longitudeDegrees === 'number') {
       this.positionWC = destination as FakeCartesian3;
     } else {
       this.framed.push(options.destination);
+      const rectangle = options.destination as { west?: number };
+      if (typeof rectangle?.west === 'number') {
+        this.positionWC = rectangleCameraPosition(
+          options.destination as { west: number; south: number; east: number; north: number },
+          this.frustum,
+        );
+        this.heading = 0;
+        this.pitch = -Math.PI / 2;
+        this.roll = 0;
+      }
     }
     if (options.orientation) {
       this.heading = options.orientation.heading;
@@ -1452,18 +1489,24 @@ export class Model {
     });
   }
 
-  /** Lands a read the scene is waiting on; with an error, refuses it instead. */
-  static deliver(url: string, error?: unknown) {
+  /**
+   * Lands a read the scene is waiting on, and hands back the model it landed as, so a test can see
+   * what became of it — drawn, or destroyed because nobody wanted it any more. With an error,
+   * refuses the read instead and hands back nothing.
+   */
+  static deliver(url: string, error?: unknown): Model | undefined {
     const pending = Model.waiting.get(url);
     if (!pending) {
       throw new Error(`no model read is waiting for ${url}`);
     }
     Model.waiting.delete(url);
     if (error === undefined) {
-      pending.resolve(new Model(pending.request));
-    } else {
-      pending.reject(error);
+      const model = new Model(pending.request);
+      pending.resolve(model);
+      return model;
     }
+    pending.reject(error);
+    return undefined;
   }
 
   /** Whether a read for this URL is still in the air. */

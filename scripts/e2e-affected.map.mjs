@@ -183,6 +183,9 @@ export const specs = {
     'scene3d-relief.spec.ts',
     // The engine's download dropped: asked for again, and said to be a download when it never arrives.
     'scene3d-download.spec.ts',
+    // The controls over the scene pressed where they are drawn: presets, projection, coupling, the
+    // callout beside them, the saved picture read back, a lost drawing context rebuilt and reloaded.
+    'scene3d-overlay-controls.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
@@ -205,6 +208,8 @@ export const specs = {
     'cave-morphometry.spec.ts', 'cave-levels.spec.ts', 'scene3d-walls.spec.ts',
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
     'caveview-label-size-mobile.spec.ts',
+    // A survey opened and closed many times in its dialog without a page load: one live drawing.
+    'caveview-open-close.spec.ts',
   ],
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.

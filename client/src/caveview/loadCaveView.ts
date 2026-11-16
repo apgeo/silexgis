@@ -61,7 +61,10 @@ export type CaveViewerEvent =
   // Carries nothing — the view is read with `getViewpoint()`. A view set through `setViewpoint()`,
   // `setCameraAngles()` or `setView()` raises none, which is what lets two viewers be kept in step
   // from each other's events without answering one another for ever.
-  | 'viewpoint';
+  | 'viewpoint'
+  // The model was taken off the viewer: said as every load starts, after a cut, and — with no
+  // `newCave` after it — when a survey file could not be read.
+  | 'clear';
 
 /**
  * How a station or a named part of a survey is addressed: the dotted path the viewer itself
@@ -726,6 +729,14 @@ declare global {
 
 let pending: Promise<Cv2Namespace> | null = null;
 
+/** The viewer's own script could not be had, so no viewer can be built on this page yet. */
+export class CaveViewBundleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CaveViewBundleError';
+  }
+}
+
 /** Injects the vendored CaveView stylesheet + script once and resolves the CV2 global. */
 export function loadCaveView(): Promise<Cv2Namespace> {
   pending ??= new Promise<Cv2Namespace>((resolve, reject) => {
@@ -744,14 +755,20 @@ export function loadCaveView(): Promise<Cv2Namespace> {
     const script = document.createElement('script');
     script.src = SCRIPT_URL;
     script.onload = () => {
-      if (window.CV2) resolve(window.CV2);
-      else reject(new Error('CaveView bundle loaded but CV2 global is missing'));
+      if (window.CV2) {
+        resolve(window.CV2);
+        return;
+      }
+      // Not kept either: a later call tries again rather than failing for the life of the page.
+      script.remove();
+      pending = null;
+      reject(new CaveViewBundleError('CaveView bundle loaded but CV2 global is missing'));
     };
     script.onerror = () => {
       script.remove();
       // Allow a retry on the next call instead of caching the failure forever.
       pending = null;
-      reject(new Error('failed to load the CaveView bundle'));
+      reject(new CaveViewBundleError('failed to load the CaveView bundle'));
     };
     document.head.appendChild(script);
   });

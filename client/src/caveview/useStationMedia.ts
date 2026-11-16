@@ -12,6 +12,13 @@ import {
 const MAX_LINKS = 200;
 
 /**
+ * How often the links are read again while the viewer is open. The thumbnail addresses they carry
+ * are signed for ten minutes, so a strip opened later than that, with nothing having refetched,
+ * would show nothing but refusals.
+ */
+export const STATION_MEDIA_REFRESH_MILLISECONDS = 8 * 60_000;
+
+/**
  * The pictures a signed-in surface shows over a survey model, read once and the same way everywhere.
  *
  * <b>This exists because the second surface arrived.</b> Deriving pictures from links is already in
@@ -45,12 +52,19 @@ export function useStationMedia(
     surveyModelId ?? '',
     { pageSize: MAX_LINKS },
     enabled && surveyModelId !== undefined,
+    { refetchInterval: STATION_MEDIA_REFRESH_MILLISECONDS },
   );
 
-  return useMemo(
-    () => stationMediaFromLinks(data?.items ?? [], surveyModelId ?? ''),
-    [data, surveyModelId],
-  );
+  // Kept across reads for the reason `usePublishedStationMedia` gives below: every read re-signs
+  // every picture, and a new map handed to the viewer closes the strip a reader has open.
+  const held = useRef<Map<string, CaveViewMediaEntry[]> | undefined>(undefined);
+  return useMemo(() => {
+    held.current = restampStationMedia(
+      held.current,
+      stationMediaFromLinks(data?.items ?? [], surveyModelId ?? ''),
+    );
+    return held.current!;
+  }, [data, surveyModelId]);
 }
 
 /**

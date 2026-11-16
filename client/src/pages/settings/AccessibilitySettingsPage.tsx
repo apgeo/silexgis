@@ -3,6 +3,7 @@ import { App, Card, Flex, Select, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSaveAccountPreferences } from '../../api/hooks/accountPrefs.ts';
+import { meProblemMessage } from './meProblems.ts';
 import { useLanguageChoice } from '../../i18n/languageChoice.ts';
 import {
   DEFAULT_APPEARANCE,
@@ -41,7 +42,7 @@ export default function AccessibilitySettingsPage() {
   // writer of the account's preferences — at once, so a failure can be said here — which merges it
   // into the stored document rather than replacing the document with this page's part of it.
   const save = useSaveAccountPreferences();
-  const saveNow = () => save.mutate(undefined, { onError: () => message.error(t('common.saveFailed')) });
+  const saveNow = () => save.mutate(undefined, { onError: (error) => message.error(meProblemMessage(error, t)) });
 
   const update = (patch: Partial<Appearance>) => {
     setAppearance(patch);

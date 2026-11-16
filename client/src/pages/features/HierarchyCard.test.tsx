@@ -179,6 +179,17 @@ describe('the hierarchy card', () => {
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 
+  it('names the refusal over a primary parent the editor cannot see', async () => {
+    setParentsSpy.mockRejectedValue(new ApiError(409, 'feature.parent_primary_hidden'));
+    show('generic');
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit parents/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(/main parent is one you cannot see/)).toBeTruthy();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+  });
+
   it('keeps the general failure for every other refusal', async () => {
     setParentsSpy.mockRejectedValue(new ApiError(400, 'feature.parent_cycle'));
     show('generic');

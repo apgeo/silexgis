@@ -39,12 +39,12 @@ import {
 } from '../../stores/workspaceStore.ts';
 import { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 import TripStateTag from '../trips/TripStateTag.tsx';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
 import PanelDock from './PanelDock.tsx';
 import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
-import { featureWriteProblem } from './featureWriteProblems.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import type { PanelScope } from '../../stores/panelPrefs.ts';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
@@ -463,10 +463,10 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       stopEditing();
       message.success(t('common.saved'));
     } catch (error) {
-      // A stale version is worded once, by the application's conflict warning; a "save failed"
-      // beside it would contradict it. The dialog stays open with what was typed.
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The dialog stays open with what was typed.
       if (!isConcurrencyConflict(error)) {
-        message.error(featureWriteProblem(error, t));
+        message.error(featureProblemMessage(error, t));
       }
     }
   };
@@ -478,7 +478,10 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       setSelection(null);
       message.success(t('common.deleted'));
     } catch (error) {
-      message.error(featureWriteProblem(error, t, 'common.deleteFailed'));
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 

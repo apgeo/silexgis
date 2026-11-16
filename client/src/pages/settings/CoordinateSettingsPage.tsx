@@ -2,6 +2,7 @@
 import { App, Card, Checkbox, Flex, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSaveAccountPreferences } from '../../api/hooks/accountPrefs.ts';
+import { meProblemMessage } from './meProblems.ts';
 import { choiceLabel, formatLabel, settingLabel } from '../../components/coordinates/formatLabels.ts';
 import { formatCoordinate, type CoordinateFormat } from '../../geo/coordinateFormat.ts';
 import { FORMAT_IDS, FORMATS, writePosition, type FormatId, type FormatSettings } from '../../geo/formats/registry.ts';
@@ -44,7 +45,7 @@ export default function CoordinateSettingsPage() {
   const setReading = useUiPrefsStore((s) => s.setCoordinateReading);
 
   const save = useSaveAccountPreferences();
-  const saveNow = () => save.mutate(undefined, { onError: () => message.error(t('common.saveFailed')) });
+  const saveNow = () => save.mutate(undefined, { onError: (error) => message.error(meProblemMessage(error, t)) });
 
   const preview = (id: FormatId) => {
     const [lon, lat] = samplePointFor(id);

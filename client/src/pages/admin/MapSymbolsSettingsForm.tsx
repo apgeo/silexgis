@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, App, Flex, Form } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,8 @@ import { api } from '../../api/client.ts';
 import { queryKeys, type AdminSettings, type MapSymbolSettings } from '../../api/hooks.ts';
 import { DEFAULT_APPROXIMATE_ENTRANCE_SYMBOL, DEFAULT_ENTRANCE_SYMBOL } from '../../map/entranceSymbols.ts';
 import { entrancePalette } from '../../map/markerPalette.ts';
+import { useSectionFields } from './useSectionFields.ts';
+import { settingsSaveProblem } from './settingsProblems.ts';
 
 /**
  * The markers the installation draws its cave entrances with: one for an entrance at its surveyed
@@ -30,16 +32,14 @@ export default function MapSymbolsSettingsForm({
   const entrance = Form.useWatch('entranceSymbol', form);
   const approximate = Form.useWatch('approximateEntranceSymbol', form);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.mapSymbols);
-  }, [settings, form]);
+  useSectionFields(form, settings.mapSymbols);
 
   const save = async (values: MapSymbolSettings) => {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/map-symbols', { body: values });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
         return;
       }
       onSaved(data);
@@ -47,6 +47,9 @@ export default function MapSymbolsSettingsForm({
       // expects to see the new symbol on their own map at once.
       void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

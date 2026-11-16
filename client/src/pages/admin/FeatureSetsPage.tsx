@@ -21,7 +21,8 @@ import {
   type FeatureSetInfo,
   type FeatureKind,
 } from '../../api/hooks.ts';
-import { ApiError } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit } from '../../filters/types.ts';
@@ -212,11 +213,10 @@ export default function FeatureSetsPage() {
       form.resetFields();
       message.success(t('common.saved'));
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'feature_set.name_taken'
-          ? t('featureSets.nameTaken')
-          : t('common.saveFailed'),
-      );
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -225,11 +225,10 @@ export default function FeatureSetsPage() {
       await deleteSet.mutateAsync(set.id);
       message.success(t('common.deleted'));
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'feature_set.in_use'
-          ? t('featureSets.inUse')
-          : t('common.saveFailed'),
-      );
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 

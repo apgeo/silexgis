@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
+
+const t = i18n.getFixedT('en');
 import type { BasemapDownload, BasemapStatus } from '../../api/hooks/basemap.ts';
 
 const { statusSpy, estimateSpy, startSpy, cancelSpy } = vi.hoisted(() => ({
@@ -147,7 +150,55 @@ describe('the installation’s own basemap, as an administrator manages it', () 
     expect(screen.getByTestId('basemap-estimate')).toBeDisabled();
 
     fireEvent.click(screen.getByTestId('basemap-cancel'));
+    // One click is not enough to throw away a download that may be hours in.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(t('admin.basemap.cancelTitle'));
+    expect(cancelSpy).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: t('admin.basemap.cancel') }));
     await waitFor(() => expect(cancelSpy).toHaveBeenCalledWith(7));
+  });
+
+  it('says so when calling a download off fails, rather than leaving the failure unheard', async () => {
+    cancelSpy.mockRejectedValue(new TypeError('Failed to fetch'));
+    answer(status({ download: download() }));
+    show();
+
+    fireEvent.click(screen.getByTestId('basemap-cancel'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: t('admin.basemap.cancel') }));
+    expect(await screen.findByText(t('admin.basemap.cancelFailed'))).toBeInTheDocument();
+  });
+
+  it('will not weigh a box whose sides are the wrong way round, and says why', () => {
+    show();
+
+    fireEvent.click(screen.getByText('A box of my own'));
+    fireEvent.change(screen.getByLabelText('West'), { target: { value: '24' } });
+    fireEvent.blur(screen.getByLabelText('West'));
+
+    expect(screen.getByTestId('basemap-box-problem')).toHaveTextContent(t('admin.basemap.boxInverted'));
+    expect(screen.getByTestId('basemap-estimate')).toBeDisabled();
+    expect(screen.getByTestId('basemap-download')).toBeDisabled();
+  });
+
+  it('takes a cleared side as missing, not as zero', () => {
+    show();
+
+    fireEvent.click(screen.getByText('A box of my own'));
+    fireEvent.change(screen.getByLabelText('South'), { target: { value: '' } });
+    fireEvent.blur(screen.getByLabelText('South'));
+
+    expect(screen.getByTestId('basemap-box-problem')).toHaveTextContent(t('admin.basemap.boxIncomplete'));
+    expect(screen.getByTestId('basemap-estimate')).toBeDisabled();
+  });
+
+  it('says a request failed, not that an extract failed, for a refusal it has no words for', async () => {
+    estimateSpy.mockRejectedValue(new ApiError(400, 'validation.failed'));
+    show();
+
+    fireEvent.click(screen.getByTestId('basemap-estimate'));
+    expect(await screen.findByText(t('admin.basemap.requestFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(t('admin.basemap.refusal.extract_failed'))).toBeNull();
   });
 
   it('says what is served now, and asks before replacing it', async () => {

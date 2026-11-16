@@ -17,6 +17,7 @@ import { isConcurrencyConflict } from '../../api/client.ts';
 import { versionReadWith } from '../../api/readingVersion.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -99,10 +100,10 @@ export default function CaveFormPage() {
       message.success(t('common.saved'));
       navigate(`/caves/${saved.id}`);
     } catch (error) {
-      // A stale version is worded once, by the application's conflict warning; a "save failed"
-      // beside it would contradict it. The form stays with what was typed.
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The form stays with what was typed.
       if (!isConcurrencyConflict(error)) {
-        message.error(t('common.saveFailed'));
+        message.error(featureProblemMessage(error, t));
       }
     }
   };

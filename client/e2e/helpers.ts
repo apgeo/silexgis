@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type CDPSession, type Locator, type Page } from '@playwright/test';
+import { bearerToken } from './rastermapApi.ts';
 
 // Demo credentials/data: `dotnet run -- seed-demo` with the dev admin bootstrap.
 // The full OIDC code+PKCE flow runs in the real browser.
@@ -255,8 +256,13 @@ export async function longPressMap(page: Page, x: number, y: number) {
 }
 
 /**
- * Waits until the scene is drawing and its current load has answered. A test that slows the page
- * on purpose passes a longer patience; the default is for a page running at the machine's speed.
+ * Waits until the scene is drawing and a load of its cave data has started and answered. A test
+ * that slows the page on purpose passes a longer patience; the default is for a page running at
+ * the machine's speed.
+ *
+ * "Not loading" alone is not enough: it is also what the view says in the moment between the scene
+ * starting and its first load going out, and a test that went on from there would be looking at a
+ * view with nothing in it yet.
  */
 export async function waitForScene3dReady(page: Page, timeout = 30_000) {
   // The engine owns the canvas inside our element; its presence is the scene having started.
@@ -264,6 +270,7 @@ export async function waitForScene3dReady(page: Page, timeout = 30_000) {
     timeout,
   });
   await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
+  await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loaded', 'true', { timeout });
   await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', {
     timeout,
   });
@@ -552,8 +559,15 @@ export async function waitForScene3dQuiet(page: Page, timeoutMilliseconds = 60_0
  * The list is watched at a close zoom, where the server serves entrances one by one. At anything
  * wider it aggregates them into counted cells, and a cell has no name for a label to be checked
  * against.
+ *
+ * `nothingDrawnOver` is for a test that clicks the middle of a scene opened over the entrance and
+ * expects the entrance to be what it picks. A cave with a survey has its centerline drawn from its
+ * entrance — the seeded demo survey starts at the demo cave's main entrance, and other specs of a
+ * whole run upload surveys and walls of their own — so a click there can land on the line or the
+ * walls instead, and which entrance a run chose would decide whether the test passed. With it set,
+ * an entrance that has a centerline or walls near it is passed over for the next most isolated.
  */
-export async function entranceToPick(page: Page) {
+export async function entranceToPick(page: Page, { nothingDrawnOver = false } = {}) {
   interface Entrance {
     geometry: { type: string; coordinates: number[] };
     properties: Record<string, unknown>;
@@ -619,14 +633,59 @@ export async function entranceToPick(page: Page) {
         ),
       Number.POSITIVE_INFINITY,
     );
-  const feature = unique.reduce((best, candidate) =>
-    distanceToNearestOther(candidate) > distanceToNearestOther(best) ? candidate : best,
-  );
+  // Ties are broken by coordinates, so equal isolation cannot reintroduce the arrival order.
+  const ranked = unique
+    .map((candidate) => ({ candidate, isolation: distanceToNearestOther(candidate) }))
+    .sort(
+      (a, b) =>
+        b.isolation - a.isolation ||
+        a.candidate.geometry.coordinates.join().localeCompare(b.candidate.geometry.coordinates.join()),
+    )
+    .map(({ candidate }) => candidate);
+  let feature = ranked[0];
+  if (nothingDrawnOver) {
+    let clear: Entrance | undefined;
+    for (const candidate of ranked) {
+      if (!(await surveyDrawnNear(page, candidate.geometry.coordinates))) {
+        clear = candidate;
+        break;
+      }
+    }
+    expect(
+      clear,
+      `every one of the ${ranked.length} named entrances served has a survey drawn over it`,
+    ).toBeDefined();
+    feature = clear!;
+  }
   return {
     lon: feature.geometry.coordinates[0],
     lat: feature.geometry.coordinates[1],
     name: feature.properties.name as string,
   };
+}
+
+/**
+ * Whether the 3D scene would draw a survey within about a hundred metres of a point: a centerline
+ * of any cave, or a cave's walls. Asked of the same endpoints the scene loads them from, as the
+ * signed-in person, so it answers for exactly what that person's scene would show.
+ *
+ * A hundred metres is far wider than a click's reach from a camera 900 m up, so a line passing just
+ * beside the entrance counts as well as one that starts on it.
+ */
+async function surveyDrawnNear(page: Page, [lon, lat]: number[]): Promise<boolean> {
+  const reach = 0.001;
+  const bbox = [lon - reach, lat - reach, lon + reach, lat + reach].map((n) => n.toFixed(5)).join(',');
+  const headers = { Authorization: `Bearer ${await bearerToken(page)}` };
+  const read = async <T>(path: string): Promise<T> => {
+    const response = await page.request.get(path, { headers });
+    expect(response.ok(), `GET ${path} answered ${response.status()}`).toBeTruthy();
+    return (await response.json()) as T;
+  };
+  const lines = await read<{ features: unknown[]; withheldCount: number }>(
+    `/api/v1/map/cave-centerlines?bbox=${bbox}&zoom=17&z=true`,
+  );
+  const walls = await read<{ total: number }>(`/api/v1/map/cave-meshes?bbox=${bbox}`);
+  return lines.features.length > 0 || lines.withheldCount > 0 || walls.total > 0;
 }
 
 /**

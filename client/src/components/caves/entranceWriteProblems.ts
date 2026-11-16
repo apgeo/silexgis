@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { ApiError } from '../../api/client.ts';
-import { featureWriteProblem } from '../map/featureWriteProblems.ts';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 
 /**
  * Why the server refused to create or change a cave entrance, as a sentence the editor can act on.
@@ -22,5 +22,5 @@ export function entranceWriteProblem(error: unknown, t: (key: string) => string)
         break;
     }
   }
-  return featureWriteProblem(error, t);
+  return featureProblemMessage(error, t);
 }

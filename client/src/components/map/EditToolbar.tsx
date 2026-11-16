@@ -39,7 +39,7 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
-import { featureWriteProblem } from './featureWriteProblems.ts';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
 import { drawShapeForType, drawShapesForType } from './featureTypeGroups.ts';
 
@@ -214,7 +214,7 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
           controller.markCreatedSaved(feature, answer.id);
           saved += 1;
         } catch (error) {
-          refused(featureWriteProblem(error, t), () => controller.markCreatedRefused(feature));
+          refused(featureProblemMessage(error, t), () => controller.markCreatedRefused(feature));
         }
       }
       for (const [id, geometry] of modified) {
@@ -249,7 +249,7 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
           controller.markModifiedSaved(id, geometry);
           saved += 1;
         } catch (error) {
-          refused(featureWriteProblem(error, t), markRefused);
+          refused(featureProblemMessage(error, t), markRefused);
         }
       }
       if (failed === 0) {

@@ -3,7 +3,8 @@ import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { SAVED_FILTER_AUDIENCE_SETTINGS_PATH } from '../../filters/savedFilterAudience.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
@@ -85,6 +86,19 @@ describe('the default audience of saved filters, in Settings', () => {
     expect(useUiPrefsStore.getState().savedFilterAudience).toEqual({ visibility: 'authenticated' });
     expect(savePreferences).toHaveBeenCalledTimes(1);
     expect(explanation()).toMatch(/^Everyone signed in can use it — it shows each of them only what they can already see\.$/);
+  });
+
+  it('puts the previous audience back and words the refusal when the save fails', async () => {
+    savePreferences.mockImplementation((_: unknown, options: { onError: (error: unknown) => void }) => {
+      options.onError(new ApiError(409, 'preferences.busy'));
+    });
+    show();
+
+    pick('Everyone signed in');
+
+    expect(useUiPrefsStore.getState().savedFilterAudience).toEqual({ visibility: 'private' });
+    expect(shown()).toBe('Only me');
+    expect(await screen.findByText(i18n.getFixedT('en')('settings.problems.preferencesBusy'))).toBeInTheDocument();
   });
 
   it('offers each of a member’s own clubs, and keeps the one they pick', () => {

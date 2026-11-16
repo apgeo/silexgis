@@ -172,21 +172,30 @@ export default function CaversPage() {
       const chosen = values.cavingGroupIds ?? groupsBefore;
       const join = chosen.filter((id) => !groupsBefore.includes(id));
       const leave = groupsBefore.filter((id) => !chosen.includes(id));
-      const { refused } =
+      const { refused, problems } =
         join.length + leave.length > 0
           ? await changeCavingGroups.mutateAsync({ caverId: saved.id, join, leave })
-          : { refused: [] as string[] };
+          : { refused: [] as string[], problems: [] as ApiError[] };
       setCreating(false);
       setEditing(null);
       form.resetFields();
       if (refused.length > 0) {
         const names = refused.map((id) => groupOptions.find((option) => option.value === id)?.label ?? id);
         message.warning(t('cavers.cavingGroupsRefused', { names: names.join(', ') }), 8);
+        // A refusal with words of its own says why, once per distinct reason.
+        const reasons = new Set(
+          problems.map((problem) => rosterWriteProblem(problem, t)).filter((words) => words !== t('common.saveFailed')),
+        );
+        for (const words of reasons) {
+          message.error(words, 8);
+        }
       } else {
         message.success(t('common.saved'));
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A roster change can be refused for a reason the person can act on (taking away the last
+      // full administrator, granting more than one holds): name it rather than a bare failure.
+      message.error(rosterWriteProblem(error, t));
     }
   };
 

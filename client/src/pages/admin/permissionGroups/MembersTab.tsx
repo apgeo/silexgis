@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Flex, Popconfirm, Select, Tag, Typography } from 'antd';
+import { Alert, App, Flex, Popconfirm, Tag, Typography } from 'antd';
 import Button from '../../../components/Button.tsx';
 import List from '../../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../../api/client.ts';
 import {
   useAddPermissionGroupMember,
-  useCavingGroups,
   usePermissionGroupEntries,
   usePermissionGroupMembers,
   useRemovePermissionGroupMember,
-  useUserSearch,
   type AccessSubjectKind,
   type PermissionGroup,
 } from '../../../api/hooks.ts';
-import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
+import SubjectPicker from '../../../components/permissions/SubjectPicker.tsx';
+import { accessRuleProblem } from './permissionGroupProblems.ts';
 import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
 import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 
@@ -29,7 +27,7 @@ import { grantsUploadReview } from '../../../components/permissions/reviewRight.
 export default function MembersTab({ group }: { group: PermissionGroup }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members, isPending } = usePermissionGroupMembers(group.id);
+  const { data: members, isPending, isError, refetch } = usePermissionGroupMembers(group.id);
   const { data: entries } = usePermissionGroupEntries(group.id);
   // A member of this group is handed the right to review uploads when its rules give it, and
   // always when the group is full administration.
@@ -37,24 +35,9 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
     (group.isProtected && group.slug === 'full-administrators') || grantsUploadReview(entries);
   const addMember = useAddPermissionGroupMember(group.id);
   const removeMember = useRemovePermissionGroupMember(group.id);
-  const { data: cavingGroups } = useCavingGroups();
   const [memberKind, setMemberKind] = useState<AccessSubjectKind>('user');
   const [memberId, setMemberId] = useState<string>();
-  const [userQuery, setUserQuery] = useState('');
-  const debouncedUserQuery = useDebouncedValue(userQuery);
-  const { data: users } = useUserSearch(debouncedUserQuery);
 
-  const describeRefusal = (error: unknown): string => {
-    if (error instanceof ApiError) {
-      if (error.code === 'permission_group.last_full_admin') {
-        return t('permissionGroups.lastFullAdmin');
-      }
-      if (error.code === 'access_entry.exceeds_own_rights') {
-        return t('permissionGroups.exceedsOwnRights');
-      }
-    }
-    return t('common.saveFailed');
-  };
 
   const onAdd = async () => {
     if (!memberId) {
@@ -63,9 +46,8 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
     try {
       await addMember.mutateAsync({ memberKind, memberId });
       setMemberId(undefined);
-      setUserQuery('');
     } catch (error) {
-      message.error(describeRefusal(error));
+      message.error(accessRuleProblem(error, t));
     }
   };
 
@@ -73,44 +55,15 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
     <Flex vertical gap={12}>
       {grantsReview && <ReviewRightWarning />}
       <Flex gap={8} wrap>
-        <Select
-          value={memberKind}
-          style={{ width: 140 }}
-          onChange={(kind: AccessSubjectKind) => {
+        <SubjectPicker
+          kind={memberKind}
+          subjectId={memberId}
+          onKindChange={(kind) => {
             setMemberKind(kind);
             setMemberId(undefined);
           }}
-          options={[
-            { value: 'user', label: t('permissions.user') },
-            { value: 'cavingGroup', label: t('permissions.cavingGroup') },
-          ]}
+          onSubjectChange={(id) => setMemberId(id)}
         />
-        {memberKind === 'cavingGroup' ? (
-          <Select
-            style={{ flex: 1, minWidth: 200 }}
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('permissions.pickCavingGroup')}
-            value={memberId}
-            onChange={setMemberId}
-            options={cavingGroups?.map((cavingGroup) => ({ value: cavingGroup.id, label: cavingGroup.name }))}
-          />
-        ) : (
-          <Select
-            style={{ flex: 1, minWidth: 200 }}
-            showSearch
-            filterOption={false}
-            placeholder={t('permissions.pickUser')}
-            value={memberId}
-            onSearch={setUserQuery}
-            onChange={setMemberId}
-            options={users?.map((user) => ({
-              value: user.id,
-              label: user.email ? `${user.label} (${user.email})` : user.label,
-            }))}
-            notFoundContent={null}
-          />
-        )}
         <Button
           icon={<PlusOutlined />}
           onClick={() => void onAdd()}
@@ -121,34 +74,50 @@ export default function MembersTab({ group }: { group: PermissionGroup }) {
         </Button>
       </Flex>
 
-      <List
-        size="small"
-        loading={isPending}
-        dataSource={members}
-        locale={{ emptyText: t('permissionGroups.noMembers') }}
-        renderItem={(member) => (
-          <List.Item
-            actions={[
-              <Popconfirm
-                key="remove"
-                title={t('permissionGroups.removeMemberConfirm')}
-                onConfirm={() =>
-                  removeMember
-                    .mutateAsync({ memberKind: member.memberKind, memberId: member.memberId })
-                    .catch((error: unknown) => message.error(describeRefusal(error)))
-                }
-              >
-                <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
-              </Popconfirm>,
-            ]}
-          >
-            <Flex gap={8} align="center">
-              <Tag>{t(`permissions.${member.memberKind}`)}</Tag>
-              <Typography.Text>{member.memberName ?? member.memberId}</Typography.Text>
-            </Flex>
-          </List.Item>
-        )}
-      />
+      {/* A list that could not be read is not an empty one: "no members" here would be a claim. */}
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('permissionGroups.membersLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+
+      {!(isError && !members) && (
+        <List
+          size="small"
+          loading={isPending}
+          dataSource={members}
+          locale={{ emptyText: t('permissionGroups.noMembers') }}
+          renderItem={(member) => (
+            <List.Item
+              actions={[
+                <Popconfirm
+                  key="remove"
+                  title={t('permissionGroups.removeMemberConfirm')}
+                  onConfirm={() =>
+                    removeMember
+                      .mutateAsync({ memberKind: member.memberKind, memberId: member.memberId })
+                      .catch((error: unknown) => message.error(accessRuleProblem(error, t)))
+                  }
+                >
+                  <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
+                </Popconfirm>,
+              ]}
+            >
+              <Flex gap={8} align="center">
+                <Tag>{t(`permissions.${member.memberKind}`)}</Tag>
+                <Typography.Text>{member.memberName ?? member.memberId}</Typography.Text>
+              </Flex>
+            </List.Item>
+          )}
+        />
+      )}
     </Flex>
   );
 }

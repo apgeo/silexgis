@@ -26,6 +26,7 @@ import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
+import { cavingGroupCreateProblem } from '../../components/cavingGroups/cavingGroupProblems.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useAnnounceToCavingGroup,
@@ -313,8 +314,8 @@ export default function CavingGroupsPage() {
       setCreating(false);
       form.resetFields();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(cavingGroupCreateProblem(error, t));
     }
   };
 

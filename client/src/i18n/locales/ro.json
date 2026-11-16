@@ -72,6 +72,8 @@
     "title": "Relief",
     "noBuilds": "Pentru această instalare nu a fost generată încă nicio suprafață de altitudine.",
     "noBuildsHint": "Trasează un dreptunghi mai sus și pornește prima generare.",
+    "listLoadFailed": "Generările de teren nu au putut fi încărcate.",
+    "buildLoadFailed": "Această generare nu a putut fi încărcată. Poate a fost ștearsă.",
     "intro": "Trasează un dreptunghi, spune de unde vin datele de altitudine, iar instalarea generează terenul pe care îl desenează scena 3D.",
     "area": {
       "draw": "Trasează dreptunghi",
@@ -758,6 +760,10 @@
     }
   },
   "caves": {
+    "problems": {
+      "typeUnknown": "Tipul de peșteră ales nu mai există. Alege altul și salvează din nou.",
+      "rockTypeUnknown": "Tipul de rocă ales nu mai există. Alege altul și salvează din nou."
+    },
     "title": "Peșteri",
     "newCave": "Peșteră nouă",
     "editCave": "Editare peșteră",
@@ -978,6 +984,10 @@
     "noParents": "Fără părinți",
     "editParents": "Editează părinții",
     "parentFixed": "O intrare sau o drumuire stă doar sub propria peșteră. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
+    "problems": {
+      "typeChangeForbidden": "Nu ai dreptul să modifici obiecte de tipul în care îl schimbi pe acesta, așa că nimic nu a fost salvat. Păstrează-i tipul actual sau cere ajutorul cuiva care poate modifica acel tip.",
+      "parentPrimaryHidden": "Părintele principal al acestui obiect este unul pe care nu îl poți vedea, așa că nu îi poți schimba părinții. Cere ajutorul cuiva care vede acel părinte."
+    },
     "parentFixedNote": "O intrare sau o drumuire stă doar sub propria peșteră, așa că părintele ei nu poate fi schimbat aici. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
     "addParent": "Adaugă părinte…",
     "parentSearchPlaceholder": "Caută obiecte…",
@@ -3415,6 +3425,10 @@
     "empty": "Niciun telefon nu a trimis încă nimic.",
     "forbidden": "Lista utilizatorilor de telefon este deschisă conturilor care pot citi lista speologilor.",
     "loadFailed": "Utilizatorii de telefon nu au putut fi încărcați.",
+    "refreshFailed": "Lista utilizatorilor de telefon nu a putut fi citită din nou; ce se vede poate fi depășit.",
+    "relinkTitle": "Asociezi acest utilizator de telefon cu altcineva?",
+    "relinkBody": "{{user}} este acum asociat cu {{from}}. Asocierea cu {{to}} înlocuiește această legătură.",
+    "relinkOk": "Asociază cu noua persoană",
     "errors": {
       "caverNotFound": "Acest speolog nu mai este în listă.",
       "userNotFound": "Acest utilizator de telefon nu mai este listat."
@@ -3571,6 +3585,12 @@
     }
   },
   "permissions": {
+    "subjectKindLabel": "Tipul subiectului",
+    "userLabel": "Cont",
+    "cavingGroupLabel": "Grup speologic",
+    "actionFor": "{{action}} pentru {{subject}}",
+    "scopeFor": "Întinderea regulii pentru {{subject}}",
+    "removeRuleFor": "Șterge regula pentru {{subject}}",
     "title": "Permisiuni",
     "button": "Permisiuni",
     "subject": "Subiect",
@@ -3580,6 +3600,10 @@
     "pickCavingGroup": "Alege un grup de speologie…",
     "addRule": "Adaugă regulă",
     "notManager": "Nu poți administra permisiunile acestui obiect.",
+    "loadFailed": "Permisiunile acestui obiect nu au putut fi încărcate, așa că nu pot fi modificate încă.",
+    "storedRulesMoved": "Cineva a schimbat regulile acestui obiect de când le-ai deschis. O salvare acum ar înlocui acea schimbare cu a ta.",
+    "loadStoredRules": "Încarcă regulile salvate (renunță la modificările tale)",
+    "keepMyRules": "Păstrează modificările mele și salvează peste ale lor",
     "scope": "Se aplică la",
     "scopeObject": "Doar acest obiect",
     "scopeSubtree": "Acest obiect și tot ce conține",
@@ -3685,18 +3709,30 @@
     "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
+    "denyFullAdministrators": "Refuzat: nicio interdicție nu îi poate atinge pe Administratorii deplini — apartenența la acel grup este însăși acordarea.",
+    "subjectUnknown": "Contul sau grupul speologic ales nu mai există. Alege-l din nou și salvează.",
+    "anchorNotFound": "Obiectul de care este legată o regulă nu mai există. Alege altul și salvează din nou.",
+    "scopeInvalid": "Întinderea unei reguli nu se potrivește cu ceea ce protejează. Schimbă întinderea sau acțiunile și salvează din nou.",
+    "forbidden": "Nu ai dreptul să schimbi regulile aici.",
+    "rulesLoadFailed": "Regulile grupului nu au putut fi încărcate, așa că nu pot fi modificate încă.",
+    "loadFailed": "Grupurile de permisiuni nu au putut fi încărcate.",
+    "membersLoadFailed": "Membrii grupului nu au putut fi încărcați.",
+    "storedRulesMoved": "Regulile grupului au fost schimbate de altcineva de când le-ai deschis. O salvare acum ar înlocui acea schimbare cu regulile tale.",
+    "loadStoredRules": "Încarcă regulile salvate (renunță la modificările tale)",
+    "keepMyRules": "Păstrează modificările mele și salvează peste ale lor",
+    "savedWithDeny": "Salvat. Setul de reguli conține o interdicție: deschide acum previzualizarea pentru a vedea ce dețin cei afectați cu ea în vigoare.",
     "rulesTab": "Reguli",
     "membersTab": "Membri",
     "previewTab": "Previzualizare",
     "addRule": "Adaugă regulă",
     "fullAdminNoRules": "Administratorii deplini nu au reguli: apartenența însăși este dreptul, decisă înaintea oricărei reguli — de aceea nicio interdicție nu îi poate atinge.",
-    "previewRequired": "Acest set de reguli conține o interdicție. Deschide previzualizarea și uită-te ce ar deține cineva afectat înainte de a salva — o interdicție salvată orbește poate bloca oameni.",
+    "previewRequired": "Acest set de reguli conține o interdicție. Deschide previzualizarea înainte de a salva și uită-te pe cine atinge acest grup. Previzualizarea răspunde din regulile deja salvate, deci arată ce dețin oamenii azi, nu ce le-ar lua această interdicție — verific-o din nou după ce interdicția este salvată, pentru că o interdicție poate bloca oameni.",
     "openPreview": "Deschide previzualizarea",
     "addMember": "Adaugă",
     "noMembers": "Încă niciun membru.",
     "removeMemberConfirm": "Elimini acest membru?",
     "runPreview": "Previzualizează",
-    "previewIntro": "Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le-ar deține.",
+    "previewIntro": "Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le dețin după regulile salvate acum. Modificările nesalvate din fila Reguli nu intră în acest răspuns.",
     "previewLegend": "Extinde un rând pentru a vedea ce regulă a decis fiecare acțiune.",
     "noRights": "nimic",
     "narrowKind": "Restrânge la un fel…",
@@ -3724,6 +3760,7 @@
     "noMembers": "Niciun obiect în acest set.",
     "deleteConfirm": "Ștergi acest set de obiecte?",
     "inUse": "Există reguli care se referă la acest set; elimină-le mai întâi.",
+    "nameInvalid": "Denumirea unui set de obiecte trebuie să conțină cel puțin o literă sau o cifră.",
     "nameTaken": "Există deja un set de obiecte cu această denumire."
   },
   "cavingGroupPicker": {
@@ -3768,11 +3805,13 @@
     "disableConfirm": "Dezactivezi autentificarea în doi pași?",
     "recoveryLeft": "Coduri de recuperare rămase: {{count}}",
     "recoveryTitle": "Salvează aceste coduri de recuperare acum — sunt afișate o singură dată.",
+    "recoveryKept": "Le-am salvat",
     "linkedAccounts": "Conturi asociate",
     "linkedIntro": "Autentifică-te cu un furnizor extern, pe lângă parolă.",
     "linkWith": "Asociază {{provider}}",
     "linkAdded": "Cont asociat.",
     "linkFailed": "Contul nu a putut fi asociat. Este posibil să fie deja asociat în altă parte.",
+    "loginsLoadFailed": "Metodele tale de autentificare nu au putut fi citite, așa că setările pentru parolă și conturile asociate nu sunt afișate.",
     "unlink": "Dezasociază",
     "unlinkConfirm": "Elimini acest cont asociat?",
     "unlinked": "Cont dezasociat.",
@@ -3810,6 +3849,10 @@
     "phoneConfirmed": "Numărul este confirmat.",
     "phoneNumber": "Număr de telefon",
     "phonePending": "Se așteaptă codul trimis la {{number}}.",
+    "phoneResend": "Trimite din nou codul",
+    "phoneResendTooSoon": "Așteaptă un minut înainte să ceri din nou codul.",
+    "phoneNothingPending": "Niciun număr nu mai așteaptă codul.",
+    "phoneUseOther": "Folosește alt număr",
     "phoneSendFailed": "Codul nu a putut fi trimis la acel număr.",
     "phoneTaken": "Alt cont folosește deja acel număr.",
     "phoneHint": "Folosit doar pentru codurile de autentificare. Introdu-l în format internațional, de exemplu +40712345678.",
@@ -4113,7 +4156,12 @@
     "scansInViewNone": "Nicio peșteră din vedere nu are o scanare plasată de desenat.",
     "scansInViewShown": "Scanările a {{shown}} din {{total}} peșteri din vedere — {{size}}.",
     "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
-    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată."
+    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
+    "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
+    "revealGone": "Ce indică această legătură nu mai există, așa că scena a rămas unde era.",
+    "revealForbidden": "Nu ai voie să vezi ce indică această legătură, așa că scena a rămas unde era.",
+    "revealFailed": "Locul indicat de această legătură nu a putut fi citit, așa că scena a rămas unde era. Urmează legătura din nou peste puțin timp.",
+    "tryAgain": "Încearcă din nou"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4125,6 +4173,16 @@
       "station": "Stație aleasă: {{name}}"
     },
     "loadError": "Modelul 3D nu a putut fi încărcat",
+    "loadFailed": {
+      "unreadable": "Fișierul topografiei nu a putut fi citit. Poate fi deteriorat sau scris de o versiune a programului de topografie pe care vizualizatorul nu o cunoaște.",
+      "stalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
+      "missing": "Fișierul topografiei nu mai este pe server.",
+      "refused": "Fișierul topografiei a fost refuzat. Adresa lui poate să fi expirat cât pagina a stat deschisă; încearcă din nou.",
+      "server": "Serverul nu a putut da fișierul topografiei (eroarea {{status}}). Încearcă din nou peste puțin timp.",
+      "viewer": "Vizualizatorul 3D nu a putut fi încărcat. Verifică conexiunea și încearcă din nou.",
+      "network": "Fișierul topografiei nu a putut fi descărcat. Verifică conexiunea și încearcă din nou."
+    },
+    "tryAgain": "Încearcă din nou",
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",
     "labelSize": "Mărimea numelor de stații",
@@ -4204,7 +4262,6 @@
       "openFailedStale": "Realizarea filmului nu s-a descărcat complet: conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă, ori aplicația a fost actualizată după ce ai deschis această pagină. Datele tale nu au nicio problemă. Reîncarcă pagina ca să încerci din nou.",
       "previewLoadingSoFar": "Se încarcă modelul pentru previzualizare… {{received}} până acum",
       "previewLoadingOf": "Se încarcă modelul pentru previzualizare… {{received}} din {{total}}",
-      "previewStalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
       "previewRetry": "Încearcă din nou",
       "make": "Fă un film",
       "makeHelp": "Exportă un film al acestui model, cu turele urmărite deplasându-se prin el",
@@ -4672,6 +4729,11 @@
     "paths": "Trasee"
   },
   "settings": {
+    "problems": {
+      "cavingClubUnknown": "Acel club de speologie nu mai există. Alege altul și salvează din nou.",
+      "emailNotUsable": "Această adresă nu poate fi folosită pentru autentificare aici. Alege alta.",
+      "preferencesBusy": "Preferințele tale se salvează chiar acum din altă fereastră sau de pe alt dispozitiv. Încearcă din nou peste câteva clipe."
+    },
     "scanProfiles": {
       "title": "Profiluri de procesare",
       "intro": "Seturi de setări cu nume după care rulează un pas de procesare a scanărilor. Le poți păstra pentru tine, pentru un grup speologic sau pentru toată instalarea, poți alege unul când încarci o înregistrare și poți aduce sau scoate fișierele de parametri ale HDMapping.",
@@ -5088,6 +5150,7 @@
       "createdAt": "Deschis",
       "actions": "Acțiuni",
       "you": "tu",
+      "loadFailed": "Conturile nu au putut fi încărcate.",
       "statusActive": "Se poate autentifica",
       "statusLocked": "Blocat",
       "statusNoPassword": "Fără parolă încă",
@@ -5168,6 +5231,10 @@
         "fullAdministratorAccount": "Doar un administrator deplin poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator deplin."
       }
     },
+    "settingsProblems": {
+      "invalid": "O valoare din acest formular a fost refuzată. Verifică ce ai introdus și salvează din nou.",
+      "forbidden": "Nu ai dreptul să schimbi aceste setări."
+    },
     "messaging": {
       "title": "Mesagerie",
       "intro": "Unde ajung e-mailurile și SMS-urile și ce necesită autentificarea. Acestea pot fi setate și din mediul de instalare; ce salvezi aici înlocuiește acele valori.",
@@ -5222,6 +5289,9 @@
       "testSent": "Mesajul de test a fost trimis.",
       "testFailed": "Trimiterea a eșuat: {{error}}",
       "testNotConfigured": "Configurează și salvează mai întâi canalul.",
+      "testTooSoon": "Un SMS de test a fost trimis adineauri. Așteaptă puțin înainte de a trimite altul.",
+      "testRecipientInvalid": "Acest destinatar nu poate fi folosit pentru un test. Verifică adresa sau numărul.",
+      "testRequestFailed": "Testul nu a putut fi cerut. Încearcă din nou.",
       "sendConfirmation": "Trimite un mesaj de confirmare la crearea unui cont",
       "requireConfirmed": "Cere o adresă confirmată pentru autentificare",
       "requireConfirmedHint": "Conturile care nu și-au confirmat adresa vor fi refuzate la autentificare și li se va oferi un nou mesaj de confirmare.",
@@ -5316,6 +5386,12 @@
       "latestDownload": "Ultima descărcare:",
       "cancel": "Anulează descărcarea",
       "loadFailed": "Starea hărții de bază nu a putut fi citită.",
+      "requestFailed": "Cererea nu a putut fi dusă la capăt. Încearcă din nou.",
+      "boxIncomplete": "Completează toate cele patru laturi ale zonei.",
+      "boxInverted": "Vestul trebuie să fie mai mic decât estul, iar sudul mai mic decât nordul.",
+      "cancelTitle": "Oprești această descărcare?",
+      "cancelBody": "Ce s-a descărcat până acum se aruncă, iar harta continuă să folosească harta de bază pe care o are acum.",
+      "cancelFailed": "Descărcarea nu a putut fi oprită. Încearcă din nou.",
       "state": {
         "queued": "în așteptare",
         "running": "în curs",

@@ -320,6 +320,45 @@ describe('ChecklistsPage', () => {
     ).toBeTruthy();
   });
 
+  it('words a refused save itself rather than in the server prose, and keeps the editor open', async () => {
+    updateMutate.mockRejectedValue(new ApiError(404, 'checklist.not_found', 'server prose'));
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await screen.findAllByPlaceholderText('Something to settle before setting off');
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(
+      await screen.findByText('That checklist is no longer there, or you may no longer see it.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('server prose')).toBeNull();
+    expect(screen.getAllByPlaceholderText('Something to settle before setting off')).toHaveLength(2);
+  });
+
+  it('says why a delete was refused', async () => {
+    deleteMutate.mockImplementation((_variables, options: { onError: (error: unknown) => void }) =>
+      options.onError(new ApiError(403, 'acl.forbidden')),
+    );
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this checklist' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText('You may not change this checklist.')).toBeTruthy();
+  });
+
+  it('leaves a delete refused as a conflict to the prompt every write shares', async () => {
+    deleteMutate.mockImplementation((_variables, options: { onError: (error: unknown) => void }) =>
+      options.onError(new ApiError(412, 'concurrency.version_mismatch', 'Stale.')),
+    );
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this checklist' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('That checklist could not be deleted.')).toBeNull();
+    expect(screen.queryByText('Stale.')).toBeNull();
+  });
+
   /** A list read that failed is not an installation with no lists. */
   it('shows a failed read as a failure with a retry, not as no lists', () => {
     listRead = { isLoading: false, isError: true };

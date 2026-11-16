@@ -8,12 +8,19 @@ import { getWorkspaceMap } from '../../map/mapContext.ts';
 
 // Every map the dialog builds, in order: a second one is the defect.
 const built = vi.hoisted(() => [] as OlMap[]);
+// The maps that were disposed: one only detached keeps its listeners and its tile requests alive.
+const disposed = vi.hoisted(() => new Set<unknown>());
 vi.mock('ol/Map', async (original) => {
   const Actual = (await original<typeof import('ol/Map')>()).default;
   class Counted extends Actual {
     constructor(...args: ConstructorParameters<typeof Actual>) {
       super(...args);
       built.push(this);
+    }
+
+    override dispose() {
+      disposed.add(this);
+      super.dispose();
     }
   }
   return { default: Counted };
@@ -43,6 +50,7 @@ beforeEach(() => {
   // The background choice reads the application's one shared map; it exists in every session.
   getWorkspaceMap();
   built.length = 0;
+  disposed.clear();
   onPick.mockReset();
 });
 afterEach(cleanup);
@@ -69,6 +77,29 @@ describe('PointPickerModal', () => {
     rerender(dialog(false));
     await waitFor(() => expect(map.getTargetElement()).toBeNull());
     expect(map.getLayers().getLength()).toBe(0);
+  });
+
+  it('builds one map when it opens and disposes of it when it closes, every time', async () => {
+    const { rerender } = render(dialog(true));
+    await waitFor(() => expect(built).toHaveLength(1));
+
+    rerender(dialog(false));
+    await waitFor(() => expect(disposed.has(built[0])).toBe(true));
+
+    rerender(dialog(true));
+    await waitFor(() => expect(built).toHaveLength(2));
+    expect(disposed.has(built[1])).toBe(false);
+
+    rerender(dialog(false));
+    await waitFor(() => expect(built.every((map) => disposed.has(map))).toBe(true));
+  });
+
+  it('disposes of its map when the page leaves with the dialog still open', async () => {
+    const { unmount } = render(dialog(true));
+    await waitFor(() => expect(built).toHaveLength(1));
+
+    unmount();
+    expect(disposed.has(built[0])).toBe(true);
   });
 
   it('keeps the last position when a coordinate field is cleared, rather than moving to zero', async () => {

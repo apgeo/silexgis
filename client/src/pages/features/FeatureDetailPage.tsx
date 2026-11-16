@@ -27,6 +27,7 @@ import { isConcurrencyConflict } from '../../api/client.ts';
 import { versionReadWith } from '../../api/readingVersion.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import AreaAltitudeDisagreementCard from '../../components/features/AreaAltitudeDisagreementCard.tsx';
 import AreaTerrainStatisticsCard from '../../components/features/AreaTerrainStatisticsCard.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
@@ -179,10 +180,10 @@ export default function FeatureDetailPage() {
       setEditOpen(false);
       message.success(t('common.saved'));
     } catch (error) {
-      // A stale version is worded once, by the application's conflict warning; a "save failed"
-      // beside it would contradict it. The dialog stays open with what was typed.
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The dialog stays open with what was typed.
       if (!isConcurrencyConflict(error)) {
-        message.error(t('common.saveFailed'));
+        message.error(featureProblemMessage(error, t));
       }
     }
   };
