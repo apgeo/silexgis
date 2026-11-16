@@ -26,6 +26,18 @@ import type { CaveListItem, CaveListParams, RegistryClustering, RegistryClusteri
 export const scatterClusteringMeasures = 'surveyedLength,depth';
 
 /**
+ * The measures the principal-axes picture is grouped and projected over.
+ *
+ * Two measures would make the axes a rotation of the plane the scatter already draws and tell the
+ * reader nothing new, so this mode asks over four that each describe a different thing about a
+ * cave: how much passage there is, how far down it goes, how far it spreads on the map, and how
+ * tangled the passage is for that spread. The grouping is asked over the same four, so the colours
+ * and the axes stay about one set of measures — the restraint the two-measure scatter keeps.
+ * Altitude is absent by construction: no grouping measure is a height.
+ */
+export const principalAxesMeasures = 'surveyedLength,depth,projectedExtension,ramificationIndex';
+
+/**
  * Every narrowing a cave list can hold, and what the grouping route can do with it.
  *
  * <p>
@@ -77,12 +89,15 @@ function isSet(value: unknown): boolean {
  * narrowings the route cannot express and asking anyway — answers a different question in a way
  * neither the answer nor the picture would ever admit to.
  */
-export function clusteringScopeFor(params: CaveListParams): RegistryClusteringParams | null {
+export function clusteringScopeFor(
+  params: CaveListParams,
+  measures: string = scatterClusteringMeasures,
+): RegistryClusteringParams | null {
   for (const [name, kind] of Object.entries(listNarrowings)) {
     if (kind === 'unaskable' && isSet(params[name as keyof CaveListParams])) return null;
   }
   return {
-    measures: scatterClusteringMeasures,
+    measures,
     caveTypeId: params.caveTypeId,
   };
 }
@@ -188,4 +203,47 @@ export function clusteredScatter(
   return [...grouped.entries()]
     .sort((a, b) => (a[0] ?? Number.MAX_SAFE_INTEGER) - (b[0] ?? Number.MAX_SAFE_INTEGER))
     .map(([cluster, groupPoints]) => ({ cluster, points: groupPoints }));
+}
+
+/**
+ * The grouped caves on this page, placed on the two principal axes the server worked out.
+ *
+ * <p>
+ * Like everything else here this is a join and not a computation: the coordinates, the axes and
+ * the groups are all one answer's, and the only thing decided on this side is which of the
+ * server's positioned caves are on the page being drawn. The grouping and the projection cover
+ * every cave in the narrowed set, so a cave on another page is positioned and not drawn here, in
+ * the same way the two-measure scatter draws only the rows it was handed.
+ * </p>
+ * <p>
+ * Unlike {@link clusteredScatter} a picture with no published group is still a picture — the
+ * axes are a finding of their own — so the caves in no published group are drawn as the
+ * ungrouped series and nothing is hidden for want of colour.
+ * </p>
+ *
+ * Returns `null` when the server published no projection (no grouping ran, or fewer than two
+ * measures varied) or none of the positioned caves is on this page.
+ */
+export function principalScatter(
+  caves: CaveListItem[],
+  clustering: RegistryClustering | undefined,
+): ScatterGroup[] | null {
+  const projection = clustering?.projection;
+  if (clustering === undefined || projection === null || projection === undefined) return null;
+
+  const onPage = new Set(caves.map((cave) => cave.id));
+  const byCave = clusterByCave(clustering);
+  const grouped = new Map<number | null, Array<[number, number]>>();
+  for (const position of projection.positions) {
+    if (!onPage.has(position.caveId)) continue;
+    const cluster = byCave.get(position.caveId) ?? null;
+    const bucket = grouped.get(cluster);
+    if (bucket === undefined) grouped.set(cluster, [[position.x, position.y]]);
+    else bucket.push([position.x, position.y]);
+  }
+  if (grouped.size === 0) return null;
+
+  return [...grouped.entries()]
+    .sort((a, b) => (a[0] ?? Number.MAX_SAFE_INTEGER) - (b[0] ?? Number.MAX_SAFE_INTEGER))
+    .map(([cluster, points]) => ({ cluster, points }));
 }
