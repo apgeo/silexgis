@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../client.ts';
 import { retryUnlessRefused } from './shared.ts';
-import { isSettledRefusal, objectRightsFrom, type InstallationWideRights } from './objectRights.ts';
+import { isObjectAnswer, objectRightsFrom, type InstallationWideRights } from './objectRights.ts';
 
 const everything: InstallationWideRights = { write: true, delete: true, share: true, managePermissions: true };
 const nothing: InstallationWideRights = { write: false, delete: false, share: false, managePermissions: false };
@@ -42,10 +42,10 @@ describe('objectRightsFrom', () => {
   });
 
   it('counts a refusal or a not-found as the object answering, and a failure to reach it as no answer', () => {
-    expect(isSettledRefusal(new ApiError(403, 'forbidden'))).toBe(true);
-    expect(isSettledRefusal(new ApiError(404, 'not_found'))).toBe(true);
-    expect(isSettledRefusal(new ApiError(503, undefined))).toBe(false);
-    expect(isSettledRefusal(new TypeError('Failed to fetch'))).toBe(false);
+    expect(isObjectAnswer(new ApiError(403, 'forbidden'))).toBe(true);
+    expect(isObjectAnswer(new ApiError(404, 'not_found'))).toBe(true);
+    expect(isObjectAnswer(new ApiError(503, undefined))).toBe(false);
+    expect(isObjectAnswer(new TypeError('Failed to fetch'))).toBe(false);
   });
 
   it('asks again for an answer that could not be had, and not for a refusal', () => {
@@ -53,5 +53,7 @@ describe('objectRightsFrom', () => {
     expect(retryUnlessRefused(2, new ApiError(503, undefined))).toBe(true);
     expect(retryUnlessRefused(3, new ApiError(503, undefined))).toBe(false);
     expect(retryUnlessRefused(0, new ApiError(403, 'forbidden'))).toBe(false);
+    // A full rate window is waited out, as every other read does, not taken as the answer.
+    expect(retryUnlessRefused(0, new ApiError(429, 'rate.limited'))).toBe(true);
   });
 });

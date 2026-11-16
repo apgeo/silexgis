@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import type { Query, QueryClient } from '@tanstack/react-query';
-import { ApiError, retryAfterOf } from '../client.ts';
+import { ApiError, retryAfterOf, retryQuery } from '../client.ts';
 
 export async function unwrap<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
@@ -24,11 +24,15 @@ export async function unwrap<T>(
 }
 
 /**
- * A query's retry rule for an answer where a refusal is itself the answer: a 4xx is settled and
- * not asked again; a failure to reach the server is asked again, up to three times.
+ * A query's retry rule for an answer where a refusal is itself the answer: a settled refusal is not
+ * asked again; a failure to reach the server, a failed server and a 429 are, up to three times (a
+ * 429 after the wait it names). This is the installation-wide default rule, delegated rather than
+ * restated, so a hook that names it explicitly cannot drift from the screens that rely on the
+ * default — it once treated a 429 as settled, and a rate-limited read then stayed in its error
+ * state instead of recovering after the named wait.
  */
 export function retryUnlessRefused(failureCount: number, error: unknown): boolean {
-  return !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 3;
+  return retryQuery(failureCount, error);
 }
 
 /** unwrap for endpoints with no response body (DELETE / 204). */
