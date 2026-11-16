@@ -42,6 +42,7 @@ import { describeComparison, formatSigned, readComparison, type Reading } from '
 import CaveRegistrySavedFilters from './CaveRegistrySavedFilters.tsx';
 import SelectResultButton from '../../components/filters/SelectResultButton.tsx';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
+import { isFilterRefusal } from '../../filters/refusal.ts';
 import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 import { RowLink } from '../../components/RowOpeners.tsx';
 
@@ -249,7 +250,7 @@ export default function CaveListPage() {
     // it, by the point each reader is shown, and counts the page over the same set.
     bbox: address.bbox,
   };
-  const { data, isFetching, error } = useCaves(listParams);
+  const { data, isFetching, error, refetch } = useCaves(listParams);
   const tableMap = useTableMapLink<CaveListItem>();
 
   const canCreate = useCan('features', 'create');
@@ -348,11 +349,11 @@ export default function CaveListPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('caves.title')}
         </Typography.Title>
-        <Flex gap={8}>
+        <Flex gap={8} wrap>
           {/* The map is opened with this list's own document as its filter, so it draws the
               caves listed here — the same question, run by the map's routes. */}
           <Button
@@ -584,7 +585,10 @@ export default function CaveListPage() {
         onForget={() => go(() => ({ savedFilterId: undefined }))}
         onRelease={() => go(() => ({ controls: {}, extra: [], savedFilterId: undefined, page: 1 }))}
       />
-      {error && listToken !== undefined && (
+      {/* Only the server's refusal of the filter is worded as one. Any other failure — a dropped
+          connection, a server error — says the list could not be read and offers to ask again,
+          so it is never read as "no caves" or blamed on a filter that was fine. */}
+      {error && listToken !== undefined && isFilterRefusal(error) ? (
         <Alert
           type="warning"
           showIcon
@@ -592,7 +596,20 @@ export default function CaveListPage() {
           data-testid="cave-registry-filter-refused"
           title={t('caveRegistry.filterRefused')}
         />
-      )}
+      ) : error ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="cave-registry-load-failed"
+          title={t('caveRegistry.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : null}
       <Table<CaveListItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
