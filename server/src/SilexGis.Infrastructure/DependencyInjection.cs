@@ -458,6 +458,8 @@ public static class DependencyInjection
             services.AddSingleton<Surveys.ISurveyCompiler, Surveys.NoSurveyCompiler>();
         }
 
+        Analysis.WhiteboxRegistration.AddWhiteboxTools(services, configuration);
+
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 

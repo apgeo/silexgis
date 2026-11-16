@@ -23,6 +23,8 @@ export const always = ['smoke.spec.ts'];
 /** Area name → the specs that answer for it. An empty list means "nothing narrower than everything". */
 export const specs = {
   about: [],
+  // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
+  analysis: ['terrain-derivatives.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',

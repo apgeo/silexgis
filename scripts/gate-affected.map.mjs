@@ -482,6 +482,9 @@ export const groups = {
     'TerrainRasterIndexTests', 'TerrainRasterPreparationTests', 'TerrainRasterTokenServiceTests', 'TerrainSourceTests',
     'TerrainTileUploadTests', 'TerrainUploadSweepTests', 'TerrainValidatePhaseTests',
   ],
+  // Terrain analysis run by WhiteboxTools — started in a sandbox by the application itself or by
+  // the analysis service in a container of its own — and the settings that choose which.
+  analysis: ['LocalWhiteboxToolsTests', 'WhiteboxServiceTests', 'OptionsDocumentationTests'],
 };
 
 // Path prefix (repo-relative, forward slashes) -> group name or inline class list.
@@ -615,6 +618,9 @@ export const areas = {
   'server/src/SilexGis.TherionService/': 'surveyUploads',
   'server/src/SilexGis.Infrastructure/TestData/': 'testData',
   'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
+  // WhiteboxTools, and the analysis service that runs it in a container of its own.
+  'server/src/SilexGis.Infrastructure/Analysis/': 'analysis',
+  'server/src/SilexGis.WhiteboxService/': 'analysis',
   'server/src/SilexGis.Infrastructure/Statistics/': 'statistics',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
 };

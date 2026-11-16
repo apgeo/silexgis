@@ -1,0 +1,102 @@
+# Analysis service overlay: runs WhiteboxTools, the terrain-analysis program behind the analyses
+# the application's own raster library has no equivalent of (geomorphons — the landform class of
+# every cell — first).
+#
+# Entirely optional, and off unless you start it. Without it the analyses that need the program are
+# listed as not available, saying why; everything else works as before.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.whitebox.yml up -d
+#
+# Requires in .env (or `up` stops and says so):
+#   SILEXGIS__Analysis__Whitebox__Mode=service
+#
+# Optional in .env:
+#   SILEXGIS__Analysis__Whitebox__TimeoutSeconds=1800          # per run
+#   SILEXGIS__Analysis__Whitebox__MaxMemoryBytes=4294967296    # per run, inside the container's own limit
+#   SILEXGIS__Analysis__Whitebox__MaxOutputFileBytes=2147483648 # the largest file one run may write
+#   SILEXGIS__Analysis__Whitebox__MaxOutputBytes=4294967296    # the most one run may hand back
+#   SILEXGIS__WhiteboxService__MaxConcurrentRuns=1              # runs at once; raise the memory with it
+#   SILEXGIS__WhiteboxService__MaxInputBytes=2147483648         # the most one run sent to it may hold
+#   SILEXGIS_WHITEBOX_MEMORY=6g                                 # the container's limit, above MaxMemoryBytes
+#   SILEXGIS_WHITEBOX_CPUS=2
+#
+# The image is built here, from the same sources as the application, with WhiteboxTools compiled
+# from the source of its tagged release, pinned by checksum (see deploy/whitebox/Dockerfile). The
+# first build compiles the program and is slow. An installation that never runs these analyses
+# should never build it.
+#
+# Why a container of its own: what the application sends is an elevation raster and nothing else —
+# never a cave's position — but the program is large native code from outside this project. So it
+# runs where there is nothing to read — no database password, no stored files, none of the
+# application's settings — on a network with no way out, with a read-only filesystem, no
+# capabilities, and limits on memory, processors and processes. It publishes no port; the
+# application is its only caller, and it runs only the tools the application has an analysis for.
+# Each run is also bounded inside it by time, memory and file size, and its directory is deleted
+# when it ends.
+#
+# Stop it again with:
+#   docker compose -f docker-compose.yml -f docker-compose.whitebox.yml stop whitebox
+# and set SILEXGIS__Analysis__Whitebox__Mode back to none, or every run will fail saying the
+# analysis service is not available.
+name: silexgis
+
+services:
+  api:
+    environment:
+      # Guarded rather than merely documented: a service beside an application that has not been
+      # told to use it looks exactly like no service at all. This turns it into a sentence at `up`.
+      SILEXGIS__Analysis__Whitebox__Mode: ${SILEXGIS__Analysis__Whitebox__Mode:?set SILEXGIS__Analysis__Whitebox__Mode=service in .env so the application hands its analyses to the service}
+      SILEXGIS__Analysis__Whitebox__Url: http://whitebox:3200
+    # The base file names no network for the application, which puts it on the default one; naming
+    # one here would take it off that unless the default is named too.
+    networks:
+      - default
+      - whitebox
+
+  whitebox:
+    # Bounded, because the default json-file driver never rotates: a container left running for
+    # a year would otherwise fill the disk with its own output.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    build:
+      context: ../server
+      dockerfile: ../deploy/whitebox/Dockerfile
+    restart: unless-stopped
+    # No published ports on purpose — see the note above.
+    networks:
+      - whitebox
+    environment:
+      SILEXGIS__Analysis__Whitebox__TimeoutSeconds: ${SILEXGIS__Analysis__Whitebox__TimeoutSeconds:-1800}
+      SILEXGIS__Analysis__Whitebox__MaxMemoryBytes: ${SILEXGIS__Analysis__Whitebox__MaxMemoryBytes:-4294967296}
+      SILEXGIS__Analysis__Whitebox__MaxOutputFileBytes: ${SILEXGIS__Analysis__Whitebox__MaxOutputFileBytes:-2147483648}
+      SILEXGIS__Analysis__Whitebox__MaxOutputBytes: ${SILEXGIS__Analysis__Whitebox__MaxOutputBytes:-4294967296}
+      SILEXGIS__WhiteboxService__MaxConcurrentRuns: ${SILEXGIS__WhiteboxService__MaxConcurrentRuns:-1}
+      SILEXGIS__WhiteboxService__MaxInputBytes: ${SILEXGIS__WhiteboxService__MaxInputBytes:-2147483648}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${SILEXGIS_WHITEBOX_MEMORY:-6g}
+    cpus: ${SILEXGIS_WHITEBOX_CPUS:-2}
+    # The service and the program's worker threads; a run that forks without end stops here.
+    pids_limit: 256
+    tmpfs:
+      # The service's own temporary files only; every run's go to its run directory.
+      - /tmp:size=64m
+    volumes:
+      # Runs, one directory each, deleted when the run ends: on a volume rather than in memory,
+      # because a run holds its input raster and every output.
+      - silexgis-whitebox-work:/work
+
+networks:
+  # Internal: the program can answer the application and reach nothing else, the internet included.
+  whitebox:
+    internal: true
+
+volumes:
+  silexgis-whitebox-work:
