@@ -11,6 +11,8 @@ export type TerrainBuildDetail = components['schemas']['TerrainBuildDetailDto'];
 export type TerrainBuildSource = components['schemas']['TerrainBuildSourceDto'];
 export type TerrainBuildSourceRequest = components['schemas']['TerrainBuildSourceRequest'];
 export type TerrainBuildSubmitRequest = components['schemas']['TerrainBuildSubmitRequest'];
+export type TerrainAccuracy = components['schemas']['TerrainAccuracyDto'];
+export type TerrainAccuracyRequest = components['schemas']['TerrainAccuracyRequest'];
 export type TerrainRasterUpload = components['schemas']['TerrainRasterUploadDto'];
 export type TerrainBuildStatus = components['schemas']['TerrainBuildStatus'];
 export type TerrainBuildPhase = components['schemas']['TerrainBuildPhase'];
@@ -263,6 +265,27 @@ export function useCancelTerrainBuild() {
       unwrap(api.POST('/api/v1/terrain/builds/{id}/cancel', { params: { path: { id } } })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+    },
+  });
+}
+
+/**
+ * Records or corrects how accurate a build's elevation is. Every query that carries a build is
+ * asked again: the figure rides on the list, the detail, the probe and the derived pictures.
+ */
+export function useSetTerrainBuildAccuracy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: TerrainAccuracyRequest }) =>
+      unwrap(
+        api.PUT('/api/v1/terrain/builds/{id}/accuracy', {
+          params: { path: { id } },
+          body: request,
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
     },
   });
 }

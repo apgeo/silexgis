@@ -63,6 +63,7 @@ vi.mock('../../../api/hooks.ts', async () => {
     useDeleteTerrainBuild: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useCancelTerrainBuild: () => ({ mutateAsync: cancelMutate, isPending: false }),
     useRetryTerrainBuild: () => ({ mutateAsync: retryMutate, isPending: false }),
+    useSetTerrainBuildAccuracy: () => ({ mutateAsync: vi.fn(), isPending: false }),
   };
 });
 
@@ -111,6 +112,34 @@ describe('TerrainBuildList', () => {
     expect(screen.getAllByText('On disk').length).toBeGreaterThan(0);
     expect(screen.getByTestId('terrain-active-b1')).toBeInTheDocument();
     expect(screen.queryByTestId('terrain-active-b2')).not.toBeInTheDocument();
+  });
+
+  it('shows the recorded accuracy with its statistic named, and says "not recorded" rather than leaving a blank', () => {
+    builds = [
+      build({
+        id: 'known',
+        accuracy: {
+          sourceResolutionM: 30,
+          verticalAccuracyM: 4,
+          verticalAccuracyStatistic: 'LE90',
+          accuracySource: 'An invented handbook',
+        },
+      }),
+      build({ id: 'bare', accuracy: null }),
+    ];
+    show();
+
+    expect(screen.getByTestId('terrain-accuracy-known')).toHaveTextContent('30 m spacing, 4 m LE90');
+    expect(screen.getByTestId('terrain-accuracy-bare')).toHaveTextContent('Not recorded');
+  });
+
+  it('offers the accuracy editor only to somebody who may run terrain work', () => {
+    builds = [build({ id: 'b1' })];
+    const { unmount } = show({ canExecute: true });
+    expect(screen.getByTestId('terrain-accuracy-edit-b1')).toBeInTheDocument();
+    unmount();
+    show({ canExecute: false });
+    expect(screen.queryByTestId('terrain-accuracy-edit-b1')).not.toBeInTheDocument();
   });
 
   it('says which size it shows, and the depth reached when it is less than the depth asked for', () => {

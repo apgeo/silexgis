@@ -1575,6 +1575,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/builds/{id}/accuracy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records or corrects how accurate the elevation of a build is; requires Execute on the Terrain domain. */
+        put: operations["terrainBuildSetAccuracy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terrain/builds/{id}/cancel": {
         parameters: {
             query?: never;
@@ -17688,6 +17705,22 @@ export interface components {
         };
         /** @enum {unknown} */
         TermStripMode: "none" | "leading" | "trailing" | "anywhere";
+        TerrainAccuracyDto: {
+            /** Format: double */
+            sourceResolutionM: null | number;
+            /** Format: double */
+            verticalAccuracyM: null | number;
+            verticalAccuracyStatistic: null | string;
+            accuracySource: null | string;
+        };
+        TerrainAccuracyRequest: {
+            /** Format: double */
+            sourceResolutionM: null | number;
+            /** Format: double */
+            verticalAccuracyM: null | number;
+            verticalAccuracyStatistic: null | string;
+            accuracySource: null | string;
+        };
         TerrainBakeTimeLimitDto: {
             /** Format: int64 */
             elapsedSeconds: number;
@@ -17751,6 +17784,7 @@ export interface components {
             /** Format: date-time */
             cancelRequestedAt: null | string;
             bakeTimeLimit: null | components["schemas"]["TerrainBakeTimeLimitDto"];
+            accuracy: null | components["schemas"]["TerrainAccuracyDto"];
         };
         /** @enum {unknown} */
         TerrainBuildPhase: "pending" | "fetch" | "prepare" | "bake" | "validate" | "publish";
@@ -17791,6 +17825,7 @@ export interface components {
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
             /** Format: uuid */
             baseBuildId?: null | string;
+            accuracy?: null | components["schemas"]["TerrainAccuracyRequest"];
         };
         TerrainClassRowDto: {
             code: string;
@@ -17868,6 +17903,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             rasters: components["schemas"]["TerrainDerivativeRasterDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainDerivativeRasterDto: {
             /** Format: int64 */
@@ -17897,6 +17933,7 @@ export interface components {
         TerrainFeatureProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainFeatureProbeSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainFeatureProbeRequest: {
             featureIds: string[];
@@ -17927,6 +17964,7 @@ export interface components {
         TerrainProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainProbeSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainProbePointRequest: {
             /** Format: double */
@@ -23369,6 +23407,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TerrainBuildDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    terrainBuildSetAccuracy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerrainAccuracyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerrainBuildDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
             };
             /** @description Unauthorized */

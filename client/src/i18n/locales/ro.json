@@ -353,6 +353,30 @@
         "edgesOff": "margini lăsate goale"
       }
     },
+    "accuracy": {
+      "column": "Acuratețea elevației",
+      "notRecorded": "Nenotată",
+      "edit": "Acuratețe",
+      "editTitle": "Acuratețea elevației",
+      "editIntro": "Spune cât de des eșantionează elevația acestei construcții terenul și cu cât pot greși înălțimile. Lasă toate câmpurile goale pentru a nu nota nimic.",
+      "saved": "Acuratețea a fost salvată.",
+      "formTitle": "Acuratețea elevației (opțional)",
+      "formIntro": "Lăsat gol, o construcție făcută doar din acoperirea obținută notează cifrele publicate ale acelui set de date; o construcție din rasterele tale nu notează nimic până nu o spui aici.",
+      "resolution": "Pasul pe teren (m)",
+      "resolutionHint": "Distanța dintre eșantioanele de elevație, în metri.",
+      "error": "Eroare verticală (m)",
+      "errorHint": "Cu cât se poate abate o înălțime de la terenul real.",
+      "statistic": "Statistica",
+      "source": "De unde provin cifrele",
+      "sourceHint": "O publicație, un raport de măsurători sau declarația unui furnizor.",
+      "spacing": "pas de {{value}} m",
+      "vertical": "{{value}} m {{statistic}}",
+      "statistics": {
+        "RMSE": "RMSE (eroare medie pătratică)",
+        "LE90": "LE90 (eroare nedepășită de 90 % din puncte)",
+        "LE95": "LE95 (eroare nedepășită de 95 % din puncte)"
+      }
+    },
     "configured": {
       "title": "O adresă de relief din configurația acestei instalări are prioritate față de generarea aleasă",
       "body": "Configurația numește o adresă de relief proprie, iar ea câștigă: scena desenează acea piramidă, nu generarea aleasă aici ({{build}}…). Generarea aleasă se desenează doar după ce setarea de mai jos este scoasă din configurația instalării și aplicația repornită.",

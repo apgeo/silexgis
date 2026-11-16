@@ -41,6 +41,8 @@ import {
 import type { TerrainBuildState } from './terrainBuild.ts';
 import { terrainProblemMessage } from './terrainProblems.ts';
 import TerrainBuildProgress from './TerrainBuildProgress.tsx';
+import TerrainAccuracyEditor from './TerrainAccuracyEditor.tsx';
+import { describeAccuracy } from './terrainAccuracy.ts';
 
 /**
  * Which colour a run's state is worth: only a failure is an alarm, only success is a result. A
@@ -86,6 +88,7 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
   const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [editingAccuracy, setEditingAccuracy] = useState<TerrainBuild | null>(null);
   const { data, isLoading } = useTerrainBuilds({ page, pageSize: TERRAIN_PAGE_SIZE });
   const choose = useChooseTerrainBuild();
   const stopDrawing = useStopDrawingTerrainBuild();
@@ -250,10 +253,38 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
               ),
             },
             {
+              // How good the elevation is: its spacing and its vertical error with the statistic
+              // named. Builds nobody described show that plainly rather than a blank, which would
+              // read as "perfect" to somebody scanning the column.
+              title: t('terrain.accuracy.column'),
+              key: 'accuracy',
+              render: (_: unknown, build: TerrainBuild) => {
+                const line = describeAccuracy(build.accuracy, t);
+                return line === null ? (
+                  <Typography.Text type="secondary" data-testid={`terrain-accuracy-${build.id}`}>
+                    {t('terrain.accuracy.notRecorded')}
+                  </Typography.Text>
+                ) : (
+                  <Tooltip title={build.accuracy?.accuracySource ?? undefined}>
+                    <span data-testid={`terrain-accuracy-${build.id}`}>{line}</span>
+                  </Tooltip>
+                );
+              },
+            },
+            {
               title: t('terrain.list.actions'),
               key: 'actions',
               render: (_: unknown, build: TerrainBuild) => (
                 <Space size={4} wrap onClick={(event) => event.stopPropagation()}>
+                  {canExecute && (
+                    <Button
+                      size="small"
+                      data-testid={`terrain-accuracy-edit-${build.id}`}
+                      onClick={() => setEditingAccuracy(build)}
+                    >
+                      {t('terrain.accuracy.edit')}
+                    </Button>
+                  )}
                   {canExecute && mayActivate(build) && (
                     <Button
                       size="small"
@@ -343,6 +374,7 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
         />
       </Card>
 
+      <TerrainAccuracyEditor build={editingAccuracy} onClose={() => setEditingAccuracy(null)} />
       {selected !== null && <TerrainBuildProgress buildId={selected} />}
     </Flex>
   );

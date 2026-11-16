@@ -34,6 +34,8 @@ import { DEFAULT_DEPTH, MAX_DEPTH, MIN_DEPTH, depthBand, depthExceedsCoverage } 
 import { terrainProblemMessage } from './terrainProblems.ts';
 import TerrainAreaField from './TerrainAreaField.tsx';
 import { TerrainMemoryNote } from './TerrainBakeLimits.tsx';
+import TerrainAccuracyFields from './TerrainAccuracyFields.tsx';
+import { accuracyRequest } from './terrainAccuracy.ts';
 
 /**
  * What the browser refuses to send before the server refuses to read it.
@@ -67,6 +69,10 @@ interface FormValues {
   directory: string;
   heightDatum: TerrainHeightDatum;
   geoidHeightM: number;
+  resolutionM: number | null;
+  accuracyM: number | null;
+  accuracyStatistic: string | null;
+  accuracySource: string;
 }
 
 const emptyValues: FormValues = {
@@ -79,6 +85,10 @@ const emptyValues: FormValues = {
   directory: '',
   heightDatum: 'orthometric',
   geoidHeightM: 0,
+  resolutionM: null,
+  accuracyM: null,
+  accuracyStatistic: 'RMSE',
+  accuracySource: '',
 };
 
 interface Props {
@@ -232,6 +242,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
         geoidHeightM: datum === 'ellipsoidal' ? geoidHeightM : 0,
         fetchCoverage: wantsCoverage,
         sources,
+        ...(accuracyRequest(submitted) ? { accuracy: accuracyRequest(submitted) } : {}),
         ...(submitted.baseBuildId ? { baseBuildId: submitted.baseBuildId } : {}),
       });
       message.success(t('terrain.form.started'));
@@ -492,6 +503,26 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
                     </Form.Item>
                   )}
                 </Flex>
+              ),
+            },
+          ]}
+        />
+
+        <Collapse
+          ghost
+          size="small"
+          style={{ marginBottom: 16 }}
+          items={[
+            {
+              key: 'accuracy',
+              label: t('terrain.accuracy.formTitle'),
+              children: (
+                <>
+                  <Typography.Paragraph type="secondary">
+                    {t('terrain.accuracy.formIntro')}
+                  </Typography.Paragraph>
+                  <TerrainAccuracyFields />
+                </>
               ),
             },
           ]}

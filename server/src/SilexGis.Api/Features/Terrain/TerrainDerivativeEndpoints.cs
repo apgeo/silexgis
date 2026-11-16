@@ -48,6 +48,10 @@ public sealed record TerrainDerivativeRasterDto(
 /// stale picture is still shown — withdrawing it would leave a reader with nothing over ground
 /// that has probably not changed — but it must never be shown as current.
 /// </param>
+/// <param name="Accuracy">
+/// The recorded accuracy of the elevation build this picture was computed from — a slope or a
+/// shaded relief is only as good as the heights under it; null when nothing is recorded.
+/// </param>
 /// <param name="StaleReason">
 /// Why, when it is: the elevation it was computed from is no longer the active build, or the
 /// arithmetic that computed it has since been corrected. Told apart because the remedies differ —
@@ -70,7 +74,8 @@ public sealed record TerrainDerivativeLayerDto(
     TerrainDerivativeStaleness? StaleReason,
     DateTimeOffset? ComputedAt,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<TerrainDerivativeRasterDto> Rasters);
+    IReadOnlyList<TerrainDerivativeRasterDto> Rasters,
+    TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>Asks for one picture of the ground to be computed from one elevation build.</summary>
 public sealed record TerrainDerivativeCreateRequest(
@@ -213,11 +218,15 @@ public static class TerrainDerivativeEndpoints
         var byLayer = rasters.GroupBy(r => r.TerrainDerivativeLayerId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var accuracy = await TerrainAccuracy.OfBuildsAsync(
+            db, [.. views.Select(v => v.TerrainBuildId).Distinct()], ct);
+
         var dtos = views
             .Select(view => ToDto(
                 view,
                 byLayer.TryGetValue(view.Id, out var own) ? own : [],
-                tokens))
+                tokens,
+                accuracy.GetValueOrDefault(view.TerrainBuildId)))
             .ToList();
 
         return TypedResults.Ok<IReadOnlyList<TerrainDerivativeLayerDto>>(dtos);
@@ -359,7 +368,8 @@ public static class TerrainDerivativeEndpoints
         {
             var view = await catalogue.FindAsync(layerId, ct);
             List<TerrainDerivativeRaster> rasters = hasRasters ? await RastersOfAsync(db, layerId, ct) : [];
-            return TypedResults.Ok(ToDto(view!, rasters, tokens));
+            var accuracy = await TerrainAccuracy.OfBuildsAsync(db, [view!.TerrainBuildId], ct);
+            return TypedResults.Ok(ToDto(view, rasters, tokens, accuracy.GetValueOrDefault(view.TerrainBuildId)));
         }
     }
 
@@ -459,7 +469,8 @@ public static class TerrainDerivativeEndpoints
     private static TerrainDerivativeLayerDto ToDto(
         TerrainDerivativeLayerView view,
         IReadOnlyList<TerrainDerivativeRaster> rasters,
-        ITerrainRasterTokenService tokens) =>
+        ITerrainRasterTokenService tokens,
+        TerrainAccuracyDto? accuracy) =>
         new(
             view.Id,
             view.TerrainBuildId,
@@ -476,7 +487,8 @@ public static class TerrainDerivativeEndpoints
             view.Staleness,
             view.ComputedAt,
             view.CreatedAt,
-            [.. rasters.Select(raster => ToDto(view.Id, raster, tokens))]);
+            [.. rasters.Select(raster => ToDto(view.Id, raster, tokens))],
+            accuracy);
 
     private static TerrainDerivativeRasterDto ToDto(
         Guid layerId, TerrainDerivativeRaster raster, ITerrainRasterTokenService tokens)

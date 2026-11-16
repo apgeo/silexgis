@@ -100,6 +100,40 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// A picture is only as good as the heights under it, so each one carries the recorded accuracy
+    /// of the build it was drawn from, and a build with none recorded gives a picture with none.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_carries_the_accuracy_recorded_for_its_build()
+    {
+        var described = await SeedBuildAsync(active: true);
+        var layer = await SeedLayerAsync(described, TerrainDerivative.Hillshade, "relief of described ground");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == described).ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.SourceResolutionM, 30d)
+                .SetProperty(b => b.VerticalAccuracyM, 4d)
+                .SetProperty(b => b.VerticalAccuracyStatistic, "LE90")
+                .SetProperty(b => b.AccuracySource, "An invented handbook"));
+        }
+
+        var bareBuild = await SeedBuildAsync(active: false);
+        var bareLayer = await SeedLayerAsync(bareBuild, TerrainDerivative.Slope, "steepness of undescribed ground");
+
+        var listing = await (await holder.GetAsync("/api/v1/terrain/derivatives")).Content.ReadFromJsonAsync<JsonElement>();
+
+        var withFigures = listing.EnumerateArray().Single(l => l.GetProperty("id").GetGuid() == layer);
+        withFigures.GetProperty("accuracy").GetProperty("verticalAccuracyM").GetDouble().ShouldBe(4d);
+        withFigures.GetProperty("accuracy").GetProperty("verticalAccuracyStatistic").GetString().ShouldBe("LE90");
+        withFigures.GetProperty("accuracy").GetProperty("sourceResolutionM").GetDouble().ShouldBe(30d);
+
+        var without = listing.EnumerateArray().Single(l => l.GetProperty("id").GetGuid() == bareLayer);
+        (!without.TryGetProperty("accuracy", out var none) || none.ValueKind == JsonValueKind.Null)
+            .ShouldBeTrue(without.ToString());
+    }
+
+    /// <summary>
     /// The whole permission table for the listing, in one test: refused without a signature,
     /// refused with a signature and no right, allowed with the right and nothing else.
     /// </summary>

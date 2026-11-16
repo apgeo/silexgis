@@ -353,6 +353,30 @@
         "edgesOff": "edges left blank"
       }
     },
+    "accuracy": {
+      "column": "Elevation accuracy",
+      "notRecorded": "Not recorded",
+      "edit": "Accuracy",
+      "editTitle": "Elevation accuracy",
+      "editIntro": "State how finely this build's elevation samples the ground and how far its heights may be off. Leave every field empty to record nothing.",
+      "saved": "Accuracy saved.",
+      "formTitle": "Elevation accuracy (optional)",
+      "formIntro": "Left empty, a build made only from the obtained coverage records that dataset's published figures; a build from your own rasters records nothing until you state it here.",
+      "resolution": "Ground spacing (m)",
+      "resolutionHint": "Distance between elevation samples, in metres.",
+      "error": "Vertical error (m)",
+      "errorHint": "How far a height may be from the true ground.",
+      "statistic": "Statistic",
+      "source": "Where the figures come from",
+      "sourceHint": "A publication, a survey report or a vendor's statement.",
+      "spacing": "{{value}} m spacing",
+      "vertical": "{{value}} m {{statistic}}",
+      "statistics": {
+        "RMSE": "RMSE (root-mean-square error)",
+        "LE90": "LE90 (error not exceeded by 90 % of points)",
+        "LE95": "LE95 (error not exceeded by 95 % of points)"
+      }
+    },
     "configured": {
       "title": "A terrain address in this installation's configuration overrides the chosen build",
       "body": "The configuration names a terrain address of its own, and it wins: the scene draws that pyramid, not the build chosen here ({{build}}…). The chosen build is drawn only once the setting below is removed from the installation's configuration and the application restarted.",

@@ -116,6 +116,30 @@ elipsoidului*.
 Pentru înălțimi elipsoidale, dă **înălțimea geoidului** — cât de sus stă acolo suprafața locală
 a nivelului mării față de elipsoid.
 
+**Cât de exactă este elevația (opțional).** Deschide **Acuratețea elevației (opțional)** ca să
+spui cât de des eșantionează elevația terenul și cu cât pot greși înălțimile:
+
+| Câmp | Ce conține |
+|---|---|
+| **Pasul pe teren (m)** | Distanța dintre eșantioanele de elevație, în metri |
+| **Eroare verticală (m)** | Cu cât se poate abate o înălțime de la terenul real |
+| **Statistica** | Ce fel de cifră este eroarea: **RMSE** (eroarea medie pătratică), **LE90** sau **LE95** (eroarea pe care nu o depășesc 90 % sau 95 % dintre puncte) |
+| **De unde provin cifrele** | O publicație, un raport de măsurători sau declarația unui furnizor |
+
+Statistica nu este un amănunt. Un RMSE și un LE90 pentru același teren diferă de aproximativ una
+și jumătate de ori, așa că o cifră fără statistica ei nu poate fi comparată cu alta.
+
+- **Doar acoperirea obținută.** Lasă secțiunea goală și generarea notează cifrele publicate ale
+  setului Copernicus de treizeci de metri: pas de treizeci de metri și o acuratețe verticală
+  absolută mai bună de patru metri la LE90, cu manualul din care provin.
+- **Rastere proprii sau un amestec.** Nu se notează nimic până nu o spui tu. O generare care
+  amestecă surse sau o prelungește pe alta nu are o cifră proprie, iar formularul preferă să arate
+  **Nenotată** decât un număr pe care datele nu îl respectă.
+
+Înregistrarea poate fi corectată oricând, indiferent în ce stare este generarea: apasă
+**Acuratețe** pe rândul generării din lista Generări. Salvarea cu toate câmpurile goale o șterge.
+Nu schimbă niciodată dalele, deci nimic nu se generează din nou.
+
 ### 6. Pornirea
 
 **Pornește generarea.** Se pune la coadă.
@@ -128,6 +152,12 @@ Lângă buton, o notă spune ce hotărăște cât de fin poate ieși rezultatul:
 > rămas fără memorie se oprește și spune asta, iar setarea poate fi apoi mărită."*
 
 ---
+
+> **La ce folosesc cifrele.** Coloana **Acuratețea elevației** din lista Generări arată, pentru
+> fiecare generare, pasul și eroarea ei cu statistica numită (*pas de 30 m, 4 m LE90*); ține
+> cursorul deasupra ei ca să vezi de unde provin cifrele. Aceleași cifre însoțesc orice răspuns
+> care citește terenul — o înălțime cerută într-un loc și fiecare imagine derivată — așa că un
+> număr nu este dat niciodată fără calitatea terenului de sub el.
 
 ## Adăugarea unui raster la o generare pe care o ai deja
 

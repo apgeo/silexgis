@@ -7602,6 +7602,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccuracySource")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("accuracy_source");
+
                     b.Property<int?>("AchievedMaxDepth")
                         .HasColumnType("integer")
                         .HasColumnName("achieved_max_depth");
@@ -7683,6 +7688,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("size_bytes");
 
+                    b.Property<double?>("SourceResolutionM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("source_resolution_m");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -7694,6 +7703,15 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<double?>("VerticalAccuracyM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("vertical_accuracy_m");
+
+                    b.Property<string>("VerticalAccuracyStatistic")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("vertical_accuracy_statistic");
 
                     b.HasKey("Id")
                         .HasName("pk_terrain_builds");
@@ -7720,6 +7738,8 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.ToTable("terrain_builds", null, t =>
                         {
+                            t.HasCheckConstraint("ck_terrain_builds_accuracy", "(source_resolution_m is null or source_resolution_m > 0) and (vertical_accuracy_m is null or vertical_accuracy_m > 0) and ((vertical_accuracy_m is null) = (vertical_accuracy_statistic is null))");
+
                             t.HasCheckConstraint("ck_terrain_builds_progress_range", "progress >= 0 and progress <= 100");
                         });
                 });

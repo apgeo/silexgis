@@ -113,6 +113,30 @@ for.
 For ellipsoidal heights, give the **geoid height** — how far the local sea-level surface sits
 above the ellipsoid there.
 
+**How accurate the elevation is (optional).** Open **Elevation accuracy (optional)** to say how
+finely the elevation samples the ground and how far its heights may be off:
+
+| Field | What it holds |
+|---|---|
+| **Ground spacing (m)** | Distance between elevation samples, in metres |
+| **Vertical error (m)** | How far a height may be from the true ground |
+| **Statistic** | What kind of figure the error is: **RMSE** (root-mean-square error), **LE90** or **LE95** (the error not exceeded by 90 % or 95 % of points) |
+| **Where the figures come from** | A publication, a survey report or a vendor's statement |
+
+The statistic is not a detail. An RMSE and an LE90 of the same ground differ by about a factor of
+one and a half, so a figure without its statistic cannot be compared with another.
+
+- **Obtained coverage only.** Leave the section empty and the build records the published figures
+  of the Copernicus thirty-metre dataset: thirty-metre spacing and an absolute vertical accuracy
+  better than four metres at LE90, with the handbook it comes from.
+- **Your own rasters, or a mixture.** Nothing is recorded until you state it. A build that mixes
+  sources, or extends another, has no single figure of its own, and the form would rather show
+  **Not recorded** than a number the data does not meet.
+
+The record can be corrected at any time, whatever state the build is in: press **Accuracy** on the
+build's row in the Builds list. Saving with every field empty clears it. It never changes the
+tiles, so nothing is built again.
+
 ### 6. Start
 
 **Start build.** It is queued.
@@ -125,6 +149,12 @@ Beside the button, a note says what decides how fine the result can be:
 > and says so, and the setting can then be raised."*
 
 ---
+
+> **What the figures are for.** The **Elevation accuracy** column of the Builds list shows, for
+> each build, its spacing and its error with the statistic named (*30 m spacing, 4 m LE90*); hover
+> over it to see where the figures come from. The same figures travel with every answer that reads
+> the ground — a height asked for at a place, and each derived picture — so a number is never
+> given without the quality of the ground under it.
 
 ## Adding a raster to a build you already have
 
