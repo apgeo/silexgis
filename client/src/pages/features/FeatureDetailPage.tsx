@@ -31,8 +31,10 @@ import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx
 import AreaKarstStatisticsCard from '../../components/features/AreaKarstStatisticsCard.tsx';
 import AreaPointPatternCard from '../../components/features/AreaPointPatternCard.tsx';
 import AreaStructureCard from '../../components/features/AreaStructureCard.tsx';
+import AreaStereonetCard from '../../components/geology/AreaStereonetCard.tsx';
 import FeatureMorphometryCard from '../../components/features/FeatureMorphometryCard.tsx';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
+import { typedEnumLabel, typedFieldLabel } from '../../components/geology/lithology.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
@@ -96,10 +98,10 @@ export default function FeatureDetailPage() {
   const propertyLabels = useMemo(() => {
     const labels = new Map<string, string>();
     for (const field of parsePropertiesSchema(featureType?.propertiesSchema)) {
-      labels.set(field.key, field.label);
+      labels.set(field.key, typedFieldLabel(t, featureType?.code, field.key, field.label));
     }
     return labels;
-  }, [featureType]);
+  }, [featureType, t]);
 
   if (isError) {
     return (
@@ -335,7 +337,10 @@ export default function FeatureDetailPage() {
         <Card title={t('features.typedProperties')} style={{ marginBottom: 16 }}>
           <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
             {properties.map(([key, value]) =>
-              detailItem(propertyLabels.get(key) ?? key, value),
+              detailItem(
+                propertyLabels.get(key) ?? key,
+                typeof value === 'string' ? typedEnumLabel(t, feature.featureTypeCode, key, value) : value,
+              ),
             )}
           </Descriptions>
         </Card>
@@ -349,6 +354,7 @@ export default function FeatureDetailPage() {
       <AreaAltitudeDisagreementCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaTerrainStatisticsCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaStructureCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      <AreaStereonetCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaKarstStatisticsCard featureId={id} featureTypeCode={feature.featureTypeCode ?? null} />
       <AreaPointPatternCard
         featureId={id}
