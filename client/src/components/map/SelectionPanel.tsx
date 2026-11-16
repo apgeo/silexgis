@@ -37,6 +37,7 @@ import {
 } from '../../stores/workspaceStore.ts';
 import { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 import TripStateTag from '../trips/TripStateTag.tsx';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
@@ -448,8 +449,8 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       surfaceFeaturesChanged();
       stopEditing();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(featureProblemMessage(error, t));
     }
   };
 

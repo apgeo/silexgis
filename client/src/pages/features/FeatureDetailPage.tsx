@@ -25,6 +25,7 @@ import {
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import AreaAltitudeDisagreementCard from '../../components/features/AreaAltitudeDisagreementCard.tsx';
 import AreaTerrainStatisticsCard from '../../components/features/AreaTerrainStatisticsCard.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
@@ -165,8 +166,8 @@ export default function FeatureDetailPage() {
       surfaceFeaturesChanged();
       setEditOpen(false);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(featureProblemMessage(error, t));
     }
   };
 

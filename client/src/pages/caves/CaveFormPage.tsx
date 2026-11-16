@@ -15,6 +15,7 @@ import {
 } from '../../api/hooks.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -81,8 +82,8 @@ export default function CaveFormPage() {
       const saved = isEdit ? await updateCave.mutateAsync(body) : await createCave.mutateAsync(body);
       message.success(t('common.saved'));
       navigate(`/caves/${saved.id}`);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(featureProblemMessage(error, t));
     }
   };
 
