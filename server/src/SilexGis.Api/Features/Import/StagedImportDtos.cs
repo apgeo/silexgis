@@ -2,6 +2,7 @@
 using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Import;
 
@@ -81,7 +82,17 @@ public sealed record ImportPreviewDto(
     int FileRowCount,
     int ScannedRowCount,
     IReadOnlyList<RuleHitDto> RuleHits,
-    TermRuleSetDto? RuleSet);
+    TermRuleSetDto? RuleSet,
+    /// <summary>
+    /// The mapping step of a geology import: each distinct value of the outlines' lithology
+    /// column, how many outlines carry it, the class it becomes and how (the reviewer's mapping,
+    /// recognised on its own, or unmatched — created unclassified). Unmatched values first.
+    /// Empty when the file's outlines carry no such column.
+    /// </summary>
+    IReadOnlyList<ImportLithologyValueDto> LithologyValues);
+
+/// <summary>One distinct value of the outlines' lithology column, and the class it becomes.</summary>
+public sealed record ImportLithologyValueDto(string Value, int Count, string? Code, LithologyMatchKind Match);
 
 /// <summary>
 /// Runs a rule set over a loaded file. A computation over a body, so a POST.
@@ -266,9 +277,33 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
             .NotEmpty()
             .When(x => x.Tracks == ImportTrackHandling.ImportAsLine)
             .WithMessage("Say which kind of line feature a track becomes.");
+        RuleFor(x => x.Areas).IsInEnum();
+        RuleFor(x => x.AreaFeatureTypeCode)
+            .NotEmpty()
+            .When(x => x.Areas == ImportAreaHandling.ImportAsArea)
+            .WithMessage("Say which kind of area an outline becomes.");
         RuleFor(x => x.Languages).NotNull();
         RuleFor(x => x.TagIds).NotNull();
+        RuleFor(x => x.Mapping).NotNull();
+        RuleFor(x => x.Mapping.LithologyField).MaximumLength(200).When(x => x.Mapping is not null);
+        RuleFor(x => x.Mapping.LithologyValues)
+            .NotNull()
+            .Must(values => values.Count <= MaxLithologyValues)
+            .WithMessage($"A lithology mapping answers at most {MaxLithologyValues} source values.")
+            .When(x => x.Mapping is not null);
+
+        // The vocabulary is closed: a mapping to any other code would store a class no statistic
+        // can say is karstifiable or not, so it is refused here rather than quietly dropped.
+        RuleForEach(x => x.Mapping.LithologyValues)
+            .Must(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Key.Length <= 200)
+            .WithMessage("A mapped source value must be a non-empty text of at most 200 characters.")
+            .Must(pair => Lithology.Find(pair.Value) is not null)
+            .WithMessage((_, pair) => $"'{pair.Value}' is not a lithology class.")
+            .When(x => x.Mapping?.LithologyValues is not null);
     }
+
+    /// <summary>More distinct rock names than any geology map's legend carries.</summary>
+    public const int MaxLithologyValues = 500;
 }
 
 /// <summary>

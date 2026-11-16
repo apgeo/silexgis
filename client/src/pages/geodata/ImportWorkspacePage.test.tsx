@@ -100,6 +100,8 @@ const fullPreview: ImportPreview = {
     { ruleId: 'spring', ruleName: 'Spring', count: 0 },
   ],
   ruleSet: null,
+  // A waypoint file has no outlines, so no rock column to map.
+  lithologyValues: [],
 };
 
 let preview: ImportPreview = fullPreview;

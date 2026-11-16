@@ -6208,12 +6208,34 @@
     "tracksIgnore": "Leave them in the file",
     "tracksAsLine": "Import as a line feature",
     "trackKind": "Line feature kind",
+    "optionsAreas": "Outlines (areas)",
+    "areas": "What to do with them",
+    "areasHint": "Rules read names, and an outline's name rarely says what it is. Choose the kind every outline in the file becomes — for a geology map, Geological unit — or leave them in the file.",
+    "areasIgnore": "Leave them in the file",
+    "areasAsArea": "Import each as an area feature",
+    "areaKind": "Area feature kind",
     "mappingAuto": "Work it out",
     "mapping": {
       "nameField": "Name",
       "descriptionField": "Description",
       "codeField": "Identification code",
-      "elevationField": "Altitude"
+      "elevationField": "Altitude",
+      "lithologyField": "Rock type (geological units)"
+    },
+    "lithologyStep": {
+      "title": "Rock types in the file",
+      "unmatched": "Rock names matching no class: {{count}}. Pick a class for each, or leave it and those units are created unclassified.",
+      "allMatched": "Every rock name in the file matches a class. Change any you disagree with.",
+      "sourceValue": "In the file",
+      "count": "Outlines",
+      "becomes": "Becomes",
+      "becomesFor": "Class for {{value}}",
+      "how": "How",
+      "match": {
+        "mapped": "Your choice",
+        "recognised": "Recognised",
+        "unmatched": "No match"
+      }
     },
     "selectAll": "All",
     "selectAllPages": "Select all {{count}} across every page",
@@ -8483,7 +8505,7 @@
     "unitDegrees": "°",
     "noDivergence": "One side has nothing in it, so there is no disagreement to report. Nought here would claim agreement with a structure nobody has mapped.",
     "divergenceScale": "Nought means the two lie along each other; one means they lie across each other, a quarter turn apart.",
-    "linesOnly": "Only mapped fracture and fault lines are compared. Bedding and joint readings taken at a station are a different kind of record and this installation stores none.",
+    "linesOnly": "Mapped fracture and fault lines are compared here rose against rose, by length. Structural readings taken at a point — bedding, joints, fault planes — are plotted on a stereonet, and a cave's passages are tested against their strikes.",
     "dolineModeElsewhere": "The comparison of depression long axes against fault strikes is asked of an area, on that area's own page.",
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
@@ -10159,5 +10181,92 @@
     "preview": "Preview",
     "none": "No symbol (plain dot)",
     "sources": "Symbol sources: the club’s own speleological set; OpenStreetMap Carto (CC0); QGIS (GPL-2.0-or-later); the FGDC Digital Cartographic Standard for Geologic Map Symbolization (USGS)."
+  },
+  "geology": {
+    "lithology": {
+      "limestone": "Limestone",
+      "dolomite": "Dolomite",
+      "marble": "Marble",
+      "gypsum_anhydrite": "Gypsum / anhydrite",
+      "salt": "Rock salt",
+      "conglomerate_calcareous": "Conglomerate (calcareous)",
+      "sandstone": "Sandstone",
+      "shale_marl": "Shale / marl",
+      "granite": "Granite",
+      "crystalline_schist": "Crystalline schist",
+      "volcanic": "Volcanic rock",
+      "unconsolidated": "Unconsolidated deposits",
+      "other": "Other"
+    },
+    "unclassified": "Unclassified",
+    "karstifiable": "karstifiable",
+    "unrecognised": "not in the vocabulary",
+    "legend": {
+      "title": "Geological units"
+    },
+    "area": {
+      "title": "Geology inside the area",
+      "basisPlaceable": "Measured on the map, over the geological units and entrances you may place exactly — so its entrance counts are not the declared totals above.",
+      "noneMapped": "No geological unit you may place is mapped inside this area.",
+      "lithology": "Lithology",
+      "areaKm2": "Outcrop (km²)",
+      "share": "Share of area",
+      "entrances": "Entrances",
+      "entrancesPerKm2": "Entrances per km²",
+      "notMeasured": "not measured",
+      "karstifiableArea": "Karstifiable outcrop (km²)",
+      "karstifiableDensity": "Entrances per km² of karstifiable outcrop",
+      "unmappedArea": "Ground with no unit mapped (km²)",
+      "unmappedEntrances": "Entrances on unmapped ground"
+    }
+  },
+  "structural": {
+    "types": {
+      "bedding": "Bedding",
+      "joint": "Joint",
+      "fault": "Fault plane",
+      "cleavage": "Cleavage",
+      "fracture": "Fracture",
+      "other": "Other"
+    },
+    "fields": {
+      "measurement_type": "Measured plane",
+      "dip_direction": "Dip direction (°)",
+      "dip": "Dip (°)",
+      "note": "Note",
+      "measured_on": "Measured on (YYYY-MM-DD)"
+    },
+    "entry": {
+      "label": "Orientation entered as",
+      "dipDirection": "Dip direction and dip",
+      "strike": "Strike and dip (right-hand rule)",
+      "strikeField": "Strike (°, right-hand rule: the plane dips to the right of it)"
+    },
+    "stereonet": {
+      "title": "Stereonet of structural readings",
+      "areaTitle": "Structural readings in this area",
+      "loading": "Plotting…",
+      "noReadings": "No structural reading you may place was recorded here.",
+      "readingCount": "{{count}} readings plotted",
+      "caveReach": "{{count}} readings within {{radius}} m of the cave",
+      "measurementType": "Readings of",
+      "allTypes": "every kind",
+      "description": "Equal-area net, lower hemisphere: each dot is the pole of one plane (the line at right angles to it, taken pointing down). A plane dipping gently plots near the centre; a steep one near the rim, on the side opposite its dip.",
+      "densityLegend": "Shading: Kamb density, a band every {{interval}} standard deviations. Readings scattered at random would read {{expected}} everywhere; the densest spot here reads {{max}}.",
+      "poleLabel": "{{type}}: dip {{dip}}° towards {{dipDirection}}°",
+      "north": "N"
+    },
+    "strikeComparison": {
+      "title": "Passage against measured strikes (Watson U²)",
+      "statistic": "U²",
+      "pValue": "Probability",
+      "counts": "{{legs}} survey legs against {{readings}} strikes",
+      "tooFew": "The test needs at least {{min}} survey legs and {{min}} readings with a strike; here there are {{legs}} and {{readings}}.",
+      "different": "The passage trends and the strikes are unlikely to come from one distribution (probability {{p}}).",
+      "alike": "Nothing here shows the passage trends and the strikes to differ (probability {{p}}).",
+      "caveat": "Each survey leg and each reading counts once. Legs along one passage are not independent of each other, so a small probability says less than it reads. U² compares the whole spread of trends, not only the mean direction: a straight passage against scattered strikes with the same mean still differs.",
+      "strikeRose": "Strikes of the readings ({{count}})",
+      "noStrikes": "No reading you may place within reach has a strike."
+    }
   }
 }

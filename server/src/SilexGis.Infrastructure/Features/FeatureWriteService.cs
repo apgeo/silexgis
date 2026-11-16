@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
@@ -1048,6 +1049,19 @@ public sealed class FeatureWriteService(
         {
             feature.PropertiesSchemaVersion = null;
             return;
+        }
+
+        if (featureType.Code == FeatureTypeSeeds.StructuralMeasurement)
+        {
+            // A reading may arrive as a right-hand-rule strike from any door — the form, an import,
+            // the API — and is stored as its dip direction, so the conversion happens here, once.
+            var (normalized, problems) = StructuralMeasurement.NormalizeProperties(feature.Properties);
+            if (problems.Count > 0)
+            {
+                throw new FeatureWriteException("feature.properties_invalid", problems);
+            }
+
+            feature.Properties = normalized!;
         }
 
         var errors = propertiesValidator.Validate(featureType.PropertiesSchema, feature.Properties);

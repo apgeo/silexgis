@@ -446,6 +446,29 @@ O hartă scanată se **poziționează** (*Poziționează pe hartă…*, *poziți
 **plasează** (*Plasează pe hartă*, *plasare*): așa le numește interfața, iar ghidul păstrează
 deosebirea.
 
+## Geologie
+
+| Engleză | Română |
+|---|---|
+| Geological unit (the guide's word) | Unitate geologică |
+| Lithology | Litologie |
+| karstifiable | carstificabil |
+| not in the vocabulary · Unclassified | în afara vocabularului · Neclasificat |
+| Outcrop (km²) | Afloriment (km²) |
+| Geology inside the area | Geologia din interiorul zonei |
+| Structural measurement / structural reading | Măsurătoare structurală |
+| Measured plane | Planul măsurat |
+| Bedding · Joint · Fault plane · Cleavage · Fracture | Stratificație · Diaclază · Plan de falie · Clivaj · Fractură |
+| Dip direction · Dip | Direcția de înclinare · Înclinare |
+| Strike (right-hand rule) | Direcția stratului (regula mâinii drepte) |
+| Orientation entered as | Orientare introdusă ca |
+| Stereonet | Stereogramă |
+| Equal-area net, lower hemisphere | Rețea echiarială, emisfera inferioară |
+| Readings of … every kind | Măsurători de tip … toate tipurile |
+| Passage against the mapped structure | Galeriile față de structura cartată |
+| Passage against measured strikes (Watson U²) | Galeriile față de direcțiile măsurate (Watson U²) |
+| Probability | Probabilitate |
+
 ## Alte
 
 | Engleză | Română |

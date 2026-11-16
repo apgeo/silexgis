@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { AreaCaveExtreme, AreaKarstStatistics, KarstificationComponent } from '../../api/hooks.ts';
 import { useAreaKarstStatistics } from '../../api/hooks.ts';
+import AreaLithologySection from '../geology/AreaLithologySection.tsx';
 
 /**
  * What one karst area adds up to: how many caves are in it, how thickly they sit, how much passage
@@ -144,6 +145,8 @@ export default function AreaKarstStatisticsCard({
           { title: t('karstArea.caveCount'), dataIndex: 'caveCount' },
         ]}
       />
+
+      <AreaLithologySection data={data.lithology} />
 
       <Typography.Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0 }}>
         {t('karstArea.scopeNote')}

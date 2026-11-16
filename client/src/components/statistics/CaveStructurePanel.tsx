@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Card, Empty, Typography } from 'antd';
+import { Card, Divider, Empty, Typography } from 'antd';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCaveStructureComparison } from '../../api/hooks.ts';
+import { useCaveStereonet } from '../../api/hooks/structural.ts';
+import MeasurementTypeSelect from '../geology/MeasurementTypeSelect.tsx';
+import StereonetDiagram from '../geology/StereonetDiagram.tsx';
+import StrikeComparisonSection from '../geology/StrikeComparisonSection.tsx';
 import StructureComparisonView from './StructureComparisonView.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
 
@@ -15,15 +20,17 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * that a guarded cave is here.
  * </p>
  * <p>
- * Only mapped fracture and fault <em>lines</em> are on the other side. Bedding and joint readings
- * taken at a station with a compass are a different kind of record and this installation stores
- * none, so that comparison is said to be unavailable rather than offered as an affordance that
- * always comes back empty.
+ * Two kinds of structure are on the other side. Mapped fracture and fault <em>lines</em> are set
+ * against the passage rose against rose, by length. Readings taken at a point — bedding, joints,
+ * fault planes — are set against it by their strikes with Watson's U², and plotted as poles on a
+ * stereonet; the reader picks which kind of plane both of those read.
  * </p>
  */
 export default function CaveStructurePanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCaveStructureComparison(caveId);
+  const [measurementType, setMeasurementType] = useState('');
+  const { data, isLoading, isError } = useCaveStructureComparison(caveId, undefined, measurementType || undefined);
+  const stereonet = useCaveStereonet(caveId, measurementType || undefined);
 
   if (isError) return null;
 
@@ -62,6 +69,31 @@ export default function CaveStructurePanel({ caveId }: { caveId: string }) {
         {t('structureComparison.dolineModeElsewhere')}
       </Typography.Paragraph>
       {data && <SurveyBasisNote basis={data.basis} />}
+      <Divider />
+      <MeasurementTypeSelect value={measurementType} onChange={setMeasurementType} testId="cave-structure-type" />
+      {data?.measuredStrikes && (
+        <div style={{ marginTop: 12 }}>
+          <StrikeComparisonSection data={data.measuredStrikes} />
+        </div>
+      )}
+      {stereonet.data && (
+        <div style={{ marginTop: 12 }} data-testid="cave-stereonet">
+          <Typography.Title level={5}>{t('structural.stereonet.title')}</Typography.Title>
+          {stereonet.data.readingCount === 0 ? (
+            <Typography.Paragraph type="secondary">{t('structural.stereonet.noReadings')}</Typography.Paragraph>
+          ) : (
+            <>
+              <Typography.Text>
+                {t('structural.stereonet.caveReach', {
+                  count: stereonet.data.readingCount,
+                  radius: Math.round(stereonet.data.radiusMetres ?? 0),
+                })}
+              </Typography.Text>
+              <StereonetDiagram data={stereonet.data} />
+            </>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

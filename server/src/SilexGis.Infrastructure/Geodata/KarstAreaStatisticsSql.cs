@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -34,6 +35,12 @@ public sealed record KarstAreaExtremeRow(Guid FeatureId, string? Name, double Va
 
 /// <summary>How many caves in the area carry each rock type.</summary>
 public sealed record KarstAreaRockTypeRow(long? RockTypeId, string? Code, string? Name, int CaveCount);
+
+/// <summary>
+/// Ground of one lithology inside an area outline, or — with <see cref="Unmapped"/> set — the
+/// outline ground no unit covers, with the entrances found on it.
+/// </summary>
+public sealed record KarstAreaLithologyRow(bool Unmapped, string? Lithology, double AreaM2, int EntranceCount);
 
 /// <summary>
 /// The per-area half of the registry statistics: what the caves declared to be inside one karst
@@ -197,6 +204,107 @@ public static class KarstAreaStatisticsSql
               AND {visibleSql}
             GROUP BY c.rock_type_id, rt.code, rt.name
             ORDER BY COUNT(*) DESC, rt.name NULLS LAST
+            """;
+
+        return (sql, parameters);
+    }
+
+    /// <summary>
+    /// The area outline split by the geological units mapped over it: each lithology's outcrop
+    /// inside the outline, the ground no unit covers, and how many entrances stand on each.
+    ///
+    /// <para>
+    /// Unlike every other figure here this one is spatial — a geology map is not a hierarchy, and a
+    /// unit is in an area because its outline overlaps it. A spatial test is a probe when it runs
+    /// against a position the caller may not see, so <b>both sides run over the placeable set
+    /// only</b>: a unit whose outline this caller may not see exactly does not shape the split, and
+    /// an entrance they may not place is not counted on any ground. Withholding a row before it is
+    /// counted is what keeps a protected entrance from being located by bisecting the units it
+    /// would be counted in.
+    /// </para>
+    /// <para>
+    /// Units of one class that overlap are merged before measuring, so a class's ground is not
+    /// counted twice; units of different classes that overlap are a mapping error and are each
+    /// counted, as overlapping depressions are. The class is read as stored; deciding what a stored
+    /// code means — and which are karstifiable — is left to the vocabulary in code.
+    /// </para>
+    /// </summary>
+    public static async Task<IReadOnlyList<KarstAreaLithologyRow>> LithologyAsync(
+        SilexGisDbContext db, AccessContext ctx, Guid areaFeatureId, long unitTypeId, CancellationToken ct)
+    {
+        var (sql, parameters) = BuildLithology(ctx, areaFeatureId, unitTypeId);
+        var rows = await db.Database.GetDbConnection().QueryAsync<KarstAreaLithologyRow>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        return [.. rows];
+    }
+
+    public static (string Sql, DynamicParameters Parameters) BuildLithology(
+        AccessContext ctx, Guid areaFeatureId, long unitTypeId)
+    {
+        // One fragment set, spelled over the alias "f" in two separate scopes (units and
+        // entrances): the two fragments share the caller's parameters and cannot be built twice.
+        var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        parameters.Add("ka_area_id", areaFeatureId);
+        parameters.Add("ka_unit_type_id", unitTypeId);
+
+        // ST_CollectionExtract keeps the polygonal part of an intersection: two outlines that share
+        // an edge intersect in a line, which has no ground and would otherwise poison the union.
+        var sql = $"""
+            WITH area AS (
+                SELECT a.geom
+                FROM features a
+                WHERE a.id = @ka_area_id AND a.deleted_at IS NULL AND a.geom IS NOT NULL
+                  AND ST_Dimension(a.geom) = 2
+            ),
+            units AS (
+                SELECT NULLIF(f.properties ->> '{Lithology.PropertyKey}', '') AS lithology,
+                       ST_CollectionExtract(ST_Intersection(f.geom, area.geom), 3) AS g
+                FROM features f, area
+                WHERE f.kind = {(short)FeatureKind.Generic}
+                  AND f.feature_type_id = @ka_unit_type_id
+                  AND f.deleted_at IS NULL
+                  AND f.geom IS NOT NULL
+                  AND ST_Dimension(f.geom) = 2
+                  AND f.geom && area.geom
+                  AND ST_Intersects(f.geom, area.geom)
+                  AND {visibleSql}
+                  AND {exactSql}
+            ),
+            classes AS (
+                SELECT lithology, ST_Union(g) AS g
+                FROM units
+                WHERE NOT ST_IsEmpty(g)
+                GROUP BY lithology
+            ),
+            unmapped AS (
+                SELECT COALESCE(ST_Difference(area.geom, (SELECT ST_Union(g) FROM classes)), area.geom) AS g
+                FROM area
+            ),
+            entrances AS (
+                SELECT f.geom
+                FROM features f, area
+                WHERE f.kind = {(short)FeatureKind.CaveEntrance}
+                  AND f.deleted_at IS NULL
+                  AND f.geom IS NOT NULL
+                  AND f.geom && area.geom
+                  AND ST_Intersects(f.geom, area.geom)
+                  AND {visibleSql}
+                  AND {exactSql}
+            )
+            SELECT false AS "Unmapped",
+                   c.lithology AS "Lithology",
+                   ST_Area(c.g::geography) AS "AreaM2",
+                   (SELECT COUNT(*)::int FROM entrances e
+                    WHERE e.geom && c.g AND ST_Intersects(e.geom, c.g)) AS "EntranceCount"
+            FROM classes c
+            UNION ALL
+            SELECT true,
+                   NULL,
+                   CASE WHEN ST_IsEmpty(u.g) THEN 0 ELSE ST_Area(u.g::geography) END,
+                   (SELECT COUNT(*)::int FROM entrances e
+                    WHERE NOT ST_IsEmpty(u.g) AND e.geom && u.g AND ST_Intersects(e.geom, u.g))
+            FROM unmapped u
             """;
 
         return (sql, parameters);

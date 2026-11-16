@@ -3,9 +3,11 @@ import Feature, { type FeatureLike } from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
 import MultiPoint from 'ol/geom/MultiPoint';
 import Point from 'ol/geom/Point';
+import Polygon from 'ol/geom/Polygon';
 import type Style from 'ol/style/Style';
 import { describe, expect, it } from 'vitest';
 import { createSurfaceFeatureLayer, setFeatureTypeSymbols } from './featureLayer.ts';
+import { lithologyPalette } from './markerPalette.ts';
 
 describe('feature styling', () => {
   const styleFn = createSurfaceFeatureLayer().getStyle() as (f: FeatureLike, r: number) => Style | Style[];
@@ -38,6 +40,25 @@ describe('feature styling', () => {
     pending.set('pendingNew', true);
     pending.set('featureTypeId', 7);
     expect(stylesFor(pending).some((s) => s.getImage())).toBe(true);
+  });
+
+  it('fills a geological unit by its class and leaves an unclassified one an outline', () => {
+    const square = () => new Polygon([[[0, 0], [1, 0], [1, 1], [0, 0]]]);
+    const limestone = new Feature(square());
+    limestone.setProperties({ typeCode: 'geological_unit', lithology: 'limestone', karstifiable: true });
+    const unclassified = new Feature(square());
+    unclassified.setProperties({ typeCode: 'geological_unit', lithology: null, karstifiable: null });
+    const doline = new Feature(square());
+
+    const [lime] = stylesFor(limestone);
+    const [none] = stylesFor(unclassified);
+    const [plain] = stylesFor(doline);
+    expect(lime.getStroke()?.getColor()).toBe(lithologyPalette.classes.limestone);
+    expect(lime.getFill()).not.toBeNull();
+    expect(none.getFill()).toBeNull();
+    expect(none.getStroke()?.getLineDash()).not.toBeNull();
+    // Any other area keeps the ordinary outline style.
+    expect(plain.getStroke()?.getColor()).not.toBe(lithologyPalette.classes.limestone);
   });
 
   it('renders lines with a stroke and no image', () => {

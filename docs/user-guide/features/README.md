@@ -33,6 +33,7 @@ detail those walkthroughs link into.
 | [Point clouds (LiDAR scans)](point-clouds.md) | Laser scans of a cave: uploading a cloud or a raw MANDEYE recording, processing profiles, viewing, placing on the map |
 | [Measurements and statistics](measurements-and-statistics.md) | What the application computes, and what it refuses to compute |
 | [Karst analyses](karst-analyses.md) | Karst-area statistics, density and spacing of entrances, the depth of a system, a cave's passage network and what its shape suggests |
+| [Geology: units, structural readings and the stereonet](geology.md) | Geological units and their lithology, an area's geology split, structural readings, the stereonet, passages against measured strikes |
 | [Geodata files](geodata.md) | Vector import and export, the imports register |
 | [The national cave catalogue](cave-catalogue.md) | Searching speologie.org and importing caves from it |
 | [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays: GeoTIFFs, PDFs and scans, and placing a sheet by its corners or by control points |

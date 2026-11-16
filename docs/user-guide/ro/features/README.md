@@ -33,6 +33,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Nori de puncte (scanări LiDAR)](point-clouds.md) | Scanări laser ale unei peșteri: încărcarea unui nor sau a unei înregistrări brute MANDEYE, profiluri de procesare, vizualizare, plasare pe hartă |
 | [Măsurători și statistici](measurements-and-statistics.md) | Ce calculează aplicația și ce refuză să calculeze |
 | [Analize carstice](karst-analyses.md) | Statistici pe zona carstică, densitatea și spațierea intrărilor, adâncimea unui sistem, rețeaua de galerii a unei peșteri și ce sugerează forma ei |
+| [Geologie: unități, măsurători structurale și stereograma](geology.md) | Unitățile geologice și litologia lor, geologia unei zone, măsurătorile structurale, stereograma, galeriile față de direcțiile măsurate |
 | [Fișiere de geodate](geodata.md) | Import și export vectorial, registrul importurilor |
 | [Catalogul național al peșterilor](cave-catalogue.md) | Căutarea pe speologie.org și importul peșterilor de acolo |
 | [Hărți raster georeferențiate](georeferenced-maps.md) | Foi geologice și topografice ca straturi suprapuse: GeoTIFF-uri, PDF-uri și scanări, și poziționarea unei planșe după colțuri sau după puncte de control |

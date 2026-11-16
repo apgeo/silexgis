@@ -43,6 +43,10 @@ Beyond name, description and geometry, a feature carries whatever properties its
 defines. A spring is asked different things from a fault. These are shown as a **Properties**
 section and are filterable.
 
+Two shipped kinds use their properties for more than description: a **geological unit** carries
+its rock class, and a **structural measurement** its dip direction and dip. What the application
+does with them is on its own page: [Geology](geology.md).
+
 ---
 
 ## Hierarchy: parents and children

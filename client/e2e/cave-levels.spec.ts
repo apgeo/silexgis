@@ -93,8 +93,8 @@ test('a cave at two heights proposes two levels and a confirmed reading survives
 });
 
 /**
- * The cave's passages set against the rock around them, and the one comparison this installation
- * cannot make said in words rather than left as a dead affordance.
+ * The cave's passages set against the rock around them, and where readings taken at a point are
+ * compared said in words.
  */
 test('a cave shows its passage rose against the mapped structure', async ({ page }) => {
   const caveName = `E2E Structure Cave ${Date.now()}`;
@@ -123,9 +123,9 @@ test('a cave shows its passage rose against the mapped structure', async ({ page
   // Nought is not the answer when one side is empty, and the panel refuses to give one.
   await expect(comparison.getByTestId('cave-structure-comparison-no-divergence')).toBeVisible();
 
-  // Bedding and joint readings are the comparison this installation cannot make. Said here, so a
-  // reader is not left looking for a control that was never built.
-  await expect(card.getByText(/Bedding and joint readings/)).toBeVisible();
+  // Readings taken at a point are compared another way, and the note under the lines says how, so
+  // a reader is not left looking for them in the line comparison.
+  await expect(card.getByText(/plotted on a stereonet/)).toBeVisible();
 
   // And the surface comparison is named and placed, rather than being absent without explanation.
   await expect(card.getByText(/asked of an area, on that area's own page/)).toBeVisible();

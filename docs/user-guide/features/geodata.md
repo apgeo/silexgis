@@ -42,6 +42,10 @@ caves, entrances and surface features, proposing what each one is from your club
 habits. That is a whole workflow of its own:
 [Import a season of GPS waypoints](../workflows/import-a-gps-file.md).
 
+Outlines are not proposed by names: the review is told once which kind of area every outline
+becomes. A geology map of polygons becomes **geological units**, with its rock-type column turned
+into their lithology — see [Importing a geology map](geology.md#importing-a-geology-map).
+
 ### Managing
 
 Search by name, edit a geofile's details, delete it — which deletes its imported features

@@ -55,6 +55,7 @@ import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
 import KarstIndexControls from './KarstIndexControls.tsx';
 import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
 import PassageDepthControls from './PassageDepthControls.tsx';
+import LithologyLegend from '../geology/LithologyLegend.tsx';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
 import {
   TRIP_LAYER_ID,
@@ -604,6 +605,8 @@ export default function LayerPanel({
       )}
       {karstIndexVisible && <KarstIndexControls />}
       {passageDepthVisible && <PassageDepthControls />}
+      {/* Draws nothing unless geological units are loaded on the map. */}
+      <LithologyLegend />
       {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}
       <PhotoCutShortNotice />
       {/* The map-corner notice about withheld lines opens the panel here and moves focus to this

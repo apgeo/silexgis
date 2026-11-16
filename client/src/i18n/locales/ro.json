@@ -6221,12 +6221,34 @@
     "tracksIgnore": "Lasă-le în fișier",
     "tracksAsLine": "Importă ca obiect liniar",
     "trackKind": "Tipul obiectului liniar",
+    "optionsAreas": "Contururi (zone)",
+    "areas": "Ce se face cu ele",
+    "areasHint": "Regulile citesc nume, iar numele unui contur spune rareori ce este. Alege tipul în care devine fiecare contur din fișier — pentru o hartă geologică, Unitate geologică — sau lasă-le în fișier.",
+    "areasIgnore": "Rămân în fișier",
+    "areasAsArea": "Importă fiecare ca obiect de tip zonă",
+    "areaKind": "Tipul obiectului de tip zonă",
     "mappingAuto": "Determină automat",
     "mapping": {
       "nameField": "Nume",
       "descriptionField": "Descriere",
       "codeField": "Cod de identificare",
-      "elevationField": "Altitudine"
+      "elevationField": "Altitudine",
+      "lithologyField": "Tip de rocă (unități geologice)"
+    },
+    "lithologyStep": {
+      "title": "Tipurile de rocă din fișier",
+      "unmatched": "Denumiri de rocă fără clasă corespunzătoare: {{count}}. Alege o clasă pentru fiecare sau lasă-le, iar acele unități vor fi create neclasificate.",
+      "allMatched": "Fiecare denumire de rocă din fișier corespunde unei clase. Schimbă-le pe cele cu care nu ești de acord.",
+      "sourceValue": "În fișier",
+      "count": "Contururi",
+      "becomes": "Devine",
+      "becomesFor": "Clasa pentru {{value}}",
+      "how": "Cum",
+      "match": {
+        "mapped": "Alegerea ta",
+        "recognised": "Recunoscută",
+        "unmatched": "Fără corespondență"
+      }
     },
     "selectAll": "Toate",
     "selectAllPages": "Selectează toate cele {{count}} de pe toate paginile",
@@ -8496,7 +8518,7 @@
     "unitDegrees": "°",
     "noDivergence": "O parte nu conține nimic, deci nu există niciun dezacord de raportat. Zero aici ar susține un acord cu o structură pe care nimeni nu a cartat-o.",
     "divergenceScale": "Zero înseamnă că cele două se suprapun ca direcție; unu înseamnă că sunt perpendiculare, la un sfert de tură distanță.",
-    "linesOnly": "Se compară doar liniile de fractură și de falie cartate. Măsurătorile de strat și de diaclază luate la o stație sunt un alt fel de înregistrare, iar această instalare nu stochează niciuna.",
+    "linesOnly": "Aici se compară liniile de fractură și de falie cartate, rozetă cu rozetă, după lungime. Măsurătorile structurale luate într-un punct — strat, diaclaze, plane de falie — se reprezintă pe o stereogramă, iar galeriile unei peșteri se testează față de direcțiile lor.",
     "dolineModeElsewhere": "Compararea axelor lungi ale depresiunilor cu direcțiile faliilor se face pe o zonă, pe pagina zonei respective.",
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
@@ -10172,5 +10194,92 @@
     "preview": "Previzualizare",
     "none": "Fără simbol (punct simplu)",
     "sources": "Sursele simbolurilor: setul speologic propriu al clubului; OpenStreetMap Carto (CC0); QGIS (GPL-2.0-or-later); standardul FGDC pentru simbolizarea hărților geologice (USGS)."
+  },
+  "geology": {
+    "lithology": {
+      "limestone": "Calcar",
+      "dolomite": "Dolomit",
+      "marble": "Marmură",
+      "gypsum_anhydrite": "Gips / anhidrit",
+      "salt": "Sare gemă",
+      "conglomerate_calcareous": "Conglomerat (calcaros)",
+      "sandstone": "Gresie",
+      "shale_marl": "Șist argilos / marnă",
+      "granite": "Granit",
+      "crystalline_schist": "Șist cristalin",
+      "volcanic": "Rocă vulcanică",
+      "unconsolidated": "Depozite neconsolidate",
+      "other": "Altele"
+    },
+    "unclassified": "Neclasificat",
+    "karstifiable": "carstificabil",
+    "unrecognised": "în afara vocabularului",
+    "legend": {
+      "title": "Unități geologice"
+    },
+    "area": {
+      "title": "Geologia din interiorul zonei",
+      "basisPlaceable": "Măsurată pe hartă, peste unitățile geologice și intrările pe care le poți localiza exact — de aceea numărul de intrări nu este totalul declarat de mai sus.",
+      "noneMapped": "În această zonă nu este cartată nicio unitate geologică pe care o poți localiza.",
+      "lithology": "Litologie",
+      "areaKm2": "Afloriment (km²)",
+      "share": "Pondere din zonă",
+      "entrances": "Intrări",
+      "entrancesPerKm2": "Intrări pe km²",
+      "notMeasured": "nemăsurat",
+      "karstifiableArea": "Afloriment carstificabil (km²)",
+      "karstifiableDensity": "Intrări pe km² de afloriment carstificabil",
+      "unmappedArea": "Teren fără unitate cartată (km²)",
+      "unmappedEntrances": "Intrări pe teren necartat"
+    }
+  },
+  "structural": {
+    "types": {
+      "bedding": "Stratificație",
+      "joint": "Diaclază",
+      "fault": "Plan de falie",
+      "cleavage": "Clivaj",
+      "fracture": "Fractură",
+      "other": "Altul"
+    },
+    "fields": {
+      "measurement_type": "Planul măsurat",
+      "dip_direction": "Direcția de înclinare (°)",
+      "dip": "Înclinare (°)",
+      "note": "Notă",
+      "measured_on": "Măsurat la (AAAA-LL-ZZ)"
+    },
+    "entry": {
+      "label": "Orientare introdusă ca",
+      "dipDirection": "Direcție de înclinare și înclinare",
+      "strike": "Direcție și înclinare (regula mâinii drepte)",
+      "strikeField": "Direcția stratului (°, regula mâinii drepte: planul înclină spre dreapta ei)"
+    },
+    "stereonet": {
+      "title": "Stereograma măsurătorilor structurale",
+      "areaTitle": "Măsurătorile structurale din această zonă",
+      "loading": "Se reprezintă…",
+      "noReadings": "Nu a fost înregistrată aici nicio măsurătoare structurală pe care o poți localiza.",
+      "readingCount": "{{count}} măsurători reprezentate",
+      "caveReach": "{{count}} măsurători pe o rază de {{radius}} m de peșteră",
+      "measurementType": "Măsurători de tip",
+      "allTypes": "toate tipurile",
+      "description": "Rețea echiarială, emisfera inferioară: fiecare punct este polul unui plan (dreapta perpendiculară pe el, luată în jos). Un plan cu înclinare mică apare lângă centru; unul abrupt lângă margine, de partea opusă înclinării.",
+      "densityLegend": "Umbrire: densitate Kamb, o bandă la fiecare {{interval}} abateri standard. Măsurători împrăștiate la întâmplare ar da {{expected}} peste tot; locul cel mai dens de aici dă {{max}}.",
+      "poleLabel": "{{type}}: înclinare {{dip}}° spre {{dipDirection}}°",
+      "north": "N"
+    },
+    "strikeComparison": {
+      "title": "Galeriile față de direcțiile măsurate (Watson U²)",
+      "statistic": "U²",
+      "pValue": "Probabilitate",
+      "counts": "{{legs}} vize de topografie față de {{readings}} direcții",
+      "tooFew": "Testul are nevoie de cel puțin {{min}} vize și {{min}} măsurători cu direcție; aici sunt {{legs}} și {{readings}}.",
+      "different": "Este puțin probabil ca direcțiile galeriilor și direcțiile măsurate să provină din aceeași distribuție (probabilitate {{p}}).",
+      "alike": "Nimic de aici nu arată că direcțiile galeriilor diferă de direcțiile măsurate (probabilitate {{p}}).",
+      "caveat": "Fiecare viză și fiecare măsurătoare contează o dată. Vizele de-a lungul aceleiași galerii nu sunt independente, deci o probabilitate mică spune mai puțin decât pare. U² compară întreaga împrăștiere a direcțiilor, nu doar direcția medie: o galerie dreaptă față de direcții împrăștiate cu aceeași medie tot diferă.",
+      "strikeRose": "Direcțiile măsurătorilor ({{count}})",
+      "noStrikes": "Nicio măsurătoare pe care o poți localiza în apropiere nu are direcție."
+    }
   }
 }
