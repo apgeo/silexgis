@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { EventDefaults, EventInfo } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import EventFormModal from './EventFormModal.tsx';
 
 const { defaultsSpy, createSpy, updateSpy, followingSpy, versionOnFile, runVersionOnFile } =
@@ -17,6 +18,13 @@ const { defaultsSpy, createSpy, updateSpy, followingSpy, versionOnFile, runVersi
     versionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
     runVersionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
   }));
+
+
+/** `reading` as a read answered at `version` hands it over: the version is kept with the values. */
+function readAt<T extends object>(reading: T, version: string): T {
+  noteVersionOfReading(reading, new Response(null, { headers: { ETag: version } }));
+  return reading;
+}
 
 vi.mock('../../api/client.ts', async (original) => ({
   ...(await original<typeof import('../../api/client.ts')>()),
@@ -237,14 +245,18 @@ describe('a save from a dialog opened before the event was read again', () => {
   const path = `/api/v1/events/${anOccurrence().id}`;
 
   function reopenAfterARead() {
-    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    // A read made outside the cache has filed an event version newer than either copy holds.
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"3"' : undefined));
     runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-1"' : undefined));
-    const view = show(anOccurrence());
-    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    const view = show(readAt(anOccurrence(), '"1"'));
     runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-2"' : undefined));
     view.rerender(
       <App>
-        <EventFormModal open event={anOccurrence({ title: 'Renamed by somebody else' })} onClose={() => {}} />
+        <EventFormModal
+          open
+          event={readAt(anOccurrence({ title: 'Renamed by somebody else' }), '"2"')}
+          onClose={() => {}}
+        />
       </App>,
     );
   }

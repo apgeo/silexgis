@@ -28,7 +28,8 @@ import {
   type EventWrite,
   type Visibility,
 } from '../../api/hooks.ts';
-import { isConcurrencyConflict, lastReadETag, lastReadRunVersion } from '../../api/client.ts';
+import { isConcurrencyConflict, lastReadRunVersion } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
 import { eventRefusalKey } from './eventRefusals.ts';
@@ -130,7 +131,10 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
   // The versions of the event and of its run the fields were filled from. The page behind the
   // dialog goes on reading the event and filing each newer version for the next save; a save that
   // carried that one would tell the server this form had seen a change it never showed, and
-  // somebody else's edit would be written back with nobody told. So they are taken here, once.
+  // somebody else's edit would be written back with nobody told. So they are taken here, once —
+  // the event's from the copy the fields came from, since the newest version filed for its address
+  // can already be ahead of that copy. The run's version has no copy of its own to travel with,
+  // so it is still the newest filed for the event's address.
   const openedAt = useRef<{ version?: string; runVersion?: string }>({});
 
   useEffect(() => {
@@ -139,7 +143,7 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
     }
     openedAt.current = event
       ? {
-          version: lastReadETag(`/api/v1/events/${event.id}`),
+          version: versionReadWith(event),
           runVersion: lastReadRunVersion(`/api/v1/events/${event.id}`),
         }
       : {};

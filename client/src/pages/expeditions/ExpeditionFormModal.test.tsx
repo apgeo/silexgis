@@ -5,11 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ExpeditionInfo, ExpeditionWrite } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 
 const createCamp = vi.fn();
 const updateCamp = vi.fn();
 
-// The version on file for the camp, as the transport would answer it at this moment.
+/** `reading` as a read answered at `version` hands it over: the version is kept with the values. */
+function readAt<T extends object>(reading: T, version: string): T {
+  noteVersionOfReading(reading, new Response(null, { headers: { ETag: version } }));
+  return reading;
+}
+
+// The newest version filed for the camp's address, as the transport would answer it at this
+// moment. A form must not take its version from here: the newest filed can be ahead of the copy
+// the form was filled from.
 const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
 
 vi.mock('../../api/client.ts', async (original) => ({
@@ -145,18 +154,22 @@ describe('ExpeditionFormModal', () => {
     // The page behind the dialog goes on reading the camp — on a return to the browser tab, after
     // a state move — and each read files a newer version. Sending that one with the values the
     // form was filled from would present somebody else's change as already seen and write over it.
-    versionOnFile.mockImplementation((path) => (path === '/api/v1/expeditions/camp-1' ? '"1"' : undefined));
+    // A read made outside the cache has filed a version newer than either copy for the address.
+    versionOnFile.mockImplementation((path) => (path === '/api/v1/expeditions/camp-1' ? '"3"' : undefined));
     const onClose = vi.fn();
     const view = render(
       <App>
-        <ExpeditionFormModal open camp={camp()} onClose={onClose} />
+        <ExpeditionFormModal open camp={readAt(camp(), '"1"')} onClose={onClose} />
       </App>,
     );
 
-    versionOnFile.mockImplementation((path) => (path === '/api/v1/expeditions/camp-1' ? '"2"' : undefined));
     view.rerender(
       <App>
-        <ExpeditionFormModal open camp={camp({ name: 'Renamed by somebody else' })} onClose={onClose} />
+        <ExpeditionFormModal
+          open
+          camp={readAt(camp({ name: 'Renamed by somebody else' }), '"2"')}
+          onClose={onClose}
+        />
       </App>,
     );
 

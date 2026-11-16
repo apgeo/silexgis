@@ -17,7 +17,8 @@ import {
 import Button from '../../components/Button.tsx';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { ApiError, isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
   useCreateDoor,
   useCreateTripLog,
@@ -308,12 +309,14 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // tab, after anything that refreshes trips — and every read files a newer version for the next
   // save to carry. A save that carried that one would tell the server this form had seen a change
   // it never showed, and the roster and times somebody else saved meanwhile would be written back
-  // to what they were with nobody told. So the save names the version taken here.
+  // to what they were with nobody told. So the save names the version taken here, and takes it
+  // from the copy the fields came from: the newest version filed for the trip's address can
+  // already be ahead of that copy, and with an older roster it would pass for the newer one.
   const openedAtVersion = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (open) {
-      openedAtVersion.current = trip ? lastReadETag(`/api/v1/trip-logs/${trip.id}`) : undefined;
+      openedAtVersion.current = trip ? versionReadWith(trip) : undefined;
       form.resetFields();
       if (trip) {
         form.setFieldsValue({

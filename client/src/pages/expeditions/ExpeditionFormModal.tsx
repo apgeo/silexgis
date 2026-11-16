@@ -10,7 +10,8 @@ import {
   type ExpeditionInfo,
   type ExpeditionWrite,
 } from '../../api/hooks.ts';
-import { isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
@@ -62,11 +63,13 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
   // opens, while the page behind it goes on reading the camp and filing each newer version for
   // the next save. Carrying that one would tell the server this form had seen a change it never
   // showed, and somebody else's dates or description would be written back with nobody told.
+  // The version is the one kept with the copy the fields came from, not the newest filed for the
+  // camp's address, which can already be ahead of that copy.
   const openedAtVersion = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (open) {
-      openedAtVersion.current = camp ? lastReadETag(`/api/v1/expeditions/${camp.id}`) : undefined;
+      openedAtVersion.current = camp ? versionReadWith(camp) : undefined;
       form.resetFields();
       if (camp) {
         form.setFieldsValue({

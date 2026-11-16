@@ -6,9 +6,11 @@ import {
   invalidateAfterDelete,
   invalidateDatedRows,
   unwrap,
+  unwrapVersioned,
   unwrapVoid,
   useInvalidateHistory,
 } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { ActivityState, EventListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 import type { TripInvitationAnswer } from './trips.ts';
@@ -170,7 +172,8 @@ export function useEvents(params: EventListParams = {}) {
 export function useEvent(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.event(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id,
     // A refusal here is a settled answer about the caller, not a transient failure: retrying it
     // three times only delays the page saying so.

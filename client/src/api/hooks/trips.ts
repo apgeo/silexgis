@@ -12,10 +12,12 @@ import {
   invalidateAfterDelete,
   invalidateDatedRows,
   unwrap,
+  unwrapVersioned,
   unwrapVoid,
   useInvalidateAttachments,
   useInvalidateHistory,
 } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type {
   ActivityState,
   AttachedEntityType,
@@ -182,7 +184,8 @@ export function useMyTripLogs(params: MyTripLogListParams) {
 function tripLogQuery(id: string) {
   return queryOptions({
     queryKey: queryKeys.tripLog(id),
-    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
+    structuralSharing: sharesKeepingVersion,
   });
 }
 
@@ -314,8 +317,10 @@ export function useUpdateTripLog() {
     // form: it names the version those values came from, so a change somebody else saved in
     // between is refused instead of overwritten. Left out, the save carries the newest version
     // read, which is right for a write made from what the page shows now.
+    // The answer is the trip as saved, and it becomes the held copy with the version it was
+    // answered at, so a form opened on the trip at once saves against that version.
     mutationFn: ({ id, body, ifMatch }: { id: string; body: TripLogWrite; ifMatch?: string }) =>
-      unwrap(
+      unwrapVersioned(
         api.PUT('/api/v1/trip-logs/{id}', {
           params: { path: { id } },
           headers: ifMatch ? { 'If-Match': ifMatch } : undefined,

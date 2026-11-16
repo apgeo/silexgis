@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import type { TripLogInfo, TripLogWrite } from '../../api/hooks.ts';
 
 const createTrip = vi.fn();
@@ -20,7 +21,15 @@ const holdsTheRight = { canCreate: true, unbound: true, cavingGroups: [] };
 const silex = { id: 'g-1', name: 'Silex' };
 const avenul = { id: 'g-2', name: 'Avenul' };
 
-// The version on file for the trip, as the transport would answer it at this moment.
+/** `reading` as a read answered at `version` hands it over: the version is kept with the values. */
+function readAt<T extends object>(reading: T, version: string): T {
+  noteVersionOfReading(reading, new Response(null, { headers: { ETag: version } }));
+  return reading;
+}
+
+// The newest version filed for the trip's address, as the transport would answer it at this
+// moment. A form must not take its version from here: the newest filed can be ahead of the copy
+// the form was filled from.
 const versionOnFile = vi.fn<() => string | undefined>(() => undefined);
 
 vi.mock('../../api/client.ts', async (original) => ({
@@ -29,6 +38,8 @@ vi.mock('../../api/client.ts', async (original) => ({
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
+  // The sketch maps draw over the catalogue's background; this installation names none.
+  useMapLayers: () => ({ isPending: false, data: [] }),
   useCavingGroups: () => ({ data: [] }),
   useCan: () => false,
   useCreateCavingGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -716,13 +727,13 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     // return to the browser tab is enough — and each read files a newer version. Were the save
     // to carry that one, a roster somebody else saved in the meantime would be written back to
     // what this form still shows, with the server told the change had been seen.
-    versionOnFile.mockReturnValue('"1"');
-    const view = show(trip());
+    // A read made outside the cache has filed a version newer than either copy for the address.
+    versionOnFile.mockReturnValue('"3"');
+    const view = show(readAt(trip(), '"1"'));
 
-    versionOnFile.mockReturnValue('"2"');
     view.rerender(
       <App>
-        <TripFormModal open trip={trip({ title: 'Renamed by somebody else' })} onClose={() => {}} />
+        <TripFormModal open trip={readAt(trip({ title: 'Renamed by somebody else' }), '"2"')} onClose={() => {}} />
       </App>,
     );
 
@@ -757,8 +768,8 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
   });
 
   it('takes the version afresh each time it is opened', async () => {
-    versionOnFile.mockReturnValue('"1"');
-    const view = show(trip());
+    versionOnFile.mockReturnValue('"3"');
+    const view = show(readAt(trip(), '"1"'));
     const closed = (
       <App>
         <TripFormModal open={false} trip={trip()} onClose={() => {}} />
@@ -766,10 +777,9 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     );
     view.rerender(closed);
 
-    versionOnFile.mockReturnValue('"2"');
     view.rerender(
       <App>
-        <TripFormModal open trip={trip()} onClose={() => {}} />
+        <TripFormModal open trip={readAt(trip(), '"2"')} onClose={() => {}} />
       </App>,
     );
 
