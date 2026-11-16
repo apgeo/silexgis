@@ -874,7 +874,12 @@
       "map": "From map",
       "estimated": "Estimated"
     },
-    "surveyedAt": "Surveyed"
+    "surveyedAt": "Surveyed",
+    "problems": {
+      "locationForbidden": "You may not choose the main entrance of a cave whose exact location is withheld from you. Save it as a further entrance, or ask somebody who may see the cave’s position.",
+      "notFound": "This entrance is no longer there. It may have been deleted.",
+      "caveNotFound": "The cave this entrance belongs to is no longer there, or you can no longer see it."
+    }
   },
   "features": {
     "title": "Features",

@@ -291,8 +291,18 @@ export function useUpdateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: EntranceWrite }) =>
-      unwrap(api.PUT('/api/v1/cave-entrances/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` is the version the editing form opened at. Nothing else supplies one: the entrance
+    // list carries no version, and the version an entrance write answers with is filed under the
+    // feature's own address, not this route's — so without it the save overwrites whatever
+    // somebody else saved since the form was opened.
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: EntranceWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/cave-entrances/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: () => {
       invalidate(caveId);
       invalidateHistory();

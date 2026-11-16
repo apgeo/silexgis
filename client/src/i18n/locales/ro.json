@@ -874,7 +874,12 @@
       "map": "De pe hartă",
       "estimated": "Estimată"
     },
-    "surveyedAt": "Cartată"
+    "surveyedAt": "Cartată",
+    "problems": {
+      "locationForbidden": "Nu poți alege intrarea principală a unei peșteri a cărei locație exactă îți este ascunsă. Salveaz-o ca intrare suplimentară sau roagă pe cineva care poate vedea poziția peșterii.",
+      "notFound": "Această intrare nu mai există. Poate a fost ștearsă.",
+      "caveNotFound": "Peștera căreia îi aparține această intrare nu mai există sau nu o mai poți vedea."
+    }
   },
   "features": {
     "title": "Obiecte",
