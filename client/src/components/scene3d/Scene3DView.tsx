@@ -21,7 +21,6 @@ import {
 } from '../../map/featureTypeCatalog.ts';
 import { onEntranceSymbolsChanged, setEntranceSymbols } from '../../map/entranceSymbols.ts';
 import { onMapFilterChange, onMapFilterRefusal } from '../../map/mapFilters.ts';
-import { revealProblemKey } from './revealMessages.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
   isDrawableIn3d,
@@ -125,7 +124,8 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { exaggerationInForce, formatExaggeration, readExaggeration } from '../../scene3d/exaggeration3d.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
-import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { APPROXIMATE_SPAN_DEGREES, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { followReveal } from '../../viewlinks/reveal.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
@@ -267,7 +267,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const frameReveal = useCallback(
     (ref: ResourceRef) => {
       setRevealProblem(undefined);
-      geometryFor(queryClient, ref).then((target) => {
+      followReveal(queryClient, ref, (target) => {
         const engine = engineRef.current;
         const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
         if (engine !== null && bounds) {
@@ -279,7 +279,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           const pad = target?.approximate ? APPROXIMATE_SPAN_DEGREES / 2 : 0;
           engine.fitBounds([west - pad, south - pad, east + pad, north + pad], { animate: true });
         }
-      }, (error: unknown) => setRevealProblem(revealProblemKey(error)));
+      }, setRevealProblem);
     },
     [queryClient],
   );

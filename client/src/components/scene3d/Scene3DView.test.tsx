@@ -1614,7 +1614,7 @@ describe('arriving with a cave to reveal', () => {
       await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
 
       expect(
-        await screen.findByText('What this link points at no longer exists, so the scene stayed where it was.'),
+        await screen.findByText('What this link points at no longer exists, so the view stayed where it was.'),
       ).toBeInTheDocument();
       expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1633,7 +1633,7 @@ describe('arriving with a cave to reveal', () => {
     renderView();
 
     expect(
-      await screen.findByText('You may not see what this link points at, so the scene stayed where it was.'),
+      await screen.findByText('You may not see what this link points at, so the view stayed where it was.'),
     ).toBeInTheDocument();
   });
 
