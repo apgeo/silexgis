@@ -19,6 +19,9 @@ const SOMEBODY_ELSE = '99999999-9999-9999-9999-999999999999';
 // Who is reading the page, and whether they hold the right to manage every list's rules.
 let reader = SOMEBODY_ELSE;
 let managesAnyList = false;
+// What the server says this reader may do to the list itself, for a list that is not theirs.
+let heldOnList = 'read,write,delete';
+const effectiveAccess = vi.fn();
 
 const checklists = [
   {
@@ -49,6 +52,10 @@ vi.mock('../../api/hooks.ts', async () => {
     useDeleteChecklist: () => ({ mutate: deleteMutate, isPending: false }),
     useMe: () => ({ data: { id: reader } }),
     useCan: () => managesAnyList,
+    useEffectiveAccess: (entityType: string, id: string, options?: { enabled?: boolean }) => {
+      effectiveAccess(entityType, id, options);
+      return options?.enabled === false ? { data: undefined } : { data: { actions: heldOnList } };
+    },
   };
 });
 
@@ -79,6 +86,8 @@ beforeEach(() => {
   permissionsModal.mockReset();
   reader = SOMEBODY_ELSE;
   managesAnyList = false;
+  heldOnList = 'read,write,delete';
+  effectiveAccess.mockReset();
 });
 afterEach(cleanup);
 
@@ -151,6 +160,30 @@ describe('ChecklistsPage', () => {
         open: true,
       }),
     );
+  });
+
+  it('offers Edit and Delete only to somebody who may change the list, and always to its owner', () => {
+    // A reader of a list published to everybody may read it and nothing more.
+    heldOnList = 'read';
+    show();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this checklist' })).toBeNull();
+    expect(effectiveAccess).toHaveBeenCalledWith('checklist', checklists[0].id, expect.anything());
+
+    // The list's owner, in the same test: the buttons are there.
+    cleanup();
+    reader = OWNER;
+    show();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete this checklist' })).toBeTruthy();
+
+    // Somebody handed the list to change but not to delete gets the one and not the other.
+    cleanup();
+    reader = SOMEBODY_ELSE;
+    heldOnList = 'read,write';
+    show();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Delete this checklist' })).toBeNull();
   });
 
   it('draws the lock for somebody who manages every list, and for nobody else', () => {
