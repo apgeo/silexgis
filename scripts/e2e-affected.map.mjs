@@ -80,7 +80,7 @@ export const specs = {
     'cave-registry-filters.spec.ts',
   ],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'feature-sets.spec.ts'],
-  featureShares: [],
+  featureShares: ['shared-feature.spec.ts'],
   files: [
     'uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts',
     'attachment-default-set.spec.ts', 'place-map.spec.ts',
@@ -133,10 +133,16 @@ export const specs = {
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
   basemap: ['map-background-kinds.spec.ts'],
-  me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts'],
+  me: [
+    'settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts',
+    'account-pages-phone.spec.ts',
+  ],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
-  notifications: ['notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts'],
+  notifications: [
+    'notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts',
+    'account-pages-phone.spec.ts',
+  ],
   photoLibraries: [
     'photo-library-smoke.spec.ts', 'photo-library-browse.spec.ts',
     'photo-library-health.spec.ts', 'photo-library-pictures.spec.ts',
@@ -337,6 +343,7 @@ export const clientAreas = {
   'client/src/pages/QrLandingPage': 'qr',
   'client/src/pages/MapPage': 'map',
   'client/src/pages/SharedViewPage': 'mapViews',
+  'client/src/pages/SharedFeaturePage': 'featureShares',
 };
 
 /**
