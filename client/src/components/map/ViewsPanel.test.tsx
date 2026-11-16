@@ -2,6 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../../api/client.ts';
 import '../../i18n';
 import i18n from '../../i18n';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
@@ -10,13 +11,16 @@ import type { MapImageExport, ViewConfig } from '../../map/viewConfig.ts';
 let catalog: { id: number; name: string; layerKind: string; isBase: boolean; inDocuments: boolean }[] = [];
 let exported: MapImageExport = { refused: 'failed' };
 const createSpy = vi.fn();
+const deleteSpy = vi.fn();
+const shareSpy = vi.fn();
+let views: { id: string; name: string; isHome: boolean; config: object }[] = [];
 
 vi.mock('../../api/hooks.ts', () => ({
-  useMapViews: () => ({ data: [] }),
+  useMapViews: () => ({ data: views }),
   useMapLayers: () => ({ data: catalog }),
   useCreateMapView: () => ({ mutateAsync: createSpy, isPending: false }),
-  useDeleteMapView: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useShareMapView: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteMapView: () => ({ mutateAsync: deleteSpy, isPending: false }),
+  useShareMapView: () => ({ mutateAsync: shareSpy, isPending: false }),
 }));
 vi.mock('../../map/viewConfig.ts', async () => {
   const actual = await vi.importActual<typeof import('../../map/viewConfig.ts')>('../../map/viewConfig.ts');
@@ -26,7 +30,10 @@ vi.mock('./ViewShareDialog.tsx', () => ({ default: () => null }));
 
 const { default: ViewsPanel } = await import('./ViewsPanel.tsx');
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  views = [];
+});
 
 const VIEW: ViewConfig = {
   configVersion: 1,
@@ -115,5 +122,41 @@ describe('saving a view whose filter holds a place of its own', () => {
 
     await vi.waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
     expect(createSpy.mock.calls[0]?.[0]).toMatchObject({ name: 'Long caves', config: { filterDocument: plain } });
+  });
+});
+
+describe('a saved-view write the server refuses', () => {
+  function panel() {
+    render(
+      <App>
+        <ViewsPanel onCapture={() => VIEW} onApply={() => {}} />
+      </App>,
+    );
+  }
+
+  it('says that the person may not save views, rather than only that the save failed', async () => {
+    await i18n.changeLanguage('en');
+    createSpy.mockReset().mockRejectedValue(new ApiError(403, 'access.create_forbidden'));
+    panel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name of the view to save' }), { target: { value: 'Mine' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save current view' }));
+
+    expect(await screen.findByText(/You may not save map views/)).toBeTruthy();
+  });
+
+  it('says a view somebody else deleted is gone, when it is shared or deleted', async () => {
+    await i18n.changeLanguage('en');
+    views = [{ id: 'v1', name: 'Plateau', isHome: false, config: VIEW }];
+    shareSpy.mockReset().mockRejectedValue(new ApiError(404, 'map_view.not_found'));
+    deleteSpy.mockReset().mockRejectedValue(new ApiError(404, 'map_view.not_found'));
+    panel();
+
+    fireEvent.click(screen.getByRole('button', { name: /Share.*Plateau/ }));
+    expect(await screen.findAllByText(/This saved view is no longer there/)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete.*Plateau/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(deleteSpy).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(screen.getAllByText(/This saved view is no longer there/)).toHaveLength(2));
   });
 });
