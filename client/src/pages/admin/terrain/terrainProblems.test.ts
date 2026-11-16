@@ -45,6 +45,7 @@ const codes = [
   'terrain_derivative.build_not_finished',
   'terrain_derivative.not_found',
   'terrain_derivative.not_ready',
+  'terrain_derivative.analysis_unavailable',
 ];
 
 const enProblems: Record<string, string> = en.terrain.problems;

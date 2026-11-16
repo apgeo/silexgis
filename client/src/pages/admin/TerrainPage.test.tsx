@@ -89,6 +89,7 @@ vi.mock('../../api/hooks.ts', async () => {
     // only have to render empty, and to show that the page hands them the right they are held under.
     useTerrainDerivatives: () => ({ data: [], isLoading: false }),
     useRequestTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useTerrainDerivativeKinds: () => ({ data: undefined }),
     useDeleteTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useMapConfig: () => ({ data: config }),
   };

@@ -366,6 +366,7 @@ const terrainDerivativeKinds: Record<TerrainDerivativeKind, true> = {
   roughness: true,
   colourRelief: true,
   contours: true,
+  geomorphons: true,
 };
 
 const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], true> = {
