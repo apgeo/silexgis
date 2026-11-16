@@ -188,6 +188,8 @@ export const specs = {
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
     'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
+    // Structural readings on a stereonet and the passage tested against their strikes.
+    'structural-stereonet.spec.ts',
   ],
   // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
   storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
