@@ -8519,6 +8519,28 @@
     "noSurveyAltitudes": "Traseul nu conține altitudini, deci adâncimea și înălțimea nu pot fi măsurate din el. Un desen în plan nu este o peșteră fără adâncime.",
     "explained": "Adâncimea se măsoară de la cea mai înaltă intrare până la cel mai de jos punct atins de ridicare, iar înălțimea de la cea mai joasă intrare până la cel mai înalt punct. Nivelul exurgenței este cea mai joasă intrare a unei peșteri-izvor din zona care conține această peșteră, dintre cele pe care le poți localiza; adâncimea potențială este cea mai înaltă intrare minus acest nivel."
   },
+  "areaSystemFigures": {
+    "title": "Adâncimea și înălțimea sistemului",
+    "loading": "Se măsoară pe peșterile membre…",
+    "noCaves": "Nicio peșteră din această zonă nu este una pe care o poți localiza, deci nu există ce să se măsoare.",
+    "caves": "Peșteri membre măsurate",
+    "surveyedCaves": "dintre ele cu o ridicare care conține altitudini",
+    "entrances": "Intrări",
+    "highestEntrance": "Cea mai înaltă intrare a sistemului",
+    "lowestEntrance": "Cea mai joasă intrare a sistemului",
+    "entranceSpread": "Diferența de nivel dintre intrările sistemului",
+    "totalDepth": "Adâncimea sistemului sub cea mai înaltă intrare",
+    "height": "Înălțime deasupra celei mai joase intrări",
+    "resurgenceLevel": "Nivelul exurgenței din această zonă",
+    "potentialDepth": "Adâncime potențială până la nivelul exurgenței",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "basisDeclared": "Calculat pe peșterile declarate ca fiind în această zonă și doar pe cele a căror poziție o poți vedea. O peșteră închisă pentru tine nu adaugă nimic aici, nici măcar la numărătoare.",
+    "truncated": "Aici sunt încadrate mai multe peșteri decât măsoară un singur răspuns, deci cifrele descriu primele {{count}} dintre ele.",
+    "approximate": "Adâncimea a cel puțin unei peșteri provine dintr-o reducere pe baza formei traseului desenat, nu din vize, deci acele cifre sunt aproximative.",
+    "noSurveyAltitudes": "Ridicarea niciunui membru nu conține altitudini, deci adâncimea și înălțimea nu pot fi măsurate din ele.",
+    "explained": "Adâncimea sistemului merge de la cea mai înaltă intrare a oricărei peșteri membre până la cel mai de jos punct atins de ridicarea oricărui membru; înălțimea, de la cea mai joasă intrare până la cel mai înalt punct ridicat. Nivelul exurgenței este cea mai joasă intrare a unei peșteri-izvor din această zonă dintre cele pe care le poți localiza; adâncimea potențială este cea mai înaltă intrare minus acest nivel."
+  },
   "depthProfile": {
     "title": "Profil de adâncime",
     "loading": "Se desenează profilul…",

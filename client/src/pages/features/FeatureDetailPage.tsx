@@ -29,6 +29,7 @@ import AreaAltitudeDisagreementCard from '../../components/features/AreaAltitude
 import AreaTerrainStatisticsCard from '../../components/features/AreaTerrainStatisticsCard.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
 import AreaKarstStatisticsCard from '../../components/features/AreaKarstStatisticsCard.tsx';
+import AreaSystemFiguresCard from '../../components/features/AreaSystemFiguresCard.tsx';
 import AreaPointPatternCard from '../../components/features/AreaPointPatternCard.tsx';
 import AreaStructureCard from '../../components/features/AreaStructureCard.tsx';
 import FeatureMorphometryCard from '../../components/features/FeatureMorphometryCard.tsx';
@@ -350,6 +351,7 @@ export default function FeatureDetailPage() {
       <AreaTerrainStatisticsCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaStructureCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaKarstStatisticsCard featureId={id} featureTypeCode={feature.featureTypeCode ?? null} />
+      <AreaSystemFiguresCard featureId={id} featureTypeCode={feature.featureTypeCode ?? null} />
       <AreaPointPatternCard
         featureId={id}
         featureTypeCode={feature.featureTypeCode ?? null}

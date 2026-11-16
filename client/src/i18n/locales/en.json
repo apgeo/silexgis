@@ -8506,6 +8506,28 @@
     "noSurveyAltitudes": "The survey carries no altitudes, so depth and height cannot be measured from it. A plan drawing is not a cave of no depth.",
     "explained": "Depth is measured from the highest entrance down to the lowest point the survey reaches, and height from the lowest entrance up to the highest. The resurgence level is the lowest spring cave entrance in the area that contains this cave, among those you may place; potential depth is the highest entrance less that level."
   },
+  "areaSystemFigures": {
+    "title": "Depth and height of the system",
+    "loading": "Measuring across the member caves…",
+    "noCaves": "No cave filed under this one is a cave you may place, so there is nothing to measure.",
+    "caves": "Member caves measured",
+    "surveyedCaves": "of them with a survey carrying altitudes",
+    "entrances": "Entrances",
+    "highestEntrance": "Highest entrance of the system",
+    "lowestEntrance": "Lowest entrance of the system",
+    "entranceSpread": "Height between the system's entrances",
+    "totalDepth": "System depth below its highest entrance",
+    "height": "Height above its lowest entrance",
+    "resurgenceLevel": "Resurgence level under this area",
+    "potentialDepth": "Potential depth to the resurgence level",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "basisDeclared": "Taken over the caves declared to be filed under this one, and only those whose position you may see. A cave closed to you adds nothing here, not even to the count.",
+    "truncated": "More caves are filed here than one answer measures, so these figures describe the first {{count}} of them.",
+    "approximate": "At least one cave's depth comes from a shape-based reduction of its drawn line, not from survey legs, so those figures are approximate.",
+    "noSurveyAltitudes": "No member's survey carries altitudes, so depth and height cannot be measured from them.",
+    "explained": "System depth runs from the highest entrance of any member cave down to the lowest point any member's survey reaches; height from the lowest entrance up to the highest surveyed point. The resurgence level is the lowest spring cave entrance under this area that you may place; potential depth is the highest entrance less that level."
+  },
   "depthProfile": {
     "title": "Depth profile",
     "loading": "Drawing the profile…",

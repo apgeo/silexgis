@@ -3478,6 +3478,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/features/{id}/system-figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Highest and lowest entrance, entrance spread, system depth and potential depth across the caves filed under one area. Only caves the caller may place count. */
+        get: operations["areaSystemFiguresSystemFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features/{id}/terrain-statistics": {
         parameters: {
             query?: never;
@@ -9777,6 +9794,23 @@ export interface components {
             dolines: null | components["schemas"]["OrientationSummary"];
             structure: null | components["schemas"]["OrientationSummary"];
             divergence: null | components["schemas"]["RoseDivergence"];
+        };
+        AreaSystemFiguresDto: {
+            /** Format: uuid */
+            areaId: string;
+            basis: string;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            surveyedCaveCount: number;
+            truncated: boolean;
+            isApproximation: boolean;
+            hasAltitudes: boolean;
+            figures: components["schemas"]["CaveSystemFiguresSummary"];
+            /** Format: double */
+            surveyHighestM: null | number;
+            /** Format: double */
+            surveyLowestM: null | number;
         };
         AreaTerrainStatisticsDto: {
             /** Format: uuid */
@@ -28570,6 +28604,46 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    areaSystemFiguresSystemFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaSystemFiguresDto"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {

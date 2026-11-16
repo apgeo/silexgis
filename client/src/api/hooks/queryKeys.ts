@@ -272,6 +272,7 @@ export const queryKeys = {
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  areaSystemFigures: (id: string) => ['features', id, 'system-figures'] as const,
   registryDistribution: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'distribution', params] as const,
   registryCorrelation: (params: Record<string, unknown>) =>

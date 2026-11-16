@@ -33,6 +33,7 @@ public sealed class CaveSystemFiguresTests : IAsyncLifetime, IDisposable, IClass
     private long springCaveTypeId;
     private long entranceTypeId;
     private long karstAreaTypeId;
+    private long caveSystemTypeId;
 
     public CaveSystemFiguresTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -52,6 +53,8 @@ public sealed class CaveSystemFiguresTests : IAsyncLifetime, IDisposable, IClass
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
             karstAreaTypeId = await db.FeatureTypes
                 .Where(t => t.Code == "karst_area").Select(t => t.Id).FirstAsync();
+            caveSystemTypeId = await db.FeatureTypes
+                .Where(t => t.Code == "cave_system").Select(t => t.Id).FirstAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"sf-own-{suffix}@t.local");
@@ -138,6 +141,95 @@ public sealed class CaveSystemFiguresTests : IAsyncLifetime, IDisposable, IClass
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// A cave system's figures are the single-cave arithmetic over the union of its members: the
+    /// highest entrance of any, the lowest surveyed point of any, and the potential depth down to a
+    /// spring filed under the same system.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_system_takes_its_figures_across_every_member_cave()
+    {
+        var system = await CreateAreaAsync(caveSystemTypeId);
+        await CaveWithEntrancesAsync(system, [800m], springCaveTypeId);
+        var first = await CaveWithEntrancesAsync(system, [1200m, 1100m]);
+        var second = await CaveWithEntrancesAsync(system, [1300m]);
+        await UploadDescentAsync(first, 1150, 900);
+        await UploadDescentAsync(second, 1250, 700);
+        _ = await CaveWithEntrancesAsync(null, [5000m]);
+
+        var body = await ReadAreaAsync(viewer, system);
+        var figures = body.GetProperty("figures");
+
+        body.GetProperty("basis").GetString().ShouldBe("declared");
+        body.GetProperty("caveCount").GetInt32().ShouldBe(3);
+        body.GetProperty("surveyedCaveCount").GetInt32().ShouldBe(2);
+        body.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+        body.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+        figures.GetProperty("entranceCount").GetInt32().ShouldBe(4);
+        figures.GetProperty("highestEntranceM").GetDouble().ShouldBe(1300, 1e-6);
+        figures.GetProperty("lowestEntranceM").GetDouble().ShouldBe(800, 1e-6);
+        figures.GetProperty("entranceSpreadM").GetDouble().ShouldBe(500, 1e-6);
+        figures.GetProperty("totalDepthM").GetDouble().ShouldBe(600, 1e-6);
+        figures.GetProperty("heightAboveLowestEntranceM").GetDouble().ShouldBe(450, 1e-6);
+        figures.GetProperty("resurgenceLevelM").GetDouble().ShouldBe(800, 1e-6);
+        figures.GetProperty("potentialDepthM").GetDouble().ShouldBe(500, 1e-6);
+    }
+
+    /// <summary>
+    /// A member cave the reader may read and not place contributes nothing — no extreme, no
+    /// entrance, no count — so the answer is byte-for-byte the one given when it did not exist; the
+    /// author, who may place it, sees it move.
+    /// </summary>
+    [Fact]
+    public async Task A_member_cave_the_reader_may_not_place_moves_no_figure_and_is_not_counted()
+    {
+        var system = await CreateAreaAsync(caveSystemTypeId);
+        var open = await CaveWithEntrancesAsync(system, [1200m]);
+        await UploadDescentAsync(open, 1150, 900);
+        var before = (await ReadAreaAsync(viewer, system)).GetRawText();
+
+        var hidden = await CaveWithEntrancesAsync(system, [2000m], locationProtected: true);
+        await UploadDescentAsync(hidden, 1900, 100);
+        (await viewer.GetAsync($"/api/v1/caves/{hidden}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await ReadAreaAsync(viewer, system)).GetRawText().ShouldBe(before);
+
+        var seen = await ReadAreaAsync(owner, system);
+        seen.GetProperty("caveCount").GetInt32().ShouldBe(2);
+        seen.GetProperty("figures").GetProperty("highestEntranceM").GetDouble().ShouldBe(2000, 1e-6);
+        seen.GetProperty("figures").GetProperty("totalDepthM").GetDouble().ShouldBe(1900, 1e-6);
+    }
+
+    [Fact]
+    public async Task An_area_with_no_placeable_caves_answers_empty_and_a_protected_area_answers_as_absent()
+    {
+        var empty = await CreateAreaAsync(caveSystemTypeId);
+        var body = await ReadAreaAsync(viewer, empty);
+        body.GetProperty("caveCount").GetInt32().ShouldBe(0);
+        body.GetProperty("figures").GetProperty("highestEntranceM").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var protectedArea = await CreateAreaAsync(caveSystemTypeId, locationProtected: true);
+        _ = await ReadAreaAsync(owner, protectedArea);
+        (await viewer.GetAsync($"/api/v1/features/{protectedArea}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var refused = await viewer.GetAsync($"/api/v1/features/{protectedArea}/system-figures");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var absent = await viewer.GetAsync($"/api/v1/features/{Guid.CreateVersion7()}/system-figures");
+        absent.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("feature.not_found");
+        (await absent.Content.ReadAsStringAsync()).ShouldContain("feature.not_found");
+
+        (await anonymous.GetAsync($"/api/v1/features/{empty}/system-figures"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    private static async Task<JsonElement> ReadAreaAsync(HttpClient client, Guid areaId)
+    {
+        var response = await client.GetAsync($"/api/v1/features/{areaId}/system-figures");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        return JsonDocument.Parse(body).RootElement.Clone();
+    }
+
     public async ValueTask DisposeAsync()
     {
         await factory.DisposeAsync();
@@ -159,13 +251,13 @@ public sealed class CaveSystemFiguresTests : IAsyncLifetime, IDisposable, IClass
         return JsonDocument.Parse(body).RootElement.Clone();
     }
 
-    private async Task<Guid> CreateAreaAsync()
+    private async Task<Guid> CreateAreaAsync(long? typeId = null, bool locationProtected = false)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/features", new
         {
             kind = "generic",
             name = $"SysFig Area {Guid.NewGuid():N}"[..36],
-            featureTypeId = karstAreaTypeId,
+            featureTypeId = typeId ?? karstAreaTypeId,
             geometry = new
             {
                 type = "Polygon",
@@ -179,7 +271,7 @@ public sealed class CaveSystemFiguresTests : IAsyncLifetime, IDisposable, IClass
                     },
                 },
             },
-            locationProtected = false,
+            locationProtected,
             visibility = "authenticated",
         });
         var payload = await response.Content.ReadAsStringAsync();
