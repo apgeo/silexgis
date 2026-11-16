@@ -230,6 +230,7 @@
       "derivativeBuildNotFinished": "That build has not finished, so there is no elevation to draw the ground from yet.",
       "derivativeNotFound": "That picture is no longer here.",
       "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",
+      "derivativeAnalysisUnavailable": "That picture is computed by the terrain-analysis program (WhiteboxTools), which this installation does not run.",
       "baseNotFound": "The build to extend no longer exists.",
       "baseUnchecked": "The build to extend never had its tiles read back and found whole, so there is nothing known-good to add to.",
       "baseNotPublished": "The build to extend has no tiles where terrain is served from any more. Start a fresh build over the whole area instead.",
@@ -262,7 +263,8 @@
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
         "colourRelief": "Coloured relief",
-        "contours": "Contour lines"
+        "contours": "Contour lines",
+        "geomorphons": "Landform classes"
       }
     },
     "derivativeForm": {
@@ -313,6 +315,19 @@
       "contourInterval": "A line every (m)",
       "contourIntervalHint": "Metres of height between one line and the next, counted from sea level. Every fifth line is drawn heavier. The lines are a picture: nothing can be measured along one or selected.",
       "contourIntervalInvalid": "Contour lines are spaced from {{min}} to {{max}} metres of height apart.",
+      "kindUnavailable": "{{kind}} (not available here)",
+      "unavailable": {
+        "not_configured": "Landform classes are computed by WhiteboxTools, which this installation does not run. An administrator can set it up.",
+        "tool_missing": "Landform classes are computed by WhiteboxTools, which this installation is set up to run but cannot find. An administrator can check where it is installed.",
+        "sandbox_missing": "Landform classes are computed by WhiteboxTools, which is installed here but cannot run without its sandbox (bubblewrap). An administrator can install it."
+      },
+      "landformSearch": "Search distance (m)",
+      "landformSearchHint": "How far each cell looks along eight lines of sight. It sets the scale of the landforms: the same hillside is a slope at 100 m and a shoulder at 1 km.",
+      "landformSkip": "Look past (m)",
+      "landformSkipHint": "Bumps nearer than this are looked past. Usually zero.",
+      "landformFlatness": "Flatness angle (°)",
+      "landformFlatnessHint": "A line of sight rising or falling less steeply than this counts as level.",
+      "landformInvalid": "The search distance is above 0 and at most {{search}} m, the distance looked past is shorter than it, and the flatness angle is between 0 and {{flatness}}°.",
       "computeEdges": "Compute the outermost cells from the neighbours they have",
       "computeEdgesHint": "Off, every raster of the build meets its neighbour with a hairline gap. On, the edge is slightly wrong — by less than a missing line is.",
       "colourRamp": "Colour ramp",
@@ -350,8 +365,23 @@
         "zFactor": "heights ×{{factor}}",
         "stops": "{{count}} colour stops",
         "interval": "a line every {{metres}} m",
-        "edgesOff": "edges left blank"
+        "edgesOff": "edges left blank",
+        "search": "looking {{metres}} m out",
+        "skip": "past the nearest {{metres}} m",
+        "flatness": "level below {{degrees}}°"
       }
+    },
+    "landforms": {
+      "flat": "Flat",
+      "peak": "Peak",
+      "ridge": "Ridge",
+      "shoulder": "Shoulder",
+      "spur": "Spur",
+      "slope": "Slope",
+      "hollow": "Hollow",
+      "footslope": "Footslope",
+      "valley": "Valley",
+      "pit": "Pit"
     },
     "configured": {
       "title": "A terrain address in this installation's configuration overrides the chosen build",
@@ -8520,6 +8550,8 @@
     "noLayer": "No picture of the terrain has been computed for this measure yet. An administrator can compute one from the terrain page.",
     "needsSlope": "Facing is counted only on sloping ground, and that needs the slope picture.",
     "slopeUnit": "The slope picture exists only in percent; the classes are cut in degrees.",
+    "analysisUnavailable": "Landforms are computed by the terrain-analysis program (WhiteboxTools), which this installation does not run, and none were computed earlier. An administrator can set it up.",
+    "landformNote": "Landforms are read from the newest landform picture on the terrain page. Its search distance sets their scale: the same hillside is a slope at 100 m and a shoulder at 1 km. Ground the picture left unclassified, such as its outermost cells, is not counted.",
     "entrances": "Entrances",
     "sinkholes": "Sinkholes",
     "background": "Ground of the area",
@@ -8528,7 +8560,8 @@
     "measure": {
       "slope": "Slope",
       "aspect": "Facing",
-      "position": "Position on the relief"
+      "position": "Position on the relief",
+      "landform": "Landform"
     },
     "classes": {
       "lt5": "under 5°",

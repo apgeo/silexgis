@@ -230,6 +230,7 @@
       "derivativeBuildNotFinished": "Generarea nu s-a încheiat, deci nu există încă relieful din care să se deseneze terenul.",
       "derivativeNotFound": "Imaginea nu mai există.",
       "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus.",
+      "derivativeAnalysisUnavailable": "Imaginea este calculată de programul de analiză a terenului (WhiteboxTools), pe care această instalare nu îl rulează.",
       "baseNotFound": "Generarea de extins nu mai există.",
       "baseUnchecked": "Generarea de extins nu a avut niciodată dalele citite înapoi și găsite întregi, așa că nu există nimic sigur la care să se adauge.",
       "baseNotPublished": "Generarea de extins nu mai are dale acolo de unde se servește terenul. Pornește în schimb o generare nouă peste toată zona.",
@@ -262,7 +263,8 @@
         "positionIndex": "Poziție topografică",
         "roughness": "Rugozitate",
         "colourRelief": "Relief colorat",
-        "contours": "Curbe de nivel"
+        "contours": "Curbe de nivel",
+        "geomorphons": "Forme de relief"
       }
     },
     "derivativeForm": {
@@ -313,6 +315,19 @@
       "contourInterval": "O curbă la fiecare (m)",
       "contourIntervalHint": "Metri de înălțime între o curbă și următoarea, numărați de la nivelul mării. Fiecare a cincea curbă este desenată mai gros. Curbele sunt o imagine: de-a lungul lor nu se poate măsura și nu pot fi selectate.",
       "contourIntervalInvalid": "Curbele de nivel se află la o distanță de la {{min}} la {{max}} metri de înălțime una de alta.",
+      "kindUnavailable": "{{kind}} (indisponibil aici)",
+      "unavailable": {
+        "not_configured": "Formele de relief sunt calculate de WhiteboxTools, pe care această instalare nu îl rulează. Un administrator îl poate configura.",
+        "tool_missing": "Formele de relief sunt calculate de WhiteboxTools, pe care această instalare este configurată să îl ruleze, dar nu îl găsește. Un administrator poate verifica unde este instalat.",
+        "sandbox_missing": "Formele de relief sunt calculate de WhiteboxTools, care este instalat aici, dar nu poate rula fără mediul său izolat (bubblewrap). Un administrator îl poate instala."
+      },
+      "landformSearch": "Distanța de căutare (m)",
+      "landformSearchHint": "Cât de departe privește fiecare celulă de-a lungul a opt linii de vizare. Stabilește scara formelor: același versant este pantă la 100 m și umăr la 1 km.",
+      "landformSkip": "Ignoră până la (m)",
+      "landformSkipHint": "Denivelările mai apropiate decât atât sunt ignorate. De obicei zero.",
+      "landformFlatness": "Unghi de planeitate (°)",
+      "landformFlatnessHint": "O linie de vizare care urcă sau coboară mai puțin abrupt decât atât este socotită plană.",
+      "landformInvalid": "Distanța de căutare este peste 0 și cel mult {{search}} m, distanța ignorată este mai mică decât ea, iar unghiul de planeitate este între 0 și {{flatness}}°.",
       "computeEdges": "Calculează celulele de la margine din vecinii pe care îi au",
       "computeEdgesHint": "Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală. Pornit, marginea este ușor greșită — cu mai puțin decât o linie lipsă.",
       "colourRamp": "Rampa de culori",
@@ -350,8 +365,23 @@
         "zFactor": "înălțimi ×{{factor}}",
         "stops": "{{count}} trepte de culoare",
         "interval": "o curbă la fiecare {{metres}} m",
-        "edgesOff": "margini lăsate goale"
+        "edgesOff": "margini lăsate goale",
+        "search": "privind la {{metres}} m",
+        "skip": "dincolo de primii {{metres}} m",
+        "flatness": "plan sub {{degrees}}°"
       }
+    },
+    "landforms": {
+      "flat": "Plan",
+      "peak": "Vârf",
+      "ridge": "Creastă",
+      "shoulder": "Umăr",
+      "spur": "Pinten",
+      "slope": "Versant",
+      "hollow": "Scobitură",
+      "footslope": "Bază de versant",
+      "valley": "Vale",
+      "pit": "Depresiune"
     },
     "configured": {
       "title": "O adresă de relief din configurația acestei instalări are prioritate față de generarea aleasă",
@@ -8533,6 +8563,8 @@
     "noLayer": "Pentru această măsurătoare nu a fost calculată încă nicio imagine a reliefului. Un administrator o poate calcula din pagina de relief.",
     "needsSlope": "Orientarea se numără doar pe teren înclinat, iar pentru asta e nevoie de imaginea pantei.",
     "slopeUnit": "Imaginea pantei există doar în procente; clasele sunt tăiate în grade.",
+    "analysisUnavailable": "Formele de relief sunt calculate de programul de analiză a reliefului (WhiteboxTools), pe care această instalație nu îl rulează, și nu au fost calculate anterior. Un administrator îl poate configura.",
+    "landformNote": "Formele de relief sunt citite din cea mai nouă imagine a formelor de relief din pagina de relief. Distanța ei de căutare le dă scara: același versant este pantă la 100 m și umăr la 1 km. Terenul pe care imaginea l-a lăsat neclasificat, cum sunt celulele de la margine, nu se numără.",
     "entrances": "Intrări",
     "sinkholes": "Doline",
     "background": "Terenul zonei",
@@ -8541,7 +8573,8 @@
     "measure": {
       "slope": "Panta",
       "aspect": "Orientarea versantului",
-      "position": "Poziția pe relief"
+      "position": "Poziția pe relief",
+      "landform": "Forma de relief"
     },
     "classes": {
       "lt5": "sub 5°",
