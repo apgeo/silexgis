@@ -281,6 +281,8 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   // Cleanup.
   await page.getByRole('listitem').filter({ hasText: viewName })
     .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
+  // Deleting a saved view asks first.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(viewLink).not.toBeVisible({ timeout: 15_000 });
 });
 
@@ -635,5 +637,7 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   await page.locator('.map-workspace-panel').first()
     .getByRole('listitem').filter({ hasText: viewName })
     .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
+  // Deleting a saved view asks first.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText(viewName)).not.toBeVisible({ timeout: 15_000 });
 });
