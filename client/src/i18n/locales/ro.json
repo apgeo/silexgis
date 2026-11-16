@@ -7145,7 +7145,18 @@
       "authenticated": "Oricine este autentificat",
       "public": "Toată lumea"
     },
-    "delete": "Șterge această listă"
+    "delete": "Șterge această listă",
+    "loadFailed": "Listele de verificare nu au putut fi încărcate.",
+    "changedSinceShown": "Cineva a modificat această listă după ce pagina a afișat-o. Uită-te din nou la ea înainte s-o ștergi.",
+    "problems": {
+      "openFailed": "Lista nu a putut fi deschisă. Încearcă din nou.",
+      "deleteFailed": "Lista nu a putut fi ștearsă.",
+      "notFound": "Lista nu mai există sau nu o mai poți vedea.",
+      "forbidden": "Nu ai voie să modifici această listă.",
+      "createForbidden": "Nu ai voie să creezi o listă pentru acel club de speologie. Alege alt club sau cere-i administratorului clubului.",
+      "groupNotAllowed": "Nu ai voie să dai o listă acelui club de speologie.",
+      "invalid": "Ceva din listă nu este valid: verifică titlul, descrierea și fiecare linie."
+    }
   },
   "workAreas": {
     "title": "Zone de lucru",

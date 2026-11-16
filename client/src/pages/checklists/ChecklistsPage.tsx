@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DeleteOutlined, EditOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
@@ -10,6 +10,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Result,
   Select,
   Skeleton,
   Space,
@@ -18,7 +19,6 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
 import {
   useCan,
   useCavingGroups,
@@ -26,12 +26,14 @@ import {
   useCreateChecklist,
   useDeleteChecklist,
   useMe,
+  useReadChecklistForChange,
   useUpdateChecklist,
   type ChecklistInfo,
   type ChecklistWrite,
 } from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import { checklistProblem, type ChecklistAct } from './checklistProblems.ts';
 
 /** The audience a list is given, in the order they widen. */
 const visibilities = ['private', 'cavingGroup', 'authenticated', 'public'] as const;
@@ -59,7 +61,7 @@ type FormValues = {
 export default function ChecklistsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading } = useChecklists();
+  const { data, isLoading, isError, refetch } = useChecklists();
   const { data: cavingGroups } = useCavingGroups();
 
   // Handing one list to one person by name is narrower than any audience the visibility control
@@ -73,12 +75,67 @@ export default function ChecklistsPage() {
   const create = useCreateChecklist();
   const update = useUpdateChecklist();
   const remove = useDeleteChecklist();
+  const readForChange = useReadChecklistForChange();
   const [editing, setEditing] = useState<ChecklistInfo | null>(null);
+  // The list whose current reading is being fetched before it is opened or deleted.
+  const [reading, setReading] = useState<string | null>(null);
+  // The version of the list the dialog was filled from: the rewrite is whole, so it has to be
+  // refused if somebody changed the list after these lines were read.
+  const openedAtVersion = useRef<string | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [initial, setInitial] = useState<FormValues | undefined>(undefined);
   const [form] = Form.useForm<FormValues>();
 
+  const tell = (error: unknown, act: ChecklistAct) => {
+    const sentence = checklistProblem(error, act, t);
+    if (sentence) {
+      void message.error(sentence);
+    }
+  };
+
+  // The listing carries no version per list, so a list is read on its own before it is changed.
+  // That answer — not the listing row, which may be older — is what the dialog is filled from.
+  const openForEdit = async (list: ChecklistInfo) => {
+    setReading(list.id);
+    try {
+      const held = await readForChange(list.id);
+      openedAtVersion.current = held.version;
+      openFor(held.list);
+    } catch (error) {
+      tell(error, 'open');
+    } finally {
+      setReading(null);
+    }
+  };
+
+  // A delete is decided on the list as this page showed it. The version sent is the one read now,
+  // so it is held to that only when the list has not moved since the listing was read; when it
+  // has, the person is told and shown it again instead of deleting what they have not seen.
+  const deleteShown = async (list: ChecklistInfo) => {
+    setReading(list.id);
+    try {
+      const held = await readForChange(list.id);
+      if (held.list.updatedAt !== list.updatedAt) {
+        void message.warning(t('checklists.changedSinceShown'));
+        void refetch();
+        return;
+      }
+
+      remove.mutate(
+        { id: list.id, ifMatch: held.version },
+        { onError: (error) => tell(error, 'delete') },
+      );
+    } catch (error) {
+      tell(error, 'delete');
+    } finally {
+      setReading(null);
+    }
+  };
+
   const openFor = (list: ChecklistInfo | null) => {
+    if (!list) {
+      openedAtVersion.current = undefined;
+    }
     setEditing(list);
     // Handed to the form as it mounts rather than written into it here. The dialog's body is
     // destroyed while it is shut, so at this moment the form instance is attached to no form, and
@@ -106,14 +163,15 @@ export default function ChecklistsPage() {
     };
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, body });
+        await update.mutateAsync({ id: editing.id, body, ifMatch: openedAtVersion.current });
       } else {
         await create.mutateAsync(body);
       }
       setOpen(false);
       void message.success(t('checklists.saved'));
     } catch (error) {
-      void message.error(error instanceof ApiError ? error.detail : t('checklists.saveFailed'));
+      // The dialog stays open with what was typed, whatever the refusal.
+      tell(error, 'save');
     }
   };
 
@@ -133,6 +191,12 @@ export default function ChecklistsPage() {
 
       {isLoading ? (
         <Skeleton active />
+      ) : isError ? (
+        <Result
+          status="warning"
+          title={t('checklists.loadFailed')}
+          extra={<Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
+        />
       ) : !data?.length ? (
         <Empty description={t('checklists.empty')} />
       ) : (
@@ -162,21 +226,20 @@ export default function ChecklistsPage() {
                   )}
                   <Button
                     icon={<EditOutlined />}
-                    onClick={() => openFor(list)}
+                    loading={reading === list.id}
+                    onClick={() => void openForEdit(list)}
                     aria-label={t('common.edit')}
                   />
                   <Popconfirm
                     title={t('checklists.deleteConfirm')}
-                    onConfirm={() => {
-                      remove.mutate(list.id, {
-                        onError: (error) =>
-                          void message.error(
-                            error instanceof ApiError ? error.detail : t('checklists.saveFailed'),
-                          ),
-                      });
-                    }}
+                    onConfirm={() => void deleteShown(list)}
                   >
-                    <Button danger icon={<DeleteOutlined />} aria-label={t('checklists.delete')} />
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled={reading === list.id}
+                      aria-label={t('checklists.delete')}
+                    />
                   </Popconfirm>
                 </Space>
               </Flex>

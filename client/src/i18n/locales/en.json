@@ -7132,7 +7132,18 @@
       "authenticated": "Anyone signed in",
       "public": "Everyone"
     },
-    "delete": "Delete this checklist"
+    "delete": "Delete this checklist",
+    "loadFailed": "The checklists could not be loaded.",
+    "changedSinceShown": "Somebody changed this checklist since the page showed it. Look at it again before deleting it.",
+    "problems": {
+      "openFailed": "That checklist could not be opened. Try again.",
+      "deleteFailed": "That checklist could not be deleted.",
+      "notFound": "That checklist is no longer there, or you may no longer see it.",
+      "forbidden": "You may not change this checklist.",
+      "createForbidden": "You may not create a checklist for that caving group. Choose another group, or ask its administrator.",
+      "groupNotAllowed": "You may not hand a checklist to that caving group.",
+      "invalid": "Something in the checklist is not valid: check the title, the description and every line."
+    }
   },
   "workAreas": {
     "title": "Work areas",
