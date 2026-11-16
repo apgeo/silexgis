@@ -206,18 +206,100 @@ export function syncBaseImagery(
   context: CatalogueImageryContext,
   activeId: number,
 ): void {
+  const listed = new Set<string>();
   for (const entry of context.catalog) {
     // int64 ids arrive as number | string from the generated contract — normalize once here.
     const layerId = baseImageryLayerId(Number(entry.id));
-    if (!entry.isBase || engine.hasImageryLayer(layerId)) {
+    if (!entry.isBase) {
+      continue;
+    }
+    listed.add(layerId);
+    if (engine.hasImageryLayer(layerId)) {
+      redrawIfChanged(engine, layerId, entry, context);
       continue;
     }
     const options = catalogueImageryFor(engine, layerId, entry, context);
     if (options) {
       engine.addImageryLayer(layerId, options);
+      drawnFrom(engine).set(layerId, drawableSignature(entry));
     }
   }
+  dropUnlisted(engine, BASE_LAYER_PREFIX, listed);
   setActiveBaseImagery(engine, activeId);
+}
+
+/**
+ * What a scene layer was built from, per scene and layer id, so a catalogue edit made while the
+ * scene is open — a moved address, another WMS layer, a new attribution — is drawn rather than
+ * ignored because a layer of that id already exists.
+ */
+const drawnSignatures = new WeakMap<Scene3DImagery, Map<string, string>>();
+
+function drawnFrom(engine: Scene3DImagery): Map<string, string> {
+  let signatures = drawnSignatures.get(engine);
+  if (!signatures) {
+    signatures = new Map();
+    drawnSignatures.set(engine, signatures);
+  }
+  return signatures;
+}
+
+/** Everything about an entry that decides what its layer draws. Not its name, order or default. */
+function drawableSignature(entry: MapLayerInfo): string {
+  return JSON.stringify([
+    entry.layerKind,
+    entry.urlTemplate,
+    entry.wms,
+    entry.wmts,
+    entry.cog,
+    entry.vector,
+    entry.attribution,
+    entry.minZoom,
+    entry.maxZoom,
+  ]);
+}
+
+/**
+ * Builds a layer again in its place when its catalogue entry changed what it draws. Replaced
+ * rather than removed and added, so it keeps its place in the stack — an overlay re-added would
+ * land on top of everything — and the visibility and transparency the viewer gave it.
+ */
+function redrawIfChanged(
+  engine: Scene3DImagery,
+  layerId: string,
+  entry: MapLayerInfo,
+  context: CatalogueImageryContext,
+): void {
+  const signature = drawableSignature(entry);
+  const signatures = drawnFrom(engine);
+  const before = signatures.get(layerId);
+  if (before === undefined || before === signature) {
+    // Unknown means built before this scene was told its catalogue here; it is not second-guessed.
+    signatures.set(layerId, signature);
+    return;
+  }
+  const options = catalogueImageryFor(engine, layerId, entry, context);
+  if (options) {
+    engine.replaceImageryLayer(layerId, options);
+    signatures.set(layerId, signature);
+  } else {
+    engine.removeImageryLayer(layerId);
+    signatures.delete(layerId);
+  }
+}
+
+/**
+ * Takes off the globe every catalogue layer of one kind whose entry the catalogue no longer lists
+ * as that kind. An overlay an administrator deleted would otherwise stay draped with no entry in
+ * the layer list, so nothing on screen could turn it off.
+ */
+function dropUnlisted(engine: Scene3DImagery, prefix: string, listed: ReadonlySet<string>): void {
+  for (const layerId of engine.getImageryLayerIds()) {
+    if (layerId.startsWith(prefix) && !listed.has(layerId)) {
+      engine.removeImageryLayer(layerId);
+      drawnFrom(engine).delete(layerId);
+    }
+  }
 }
 
 /**
@@ -234,22 +316,31 @@ export function syncTileOverlayImagery(
   visibleIds: ReadonlySet<number>,
   opacityById: Readonly<Record<number, number>>,
 ): void {
+  const listed = new Set<string>();
   for (const entry of context.catalog) {
     const catalogId = Number(entry.id);
     if (entry.isBase) {
       continue;
     }
     const layerId = tileOverlayImageryLayerId(catalogId);
-    if (!engine.hasImageryLayer(layerId)) {
+    listed.add(layerId);
+    if (engine.hasImageryLayer(layerId)) {
+      redrawIfChanged(engine, layerId, entry, context);
+      if (!engine.hasImageryLayer(layerId)) {
+        continue;
+      }
+    } else {
       const options = catalogueImageryFor(engine, layerId, entry, context);
       if (!options) {
         continue;
       }
       engine.addImageryLayer(layerId, options);
+      drawnFrom(engine).set(layerId, drawableSignature(entry));
     }
     engine.setImageryLayerVisible(layerId, visibleIds.has(catalogId));
     engine.setImageryLayerOpacity(layerId, opacityById[catalogId] ?? 1);
   }
+  dropUnlisted(engine, TILE_OVERLAY_PREFIX, listed);
 }
 
 /**

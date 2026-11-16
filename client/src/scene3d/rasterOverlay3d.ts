@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import Map from 'ol/Map';
+import OlMap from 'ol/Map';
 import View from 'ol/View';
 import WebGLTileLayer from 'ol/layer/WebGLTile';
 import GeoTIFF from 'ol/source/GeoTIFF';
@@ -115,7 +115,7 @@ export async function rasterizeCog(cogUrl: string, bounds: Scene3DBounds): Promi
   // 'auto', not a forced conversion: a map sheet's file carries a fourth, transparency band that a
   // forced conversion drops while the layer still expects it — see the 2D overlay's note.
   const source = new GeoTIFF({ sources: [{ url: cogUrl }], convertToRGB: 'auto', interpolate: false });
-  const map = new Map({
+  const map = new OlMap({
     target: container,
     controls: [],
     interactions: [],
@@ -191,6 +191,24 @@ export async function prepareRasterImagery(
 }
 
 /**
+ * Per scene: what the most recent sync was told, and the renders still under way.
+ *
+ * A render takes seconds, and the viewer keeps ticking and unticking meanwhile, so every sync that
+ * finds a render finished has to act on what is wanted NOW — the newest sync's set — and not on
+ * the set it was itself called with. And a sheet already being rendered for an earlier sync is
+ * waited for rather than rendered again: each render holds a drawing context of its own until it
+ * finishes, and under software rendering two of them for one picture is real memory and time.
+ */
+interface RasterSyncMemory {
+  known: ReadonlySet<string>;
+  visibleIds: ReadonlySet<string>;
+  opacityById: Readonly<Record<string, number>>;
+  rendering: Map<string, Promise<string>>;
+}
+
+const syncMemory = new WeakMap<Scene3DImagery, RasterSyncMemory>();
+
+/**
  * Brings the scene's georeferenced maps into line with the wanted set.
  *
  * Rendering one is slow and the result never changes, so a raster that has been drawn once is kept
@@ -209,6 +227,17 @@ export async function syncRasterImagery(
   rasterize: (cogUrl: string, bounds: Scene3DBounds) => Promise<string> = rasterizeCog,
 ): Promise<void> {
   const known = new Set(rasters.map((r) => r.id));
+  const memory: RasterSyncMemory = syncMemory.get(engine) ?? {
+    known,
+    visibleIds,
+    opacityById,
+    rendering: new Map<string, Promise<string>>(),
+  };
+  memory.known = known;
+  memory.visibleIds = visibleIds;
+  memory.opacityById = opacityById;
+  syncMemory.set(engine, memory);
+
   for (const layerId of engine.getImageryLayerIds()) {
     if (layerId.startsWith(RASTER_LAYER_PREFIX) && !known.has(layerId.slice(RASTER_LAYER_PREFIX.length))) {
       engine.removeImageryLayer(layerId);
@@ -238,17 +267,35 @@ export async function syncRasterImagery(
     }
 
     try {
-      const imageUrl = await rasterize(raster.cogUrl, bounds);
-      // Checked again after the await: the viewer may have unticked it, or left the scene, during
-      // the seconds this took, and adding it now would put a picture on the globe that nothing on
-      // screen asked for.
-      if (!engine.hasImageryLayer(layerId)) {
+      let rendering = memory.rendering.get(raster.id);
+      if (!rendering) {
+        rendering = rasterize(raster.cogUrl, bounds);
+        memory.rendering.set(raster.id, rendering);
+        const settled = rendering;
+        void settled.then(
+          () => memory.rendering.get(raster.id) === settled && memory.rendering.delete(raster.id),
+          () => memory.rendering.get(raster.id) === settled && memory.rendering.delete(raster.id),
+        );
+      }
+      const imageUrl = await rendering;
+      // Read again after the await, from the newest sync: the viewer may have unticked it, faded
+      // it or seen it leave the catalogue during the seconds this took. A sheet unticked meanwhile
+      // is kept hidden — the render was paid for — and never shown because an older sync wanted it.
+      if (!memory.known.has(raster.id)) {
+        continue;
+      }
+      const opacity = memory.opacityById[raster.id] ?? Number(raster.defaultOpacity ?? 1);
+      const visible = memory.visibleIds.has(raster.id);
+      if (engine.hasImageryLayer(layerId)) {
+        engine.setImageryLayerVisible(layerId, visible);
+        engine.setImageryLayerOpacity(layerId, opacity);
+      } else {
         engine.addImageOverlayLayer(layerId, {
           imageUrl,
           bounds,
           attribution: raster.attribution ?? undefined,
-          visible: true,
-          opacity: opacityById[raster.id] ?? Number(raster.defaultOpacity ?? 1),
+          visible,
+          opacity,
         });
       }
     } catch {

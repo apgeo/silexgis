@@ -4005,7 +4005,12 @@
     "scansInViewNone": "No cave in view has a placed scan to draw.",
     "scansInViewShown": "Scans of {{shown}} of {{total}} caves in view — {{size}}.",
     "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
-    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once."
+    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
+    "dataFailed": "The caves of this view could not be loaded.",
+    "revealGone": "What this link points at no longer exists, so the scene stayed where it was.",
+    "revealForbidden": "You may not see what this link points at, so the scene stayed where it was.",
+    "revealFailed": "Where this link points could not be read, so the scene stayed where it was. Follow it again in a moment.",
+    "tryAgain": "Try again"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4017,6 +4022,16 @@
       "station": "Station clicked: {{name}}"
     },
     "loadError": "Failed to load the 3D model",
+    "loadFailed": {
+      "unreadable": "The survey file could not be read. It may be damaged, or written by a version of the survey program the viewer does not know.",
+      "stalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
+      "missing": "The survey file is no longer on the server.",
+      "refused": "The survey file was refused. Its address may have lapsed while the page was open; try again.",
+      "server": "The server could not hand over the survey file (error {{status}}). Try again in a while.",
+      "viewer": "The 3D viewer could not be loaded. Check the connection and try again.",
+      "network": "The survey file could not be downloaded. Check the connection and try again."
+    },
+    "tryAgain": "Try again",
     "linkThisPart": "Link this…",
     "notInThisModel": "That point is not in this model",
     "labelSize": "Size of station names",
@@ -4096,7 +4111,6 @@
       "openFailedStale": "The application was updated after this page was opened, and the page still asks for the old version's files. Reload the page to use the new version.",
       "previewLoadingSoFar": "Loading the model for the preview… {{received}} so far",
       "previewLoadingOf": "Loading the model for the preview… {{received}} of {{total}}",
-      "previewStalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
       "previewRetry": "Try again",
       "make": "Make a movie",
       "makeHelp": "Export a movie of this model with its tracked trips moving through it",

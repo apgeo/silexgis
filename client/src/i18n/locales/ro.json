@@ -4005,7 +4005,12 @@
     "scansInViewNone": "Nicio peșteră din vedere nu are o scanare plasată de desenat.",
     "scansInViewShown": "Scanările a {{shown}} din {{total}} peșteri din vedere — {{size}}.",
     "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
-    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată."
+    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
+    "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
+    "revealGone": "Ce indică această legătură nu mai există, așa că scena a rămas unde era.",
+    "revealForbidden": "Nu ai voie să vezi ce indică această legătură, așa că scena a rămas unde era.",
+    "revealFailed": "Locul indicat de această legătură nu a putut fi citit, așa că scena a rămas unde era. Urmează legătura din nou peste puțin timp.",
+    "tryAgain": "Încearcă din nou"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4017,6 +4022,16 @@
       "station": "Stație aleasă: {{name}}"
     },
     "loadError": "Modelul 3D nu a putut fi încărcat",
+    "loadFailed": {
+      "unreadable": "Fișierul topografiei nu a putut fi citit. Poate fi deteriorat sau scris de o versiune a programului de topografie pe care vizualizatorul nu o cunoaște.",
+      "stalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
+      "missing": "Fișierul topografiei nu mai este pe server.",
+      "refused": "Fișierul topografiei a fost refuzat. Adresa lui poate să fi expirat cât pagina a stat deschisă; încearcă din nou.",
+      "server": "Serverul nu a putut da fișierul topografiei (eroarea {{status}}). Încearcă din nou peste puțin timp.",
+      "viewer": "Vizualizatorul 3D nu a putut fi încărcat. Verifică conexiunea și încearcă din nou.",
+      "network": "Fișierul topografiei nu a putut fi descărcat. Verifică conexiunea și încearcă din nou."
+    },
+    "tryAgain": "Încearcă din nou",
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",
     "labelSize": "Mărimea numelor de stații",
@@ -4096,7 +4111,6 @@
       "openFailedStale": "Aplicația a fost actualizată după ce ai deschis această pagină, iar pagina cere încă fișierele versiunii vechi. Reîncarcă pagina ca să folosești versiunea nouă.",
       "previewLoadingSoFar": "Se încarcă modelul pentru previzualizare… {{received}} până acum",
       "previewLoadingOf": "Se încarcă modelul pentru previzualizare… {{received}} din {{total}}",
-      "previewStalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
       "previewRetry": "Încearcă din nou",
       "make": "Fă un film",
       "makeHelp": "Exportă un film al acestui model, cu turele urmărite deplasându-se prin el",

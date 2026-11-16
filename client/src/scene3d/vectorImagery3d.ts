@@ -253,6 +253,9 @@ export function createVectorTileSource(
         throw error;
       }
       if (closed) {
+        // Nothing else holds the layer once this throws, so it is disposed of here, with the
+        // source, tile cache and listeners it built.
+        layer.dispose();
         throw new Error('the source was closed');
       }
       renderer = createRenderer(layer);

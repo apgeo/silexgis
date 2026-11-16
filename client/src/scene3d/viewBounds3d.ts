@@ -120,8 +120,12 @@ export function cameraFramingBounds(
   zoom: number,
   current: Camera3DState,
   heightForZoom: (zoom: number, latitude: number) => number,
+  groundHeight: (longitude: number, latitude: number) => number = () => 0,
 ): Camera3DState | undefined {
-  const target = boundsCenter(bounds);
+  // Aimed at the ground drawn there: a zoom is a height over what is looked at, and measured from
+  // the ellipsoid it would stand the camera inside any hill higher than that height.
+  const center = boundsCenter(bounds);
+  const target = { ...center, height: groundHeight(center.lon, center.lat) };
   const height = heightForZoom(zoom, target.lat);
   if (!Number.isFinite(height) || height <= 0) {
     return undefined;

@@ -19,6 +19,8 @@ import {
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
 import { onEntranceSymbolsChanged, setEntranceSymbols } from '../../map/entranceSymbols.ts';
+import { onMapFilterChange, onMapFilterRefusal } from '../../map/mapFilters.ts';
+import { revealProblemKey } from './revealMessages.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
   isDrawableIn3d,
@@ -65,6 +67,7 @@ import { claimSceneSurface, sceneSurfaceElement } from '../../scene3d/sceneSurfa
 import {
   pickMatchesSelection,
   pickPayload,
+  samePickTarget,
   selectionFromPick,
   type Scene3DPickPayload,
 } from '../../scene3d/selection3d.ts';
@@ -196,7 +199,7 @@ const NO_CATALOG: MapLayerInfo[] = [];
 const NO_TERRAIN_BUILDS: TerrainBuildChoice[] = [];
 
 /** How long the camera has to be still before finer ground is offered — the data loaders' own settle. */
-const TERRAIN_OFFER_SETTLE_MILLISECONDS = 250;
+export const TERRAIN_OFFER_SETTLE_MILLISECONDS = 250;
 
 export interface Scene3DViewProps {
   /** CSS height of the scene surface. */
@@ -233,6 +236,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // Incremented to build the scene again after the browser has taken its graphics context away.
   // It is a dependency of the effect that owns the scene, so changing it is the rebuild.
   const [rebuildToken, setRebuildToken] = useState(0);
+  // Where the camera was when the context was lost, put back on the scene built to replace it. A
+  // page that owns the address would find it there, but a docked or panel view has nothing else
+  // that remembers, and would reopen over the default place in perspective.
+  const cameraBeforeLossRef = useRef<Camera3DState | null>(null);
   // False while another mount in this window is showing the one scene there is.
   const [showingHere, setShowingHere] = useState(true);
 
@@ -240,6 +247,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // effects below that the handle in the ref has changed.
   const engineRef = useRef<Scene3DCore | null>(null);
   const [engineVersion, setEngineVersion] = useState(0);
+  // Where the pointer rests over the scene; see `createHoverPointer`.
+  const [hoverPointer] = useState(createHoverPointer);
   const queryClient = useQueryClient();
 
   /**
@@ -249,9 +258,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
    * while the scene is open, or parked before the scene existed by a page that opened it. Both
    * must put the camera in the same place, so there is one way of putting it there.
    */
+  const [revealProblem, setRevealProblem] = useState<string | undefined>(undefined);
   const frameReveal = useCallback(
     (ref: ResourceRef) => {
-      void geometryFor(queryClient, ref).then((target) => {
+      setRevealProblem(undefined);
+      geometryFor(queryClient, ref).then((target) => {
         const engine = engineRef.current;
         const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
         if (engine !== null && bounds) {
@@ -263,7 +274,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           const pad = target?.approximate ? APPROXIMATE_SPAN_DEGREES / 2 : 0;
           engine.fitBounds([west - pad, south - pad, east + pad, north + pad], { animate: true });
         }
-      });
+      }, (error: unknown) => setRevealProblem(revealProblemKey(error)));
     },
     [queryClient],
   );
@@ -340,18 +351,30 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           return;
         }
         if (state === 'recovering') {
+          if (session) {
+            cameraBeforeLossRef.current = readCamera3D(session.engine);
+          }
           setRebuildToken((token) => token + 1);
         } else {
           setStatus('contextLost');
         }
       });
+      const restored = cameraBeforeLossRef.current;
+      cameraBeforeLossRef.current = null;
+      if (restored) {
+        applyCamera3D(session.engine, restored);
+      }
       engineRef.current = session.engine;
       setEngineVersion((version) => version + 1);
       setStatus('ready');
-      // Arms the next recovery. Without it a scene that came back cleanly would refuse to come
-      // back from a later, unrelated loss: the guard that stops a rebuild loop cannot tell a
-      // repeat from a new fault until one rebuild has been seen to work.
-      session.engine.reportContextRecovered();
+      // Arms the next recovery — after a rebuild only. Without it a scene that came back cleanly
+      // would refuse to come back from a later, unrelated loss: the guard that stops a rebuild
+      // loop cannot tell a repeat from a new fault until one rebuild has been seen to work. Not
+      // on the first build, which recovered from nothing: armed there, a loss in the first
+      // seconds after opening would count as a repeat and stop the view instead of rebuilding it.
+      if (rebuildToken > 0) {
+        session.engine.reportContextRecovered();
+      }
     })().catch((error: unknown) => {
       if (disposed) {
         return;
@@ -537,6 +560,18 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // until they press a different one.
   const overburdenRef = useRef<OverburdenHighlight3DHandle | null>(null);
   const [dataState, setDataState] = useState<CaveData3DState>(EMPTY_CAVE_DATA_3D_STATE);
+  // Whether a load of the cave data has started and finished since the view opened. "Not loading"
+  // alone is also true in the moment before the first load starts, which is what a reader from
+  // outside — a browser test waiting for the view to fill in — would otherwise take for done.
+  const [dataLoadedOnce, setDataLoadedOnce] = useState(false);
+  const sawDataLoadingRef = useRef(false);
+  useEffect(() => {
+    if (dataState.loading) {
+      sawDataLoadingRef.current = true;
+    } else if (sawDataLoadingRef.current) {
+      setDataLoadedOnce(true);
+    }
+  }, [dataState.loading]);
   const [caveFramable, setCaveFramable] = useState(false);
 
   // The walls of one cave, held apart from the camera-driven loader above because nothing about
@@ -794,7 +829,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     const unsubscribeHover = engine.onHover((pick) => {
       const payload = pickPayload(pick);
       surface.style.cursor = payload || isStationPhotosPickId(pick?.id) ? 'pointer' : '';
-      setHovered(payload && pick?.screen ? { payload, screen: pick.screen } : undefined);
+      // Only what is named is state, and only when it changes; where the pointer is goes straight
+      // to the tooltip. A state write per frame would re-render this whole view per frame, on the
+      // main thread the scene is drawn on.
+      const named = payload && pick?.screen ? payload : undefined;
+      hoverPointer.move(named ? pick?.screen : undefined);
+      setHovered((previous) =>
+        previous !== undefined && named !== undefined && samePickTarget(previous, named) && previous.label === named.label
+          ? previous
+          : named,
+      );
     });
 
     // Editing or deleting a feature invalidates what is drawn here. The write happens in the
@@ -914,18 +958,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setCaveFramable(false);
       setCamera(undefined);
       setHovered(undefined);
+      hoverPointer.move(undefined);
       setPicked(undefined);
       surface.style.cursor = '';
     };
-  }, [engineVersion, syncUrlHash, showingHere]);
+  }, [engineVersion, syncUrlHash, showingHere, hoverPointer]);
 
   // ---- what the chrome over the scene names ----
 
-  /** What the pointer rests on and where it is; both change together or not at all. */
-  const [hovered, setHovered] = useState<{
-    payload: Scene3DPickPayload;
-    screen: Scene3DScreenPosition;
-  }>();
+  /** What the pointer rests on. Where it rests is `hoverPointer`'s, which renders nothing. */
+  const [hovered, setHovered] = useState<Scene3DPickPayload>();
   /** What was picked in this scene, until it is dismissed or the selection moves on. */
   const [picked, setPicked] = useState<Scene3DPickPayload>();
   const selection = useWorkspaceStore((s) => s.selection);
@@ -1031,6 +1073,18 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [savingImage, setSavingImage] = useState(false);
   /** True when the last picture could not be made, until the next one is asked for. */
   const [imageProblem, setImageProblem] = useState(false);
+  // The map's filter refused by the server. Every layer it governs is emptied when that happens,
+  // and on a page with no flat map beside it nothing else would say why the scene went blank.
+  // Cleared when the filter changes, which is the only thing that can make it run.
+  const [filterRefused, setFilterRefused] = useState(false);
+  useEffect(() => {
+    const offRefusal = onMapFilterRefusal(() => setFilterRefused(true));
+    const offChange = onMapFilterChange(() => setFilterRefused(false));
+    return () => {
+      offRefusal();
+      offChange();
+    };
+  }, []);
 
   const saveImage = useCallback(() => {
     const engine = engineRef.current;
@@ -1204,6 +1258,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       return;
     }
     let cancelled = false;
+    // Calls off a check still waiting on a server when the candidates change or the view goes.
+    const checks = new AbortController();
     setTerrainProblem(undefined);
 
     if (candidates.length === 0) {
@@ -1244,7 +1300,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       // all, because the fallback worked — is how a broken configuration line survives for months.
       let firstProblem: TerrainSourceProblem | undefined;
       for (const candidate of candidates) {
-        const problem = await checkTerrainSource(candidate.url);
+        const problem = await checkTerrainSource(candidate.url, undefined, checks.signal);
         if (cancelled) {
           return;
         }
@@ -1285,6 +1341,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
     return () => {
       cancelled = true;
+      checks.abort();
     };
   }, [candidates, engineVersion]);
 
@@ -1616,6 +1673,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       ? t(terrainProblemMessage(terrainProblem.problem, terrainProblem.fellBack))
       : undefined,
     imageProblem ? t('scene3d.saveImageFailed') : undefined,
+    filterRefused ? t('mapFilter.refused') : undefined,
+    revealProblem ? t(revealProblem) : undefined,
     // Said for as long as heights are not drawn true, because a stretched hillside looks like a
     // real one: somebody judging a slope off the screen has to know.
     exaggeration !== 1
@@ -1667,8 +1726,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       {status === 'ready' && showingHere && (
         <Scene3DOverlay
           key={engineVersion}
-          hovered={hovered?.payload}
-          hoveredAt={hovered?.screen}
+          hovered={hovered}
+          hoverPointer={hoverPointer}
           selected={picked}
           project={project}
           subscribeFrames={subscribeFrames}
@@ -1779,12 +1838,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         className="scene3d-data-state"
         data-testid="scene3d-data"
         data-loading={dataState.loading || meshLoading || tracksState.loading ? 'true' : 'false'}
+        data-loaded={dataLoadedOnce ? 'true' : 'false'}
       >
         {notices.map((notice) => (
           <span key={notice} className="scene3d-notice">
             {notice}
           </span>
         ))}
+        {/* A load that failed keeps what was drawn before it, so the view can be missing caves
+            with nothing on screen to show it; said, with the one thing that can help. */}
+        {dataState.loadFailed && !dataState.loading && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-data-failed">
+            {t('scene3d.dataFailed')}
+            <Button size="small" type="link" onClick={() => dataRef.current?.reload()}>
+              {t('scene3d.tryAgain')}
+            </Button>
+          </span>
+        )}
         {/* The one notice with something to press. Offered, never done: the viewer decides whether
             the ground under them is reloaded and the surveys re-hung from a different surface,
             and a build waved away stays away for the session. */}
@@ -1849,6 +1919,30 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
  * from, and reading them costs no extra conversion and no knowledge of where the page has been
  * scrolled to.
  */
+/**
+ * Where the pointer rests over the scene, kept outside React: the tooltip reads it when it is placed
+ * and is told when it moves, so a pointer moving over the same thing re-renders nothing at all.
+ */
+function createHoverPointer() {
+  let at: Scene3DScreenPosition | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    read: () => at,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    move(next: Scene3DScreenPosition | undefined) {
+      at = next;
+      for (const listener of [...listeners]) {
+        listener();
+      }
+    },
+  };
+}
+
 function boundingRectOf(elements: readonly (HTMLElement | null)[]): OverlayRect | undefined {
   let left = Number.POSITIVE_INFINITY;
   let top = Number.POSITIVE_INFINITY;

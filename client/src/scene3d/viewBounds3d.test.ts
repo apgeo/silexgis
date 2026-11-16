@@ -127,6 +127,19 @@ describe('cameraFramingBounds', () => {
     expect(framed.eye.height).toBeCloseTo(heightForZoom(14, 45.7), 0);
   });
 
+  it('stands the camera that height above the GROUND it is aimed at, not above the ellipsoid', () => {
+    // Over a plateau at 1,100 m a zoom-14 height measured from sea level is inside the hill.
+    const framed = cameraFramingBounds(
+      [25.2, 45.6, 25.4, 45.8],
+      14,
+      tilted,
+      heightForZoom,
+      () => 1100,
+    )!;
+    expect(framed.target!.height).toBe(1100);
+    expect(framed.eye.height).toBeCloseTo(1100 + heightForZoom(14, 45.7), 0);
+  });
+
   it('closes in as the zoom goes up', () => {
     const wide = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 10, tilted, heightForZoom)!;
     const close = cameraFramingBounds([25.2, 45.6, 25.4, 45.8], 16, tilted, heightForZoom)!;

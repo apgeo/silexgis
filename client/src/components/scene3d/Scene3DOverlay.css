@@ -79,6 +79,13 @@
   font-size: 12px;
 }
 
+/* The name gives way to a long title (it ellipsises); the close button never does. As a flex item
+   it would otherwise shrink alongside the name once the callout reaches its maximum width, and a
+   long entrance name took the touch target below the size a finger needs. */
+.scene3d-overlay-callout .ant-btn {
+  flex-shrink: 0;
+}
+
 html[data-theme='dark'] .scene3d-overlay-callout {
   color: rgba(255, 255, 255, 0.88);
   background: rgba(0, 0, 0, 0.8);

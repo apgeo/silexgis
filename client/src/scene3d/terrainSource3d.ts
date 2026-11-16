@@ -124,6 +124,15 @@ export function looksGzipped(bytes: Uint8Array): boolean {
 }
 
 /**
+ * How long one file of the pyramid is waited for before the pyramid is called unreachable.
+ *
+ * A proxy that accepts the connection and never answers would otherwise leave the scene saying
+ * it is still working out its ground for the rest of the session — no ground offered, no problem
+ * reported. Generous, because the first file can be a large `layer.json` over a slow link.
+ */
+export const TERRAIN_CHECK_TIMEOUT_MILLISECONDS = 20_000;
+
+/**
  * Fetches one tile from a configured pyramid and reports what is wrong with it, or nothing when
  * it can be drawn.
  *
@@ -134,14 +143,17 @@ export function looksGzipped(bytes: Uint8Array): boolean {
  * mesh should be, which is visible in its first two bytes.
  *
  * `fetchImpl` is a parameter so this can be tested without a network; callers pass nothing.
+ * `signal` calls the check off — the scene that asked has gone — and the answer is then
+ * 'unreachable', which nothing reads.
  */
 export async function checkTerrainSource(
   url: string,
   fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
 ): Promise<TerrainSourceProblem | undefined> {
   const root = url.endsWith('/') ? url : `${url}/`;
 
-  const layerBytes = await readFile(`${root}layer.json`, fetchImpl);
+  const layerBytes = await readFile(`${root}layer.json`, fetchImpl, signal);
   if (typeof layerBytes === 'string') {
     return layerBytes;
   }
@@ -162,7 +174,7 @@ export async function checkTerrainSource(
     return 'malformed';
   }
 
-  const tileBytes = await readFile(`${root}${description.probeTilePath}`, fetchImpl);
+  const tileBytes = await readFile(`${root}${description.probeTilePath}`, fetchImpl, signal);
   if (typeof tileBytes !== 'string') {
     return undefined;
   }
@@ -191,10 +203,32 @@ export async function checkTerrainSource(
 async function readFile(
   url: string,
   fetchImpl: typeof fetch,
+  signal: AbortSignal | undefined,
+): Promise<Uint8Array | TerrainSourceProblem> {
+  if (signal?.aborted) {
+    return 'unreachable';
+  }
+  // One controller per file, called off by the bounded wait or by the caller, whichever is first.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TERRAIN_CHECK_TIMEOUT_MILLISECONDS);
+  const callOff = () => controller.abort();
+  signal?.addEventListener('abort', callOff);
+  try {
+    return await readFileWithin(url, fetchImpl, controller.signal);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', callOff);
+  }
+}
+
+async function readFileWithin(
+  url: string,
+  fetchImpl: typeof fetch,
+  signal: AbortSignal,
 ): Promise<Uint8Array | TerrainSourceProblem> {
   let response: Response;
   try {
-    response = await fetchImpl(url, { cache: 'no-store' });
+    response = await fetchImpl(url, { cache: 'no-store', signal });
   } catch {
     return 'unreachable';
   }
@@ -206,6 +240,11 @@ async function readFile(
   try {
     bytes = new Uint8Array(await response.arrayBuffer());
   } catch {
+    // A body that stopped arriving and was called off is a pyramid that did not answer, not one
+    // whose encoding is wrong.
+    if (signal.aborted) {
+      return 'unreachable';
+    }
     // The request succeeded and the transfer then failed, which for a file that answered with a
     // success status means the browser could not undo the encoding the server declared: it says
     // these bytes are compressed and they are not. Reported as the mismatch it is rather than as

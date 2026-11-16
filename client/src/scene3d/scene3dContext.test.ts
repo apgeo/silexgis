@@ -136,12 +136,14 @@ describe('scene configuration', () => {
   });
 });
 
-describe('air gap', () => {
-  it('makes no request to the engine vendor while a scene is created and torn down', async () => {
-    // The library reaches the network through more than one API, so all of them are watched. What
-    // this pins down is this application's configuration of the engine, which is where the
-    // guarantee actually lives: the library's own code still contains the vendor URLs, so nothing
-    // here could be proved by searching the bundle for them.
+describe('requests the scene module makes of its own accord', () => {
+  it('asks the engine vendor for nothing itself while a scene is created and torn down', async () => {
+    // What this can and cannot show: the library is replaced here by a stand-in that makes no
+    // requests at all, so the only requests that could be seen are ones this application's own
+    // scene code makes — an icon, a credit, a default it reached for by name. Whether the real
+    // library, as configured, stays off the vendor's servers is a question only a browser can
+    // answer, and the 3D browser spec answers it by watching every request the page makes. The
+    // configuration that guarantee rests on is pinned above, option by option.
     const requested: string[] = [];
     vi.stubGlobal(
       'fetch',
@@ -780,6 +782,110 @@ describe('camera', () => {
   });
 });
 
+describe('placing the camera over raised ground', () => {
+  // Every placement test above runs over the bare ellipsoid, where "height above the ground" and
+  // "height above the ellipsoid" are the same number. With an elevation model drawn they are not:
+  // a zoom asked for over an entrance at 1,100 m is a height above THAT ground, and handed to the
+  // engine as an ellipsoid height it stands the camera inside the hill.
+  const GROUND = 1100;
+
+  it('stands a zoom-to above the ground under the point, at the zoom asked for', async () => {
+    const session = acquire();
+    engine.engineState.widgets[0].scene.globe.terrainHeight = GROUND;
+
+    session.engine.flyToZoom(22.7, 46.5, 17);
+
+    expect(session.engine.getCamera().height).toBeGreaterThan(GROUND);
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(17, 6);
+    session.release();
+  });
+
+  it('stands the close-up of a single point above the ground', async () => {
+    const session = acquire();
+    engine.engineState.widgets[0].scene.globe.terrainHeight = GROUND;
+
+    session.engine.fitBounds([22.7, 46.5, 22.7, 46.5]);
+
+    expect(session.engine.getCamera().height).toBeGreaterThan(GROUND);
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(17, 6);
+    session.release();
+  });
+
+  it('stands the framing of a small box above the ground, as high over it as over the ellipsoid', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+
+    // The engine frames a rectangle from the ellipsoid; a few hundred metres of box over a
+    // kilometre of hill is the case that ends underground.
+    session.engine.fitBounds([22.7, 46.5, 22.703, 46.502]);
+    const overEllipsoid = session.engine.getCamera().height;
+    scene.globe.terrainHeight = GROUND;
+    session.engine.fitBounds([22.7, 46.5, 22.703, 46.502]);
+
+    expect(overEllipsoid).toBeLessThan(GROUND);
+    expect(session.engine.getCamera().height).toBeCloseTo(overEllipsoid + GROUND, 3);
+    expect(scene.camera.framed).toHaveLength(2);
+    session.release();
+  });
+
+  it('lifts a framed camera again when the ground arrives after it did', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+
+    // Just after arriving, the globe answers from a coarse tile; the real ground under the point
+    // comes in with the finer tiles, and only then is "above the ground" known.
+    session.engine.flyToZoom(22.7, 46.5, 17);
+    const overEllipsoid = session.engine.getCamera().height;
+    scene.globe.terrainHeight = GROUND;
+    scene.globe.tileLoadProgressEvent.raise(0);
+
+    expect(session.engine.getCamera().height).toBeCloseTo(overEllipsoid + GROUND, 3);
+    expect(session.engine.getPseudoZoom()).toBeCloseTo(17, 6);
+    session.release();
+  });
+
+  it('leaves the camera alone when the ground arrives after the viewer moved it', async () => {
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+
+    session.engine.flyToZoom(22.7, 46.5, 17);
+    const moved = { longitude: 22.8, latitude: 46.4, height: 5000, heading: 0, pitch: -90, roll: 0 };
+    session.engine.setCamera(moved);
+    scene.globe.terrainHeight = GROUND;
+    scene.globe.tileLoadProgressEvent.raise(0);
+
+    expect(session.engine.getCamera().height).toBeCloseTo(5000, 6);
+    session.release();
+  });
+
+  it('still measures a camera that has gone below the ground, so loaders and the map keep following', async () => {
+    const session = acquire();
+    engine.engineState.widgets[0].scene.globe.terrainHeight = GROUND;
+
+    // Going under the surface is what this view is for: the camera is three hundred metres into
+    // the hill, among the passages. A zoom of NaN there stops every loader and the coupled map.
+    session.engine.setCamera({
+      longitude: 22.7,
+      latitude: 46.5,
+      height: GROUND - 300,
+      heading: 0,
+      pitch: -90,
+      roll: 0,
+    });
+
+    expect(Number.isFinite(session.engine.getPseudoZoom())).toBe(true);
+    expect(session.engine.getPseudoZoom()).toBeGreaterThan(14);
+    const bounds = session.engine.getVisibleBounds();
+    expect(bounds).toBeDefined();
+    const [west, south, east, north] = bounds!;
+    expect(west).toBeLessThan(22.7);
+    expect(east).toBeGreaterThan(22.7);
+    expect(south).toBeLessThan(46.5);
+    expect(north).toBeGreaterThan(46.5);
+    session.release();
+  });
+});
+
 describe('coordinates', () => {
   it('puts what the camera is over in the middle, and moves it when the camera moves', async () => {
     const session = acquire();
@@ -1032,6 +1138,41 @@ describe('the box a loader should ask about', () => {
 
     expect((west + east) / 2).toBeCloseTo(25.3, 6);
     expect((south + north) / 2).toBeCloseTo(45.7, 6);
+    session.release();
+  });
+
+  it('is worked out once per camera rest however many loaders ask for it', async () => {
+    // Every loader asks for the box when the camera settles, and each answer reads the depth of
+    // the picture — up to a column of reads when the middle of the screen is sky, synchronous on
+    // the main thread under software drawing. Asked again for the same camera and the same
+    // picture, the answer cannot have changed.
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    session.engine.setCamera({ longitude: 25.3, latitude: 45.7, height: 4000, heading: 0, pitch: -10, roll: 0 });
+    let reads = 0;
+    const screenHeight = engine.engineState.widgets[0].canvas.clientHeight;
+    scene.pickedPositionAt = (_x, y) => {
+      reads += 1;
+      return y <= screenHeight / 2 ? undefined : { longitudeDegrees: 25.3, latitudeDegrees: 45.9, height: 900 };
+    };
+
+    const first = session.engine.getVisibleBounds();
+    const afterFirst = reads;
+    for (let consumer = 0; consumer < 5; consumer += 1) {
+      expect(session.engine.getVisibleBounds()).toEqual(first);
+    }
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(reads).toBe(afterFirst);
+
+    // A camera that moved, or a frame drawn since — tiles arriving change the depth under the
+    // same camera — is worked out afresh.
+    session.engine.setCamera({ longitude: 25.4, latitude: 45.7, height: 4000, heading: 0, pitch: -10, roll: 0 });
+    session.engine.getVisibleBounds();
+    expect(reads).toBeGreaterThan(afterFirst);
+    const afterMove = reads;
+    scene.render();
+    session.engine.getVisibleBounds();
+    expect(reads).toBeGreaterThan(afterMove);
     session.release();
   });
 
@@ -2324,6 +2465,59 @@ describe('picking', () => {
     expect(hovers).toHaveLength(0);
   });
 
+  it('takes off every listener it put on the drawing surface and the globe, and the queued hover frame', () => {
+    // The two tests above watch the application's own callbacks, which the release empties before it
+    // lets go of the surface — so they would hold for a listener left on the element. This counts
+    // the element's own listeners instead.
+    const added: [EventTarget, string, unknown][] = [];
+    const removed: [EventTarget, string, unknown][] = [];
+    const add = vi.spyOn(EventTarget.prototype, 'addEventListener').mockImplementation(function (
+      this: EventTarget, type: string, listener: unknown,
+    ) {
+      added.push([this, type, listener]);
+    });
+    const remove = vi.spyOn(EventTarget.prototype, 'removeEventListener').mockImplementation(function (
+      this: EventTarget, type: string, listener: unknown,
+    ) {
+      removed.push([this, type, listener]);
+    });
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const cancelled: number[] = [];
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => cancelled.push(id));
+    try {
+      const session = acquire();
+      const widget = engine.engineState.widgets[0];
+      const surface = widget.canvas as unknown as EventTarget;
+      session.engine.onHover(() => {});
+      // A hit test queued for the next frame when the scene goes.
+      engine.engineState.eventHandlers[0].raise('mouseMove', { endPosition: new engine.Cartesian2(3, 4) });
+      expect(frames).toHaveLength(1);
+      const onSurface = added.filter(([target]) => target === surface);
+      // Guards the count below: with nothing added, nothing would need taking off.
+      expect(onSurface.map(([, type]) => type)).toEqual(
+        expect.arrayContaining(['pointerleave', 'webglcontextlost']),
+      );
+      // Held before the release, which takes the scene off the widget.
+      const tileProgress = widget.scene.globe.tileLoadProgressEvent;
+      expect(tileProgress.listeners.size).toBeGreaterThan(0);
+
+      session.release();
+
+      const left = onSurface.filter(([, type, listener]) =>
+        !removed.some(([target, t, l]) => target === surface && t === type && l === listener));
+      expect(left.map(([, type]) => type)).toEqual([]);
+      expect(tileProgress.listeners.size).toBe(0);
+      expect(cancelled).toContain(1);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+    }
+  });
+
   it('does not read the depth buffer on hover, which is the expensive half of a click', async () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -3126,13 +3320,15 @@ describe('models the scene loads', () => {
     });
 
     session.engine.removeModel('cave-mesh');
-    engine.Model.deliver(MESH_URL);
+    const landed = engine.Model.deliver(MESH_URL)!;
     await loading;
 
     // Nobody is waiting for it, so it is thrown away rather than drawn — the alternative is a mesh
     // reappearing seconds after a viewer switched it off.
     expect(loadedModels()).toHaveLength(0);
     expect(session.engine.modelStatus('cave-mesh')).toBeUndefined();
+    // Thrown away means destroyed: its buffers are on the graphics card whether or not it is drawn.
+    expect(landed.destroyed).toBe(true);
   });
 
   it('does not put a file that lands after teardown into a scene that is gone', async () => {
@@ -3144,11 +3340,12 @@ describe('models the scene loads', () => {
     });
 
     session.release();
-    engine.Model.deliver(MESH_URL);
+    const landed = engine.Model.deliver(MESH_URL)!;
 
     // The widget is destroyed and every one of its methods throws, so the read has to notice that
     // rather than reach into it — and it still releases what it fetched.
     await expect(loading).resolves.toBeUndefined();
+    expect(landed.destroyed).toBe(true);
   });
 });
 

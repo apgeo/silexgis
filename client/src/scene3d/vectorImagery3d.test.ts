@@ -137,6 +137,29 @@ describe('a vector background in the scene', () => {
     expect(renderer.disposed()).toBe(1);
   });
 
+  it('lets go of the layer it built when it was closed while the style was still loading', async () => {
+    // A quick switch between backgrounds closes this one while its style is still being read. The
+    // layer built after that has its source, its tile cache and its listeners attached, and
+    // nothing else will ever hold it to dispose of it.
+    let disposed = 0;
+    const built = { dispose: () => (disposed += 1) } as unknown as BaseLayer;
+    let finishBuild: (layer: BaseLayer) => void = () => {};
+    const renderer = stoodInRenderer();
+    const source = createVectorTileSource(entry(), 'en', () => undefined, {
+      build: () =>
+        new Promise<BaseLayer>((resolve) => {
+          finishBuild = resolve;
+        }),
+      createRenderer: renderer.createRenderer,
+    });
+    const opening = source.open();
+    source.destroy();
+    finishBuild(built);
+
+    await expect(opening).rejects.toThrow('the source was closed');
+    expect(disposed).toBe(1);
+  });
+
   it('is rendered a few levels past its data, a single file as deep as any background', () => {
     expect(vectorMaximumLevel(entry({ maxZoom: 14 }))).toBe(17);
     expect(vectorMaximumLevel(entry({ maxZoom: 18 }))).toBe(19);
