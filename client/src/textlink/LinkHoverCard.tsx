@@ -12,7 +12,7 @@ import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { targetTypeEntry, anchorSummary, memberRoute, linkPageRoute } from '../components/reslinks/registry.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
-import { canRevealHere, refreshRoster, subscribeToRoster } from '../viewlinks/viewTargets.ts';
+import { allControls, canRevealHere, refreshRoster, subscribeToRoster } from '../viewlinks/viewTargets.ts';
 import { highlightIsUncertain, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
 
 /**
@@ -66,13 +66,7 @@ export default function LinkHoverCard({
 
     // A window opening or closing while the card is up changes the answer; the roster announces
     // itself on both, so the card follows without asking again.
-    const unsubscribe = subscribeToRoster(() => {
-      void refreshRoster().then((roster) => {
-        if (alive) {
-          setControls(roster);
-        }
-      });
-    });
+    const unsubscribe = subscribeToRoster(() => setControls(allControls()));
 
     return () => {
       alive = false;

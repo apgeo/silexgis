@@ -17,6 +17,14 @@ import { locateAnchor, type GlobalRange, type TextRangeAnchorPayload } from './r
  * and is drawn as such rather than disappearing and leaving a hole in the sentence.
  */
 
+/**
+ * How many of a document's links its readers fetch in one read. The text and the picture readers
+ * have no paging of their own — a passage or region on a page they did not fetch would show as
+ * "nothing is linked here" — so both ask for the same, generous page, and say when even that
+ * did not hold all of them.
+ */
+export const DOCUMENT_LINK_PAGE_SIZE = 200;
+
 /** One end of a link, other than the passage itself. */
 export interface HighlightTarget {
   memberId: string;

@@ -2,7 +2,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { invalidateAfterDelete, unwrap, unwrapVoid } from './shared.ts';
-import type { AlbumListParams, PhotoFeatureCollection, PhotoQueryParams } from './types.ts';
+import type { AlbumListParams, PhotoFeatureCollection, PhotoQueryParams, Visibility } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
@@ -164,7 +164,7 @@ export function useAlbum(id: string | undefined) {
 export interface AlbumWrite {
   title: string;
   description?: string | null;
-  visibility: string;
+  visibility: Visibility;
   cavingGroupId?: string | null;
   subjectEntityType?: string | null;
   subjectEntityId?: string | null;

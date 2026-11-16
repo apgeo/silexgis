@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircleTwoTone, CloseCircleTwoTone, FolderOpenOutlined, InboxOutlined,
-  MinusCircleTwoTone, ReloadOutlined,
+  MinusCircleTwoTone, ReloadOutlined, StopOutlined,
 } from '@ant-design/icons';
 import {
   Alert, App, Checkbox, Drawer, Flex, Form, Input, Progress, Space, Tag, Typography,
-  Upload,
+  Upload, theme,
 } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ import { formatSize } from '../attachments/fileFormat.ts';
 import List from '../List.tsx';
 import type { UploadItem } from './uploadPlan.ts';
 import { uploadReasonKey } from './uploadReasons.ts';
+import { useDuplicatePrompt } from './useDuplicatePrompt.ts';
 import { useUploadQueue } from './useUploadQueue.ts';
 import type { UploadTarget } from './uploadTransport.ts';
 
@@ -83,6 +84,7 @@ export default function UploadDrawer({
     [config],
   );
 
+  const askAboutDuplicate = useDuplicatePrompt();
   const queue = useUploadQueue(
     limits,
     (item: UploadItem): UploadTarget => ({
@@ -95,70 +97,101 @@ export default function UploadDrawer({
       expandArchive: expandArchives && item.file.name.toLowerCase().endsWith('.zip'),
     }),
     {
-      onDuplicate: (documentId) =>
-        new Promise<boolean>((resolve) => {
-          modal.confirm({
-            title: t('uploads.duplicateTitle'),
-            content: documentId
-              ? t('uploads.duplicateKnown')
-              : t('uploads.duplicateUnknown'),
-            okText: t('uploads.duplicateStoreAnyway'),
-            cancelText: t('uploads.duplicateSkip'),
-            onOk: () => resolve(true),
-            onCancel: () => resolve(false),
-          });
-        }),
+      onDuplicate: (documentId) => askAboutDuplicate(Boolean(documentId)),
     },
   );
 
   const { summary, items, add, retryFailed, clear } = queue;
 
+  // The opening request itself, shared by every file that arrives while it is on its way.
+  const openingRef = useRef<Promise<void> | undefined>(undefined);
+
   // A drop is opened lazily, on the first file: opening one for a drawer somebody closed
-  // without uploading anything would leave an empty record behind every time.
-  const ensureBatch = async () => {
+  // without uploading anything would leave an empty record behind every time. The upload
+  // control hands over every file of a multi-file drop in the same tick, so the request is
+  // remembered while it is in flight — waiting for its answer before remembering it would let
+  // each file of the drop open a batch of its own.
+  const ensureBatch = () => {
     if (batchRef.current) {
-      return;
+      return Promise.resolve();
     }
 
-    try {
-      const created = await openBatch.mutateAsync({
+    openingRef.current ??= openBatch
+      .mutateAsync({
         label: label.trim() || null,
         cabinetId: cabinetId ?? null,
         tagName: tagName.trim() || null,
-      });
-      batchRef.current = created.id;
-      setBatchId(created.id);
-    } catch {
-      // A drop that could not be opened is not a reason to refuse the upload: the files land
-      // exactly as they would have, they simply carry no batch reference.
-    }
+      })
+      .then(
+        (created) => {
+          batchRef.current = created.id;
+          setBatchId(created.id);
+        },
+        () => {
+          // A drop that could not be opened is not a reason to refuse the upload: the files
+          // land exactly as they would have, they simply carry no batch reference.
+        },
+      );
+    return openingRef.current;
   };
+
+  const invalidateLanded = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+    void queryClient.invalidateQueries({ queryKey: ['documents'] });
+    void queryClient.invalidateQueries({ queryKey: ['attachments'] });
+    void queryClient.invalidateQueries({ queryKey: ['upload-batches'] });
+    void queryClient.invalidateQueries({ queryKey: ['file-config'] });
+    onUploaded?.();
+  }, [queryClient, onUploaded]);
 
   // Everything the archive touched — the tree, its listings, the inbox — is stale once
   // anything lands.
   useEffect(() => {
     if (!summary.running && summary.stored > 0) {
-      void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
-      void queryClient.invalidateQueries({ queryKey: ['documents'] });
-      void queryClient.invalidateQueries({ queryKey: ['attachments'] });
-      void queryClient.invalidateQueries({ queryKey: ['upload-batches'] });
-      void queryClient.invalidateQueries({ queryKey: ['file-config'] });
-      onUploaded?.();
+      invalidateLanded();
     }
     // Deliberately keyed on the finished-ness rather than on every progress tick, so a drop
     // of four hundred files does not invalidate the tree four hundred times.
-  }, [summary.running, summary.stored, queryClient, onUploaded]);
+  }, [summary.running, summary.stored, invalidateLanded]);
 
   const finish = () => {
     if (batchRef.current) {
       void closeBatch.mutateAsync(batchRef.current).catch(() => undefined);
     }
+    // Stopped part-way, what did land is still news to the lists behind the drawer — and the
+    // effect above will not see it, because the list it reads is about to be emptied.
+    if (summary.running && summary.stored > 0) {
+      invalidateLanded();
+    }
     batchRef.current = undefined;
+    openingRef.current = undefined;
     setBatchId(undefined);
     clear();
     setLabel('');
     setTagName('');
     onClose();
+  };
+
+  // Closing while files are still going stops them, so it is asked rather than done on a
+  // stray Escape or a click beside the drawer; the answer says what is kept and what is not.
+  const close = () => {
+    if (!summary.running) {
+      finish();
+      return;
+    }
+
+    modal.confirm({
+      title: t('uploads.stopTitle'),
+      content: t('uploads.stopContent', {
+        stored: summary.stored,
+        total: summary.total,
+        rest: summary.total - summary.stored - summary.skipped - summary.failed,
+      }),
+      okText: t('uploads.stopConfirm'),
+      okButtonProps: { danger: true },
+      cancelText: t('uploads.keepGoing'),
+      onOk: finish,
+    });
   };
 
   const accept = async (file: File) => {
@@ -171,12 +204,17 @@ export default function UploadDrawer({
   return (
     <Drawer
       open={open}
-      onClose={finish}
+      onClose={close}
       size="large"
       destroyOnHidden
       title={cabinetName ? t('uploads.titleInto', { cabinet: cabinetName }) : t('uploads.title')}
       extra={
         <Space>
+          {summary.running && (
+            <Button icon={<StopOutlined />} danger onClick={close} data-testid="upload-stop">
+              {t('uploads.stop')}
+            </Button>
+          )}
           {summary.failed > 0 && (
             <Button icon={<ReloadOutlined />} onClick={retryFailed} disabled={summary.running}>
               {t('uploads.retryFailed', { count: summary.failed })}
@@ -303,11 +341,12 @@ export default function UploadDrawer({
 /** One file's row: its path, where it got to, and why it did not get further. */
 function UploadRow({ item }: { item: UploadItem }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
 
   const icon = {
-    stored: <CheckCircleTwoTone twoToneColor="#52c41a" />,
-    skipped: <MinusCircleTwoTone twoToneColor="#faad14" />,
-    failed: <CloseCircleTwoTone twoToneColor="#ff4d4f" />,
+    stored: <CheckCircleTwoTone twoToneColor={token.colorSuccess} />,
+    skipped: <MinusCircleTwoTone twoToneColor={token.colorWarning} />,
+    failed: <CloseCircleTwoTone twoToneColor={token.colorError} />,
     pending: null,
     uploading: null,
   }[item.status];
@@ -332,7 +371,7 @@ function UploadRow({ item }: { item: UploadItem }) {
             <Typography.Text type={item.status === 'failed' ? 'danger' : 'secondary'}>
               {item.status === 'stored'
                 ? formatSize(item.file.size)
-                : t(uploadReasonKey(item.errorCode, item.status))}
+                : t(uploadReasonKey(item.errorCode, item.status, item.errorStatus))}
             </Typography.Text>
           )
         }

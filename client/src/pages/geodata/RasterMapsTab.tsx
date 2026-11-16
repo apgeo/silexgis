@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AimOutlined,
   DeleteOutlined,
@@ -8,6 +8,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import {
+  Alert,
   App,
   Flex,
   Form,
@@ -16,17 +17,22 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Spin,
   Table,
   Tag,
   Tooltip,
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import UploadDropzone from '../../components/geodata/UploadDropzone.tsx';
+import CavingGroupPicker from '../../components/cavingGroups/CavingGroupPicker.tsx';
+import { refusalText } from '../../components/geodata/refusalText.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useDeleteRasterMap,
+  useRasterMapForEdit,
   useRasterMaps,
   useUpdateRasterMap,
   useUploadRasterMap,
@@ -78,6 +84,7 @@ interface EditFormValues {
   defaultOpacity: number;
   caveFeatureId?: string | null;
   visibility: RasterMapInfo['visibility'];
+  cavingGroupId?: string | null;
 }
 
 /**
@@ -120,44 +127,79 @@ export default function RasterMapsTab() {
     navigate('/map');
   };
 
-  const onEditOpen = (raster: RasterMapInfo) => {
-    setEditing(raster);
+  // The form starts from the map as the server holds it now, not from the list row: the update
+  // replaces every field, the zoom range and the group included, so a value changed since the list
+  // was read would otherwise be written back over. The read's version goes with the save, so a
+  // change made meanwhile is refused rather than overwritten.
+  const editRead = useRasterMapForEdit(editing?.id);
+  const [filled, setFilled] = useState<{ value: RasterMapInfo; version?: string } | null>(null);
+  const editVisibility = Form.useWatch('visibility', form);
+
+  useEffect(() => {
+    const read = editRead.data;
+    if (!editing || !read || read.value.id !== editing.id || filled?.value.id === editing.id) {
+      return;
+    }
     form.setFieldsValue({
-      name: raster.name,
-      description: raster.description ?? undefined,
-      mapKind: raster.mapKind,
-      attribution: raster.attribution ?? undefined,
-      defaultOpacity: Number(raster.defaultOpacity),
-      caveFeatureId: raster.caveFeatureId ?? undefined,
-      visibility: raster.visibility,
+      name: read.value.name,
+      description: read.value.description ?? undefined,
+      mapKind: read.value.mapKind,
+      attribution: read.value.attribution ?? undefined,
+      defaultOpacity: Number(read.value.defaultOpacity),
+      caveFeatureId: read.value.caveFeatureId ?? undefined,
+      visibility: read.value.visibility,
+      cavingGroupId: read.value.cavingGroupId ?? undefined,
     });
+    setFilled({ value: read.value, version: read.version });
+  }, [editing, editRead.data, filled, form]);
+
+  const onEditOpen = (raster: RasterMapInfo) => {
+    setFilled(null);
+    form.resetFields();
+    setEditing(raster);
+  };
+
+  const onEditClose = () => {
+    setEditing(null);
+    setFilled(null);
   };
 
   const onEditSubmit = async () => {
-    if (!editing) {
+    if (!editing || filled?.value.id !== editing.id) {
       return;
     }
-    const values = await form.validateFields();
+    let values: EditFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The form shows what is missing beside the field itself.
+      return;
+    }
     try {
       await update.mutateAsync({
         id: editing.id,
+        version: filled.version,
         body: {
           name: values.name,
           description: values.description ?? null,
           mapKind: values.mapKind,
-          minZoom: editing.minZoom,
-          maxZoom: editing.maxZoom,
+          minZoom: filled.value.minZoom,
+          maxZoom: filled.value.maxZoom,
           attribution: values.attribution ?? null,
           defaultOpacity: values.defaultOpacity,
           caveFeatureId: values.caveFeatureId ?? null,
-          cavingGroupId: editing.cavingGroupId,
+          cavingGroupId: values.cavingGroupId ?? null,
           visibility: values.visibility,
         },
       });
-      setEditing(null);
+      onEditClose();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A version that moved is told by the application-wide notice that it changed since it was
+      // opened; a second message here would say it twice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(refusalText(error, t, 'common.saveFailed'));
+      }
     }
   };
 
@@ -166,8 +208,8 @@ export default function RasterMapsTab() {
       await remove.mutateAsync(id);
       setRasterVisible(id, false);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(refusalText(error, t, 'geodata.deleteFailed'));
     }
   };
 
@@ -310,15 +352,30 @@ export default function RasterMapsTab() {
       <Modal
         title={t('geodata.editRaster')}
         open={editing !== null}
-        onCancel={() => setEditing(null)}
+        onCancel={onEditClose}
         onOk={() => void onEditSubmit()}
         confirmLoading={update.isPending}
-        destroyOnHidden
+        okButtonProps={{ disabled: filled === null || filled.value.id !== editing?.id }}
+        forceRender
       >
+        {editRead.isError && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={refusalText(editRead.error, t, 'geodata.editLoadFailed')}
+            action={
+              <Button size="small" onClick={() => void editRead.refetch()}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        )}
         {/* Until the form has reported its first value the stored link stands for it. */}
         {editing !== null && isSheet(editing) && (linkedCave !== undefined ? linkedCave : editing.caveFeatureId) != null && (
           <CaveLinkWarning />
         )}
+        <Spin spinning={editRead.isLoading}>
         <Form<EditFormValues> form={form} layout="vertical" style={{ marginTop: 12 }}>
           <Form.Item name="name" label={t('geodata.name')} rules={[{ required: true }]}>
             <Input maxLength={200} />
@@ -338,6 +395,15 @@ export default function RasterMapsTab() {
                 label: t(`caves.visibilityValues.${v}`),
               }))}
             />
+          </Form.Item>
+          {/* Caving-group visibility admits the members of one group, so it needs the group
+              named; without one the server refuses the save. */}
+          <Form.Item
+            name="cavingGroupId"
+            label={t('geodata.cavingGroup')}
+            rules={[{ required: editVisibility === 'cavingGroup', message: t('geodata.cavingGroupRequired') }]}
+          >
+            <CavingGroupPicker />
           </Form.Item>
           <Form.Item name="caveFeatureId" label={t('features.linkedCave')}>
             {/* The linked cave is named by the filter model's resolve, so a cave this account may no
@@ -364,6 +430,7 @@ export default function RasterMapsTab() {
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
+        </Spin>
       </Modal>
     </>
   );

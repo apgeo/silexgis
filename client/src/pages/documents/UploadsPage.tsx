@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CloudServerOutlined } from '@ant-design/icons';
 import {
   Alert, App, Card, Descriptions, Flex, Form, Input, Modal, Select, Space, Table, Tag,
@@ -7,6 +7,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { cabinetPathOptions } from '../../components/documents/cabinetChoices.ts';
 import { ApiError } from '../../api/client.ts';
 import {
   useCabinets,
@@ -15,6 +16,7 @@ import {
   useUploadBatch,
   useUploadBatchItems,
   useUploadBatches,
+  uploadBatchUnsettled,
   type UploadBatchInfo,
   type UploadBatchItemInfo,
 } from '../../api/hooks.ts';
@@ -38,7 +40,7 @@ import { formatSize } from '../../components/attachments/fileFormat.ts';
  * </p>
  */
 export default function UploadsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isFullAdmin = useIsFullAdmin();
 
   const [page, setPage] = useState(1);
@@ -102,12 +104,12 @@ export default function UploadsPage() {
             render: (value: string, row: UploadBatchInfo) => (
               <Tag color={value === 'failed' ? 'error' : value === 'completed' ? 'success' : 'processing'}>
                 {t(`uploads.batchStatusValues.${value}`)}
-                {row.error ? ` · ${row.error}` : ''}
+                {row.error ? ` · ${t(uploadReasonKey(row.error, 'failed'))}` : ''}
               </Tag>
             ),
           },
           {
-            title: t('uploads.summary', { stored: '', total: '', skipped: '', failed: '' }).split('·')[0].trim(),
+            title: t('uploads.batchCountsTitle'),
             key: 'counts',
             width: 240,
             render: (_: unknown, row: UploadBatchInfo) =>
@@ -121,7 +123,7 @@ export default function UploadsPage() {
             title: t('uploads.batchStarted'),
             dataIndex: 'createdAt',
             width: 180,
-            render: (value: string) => new Date(value).toLocaleString(),
+            render: (value: string) => new Date(value).toLocaleString(i18n.language),
           },
         ]}
       />
@@ -144,8 +146,19 @@ function BatchReport({ batchId, onClose }: { batchId?: string; onClose: () => vo
   const [page, setPage] = useState(1);
 
   const { data: batch } = useUploadBatch(batchId, true);
-  const running = batch?.status === 'running' || batch?.status === 'open';
-  const { data: items } = useUploadBatchItems(batchId, { page, pageSize: 50 }, Boolean(batchId));
+  const running = uploadBatchUnsettled(batch);
+  // The report grows while the work runs, so it is asked for again with the batch, and once
+  // more when the batch settles — the last poll may have come before the last file.
+  const itemsQuery = useUploadBatchItems(batchId, { page, pageSize: 50 }, Boolean(batchId), running);
+  const items = itemsQuery.data;
+  const { refetch: refetchItems } = itemsQuery;
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && !running) {
+      void refetchItems();
+    }
+    wasRunning.current = running;
+  }, [running, refetchItems]);
 
   return (
     <Modal
@@ -174,7 +187,14 @@ function BatchReport({ batchId, onClose }: { batchId?: string; onClose: () => vo
         </Descriptions>
       )}
 
-      {batch?.error && <Alert type="error" showIcon style={{ marginBottom: 12 }} title={batch.error} />}
+      {batch?.error && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t(uploadReasonKey(batch.error, 'failed'))}
+        />
+      )}
 
       <Table<UploadBatchItemInfo>
         rowKey="id"
@@ -250,12 +270,7 @@ function DirectoryImportModal({
       onClose();
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
-      const named: Record<string, string> = {
-        'import.path_not_allowed': 'uploads.importRoots',
-        'import.no_roots_configured': 'uploads.importNoRoots',
-        'import.directory_not_found': 'uploads.reason.unreadable',
-      };
-      message.error(t(code && named[code] ? named[code] : 'common.saveFailed'));
+      message.error(t(code?.startsWith('import.') ? uploadReasonKey(code, 'failed') : 'common.saveFailed'));
     }
   };
 
@@ -295,7 +310,7 @@ function DirectoryImportModal({
             showSearch
             optionFilterProp="label"
             placeholder={t('cabinets.pickCabinet')}
-            options={(cabinets ?? []).map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+            options={cabinetPathOptions(cabinets ?? [])}
           />
         </Form.Item>
         <Form.Item name="label" label={t('uploads.label')} rules={[{ max: 200 }]}>

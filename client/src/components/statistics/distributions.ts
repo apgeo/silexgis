@@ -96,6 +96,39 @@ export function powerLawExponent(values: number[], xMin: number): number | null 
   return 1 + tail.length / sum;
 }
 
+/**
+ * The floor of a logarithmic count axis.
+ *
+ * <p>
+ * Below one on purpose. A bar is drawn up from the axis floor, so with a floor of one a bin holding
+ * a single cave is a bar of no height, indistinguishable from an empty bin — and on a long-tailed
+ * distribution the single-cave bins are the tail the chart is drawn to show.
+ * </p>
+ */
+export const LOG_COUNT_AXIS_MIN = 0.5;
+
+/**
+ * How many values each bin would hold if the tail followed the fitted power law exactly.
+ *
+ * <p>
+ * The fitted density, (alpha - 1) / xMin * (x / xMin)^-alpha, integrated over each bin and scaled
+ * by the number of values in the tail. Integrating rather than evaluating at a point keeps it
+ * right for wide bins, and it means the line falls as x^-alpha, as counts per bin of equal width
+ * do — not as x^-(alpha - 1), which is the slope of the cumulative distribution. A bin starting
+ * below `xMin` lies outside the fit and gets `null`.
+ * </p>
+ */
+export function powerLawBinCounts(
+  values: number[],
+  bins: readonly Bin[],
+  xMin: number,
+  exponent: number,
+): (number | null)[] {
+  const tail = values.filter((v) => Number.isFinite(v) && v >= xMin && v > 0).length;
+  const survival = (x: number) => Math.pow(x / xMin, 1 - exponent);
+  return bins.map((bin) => (bin.from < xMin || xMin <= 0 ? null : tail * (survival(bin.from) - survival(bin.to))));
+}
+
 /** The five numbers a box plot draws, in the order the drawing library expects them. */
 export interface FiveNumber {
   min: number;

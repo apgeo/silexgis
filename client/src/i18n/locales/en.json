@@ -1032,7 +1032,9 @@
       "other": "Other"
     },
     "makePrimary": "Use as the headline picture",
-    "clearPrimary": "Stop using as the headline picture"
+    "clearPrimary": "Stop using as the headline picture",
+    "primarySet": "This is now the headline picture.",
+    "primaryCleared": "It is no longer the headline picture."
   },
   "documents": {
     "deletion": {
@@ -1423,6 +1425,11 @@
     "duplicateUnknown": "These contents are already stored. Store this copy as well?",
     "duplicateStoreAnyway": "Store anyway",
     "duplicateSkip": "Skip it",
+    "stop": "Stop uploading",
+    "stopTitle": "Stop this upload?",
+    "stopContent": "{{stored}} of {{total}} files are stored and stay where they are. The other {{rest}} will not be sent.",
+    "stopConfirm": "Stop",
+    "keepGoing": "Keep uploading",
     "batches": "Uploads",
     "batchesEmpty": "Nothing has been uploaded in a batch yet.",
     "batchSource": "From",
@@ -1440,6 +1447,7 @@
       "failed": "Failed"
     },
     "batchCounts": "{{stored}} stored · {{skipped}} skipped · {{failed}} failed",
+    "batchCountsTitle": "Files",
     "batchReport": "Report",
     "importDirectory": "Import from a server directory",
     "importDirectoryHint": "Copies files the server can already reach, without sending them over the network. Folders become cabinets.",
@@ -1456,7 +1464,19 @@
       "pathRefused": "This folder path cannot be filed",
       "filingRefused": "You may not file into that cabinet",
       "unreadable": "The file could not be read",
-      "failed": "Upload failed"
+      "failed": "Upload failed",
+      "lengthRequired": "The server was not told how long a piece was; something between you and it may be removing that",
+      "sessionEnded": "The upload ended before the file was confirmed. It may already be stored: check before sending it again",
+      "outOfStep": "The server's copy and this file got out of step",
+      "connectionLost": "The connection was lost before the file arrived",
+      "serverFault": "The server could not store the file; it may be out of room",
+      "archiveUnreadable": "The archive could not be opened",
+      "archiveTooManyEntries": "The archive holds more files than this installation accepts",
+      "archiveTooLarge": "The archive unpacks to more than this installation accepts",
+      "archiveSuspicious": "The archive is compressed in a way that looks unsafe, so it was not unpacked",
+      "importDirectoryNotFound": "The directory was not found on the server",
+      "importPathNotAllowed": "The directory is outside the ones this installation may import from",
+      "importNoRoots": "No import directories are configured on this installation"
     },
     "batchStarted": "Uploaded"
   },
@@ -1521,6 +1541,11 @@
     "shareTitle": "Share link",
     "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. Revoke and mint a new one if it is lost.",
     "revokeConfirm": "Revoke this album’s share link?",
+    "shareAlbum": "Make a share link",
+    "revokeShare": "Revoke the share link",
+    "deleteAlbum": "Delete album",
+    "shareRevoked": "Share link revoked.",
+    "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
       "cc0": "Public domain (CC0)",
@@ -1554,6 +1579,27 @@
     "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
   },
   "geodata": {
+    "refusals": {
+      "connection": "The server could not be reached. Check the connection and try again.",
+      "signedOut": "You are signed out. Sign in again and repeat this.",
+      "forbidden": "Your account may not do this.",
+      "gone": "It is no longer there: somebody may have deleted it. Reload the list.",
+      "server": "The server failed (error {{status}}). Try again in a moment.",
+      "busy": "It is still being processed. Try again once it has finished.",
+      "groupNotAllowed": "You may not give it to that caving group.",
+      "fileNotReady": "The file has not finished being read, so there is nothing to review yet.",
+      "selectionTooLarge": "Too many rows are chosen for one confirmation. Choose fewer and confirm in parts.",
+      "nothingCreated": "Every chosen row was set aside, so nothing would be created.",
+      "reviewRequired": "Imports here are reviewed first: choose the rows and confirm them.",
+      "tooLargeWithoutReview": "The file is too large to create without a review: choose the rows and confirm them.",
+      "noFiles": "None of the chosen pictures could be read.",
+      "ruleSetGone": "The chosen rule set is no longer there. Choose another one."
+    },
+    "deleteFailed": "It was not deleted.",
+    "exportFailed": "The file could not be exported.",
+    "cavingGroup": "Caving group",
+    "cavingGroupRequired": "Choose the caving group that may read it.",
+    "editLoadFailed": "The current settings could not be read, so it cannot be edited now.",
     "title": "Geodata",
     "name": "Name",
     "format": "Format",
@@ -1568,6 +1614,19 @@
     "uploadPrompt": "Click or drag vector files here to upload",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background. Up to 150 MB per file.",
     "uploadQueued": "{{name}} uploaded — import queued.",
+    "encoding": {
+      "action": "Character encoding",
+      "title": "Character encoding of this table",
+      "hint": "If letters such as ă, ș, à or ñ show up wrong in this file's names, say how the file was saved. The file is then read again from the start with that encoding, keeping its separator and coordinate columns.",
+      "detect": "Detect it from the file",
+      "confirm": "Read it again",
+      "queued": "{{name}} is being read again.",
+      "inProgress": "This file is still being read. Wait until that finishes, then choose the encoding again.",
+      "forbidden": "Your account may not change this file.",
+      "gone": "This file no longer exists, or you may no longer see it.",
+      "failed": "The file could not be read again. Try again in a moment.",
+      "busy": "Available once the file has been read"
+    },
     "upload": {
       "sending": "Uploading — {{sent}} of {{total}}",
       "checking": "Sent — the server is checking the file…",
@@ -3113,6 +3172,8 @@
   "history": {
     "title": "History",
     "empty": "No changes recorded yet.",
+    "loadFailed": "The history could not be loaded.",
+    "partial": "Showing the latest {{shown}} of {{total}} changes.",
     "hidden": "Value hidden (protected location)",
     "geometrySummary": "Geometry of {{points}} points (too large to record in full)",
     "systemUser": "System",
@@ -6150,6 +6211,8 @@
     "held": "Your account's imports wait for a reviewer. Nothing has been created yet; it will be once a reviewer accepts it."
   },
   "vectorImport": {
+    "previewFailed": "The review could not be worked out for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Review and import",
     "reviewAndImport": "Review and import into the registry",
     "mapPreview": "Map preview",
@@ -6322,6 +6385,9 @@
     "saving": "All {{total}} rows reached; saving them"
   },
   "photoImport": {
+    "uploadFailedNamed": "{{name}} was not uploaded: {{reason}}",
+    "previewFailed": "The pictures could not be grouped into places for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Features from photographs",
     "openFromGeodata": "From photographs",
     "openFromTrip": "Derive features from this trip's photographs",
@@ -6436,6 +6502,16 @@
     }
   },
   "termRules": {
+    "errors": {
+      "notEditable": "This set cannot be changed here. Make a copy of your own and change that.",
+      "notFound": "This set is no longer there: somebody may have deleted it.",
+      "groupNotFound": "The caving group this set belongs to is no longer there.",
+      "forbidden": "Your account may not change this set."
+    },
+    "discardTitle": "Close without saving?",
+    "discardBody": "The changes made to this set are lost.",
+    "discardOk": "Close and lose them",
+    "keepEditing": "Keep editing",
     "title": "Detection rules",
     "intro": "What a waypoint called Peștera, P., aven, izbuc, ponor or doline is proposed to become. Order decides: when two rules claim one candidate, the earlier one wins.",
     "name": "Name",
@@ -8074,12 +8150,22 @@
       "searchTooDeep": "This search has more results than can be paged through. Narrow it with a county or a longer name.",
       "caveNotFound": "The catalogue no longer publishes that cave.",
       "selectionTooLarge": "Too many caves were chosen for one import. Bring them in smaller batches — each one can be undone on its own.",
-      "importFailed": "The import could not be completed."
+      "importFailed": "The import could not be completed.",
+      "createForbidden": "Your account may not create caves, so it cannot bring caves in from the catalogue.",
+      "selectionEmpty": "Nothing was chosen to import.",
+      "nothingCreated": "Every chosen cave was set aside, so there was nothing to import.",
+      "recordMissing": "The catalogue no longer publishes this cave.",
+      "updateForbidden": "You may not change the cave this entry was imported as.",
+      "caveMissing": "The cave this entry was imported as is no longer a cave here.",
+      "positionInvalid": "The position given for this cave is not on the earth.",
+      "typeUnknown": "The chosen cave or entrance type does not exist on this installation.",
+      "parentNotFound": "The chosen parent no longer exists, or you may not see it."
     },
     "paging": {
       "previous": "Previous",
       "next": "Next",
-      "page": "Page {{page}}"
+      "page": "Page {{page}}",
+      "backTo": "Back to page {{page}}"
     }
   },
   "tripImport": {
@@ -8700,7 +8786,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Linked parts of this picture: {{count}}"
+    "regionCount": "Linked parts of this picture: {{count}}",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are drawn on this picture."
   },
   "tripStats": {
     "title": "Trip insights",

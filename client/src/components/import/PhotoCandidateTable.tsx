@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
 import { Flex, Image, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,6 +26,48 @@ interface Props {
   pageSize: number;
   total: number;
   onPageChange: (page: number, pageSize: number) => void;
+}
+
+/**
+ * A place's name, edited as typed and handed to the review when the field is left.
+ *
+ * The field keeps its own draft while it has the cursor: bound straight to the review, emptying
+ * it to type a new name would store "no name" on the last Backspace, and "no name" shows the
+ * proposal — so the proposal would spring back under the cursor. A name left empty does go back
+ * to the proposal, because a place is never created without one.
+ */
+function NameCell({
+  stored,
+  proposed,
+  placeholder,
+  onCommit,
+}: {
+  stored: string | null | undefined;
+  proposed: string | null;
+  placeholder: string;
+  onCommit: (name: string | null) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) {
+      return;
+    }
+    const name = draft.trim() === '' ? null : draft;
+    setDraft(null);
+    if (name !== (stored ?? null)) {
+      onCommit(name);
+    }
+  };
+  return (
+    <Input
+      size="small"
+      placeholder={placeholder}
+      value={draft ?? stored ?? proposed ?? ''}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onPressEnter={commit}
+    />
+  );
 }
 
 /**
@@ -140,13 +183,11 @@ export default function PhotoCandidateTable({
           key: 'name',
           render: (_, row) => (
             <Flex vertical gap={2}>
-              <Input
-                size="small"
+              <NameCell
+                stored={decisionOf(row)?.name}
+                proposed={row.proposedName}
                 placeholder={row.proposedName ?? t('photoImport.unnamed')}
-                value={decisionOf(row)?.name ?? row.proposedName ?? ''}
-                onChange={(e) =>
-                  onDecision(row.key, { ...decisionOf(row), name: e.target.value || null })
-                }
+                onCommit={(name) => onDecision(row.key, { ...decisionOf(row), name })}
               />
               <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                 {row.members[0]?.originalName}

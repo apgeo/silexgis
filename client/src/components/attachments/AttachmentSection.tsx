@@ -4,7 +4,7 @@ import {
 } from '@ant-design/icons';
 import { ApiError } from '../../api/client.ts';
 import {
-  App, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload,
+  App, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload, theme,
 } from 'antd';
 import Button from '../Button.tsx';
 import List from '../List.tsx';
@@ -29,6 +29,7 @@ import PhotoFactsPanel from './PhotoFactsPanel.tsx';
 import PhotoPositionAction from './PhotoPositionAction.tsx';
 import { formatSize } from './fileFormat.ts';
 import LocationRemovedTag from './LocationRemovedTag.tsx';
+import { useDuplicatePrompt } from '../uploads/useDuplicatePrompt.ts';
 import { downloadTitle } from './downloadTitle.ts';
 import PlaceMapAction from '../../rastermap/PlaceMapAction.tsx';
 
@@ -70,13 +71,26 @@ export default function AttachmentSection({
   enabled = true,
 }: AttachmentSectionProps) {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const { data: attachments } = useAttachments(entityType, entityId, enabled);
   const { data: fileConfig } = useFileConfig();
   const uploadFile = useUploadFile();
   const createAttachment = useCreateAttachment();
   const deleteAttachment = useDeleteAttachment();
   const setPrimary = useSetPrimaryAttachment();
+  const { token } = theme.useToken();
+
+  // Starring is one click with no dialog around it, so its outcome is said either way: a
+  // refusal (a second editor removed the photo, the right was withdrawn) would otherwise pass
+  // as nothing happening at all.
+  const togglePrimary = async (attachment: AttachmentInfo) => {
+    try {
+      await setPrimary.mutateAsync({ id: attachment.id, primary: !attachment.isPrimary });
+      message.success(t(attachment.isPrimary ? 'attachments.primaryCleared' : 'attachments.primarySet'));
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
 
   // The report documents live in their own slot and are kept out of the generic lists. Usually
   // one, but a club that uploaded the report it wrote keeps it when a write-up is generated
@@ -87,25 +101,9 @@ export default function AttachmentSection({
   const photos = (attachments ?? []).filter((a) => a.file.kind === 'image' && !inSlot.has(a.id));
   const documents = (attachments ?? []).filter((a) => a.file.kind !== 'image' && !inSlot.has(a.id));
 
-  /**
-   * Asks whether to store content the archive already holds.
-   *
-   * The store refuses a second copy of bytes this caller can already see, and attaching is one
-   * of the two commonest reasons somebody genuinely wants one anyway — the other being a file
-   * that legitimately belongs to two objects. Without the question the refusal would surface
-   * as a bare failure on the ordinary drop zone.
-   */
-  const askAboutDuplicate = () =>
-    new Promise<boolean>((resolve) => {
-      modal.confirm({
-        title: t('uploads.duplicateTitle'),
-        content: t('uploads.duplicateKnown'),
-        okText: t('uploads.duplicateStoreAnyway'),
-        cancelText: t('uploads.duplicateSkip'),
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false),
-      });
-    });
+  // Attaching is one of the commonest reasons somebody genuinely wants a second copy of bytes
+  // the archive already holds; the refusal names a copy this caller can see.
+  const askAboutDuplicate = useDuplicatePrompt();
 
   const onUpload = async (file: File, roleOverride?: AttachmentRole) => {
     // Checked before the transfer starts, against the limit the server publishes rather
@@ -125,7 +123,7 @@ export default function AttachmentSection({
           throw error;
         }
 
-        if (!(await askAboutDuplicate())) {
+        if (!(await askAboutDuplicate(true))) {
           return;
         }
 
@@ -166,64 +164,12 @@ export default function AttachmentSection({
               size="small"
               dataSource={reports}
               renderItem={(attachment) => (
-                <List.Item
-                  actions={[
-                    <OpenDocument key="open" documentId={attachment.file.documentId} />,
-                    ...(canEdit
-                      ? [
-                          <AttachmentDetails key="details" attachment={attachment} />,
-                          <DocumentMetadata key="document" documentId={attachment.file.documentId} />,
-                        ]
-                      : []),
-                    <FileVersions
-                      key="versions"
-                      fileId={attachment.file.id}
-                      versionNumber={attachment.file.versionNumber}
-                      canEdit={canEdit}
-                    />,
-                    // A photo whose own coordinates this caller may not be given is
-                    // delivered as renderings only; the link would answer as a missing
-                    // file, so the control says why instead of failing when followed.
-                    <Tooltip
-                      key="download"
-                      title={downloadTitle(attachment.file, t)}
-                    >
-                      <Button
-                        type="primary"
-                        size="small"
-                        icon={<DownloadOutlined />}
-                        aria-label={t('iconButtons.download')}
-                        disabled={!attachment.file.mayDownloadOriginal}
-                        href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
-                        download={attachment.file.originalName}
-                      />
-                    </Tooltip>,
-                    ...(canEdit
-                      ? [
-                          <Popconfirm
-                            key="delete"
-                            title={t('attachments.deleteConfirm')}
-                            onConfirm={() => void onDelete(attachment)}
-                            okButtonProps={{ danger: true }}
-                          >
-                            <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
-                          </Popconfirm>,
-                        ]
-                      : []),
-                  ]}
-                >
-                  <List.Item.Meta
-                    avatar={<FileOutlined />}
-                    title={attachment.caption ?? attachment.file.originalName}
-                    description={[
-                      attachment.file.originalName,
-                      formatSize(attachment.file.sizeBytes),
-                      attachment.file.documentDate,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  />
-                </List.Item>
+                <AttachmentRow
+                  attachment={attachment}
+                  canEdit={canEdit}
+                  emphasiseDownload
+                  onDelete={onDelete}
+                />
               )}
             />
           ) : canEdit ? (
@@ -302,20 +248,17 @@ export default function AttachmentSection({
                           <Button
                             size="small"
                             type="text"
-                            aria-label={t('attachments.makePrimary')}
+                            aria-label={t(attachment.isPrimary ? 'attachments.clearPrimary' : 'attachments.makePrimary')}
+                            aria-pressed={attachment.isPrimary}
+                            loading={setPrimary.isPending && setPrimary.variables?.id === attachment.id}
                             icon={
                               attachment.isPrimary ? (
-                                <StarFilled style={{ color: '#faad14' }} />
+                                <StarFilled style={{ color: token.colorWarning }} />
                               ) : (
                                 <StarOutlined />
                               )
                             }
-                            onClick={() =>
-                              void setPrimary.mutateAsync({
-                                id: attachment.id,
-                                primary: !attachment.isPrimary,
-                              })
-                            }
+                            onClick={() => void togglePrimary(attachment)}
                           />
                         </Tooltip>
                       )}
@@ -366,60 +309,7 @@ export default function AttachmentSection({
             size="small"
             dataSource={documents}
             renderItem={(attachment) => (
-              <List.Item
-                actions={[
-                  <OpenDocument key="open" documentId={attachment.file.documentId} />,
-                  ...(canEdit
-                    ? [
-                        <AttachmentDetails key="details" attachment={attachment} />,
-                        <DocumentMetadata key="document" documentId={attachment.file.documentId} />,
-                      ]
-                    : []),
-                  <FileVersions
-                    key="versions"
-                    fileId={attachment.file.id}
-                    versionNumber={attachment.file.versionNumber}
-                    canEdit={canEdit}
-                  />,
-                  <Tooltip
-                    key="download"
-                    title={downloadTitle(attachment.file, t)}
-                  >
-                    <Button
-                      size="small"
-                      icon={<DownloadOutlined />}
-                      aria-label={t('iconButtons.download')}
-                      disabled={!attachment.file.mayDownloadOriginal}
-                      href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
-                      download={attachment.file.originalName}
-                    />
-                  </Tooltip>,
-                  ...(canEdit
-                    ? [
-                        <Popconfirm
-                          key="delete"
-                          title={t('attachments.deleteConfirm')}
-                          onConfirm={() => void onDelete(attachment)}
-                          okButtonProps={{ danger: true }}
-                        >
-                          <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
-                        </Popconfirm>,
-                      ]
-                    : []),
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={<FileOutlined />}
-                  title={attachment.caption ?? attachment.file.originalName}
-                  description={[
-                    attachment.file.originalName,
-                    formatSize(attachment.file.sizeBytes),
-                    attachment.file.documentDate,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                />
-              </List.Item>
+              <AttachmentRow attachment={attachment} canEdit={canEdit} onDelete={onDelete} />
             )}
           />
         </>
@@ -433,5 +323,77 @@ export default function AttachmentSection({
     <Card title={t('attachments.title')} size="small" style={{ marginTop: 16 }}>
       {body}
     </Card>
+  );
+}
+
+/**
+ * One document in a list: the report slot and the documents list draw the same row, so a
+ * control added to one cannot quietly be missing from the other.
+ */
+function AttachmentRow({
+  attachment,
+  canEdit,
+  emphasiseDownload = false,
+  onDelete,
+}: {
+  attachment: AttachmentInfo;
+  canEdit: boolean;
+  /** The report slot's one document is what the trip is read for, so its download stands out. */
+  emphasiseDownload?: boolean;
+  onDelete: (attachment: AttachmentInfo) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <List.Item
+      actions={[
+        <OpenDocument key="open" documentId={attachment.file.documentId} />,
+        ...(canEdit
+          ? [
+              <AttachmentDetails key="details" attachment={attachment} />,
+              <DocumentMetadata key="document" documentId={attachment.file.documentId} />,
+            ]
+          : []),
+        <FileVersions
+          key="versions"
+          fileId={attachment.file.id}
+          versionNumber={attachment.file.versionNumber}
+          canEdit={canEdit}
+        />,
+        // A photo whose own coordinates this caller may not be given is delivered as renderings
+        // only; the link would answer as a missing file, so the control says why instead of
+        // failing when followed.
+        <Tooltip key="download" title={downloadTitle(attachment.file, t)}>
+          <Button
+            type={emphasiseDownload ? 'primary' : undefined}
+            size="small"
+            icon={<DownloadOutlined />}
+            aria-label={t('iconButtons.download')}
+            disabled={!attachment.file.mayDownloadOriginal}
+            href={attachment.file.mayDownloadOriginal ? attachment.file.contentUrl : undefined}
+            download={attachment.file.originalName}
+          />
+        </Tooltip>,
+        ...(canEdit
+          ? [
+              <Popconfirm
+                key="delete"
+                title={t('attachments.deleteConfirm')}
+                onConfirm={() => void onDelete(attachment)}
+                okButtonProps={{ danger: true }}
+              >
+                <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
+              </Popconfirm>,
+            ]
+          : []),
+      ]}
+    >
+      <List.Item.Meta
+        avatar={<FileOutlined />}
+        title={attachment.caption ?? attachment.file.originalName}
+        description={[attachment.file.originalName, formatSize(attachment.file.sizeBytes), attachment.file.documentDate]
+          .filter(Boolean)
+          .join(' · ')}
+      />
+    </List.Item>
   );
 }

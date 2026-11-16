@@ -1032,7 +1032,9 @@
       "other": "Altele"
     },
     "makePrimary": "Folosește ca fotografie reprezentativă",
-    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă"
+    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă",
+    "primarySet": "Aceasta este acum fotografia reprezentativă.",
+    "primaryCleared": "Nu mai este fotografia reprezentativă."
   },
   "documents": {
     "deletion": {
@@ -1423,6 +1425,11 @@
     "duplicateUnknown": "Acest conținut este deja salvat. Salvezi și această copie?",
     "duplicateStoreAnyway": "Salvează oricum",
     "duplicateSkip": "Sari peste",
+    "stop": "Oprește încărcarea",
+    "stopTitle": "Oprești această încărcare?",
+    "stopContent": "{{stored}} din {{total}} fișiere sunt salvate și rămân acolo unde sunt. Celelalte {{rest}} nu vor mai fi trimise.",
+    "stopConfirm": "Oprește",
+    "keepGoing": "Continuă încărcarea",
     "batches": "Încărcări",
     "batchesEmpty": "Nu s-a încărcat încă nimic în loturi.",
     "batchSource": "Sursă",
@@ -1440,6 +1447,7 @@
       "failed": "Eșuat"
     },
     "batchCounts": "{{stored}} salvate · {{skipped}} sărite · {{failed}} eșuate",
+    "batchCountsTitle": "Fișiere",
     "batchReport": "Raport",
     "importDirectory": "Importă dintr-un director de pe server",
     "importDirectoryHint": "Copiază fișiere la care serverul are deja acces, fără a le trimite prin rețea. Folderele devin dulapuri.",
@@ -1456,7 +1464,19 @@
       "pathRefused": "Această cale de folder nu poate fi depusă",
       "filingRefused": "Nu ai voie să depui în acel dulap",
       "unreadable": "Fișierul nu a putut fi citit",
-      "failed": "Încărcarea a eșuat"
+      "failed": "Încărcarea a eșuat",
+      "lengthRequired": "Serverul nu a aflat lungimea unei bucăți; ceva între tine și server o poate elimina",
+      "sessionEnded": "Încărcarea s-a încheiat înainte ca fișierul să fie confirmat. Poate e deja salvat: verifică înainte să-l trimiți din nou",
+      "outOfStep": "Copia de pe server și acest fișier nu mai corespund",
+      "connectionLost": "Conexiunea s-a pierdut înainte ca fișierul să ajungă",
+      "serverFault": "Serverul nu a putut salva fișierul; poate nu mai are spațiu",
+      "archiveUnreadable": "Arhiva nu a putut fi deschisă",
+      "archiveTooManyEntries": "Arhiva conține mai multe fișiere decât acceptă această instalare",
+      "archiveTooLarge": "Arhiva despachetată depășește cât acceptă această instalare",
+      "archiveSuspicious": "Arhiva este comprimată într-un mod care pare nesigur, așa că nu a fost despachetată",
+      "importDirectoryNotFound": "Directorul nu a fost găsit pe server",
+      "importPathNotAllowed": "Directorul este în afara celor din care această instalare poate importa",
+      "importNoRoots": "Această instalare nu are configurat niciun director de import"
     },
     "batchStarted": "Încărcat"
   },
@@ -1521,6 +1541,11 @@
     "shareTitle": "Link de partajare",
     "shareOnce": "Copiază-l acum — linkul se arată o singură dată și nu mai poate fi recuperat. Dacă se pierde, revocă-l și creează altul.",
     "revokeConfirm": "Revoci linkul de partajare al acestui album?",
+    "shareAlbum": "Creează un link de partajare",
+    "revokeShare": "Revocă linkul de partajare",
+    "deleteAlbum": "Șterge albumul",
+    "shareRevoked": "Linkul de partajare a fost revocat.",
+    "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
     "licences": {
       "cc0": "Domeniu public (CC0)",
@@ -1554,6 +1579,27 @@
     "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora."
   },
   "geodata": {
+    "refusals": {
+      "connection": "Serverul nu a putut fi contactat. Verifică conexiunea și încearcă din nou.",
+      "signedOut": "Ai fost deconectat. Autentifică-te din nou și repetă operația.",
+      "forbidden": "Contul tău nu are voie să facă asta.",
+      "gone": "Nu mai există: poate a fost șters de altcineva. Reîncarcă lista.",
+      "server": "Serverul a dat o eroare ({{status}}). Încearcă din nou peste puțin timp.",
+      "busy": "Este încă în curs de procesare. Încearcă din nou după ce s-a terminat.",
+      "groupNotAllowed": "Nu poți atribui elementul acestui grup de speologie.",
+      "fileNotReady": "Fișierul nu a fost citit complet, așa că nu este încă nimic de revizuit.",
+      "selectionTooLarge": "Sunt alese prea multe rânduri pentru o singură confirmare. Alege mai puține și confirmă pe rând.",
+      "nothingCreated": "Toate rândurile alese au fost lăsate deoparte, deci nu s-ar crea nimic.",
+      "reviewRequired": "Aici importurile se revizuiesc întâi: alege rândurile și confirmă-le.",
+      "tooLargeWithoutReview": "Fișierul este prea mare pentru a fi creat fără revizuire: alege rândurile și confirmă-le.",
+      "noFiles": "Niciuna dintre fotografiile alese nu a putut fi citită.",
+      "ruleSetGone": "Setul de reguli ales nu mai există. Alege altul."
+    },
+    "deleteFailed": "Nu a fost șters.",
+    "exportFailed": "Fișierul nu a putut fi exportat.",
+    "cavingGroup": "Grup de speologie",
+    "cavingGroupRequired": "Alege grupul de speologie care îl poate citi.",
+    "editLoadFailed": "Setările actuale nu au putut fi citite, așa că nu poate fi editat acum.",
     "title": "Geodate",
     "name": "Denumire",
     "format": "Format",
@@ -1568,6 +1614,19 @@
     "uploadPrompt": "Apasă sau trage fișiere vectoriale aici pentru încărcare",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal. Cel mult 150 MB pe fișier.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
+    "encoding": {
+      "action": "Codificarea caracterelor",
+      "title": "Codificarea caracterelor acestui tabel",
+      "hint": "Dacă litere precum ă, ș, à sau ñ apar greșit în denumirile din acest fișier, alege cum a fost salvat fișierul. Fișierul este apoi citit din nou de la început cu acea codificare, păstrându-i separatorul și coloanele de coordonate.",
+      "detect": "Detectează din fișier",
+      "confirm": "Citește din nou",
+      "queued": "{{name}} este citit din nou.",
+      "inProgress": "Fișierul este încă în curs de citire. Așteaptă să se termine, apoi alege din nou codificarea.",
+      "forbidden": "Contul tău nu poate modifica acest fișier.",
+      "gone": "Fișierul nu mai există sau nu îl mai poți vedea.",
+      "failed": "Fișierul nu a putut fi citit din nou. Încearcă din nou peste puțin timp.",
+      "busy": "Disponibil după ce fișierul a fost citit"
+    },
     "upload": {
       "sending": "Se încarcă — {{sent}} din {{total}}",
       "checking": "Trimis — serverul verifică fișierul…",
@@ -3113,6 +3172,8 @@
   "history": {
     "title": "Istoric",
     "empty": "Nicio modificare înregistrată încă.",
+    "loadFailed": "Istoricul nu a putut fi încărcat.",
+    "partial": "Se arată ultimele {{shown}} din {{total}} modificări.",
     "hidden": "Valoare ascunsă (locație protejată)",
     "geometrySummary": "Geometrie cu {{points}} puncte (prea mare pentru a fi înregistrată integral)",
     "systemUser": "Sistem",
@@ -6163,6 +6224,8 @@
     "held": "Importurile contului tău așteaptă un recenzent. Nu s-a creat nimic încă; se va crea după ce un recenzent le acceptă."
   },
   "vectorImport": {
+    "previewFailed": "Revizuirea nu a putut fi calculată pentru aceste setări.",
+    "sessionFailed": "Revizuirea salvată nu a putut fi citită.",
     "title": "Verifică și importă",
     "reviewAndImport": "Verifică și importă în registru",
     "mapPreview": "Previzualizare pe hartă",
@@ -6335,6 +6398,9 @@
     "saving": "Toate cele {{total}} rânduri au fost parcurse; se salvează"
   },
   "photoImport": {
+    "uploadFailedNamed": "{{name}} nu a fost încărcat: {{reason}}",
+    "previewFailed": "Fotografiile nu au putut fi grupate în locuri pentru aceste setări.",
+    "sessionFailed": "Revizuirea salvată nu a putut fi citită.",
     "title": "Obiecte din fotografii",
     "openFromGeodata": "Din fotografii",
     "openFromTrip": "Creează obiecte din fotografiile turei",
@@ -6449,6 +6515,16 @@
     }
   },
   "termRules": {
+    "errors": {
+      "notEditable": "Acest set nu poate fi modificat aici. Fă-ți o copie proprie și modific-o pe aceea.",
+      "notFound": "Acest set nu mai există: poate a fost șters de altcineva.",
+      "groupNotFound": "Grupul de speologie căruia îi aparține setul nu mai există.",
+      "forbidden": "Contul tău nu are voie să modifice acest set."
+    },
+    "discardTitle": "Închizi fără să salvezi?",
+    "discardBody": "Modificările făcute acestui set se pierd.",
+    "discardOk": "Închide și renunță la ele",
+    "keepEditing": "Continuă editarea",
     "title": "Reguli de detectare",
     "intro": "Ce se propune să devină un punct numit Peștera, P., aven, izbuc, ponor sau dolină. Ordinea decide: când două reguli revendică același candidat, câștigă prima.",
     "name": "Nume",
@@ -6667,7 +6743,7 @@
         },
         "visibilities": {
           "private": "Privat",
-          "cavingGroup": "Club",
+          "cavingGroup": "Grup de speologie",
           "authenticated": "Conturi autentificate",
           "public": "Public"
         },
@@ -6726,7 +6802,7 @@
       "type": "Tip",
       "tag": "Etichetă",
       "owner": "Proprietar",
-      "cavingGroup": "Club",
+      "cavingGroup": "Grup de speologie",
       "organizingGroup": "Club organizator",
       "visibility": "Vizibilitate",
       "protected": "Locație protejată",
@@ -8087,12 +8163,22 @@
       "searchTooDeep": "Căutarea are mai multe rezultate decât se pot răsfoi. Restrânge-o cu un județ sau cu o denumire mai lungă.",
       "caveNotFound": "Catalogul nu mai publică acea peșteră.",
       "selectionTooLarge": "Au fost alese prea multe peșteri pentru un singur import. Adu-le în loturi mai mici — fiecare poate fi anulat separat.",
-      "importFailed": "Importul nu a putut fi finalizat."
+      "importFailed": "Importul nu a putut fi finalizat.",
+      "createForbidden": "Contul tău nu poate crea peșteri, așa că nu poate aduce peșteri din catalog.",
+      "selectionEmpty": "Nu a fost aleasă nicio peșteră pentru import.",
+      "nothingCreated": "Toate peșterile alese au fost lăsate deoparte, așa că nu era nimic de importat.",
+      "recordMissing": "Catalogul nu mai publică această peșteră.",
+      "updateForbidden": "Nu poți modifica peștera ca care a fost importată această intrare.",
+      "caveMissing": "Peștera ca care a fost importată această intrare nu mai este o peșteră aici.",
+      "positionInvalid": "Poziția dată pentru această peșteră nu este pe pământ.",
+      "typeUnknown": "Tipul de peșteră sau de intrare ales nu există în această instalare.",
+      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea."
     },
     "paging": {
       "previous": "Anterioare",
       "next": "Următoare",
-      "page": "Pagina {{page}}"
+      "page": "Pagina {{page}}",
+      "backTo": "Înapoi la pagina {{page}}"
     }
   },
   "tripImport": {
@@ -8713,7 +8799,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Părți legate din această imagine: {{count}}"
+    "regionCount": "Părți legate din această imagine: {{count}}",
+    "linksCutOff": "Pe această imagine sunt desenate doar primele {{shown}} din {{total}} legături."
   },
   "tripStats": {
     "title": "Sinteza turelor",

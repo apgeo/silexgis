@@ -5,7 +5,9 @@ import { App, Popconfirm, Popover, Tag, Upload } from 'antd';
 import Button from '../Button.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
-import { useDeleteFileVersion, useFileVersions, useUploadFileVersion } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
+import { useDeleteFileVersion, useFileConfig, useFileVersions, useUploadFileVersion } from '../../api/hooks.ts';
+import { uploadReasonKey } from '../uploads/uploadReasons.ts';
 import { formatSize } from './fileFormat.ts';
 
 /**
@@ -29,17 +31,30 @@ export default function FileVersions({
   const { data: versions, isLoading } = useFileVersions(fileId, open);
   const uploadVersion = useUploadFileVersion();
   const deleteVersion = useDeleteFileVersion();
+  const { data: fileConfig } = useFileConfig();
 
   if (!canEdit) {
     return versionNumber > 1 ? <Tag>{`v${versionNumber}`}</Tag> : null;
   }
 
   const onUpload = async (file: File) => {
+    // Checked before sending, as a first upload is: a cap learned only after the whole file has
+    // crossed the network is a wasted transfer.
+    if (fileConfig && file.size > fileConfig.maxUploadBytes) {
+      message.error(t('attachments.tooLarge', { max: formatSize(fileConfig.maxUploadBytes) }));
+      return;
+    }
     try {
       await uploadVersion.mutateAsync({ fileId, file });
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A refusal is worded by the same catalogue as any other upload's — too large, a type
+      // this installation does not take, no room left — rather than as a bare "save failed".
+      message.error(
+        error instanceof ApiError
+          ? t(uploadReasonKey(error.code, 'failed', error.status))
+          : t(uploadReasonKey(undefined, 'failed', 0)),
+      );
     }
   };
 

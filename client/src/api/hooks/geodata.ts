@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { api } from '../client.ts';
+import { api, lastReadETag } from '../client.ts';
 import { uploadWithProgress, type UploadProgress } from '../uploadWithProgress.ts';
 import type { components } from '../schema';
-import { unwrap } from './shared.ts';
+import { retryUnlessRefused, unwrap, unwrapVoid } from './shared.ts';
 import type { EntranceFeatureCollection, GeofileListParams, RasterMapListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 import type { GeofileSourceOptions } from './imports.ts';
@@ -63,11 +63,49 @@ export function useUploadGeofile() {
   });
 }
 
+/**
+ * A record read afresh for an edit form, with the version the form's save has to carry.
+ *
+ * The update replaces every field, so the form must start from what the server holds now rather
+ * than from a list row read minutes ago, and it must send the version it started from — not
+ * whatever a later read filed — so a change made by somebody else meanwhile is refused instead of
+ * written over.
+ */
+export interface ReadForEdit<T> {
+  value: T;
+  version: string | undefined;
+}
+
+/**
+ * The geofile an edit form opens on. Kept out of the geofile list's cache family so a list
+ * refresh under an open form does not read it again, and dropped as soon as the form closes so
+ * the next opening reads again.
+ */
+export function useGeofileForEdit(id: string | undefined) {
+  return useQuery({
+    queryKey: ['geofile-edit', id ?? ''] as const,
+    queryFn: async (): Promise<ReadForEdit<GeofileInfo>> => {
+      const value = await unwrap(api.GET('/api/v1/geofiles/{id}', { params: { path: { id: id! } } }));
+      return { value, version: lastReadETag(`/api/v1/geofiles/${id}`) };
+    },
+    enabled: Boolean(id),
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    retry: retryUnlessRefused,
+  });
+}
+
 export function useUpdateGeofile() {
   const invalidate = useInvalidateGeofiles();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: GeofileUpdate }) =>
-      unwrap(api.PUT('/api/v1/geofiles/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, body, version }: { id: string; body: GeofileUpdate; version?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/geofiles/{id}', {
+          params: { path: { id } },
+          body,
+          headers: version ? { 'If-Match': version } : undefined,
+        }),
+      ),
     onSuccess: () => invalidate(),
   });
 }
@@ -75,12 +113,9 @@ export function useUpdateGeofile() {
 export function useDeleteGeofile() {
   const invalidate = useInvalidateGeofiles();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/geofiles/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    // Through the shared reader of refusals, so the code travels with the failure and the page
+    // can say why a delete was refused rather than that it failed.
+    mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/geofiles/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }
@@ -128,11 +163,32 @@ export function useUploadRasterMap() {
   });
 }
 
+/** The raster map an edit form opens on, read afresh for the reasons the geofile one is. */
+export function useRasterMapForEdit(id: string | undefined) {
+  return useQuery({
+    queryKey: ['raster-map-edit', id ?? ''] as const,
+    queryFn: async (): Promise<ReadForEdit<RasterMapInfo>> => {
+      const value = await unwrap(api.GET('/api/v1/georeferenced-maps/{id}', { params: { path: { id: id! } } }));
+      return { value, version: lastReadETag(`/api/v1/georeferenced-maps/${id}`) };
+    },
+    enabled: Boolean(id),
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    retry: retryUnlessRefused,
+  });
+}
+
 export function useUpdateRasterMap() {
   const invalidate = useInvalidateRasterMaps();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: RasterMapUpdate }) =>
-      unwrap(api.PUT('/api/v1/georeferenced-maps/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, body, version }: { id: string; body: RasterMapUpdate; version?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/georeferenced-maps/{id}', {
+          params: { path: { id } },
+          body,
+          headers: version ? { 'If-Match': version } : undefined,
+        }),
+      ),
     onSuccess: () => invalidate(),
   });
 }
@@ -140,12 +196,8 @@ export function useUpdateRasterMap() {
 export function useDeleteRasterMap() {
   const invalidate = useInvalidateRasterMaps();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/georeferenced-maps/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/georeferenced-maps/{id}', { params: { path: { id } } })),
     onSuccess: () => invalidate(),
   });
 }

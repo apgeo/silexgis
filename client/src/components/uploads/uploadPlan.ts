@@ -20,9 +20,17 @@ export interface UploadItem {
   progress: number;
   /** Stable problem code, translated where it is shown. */
   errorCode?: string;
+  /**
+   * The HTTP status of a failure, 0 when the connection itself failed. Read where a failure
+   * carries no code, so a dropped link and a fault on the server are worded apart.
+   */
+  errorStatus?: number;
   documentId?: string;
-  /** Set when the file was skipped because this content is already here. */
-  duplicateOfDocumentId?: string;
+  /**
+   * The resumable session a failed attempt left open. A retry continues it rather than sending
+   * the file from its first byte; discarding the row abandons it.
+   */
+  sessionId?: string;
 }
 
 /** How a drop ended, as the summary line states it. */
@@ -105,7 +113,7 @@ export function retryable(items: readonly UploadItem[]): UploadItem[] {
 export function resetForRetry(items: readonly UploadItem[]): UploadItem[] {
   return items.map((item) =>
     item.status === 'failed'
-      ? { ...item, status: 'pending' as const, progress: 0, errorCode: undefined }
+      ? { ...item, status: 'pending' as const, progress: 0, errorCode: undefined, errorStatus: undefined }
       : item,
   );
 }

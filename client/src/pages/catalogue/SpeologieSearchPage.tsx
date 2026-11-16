@@ -5,6 +5,7 @@ import { Alert, Card, Flex, Input, Select, Space, Table, Tag, Tooltip, Typograph
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import {
   useSpeologieBasins,
   useSpeologieSearch,
@@ -62,6 +63,9 @@ export default function SpeologieSearchPage() {
   };
 
   const errorMessage = useMemo(() => speologieErrorMessage(results.error, t), [results.error, t]);
+  // A page past what a several-spelling search can page through is refused, and asking for the
+  // same page again would be refused again: the way on is the last page that answered.
+  const pastReach = results.error instanceof ApiError && results.error.code === 'speologie.search_too_deep';
 
   const columns = [
     {
@@ -241,7 +245,26 @@ export default function SpeologieSearchPage() {
         </Typography.Paragraph>
       </Card>
 
-      {errorMessage ? <Alert type="error" showIcon title={errorMessage} /> : null}
+      {errorMessage ? (
+        <Alert
+          type="error"
+          showIcon
+          title={errorMessage}
+          action={
+            pastReach ? (
+              page > 1 ? (
+                <Button size="small" onClick={() => setPage((p) => p - 1)} data-testid="speologie-search-back">
+                  {t('speologie.paging.backTo', { page: page - 1 })}
+                </Button>
+              ) : null
+            ) : (
+              <Button size="small" onClick={() => void results.refetch()} data-testid="speologie-search-retry">
+                {t('common.retry')}
+              </Button>
+            )
+          }
+        />
+      ) : null}
 
       {results.data && query.basin !== undefined ? (
         <Alert
@@ -274,30 +297,38 @@ export default function SpeologieSearchPage() {
         />
       ) : null}
 
-      <Table<SpeologieCave>
-        rowKey="id"
-        size="small"
-        scroll={{ x: 'max-content' }}
-        loading={results.isFetching}
-        dataSource={rows}
-        columns={columns}
-        pagination={false}
-        locale={{
-          emptyText: results.data ? (
-            <Space orientation="vertical" size={4}>
-              <span>{t('speologie.search.noResults')}</span>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('speologie.search.noResultsHint')}
-              </Typography.Text>
-            </Space>
-          ) : undefined,
-        }}
-        rowSelection={{
-          selectedRowKeys: selected as number[],
-          onChange: (keys) => setSelected(keys as number[]),
-        }}
-        data-testid="speologie-results"
-      />
+      {/* A refused search is not an empty one: no table of nothing stands under the refusal, and
+          rows kept from an earlier answer are not passed off as this one's. */}
+      {results.error ? null : (
+        <Table<SpeologieCave>
+          rowKey="id"
+          size="small"
+          scroll={{ x: 'max-content' }}
+          loading={results.isFetching}
+          dataSource={rows}
+          columns={columns}
+          pagination={false}
+          locale={{
+            emptyText: results.data ? (
+              <Space orientation="vertical" size={4}>
+                <span>{t('speologie.search.noResults')}</span>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('speologie.search.noResultsHint')}
+                </Typography.Text>
+              </Space>
+            ) : undefined,
+          }}
+          rowSelection={{
+            // Pages are fetched one at a time, so the table only ever holds the page on screen.
+            // Without this, the next tick would silently drop caves chosen on an earlier page
+            // that the import button's count still included.
+            preserveSelectedRowKeys: true,
+            selectedRowKeys: selected as number[],
+            onChange: (keys) => setSelected(keys as number[]),
+          }}
+          data-testid="speologie-results"
+        />
+      )}
 
       <Flex justify="space-between" align="center">
         <Button disabled={page <= 1 || results.isFetching} onClick={() => setPage((p) => p - 1)}>
