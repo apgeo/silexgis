@@ -65,6 +65,8 @@ vi.mock('../../api/hooks.ts', async () => {
     // the thing doing the splitting is the one that ships.
     hasAccessAction: actual.hasAccessAction,
     terrainBuildUnsettled: actual.terrainBuildUnsettled,
+    // The area picker draws over the catalogue's background; this installation names none.
+    useMapLayers: () => ({ isPending: false, data: [] }),
     useCapabilities: () => ({ data: capabilities }),
     useSubmitTerrainBuild: () => ({ mutateAsync: submitMutate, isPending: false }),
     useUploadTerrainRaster: () => ({ mutateAsync: uploadMutate, isPending: false }),

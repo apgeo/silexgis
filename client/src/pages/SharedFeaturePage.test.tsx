@@ -13,6 +13,18 @@ import type { SharedFeatureEnvelope } from '../api/hooks.ts';
 // resolve the client's relative paths against, so the network stand-in sits one step higher.)
 const network = { answer: (): Promise<Response> => Promise.reject(new Error('no answer set')) };
 
+const { built } = vi.hoisted(() => ({ built: [] as import('ol/Map').default[] }));
+vi.mock('ol/Map', async (original) => {
+  const Actual = (await original<typeof import('ol/Map')>()).default;
+  class Counted extends Actual {
+    constructor(...args: ConstructorParameters<typeof Actual>) {
+      super(...args);
+      built.push(this);
+    }
+  }
+  return { default: Counted };
+});
+
 const signIn = vi.fn(async (_returnTo?: string) => {});
 vi.mock('../auth/auth.tsx', () => ({
   // Nobody is signed in in this tab: the link was opened cold, from a message.
@@ -84,6 +96,7 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  built.length = 0;
   signIn.mockClear();
   network.answer = () => Promise.reject(new Error('no answer set'));
 });
@@ -146,6 +159,25 @@ describe('the page a shared record link opens', () => {
     expect(screen.getByText('seasonal')).toBeTruthy();
     expect(screen.queryByText('hidden')).toBeNull();
     expect(container.querySelector('[data-testid="shared-feature-map"]')).toBeNull();
+  });
+
+  it('a record with a shape is drawn over the fallback background, not a tile server of its own', async () => {
+    network.answer = async () =>
+      new Response(JSON.stringify(envelope({ geometry: { type: 'Point', coordinates: [25.6, 45.65] } as never })), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    show();
+
+    expect(await screen.findByText('Invented spring')).toBeTruthy();
+    await waitFor(() => expect(built).toHaveLength(1));
+    const urls = built[0]
+      .getAllLayers()
+      .flatMap((layer) => (layer.getSource() as { getUrls?: () => string[] | null } | null)?.getUrls?.() ?? []);
+    // The installation's catalogue is a signed-in read, so a reader holding only the link gets
+    // the background every small map falls back to.
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((url) => url.includes('tile.opentopomap.org'))).toBe(true);
   });
 
   it('a record shown only roughly says its location is approximate', async () => {

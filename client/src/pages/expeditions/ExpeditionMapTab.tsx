@@ -1,22 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Empty, Spin, Typography } from 'antd';
 import type { FeatureLike } from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import GeoJSON from 'ol/format/GeoJSON';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useExpeditionMap } from '../../api/hooks.ts';
+import { useSmallMap } from '../../components/map/useSmallMap.ts';
 import { tripPalette as palette } from '../../map/markerPalette.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
-const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
+const DEFAULT_CENTER = [25.6, 45.65] as const;
 
 const AREA_COLOUR = '#7a5195';
 
@@ -80,13 +76,19 @@ interface Props {
 export default function ExpeditionMapTab({ expeditionId, active, height = 420 }: Props) {
   const { t } = useTranslation();
   const { data, isPending } = useExpeditionMap(expeditionId, active);
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
-  const source = useRef(new VectorSource());
+  const [source] = useState(() => new VectorSource());
+  // Built only while the tab is the one on screen, over the background the reader has on the
+  // workspace map; the hook disposes it, with its layers, when the tab or the page goes.
+  const { targetRef, map, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 9,
+    active,
+    layers: () => [new VectorLayer({ source, style: styleFor })],
+  });
 
-  const draw = () => {
-    source.current.clear();
-    if (!data) {
+  useEffect(() => {
+    source.clear();
+    if (!data || !ready) {
       return;
     }
     // The container is laid out only while there is something to draw, and a cached empty answer
@@ -94,68 +96,12 @@ export default function ExpeditionMapTab({ expeditionId, active, height = 420 }:
     // and measured 0x0. Re-measuring here, after the render that laid the container out, is what
     // stops a later non-empty answer un-hiding a blank tile grid. Cheap and idempotent otherwise.
     map.current?.updateSize();
-    source.current.addFeatures(
-      new GeoJSON().readFeatures(data, { featureProjection: 'EPSG:3857' }),
-    );
-    const extent = source.current.getExtent();
-    // An empty source reports an infinite extent, and fitting one throws.
-    if (extent && Number.isFinite(extent[0])) {
-      map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 15 });
-    }
-  };
-
-  const buildMap = () => {
-    if (map.current || !target.current || !active) {
-      return;
-    }
-    map.current = new Map({
-      target: target.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: styleFor }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 9 }),
-    });
-    draw();
-  };
-
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    target.current = el;
-    buildMap();
-  };
-
-  // The map becomes buildable after its container is already mounted, the moment the tab strip
-  // reports that this pane is the one on screen.
-  useEffect(() => {
-    if (active) {
-      buildMap();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- building is idempotent and guarded
-  }, [active]);
-
-  useEffect(() => {
-    draw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraws when the answer changes
-  }, [data]);
-
-  // The only teardown site. Doing it from the target ref would run on every re-render, because a
-  // callback ref with a fresh identity is detached and re-attached each time, and the map would
-  // be destroyed and rebuilt — losing wherever the reader had panned to.
-  useEffect(
-    () => () => {
-      map.current?.setTarget(undefined);
-      // Every layer, source and interaction the map owns stays subscribed until the map is
-      // disposed; dropping the reference alone leaks the whole graph for the life of the page.
-      map.current?.dispose();
-      map.current = null;
-    },
-    [],
-  );
+    source.addFeatures(new GeoJSON().readFeatures(data, { featureProjection: 'EPSG:3857' }));
+    const extent = source.getExtent();
+    // Framed again only when what is shown moves, so a re-read of the same camp keeps wherever
+    // the reader had panned to.
+    frame(`${expeditionId}|${extent?.join(',')}`, extent, { padding: [24, 24, 24, 24], maxZoom: 15 });
+  }, [data, ready, source, map, frame, expeditionId]);
 
   const nothingToDraw = !isPending && data?.features.length === 0;
 
@@ -164,7 +110,7 @@ export default function ExpeditionMapTab({ expeditionId, active, height = 420 }:
       {isPending && <Spin />}
       {nothingToDraw && <Empty description={t('expeditions.mapEmpty')} />}
       <div
-        ref={onTargetRef}
+        ref={targetRef}
         data-testid="expedition-map"
         style={{ width: '100%', height, display: nothingToDraw ? 'none' : undefined }}
       />
