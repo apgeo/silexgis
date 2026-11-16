@@ -502,8 +502,13 @@ export default function TrackingConfigCard({
   // coordinator's change is shown rather than drawn as unmade — and the swap warning, which
   // compares the chosen survey with the stored one, is not raised for a swap nobody is making.
   // What has been typed here is left alone: it is this person's, and the save sends only that.
+  // A reader who may not write the trip is drawn no form at all, so there is nothing to follow —
+  // and touching an instance no form holds makes antd report it as a mistake.
   const storedFilter = JSON.stringify(tracking.depthFilter);
   useEffect(() => {
+    if (!canEdit) {
+      return;
+    }
     const stored = {
       surveyModelId: tracking.surveyModelId,
       referenceStationName: tracking.referenceStationName ?? '',
@@ -518,7 +523,7 @@ export default function TrackingConfigCard({
     setModelSwapClearsDatum(swapWouldClearDatum());
     // Keyed on the stored values themselves: a re-read that changed nothing leaves the form alone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracking.surveyModelId, tracking.referenceStationName, storedFilter, form]);
+  }, [tracking.surveyModelId, tracking.referenceStationName, storedFilter, form, canEdit]);
 
   // One notice for one fact — the surveys of a cave this reader may not place are kept from them —
   // reached two ways: the cave is shown and its survey list arrives empty, or the cave itself is
