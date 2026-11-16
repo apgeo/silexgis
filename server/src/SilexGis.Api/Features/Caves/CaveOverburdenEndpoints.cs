@@ -154,6 +154,7 @@ public static class CaveOverburdenEndpoints
             covered.Length > 0 ? covered.Min() : null,
             covered.Length > 0 ? covered.Max() : null,
             covered.Length > 0 ? covered.Average() : null,
-            samples));
+            samples,
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 }

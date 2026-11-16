@@ -218,7 +218,7 @@ public static class TerrainDerivativeEndpoints
         var byLayer = rasters.GroupBy(r => r.TerrainDerivativeLayerId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var accuracy = await TerrainAccuracy.OfBuildsAsync(
+        var accuracy = await TerrainAccuracyReader.OfBuildsAsync(
             db, [.. views.Select(v => v.TerrainBuildId).Distinct()], ct);
 
         var dtos = views
@@ -368,7 +368,7 @@ public static class TerrainDerivativeEndpoints
         {
             var view = await catalogue.FindAsync(layerId, ct);
             List<TerrainDerivativeRaster> rasters = hasRasters ? await RastersOfAsync(db, layerId, ct) : [];
-            var accuracy = await TerrainAccuracy.OfBuildsAsync(db, [view!.TerrainBuildId], ct);
+            var accuracy = await TerrainAccuracyReader.OfBuildsAsync(db, [view!.TerrainBuildId], ct);
             return TypedResults.Ok(ToDto(view, rasters, tokens, accuracy.GetValueOrDefault(view.TerrainBuildId)));
         }
     }

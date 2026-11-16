@@ -9672,6 +9672,7 @@ export interface components {
             toleranceM: number;
             truncated: boolean;
             entrances: components["schemas"]["EntranceAltitudeRowDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange" | "tripMoment";
@@ -10390,6 +10391,7 @@ export interface components {
             /** Format: double */
             meanOverburdenM: null | number;
             samples: components["schemas"]["CaveOverburdenSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         CaveOverburdenSampleDto: {
             /** Format: double */
@@ -18033,6 +18035,7 @@ export interface components {
             /** Format: double */
             descentM: number;
             samples: components["schemas"]["TerrainProfileSampleDto"][];
+            accuracy?: null | components["schemas"]["TerrainAccuracyDto"];
         };
         TerrainProfileRequest: {
             points: components["schemas"]["TerrainProbePointRequest"][];

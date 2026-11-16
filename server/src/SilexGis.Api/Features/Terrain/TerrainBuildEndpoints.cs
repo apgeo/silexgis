@@ -1078,30 +1078,6 @@ public static class TerrainBuildEndpoints
     }
 
     /// <summary>
-    /// Calls a build off.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Under the same right that starts one. Calling a build off destroys nothing that cannot be
-    /// had again: what it obtained and prepared is kept, the build stays in the list, and running it
-    /// again carries on from where it stopped. Deleting is the act that gives disk back, and that
-    /// keeps its own right.
-    /// </para>
-    /// <para>
-    /// A queued build stops at once and its queue row is closed, so no worker ever starts it. A
-    /// running build is asked to stop: the request is written on its row, the run notices within a
-    /// couple of seconds, and it stops at the first point it can — between two files or two steps,
-    /// or, during the bake, once the tile-maker has been told and has said it stopped. Until then
-    /// the build is still running and the answer says it is being cancelled. One that has reached
-    /// publishing finishes; a build that is called off is never published.
-    /// </para>
-    /// <para>
-    /// A read followed by a write, against a worker that may be claiming the same build at that
-    /// moment, so the row is held for the length of the decision. A tracked save rather than a
-    /// direct update: calling a build off is a person's act and belongs in the trail.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// Replaces the accuracy record of a build with what the caller states, whatever state the
     /// build is in.
     /// </summary>
@@ -1141,6 +1117,30 @@ public static class TerrainBuildEndpoints
         return TypedResults.Ok(ToDto(build));
     }
 
+    /// <summary>
+    /// Calls a build off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Under the same right that starts one. Calling a build off destroys nothing that cannot be
+    /// had again: what it obtained and prepared is kept, the build stays in the list, and running it
+    /// again carries on from where it stopped. Deleting is the act that gives disk back, and that
+    /// keeps its own right.
+    /// </para>
+    /// <para>
+    /// A queued build stops at once and its queue row is closed, so no worker ever starts it. A
+    /// running build is asked to stop: the request is written on its row, the run notices within a
+    /// couple of seconds, and it stops at the first point it can — between two files or two steps,
+    /// or, during the bake, once the tile-maker has been told and has said it stopped. Until then
+    /// the build is still running and the answer says it is being cancelled. One that has reached
+    /// publishing finishes; a build that is called off is never published.
+    /// </para>
+    /// <para>
+    /// A read followed by a write, against a worker that may be claiming the same build at that
+    /// moment, so the row is held for the length of the decision. A tracked save rather than a
+    /// direct update: calling a build off is a person's act and belongs in the trail.
+    /// </para>
+    /// </remarks>
     private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> CancelAsync(
         Guid id,
         SilexGisDbContext db,
@@ -1573,5 +1573,5 @@ public static class TerrainBuildEndpoints
             && TerrainBakeTimeLimit.TryRead(build.Message) is { } stop
                 ? new TerrainBakeTimeLimitDto(stop.ElapsedSeconds, stop.LimitSeconds)
                 : null,
-        TerrainAccuracy.From(build));
+        TerrainAccuracyReader.From(build));
 }

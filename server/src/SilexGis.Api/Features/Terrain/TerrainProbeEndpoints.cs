@@ -222,7 +222,7 @@ public static class TerrainProbeEndpoints
             coverage.Rasters.Count > 0,
             [.. samples.Select(s => new TerrainProbeSampleDto(
                 s.Point.Longitude, s.Point.Latitude, s.Outcome, s.ElevationM))],
-            await TerrainAccuracy.OfActiveBuildAsync(db, ct)));
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 
     /// <summary>
@@ -313,7 +313,7 @@ public static class TerrainProbeEndpoints
             coverage.Rasters.Count > 0,
             [.. ordered.Select((id, i) => new TerrainFeatureProbeSampleDto(
                 id, samples[i].Outcome, samples[i].ElevationM))],
-            await TerrainAccuracy.OfActiveBuildAsync(db, ct)));
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 
     private sealed record Row(
