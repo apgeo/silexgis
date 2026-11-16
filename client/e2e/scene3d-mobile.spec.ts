@@ -182,7 +182,8 @@ test('two fingers move the camera in and out', async ({ page }) => {
 
 test('a callout near the controls does not take their taps', async ({ page }) => {
   await login(page);
-  const entrance = await entranceToPick(page);
+  // No survey drawn near it, so the tap in the middle picks the entrance and not a centerline.
+  const entrance = await entranceToPick(page, { nothingDrawnOver: true });
   await openScene3dAt(page, entrance.lat, entrance.lon);
 
   const box = (await scene3dSurface(page).boundingBox())!;
@@ -222,9 +223,9 @@ test('a callout near the controls does not take their taps', async ({ page }) =>
 test('a tap names what it found, with a target a finger can close', async ({ page }) => {
   await login(page);
   // Over a real entrance, looking straight down, so it is in the middle of the view by
-  // construction. "Frame the cave" cannot be used: the demo caves have entrances but no surveys,
-  // so there is nothing drawn to frame and the control is correctly disabled.
-  const entrance = await entranceToPick(page);
+  // construction. One with no survey drawn near it: over a surveyed cave — the seeded demo survey
+  // starts at the demo cave's main entrance — the tap can pick the centerline instead.
+  const entrance = await entranceToPick(page, { nothingDrawnOver: true });
   await openScene3dAt(page, entrance.lat, entrance.lon);
 
   const box = (await scene3dSurface(page).boundingBox())!;
