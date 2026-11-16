@@ -143,4 +143,32 @@ public class OverburdenProfileTests
         stations.ShouldBeEmpty();
         length.ShouldBe(0);
     }
+
+    [Fact]
+    public void The_least_cover_is_the_thinnest_reading_and_an_unread_place_is_never_a_candidate()
+    {
+        OverburdenProfile.LeastCoverIndex([null, 40d, 12.5d, 30d, null]).ShouldBe(2);
+        OverburdenProfile.LeastCoverIndex([null, null]).ShouldBeNull();
+        OverburdenProfile.LeastCoverIndex([]).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_negative_thickness_is_the_least_cover_and_a_tie_goes_to_the_earliest_reading()
+    {
+        OverburdenProfile.LeastCoverIndex([5d, -3d, 8d]).ShouldBe(1);
+        OverburdenProfile.LeastCoverIndex([7d, 4d, 4d]).ShouldBe(1);
+    }
+
+    [Fact]
+    public void The_nearest_station_is_the_one_closest_in_metres_and_none_for_no_stations()
+    {
+        var (stations, _) = OverburdenProfile.Stations([Leg(0, 25.000, 25.002)]);
+
+        var nearest = OverburdenProfile.NearestStation(stations, 25.0015, 46.0);
+
+        nearest.ShouldNotBeNull();
+        nearest.Value.Station.Longitude.ShouldBe(25.0015, 0.0002);
+        nearest.Value.DistanceM.ShouldBeLessThan(2);
+        OverburdenProfile.NearestStation([], 25.0, 46.0).ShouldBeNull();
+    }
 }

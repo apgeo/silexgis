@@ -88,9 +88,20 @@ public static class OverburdenProfile
     /// <returns>The stations, in increasing distance along, and the total length they span. Empty
     /// with a length of zero when the line work carries no altitudes, has no extent, or is empty.</returns>
     public static (IReadOnlyList<OverburdenStation> Stations, double PassageLengthM) Stations(
-        IReadOnlyList<PassageSegment> segments)
+        IReadOnlyList<PassageSegment> segments) => Stations(segments, MaxStations);
+
+    /// <summary>
+    /// The same stations with a smaller ceiling, for a caller that spreads one budget of ground
+    /// readings over several caves.
+    /// </summary>
+    /// <param name="segments">The cave's measured line work.</param>
+    /// <param name="maxStations">The most stations to place, clamped to two and
+    /// <see cref="MaxStations"/>.</param>
+    public static (IReadOnlyList<OverburdenStation> Stations, double PassageLengthM) Stations(
+        IReadOnlyList<PassageSegment> segments, int maxStations)
     {
         ArgumentNullException.ThrowIfNull(segments);
+        var ceiling = Math.Clamp(maxStations, 2, MaxStations);
 
         var ordered = segments
             .Where(s => !s.IsDuplicate && s.MidZM is not null)
@@ -108,7 +119,7 @@ public static class OverburdenProfile
             return ([], 0);
         }
 
-        var count = StationCount(total);
+        var count = Math.Min(StationCount(total), ceiling);
         var step = total / (count - 1);
 
         var stations = new List<OverburdenStation>(count);
@@ -144,6 +155,68 @@ public static class OverburdenProfile
     {
         var byStep = (int)Math.Floor(passageLengthM / MinStepM) + 1;
         return Math.Clamp(byStep, 2, MaxStations);
+    }
+
+    /// <summary>
+    /// The reading with the least rock overhead, as a position in <paramref name="overburdenM"/>;
+    /// null when no reading got a ground height.
+    /// </summary>
+    /// <remarks>
+    /// An unread place is not a candidate: treating it as nought would make the least cover of a
+    /// cave the part of it the terrain does not reach. A negative thickness is a candidate like any
+    /// other — it is a passage reading as above its ground, which is the thinnest cover there is
+    /// and is the one a reader most needs to be shown rather than clamped away. Ties go to the
+    /// earliest reading, so the same data names the same place on every request. The answer is the
+    /// least among the stations that were asked about, not the true minimum of the passage between
+    /// them.
+    /// </remarks>
+    public static int? LeastCoverIndex(IReadOnlyList<double?> overburdenM)
+    {
+        int? best = null;
+        for (var i = 0; i < overburdenM.Count; i++)
+        {
+            if (overburdenM[i] is not { } value)
+            {
+                continue;
+            }
+
+            if (best is null || value < overburdenM[best.Value]!.Value)
+            {
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// The station nearest a given place, with its distance in metres; null for no stations.
+    /// </summary>
+    /// <remarks>
+    /// Distance is worked on a local flat approximation (the longitude difference scaled by the
+    /// cosine of the latitude). The places compared are within a station spacing of one another —
+    /// the place comes off the same line work the stations were cut from — so the error is far
+    /// below the spacing and a spheroid would buy nothing.
+    /// </remarks>
+    public static (OverburdenStation Station, double DistanceM)? NearestStation(
+        IReadOnlyList<OverburdenStation> stations, double longitude, double latitude)
+    {
+        const double MetresPerDegree = 111_320d;
+        var cosLat = Math.Cos(latitude * Math.PI / 180d);
+
+        (OverburdenStation Station, double DistanceM)? best = null;
+        foreach (var station in stations)
+        {
+            var dx = (station.Longitude - longitude) * cosLat * MetresPerDegree;
+            var dy = (station.Latitude - latitude) * MetresPerDegree;
+            var distance = Math.Sqrt((dx * dx) + (dy * dy));
+            if (best is null || distance < best.Value.DistanceM)
+            {
+                best = (station, distance);
+            }
+        }
+
+        return best;
     }
 
     /// <summary>
