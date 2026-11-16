@@ -3,14 +3,16 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { RasterMapInfo } from '../../api/hooks.ts';
 import { worldToken } from '../../filters/worldList.ts';
 import type { FilterNode } from '../../filters/types.ts';
 
-const { queryCalls, updateSpy, listCalls, can } = vi.hoisted(() => ({
+const { queryCalls, updateSpy, deleteSpy, listCalls, can } = vi.hoisted(() => ({
   queryCalls: [] as { body: unknown; enabled: boolean }[],
   updateSpy: vi.fn(),
+  deleteSpy: vi.fn(),
   listCalls: [] as Record<string, unknown>[],
   can: { value: true },
 }));
@@ -47,8 +49,13 @@ vi.mock('../../api/hooks.ts', () => ({
   useCan: () => can.value,
   useRasterMaps: (params: Record<string, unknown>) => (listCalls.push(params), { data: { items: rows, page: 1, pageSize: 20, totalItems: rows.length }, isFetching: false, isError: false }),
   useUploadRasterMap: () => ({ mutateAsync: vi.fn() }),
-  useDeleteRasterMap: () => ({ mutateAsync: vi.fn() }),
+  useDeleteRasterMap: () => ({ mutateAsync: deleteSpy }),
   useUpdateRasterMap: () => ({ mutateAsync: updateSpy, isPending: false }),
+  // The editor reads the map afresh when it opens; here that read answers with the row itself.
+  useRasterMapForEdit: (id: string | undefined) => {
+    const value = rows.find((row) => row.id === id);
+    return value ? { data: { value, version: '"3"' }, isLoading: false, isError: false } : { isLoading: false, isError: false };
+  },
   useRenderRasterMap: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
   useFilterQuery: (body: unknown, enabled: boolean) => {
@@ -70,6 +77,12 @@ vi.mock('../../api/hooks.ts', () => ({
 }));
 
 // The condition editor and saved filters have their own tests; here only what the tab asks of the list.
+vi.mock('../../components/cavingGroups/CavingGroupPicker.tsx', () => ({
+  default: ({ value, onChange }: { value?: string | null; onChange?: (v: string | undefined) => void }) => (
+    <input data-testid="caving-group-picker" value={value ?? ''} onChange={(e) => onChange?.(e.target.value || undefined)} />
+  ),
+}));
+
 vi.mock('../../components/filters/WorldFilterBar.tsx', () => ({
   default: ({ world, where }: { world: string; where: unknown }) => (
     <div data-testid="world-filter-bar" data-world={world} data-on={where === null ? 'no' : 'yes'} />
@@ -108,6 +121,48 @@ beforeEach(() => {
   listCalls.length = 0;
   updateSpy.mockReset();
   updateSpy.mockResolvedValue({});
+  deleteSpy.mockReset();
+});
+
+describe('RasterMapsTab — saving and deleting', () => {
+  it('saves with the version, zoom range and caving group of the map as read when the editor opened', async () => {
+    rows = [{ ...raster(null), minZoom: 3, maxZoom: 18, cavingGroupId: 'group-1', visibility: 'cavingGroup' }];
+    const { container } = render(
+      <MemoryRouter>
+        <App>
+          <RasterMapsTab />
+        </App>
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.anticon-edit')!.closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: /OK/i }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const [request] = updateSpy.mock.lastCall as [{ version?: string; body: Record<string, unknown> }];
+    expect(request.version).toBe('"3"');
+    expect(request.body).toMatchObject({
+      minZoom: 3,
+      maxZoom: 18,
+      cavingGroupId: 'group-1',
+      visibility: 'cavingGroup',
+    });
+  });
+
+  it('says why a delete was refused', async () => {
+    deleteSpy.mockRejectedValue(new ApiError(409, 'georeferenced_map.busy'));
+    rows = [raster(null)];
+    const { container } = render(
+      <MemoryRouter>
+        <App>
+          <RasterMapsTab />
+        </App>
+      </MemoryRouter>,
+    );
+    fireEvent.click(container.querySelector('.anticon-delete')!.closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: /^ok$/i }));
+
+    expect(await screen.findByText(i18n.t('geodata.refusals.busy'))).toBeInTheDocument();
+  });
 });
 
 describe('RasterMapsTab — the linked cave', () => {
