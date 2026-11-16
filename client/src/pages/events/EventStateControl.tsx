@@ -13,7 +13,9 @@ import { App, Flex, Popconfirm } from 'antd';
 import Button from '../../components/Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import { useMoveEvent, type ActivityState } from '../../api/hooks.ts';
+import { eventRefusalKey } from './eventRefusals.ts';
 
 interface Props {
   eventId: string;
@@ -146,8 +148,11 @@ export default function EventStateControl({ eventId, state, canEdit }: Props) {
     try {
       await move.mutateAsync({ id: eventId, state: choice.to });
       message.success(t(choice.success));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, application-wide; a second "save failed" would contradict it.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(eventRefusalKey(error, 'common.saveFailed')));
+      }
     }
   };
 
