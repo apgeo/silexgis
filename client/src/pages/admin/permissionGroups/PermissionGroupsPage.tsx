@@ -14,7 +14,7 @@ import {
   usePermissionGroups,
   type PermissionGroup,
 } from '../../../api/hooks.ts';
-import { ApiError } from '../../../api/client.ts';
+import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
 import { permissionGroupNameProblem } from './permissionGroupProblems.ts';
 import PermissionGroupEditor from './PermissionGroupEditor.tsx';
 
@@ -78,11 +78,7 @@ export default function PermissionGroupsPage() {
         setEditingId(null);
       }
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'permission_group.last_full_admin'
-          ? t('permissionGroups.lastFullAdmin')
-          : t('common.saveFailed'),
-      );
+      message.error(accessRuleProblem(error, t));
     }
   };
 

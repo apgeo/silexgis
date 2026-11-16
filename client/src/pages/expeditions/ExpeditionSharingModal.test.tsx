@@ -215,6 +215,23 @@ describe('ExpeditionSharingModal', () => {
     await vi.waitFor(() => expect(withdrawMutate).toHaveBeenCalledTimes(1));
   });
 
+  it('says why withdrawing was refused when a deny withholds rights the caller does not hold', async () => {
+    sharing = {
+      memberTrips: 2,
+      rules: [
+        { subjectKind: 'cavingGroup', subjectId: 'club-1', subjectName: 'Partner Club', effect: 'deny', actions: 'read', trips: 2 },
+      ],
+    };
+    withdrawMutate.mockRejectedValueOnce(new ApiError(403, 'access_entry.removal_exceeds_own_rights'));
+    show();
+
+    fireEvent.click(screen.getByTestId('expedition-sharing-withdraw'));
+    fireEvent.click(await screen.findByRole('button', { name: /OK/i }));
+    expect(await screen.findByText(
+      'You cannot remove a deny that withholds rights you do not hold yourself.',
+    )).toBeTruthy();
+  });
+
   it('says plainly when the caller may not share the camp', () => {
     refused = true;
     show();

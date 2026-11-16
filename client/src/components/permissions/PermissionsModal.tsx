@@ -15,7 +15,7 @@ import {
   type ObjectAccessEntry,
   parseAccessActions,
 } from '../../api/hooks.ts';
-import { accessRuleProblem } from '../../pages/admin/permissionGroups/permissionGroupProblems.ts';
+import { accessRuleProblem } from './accessRuleProblem.ts';
 import AccessExplanationList from './AccessExplanationList.tsx';
 import ViaExpeditionTag from './ViaExpeditionTag.tsx';
 import SubjectPicker from './SubjectPicker.tsx';

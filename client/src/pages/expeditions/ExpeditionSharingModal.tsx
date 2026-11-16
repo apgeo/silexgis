@@ -30,6 +30,7 @@ import {
   type ExpeditionSharingOutcome,
 } from '../../api/hooks.ts';
 import { ACTION_ORDER, actionSetLabels, joinActions } from '../../components/permissions/accessDisplay.ts';
+import { accessRuleProblem } from '../../components/permissions/accessRuleProblem.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 /**
@@ -158,7 +159,9 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
       case 'expedition_sharing.nothing_shared':
         return t('expeditions.sharing.nothingShared');
       default:
-        return t('common.saveFailed');
+        // A refusal of the rules themselves (a deny withheld from whoever may not lift it, a
+        // right the caller cannot hand out) reads as it does on every other rules screen.
+        return accessRuleProblem(error, t);
     }
   };
 
