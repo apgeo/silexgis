@@ -11,7 +11,7 @@ vi.mock('./auth.tsx', () => ({
   },
 }));
 
-const { renewSignIn, renewOnReturn } = await import('./renewSignIn.ts');
+const { lastSignInRenewal, renewSignIn, renewOnReturn } = await import('./renewSignIn.ts');
 
 beforeEach(() => {
   getUser.mockReset().mockResolvedValue({ refresh_token: 'kept', expired: true });
@@ -54,6 +54,20 @@ describe('renewing the sign-in a tab holds', () => {
     signinSilent.mockRejectedValue(new TypeError('Failed to fetch'));
 
     expect(await renewSignIn()).toBe('noAnswer');
+  });
+
+  /**
+   * A caller handed a refusal the transport already tried to renew past reads what that renewal came
+   * to, rather than renewing again to find out.
+   */
+  it('remembers what the latest renewal came to', async () => {
+    signinSilent.mockRejectedValue(new TypeError('Failed to fetch'));
+    await renewSignIn();
+    expect(lastSignInRenewal()).toBe('noAnswer');
+
+    signinSilent.mockResolvedValue({ expired: false });
+    await renewSignIn();
+    expect(lastSignInRenewal()).toBe('renewed');
   });
 
   /** A renewal token is spent by being used: two renewals at once would each spend the other's. */

@@ -21,8 +21,11 @@ vi.mock('../../auth/accountId.ts', () => ({
 
 // Renewing the sign-in, stood in for like the sign-in itself: over, unless a test says otherwise.
 const renewSignIn = vi.fn<() => Promise<SignInRenewal>>();
+// What the transport's own renewal came to, the last time it ran: over, unless a test says otherwise.
+const lastSignInRenewal = vi.fn<() => SignInRenewal | null>();
 vi.mock('../../auth/renewSignIn.ts', () => ({
   renewSignIn: () => renewSignIn(),
+  lastSignInRenewal: () => lastSignInRenewal(),
 }));
 
 const { useTrackingReport } = await import('./trackingReport.ts');
@@ -71,6 +74,7 @@ beforeEach(() => {
   resetHeldReportsDrain();
   recordEvents.mockReset().mockResolvedValue([{}]);
   renewSignIn.mockReset().mockResolvedValue('lapsed');
+  lastSignInRenewal.mockReset().mockReturnValue('lapsed');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(COMPOSED);
 });
@@ -535,20 +539,41 @@ describe('sending a tracking report', () => {
      * after an outage longer than its token lasts.
      */
     describe('because the sign-in ran out', () => {
-      it('renews the sign-in and sends the same report once more, under the same key', async () => {
-        recordEvents.mockImplementationOnce(refusal(401));
+      /**
+       * The transport renews a refused sign-in once and sends the request again, with the same body
+       * and so the same key. A 401 that reaches the report is one it could not get past: renewing
+       * here as well would spend a second renewal and send the report a third time.
+       */
+      it('leaves the renewal to the transport, and keeps a report a renewed sign-in was refused all the same', async () => {
+        recordEvents.mockImplementation(refusal(401));
+        lastSignInRenewal.mockReturnValue('renewed');
         renewSignIn.mockResolvedValue('renewed');
         const send = hook().current.send;
 
         const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
 
-        expect(outcome).toEqual({ recorded: true, held: false, code: null });
-        expect(recordEvents).toHaveBeenCalledTimes(2);
-        expect(posted(1)).toEqual(posted(0));
-        expect(renewSignIn).toHaveBeenCalledTimes(1);
-        expect(heldReportsOf(ANA)).toEqual([]);
-        expect(Object.keys(window.localStorage)).toEqual([]);
-        expect(screen.getByText('Recorded for 1.')).toBeInTheDocument();
+        expect(outcome).toEqual({ recorded: false, held: true, code: null });
+        expect(renewSignIn).not.toHaveBeenCalled();
+        expect(recordEvents).toHaveBeenCalledTimes(1);
+        expect(heldReportsOf(ANA)).toHaveLength(1);
+        expect(isHeldReportsSignInLapsed()).toBe(true);
+      });
+
+      /**
+       * Nobody answered the renewal: the sign-in may well still be good, so the report is not said
+       * to wait for a new sign-in — it is held and tried again a little later, like one nobody
+       * answered.
+       */
+      it('keeps the report without calling the sign-in over when nobody answered the renewal', async () => {
+        recordEvents.mockImplementation(refusal(401));
+        lastSignInRenewal.mockReturnValue('noAnswer');
+        const send = hook().current.send;
+
+        const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
+
+        expect(outcome).toEqual({ recorded: false, held: true, code: null });
+        expect(heldReportsOf(ANA)).toHaveLength(1);
+        expect(isHeldReportsSignInLapsed()).toBe(false);
       });
 
       /**
@@ -580,33 +605,6 @@ describe('sending a tracking report', () => {
           screen.getByText(/Your sign-in has lapsed — not sent yet\. The report is kept in this browser/),
         ).toBeInTheDocument();
         expect(isHeldReportsSignInLapsed()).toBe(true);
-      });
-
-      it('keeps the report when a renewed sign-in is refused all the same', async () => {
-        recordEvents.mockImplementation(refusal(401));
-        renewSignIn.mockResolvedValue('renewed');
-        const send = hook().current.send;
-
-        const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
-
-        expect(outcome).toEqual({ recorded: false, held: true, code: null });
-        // Once more and no further: this is not a loop.
-        expect(recordEvents).toHaveBeenCalledTimes(2);
-        expect(heldReportsOf(ANA)).toHaveLength(1);
-      });
-
-      it('shows the refusal a renewed sign-in was then given, and holds nothing', async () => {
-        recordEvents
-          .mockImplementationOnce(refusal(401))
-          .mockImplementationOnce(refusal(409, 'tracking.not_writable'));
-        renewSignIn.mockResolvedValue('renewed');
-        const send = hook().current.send;
-
-        const outcome = await sent(send, 'trip-1', ['caver-1'], AT_STATION);
-
-        expect(outcome).toEqual({ recorded: false, held: false, code: 'tracking.not_writable' });
-        expect(heldReportsOf(ANA)).toEqual([]);
-        expect(Object.keys(window.localStorage)).toEqual([]);
       });
 
       it('leaves the form its report, and holds nothing, where the browser will not store it', async () => {
