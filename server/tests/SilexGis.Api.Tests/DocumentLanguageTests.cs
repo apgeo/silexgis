@@ -190,6 +190,55 @@ public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable, IClassF
         (await LanguageOfAsync(documentId)).ShouldBe("ro");
     }
 
+    /// <summary>
+    /// A document's details are read with their version and saved under it: a form filled before
+    /// somebody else's save — or before reading the text wrote the language — is refused rather
+    /// than putting the old values back, while a save that names no version still lands. A caller
+    /// who may not read the document learns nothing from a stale version that the plain refusal
+    /// would not have told them.
+    /// </summary>
+    [Fact]
+    public async Task A_details_save_is_held_to_the_version_it_was_read_at()
+    {
+        var file = await UploadAsync("versiune.txt", $"{nonce} {UndetectableRomanian}");
+        await WaitForExtractionAsync(file);
+        var documentId = await DocumentIdOfAsync(file);
+        var url = $"/api/v1/documents/{documentId}";
+
+        var read = await owner.GetAsync(url);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK, await read.Content.ReadAsStringAsync());
+        var opened = read.Headers.ETag?.ToString();
+        opened.ShouldNotBeNull("the details are read with their version");
+
+        var first = await owner.PutWithIfMatchAsync(
+            url, new { title = "Raport întâi", visibility = "private" }, opened);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var produced = first.Headers.ETag?.ToString();
+        produced.ShouldNotBeNull();
+        produced.ShouldNotBe(opened);
+
+        // The same reading, saved again: the details changed since, so it is refused.
+        var stale = await owner.PutWithIfMatchAsync(
+            url, new { title = "Raport vechi", visibility = "private" }, opened);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+        (await stale.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+
+        // A stranger holding nothing over the document gets the refusal they always got.
+        (await stranger.PutWithIfMatchAsync(
+            url, new { title = "Raport străin", visibility = "private" }, opened))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var title = JsonDocument.Parse(await (await owner.GetAsync(url)).Content.ReadAsStringAsync())
+            .RootElement.GetProperty("title").GetString();
+        title.ShouldBe("Raport întâi");
+
+        // The version the save answered is current, and naming none keeps last-write-wins.
+        (await owner.PutWithIfMatchAsync(url, new { title = "Raport doi", visibility = "private" }, produced))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.PutAsJsonAsync(url, new { title = "Raport trei", visibility = "private" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task Signing_in_is_required_to_correct_a_language()
     {

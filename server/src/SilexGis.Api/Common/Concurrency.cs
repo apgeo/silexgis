@@ -213,6 +213,12 @@ public static class Concurrency
     public static string WeakETag(string value) => $"W/\"{value}\"";
 
     /// <summary>
+    /// A row version written as the entity tag a read of that row answers with, for a listing
+    /// that carries each row's version in its body, so that the client sends it back as is.
+    /// </summary>
+    public static string ETagOf(long version) => $"\"{version}\"";
+
+    /// <summary>
     /// Whether the request's <c>If-None-Match</c> names <paramref name="currentTag"/> — that is,
     /// whether the caller already holds the answer about to be sent.
     /// </summary>

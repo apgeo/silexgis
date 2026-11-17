@@ -793,6 +793,48 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    /// <summary>
+    /// Each row of a cave's entrance listing carries the entrance's version — the feature row's,
+    /// which is what an entrance edit is checked against — so an edit opened from the listing
+    /// needs no second read, and a row shown before a change is refused as stale.
+    /// </summary>
+    [Fact]
+    public async Task Each_listed_entrance_carries_its_version_and_an_edit_sent_with_it_is_checked()
+    {
+        var caveId = await CreateCaveAsync("Listed Entrance Version Cave");
+        var ids = new List<Guid>();
+        foreach (var (name, lon) in new[] { ("Upper", 25.83), ("Lower", 25.84) })
+        {
+            var create = await owner.PostAsJsonAsync(
+                $"/api/v1/caves/{caveId}/entrances", EntranceBody(name, lon, 45.93, surveyedAt: null));
+            create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+            ids.Add((await create.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        }
+
+        var listing = await owner.GetAsync($"/api/v1/caves/{caveId}/entrances");
+        listing.StatusCode.ShouldBe(HttpStatusCode.OK, await listing.Content.ReadAsStringAsync());
+        var rows = (await listing.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+            .ToDictionary(
+                x => x.GetProperty("id").GetGuid(),
+                x => x.TryGetProperty("version", out var v) ? v.GetString() : null);
+        foreach (var id in ids)
+        {
+            rows[id].ShouldBe(await FeatureETagAsync(id));
+        }
+
+        var current = await owner.PutWithIfMatchAsync(
+            $"/api/v1/cave-entrances/{ids[0]}",
+            EntranceBody("Upper", 25.83, 45.93, surveyedAt: new DateOnly(2026, 7, 1)),
+            rows[ids[0]]!);
+        current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
+
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/cave-entrances/{ids[0]}",
+            EntranceBody("Upper", 25.83, 45.93, surveyedAt: new DateOnly(2026, 7, 2)),
+            rows[ids[0]]!))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+    }
+
     /// <summary>The row's current version as an ETag value — the token every feature kind shares.</summary>
     private async Task<string> FeatureETagAsync(Guid featureId)
     {

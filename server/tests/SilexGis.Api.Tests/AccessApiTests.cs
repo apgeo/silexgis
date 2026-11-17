@@ -1014,6 +1014,71 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
     }
 
     /// <summary>
+    /// The rules authored on an object are read with the version of that set and saved under it:
+    /// a save made from a reading another save has changed since is refused instead of taking the
+    /// other save's grant off, and one naming no version still lands. Somebody holding nothing over
+    /// the object is told it does not exist whatever version they name.
+    /// </summary>
+    [Fact]
+    public async Task An_object_rules_save_is_held_to_the_version_of_the_rules_it_was_read_at()
+    {
+        var strangerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-ver-{suffix}@t.local");
+        using var stranger = await AuthHelper.BearerClientAsync(factory, $"acc-api-ver-{suffix}@t.local");
+
+        // Owned by a Viewer, so owning the row is the only thing that lets anybody manage it.
+        Guid tripId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var trip = new TripLog
+            {
+                Title = $"Versioned Rules Trip {suffix}",
+                TripDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = viewerId,
+                Visibility = Visibility.Private,
+            };
+            db.TripLogs.Add(trip);
+            await db.SaveChangesAsync();
+            tripId = trip.Id;
+        }
+
+        var url = $"/api/v1/objects/tripLog/{tripId}/access";
+        object Grant(Guid subject, string actions) => new
+        {
+            entries = new[] { new { subjectKind = "user", subjectId = subject, effect = "allow", actions, scopeKind = "object" } },
+        };
+
+        var read = await viewer.GetAsync(url);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK, await read.Content.ReadAsStringAsync());
+        var opened = read.Headers.ETag?.ToString();
+        opened.ShouldNotBeNull("the rules are read with their version");
+
+        var first = await viewer.PutWithIfMatchAsync(url, Grant(strangerId, "read"), opened);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var produced = first.Headers.ETag?.ToString();
+        produced.ShouldNotBeNull();
+        produced.ShouldNotBe(opened);
+        (await viewer.GetAsync(url)).Headers.ETag?.ToString().ShouldBe(produced);
+
+        // The same reading saved again would take the grant just made off: refused, and kept.
+        var stale = await viewer.PutWithIfMatchAsync(url, Grant(editorId, "read"), opened);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+        (await stale.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+        (await viewer.GetFromJsonAsync<JsonElement>(url)).EnumerateArray()
+            .Select(e => e.GetProperty("subjectId").GetGuid()).ShouldBe([strangerId]);
+
+        // The grantee reads the trip and manages nothing on it, stale version or current.
+        (await stranger.PutWithIfMatchAsync(url, Grant(strangerId, "read, write"), produced))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        (await viewer.PutWithIfMatchAsync(url, Grant(strangerId, "read, write"), produced))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PutAsJsonAsync(url, Grant(strangerId, "read")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// Owning a row is a reason to hold every action on it, and sharing it is one of them —
     /// on a trip, a saved view and every other row that is not a feature, exactly as it
     /// already was on features. Both halves are here because only the pair proves anything:

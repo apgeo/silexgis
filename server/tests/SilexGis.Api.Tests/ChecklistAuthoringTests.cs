@@ -451,6 +451,47 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
         allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
     }
 
+    /// <summary>
+    /// Each row of the listing carries the version a read of that one list hands out, so an edit
+    /// opened from the listing sends the version the row was shown at: accepted while it is
+    /// current, refused as stale once the list has changed since.
+    /// </summary>
+    [Fact]
+    public async Task Each_listed_list_carries_its_version_and_an_edit_sent_with_it_is_checked()
+    {
+        var first = await CreateAsync($"Versioned list A {suffix}", "Permit obtained");
+        var second = await CreateAsync($"Versioned list B {suffix}", "Rope checked");
+
+        var listing = await owner.GetAsync("/api/v1/checklists");
+        listing.StatusCode.ShouldBe(HttpStatusCode.OK, await listing.Content.ReadAsStringAsync());
+        var rows = System.Text.Json.JsonDocument.Parse(await listing.Content.ReadAsStringAsync())
+            .RootElement.EnumerateArray()
+            .ToDictionary(
+                x => x.GetProperty("id").GetGuid(),
+                x => x.TryGetProperty("version", out var v) ? v.GetString() : null);
+
+        foreach (var id in new[] { first.Id, second.Id })
+        {
+            var one = await owner.GetAsync($"/api/v1/checklists/{id}");
+            one.StatusCode.ShouldBe(HttpStatusCode.OK);
+            rows[id].ShouldNotBeNullOrEmpty();
+            rows[id].ShouldBe(one.Headers.ETag!.Tag);
+        }
+
+        using var current = await owner.PutWithIfMatchAsync(
+            $"/api/v1/checklists/{first.Id}",
+            Body(first.Title, [(first.Items[0].Id, "Permit obtained and filed")]),
+            rows[first.Id]!);
+        current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
+
+        // The row was shown before that edit: sending its version again is a stale write.
+        using var stale = await owner.PutWithIfMatchAsync(
+            $"/api/v1/checklists/{first.Id}",
+            Body(first.Title, [(first.Items[0].Id, "Permit lost")]),
+            rows[first.Id]!);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+    }
+
     private async Task<ChecklistPayload> CreateAsync(string title, params string[] lines)
     {
         var created = await owner.PostAsJsonAsync("/api/v1/checklists", new

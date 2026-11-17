@@ -116,6 +116,7 @@ public static class ObjectAccessEndpoints
     private static async Task<Results<Ok<List<ObjectAccessEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         string entityType,
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -140,13 +141,22 @@ public static class ObjectAccessEndpoints
             return denied;
         }
 
-        return TypedResults.Ok(await LoadAsync(db, user, target.Value, ct));
+        // The rules and the version of the set a save replaces, in one snapshot: read apart, a
+        // replacement landing between them would pair the older rules with the newer version.
+        await using var snapshot = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
+        var rules = await LoadAsync(db, user, target.Value, ct);
+        var version = await DirectRulesVersionAsync(db, target.Value, ct);
+        await snapshot.CommitAsync(ct);
+        http.Response.Headers.ETag = $"\"{version}\"";
+        return TypedResults.Ok(rules);
     }
 
     private static async Task<Results<Ok<List<ObjectAccessEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ReplaceAsync(
         string entityType,
         Guid id,
         ObjectAccessReplaceRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -203,10 +213,26 @@ public static class ObjectAccessEndpoints
             staged.Add(entry);
         }
 
+        // The replacement is whole: every rule authored here that the request does not name is
+        // taken off. Made from an old reading it would take off the rules somebody added since, so
+        // it is held to the version of that set it was read at when it names one — offered rather
+        // than required, so a caller that sends none keeps last-write-wins. Replacements of this
+        // object's rules are serialised from here to the commit, and the set is read under that
+        // lock. A rule a camp's sharing wrote is not in the set and does not move its version.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await ConcurrencySql.LockWholeSetAsync(db, $"object-rules:{target.Entity.Id}", ct);
+
         // Who already had a rule here, read before the replace wipes it: a full-replace
         // that leaves an existing grant untouched is not news, and mailing everyone on
         // every edit would train people to ignore the message that matters.
         var current = await DirectRulesOf(db, target).ToListAsync(ct);
+        var version = await ConcurrencySql.AccessRuleSetVersionAsync(
+            db, [.. current.Select(e => e.Id)], ct);
+        if (Concurrency.CheckIfMatchVersion(http, version) is { } stale)
+        {
+            return stale;
+        }
+
         var alreadyGranted = current
             .Where(e => e.Effect == AccessEffect.Allow)
             .Select(e => (e.SubjectKind, e.SubjectId))
@@ -224,7 +250,19 @@ public static class ObjectAccessEndpoints
         await NotifyGranteesAsync(db, user, target, newlyGranted, ct);
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await LoadAsync(db, user, target, ct));
+        var rules = await LoadAsync(db, user, target, ct);
+        var produced = await DirectRulesVersionAsync(db, target, ct);
+        await transaction.CommitAsync(ct);
+        http.Response.Headers.ETag = $"\"{produced}\"";
+        return TypedResults.Ok(rules);
+    }
+
+    /// <summary>The version of the set a replacement here rewrites: the rules authored here.</summary>
+    private static async Task<string> DirectRulesVersionAsync(
+        SilexGisDbContext db, AccessTarget target, CancellationToken ct)
+    {
+        var ids = await DirectRulesOf(db, target).Select(e => e.Id).ToListAsync(ct);
+        return await ConcurrencySql.AccessRuleSetVersionAsync(db, ids, ct);
     }
 
     /// <summary>

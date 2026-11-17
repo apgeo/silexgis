@@ -15,6 +15,13 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Caves;
 
+/// <summary>One entrance of a cave, its position as the caller may see it.</summary>
+/// <remarks>
+/// <c>Version</c> is filled on the rows of a cave's entrance listing: the entity tag of the
+/// entrance's feature row, which is what an entrance edit or delete is checked against, so an
+/// edit opened from a row sends it as <c>If-Match</c> without a read of its own. Answers about one
+/// entrance leave it empty and carry the version in their <c>ETag</c> header.
+/// </remarks>
 public sealed record EntranceDto(
     Guid Id,
     Guid CaveId,
@@ -26,7 +33,8 @@ public sealed record EntranceDto(
     string? Description,
     PositionQuality PositionQuality,
     DateOnly? SurveyedAt,
-    bool ApproximateLocation);
+    bool ApproximateLocation,
+    string? Version = null);
 
 public sealed record EntranceWriteRequest(
     string? Name,
@@ -117,15 +125,26 @@ public static class EntranceEndpoints
         // Readability is decided on the cave alone. Re-filtering the entrance rows would be
         // wrong, not merely redundant: ACL grants are keyed to the row they were made on, so
         // a caller who reads a private cave through a grant holds none on its entrances.
+        // The rows and their versions come from one snapshot: read apart, an edit landing between
+        // them would pair an entrance's older values with its newer version, and an edit opened
+        // from that row would be taken over the change it never saw.
+        await using var snapshot = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
         var rows = await db.CaveEntrances.AsNoTracking()
             .Include(e => e.Feature)
             .Where(e => e.CaveFeatureId == caveId)
             .OrderByDescending(e => e.IsMain).ThenBy(e => e.Feature.CreatedAt)
             .ToListAsync(ct);
 
-        var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(e => e.Id)], ct);
+        List<Guid> ids = [.. rows.Select(e => e.Id)];
+        var versions = await ConcurrencySql.VersionsAsync(db, VersionedTable.Features, ids, ct);
+        var exact = await protection.ExactViewIdsAsync(ctx, ids, ct);
+        await snapshot.CommitAsync(ct);
         return TypedResults.Ok(rows
-            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), accessOptions.Value.LocationGridMeters))
+            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), accessOptions.Value.LocationGridMeters) with
+            {
+                Version = versions.TryGetValue(e.Id, out var version) ? Concurrency.ETagOf(version) : null,
+            })
             .ToList());
     }
 
