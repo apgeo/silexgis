@@ -54,8 +54,18 @@ vi.mock('../../scene3d/sceneImage3d.ts', async (importOriginal) => ({
     return Promise.resolve(pictureWithCredits);
   },
 }));
+/** What the layer catalogue's read failed with, when a test makes it fail. */
+let mapLayersFailure: unknown;
+const mapLayersRefetch = vi.fn();
+vi.mock('../../api/hooks/mapLayers.ts', () => ({
+  useEveryRasterMap: () => ({ data: undefined, isError: false, error: null, refetch: vi.fn() }),
+  useEveryGeofile: () => ({ data: geofilePage, isError: false, error: null, refetch: vi.fn() }),
+}));
 vi.mock('../../api/hooks.ts', () => ({
-  useMapLayers: () => ({ data: mapLayers }),
+  useMapLayers: () =>
+    mapLayersFailure === undefined
+      ? { data: mapLayers, isError: false, error: null, refetch: mapLayersRefetch }
+      : { data: undefined, isError: true, error: mapLayersFailure, refetch: mapLayersRefetch },
   useMapConfig: () => ({ data: mapConfig }),
   useFeatureTypes: () => ({ data: featureTypes }),
   // Named for the same reason as fetchSurveyModels below: the factory replaces the whole module,
@@ -275,6 +285,8 @@ beforeEach(() => {
   engine.engineState.reset();
   codeDownload.failures = 0;
   mapLayers = undefined;
+  mapLayersFailure = undefined;
+  mapLayersRefetch.mockReset();
   savedFiles = [];
   composited = [];
   mapConfig = undefined;
@@ -1855,6 +1867,29 @@ describe('saving the view as an image', () => {
     fireEvent.click(save);
     await waitFor(() => expect(savedFiles).toHaveLength(1));
     expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
+  });
+});
+
+describe('layer lists the server did not give', () => {
+  it('says a failed layer catalogue read on the globe, rather than leaving it bare, and asks again', async () => {
+    withWebGl2(true);
+    mapLayersFailure = new TypeError('Failed to fetch');
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-layers-failed');
+    expect(notice).toHaveTextContent('Some of the layers this view offers could not be read.');
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(mapLayersRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Try again when the server refused the read', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    mapLayersFailure = new ApiError(403, 'forbidden');
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-layers-failed');
+    expect(within(notice).queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 });
 

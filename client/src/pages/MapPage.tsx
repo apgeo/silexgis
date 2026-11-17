@@ -14,16 +14,16 @@ import { useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useFeatureTypes,
-  useGeofiles,
   useMapConfig,
   useMapLayers,
   useMapViews,
   usePhotoLibraries,
-  useRasterMaps,
   useTerrainDerivatives,
   useSurveyModel,
   type SurveyModelInfo,
 } from '../api/hooks.ts';
+import { useEveryGeofile, useEveryRasterMap } from '../api/hooks/mapLayers.ts';
+import MapLayerReadsNotice from '../components/map/MapLayerReadsNotice.tsx';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useEditScope } from '../components/map/useEditScope.ts';
 import { useOverviewMap } from '../components/map/useOverviewMap.ts';
@@ -202,7 +202,8 @@ export default function MapPage() {
   );
   /** The same model over the whole window, escalated from the pane. */
   const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
-  const { data: layers } = useMapLayers();
+  const layersRead = useMapLayers();
+  const layers = layersRead.data;
   const { data: mapConfig } = useMapConfig();
   // The installation's entrance symbols arrive with the map's configuration; the layer restyles
   // itself when they change.
@@ -268,7 +269,9 @@ export default function MapPage() {
   });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
+  // Every file, not a first page: one past the end of a page would never be offered as a layer.
+  const geofilesRead = useEveryGeofile();
+  const geofilePage = geofilesRead.data;
   const importedGeofiles = useMemo(
     () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
     [geofilePage],
@@ -290,7 +293,8 @@ export default function MapPage() {
   const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
   const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
   const resetBaseOpacity = useWorkspaceStore((s) => s.resetBaseOpacity);
-  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
+  const rastersRead = useEveryRasterMap();
+  const rasterPage = rastersRead.data;
   const readyRasters = useMemo(
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
     [rasterPage],
@@ -303,7 +307,8 @@ export default function MapPage() {
   // nobody reads, arriving forever, and it fills the browser's own error trail with something no
   // reader can act on.
   const mayReadTerrain = useCan('terrain', 'read');
-  const { data: terrainDerivatives } = useTerrainDerivatives(mayReadTerrain);
+  const terrainDerivativesRead = useTerrainDerivatives(mayReadTerrain);
+  const terrainDerivatives = terrainDerivativesRead.data;
   const derivativeLayers = useMemo(() => terrainDerivatives ?? [], [terrainDerivatives]);
 
   // The toolbar mixes drawing new features with modifying existing ones, so either
@@ -717,6 +722,7 @@ export default function MapPage() {
       centerlineMaxPaths={centerlineMaxPaths}
       onCenterlineLimitsChange={setCenterlinePrefs}
       footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
+      notice={<MapLayerReadsNotice reads={[layersRead, geofilesRead, rastersRead, terrainDerivativesRead]} />}
     />
   );
 

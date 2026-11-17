@@ -35,11 +35,16 @@ const sharedFeatureStyle = new Style({
  * its filters, its selection, its editing — and to routes that answer for an account; these read
  * the link's own routes, which answer for nobody in particular, and nothing on this page can
  * select, edit or open a feature.
+ *
+ * A read that fails keeps what was drawn, but says so through `onReadFailed`: on a page reached
+ * without an account there is nothing else to tell its reader that a pale map is a failed read
+ * and not an area without caves. `reload` asks again for the view as it stands.
  */
 export function createSharedViewLayers(
   token: string,
   overlays: SharedViewOverlays,
-): { layers: VectorLayer[]; attach: (map: Map) => () => void } {
+  onReadFailed?: (failed: boolean) => void,
+): { layers: VectorLayer[]; attach: (map: Map) => () => void; reload: () => void } {
   const format = new GeoJSON();
   const entrances = new VectorSource();
   const features = new VectorSource();
@@ -51,6 +56,7 @@ export function createSharedViewLayers(
     layers.push(new VectorLayer({ source: entrances, style: entranceStyle, zIndex: 2 }));
   }
 
+  let reloadAttached: (() => void) | undefined;
   const attach = (map: Map) => {
     let requestSeq = 0;
     let timer: number | undefined;
@@ -70,7 +76,8 @@ export function createSharedViewLayers(
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
-      // A failed answer keeps what was drawn; the next move asks again.
+      // A failed answer keeps what was drawn, and is said; the next move, or a retry, asks again.
+      onReadFailed?.(entranceAnswer.status === 'rejected' || featureAnswer.status === 'rejected');
       if (entranceAnswer.status === 'fulfilled' && entranceAnswer.value) {
         entrances.clear(true);
         entrances.addFeatures(format.readFeatures(entranceAnswer.value, { featureProjection: 'EPSG:3857' }));
@@ -89,12 +96,14 @@ export function createSharedViewLayers(
       timer = window.setTimeout(() => void load(), 250);
     };
     map.on('moveend', onMoveEnd);
+    reloadAttached = () => void load();
     void load();
     return () => {
       map.un('moveend', onMoveEnd);
       window.clearTimeout(timer);
+      reloadAttached = undefined;
     };
   };
 
-  return { layers, attach };
+  return { layers, attach, reload: () => reloadAttached?.() };
 }

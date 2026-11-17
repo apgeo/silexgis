@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { AimOutlined, ClearOutlined, SaveOutlined, TagsOutlined } from '@ant-design/icons';
-import { App, Descriptions, Empty, Flex, Form, Input, Modal, Tag, Tooltip, Typography } from 'antd';
+import { App, Descriptions, Empty, Flex, Form, Input, Modal, Spin, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import type { FeatureListItem } from '../../api/hooks.ts';
@@ -10,6 +10,7 @@ import { useSelectionSummary } from '../../api/hooks/workingSet.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
 import { savedFilterSaveFailedKey } from '../filters/useSavedFilterAudienceChoice.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 
 /**
  * What several selected objects have in common, and what can be done to all of them.
@@ -63,7 +64,8 @@ export default function MultiSelectionCard() {
   };
 
   const ids = selectionSet.map((ref) => ref.id);
-  const { data } = useSelectionSummary(ids);
+  // Until the summary has answered there is nothing to count: a failed read is not "0 readable".
+  const { data, isError, error, refetch } = useSelectionSummary(ids);
   const items = data?.items ?? [];
 
   const shared = <K extends keyof FeatureListItem>(key: K): FeatureListItem[K] | undefined => {
@@ -103,8 +105,17 @@ export default function MultiSelectionCard() {
         </Typography.Text>
       )}
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('panel.multiLoadFailed')}
+        testId="multi-selection-load-failed"
+      />
+
       <Descriptions column={1} size="small">
-        <Descriptions.Item label={t('panel.multiReadable')}>{items.length}</Descriptions.Item>
+        <Descriptions.Item label={t('panel.multiReadable')}>{data === undefined ? '-' : items.length}</Descriptions.Item>
         <Descriptions.Item label={t('features.type')}>
           {sharedType ?? <Typography.Text type="secondary">{t('panel.multiMixed')}</Typography.Text>}
         </Descriptions.Item>
@@ -183,7 +194,9 @@ export default function MultiSelectionCard() {
         {t('panel.multiHint')}
       </Typography.Text>
 
-      {items.length === 0 ? (
+      {data === undefined ? (
+        isError ? null : <Spin size="small" style={{ display: 'block', marginTop: 8 }} />
+      ) : items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('panel.multiNothingReadable')} />
       ) : (
         <Flex vertical gap={2} style={{ marginTop: 8 }}>

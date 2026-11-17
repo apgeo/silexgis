@@ -14,9 +14,14 @@ const createSpy = vi.fn();
 const deleteSpy = vi.fn();
 const shareSpy = vi.fn();
 let views: { id: string; name: string; isHome: boolean; config: object }[] = [];
+/** What the read of the views failed with, when a test makes it fail. */
+let viewsFailure: unknown;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useMapViews: () => ({ data: views }),
+  useMapViews: () =>
+    viewsFailure === undefined
+      ? { data: views, isError: false, error: null, refetch: vi.fn() }
+      : { data: undefined, isError: true, error: viewsFailure, refetch: vi.fn() },
   useMapLayers: () => ({ data: catalog }),
   useCreateMapView: () => ({ mutateAsync: createSpy, isPending: false }),
   useDeleteMapView: () => ({ mutateAsync: deleteSpy, isPending: false }),
@@ -54,6 +59,22 @@ function exportImage() {
   );
   fireEvent.click(screen.getByRole('button', { name: 'Export map image' }));
 }
+
+describe('a failed read of the saved views', () => {
+  it('says the views could not be read, rather than showing a blank list', () => {
+    viewsFailure = new TypeError('Failed to fetch');
+    try {
+      render(
+        <App>
+          <ViewsPanel onCapture={() => VIEW} onApply={() => {}} />
+        </App>,
+      );
+      expect(screen.getByTestId('views-load-failed')).toBeTruthy();
+    } finally {
+      viewsFailure = undefined;
+    }
+  });
+});
 
 describe('exporting the map as an image over a layer that does not allow it', () => {
   it('names the layer, and the installation’s own background allowed in documents', async () => {

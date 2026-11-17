@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { CameraOutlined, DeleteOutlined, HomeFilled, LinkOutlined, SaveOutlined } from '@ant-design/icons';
 import { App, Divider, Flex, Input, Popconfirm, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,7 +29,7 @@ interface ViewsPanelProps {
 export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: views } = useMapViews();
+  const { data: views, isError: viewsFailed, error: viewsError, refetch: refetchViews } = useMapViews();
   const { data: mapLayers } = useMapLayers();
   const createView = useCreateMapView();
   const deleteView = useDeleteMapView();
@@ -131,6 +132,15 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
           />
         </Tooltip>
       </Flex>
+      <ReadFailedAlert
+        isError={viewsFailed}
+        error={viewsError}
+        held={views !== undefined}
+        onRetry={refetchViews}
+        title={t('views.loadFailed')}
+        testId="views-load-failed"
+        style={{ marginTop: 8, marginBottom: 0 }}
+      />
       <List
         size="small"
         dataSource={views}
