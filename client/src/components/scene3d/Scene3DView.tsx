@@ -626,6 +626,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   /** Whether the flyby tool is open over the scene. */
   const [flybyOpen, setFlybyOpen] = useState(false);
+  const flybyCloseRequest = useRef<(() => void) | null>(null);
   // Whether a flyby has the camera. Held twice: as state for the chrome that is held meanwhile, and
   // in a ref for the exchange with the flat map and the address bar, which ask at the moment of
   // each message and must not make the effect that owns them run again.
@@ -1837,7 +1838,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           onSaveImage={saveImage}
           savingImage={savingImage}
           flybyOpen={flybyOpen}
-          onFlybyOpenChange={setFlybyOpen}
+          // Closing from the toolbar goes through the tool's own close, which asks about unsaved
+          // changes; with the tool not mounted there is nothing to ask about.
+          onFlybyOpenChange={(next) => {
+            if (!next && flybyCloseRequest.current) {
+              flybyCloseRequest.current();
+            } else {
+              setFlybyOpen(next);
+            }
+          }}
         />
       )}
       {status === 'ready' && showingHere && flybyOpen && (
@@ -1846,6 +1855,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           selection={selection}
           onActiveChange={changeFlybyActive}
           onClose={() => setFlybyOpen(false)}
+          closeRequest={flybyCloseRequest}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer

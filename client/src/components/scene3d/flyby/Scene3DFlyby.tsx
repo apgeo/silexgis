@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Modal, Spin } from 'antd';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { App, Modal, Spin } from 'antd';
+import { Suspense, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatSize } from '../../attachments/fileFormat.ts';
 import { lazyRetrying } from '../../../codeLoading.ts';
@@ -26,6 +26,11 @@ export interface Scene3DFlybyProps {
    */
   onActiveChange(active: boolean): void;
   onClose(): void;
+  /**
+   * Filled with the tool's own way of being closed, for a close control that lives outside it (the
+   * 3D toolbar's toggle), so that every way out asks the same question about unsaved changes.
+   */
+  closeRequest?: RefObject<(() => void) | null>;
 }
 
 /** The class the view wears while everything but the scene is off the screen. */
@@ -37,10 +42,48 @@ const COUNTDOWN_SECONDS = 3;
  * The flyby tool, as the 3D view mounts it: the panel a flyby is put together in, the bar it is
  * played from, and the clean screen it is shown on for somebody recording their display.
  */
-export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose }: Scene3DFlybyProps) {
+export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose, closeRequest }: Scene3DFlybyProps) {
   const { t } = useTranslation();
+  const { modal } = App.useApp();
   const loadRoute = useFlybyStore((state) => state.loadRoute);
   const flyby = useFlyby(scene, selection, loadRoute);
+
+  // The draft outlives the tool (it is there again when the tool is reopened), but not a reload of
+  // the page, so closing with unsaved changes still says so once, whichever control closed it.
+  const asking = useRef(false);
+  const requestClose = useCallback(() => {
+    if (!flyby.dirty) {
+      onClose();
+      return;
+    }
+    if (asking.current) {
+      return;
+    }
+    asking.current = true;
+    modal.confirm({
+      title: t('flyby.closeTitle'),
+      content: t('flyby.closeBody'),
+      okText: t('flyby.closeOk'),
+      okButtonProps: { 'data-testid': 'flyby-close-confirm' },
+      cancelText: t('common.keepEditing'),
+      onOk: () => {
+        asking.current = false;
+        onClose();
+      },
+      onCancel: () => {
+        asking.current = false;
+      },
+    });
+  }, [flyby.dirty, modal, onClose, t]);
+  useEffect(() => {
+    if (!closeRequest) {
+      return;
+    }
+    closeRequest.current = requestClose;
+    return () => {
+      closeRequest.current = null;
+    };
+  }, [closeRequest, requestClose]);
   const { active, playerState, pause, play, ensurePlayer } = flyby;
 
   // ---- the movie ----
@@ -187,7 +230,7 @@ export default function Scene3DFlyby({ scene, selection, onActiveChange, onClose
       {/* Under the panel and the bar, over the scene; shown on the clean screen too, where it is
           part of what is being recorded. */}
       <FlybyTextsOverlay subscribeMoment={flyby.subscribeMoment} />
-      {!clean && !movieOpen && <FlybyPanel flyby={flyby} onClose={onClose} />}
+      {!clean && !movieOpen && <FlybyPanel flyby={flyby} onClose={requestClose} />}
       {!clean && movieOpen && (
         <Suspense fallback={<Spin className="scene3d-flyby-panel scene3d-flyby-movie" />}>
           <FlybyMovieDialog

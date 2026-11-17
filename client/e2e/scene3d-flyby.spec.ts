@@ -179,6 +179,8 @@ test('a flyby is kept under a name, changed section by section, and played on a 
   await expect(page.getByTestId('flyby-edited')).toHaveCount(0);
   await page.getByTestId('flyby-saved').click();
   await page.getByTitle('Demo flyby').click();
+  // The unticked box is a change nobody saved: opening the kept flyby over it asks first.
+  await page.getByTestId('discard-confirm').click();
   await expect(page.getByTestId('flyby-edited')).toBeVisible();
   await expect(firstSeconds).toHaveValue('3');
 
@@ -201,6 +203,7 @@ test('a flyby is kept under a name, changed section by section, and played on a 
 
   // Closing the tool with a flyby held ends it, and the camera is where it was found.
   await page.getByTestId('flyby-delete').click();
+  await page.getByTestId('flyby-delete-confirm').click();
   await expect(page.getByTestId('flyby-saved')).toHaveCount(0);
   await page.getByTestId('flyby-close').click();
   await expect(page.getByTestId('flyby-panel')).toHaveCount(0);

@@ -10,6 +10,7 @@ import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
 import type { Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEngine.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Scene3DFlyby from './Scene3DFlyby.tsx';
+import { useFlybyDraftStore } from './flybyDraft.ts';
 // Loaded beforehand, so the panel's own chunk is already in hand when the tool asks for it.
 import './FlybyMovieDialog.tsx';
 import type { FlybyScene } from './useFlyby.ts';
@@ -224,6 +225,8 @@ beforeEach(() => {
     return context && Object.assign(context, { fillText: () => undefined, textBaseline: 'alphabetic' });
   } as typeof getContext);
   useFlybyStore.setState({ library: [], loadRoute: false, movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'webm' } });
+  // A flyby left in the tool by one test would otherwise open in the next.
+  useFlybyDraftStore.setState({ draft: null });
   saveBlob.mockClear();
   encoding.opened = [];
   encoding.frames = 0;
