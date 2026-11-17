@@ -140,6 +140,9 @@ export default function ReviewBatchPage() {
       await attempt(over);
       setConflict(null);
       setNote('');
+      // Only a decision that went through empties the selection: after a refusal or a failure the
+      // reviewer tries again with the same lines instead of picking them all over.
+      setSelected(new Set());
       message.success(t('review.decided'));
     } catch (error) {
       if (error instanceof ChangedSinceStop) {
@@ -157,7 +160,6 @@ export default function ReviewBatchPage() {
       }
     } finally {
       setWorking(false);
-      setSelected(new Set());
     }
   };
 
@@ -192,14 +194,14 @@ export default function ReviewBatchPage() {
     };
   };
 
-  const rejectLines = (ids: string[]) => {
+  const rejectLines = (ids: string[], noteText: string = note) => {
     const done = new Set<string>();
     return async () => {
       for (const reviewId of ids) {
         if (done.has(reviewId)) {
           continue;
         }
-        const result = await rejectItem.mutateAsync({ reviewId, note });
+        const result = await rejectItem.mutateAsync({ reviewId, note: noteText });
         result.decided.forEach((d) => done.add(d.reviewId));
         done.add(reviewId);
       }
@@ -254,7 +256,52 @@ export default function ReviewBatchPage() {
   const rejectSelection = (ids: string[]) => {
     const picked = new Set(ids);
     const reach = unique(ids.flatMap((i) => dependentsOf(i, lines)), picked);
-    confirmReach(reach, 'cascade', () => void decide(rejectLines(ids)));
+    if (ids.length <= 1) {
+      confirmReach(reach, 'cascade', () => void decide(rejectLines(ids)));
+      return;
+    }
+    // Several lines at once are rejected only after the reviewer has seen how many, and the note the
+    // uploader will be sent with them: a stray click on a wide selection tells the uploader no about
+    // work nobody looked at. (A rejected line can still be accepted afterwards, one row at a time.)
+    // The lines a rejection cascades to are named in the same question rather than in a second one.
+    const typed = { note };
+    modal.confirm({
+      title: t('review.rejectSelectedTitle', { count: ids.length }),
+      width: 520,
+      content: (
+        <div data-testid="review-reject-confirm">
+          <Typography.Paragraph>{t('review.rejectSelectedExplain', { count: ids.length })}</Typography.Paragraph>
+          {reach.length > 0 && (
+            <div data-testid="review-cascade">
+              <Typography.Paragraph>{t('review.cascadeExplain')}</Typography.Paragraph>
+              <ul>
+                {reach.map((l) => (
+                  <li key={l.reviewId}>{nameOf(l)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Typography.Text type="secondary">{t('review.noteLabel')}</Typography.Text>
+          <Input.TextArea
+            defaultValue={note}
+            maxLength={2000}
+            rows={2}
+            onChange={(e) => {
+              typed.note = e.target.value;
+            }}
+            placeholder={t('review.notePlaceholder')}
+            data-testid="review-reject-note"
+          />
+        </div>
+      ),
+      okText: t('review.reject'),
+      okButtonProps: { danger: true, 'data-testid': 'review-reject-confirm-ok' },
+      cancelText: t('common.cancel'),
+      onOk: () => {
+        setNote(typed.note);
+        void decide(rejectLines(ids, typed.note));
+      },
+    });
   };
 
   const acceptAll = () =>
