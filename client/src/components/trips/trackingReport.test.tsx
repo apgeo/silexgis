@@ -384,6 +384,8 @@ describe('sending a tracking report', () => {
     it.each([
       [429, 'rate_limited'],
       [503, undefined],
+      // A collision with another transaction at the same moment: a 409, but nothing was saved.
+      [409, 'concurrency.transaction_conflict'],
     ])('keeps a report answered %i, as it keeps one that got no answer', async (status, code) => {
       recordEvents.mockImplementation(later(status, code));
       const send = hook().current.send;

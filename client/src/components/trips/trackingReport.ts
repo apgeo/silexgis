@@ -4,7 +4,7 @@ import type { Rule } from 'antd/es/form';
 import type { Dayjs } from 'dayjs';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict, isTransientConflict } from '../../api/client.ts';
 import { useRecordTrackingEvents, type TripPositionEventKind } from '../../api/hooks.ts';
 import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { signedInAccountId } from '../../auth/accountId.ts';
@@ -159,12 +159,13 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
 /**
  * Whether the server's answer to a report was "later" rather than "no".
  *
- * Two statuses say so in so many words: too many requests, and a service with no room right now.
- * Other server faults are left out on purpose — they do not say the report was not written, and
- * the form deals with those by keeping the text and the key it went under.
+ * Two statuses say so in so many words: too many requests, and a service with no room right now;
+ * so does a collision with another transaction, which saved nothing. Other server faults are left
+ * out on purpose — they do not say the report was not written, and the form deals with those by
+ * keeping the text and the key it went under.
  */
 function answeredLater(error: ApiError): boolean {
-  return error.status === 429 || error.status === 503;
+  return error.status === 429 || error.status === 503 || isTransientConflict(error);
 }
 
 /**

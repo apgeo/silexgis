@@ -8248,7 +8248,8 @@
       "caveMissing": "Peștera ca care a fost importată această intrare nu mai este o peșteră aici.",
       "positionInvalid": "Poziția dată pentru această peșteră nu este pe pământ.",
       "typeUnknown": "Tipul de peșteră sau de intrare ales nu există în această instalare.",
-      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea."
+      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea.",
+      "alreadyImported": "Această peșteră este deja în registru. Actualizeaz-o în loc să creezi o a doua copie."
     },
     "paging": {
       "previous": "Anterioare",

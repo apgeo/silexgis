@@ -272,6 +272,25 @@ describe('sending the held reports', () => {
     },
   );
 
+  // A collision with another transaction is a 409, but it is about the moment and not about the
+  // report: nothing was saved, and the same report goes through once the wait it named is over.
+  it('leaves a report held when it collided with another change, and sends it after the wait', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-01T11:00:00.000Z'));
+    const tab = await openTab();
+    tab.holdReport(report());
+    const send = vi.fn<(request: TrackingReportRequest) => Promise<unknown[]>>(() =>
+      Promise.reject(new tab.ApiError(409, 'concurrency.transaction_conflict', undefined, undefined, 1_000)),
+    );
+
+    expect(await tab.drainHeldReports(ANA, send)).toMatchObject({ refused: 0, stopped: 'serverBusy' });
+    expect(tab.heldReportsOf(ANA)[0]).toMatchObject({ state: 'held' });
+
+    vi.advanceTimersByTime(1_000);
+    send.mockImplementation(() => Promise.resolve([{}]));
+    expect(await tab.drainHeldReports(ANA, send)).toMatchObject({ sent: 1, stopped: null });
+  });
+
   it.each([
     ['the server fails without naming a wait', 'serverBusy'],
     ['no answer comes', 'noAnswer'],

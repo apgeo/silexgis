@@ -40,6 +40,14 @@ describe('a refusal the server has settled', () => {
     expect(isSettledRefusal(new TypeError('Failed to fetch'))).toBe(false);
   });
 
+  it('leaves a collision with another transaction unsettled, though it is a 409', () => {
+    // The database broke the request off for colliding with another one at the same moment and
+    // saved nothing; the identical request sent again normally succeeds. Any other 409 is final.
+    expect(isSettledRefusal(new ApiError(409, 'concurrency.transaction_conflict'))).toBe(false);
+    expect(retryQuery(0, new ApiError(409, 'concurrency.transaction_conflict'))).toBe(true);
+    expect(isSettledRefusal(new ApiError(409, 'share.already_exists'))).toBe(true);
+  });
+
   // The retry policy is this rule and not a second reading of it: a 4xx that stopped being
   // retried while some screen still called it transient is exactly the disagreement being avoided.
   it('is the same answer the retry policy acts on', () => {

@@ -8235,7 +8235,8 @@
       "caveMissing": "The cave this entry was imported as is no longer a cave here.",
       "positionInvalid": "The position given for this cave is not on the earth.",
       "typeUnknown": "The chosen cave or entrance type does not exist on this installation.",
-      "parentNotFound": "The chosen parent no longer exists, or you may not see it."
+      "parentNotFound": "The chosen parent no longer exists, or you may not see it.",
+      "alreadyImported": "This cave is already in the register. Refresh it instead of creating a second copy."
     },
     "paging": {
       "previous": "Previous",
