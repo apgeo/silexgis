@@ -143,6 +143,11 @@ introdusă ca direcție și înclinare după regula mâinii drepte.
 le-a scris cineva (lungime, adâncime, volum…). La un **obiect de tip zonă**, *forma măsurată*
 calculată din contur (suprafață, circularitate, direcția axei lungi…).
 
+**Model de potențial speologic** — O judecată salvată despre ce dovezi sugerează o peșteră și cât
+contează fiecare: straturi de dovezi, felul în care este evaluat fiecare și ponderile lor. Nu
+numește niciun loc. Rulat pe o zonă, dă o *hartă de favorabilitate*.
+→ [Potențial speologic](features/cave-potential.md)
+
 **Model de raport** — Un model scris de club pentru documentul Word pe care îl generează o tură.
 Poate cere doar lucruri care i-au fost deja date cititorului.
 
@@ -167,6 +172,11 @@ sau al instalării. → [Profiluri de procesare](features/point-clouds.md#profil
 înregistrarea lizibilă. Acțiunea lui de permisiune este **Locație exactă**.
 → [Protecția locațiilor](admin/location-protection.md)
 
+**Hartă de favorabilitate** — Ce dă un model de potențial speologic rulat pe o zonă: fiecare
+celulă cu un scor de la 0 la 1 după ponderile modelului, la o dată. O cântărire a dovezilor, nu o
+probabilitate și nu o constatare. Cine o poate citi se hotărăște după ce a intrat în ea, nu de către
+autor. → [Potențial speologic](features/cave-potential.md#harta)
+
 **Hartă de bază proprie** — Harta de bază vectorială a instalării: formele OpenStreetMap ale unei
 regiuni pe care a descărcat-o un administrator, servite numai de instalare.
 → [Hartă de bază proprie](admin/messaging.md#hartă-de-bază-proprie)
@@ -176,6 +186,11 @@ regiuni pe care a descărcat-o un administrator, servite numai de instalare.
 
 **Calitatea poziției** — Cum au fost obținute coordonatele unei intrări: necunoscută, GPS, de pe
 hartă, estimată. Diferența dintre „mergi aici" și „caută pe versantul ăsta".
+
+**Raport de consistență** — La un model cântărit prin comparații pe perechi: cât de mult se
+contrazic comparațiile între ele. 0 înseamnă deloc; peste 0,1 se avertizează, nu se refuză
+niciodată. Nu spune nimic despre cât de corecte sunt judecățile.
+→ [Potențial speologic](features/cave-potential.md#comparațiile-pe-perechi-și-raportul-de-consistență)
 
 **Regulă de detectare** — Ce decide că un punct numit `P. Ursilor` este propus ca peșteră numită
 *Ursilor*. → [Vocabulare](admin/vocabularies.md#configurare--reguli-de-detectare)
@@ -209,6 +224,11 @@ instalare, de un grup de speologie sau de tine. Exportabil ca fișier.
 **Speolog** — O fișă în lista clubului. **Poate avea sau nu un cont.** Un speolog fără cont poate
 fi numit pe ture, dar nu i se poate acorda acces la nimic și nu i se poate trimite nimic.
 → [Persoane și cluburi](features/people-and-clubs.md)
+
+**Strat de dovezi** — O suprafață pe care o cântărește un model de potențial speologic, câte o
+valoare pe celulă: din forma terenului (altitudine, pantă, formă de relief…) sau din ce a fost
+înregistrat (tipul rocii, distanța până la falii sau doline, densitatea intrărilor).
+→ [Potențial speologic](features/cave-potential.md#straturile-de-dovezi)
 
 **Sursă topografică** — Fișierul `.th`, `.svx`, `.thconfig`, `.log` sau `.zip` din care a fost
 făcută o topografie compilată. Arhivat, niciodată citit.

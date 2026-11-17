@@ -469,6 +469,40 @@ deosebirea.
 | Passage against measured strikes (Watson U²) | Galeriile față de direcțiile măsurate (Watson U²) |
 | Probability | Probabilitate |
 
+## Potențial speologic
+
+| Engleză | Română |
+|---|---|
+| Cave potential | Potențial speologic |
+| Cave-potential model (the guide's word) | Model de potențial speologic |
+| Favourability map (the guide's word) | Hartă de favorabilitate |
+| Models · New model · Maps computed | Modele · Model nou · Hărți calculate |
+| Evidence layers · Evidence and weight | Straturi de dovezi · Dovezi și pondere |
+| Elevation · Slope · Aspect | Altitudine · Pantă · Orientare |
+| Topographic position · Ruggedness · Roughness | Poziție topografică · Asperitate · Rugozitate |
+| Landform | Formă de relief |
+| Distance to faults · Distance to sinkholes | Distanța până la falii · Distanța până la doline |
+| Rock type · Cave-entrance density | Tipul rocii · Densitatea intrărilor de peșteră |
+| Scored by · score | Evaluat prin · scor |
+| A table of classes · A ramp between two values · A score per class | Un tabel de clase · O rampă între două valori · Un scor pentru fiecare clasă |
+| Up to · Everything above | Până la · Tot ce este peste |
+| Value that scores 0 / 1 | Valoarea cu scorul 0 / 1 |
+| How the layers are weighed | Cum sunt cântărite straturile |
+| Weights given outright · Pairwise comparisons | Ponderi date direct · Comparații pe perechi |
+| Equally important · N × more important · N × less important | La fel de important · de N ori mai important · de N ori mai puțin important |
+| Weights · Consistency ratio | Ponderi · Raport de consistență |
+| Shared with · Only me · Everyone signed in · Members of … | Partajat cu · Doar eu · Toți cei autentificați · Membrii … |
+| Uses recorded positions | Folosește poziții înregistrate |
+| Run · Area · Cell size (m) | Rulează · Zonă · Mărimea celulei (m) |
+| Queued · Computing · Ready · Failed (a run) | În așteptare · Se calculează · Gata · Eșuat |
+| … cells scored · mean | … celule evaluate · media |
+| Asked for by · Written by | Cerut de · Scris de |
+| Show on the map | Arată pe hartă |
+| Less favourable · More favourable | Mai puțin favorabil · Mai favorabil |
+
+Un strat este **evaluat** (primește un *scor*), iar straturile sunt **cântărite** (primesc o
+*pondere*): așa le deosebește interfața, iar ghidul păstrează cele două cuvinte separate.
+
 ## Alte
 
 | Engleză | Română |

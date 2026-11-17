@@ -300,5 +300,6 @@ card chooses which kind of plane both the test and the stereonet use.
 Related: [Surface features](surface-features.md) ·
 [Measurements and statistics](measurements-and-statistics.md) ·
 [Geodata files](geodata.md) ·
+[Cave potential](cave-potential.md) ·
 [Location protection](../admin/location-protection.md) ·
 [Vocabularies](../admin/vocabularies.md)

@@ -302,6 +302,11 @@ the landform classes. They are computed once by the installation, on the same wo
 everybody with permission to read terrain sees them in the map's layer list under **Ground
 pictures**: switch one on, and it draws beneath the caves.
 
+They are also what a [cave-potential model](../features/cave-potential.md#from-the-shape-of-the-ground)
+reads its terrain evidence from: steepness (which it needs **in degrees**), facing, topographic
+position, ruggedness, roughness and the landform classes. A model computes none of them itself, so
+a run over ground whose picture is missing or out of date fails and names the picture.
+
 ### Asking for one
 
 The **Derived pictures** card on the Terrain page, below the builds. Asking needs the right to

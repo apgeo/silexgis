@@ -50,6 +50,10 @@ roster, working area and leads board. → [Camps](features/camps.md)
 across cave types, or across rock types, drawing one box per group. → [Measurements and
 statistics](features/measurements-and-statistics.md#the-whole-registry-explored)
 
+**Cave-potential model** — A saved judgment of which evidence suggests a cave and how much each
+kind counts: evidence layers, how each is scored, and their weights. It names no place. Run over an
+area, it gives a *favourability map*. → [Cave potential](features/cave-potential.md)
+
 **Caver** — An entry in the club's roster. **May or may not have an account.** A caver with no
 account can be named on trips but cannot be granted access or sent anything.
 → [People and clubs](features/people-and-clubs.md)
@@ -69,6 +73,10 @@ is ever refused because a line is unticked.
 and vertical components — *the two parts of that same line*, not two separate measurements.
 → [Measurements](features/measurements-and-statistics.md#closest-approach)
 
+**Consistency ratio** — For a model weighed by pairwise comparisons: how far the comparisons
+contradict each other. 0 is none; above 0.1 is warned about, never refused. It says nothing about
+whether the judgments are right. → [Cave potential](features/cave-potential.md#pairwise-comparisons-and-the-consistency-ratio)
+
 **Containment** — A feature being inside another feature. Drives breadcrumbs, and **inherits
 location protection downwards**. Distinct from a **link**.
 
@@ -80,6 +88,15 @@ documents of that kind are asked for**.
 
 **Draft** — A trip or event that has told nobody. Not a *hidden* record: whoever its
 visibility admits can already read it.
+
+**Evidence layer** — One surface a cave-potential model weighs, a value per cell: from the shape
+of the ground (elevation, slope, landform…) or from what has been recorded (rock type, distance to
+faults or sinkholes, entrance density). → [Cave potential](features/cave-potential.md#the-evidence-layers)
+
+**Favourability map** — What a cave-potential model gives when run over an area: every cell scored
+from 0 to 1 by the model's weights, on a date. A weighing of evidence, not a probability and not a
+finding. Who may read one is decided by what it was made from, not by its author.
+→ [Cave potential](features/cave-potential.md#the-map)
 
 **Filter** — A question about your records: which kinds of object, the conditions they must
 meet, and the order of the answer. Always answered with what the person asking may see — it narrows,

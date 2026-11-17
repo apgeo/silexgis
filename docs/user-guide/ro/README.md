@@ -63,6 +63,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
 [Analize carstice](features/karst-analyses.md) ·
 [Geologie și stereograma](features/geology.md) ·
+[Potențial speologic](features/cave-potential.md) ·
 [Fișiere de geodate](features/geodata.md) ·
 [Hărți raster georeferențiate](features/georeferenced-maps.md) ·
 [Catalogul național al peșterilor](features/cave-catalogue.md) ·

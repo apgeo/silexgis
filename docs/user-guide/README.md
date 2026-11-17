@@ -59,6 +59,7 @@ linking out to the reference pages for detail.
 [Measurements and statistics](features/measurements-and-statistics.md) ·
 [Karst analyses](features/karst-analyses.md) ·
 [Geology and the stereonet](features/geology.md) ·
+[Cave potential](features/cave-potential.md) ·
 [Geodata files](features/geodata.md) ·
 [Georeferenced raster maps](features/georeferenced-maps.md) ·
 [The national cave catalogue](features/cave-catalogue.md) ·

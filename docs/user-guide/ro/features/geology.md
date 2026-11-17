@@ -309,5 +309,6 @@ card alege tipul de plan folosit atât de test, cât și de stereogramă.
 Înrudite: [Fenomene de suprafață](surface-features.md) ·
 [Măsurători și statistici](measurements-and-statistics.md) ·
 [Fișiere de geodate](geodata.md) ·
+[Potențial speologic](cave-potential.md) ·
 [Protecția locațiilor](../admin/location-protection.md) ·
 [Vocabularele clubului](../admin/vocabularies.md)

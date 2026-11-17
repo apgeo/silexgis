@@ -215,8 +215,14 @@ Ecranele pentru întregul registru de sub **Statistici** — distribuții, corel
 categorii — sunt descrise în
 [Tot registrul, explorat](measurements-and-statistics.md#tot-registrul-explorat).
 
+## Unde ar putea fi peșteri
+
+Tot la **Statistici**: **Potențial speologic**, unde un model cântărește forma terenului, roca și
+ce a fost înregistrat într-o hartă a terenului mai mult sau mai puțin favorabil dintr-o zonă. Are
+pagina lui: [Potențial speologic](cave-potential.md).
+
 ---
 
 Înrudite: [Măsurători și statistici](measurements-and-statistics.md) ·
 [Spațiul de lucru al hărții](map-workspace.md) · [Relief](terrain.md) ·
-[Peșteri și intrări](caves-and-entrances.md)
+[Peșteri și intrări](caves-and-entrances.md) · [Potențial speologic](cave-potential.md)

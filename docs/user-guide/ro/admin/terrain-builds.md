@@ -308,6 +308,12 @@ nivel sau formele de relief. Sunt calculate o singură dată de instalare, pe ac
 apoi oricine are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale
 terenului**: activează una și se desenează sub peșteri.
 
+Tot din ele își citește dovezile de relief un
+[model de potențial speologic](../features/cave-potential.md#din-forma-terenului): panta (de care
+are nevoie **în grade**), orientarea, poziția topografică, asperitatea, rugozitatea și formele de
+relief. Un model nu calculează singur niciuna, așa că o rulare peste teren a cărui imagine lipsește
+sau este depășită eșuează și numește imaginea.
+
 ### Cum se cere una
 
 Cardul **Imagini derivate** de pe pagina Relief, sub generări. Cererea are nevoie de dreptul de

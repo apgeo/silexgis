@@ -396,6 +396,19 @@ feature and walkthroughs of whole jobs.
   10th to the 90th percentile) rather than its extremes, which are single caves' own figures, and
   with no box at all for a group measured on fewer than six caves. Everything is counted over the
   caves you may read, and the whole question lives in the address.
+- **Where caves might be, as a judgment you can read** — a cave-potential model says which evidence
+  counts and how much: the shape of the ground (elevation, slope, facing, topographic position,
+  ruggedness, roughness, landform), the mapped rock, the distance to faults and to sinkholes, and
+  the density of known entrances. Each layer is scored from 0 to 1 by a table of classes, a ramp
+  between two values or a score per class, and the layers are weighed by weights given outright or
+  by pairwise comparisons, with the consistency ratio shown and warned about above 0.1, never
+  refused. A model names no place, can be shared with a caving group or everyone signed in, and can
+  be copied. Run over an area at a chosen cell size it becomes a dated favourability map on the
+  map's layers panel, with a key that says what it is: a weighing of evidence, not a probability
+  and not a finding. A run reads only the features its account may place exactly, and a map made
+  from recorded positions is shown only to accounts that may place every one of them, asked afresh
+  at each reading — nobody chooses who sees a map. Maps are never exported and never on a shared
+  link.
 - **Years of trips typed up in a spreadsheet become trips** — the club's centralizator is uploaded
   and read on a review screen, not imported blind: every row says what it would create, which people
   and caves it matched, and what it could not settle, and nothing is written until you confirm.

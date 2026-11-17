@@ -213,8 +213,14 @@ The registry-wide screens under **Statistics** — distributions, correlations, 
 categories — are described in
 [The whole registry, explored](measurements-and-statistics.md#the-whole-registry-explored).
 
+## Where caves might be
+
+Also under **Statistics**: **Cave potential**, where a model weighs the shape of the ground, the
+rock and what has been recorded into a map of more and less favourable ground over an area. It
+has its own page: [Cave potential](cave-potential.md).
+
 ---
 
 Related: [Measurements and statistics](measurements-and-statistics.md) ·
 [Map workspace](map-workspace.md) · [Terrain](terrain.md) ·
-[Caves and entrances](caves-and-entrances.md)
+[Caves and entrances](caves-and-entrances.md) · [Cave potential](cave-potential.md)
