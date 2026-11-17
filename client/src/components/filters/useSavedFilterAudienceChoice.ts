@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { ApiError } from '../../api/client.ts';
 import { useCapabilities, useCreateDoor } from '../../api/hooks/access.ts';
 import { useCavingGroups } from '../../api/hooks/people.ts';
+import { filterRefusalKey, isFilterRefusal } from '../../filters/refusal.ts';
 import { effectiveSavedFilterAudience, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
@@ -51,13 +52,37 @@ export function useSavedFilterAudienceChoice(): {
 /** What the server answers when a filter is bound to a caving group its author may not share with. */
 const GROUP_NOT_ALLOWED_CODE = 'access.caving_group_binding_forbidden';
 
+/** What the server answers when the filter being updated was deleted, or is no longer the author's to change. */
+const SAVED_FILTER_GONE_CODE = 'saved_filter.not_found';
+
 /**
- * The message for a refused save of a saved filter: a club the author may not share with is named
- * as such — it is on offer, so picking it is an ordinary mistake, not a failure — and anything else
- * is the general one.
+ * The message for a refused save of a saved filter, as the key of a sentence the author can act on:
+ * a club the author may not share with is named as such — it is on offer, so picking it is an
+ * ordinary mistake, not a failure — and so is a member without the right to save filters at all, a
+ * filter holding a typed position (never stored, because it would travel with every share), and a
+ * filter deleted or unshared elsewhere since it was opened (an update sends no conditions, so
+ * telling the author to check them would send them in circles). A refusal the filter editor
+ * already words by its code keeps that sentence; any other refusal of the filter itself is the
+ * general "cannot save it as it stands". Only what is not a refusal — a dropped connection, a
+ * server error — is the general failure.
  */
 export function savedFilterSaveFailedKey(error: unknown): string {
-  return error instanceof ApiError && error.code === GROUP_NOT_ALLOWED_CODE
-    ? 'savedFilters.groupNotAllowed'
-    : 'common.saveFailed';
+  if (!(error instanceof ApiError)) {
+    return 'common.saveFailed';
+  }
+  switch (error.code) {
+    case GROUP_NOT_ALLOWED_CODE:
+      return 'savedFilters.groupNotAllowed';
+    case 'access.create_forbidden':
+      return 'savedFilters.saveRefused.forbidden';
+    case 'saved_filter.anchor_refused':
+      return 'savedFilters.saveRefused.holdsPosition';
+    case SAVED_FILTER_GONE_CODE:
+      return 'savedFilters.saveRefused.gone';
+    default:
+      return (
+        filterRefusalKey(error.code) ??
+        (isFilterRefusal(error) ? 'savedFilters.saveRefused.notSavable' : 'common.saveFailed')
+      );
+  }
 }

@@ -8,6 +8,7 @@ import Button from '../Button.tsx';
 import QuickFilterChips from './QuickFilterChips.tsx';
 import { documentOf, useCreateSavedFilter, useSavedFilters, type SavedFilter } from '../../api/hooks/savedFilters.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
+import { savedFilterSaveFailedKey } from './useSavedFilterAudienceChoice.ts';
 
 interface Props<R extends { extra: FilterNode[] }> {
   /** What the list's controls and any extra conditions say now. */
@@ -123,8 +124,8 @@ export default function ListSavedFilters<R extends { extra: FilterNode[] }>({
       form.resetFields();
       message.success(t('listFilters.saved', { name: created.name }));
       onSaved(created.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 

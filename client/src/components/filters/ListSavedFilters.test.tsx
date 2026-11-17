@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterNode } from '../../filters/types.ts';
 
@@ -82,4 +83,25 @@ it('Save with a name sends the conditions as a private filter', async () => {
 
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith('f-1'));
   expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ name: 'Tracks', visibility: 'private' }));
+});
+
+it('a refused save says why rather than that the operation failed', async () => {
+  createSpy.mockRejectedValue(new ApiError(400, 'saved_filter.anchor_refused'));
+  mount();
+  fireEvent.click(screen.getByTestId('list-save-filter'));
+  fireEvent.change(await screen.findByTestId('saved-filter-name'), { target: { value: 'Near here' } });
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+  expect(await screen.findByText(i18n.t('savedFilters.saveRefused.holdsPosition'))).toBeTruthy();
+  expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+});
+
+it('a dropped connection is still told as a failed save', async () => {
+  createSpy.mockRejectedValue(new TypeError('Failed to fetch'));
+  mount();
+  fireEvent.click(screen.getByTestId('list-save-filter'));
+  fireEvent.change(await screen.findByTestId('saved-filter-name'), { target: { value: 'Tracks' } });
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+  expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeTruthy();
 });

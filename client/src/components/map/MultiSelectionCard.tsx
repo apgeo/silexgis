@@ -9,6 +9,7 @@ import { useCreateSavedFilter } from '../../api/hooks/savedFilters.ts';
 import { useSelectionSummary } from '../../api/hooks/workingSet.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
+import { savedFilterSaveFailedKey } from '../filters/useSavedFilterAudienceChoice.ts';
 
 /**
  * What several selected objects have in common, and what can be done to all of them.
@@ -40,7 +41,12 @@ export default function MultiSelectionCard() {
   const savable = source?.document ?? null;
   const save = async () => {
     if (savable === null) return;
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),
@@ -51,8 +57,8 @@ export default function MultiSelectionCard() {
       setSaving(false);
       form.resetFields();
       message.success(t('listFilters.saved', { name: created.name }));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 
