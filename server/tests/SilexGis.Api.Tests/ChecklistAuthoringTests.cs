@@ -423,10 +423,32 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
         var refused = await owner.PutAsJsonAsync(
             $"/api/v1/checklists/{list.Id}",
             Body(list.Title, [(first, "Permit obtained"), (first, "Permit obtained again")]));
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        var body = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        // Its own code rather than the generic one, so a screen can say what is wrong without
+        // parsing the message.
+        System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("code").GetString()
+            .ShouldBe("checklist.line_repeated");
 
         var after = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
         after!.Items.OrderBy(x => x.SortOrder).Select(x => x.Text).ShouldBe(["Permit obtained", "Rope checked"]);
+
+        // A request with that problem and another one as well is described by neither code alone,
+        // and falls back to the generic answer that lists both.
+        using var twoProblems = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{list.Id}",
+            Body(string.Empty, [(first, "Permit obtained"), (first, "Permit obtained again")]));
+        var both = await twoProblems.Content.ReadAsStringAsync();
+        twoProblems.StatusCode.ShouldBe(HttpStatusCode.BadRequest, both);
+        System.Text.Json.JsonDocument.Parse(both).RootElement.GetProperty("code").GetString()
+            .ShouldBe("validation.failed");
+
+        // The same rewrite naming each line once goes through.
+        var second = list.Items.Single(x => x.Text == "Rope checked").Id;
+        using var allowed = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{list.Id}",
+            Body(list.Title, [(second, "Rope checked"), (first, "Permit obtained")]));
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
     }
 
     private async Task<ChecklistPayload> CreateAsync(string title, params string[] lines)

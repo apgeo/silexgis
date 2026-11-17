@@ -55,6 +55,9 @@ public sealed class ChecklistWriteRequestValidator : AbstractValidator<Checklist
     /// </summary>
     public const int MaxItems = 200;
 
+    /// <summary>The refusal of a rewrite that names one stored line more than once.</summary>
+    public const string LineRepeatedCode = "checklist.line_repeated";
+
     public ChecklistWriteRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
@@ -72,6 +75,7 @@ public sealed class ChecklistWriteRequestValidator : AbstractValidator<Checklist
         RuleFor(x => x.Items)
             .Must(items => items is null
                 || items.Where(i => i.Id is not null).GroupBy(i => i.Id).All(g => g.Count() == 1))
+            .WithProblemCode(LineRepeatedCode)
             .WithMessage("A line may appear only once in a list.");
     }
 }
