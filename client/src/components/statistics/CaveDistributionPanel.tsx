@@ -11,6 +11,8 @@ import {
 import {
   clusteredScatter,
   clusteringScopeFor,
+  principalAxesMeasures,
+  principalScatter,
   scatterClusteringMeasures,
   scatterPointsFor,
 } from './caveClustering.ts';
@@ -20,8 +22,11 @@ import {
   CcdfChart,
   CorrelationChart,
   HistogramChart,
+  PrincipalAxesChart,
   type CorrelationSeries,
 } from './DistributionCharts.tsx';
+import PrincipalAxesNote from './PrincipalAxesNote.tsx';
+import { axisTitle } from './principalAxesLabels.ts';
 
 interface CaveDistributionPanelProps {
   caves: CaveListItem[];
@@ -36,6 +41,9 @@ interface CaveDistributionPanelProps {
 }
 
 type View = 'histogram' | 'ccdf' | 'correlation' | 'byType';
+
+/** What the length-and-depth view draws: the two measures themselves, or the grouped caves on their principal axes. */
+type ScatterMode = 'measures' | 'axes';
 
 /**
  * How the caves in front of the reader are distributed — length, the rank-size shape of that
@@ -56,14 +64,21 @@ type View = 'histogram' | 'ccdf' | 'correlation' | 'byType';
 export default function CaveDistributionPanel({ caves, typeName, scope }: CaveDistributionPanelProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<View>('histogram');
+  const [scatterMode, setScatterMode] = useState<ScatterMode>('measures');
 
   // The grouping is asked only for a narrowing it can be asked about, and only while the chart
   // that shows it is the one on screen. A null scope is not a failure: it says the list is
   // narrowed by something the registry-wide grouping has no parameter for, so the honest picture
   // is the uncoloured one.
-  const clusteringScope = clusteringScopeFor(scope);
+  // The principal axes are taken over more measures than the two the plain scatter draws, so the
+  // grouping that colours them is asked over the same ones. The two modes are therefore two
+  // different questions with two cache entries, and flipping the toggle never paints one mode's
+  // grouping over the other's picture.
+  const axes = scatterMode === 'axes';
+  const measures = axes ? principalAxesMeasures : scatterClusteringMeasures;
+  const clusteringScope = clusteringScopeFor(scope, measures);
   const { data: answered } = useRegistryClustering(
-    clusteringScope ?? { measures: scatterClusteringMeasures },
+    clusteringScope ?? { measures },
     clusteringScope !== null && view === 'correlation',
   );
 
@@ -104,6 +119,21 @@ export default function CaveDistributionPanel({ caves, typeName, scope }: CaveDi
     }));
   }, [caves, clustering, t]);
 
+  /** The same grouping's caves on the two principal axes; null where the server published none. */
+  const axesSeries = useMemo<CorrelationSeries[] | null>(() => {
+    if (!axes) return null;
+    const placed = principalScatter(caves, clustering);
+    if (placed === null) return null;
+    return placed.map((group) => ({
+      cluster: group.cluster,
+      points: group.points,
+      name:
+        group.cluster === null
+          ? t('karstStats.clusterUngrouped')
+          : t('karstStats.clusterGroup', { group: group.cluster + 1 }),
+    }));
+  }, [axes, caves, clustering, t]);
+
   const groups = useMemo(() => {
     const byType = new Map<number, number[]>();
     for (const cave of caves) {
@@ -130,6 +160,33 @@ export default function CaveDistributionPanel({ caves, typeName, scope }: CaveDi
         // The account of who could not be grouped is drawn above the picture, not beneath it.
         // A reader who meets the colours first has already drawn a conclusion by the time they
         // reach the sentence saying which caves the colours could say nothing about.
+        if (axes) {
+          const projection = clustering?.projection;
+          const drawn = axesSeries?.reduce((n, g) => n + g.points.length, 0) ?? 0;
+          return (
+            <>
+              <ClusterPopulationNote
+                clustering={clustering}
+                unaskable={clusteringScope === null}
+                axes
+              />
+              {projection && axesSeries ? (
+                <>
+                  <PrincipalAxesChart
+                    series={axesSeries}
+                    xLabel={axisTitle(t, 1, projection)}
+                    yLabel={axisTitle(t, 2, projection)}
+                  />
+                  <PrincipalAxesNote projection={projection} positioned={drawn} onPage={caves.length} />
+                </>
+              ) : (
+                clustering !== undefined && (
+                  <Empty description={t('karstStats.axesNone')} data-testid="principal-axes-none" />
+                )
+              )}
+            </>
+          );
+        }
         return (
           <>
             <ClusterPopulationNote clustering={clustering} unaskable={clusteringScope === null} />
@@ -168,6 +225,19 @@ export default function CaveDistributionPanel({ caves, typeName, scope }: CaveDi
       }
     >
       <div data-testid="cave-distributions">
+        {view === 'correlation' && (
+          <Segmented
+            size="small"
+            value={scatterMode}
+            onChange={(v) => setScatterMode(v as ScatterMode)}
+            style={{ marginBottom: 8 }}
+            data-testid="scatter-mode"
+            options={[
+              { value: 'measures', label: t('karstStats.modeMeasures') },
+              { value: 'axes', label: t('karstStats.modeAxes') },
+            ]}
+          />
+        )}
         <Row>
           <Col span={24}>{body()}</Col>
         </Row>

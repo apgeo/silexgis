@@ -35,6 +35,10 @@ pe care l-a ales.
 și ora la care se dă alarma dacă nimeni nu a anunțat.
 → [Liste de verificare și apelul de urgență](features/checklists-and-callout.md#apelul-de-urgență)
 
+**Carstificabil** — Se spune despre o litologie care se dizolvă destul de ușor ca să găzduiască
+peșteri: carbonatele, evaporitele și conglomeratul calcaros. Fixat de aplicație pentru fiecare
+clasă din lista ei. → [Geologie](features/geology.md#lista-litologiilor)
+
 **Categorii** *(statistici)* — Ecranul de sub **Statistici** care compară o măsurătoare între
 tipuri de peșteri sau între tipuri de rocă, cu câte o cutie pentru fiecare grupă.
 → [Măsurători și statistici](features/measurements-and-statistics.md#tot-registrul-explorat)
@@ -101,6 +105,9 @@ circularitate, direcția axei lungi…). A nu se confunda cu **morfometria** une
 **Grup de speologie** — Un club, un grup sau o organizație. Contează pentru vizibilitate, pentru
 delimitarea permisiunilor și pentru anunțuri. Nu este același lucru cu un **grup de permisiuni**.
 
+**Indice de carstificare** — O singură citire, de la *foarte scăzut* la *foarte ridicat*, a cât de carstificată este o zonă: media dintre densitatea peșterilor și acoperirea cu depresiuni, fiecare față de o referință declarată. O citire lipsă este lăsată deoparte, nu socotită zero.
+→ [Analize carstice](features/karst-analyses.md#indicele-de-carstificare)
+
 **Invitație** *(cont)* — Felul în care un cont este deschis de altcineva: **Invită pe cineva**
 din *Administrare → Conturi* cere un nume și o adresă de e-mail, iar titularul primește un link
 pentru a-și alege singur parola. Linkul funcționează o singură dată și timp de 24 de ore. Nu este
@@ -126,6 +133,11 @@ orientativă** — nimic nu este refuzat vreodată pentru că un rând nu este b
 → [Liste de verificare](features/checklists-and-callout.md)
 
 **Locație protejată** — Vezi *Protecția locațiilor*.
+
+**Măsurătoare structurală** — O citire a unui plan luată într-un punct — stratificație, o
+diaclază, un plan de falie — salvată ca direcție de înclinare și înclinare, și care poate fi
+introdusă ca direcție și înclinare după regula mâinii drepte.
+→ [Geologie](features/geology.md#măsurători-structurale)
 
 **Morfometrie** — Din păcate, două lucruri diferite. La o **peșteră**, cifrele declarate pe care
 le-a scris cineva (lungime, adâncime, volum…). La un **obiect de tip zonă**, *forma măsurată*
@@ -176,6 +188,8 @@ parola și își configurează din nou un al doilea factor. Refuzată pentru pro
 → [Conturi](admin/accounts.md) ·
 [Autentificare în doi pași](features/account-and-settings.md#autentificare-în-doi-pași)
 
+**Rețeaua de galerii** — Topografia unei peșteri citită ca puncte unite prin vize de galerie, numărate pe intersecții, fundături, bucle independente și rapoartele studiilor carstice. → [Analize carstice](features/karst-analyses.md#rețeaua-de-galerii)
+
 **Scanare** — Vezi *Nor de puncte*. O *înregistrare brută* este dosarul scris de un scaner
 MANDEYE, pe care serverul îl transformă în nor de puncte.
 
@@ -200,6 +214,10 @@ fi numit pe ture, dar nu i se poate acorda acces la nimic și nu i se poate trim
 făcută o topografie compilată. Arhivat, niciodată citit.
 → [Topografii și modele](features/surveys-and-models.md#surse-topografice)
 
+**Stereogramă** — Un cerc pe care sunt puse deodată multe măsurători structurale, fiecare ca
+polul planului ei (rețea echiarială, emisfera inferioară), umbrit după cât de deși sunt polii.
+→ [Geologie](features/geology.md#stereograma)
+
 **Scop de tură** — Pentru ce a fost o tură. Decide și ce cere raportul ei și ce listă de verificare
 parcurge.
 
@@ -223,6 +241,10 @@ drumuire). → [Vocabulare](admin/vocabularies.md#configurare--tipuri-de-obiecte
 unui pasaj mută harta, scena 3D și vizualizatoarele deschise.
 → [Documente](features/documents-and-cabinets.md#text-adnotat-cu-legături)
 
+**Unitate geologică** — Conturul unui teren format dintr-o singură clasă de rocă, după o hartă
+geologică, cu litologia aleasă dintr-o listă fixă. Nu este același lucru cu *tipul de rocă*
+declarat al unei peșteri. → [Geologie](features/geology.md#unități-geologice)
+
 **Vedere salvată** — O configurație de hartă denumită: extindere, straturi, filtre. Partajabilă
 printr-un link. → [Vederi salvate](features/saved-views-and-windows.md#vederi-salvate)
 
@@ -232,6 +254,10 @@ de imagini gata făcute: clar la orice zoom, cu etichete în limba ta. Nu are re
 
 **Vizibilitate** — Audiența proprie a unei înregistrări: privată, grup de speologie, utilizatori
 autentificați, publică. Unul dintre cele trei lucruri care decid accesul.
+
+**Watson U²** — Testul care compară direcțiile galeriilor unei peșteri cu direcțiile
+măsurătorilor structurale din jurul ei și dă probabilitatea ca cele două să provină din aceeași
+distribuție. → [Geologie](features/geology.md)
 
 **Zonă de lucru** — Teren pe care lucrează clubul, desenat ca zonă și cuibărit, arătat împreună cu
 ce îl conține, ca două galerii cu același nume să se deosebească.

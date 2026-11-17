@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { AreaKarstStatistics } from '../../api/hooks.ts';
@@ -41,6 +41,35 @@ function statistics(overrides: Partial<AreaKarstStatistics> = {}): AreaKarstStat
     },
     unparentedInsideCount: 1,
     placeableCaveCount: 4,
+    lithology: {
+      basis: 'placeable',
+      classes: [
+        {
+          code: 'limestone',
+          recognised: true,
+          karstifiable: true,
+          areaKm2: 8,
+          areaShare: 0.4,
+          entranceCount: 4,
+          entrancesPerKm2: 0.5,
+        },
+        {
+          code: 'sandstone',
+          recognised: true,
+          karstifiable: false,
+          areaKm2: 10,
+          areaShare: 0.5,
+          entranceCount: 1,
+          entrancesPerKm2: 0.1,
+        },
+      ],
+      mappedAreaKm2: 18,
+      unmappedAreaKm2: 2,
+      unmappedEntranceCount: 1,
+      karstifiableAreaKm2: 8,
+      karstifiableEntranceCount: 4,
+      karstifiableEntrancesPerKm2: 0.5,
+    },
     ...overrides,
   } as AreaKarstStatistics;
 }
@@ -126,5 +155,34 @@ describe('AreaKarstStatisticsCard', () => {
     const { container } = renderCard();
 
     expect(container.textContent).toBe('');
+  });
+  it('splits the area by mapped geology and names the karstifiable ground', async () => {
+    statisticsSpy.mockReturnValue({ data: statistics(), isLoading: false, isError: false });
+
+    renderCard();
+
+    // Scoped to the section: the rock-type table above it names limestone too.
+    const section = within(await screen.findByTestId('area-lithology'));
+    expect(section.getByText(/Limestone/)).toBeTruthy();
+    expect(section.getByText(/Sandstone/)).toBeTruthy();
+    expect(section.getAllByText('karstifiable')).toHaveLength(1);
+    expect(screen.getByTestId('area-lithology-karst-density').textContent).toBe('0.500');
+    expect(screen.getByText(/you may place exactly/i)).toBeTruthy();
+  });
+
+  it('says when no geology is mapped rather than showing an empty table', async () => {
+    const base = statistics();
+    statisticsSpy.mockReturnValue({
+      data: statistics({
+        lithology: { ...base.lithology, classes: [], karstifiableAreaKm2: 0, karstifiableEntrancesPerKm2: null },
+      }),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderCard();
+
+    expect(await screen.findByTestId('area-lithology-none')).toBeTruthy();
+    expect(screen.getByTestId('area-lithology-karst-density').textContent).toBe('not measured');
   });
 });

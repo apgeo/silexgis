@@ -542,6 +542,12 @@ public sealed record RegistryClusterSeparationDto(
 /// What it was computed over, in words, because two people with different access get different
 /// groupings of the same registry and both are right.
 /// </param>
+/// <param name="Projection">
+/// The same grouped caves laid out on their two principal axes, or null wherever the grouping
+/// itself did not run — too few caves recorded every measure, or fewer than two measures varied.
+/// It is derived from the very matrix the grouping used, over exactly the caves in
+/// <paramref name="Assignments"/>.
+/// </param>
 public sealed record RegistryClusteringDto(
     IReadOnlyList<RegistryMeasure> Measures,
     int RequestedClusterCount,
@@ -554,4 +560,49 @@ public sealed record RegistryClusteringDto(
     int MinimumPublishableClusterSize,
     int Iterations,
     bool Converged,
-    string Basis);
+    string Basis,
+    RegistryClusterProjectionDto? Projection);
+
+/// <summary>One of the two principal axes of a grouped set of caves.</summary>
+/// <param name="Loadings">
+/// How much each of <see cref="RegistryClusterProjectionDto.Measures"/> contributes to the axis,
+/// in that order. The measure with the largest magnitude is always positive, so the sign of an
+/// axis is a convention and only the relative signs between measures mean anything.
+/// </param>
+/// <param name="ExplainedShare">
+/// The fraction, from nought to one, of the standardised measures' total variation this axis
+/// carries.
+/// </param>
+public sealed record RegistryProjectionAxisDto(
+    IReadOnlyList<double> Loadings, double ExplainedShare);
+
+/// <summary>Where one grouped cave sits on the two principal axes, in standardised units.</summary>
+/// <param name="CaveId">The cave.</param>
+/// <param name="X">Its coordinate on the first axis.</param>
+/// <param name="Y">Its coordinate on the second axis.</param>
+public sealed record RegistryProjectionPositionDto(Guid CaveId, double X, double Y);
+
+/// <summary>
+/// The grouped caves drawn on the two directions along which they differ most.
+/// </summary>
+/// <remarks>
+/// Positions are each cave's own standardised readings turned through the axes, over the same
+/// population as the assignments; they hold no coordinate on the ground, because no measure a
+/// grouping can be asked over is one. They are published for every grouped cave, including those
+/// in a group too small to be summarised: the floor protects a mean over a few caves, not a
+/// cave's own reading, which the cave's list row already shows to the same reader.
+/// </remarks>
+/// <param name="Measures">
+/// The measures the axes were taken over. Fewer than the measures asked for whenever one was
+/// constant across the grouped caves and so had nothing to contribute.
+/// </param>
+/// <param name="DroppedMeasures">The asked-for measures left out of the axes because they were constant.</param>
+/// <param name="First">The axis along which the caves differ most.</param>
+/// <param name="Second">The next, at a right angle to the first.</param>
+/// <param name="Positions">One entry per grouped cave.</param>
+public sealed record RegistryClusterProjectionDto(
+    IReadOnlyList<RegistryMeasure> Measures,
+    IReadOnlyList<RegistryMeasure> DroppedMeasures,
+    RegistryProjectionAxisDto First,
+    RegistryProjectionAxisDto Second,
+    IReadOnlyList<RegistryProjectionPositionDto> Positions);

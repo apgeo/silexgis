@@ -180,6 +180,8 @@ public class DependencyRuleTests
                      // The compiler service compiles through the same runner, and is held to the
                      // same rules as the application: it names no Therion type of its own.
                      typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+                     // So is the analysis service, which shares the infrastructure layer.
+                     typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly,
                  })
         {
             var reached = TherionTypesReferencedBy(assembly);
@@ -348,6 +350,8 @@ public class DependencyRuleTests
                      // The compiler service compiles through the same runner, and is held to the
                      // same rules as the application: it names no Therion type of its own.
                      typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+                     // So is the analysis service, which shares the infrastructure layer.
+                     typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly,
                  })
         {
             var result = Types.InAssembly(assembly)

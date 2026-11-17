@@ -113,6 +113,30 @@ for.
 For ellipsoidal heights, give the **geoid height** — how far the local sea-level surface sits
 above the ellipsoid there.
 
+**How accurate the elevation is (optional).** Open **Elevation accuracy (optional)** to say how
+finely the elevation samples the ground and how far its heights may be off:
+
+| Field | What it holds |
+|---|---|
+| **Ground spacing (m)** | Distance between elevation samples, in metres |
+| **Vertical error (m)** | How far a height may be from the true ground |
+| **Statistic** | What kind of figure the error is: **RMSE** (root-mean-square error), **LE90** or **LE95** (the error not exceeded by 90 % or 95 % of points) |
+| **Where the figures come from** | A publication, a survey report or a vendor's statement |
+
+The statistic is not a detail. An RMSE and an LE90 of the same ground differ by about a factor of
+one and a half, so a figure without its statistic cannot be compared with another.
+
+- **Obtained coverage only.** Leave the section empty and the build records the published figures
+  of the Copernicus thirty-metre dataset: thirty-metre spacing and an absolute vertical accuracy
+  better than four metres at LE90, with the handbook it comes from.
+- **Your own rasters, or a mixture.** Nothing is recorded until you state it. A build that mixes
+  sources, or extends another, has no single figure of its own, and the form would rather show
+  **Not recorded** than a number the data does not meet.
+
+The record can be corrected at any time, whatever state the build is in: press **Accuracy** on the
+build's row in the Builds list. Saving with every field empty clears it. It never changes the
+tiles, so nothing is built again.
+
 ### 6. Start
 
 **Start build.** It is queued.
@@ -125,6 +149,12 @@ Beside the button, a note says what decides how fine the result can be:
 > and says so, and the setting can then be raised."*
 
 ---
+
+> **What the figures are for.** The **Elevation accuracy** column of the Builds list shows, for
+> each build, its spacing and its error with the statistic named (*30 m spacing, 4 m LE90*); hover
+> over it to see where the figures come from. The same figures travel with every answer that reads
+> the ground — a height asked for at a place, and each derived picture — so a number is never
+> given without the quality of the ground under it.
 
 ## Adding a raster to a build you already have
 
@@ -267,8 +297,8 @@ finished build — start one over the same ground with its sources credited, and
 ## Derived pictures of the ground
 
 A finished build's elevation can also be turned into **pictures of the ground** — shaded relief,
-steepness, facing, ruggedness, topographic position, roughness, a colour relief, or contour lines.
-They are computed once by the installation, on the same worker that makes builds, and then
+steepness, facing, ruggedness, topographic position, roughness, a colour relief, contour lines, or
+the landform classes. They are computed once by the installation, on the same worker that makes builds, and then
 everybody with permission to read terrain sees them in the map's layer list under **Ground
 pictures**: switch one on, and it draws beneath the caves.
 
@@ -307,8 +337,14 @@ The settings, by kind:
   lines stay smooth until the map is zoomed in past about 1:4,000; closer than that they show their
   steps. A picture computed before 2026-10-21 was drawn twice as fine — request it again for the
   smoother one.
-- Every kind but contour lines: whether the outermost cells are computed from the neighbours they
-  have. Off, every raster of a build meets its neighbour with a hairline gap through the picture.
+- **Landform classes**: the **search distance** in metres (500 unless you say otherwise, at most
+  10,000), the distance to **look past** (usually zero) and the **flatness angle** (1° unless you say
+  otherwise, at most 45°). See *Landform classes* below for what they do. Offered only where the
+  installation runs the terrain-analysis program; elsewhere it is listed as *(not available here)*
+  and the line under the field says why.
+- Every kind but contour lines and landform classes: whether the outermost cells are computed from
+  the neighbours they have. Off, every raster of a build meets its neighbour with a hairline gap
+  through the picture.
 
 **Request picture** queues it. Asking again for a picture the installation already holds — same
 build, same kind, same settings — answers with the one that exists rather than computing it twice.
@@ -321,6 +357,45 @@ so every row of a raster is computed with the two distances a degree really span
 latitude, and a hillside facing east reads as steep as the same hillside facing north. Nothing is
 reprojected or resampled on the way, so the picture sits exactly on the elevation it was drawn
 from, and shaded relief is lit using the same two distances.
+
+### Landform classes
+
+A landform picture names the **shape of the ground** at every cell — one of ten classes: *flat*,
+*peak*, *ridge*, *shoulder*, *spur*, *slope*, *hollow*, *footslope*, *valley* and *pit* (the method
+is Jasiewicz and Stepinski's *geomorphons*). Each cell looks out along the eight compass lines, up to
+the search distance, and notes along each whether the ground rises above the flatness angle, falls
+below it, or stays level; the pattern of the eight answers names the landform. A doline floor reads
+as a pit or a valley, its rim as a shoulder or a ridge, a dry valley as a valley between two slopes.
+
+- **The search distance sets the scale.** The same hillside is a slope at 100 m and a shoulder at
+  1 km. The usual 500 m sees a doline or a dry valley whole at the thirty-metre pixel of the global
+  elevation models; ask for a shorter one over fine survey elevation, and a longer one to read the
+  landscape. A longer distance takes longer to compute. Several pictures at different distances can
+  sit side by side.
+- **Look past** ignores bumps nearer than that distance — a boulder or a noisy cell next to the
+  one being classed. Usually zero.
+- **The flatness angle** decides what counts as level. Raise it over a noisy elevation model where
+  gentle ground comes out as a scatter of small peaks and pits.
+
+The picture is drawn on the map in ten colours — the raised forms warm, the hollow ones cool, flat
+ground and plain slopes pale — and **switching it on in the layer list shows its key** beneath its
+name. It is a picture of classes, not of heights: nothing is interpolated, and a cell sits exactly
+where the elevation cell it was classed from does.
+
+How it is computed, and what follows from it:
+
+- **By a separate program.** The landform classes are computed by **WhiteboxTools**, which the
+  installation runs only if it chose to — in a locked-down container of its own, or natively beside
+  the server. It is handed one elevation raster and three numbers, and nothing about any cave.
+  Where it is not set up, the kind is listed as *(not available here)* and cannot be asked for; an
+  administrator sets it up as the installation guide describes. A landform picture computed while it
+  ran is kept and still draws when it is switched off.
+- **On a grid in metres.** Each elevation raster is turned, for the run, into a grid whose cells are
+  as wide as they are tall on the ground, so a line of sight measures the same angle in every
+  direction; the classes are then put back on exactly the grid the elevation came from.
+- **Raster by raster**, like every other picture of a build. A cell nearer the edge of its raster
+  than the search distance sees only part of its lines of sight, so along the seam between two
+  rasters a band about the search distance wide may be classed differently on either side.
 
 ### The register
 
@@ -346,10 +421,10 @@ the old one.
 It needs the right to **delete** on terrain. The files sit under the build itself, so **deleting a
 build deletes its pictures with it**.
 
-**Some things cannot be computed here and are not offered under a borrowed name.** Geomorphons,
-curvature, and flow direction, flow accumulation and the wetness index are not produced by the
-elevation library this installation uses, so they are absent rather than approximated by something
-that resembles them.
+**Some things cannot be computed here and are not offered under a borrowed name.** Curvature, and
+flow direction, flow accumulation and the wetness index are produced neither by the elevation
+library this installation uses nor, yet, through the terrain-analysis program, so they are absent
+rather than approximated by something that resembles them.
 
 ---
 
@@ -367,6 +442,9 @@ that resembles them.
 | *An extension is built to the depth of the build it extends* | Ask for the base's level, or start a fresh build |
 | *Another build that extends this one has not finished and still reads its tiles* | Wait for that build to stop, whichever way it stops, before deleting this one |
 | *That build has already stopped, so there is nothing to call off* | It finished or failed on its own first |
+| *That picture is computed by the terrain-analysis program (WhiteboxTools), which this installation does not run* | Landform classes need that program; the installation guide says how to set it up |
+| *The landform classes of … took longer than this installation allows a run* | Ask again with a shorter search distance, or ask the administrator to allow a run more time |
+| *The analysis service did not answer; the landform classes will be tried again* | The analysis container is down or restarting. The queue tries twice more on its own; after that the picture is *Failed* and can be asked for again |
 | *Only a build that has stopped can be run again* | It is still queued or running, or it finished |
 | *That build was called off while its tiles were being made, and the tile maker has not yet said it stopped* | Start the tile-making service; it answers at once, and the build can then be run again |
 

@@ -82,7 +82,14 @@ export function parsePropertiesSchema(schemaJson: string | null | undefined): Sc
       readOnly: spec.readOnly === true,
       enumValues: kind === 'enum' ? enumValues : undefined,
       min: typeof spec.minimum === 'number' ? spec.minimum : undefined,
-      max: typeof spec.maximum === 'number' ? spec.maximum : undefined,
+      // An exclusive bound is offered as an inclusive one: a box cannot say "below 360", and the
+      // server, which holds the exact rule, refuses or folds the one value at the bound.
+      max:
+        typeof spec.maximum === 'number'
+          ? spec.maximum
+          : typeof spec.exclusiveMaximum === 'number'
+            ? spec.exclusiveMaximum
+            : undefined,
     });
   }
 

@@ -34,8 +34,8 @@ când te oprești deasupra terenului pe care îl acoperă. Vezi
 
 Relieful nu este doar pentru glob. Un administrator poate cere ca o generare încheiată să fie
 transformată în **imagini ale terenului** — relief umbrit, pantă, orientare, asperitate, poziție
-topografică, rugozitate, un relief colorat sau curbe de nivel — iar oricine are dreptul de a citi
-relieful le găsește apoi în lista de straturi a hărții plane, la **Imagini ale terenului**. Activează
+topografică, rugozitate, un relief colorat, curbe de nivel sau formele de relief — iar oricine are
+dreptul de a citi relieful le găsește apoi în lista de straturi a hărții plane, la **Imagini ale terenului**. Activează
 una și se desenează sub peșteri.
 
 - Fiecare imagine este listată după numele ei, cu felul imaginii și spațiul pe care îl ocupă pe disc
@@ -49,6 +49,15 @@ una și se desenează sub peșteri.
 - **Sunt imagini, nu date.** De-a lungul unei curbe de nivel nu se poate măsura, ea nu poate fi
   selectată sau exportată și nicio curbă nu își poartă înălțimea. Curbele de nivel rămân netede până
   când harta este apropiată dincolo de circa 1:4.000; mai aproape de atât își arată treptele.
+- **Formele de relief** colorează fiecare celulă ca una din zece forme ale terenului — plan, vârf,
+  creastă, umăr, pinten, versant, scobitură, bază de versant, vale și depresiune — formele ridicate
+  în culori calde, cele adâncite în culori reci, terenul plan și versanții simpli în culori palide.
+  Când imaginea este activată, legenda ei apare sub nume, în lista de straturi. Distanța de căutare
+  la care a fost desenată (registrul din pagina de relief o arată) stabilește scara a ceea ce
+  numește formă de relief: același versant este pantă la 100 m și umăr la 1 km, așa că imaginile
+  desenate la distanțe diferite merită nume care să spună asta. Sunt desenate de un program de analiză separat, pe care o
+  instalare poate să nu îl ruleze; acolo unde nu îl rulează, nu apare niciuna, în afară de cele
+  desenate mai devreme.
 
 ## Ce costă să-l ai
 
@@ -72,6 +81,15 @@ Două lucruri de știut ca ne-administrator:
 Fiecare generare poartă un **credit** — cui aparțin datele — și acesta este scris în suprafața
 publicată. O generare nu trebuie să poarte niciodată un credit care nu este al ei. Dacă furnizezi
 rastere, trebuie să spui de unde vin.
+
+## Acuratețe
+
+Fiecare generare poate nota cât de des eșantionează elevația ei terenul și cu cât pot greși
+înălțimile, cu felul cifrei numit (**RMSE**, **LE90** sau **LE95**) și cu sursa ei. Terenul obținut
+din setul deschis de treizeci de metri notează cifrele publicate ale acelui set; terenul din
+rasterele proprii ale unui operator arată **Nenotată** până când cineva le spune. O înălțime citită
+din teren și fiecare imagine derivată poartă cifrele generării din care provin. Vezi
+[Generarea reliefului](../admin/terrain-builds.md).
 
 ## Înălțimi
 

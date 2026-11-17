@@ -23,6 +23,8 @@ export const always = ['smoke.spec.ts'];
 /** Area name → the specs that answer for it. An empty list means "nothing narrower than everything". */
 export const specs = {
   about: [],
+  // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
+  analysis: ['terrain-derivatives.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
@@ -41,7 +43,7 @@ export const specs = {
   ],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
-    'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
+    'cave-statistics.spec.ts', 'cave-system-figures.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
     'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
     'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
     // A cave's declared places are written through the cave's own door and published on a trip's
@@ -106,6 +108,8 @@ export const specs = {
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
     'feature-sets.spec.ts',
     'list-pages-phone.spec.ts',
+    // An area page's terrain card.
+    'area-terrain-statistics.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts', 'geodata-filters.spec.ts'],
   georeferencedMaps: [
@@ -123,7 +127,7 @@ export const specs = {
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
-    'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
+    'karst-layers.spec.ts', 'passage-depth-layer.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
     'coordinate-converter.spec.ts', 'terrain-profile-tool.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
@@ -201,6 +205,10 @@ export const specs = {
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
     'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
+    // The terrain class charts on an area page.
+    'area-terrain-statistics.spec.ts',
+    // Structural readings on a stereonet and the passage tested against their strikes.
+    'structural-stereonet.spec.ts',
   ],
   // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
   storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
@@ -235,6 +243,8 @@ export const specs = {
   terrain: [
     'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts', 'terrain-profile-tool.spec.ts',
     'scene3d.spec.ts',
+    // An area's entrances and sinkholes against slope, facing, position and landform classes.
+    'area-terrain-statistics.spec.ts',
   ],
   trips: [
     'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts', 'trip-two-sessions.spec.ts',

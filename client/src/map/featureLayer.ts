@@ -6,7 +6,7 @@ import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import { Circle as CircleStyle, Fill, Icon, Stroke, Style } from 'ol/style';
+import { Circle as CircleStyle, Fill, Icon, Stroke, Style, Text } from 'ol/style';
 import { fetchMapFeatures, type FeatureType } from '../api/hooks.ts';
 import { worldBbox } from '../geo/coords.ts';
 import { onSurfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
@@ -19,6 +19,7 @@ import { handleMapFilterError, mapFilterParams } from './mapFilters.ts';
 import { surfaceFeaturePalette as palette } from './markerPalette.ts';
 import { symbolImage } from './symbolLibrary.ts';
 import { declutterOption } from './declutter.ts';
+import { GEOLOGICAL_UNIT_TYPE_CODE, lithologyAppearance } from './lithologyAppearance.ts';
 
 // The cross-kind features overlay. The layer id keeps its historical string:
 // saved views persist overlay ids (visibility, opacity, stacking), and renaming
@@ -100,6 +101,67 @@ function pointSymbolStyle(reference: string | null | undefined): Style {
           }),
     });
     pointStyles.set(key, style);
+  }
+  return style;
+}
+
+// A structural reading's styles, one per symbol, whole-degree orientation and dip: readings of
+// one bed share their style, and a map of a hundred readings rasterises a handful of images.
+const readingStyles = new globalThis.Map<string, Style>();
+
+/**
+ * A structural reading drawn as the geologist's strike-and-dip tick: its symbol turned so the long
+ * bar lies along the strike and the short tick points down the dip, with the dip written beside it.
+ * The bundled tick is drawn pointing east (dipping 90°), hence the quarter turn taken off. It turns
+ * with the view, so it keeps pointing at the true azimuth when the map is rotated.
+ */
+function readingStyle(reference: string | null | undefined, dipDirection: number, dip: number): Style | undefined {
+  const image = symbolImage(reference, { color: palette.point });
+  if (!image) return undefined;
+  const direction = Math.round(dipDirection) % 360;
+  const dipDegrees = Math.round(dip);
+  const key = `${image.src}|${image.scale}|${direction}|${dipDegrees}`;
+  let style = readingStyles.get(key);
+  if (!style) {
+    style = new Style({
+      image: new Icon({
+        src: image.src,
+        scale: image.scale,
+        rotation: ((direction - 90) * Math.PI) / 180,
+        rotateWithView: true,
+        declutterMode: 'obstacle',
+      }),
+      text: new Text({
+        text: String(dipDegrees),
+        offsetX: 14,
+        offsetY: -10,
+        font: '600 11px sans-serif',
+        fill: new Fill({ color: palette.point }),
+        stroke: new Stroke({ color: palette.stroke, width: 3 }),
+      }),
+    });
+    readingStyles.set(key, style);
+  }
+  return style;
+}
+
+// A geological unit's styles, one per class: every unit of one rock shares its style.
+const unitStyles = new globalThis.Map<string, Style>();
+
+/**
+ * A geological unit filled by its rock class; see {@link lithologyAppearance} for which unit is
+ * drawn how. Units of the same class share one style object.
+ */
+function geologicalUnitStyle(lithology: unknown, karstifiable: unknown): Style {
+  const look = lithologyAppearance(lithology, karstifiable);
+  const key = `${look.standing}|${look.stroke}`;
+  let style = unitStyles.get(key);
+  if (!style) {
+    style = new Style({
+      stroke: new Stroke({ color: look.stroke, width: look.width, lineDash: look.lineDash ?? undefined }),
+      fill: look.fill ? new Fill({ color: look.fill }) : undefined,
+    });
+    unitStyles.set(key, style);
   }
   return style;
 }
@@ -222,12 +284,27 @@ function baseFeatureStyle(feature: FeatureLike): Style | Style[] {
   // draws the image style at every point of the geometry.
   if (geometryType === 'Point' || geometryType === 'MultiPoint') {
     // A translucent halo behind the symbol marks the selected feature.
-    const marker = pointSymbolStyle(
-      // Server rows carry their symbol reference; pending locally drawn features only carry the
-      // armed featureTypeId, resolved through the catalog instead.
-      (feature.get('symbol') as string | null | undefined) ?? getFeatureTypeSymbol(feature.get('featureTypeId')),
-    );
+    // Server rows carry their symbol reference; pending locally drawn features only carry the
+    // armed featureTypeId, resolved through the catalog instead.
+    const symbol =
+      (feature.get('symbol') as string | null | undefined) ?? getFeatureTypeSymbol(feature.get('featureTypeId'));
+    // Only a structural reading carries an orientation; the server sends one when its stored
+    // reading is whole, and anything else is drawn as an ordinary point of its kind.
+    const dipDirection: unknown = feature.get('dipDirection');
+    const dip: unknown = feature.get('dip');
+    const marker =
+      (typeof dipDirection === 'number' && typeof dip === 'number'
+        ? readingStyle(symbol, dipDirection, dip)
+        : undefined) ?? pointSymbolStyle(symbol);
     return selected ? [selectionHalo, marker] : [marker];
+  }
+
+  // Only a geological unit is filled by its class; the server marks one by its kind's code.
+  if (feature.get('typeCode') === GEOLOGICAL_UNIT_TYPE_CODE) {
+    const unit = geologicalUnitStyle(feature.get('lithology'), feature.get('karstifiable'));
+    return selected
+      ? [new Style({ stroke: new Stroke({ color: palette.highlight, width: 6 }) }), unit]
+      : unit;
   }
 
   if (selected) {

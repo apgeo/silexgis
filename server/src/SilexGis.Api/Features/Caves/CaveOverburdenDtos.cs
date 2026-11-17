@@ -85,7 +85,15 @@ public sealed record CaveOverburdenSampleDto(
 /// <param name="MeanOverburdenM">Mean thickness over the readings that got one, and over nothing
 /// else; null when none did. Averaging an absent reading in as zero would report a cave as shallower
 /// the less of it is covered.</param>
+/// <param name="LeastCover">The reading with the least rock overhead — the place where this cave
+/// comes nearest the surface — in full, position and altitude included, so a map can mark it without
+/// a second request. Null when no reading got a ground height. It is the least among the readings
+/// taken (at most one every two metres, and never more than a few hundred), not the true minimum of
+/// the passage between them, and its value can be negative where the survey reads above its own
+/// ground. It is a position of this cave and travels under exactly the gate that withholds the
+/// whole profile from a caller who may not place the cave; there is no list of these across caves.</param>
 /// <param name="Samples">The readings, in increasing distance along.</param>
+/// <param name="Accuracy">The stated accuracy of the terrain build the heights were read from, or null when none is recorded.</param>
 public sealed record CaveOverburdenDto(
     Guid CaveId,
     SurveySegmentBasis Basis,
@@ -98,7 +106,9 @@ public sealed record CaveOverburdenDto(
     double? MinOverburdenM,
     double? MaxOverburdenM,
     double? MeanOverburdenM,
-    IReadOnlyList<CaveOverburdenSampleDto> Samples);
+    CaveOverburdenSampleDto? LeastCover,
+    IReadOnlyList<CaveOverburdenSampleDto> Samples,
+    SilexGis.Api.Common.TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>Which cave to profile. The route takes nothing else.</summary>
 /// <param name="Id">The cave.</param>

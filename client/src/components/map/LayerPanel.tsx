@@ -53,6 +53,9 @@ import { KARST_DENSITY_LAYER_ID, type KarstDensityBands, type KarstDensityMode }
 import KarstDensityControls from './KarstDensityControls.tsx';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
 import KarstIndexControls from './KarstIndexControls.tsx';
+import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
+import PassageDepthControls from './PassageDepthControls.tsx';
+import LithologyLegend from '../geology/LithologyLegend.tsx';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
 import {
   TRIP_LAYER_ID,
@@ -66,6 +69,7 @@ import { filterLayerSavedIdOf, MAX_FILTER_LAYERS, type FilterLayerSymbol } from 
 import type { FilterLayerColor } from '../../map/markerPalette.ts';
 import { FilterLayerRowTitle, type FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
+import LandformLegend from './LandformLegend.tsx';
 
 /**
  * The refusal a library gives when it will not accept the credential this installation is
@@ -166,6 +170,7 @@ interface LayerPanelProps {
   onKarstDensityBandsChange: (bands: KarstDensityBands) => void;
   /** True while the karstification-index choropleth is on — its legend is hidden otherwise. */
   karstIndexVisible: boolean;
+  passageDepthVisible: boolean;
   /** What the trip overlay is currently asking for. */
   tripFilter: TripLayerFilter;
   onTripFilterChange: (filter: TripLayerFilter) => void;
@@ -226,6 +231,7 @@ export default function LayerPanel({
   karstDensityBands,
   onKarstDensityBandsChange,
   karstIndexVisible,
+  passageDepthVisible,
   tripFilter,
   onTripFilterChange,
   unappliedTripFilters,
@@ -416,6 +422,8 @@ export default function LayerPanel({
         return t('map.karstDensity.layer');
       case KARST_INDEX_LAYER_ID:
         return t('map.karstIndex.layer');
+      case PASSAGE_DEPTH_LAYER_ID:
+        return t('map.passageDepth.layer');
       case PHOTO_LAYER_ID:
         return t('map.photos');
       case TRIP_LAYER_ID:
@@ -596,6 +604,9 @@ export default function LayerPanel({
         />
       )}
       {karstIndexVisible && <KarstIndexControls />}
+      {passageDepthVisible && <PassageDepthControls />}
+      {/* Draws nothing unless geological units are loaded on the map. */}
+      <LithologyLegend />
       {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}
       <PhotoCutShortNotice />
       {/* The map-corner notice about withheld lines opens the panel here and moves focus to this
@@ -1028,7 +1039,7 @@ export default function LayerPanel({
               <div
                 key={derivative.id}
                 data-testid={`terrain-derivative-${derivative.id}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
               >
                 <Checkbox
                   disabled={derivative.status !== 'ready'}
@@ -1062,6 +1073,8 @@ export default function LayerPanel({
                     {t(`terrain.derivatives.statuses.${derivative.status}`)}
                   </Tag>
                 )}
+                {derivative.derivative === 'geomorphons' &&
+                  visibleTerrainDerivativeIds.includes(derivative.id) && <LandformLegend />}
               </div>
             ))}
           </div>

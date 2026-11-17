@@ -43,7 +43,8 @@ public sealed class TerrainDerivativeHandler(
     SilexGisDbContext db,
     TerrainWorkspace workspace,
     TerrainRasterIndex index,
-    ITerrainDerivativeComputer computer) : IProcessingJobHandler
+    ITerrainDerivativeComputer computer,
+    TerrainLandforms landforms) : IProcessingJobHandler
 {
     private static readonly GeometryFactory Geometry =
         new(new PrecisionModel(), TerrainRasterPreparation.TargetEpsg);
@@ -126,8 +127,13 @@ public sealed class TerrainDerivativeHandler(
 
                 var output = Path.Combine(
                     directory, Path.GetFileNameWithoutExtension(raster.Path) + ".tif");
-                computed.Add(computer.Compute(
-                    new TerrainDerivativeRequest(raster.Path, output, settings), ct));
+                var request = new TerrainDerivativeRequest(raster.Path, output, settings);
+
+                // The landform classes are the one picture the raster library here cannot draw;
+                // they go to the separate analysis program, everything else stays in process.
+                computed.Add(TerrainDerivativeRegistry.NeedsAnalysisTool(settings.Derivative)
+                    ? await landforms.ComputeAsync(request, ct)
+                    : computer.Compute(request, ct));
                 sources.Add(raster.Path);
             }
 
@@ -194,15 +200,7 @@ public sealed class TerrainDerivativeHandler(
             if (!JobRetry.WillBeRetried(job, e, ct))
             {
                 layer.Status = TerrainDerivativeStatus.Failed;
-                layer.ErrorCode = e is TerrainBuildException failed
-                    ? failed.Code
-                    : TerrainBuildFailures.DerivativeFailed;
-
-                // Only a reason this application wrote is shown. Anything else is a native message or a
-                // stack, which says nothing to the person reading and can quote a path off the server.
-                layer.Message = e is TerrainBuildException named
-                    ? named.Message
-                    : "The ground could not be pictured from that elevation.";
+                (layer.ErrorCode, layer.Message) = FinalFailure(e);
 
                 // Uncancelled on purpose: a run stopped part way must still leave a row that says so,
                 // and one left reading "computing" is indistinguishable from one still running.
@@ -213,6 +211,25 @@ public sealed class TerrainDerivativeHandler(
             throw;
         }
     }
+
+    /// <summary>
+    /// The code and sentence a picture is left with when the queue will not try it again.
+    /// </summary>
+    /// <remarks>
+    /// Only a reason this application wrote is shown. Anything else is a native message or a stack,
+    /// which says nothing to the person reading and can quote a path off the server. An analysis
+    /// service that stayed silent through every attempt gets a sentence of its own: the one it was
+    /// thrown with promises another attempt, and by now none is coming.
+    /// </remarks>
+    internal static (string Code, string Message) FinalFailure(Exception failure) => failure switch
+    {
+        TerrainBuildException named => (named.Code, named.Message),
+        JobFailedException { InnerException: HttpRequestException } => (
+            TerrainBuildFailures.AnalysisUnavailable,
+            "The analysis service did not answer. Ask for the picture again once it is running."),
+        JobFailedException told => (TerrainBuildFailures.DerivativeFailed, told.Message),
+        _ => (TerrainBuildFailures.DerivativeFailed, "The ground could not be pictured from that elevation."),
+    };
 
     /// <summary>Where this version of this picture's files go.</summary>
     /// <remarks>

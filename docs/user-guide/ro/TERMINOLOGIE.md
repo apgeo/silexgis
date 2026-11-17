@@ -361,6 +361,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Being cancelled / Cancelled (a terrain build) | Se anulează / Anulată |
 | Ground pictures | Imagini ale terenului |
 | Out of date (a ground picture) | Depășită |
+| Landform classes (a ground picture) | Forme de relief |
+| Flat / Peak / Ridge / Shoulder / Spur / Slope / Hollow / Footslope / Valley / Pit (landform classes) | Plan / Vârf / Creastă / Umăr / Pinten / Versant / Scobitură / Bază de versant / Vale / Depresiune |
+| Search distance / Look past / Flatness angle (a landform picture) | Distanța de căutare / Ignoră până la / Unghi de planeitate |
+| (not available here) (a kind of ground picture) | (indisponibil aici) |
+| Landform (a measure on the area terrain statistics) | Forma de relief |
 | Photographs at their stations (a 3D view layer) | Fotografii la stațiile lor |
 | Download them (cave walls in the 3D view) | Descarcă-i |
 | Ask above (MB) | Întreabă peste (MB) |
@@ -387,6 +392,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Needs placement (a map sheet's state) | De poziționat |
 | Redraw… (a map sheet) | Redesenează… |
 | Clear finished (upload rows) | Șterge cele terminate |
+| Rock overhead (a cave's overburden panel) | Roca de deasupra |
+| Least rock cover | Cea mai subțire acoperire de rocă |
+| Rock over the passage (map layer) | Rocă deasupra galeriei |
+| Passages beneath this feature | Galerii sub această trăsătură |
+| Chosen measures / Principal axes (cave scatter) | Măsuri alese / Axe principale |
 
 ## Nori de puncte și spațiu de stocare
 
@@ -435,6 +445,29 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 O hartă scanată se **poziționează** (*Poziționează pe hartă…*, *poziție*), o scanare laser se
 **plasează** (*Plasează pe hartă*, *plasare*): așa le numește interfața, iar ghidul păstrează
 deosebirea.
+
+## Geologie
+
+| Engleză | Română |
+|---|---|
+| Geological unit (the guide's word) | Unitate geologică |
+| Lithology | Litologie |
+| karstifiable | carstificabil |
+| not in the vocabulary · Unclassified | în afara vocabularului · Neclasificat |
+| Outcrop (km²) | Afloriment (km²) |
+| Geology inside the area | Geologia din interiorul zonei |
+| Structural measurement / structural reading | Măsurătoare structurală |
+| Measured plane | Planul măsurat |
+| Bedding · Joint · Fault plane · Cleavage · Fracture | Stratificație · Diaclază · Plan de falie · Clivaj · Fractură |
+| Dip direction · Dip | Direcția de înclinare · Înclinare |
+| Strike (right-hand rule) | Direcția stratului (regula mâinii drepte) |
+| Orientation entered as | Orientare introdusă ca |
+| Stereonet | Stereogramă |
+| Equal-area net, lower hemisphere | Rețea echiarială, emisfera inferioară |
+| Readings of … every kind | Măsurători de tip … toate tipurile |
+| Passage against the mapped structure | Galeriile față de structura cartată |
+| Passage against measured strikes (Watson U²) | Galeriile față de direcțiile măsurate (Watson U²) |
+| Probability | Probabilitate |
 
 ## Alte
 

@@ -57,6 +57,7 @@ function profileWithAGap(caveId: string) {
     minOverburdenM: 34.5,
     maxOverburdenM: 61.25,
     meanOverburdenM: 48.75,
+    leastCover: sample(400, 34.5),
     samples: [
       sample(0, 61.25),
       sample(100, 50.5),

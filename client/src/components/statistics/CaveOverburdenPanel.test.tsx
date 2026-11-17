@@ -41,6 +41,7 @@ const measured: CaveOverburden = {
   minOverburdenM: 40,
   maxOverburdenM: 61,
   meanOverburdenM: 52,
+  leastCover: sample(0, 40),
   samples: [sample(0, 40), sample(150, 55), sample(300, 61)],
 };
 

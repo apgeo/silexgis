@@ -43,6 +43,10 @@ Dincolo de nume, descriere și geometrie, un obiect poartă proprietățile pe c
 tipul lui. Unui izvor i se cer alte lucruri decât unei falii. Apar ca secțiune **Proprietăți** și
 sunt filtrabile.
 
+Două tipuri livrate cu aplicația își folosesc proprietățile la mai mult decât descriere: o
+**unitate geologică** poartă clasa ei de rocă, iar o **măsurătoare structurală** direcția de
+înclinare și înclinarea. Ce face aplicația cu ele are pagina ei: [Geologie](geology.md).
+
 ---
 
 ## Ierarhie: părinți și copii

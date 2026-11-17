@@ -59,7 +59,7 @@ describe('StructureComparisonView', () => {
     expect(screen.getByText('nothing was mapped')).toBeTruthy();
   });
 
-  it('says which comparison this installation cannot make', () => {
+  it('says how readings taken at a point are compared instead', () => {
     render(
       <StructureComparisonView
         testId="c"
@@ -73,7 +73,7 @@ describe('StructureComparisonView', () => {
       />,
     );
 
-    // Named rather than left as an affordance that always comes back empty.
-    expect(screen.getByText(/Bedding and joint readings/)).toBeTruthy();
+    // The lines are compared here; a reader looking for the readings is told where they went.
+    expect(screen.getByText(/plotted on a stereonet/)).toBeTruthy();
   });
 });

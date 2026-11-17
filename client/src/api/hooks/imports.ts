@@ -62,6 +62,7 @@ export type ImportOptions = components['schemas']['ImportOptions'];
 export type ImportDecision = components['schemas']['ImportDecision'];
 export type ImportCandidate = components['schemas']['ImportCandidateDto'];
 export type ImportPreview = components['schemas']['ImportPreviewDto'];
+export type ImportLithologyValue = components['schemas']['ImportLithologyValueDto'];
 export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest'];
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using Therion.Blender.Geometry;
 
 namespace SilexGis.Infrastructure.Surveys;
@@ -22,10 +23,11 @@ namespace SilexGis.Infrastructure.Surveys;
 /// <para>
 /// The reduced graph the counts are taken over is not the branch list. A branch that closes on
 /// itself is split into three edges and branches sharing both endpoints are each split into two,
-/// through stations invented for the purpose, so that what is counted is a simple graph and the
-/// loops survive the simplification rather than being collapsed away by it. Skipping the split
-/// silently changes the node count, the edge count, the cyclomatic number and every ratio and
-/// degree figure built on them, and nothing about the result looks wrong.
+/// at stations the passages run through, so that what is counted is a simple graph and the loops
+/// survive the simplification rather than being collapsed away by it. That reduction, and the
+/// counts read off it, live in the shared passage-network routine, which the pattern suggestion
+/// uses as well: there is one definition of a node, an edge, a component and an independent loop,
+/// and this class only adds the figures that need the survey's geometry.
 /// </para>
 /// </remarks>
 public static class SurveyTopologyAnalyzer
@@ -40,13 +42,16 @@ public static class SurveyTopologyAnalyzer
 
         if (graph.DistinctEdges.Count == 0) { return null; }
 
-        var reduced = graph.Reduce();
-        var branches = reduced.Branches;
-        var simple = SimpleGraph.FromBranches(branches);
+        // The counts are the shared network routine's; the centreline's own reduction is read only
+        // for what it alone knows, the length, tortuosity and geometry of each branch.
+        var branches = graph.Reduce().Branches;
+        var network = PassageNetwork.Reduce(graph.DistinctEdges)
+            ?? throw new InvalidOperationException("A graph with edges reduces to a network.");
+        var simple = SimpleGraph.FromEdges(network.Edges);
 
-        int n = simple.NodeCount;
-        int e = simple.EdgeCount;
-        int p = simple.ComponentCount;
+        int n = network.NodeCount;
+        int e = network.EdgeCount;
+        int p = network.ComponentCount;
 
         var degrees = simple.Degrees();
         double meanDegree = degrees.Length == 0 ? 0 : degrees.Average();
@@ -65,9 +70,9 @@ public static class SurveyTopologyAnalyzer
             ReducedNodeCount = n,
             ReducedEdgeCount = e,
             ReducedComponentCount = p,
-            CyclomaticNumber = e - n + p,
-            ExtremityCount = degrees.Count(d => d == 1),
-            JunctionCount = degrees.Count(d => d > 2),
+            CyclomaticNumber = network.CyclomaticNumber,
+            ExtremityCount = network.ExtremityCount,
+            JunctionCount = network.JunctionCount,
 
             // Below three nodes the two planar denominators are zero or negative, and a ratio
             // against them would be a number with no meaning rather than a small one.

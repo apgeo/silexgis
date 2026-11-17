@@ -13,6 +13,12 @@ interface ClusterPopulationNoteProps {
    * absence of colour is a decision rather than a wait.
    */
   unaskable: boolean;
+  /**
+   * True when the picture below is the principal-axes one, whose population sentence differs: the
+   * caves left out are absent because they could not be positioned, not because they lack a
+   * length or a depth to plot.
+   */
+  axes?: boolean;
 }
 
 /**
@@ -41,7 +47,7 @@ interface ClusterPopulationNoteProps {
  * confident answer.
  * </p>
  */
-export default function ClusterPopulationNote({ clustering, unaskable }: ClusterPopulationNoteProps) {
+export default function ClusterPopulationNote({ clustering, unaskable, axes = false }: ClusterPopulationNoteProps) {
   const { t } = useTranslation();
 
   if (unaskable) {
@@ -88,7 +94,7 @@ export default function ClusterPopulationNote({ clustering, unaskable }: Cluster
       data-testid="cave-cluster-population"
       title={
         <span data-testid="cave-cluster-excluded">
-          {t('karstStats.clusterPopulation', {
+          {t(axes ? 'karstStats.clusterPopulationAxes' : 'karstStats.clusterPopulation', {
             eligible: population.eligible,
             considered: population.considered,
             excluded: population.excluded,

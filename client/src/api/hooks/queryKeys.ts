@@ -260,6 +260,8 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  featurePassages: (id: string, distanceM: number) =>
+    ['features', id, 'passages-beneath', distanceM] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
   caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveAltitudeDisagreement: (id: string) => ['caves', id, 'altitude-disagreement'] as const,
@@ -269,10 +271,11 @@ export const queryKeys = {
   areaTerrainStatistics: (id: string) => ['features', id, 'terrain-statistics'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
-  caveStructureComparison: (id: string, areaId: string) =>
-    ['caves', id, 'structure-comparison', areaId] as const,
+  caveStructureComparison: (id: string, areaId: string, measurementType: string) =>
+    ['caves', id, 'structure-comparison', areaId, measurementType] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  areaSystemFigures: (id: string) => ['features', id, 'system-figures'] as const,
   registryDistribution: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'distribution', params] as const,
   registryCorrelation: (params: Record<string, unknown>) =>
@@ -348,6 +351,7 @@ export const queryKeys = {
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
   terrainDerivatives: ['terrain', 'derivatives'] as const,
+  terrainDerivativeKinds: ['terrain', 'derivative-kinds'] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,

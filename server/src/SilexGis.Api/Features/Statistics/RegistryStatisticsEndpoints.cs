@@ -393,7 +393,29 @@ public static class RegistryStatisticsEndpoints
                 MetricClustering.MinimumPublishableClusterSize,
                 model.Iterations,
                 model.Converged,
-                grouping.Basis));
+                grouping.Basis,
+                ProjectionOf(model.Projection, grouping.Measures)));
+    }
+
+    /// <summary>
+    /// The projection the grouping computed, spelled in the route's own measure names, or null
+    /// where the grouping did not run.
+    /// </summary>
+    private static RegistryClusterProjectionDto? ProjectionOf(
+        PrincipalProjection? projection, IReadOnlyList<RegistryMeasure> asked)
+    {
+        if (projection is null) return null;
+
+        // The domain carries the column names it was handed, which are the enum's own names.
+        var used = projection.Columns.Select(Enum.Parse<RegistryMeasure>).ToList();
+        var dropped = asked.Where(m => !used.Contains(m)).ToList();
+
+        return new RegistryClusterProjectionDto(
+            used,
+            dropped,
+            new RegistryProjectionAxisDto(projection.First.Loadings, projection.First.ExplainedShare),
+            new RegistryProjectionAxisDto(projection.Second.Loadings, projection.Second.ExplainedShare),
+            [.. projection.Positions.Select(p => new RegistryProjectionPositionDto(p.SubjectId, p.X, p.Y))]);
     }
 
     /// <summary>The ladder and the two statements behind the breakdown, for both surfaces.</summary>

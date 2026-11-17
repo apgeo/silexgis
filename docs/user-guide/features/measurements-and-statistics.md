@@ -152,6 +152,23 @@ interval, never closer than 2 m and never more than 400 of them.
 You need permission to read elevation data as well as permission to see exactly where the cave
 is. Ask an administrator if the panel does not appear.
 
+**Least rock cover.** Beside the figures, the panel names the place where the cave comes
+nearest the surface — the thinnest of the readings, with how far along the passage it lies —
+and **Show on the map** marks it on the map and in the 3D view. It is the thinnest of the
+readings taken, not the true minimum between two of them. It is a position of the cave, so a
+reader who may not see exactly where the cave is gets no panel at all, and there is no list of
+these across caves.
+
+### Passages beneath a doline
+
+A doline, a sinkhole or any drawn outline has a **Passages beneath this feature** card on its
+page. It lists the caves whose passage lies within a reach you choose (50 m to begin with, up
+to 500 m), nearest first, with the plan offset to the nearest passage and the rock overhead
+there. Opened on an outline with the reach set to 0, it answers the other way round: which
+passages run under this polygon. Only caves and features you may place exactly are considered,
+and the list holds at most 25 caves. You need permission to read elevation data, as for the
+panel above.
+
 ---
 
 ## Depth and height across entrances
@@ -244,6 +261,16 @@ missing picture is never read as "no caves on steep ground". Facing is counted o
 is at least 2°, because flat ground faces nowhere. The area's ground is sampled on a regular grid
 over its outline, so shares are estimates, good to a percentage point or so.
 
+A fourth measure, **landform**, sets the same entrances and sinkholes against the ten shapes of the
+ground — flat, peak, ridge, shoulder, spur, slope, hollow, footslope, valley and pit — read from the
+newest landform picture computed for the active build, as paired bars and a table like the others.
+The search distance that picture was drawn at sets the scale of its landforms (the same hillside is
+a slope at 100 m and a shoulder at 1 km), so a doline field read at 500 m and at 2 km can tell two
+different stories; the picture's settings are in the terrain page's register. Ground the picture
+left unclassified, such as the outermost cells of a raster, is not counted. Landform pictures are
+drawn by a separate analysis program an installation may not run: where it does not and none was
+drawn earlier, the measure says so rather than that no picture has been computed yet.
+
 Only entrances and sinkholes you may place are counted, so the figures do not change when a
 protected one is added. You need permission to read elevation data. Nothing here is published or
 exported.
@@ -254,12 +281,27 @@ exported.
 
 Over the caves on a cave-list page: **Distributions**.
 
+For an area's own statistics, the density and spacing of entrances, the depth of a system, a
+cave's passage network and what its shape suggests, see [Karst analyses](karst-analyses.md).
+
 | View | |
 |---|---|
 | **Length** | Histogram of surveyed length |
 | **Length vs depth** | Scatter, with a fit reporting slope and R² |
 | **Rank–size** | With a power-law fit and its exponent |
 | **By type** | Counts |
+
+On **Length vs depth** a switch chooses what the scatter is drawn on. **Chosen measures** is the
+plot above, coloured by the grouping of caves that resemble each other. **Principal axes** groups
+the caves over four measures at once — surveyed length, depth, projected extension and
+ramification index — and draws each grouped cave on the two directions along which those caves
+differ most. Each axis title says how much of the variation it carries (*"Axis 1 (62 % of the
+variation)"*), and the note under the chart lists what each axis is made of: a measure with a
+large figure of the same sign as another moves with it, one of the opposite sign moves against it.
+The sign of a whole axis means nothing — it may be read in either direction. A measure every
+grouped cave records identically has nothing to contribute and is named as left out. The axes
+exist only where the grouping itself ran; when too few caves record all four measures the page
+says so instead of drawing them.
 
 The scope note is the important part: *"Computed from the n of m caves on this page that
 carry a surveyed length. **Caves without one are absent rather than counted as zero.**"*

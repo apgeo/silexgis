@@ -23,6 +23,7 @@ import CandidateMap from '../../components/import/CandidateMap.tsx';
 import CandidateTable from '../../components/import/CandidateTable.tsx';
 import ImportOptionsPanel from '../../components/import/ImportOptionsPanel.tsx';
 import ImportResultModal from '../../components/import/ImportResultModal.tsx';
+import LithologyMappingCard from '../../components/import/LithologyMappingCard.tsx';
 import RuleHitList from '../../components/import/RuleHitList.tsx';
 import SelectionToolbar, { type CandidateFilters } from '../../components/import/SelectionToolbar.tsx';
 import { refusalText } from '../../components/geodata/refusalText.ts';
@@ -288,6 +289,12 @@ export default function ImportWorkspacePage() {
             onChange={setOptions}
             geofileId={geofileId}
             isDelimited={geofile?.format === 'csv'}
+          />
+
+          <LithologyMappingCard
+            values={preview.data?.lithologyValues ?? []}
+            mapping={options.mapping?.lithologyValues ?? {}}
+            onChange={(lithologyValues) => setOptions({ ...options, mapping: { ...options.mapping, lithologyValues } })}
           />
 
           <SelectionToolbar

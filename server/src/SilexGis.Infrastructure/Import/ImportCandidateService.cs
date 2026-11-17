@@ -45,6 +45,13 @@ public sealed record CandidateSummary
 
     public double? SourceElevation { get; init; }
 
+    /// <summary>
+    /// The rock type an outline's lithology column holds, as written; null for every row that is
+    /// not an outline. Turned into a vocabulary class only where the outline becomes a
+    /// geological unit.
+    /// </summary>
+    public string? SourceLithology { get; init; }
+
     /// <summary>The row's own attributes, verbatim, as the file wrote them.</summary>
     public required string SourceProperties { get; init; }
 
@@ -90,6 +97,10 @@ public sealed record DuplicateHint(
     Guid? CaveFeatureId,
     string? CaveName);
 
+/// <summary>One distinct value of an outline file's lithology column, and what it becomes.</summary>
+/// <param name="Code">The lithology class it becomes; null when nothing matched it.</param>
+public sealed record LithologySourceValue(string Value, int Count, string? Code, LithologyMatchKind Match);
+
 /// <summary>The dry run: which rule claimed how many candidates, before anything is created.</summary>
 public sealed record RuleHit(string RuleId, string RuleName, int Count);
 
@@ -129,6 +140,38 @@ public sealed class ImportCandidateService(
         }
 
         return (candidates, totalRows > rows.Count, totalRows);
+    }
+
+    /// <summary>
+    /// The mapping step of a geology import: every distinct value the outlines' lithology column
+    /// holds, how many outlines carry it, and the class it becomes. Unmatched values come first,
+    /// because they are the ones the reviewer has to answer; then the most frequent.
+    /// </summary>
+    public static IReadOnlyList<LithologySourceValue> LithologyValuesOf(
+        IReadOnlyList<CandidateSummary> candidates, ImportOptions options)
+    {
+        var groups = new Dictionary<string, (string Value, int Count)>(StringComparer.Ordinal);
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Geometry != CandidateGeometry.Area || candidate.SourceLithology is not { } value)
+            {
+                continue;
+            }
+
+            // Grouped as the matcher compares, so "Calcar" and "CALCAR" are one line to answer.
+            var key = LithologyImport.Fold(value);
+            groups[key] = groups.TryGetValue(key, out var seen) ? (seen.Value, seen.Count + 1) : (value, 1);
+        }
+
+        return
+        [
+            .. groups.Values
+                .Select(g => (g.Value, g.Count, Match: LithologyImport.Resolve(g.Value, options.Mapping.LithologyValues)))
+                .OrderBy(g => g.Match.Kind == LithologyMatchKind.Unmatched ? 0 : 1)
+                .ThenByDescending(g => g.Count)
+                .ThenBy(g => g.Value, StringComparer.Ordinal)
+                .Select(g => new LithologySourceValue(g.Value, g.Count, g.Match.Code, g.Match.Kind)),
+        ];
     }
 
     /// <summary>Per-rule counts over a scanned file.</summary>
@@ -222,13 +265,22 @@ public sealed class ImportCandidateService(
         // Line work is never proposed as a cave or a feature by a term: a track called
         // "Peștera Ursilor" is the walk to that cave, not the cave. It becomes a line feature
         // only when the import was told to keep tracks, and then of the type it was told.
+        // Outlines likewise: a polygon becomes an area of the type the import was told, or
+        // nothing.
         if (geometry != CandidateGeometry.Point)
         {
-            return geometry == CandidateGeometry.Line && options.Tracks == ImportTrackHandling.ImportAsLine
+            if (geometry == CandidateGeometry.Area)
+            {
+                summary = summary with { SourceLithology = SourceAttributeReader.ReadLithology(properties, options.Mapping) };
+            }
+
+            var lineKept = geometry == CandidateGeometry.Line && options.Tracks == ImportTrackHandling.ImportAsLine;
+            var areaKept = geometry == CandidateGeometry.Area && options.Areas == ImportAreaHandling.ImportAsArea;
+            return lineKept || areaKept
                 ? summary with
                 {
                     ProposedKind = ImportTargetKind.SurfaceFeature,
-                    ProposedFeatureTypeCode = options.TrackFeatureTypeCode,
+                    ProposedFeatureTypeCode = lineKept ? options.TrackFeatureTypeCode : options.AreaFeatureTypeCode,
                     ProposedName = ImportNameCleaner.WithPrefix(options.NamePrefix, attributes.Name),
                 }
                 : summary;

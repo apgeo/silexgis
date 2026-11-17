@@ -110,6 +110,7 @@ Beyond the form, the page accumulates sections as you feed it:
 | **3D survey models** | [Surveys and models](surveys-and-models.md) |
 | **Survey sources** | [Surveys and models](surveys-and-models.md#survey-sources) |
 | **Survey statistics** | [Measurements](measurements-and-statistics.md#what-a-survey-measures) |
+| **Passage against the mapped structure** | [Geology](geology.md) — with the stereonet of the readings around the cave |
 | **Photographs and documents** | [Photographs](photographs.md) · [Documents](documents-and-cabinets.md) |
 | **Tags** | Free-form, filterable on tables and map layers |
 | **Links** | [Links between records](links.md) |

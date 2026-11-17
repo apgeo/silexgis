@@ -266,16 +266,26 @@ export function useClearCaveLevelBands(caveId: string) {
  * part of the query key because the two scopes are two different answers to two different
  * questions, and caching them together would show one under the other's heading.
  */
-export function useCaveStructureComparison(caveId: string | undefined, areaId?: string) {
+export function useCaveStructureComparison(
+  caveId: string | undefined,
+  areaId?: string,
+  measurementType?: string,
+) {
   return useQuery({
-    queryKey: queryKeys.caveStructureComparison(caveId ?? '', areaId ?? ''),
+    queryKey: queryKeys.caveStructureComparison(caveId ?? '', areaId ?? '', measurementType ?? ''),
     queryFn: () =>
       unwrap(
         api.GET('/api/v1/caves/{id}/structure-comparison', {
           // The contract names its query parameters as the request record does; spelled here the
           // way the generated types spell them rather than lower-cased and left to the server's
           // case-insensitive binding to rescue.
-          params: { path: { id: caveId! }, query: areaId ? { AreaId: areaId } : {} },
+          params: {
+            path: { id: caveId! },
+            query: {
+              ...(areaId ? { AreaId: areaId } : {}),
+              ...(measurementType ? { MeasurementType: measurementType } : {}),
+            },
+          },
         }),
       ),
     enabled: !!caveId,
@@ -307,6 +317,12 @@ export type KarstificationComponent = components['schemas']['KarstificationCompo
 
 /** One cave standing at an end of a range in an area. */
 export type AreaCaveExtreme = components['schemas']['AreaCaveExtremeDto'];
+
+/** One lithology's outcrop inside an area and the entrances on it, over the placeable set. */
+export type AreaLithology = components['schemas']['AreaLithologyDto'];
+
+/** An area split by the geology mapped over it. */
+export type AreaLithologyBreakdown = components['schemas']['AreaLithologyBreakdownDto'];
 
 /**
  * Counts, densities, totals and a classed index for one area.

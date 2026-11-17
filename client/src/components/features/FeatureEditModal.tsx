@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo } from 'react';
-import { Checkbox, Divider, Form, Input, InputNumber, Select } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Checkbox, Divider, Form, Input, InputNumber, Segmented, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useGenericFeatureTypes, type FeatureDetail, type FeatureType } from '../../api/hooks.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
+import { typedEnumLabel, typedFieldLabel } from '../geology/lithology.ts';
+import {
+  DIP_DIRECTION_KEY,
+  STRUCTURAL_MEASUREMENT_TYPE_CODE,
+  withOrientationEntry,
+  type OrientationEntry,
+} from '../geology/structural.ts';
 
 type Visibility = FeatureDetail['visibility'];
 type GeometryClass = FeatureType['acceptedGeometryClasses'][number];
@@ -110,9 +117,16 @@ export default function FeatureEditModal({
     () => parsePropertiesSchema(selectedType?.propertiesSchema),
     [selectedType],
   );
+  // A structural reading's orientation may be typed as a right-hand-rule strike instead of its
+  // dip direction; the server converts it. Offered only where the kind has a dip-direction field.
+  const offersStrikeEntry =
+    selectedType?.code === STRUCTURAL_MEASUREMENT_TYPE_CODE &&
+    schemaFields.some((field) => field.key === DIP_DIRECTION_KEY);
+  const [orientationEntry, setOrientationEntry] = useState<OrientationEntry>('dipDirection');
 
   useEffect(() => {
     if (open) {
+      setOrientationEntry('dipDirection');
       form.resetFields();
       form.setFieldsValue({
         name: initial.name ?? undefined,
@@ -155,7 +169,7 @@ export default function FeatureEditModal({
       visibility: values.visibility,
       locationProtected: values.locationProtected ?? false,
       primaryParentId: values.primaryParentId ?? null,
-      properties,
+      properties: offersStrikeEntry ? withOrientationEntry(properties, orientationEntry) : properties,
     });
   };
 
@@ -220,11 +234,33 @@ export default function FeatureEditModal({
             <Divider plain style={{ margin: '8px 0' }}>
               {t('features.typedProperties')}
             </Divider>
+            {offersStrikeEntry && (
+              <Form.Item label={t('structural.entry.label')}>
+                <Segmented<OrientationEntry>
+                  data-testid="orientation-entry"
+                  value={orientationEntry}
+                  options={[
+                    { value: 'dipDirection', label: t('structural.entry.dipDirection') },
+                    { value: 'strike', label: t('structural.entry.strike') },
+                  ]}
+                  onChange={(entry) => {
+                    // A number typed for one convention means a different plane in the other, so
+                    // switching clears it rather than carrying it across.
+                    setOrientationEntry(entry);
+                    form.setFieldValue(['properties', DIP_DIRECTION_KEY], undefined);
+                  }}
+                />
+              </Form.Item>
+            )}
             {schemaFields.map((field) => (
               <Form.Item
                 key={field.key}
                 name={['properties', field.key]}
-                label={field.label}
+                label={
+                  offersStrikeEntry && orientationEntry === 'strike' && field.key === DIP_DIRECTION_KEY
+                    ? t('structural.entry.strikeField')
+                    : typedFieldLabel(t, selectedType?.code, field.key, field.label)
+                }
                 rules={field.required ? [{ required: true }] : undefined}
                 valuePropName={field.kind === 'boolean' ? 'checked' : 'value'}
               >
@@ -233,7 +269,10 @@ export default function FeatureEditModal({
                 ) : field.kind === 'enum' ? (
                   <Select
                     allowClear
-                    options={field.enumValues?.map((v) => ({ value: v, label: v }))}
+                    options={field.enumValues?.map((v) => ({
+                      value: v,
+                      label: typedEnumLabel(t, selectedType?.code, field.key, v),
+                    }))}
                   />
                 ) : field.kind === 'string' ? (
                   <Input />

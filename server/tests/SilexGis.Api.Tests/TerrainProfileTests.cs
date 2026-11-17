@@ -33,6 +33,7 @@ public sealed class TerrainProfileTests : IAsyncLifetime, IDisposable, IClassFix
     private readonly SilexGisApiFactory factory;
     private readonly string buildRoot;
 
+    private Guid buildId;
     private HttpClient reader = null!;
     private HttpClient groundless = null!;
     private HttpClient anonymous = null!;
@@ -88,6 +89,7 @@ public sealed class TerrainProfileTests : IAsyncLifetime, IDisposable, IClassFix
             db.TerrainBuilds.Add(build);
             await db.SaveChangesAsync();
             WriteRamp(build.Id);
+            buildId = build.Id;
         }
 
         reader = await AuthHelper.BearerClientAsync(factory, $"tp-read-{suffix}@t.local");
@@ -173,6 +175,46 @@ public sealed class TerrainProfileTests : IAsyncLifetime, IDisposable, IClassFix
         reader?.Dispose();
         groundless?.Dispose();
         anonymous?.Dispose();
+    }
+
+    /// <summary>
+    /// A profile is heights along a line, and a height without its error reads as more exact than
+    /// it is, so the answer carries the recorded accuracy of the build and nothing when none is.
+    /// </summary>
+    [Fact]
+    public async Task The_profile_carries_the_recorded_accuracy_of_the_ground_and_nothing_when_none_is_recorded()
+    {
+        await SetAccuracyAsync(null, null, null, null);
+        ShouldCarryNoAccuracy(await ProfileAsync(reader, (25.004, 46.09), (25.010, 46.09)));
+
+        await SetAccuracyAsync(1d, 0.3, "RMSE", "A survey report in invented words");
+        ShouldCarryTheRecordedAccuracy(await ProfileAsync(reader, (25.004, 46.09), (25.010, 46.09)));
+
+        await SetAccuracyAsync(null, null, null, null);
+    }
+
+    private async Task SetAccuracyAsync(double? resolution, double? error, string? statistic, string? source)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteUpdateAsync(s => s
+            .SetProperty(b => b.SourceResolutionM, resolution)
+            .SetProperty(b => b.VerticalAccuracyM, error)
+            .SetProperty(b => b.VerticalAccuracyStatistic, statistic)
+            .SetProperty(b => b.AccuracySource, source));
+    }
+
+    private static void ShouldCarryNoAccuracy(JsonElement body) =>
+        (!body.TryGetProperty("accuracy", out var none) || none.ValueKind == JsonValueKind.Null)
+            .ShouldBeTrue(body.ToString());
+
+    private static void ShouldCarryTheRecordedAccuracy(JsonElement body)
+    {
+        var accuracy = body.GetProperty("accuracy");
+        accuracy.GetProperty("sourceResolutionM").GetDouble().ShouldBe(1d);
+        accuracy.GetProperty("verticalAccuracyM").GetDouble().ShouldBe(0.3);
+        accuracy.GetProperty("verticalAccuracyStatistic").GetString().ShouldBe("RMSE");
+        accuracy.GetProperty("accuracySource").GetString().ShouldBe("A survey report in invented words");
     }
 
     private static async Task<JsonElement> ProfileAsync(

@@ -469,6 +469,8 @@ public static class DependencyInjection
             services.AddSingleton<Surveys.ISurveyCompiler, Surveys.NoSurveyCompiler>();
         }
 
+        Analysis.WhiteboxRegistration.AddWhiteboxTools(services, configuration);
+
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 
@@ -528,6 +530,7 @@ public static class DependencyInjection
         // when two threads touch one, so whatever drives it either takes one piece of work at a time
         // or holds a gate of its own.
         services.AddSingleton<Domain.Terrain.ITerrainDerivativeComputer, Terrain.GdalDemDerivatives>();
+        services.AddSingleton<Terrain.TerrainLandforms>();
 
         // What ground each of a build's prepared rasters covers, described once and kept beside the
         // build. Scoped because it reads and writes rows.

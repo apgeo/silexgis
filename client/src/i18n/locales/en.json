@@ -232,6 +232,7 @@
       "derivativeBuildNotFinished": "That build has not finished, so there is no elevation to draw the ground from yet.",
       "derivativeNotFound": "That picture is no longer here.",
       "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",
+      "derivativeAnalysisUnavailable": "That picture is computed by the terrain-analysis program (WhiteboxTools), which this installation does not run.",
       "baseNotFound": "The build to extend no longer exists.",
       "baseUnchecked": "The build to extend never had its tiles read back and found whole, so there is nothing known-good to add to.",
       "baseNotPublished": "The build to extend has no tiles where terrain is served from any more. Start a fresh build over the whole area instead.",
@@ -264,7 +265,8 @@
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
         "colourRelief": "Coloured relief",
-        "contours": "Contour lines"
+        "contours": "Contour lines",
+        "geomorphons": "Landform classes"
       }
     },
     "derivativeForm": {
@@ -315,6 +317,19 @@
       "contourInterval": "A line every (m)",
       "contourIntervalHint": "Metres of height between one line and the next, counted from sea level. Every fifth line is drawn heavier. The lines are a picture: nothing can be measured along one or selected.",
       "contourIntervalInvalid": "Contour lines are spaced from {{min}} to {{max}} metres of height apart.",
+      "kindUnavailable": "{{kind}} (not available here)",
+      "unavailable": {
+        "not_configured": "Landform classes are computed by WhiteboxTools, which this installation does not run. An administrator can set it up.",
+        "tool_missing": "Landform classes are computed by WhiteboxTools, which this installation is set up to run but cannot find. An administrator can check where it is installed.",
+        "sandbox_missing": "Landform classes are computed by WhiteboxTools, which is installed here but cannot run without its sandbox (bubblewrap). An administrator can install it."
+      },
+      "landformSearch": "Search distance (m)",
+      "landformSearchHint": "How far each cell looks along eight lines of sight. It sets the scale of the landforms: the same hillside is a slope at 100 m and a shoulder at 1 km.",
+      "landformSkip": "Look past (m)",
+      "landformSkipHint": "Bumps nearer than this are looked past. Usually zero.",
+      "landformFlatness": "Flatness angle (°)",
+      "landformFlatnessHint": "A line of sight rising or falling less steeply than this counts as level.",
+      "landformInvalid": "The search distance is above 0 and at most {{search}} m, the distance looked past is shorter than it, and the flatness angle is between 0 and {{flatness}}°.",
       "computeEdges": "Compute the outermost cells from the neighbours they have",
       "computeEdgesHint": "Off, every raster of the build meets its neighbour with a hairline gap. On, the edge is slightly wrong — by less than a missing line is.",
       "colourRamp": "Colour ramp",
@@ -352,8 +367,47 @@
         "zFactor": "heights ×{{factor}}",
         "stops": "{{count}} colour stops",
         "interval": "a line every {{metres}} m",
-        "edgesOff": "edges left blank"
+        "edgesOff": "edges left blank",
+        "search": "looking {{metres}} m out",
+        "skip": "past the nearest {{metres}} m",
+        "flatness": "level below {{degrees}}°"
       }
+    },
+    "accuracy": {
+      "column": "Elevation accuracy",
+      "notRecorded": "Not recorded",
+      "edit": "Accuracy",
+      "editTitle": "Elevation accuracy",
+      "editIntro": "State how finely this build's elevation samples the ground and how far its heights may be off. Leave every field empty to record nothing.",
+      "saved": "Accuracy saved.",
+      "formTitle": "Elevation accuracy (optional)",
+      "formIntro": "Left empty, a build made only from the obtained coverage records that dataset's published figures; a build from your own rasters records nothing until you state it here.",
+      "resolution": "Ground spacing (m)",
+      "resolutionHint": "Distance between elevation samples, in metres.",
+      "error": "Vertical error (m)",
+      "errorHint": "How far a height may be from the true ground.",
+      "statistic": "Statistic",
+      "source": "Where the figures come from",
+      "sourceHint": "A publication, a survey report or a vendor's statement.",
+      "spacing": "{{value}} m spacing",
+      "vertical": "{{value}} m {{statistic}}",
+      "statistics": {
+        "RMSE": "RMSE (root-mean-square error)",
+        "LE90": "LE90 (error not exceeded by 90 % of points)",
+        "LE95": "LE95 (error not exceeded by 95 % of points)"
+      }
+    },
+    "landforms": {
+      "flat": "Flat",
+      "peak": "Peak",
+      "ridge": "Ridge",
+      "shoulder": "Shoulder",
+      "spur": "Spur",
+      "slope": "Slope",
+      "hollow": "Hollow",
+      "footslope": "Footslope",
+      "valley": "Valley",
+      "pit": "Pit"
     },
     "configured": {
       "title": "A terrain address in this installation's configuration overrides the chosen build",
@@ -562,6 +616,23 @@
       "refused": {
         "window": "This view cannot be asked about. Move the map to ask again.",
         "other": "The karstification index was refused for this view."
+      }
+    },
+    "passageDepth": {
+      "layer": "Rock over the passage",
+      "loading": "Reading the passage in view…",
+      "shown": "Caves drawn: {{count}}.",
+      "none": "No cave with altitudes in view that you may place exactly.",
+      "failed": "The passage depth could not be read. Moving the map asks again.",
+      "noTerrain": "No elevation model is built here, so the passage cannot be coloured.",
+      "truncated": "More caves are in view than are drawn at once (at most {{max}}). Zoom in to see the rest.",
+      "legendAbove": "Reads above its ground",
+      "legendBand": "{{from}} – {{to}} m of rock",
+      "legendOver": "More than {{from}} m of rock",
+      "refused": {
+        "window": "This view cannot be asked about. Move the map to ask again.",
+        "terrain": "You do not have the right to read elevation, which this layer needs.",
+        "other": "The passage depth was refused for this view."
       }
     },
     "karstLegend": {
@@ -6350,12 +6421,34 @@
     "tracksIgnore": "Leave them in the file",
     "tracksAsLine": "Import as a line feature",
     "trackKind": "Line feature kind",
+    "optionsAreas": "Outlines (areas)",
+    "areas": "What to do with them",
+    "areasHint": "Rules read names, and an outline's name rarely says what it is. Choose the kind every outline in the file becomes — for a geology map, Geological unit — or leave them in the file.",
+    "areasIgnore": "Leave them in the file",
+    "areasAsArea": "Import each as an area feature",
+    "areaKind": "Area feature kind",
     "mappingAuto": "Work it out",
     "mapping": {
       "nameField": "Name",
       "descriptionField": "Description",
       "codeField": "Identification code",
-      "elevationField": "Altitude"
+      "elevationField": "Altitude",
+      "lithologyField": "Rock type (geological units)"
+    },
+    "lithologyStep": {
+      "title": "Rock types in the file",
+      "unmatched": "Rock names matching no class: {{count}}. Pick a class for each, or leave it and those units are created unclassified.",
+      "allMatched": "Every rock name in the file matches a class. Change any you disagree with.",
+      "sourceValue": "In the file",
+      "count": "Outlines",
+      "becomes": "Becomes",
+      "becomesFor": "Class for {{value}}",
+      "how": "How",
+      "match": {
+        "mapped": "Your choice",
+        "recognised": "Recognised",
+        "unmatched": "No match"
+      }
     },
     "selectAll": "All",
     "selectAllPages": "Select all {{count}} across every page",
@@ -7936,6 +8029,11 @@
     }
   },
   "karstStats": {
+    "axesNone": "The principal axes could not be drawn: too few of the caves in this set record every measure, or the measures that remain do not vary.",
+    "axisDropped": "Left out of the axes because every grouped cave records the same value: {{measures}}.",
+    "axisLoadings": "Axis {{axis}} carries {{share}} % of the variation and is made of {{loadings}}. Only the relative signs mean anything; the axis itself may be read in either direction.",
+    "axisScope": "{{drawn}} of the {{total}} caves on this page are positioned. Axes and colours are worked out over the whole set this list is narrowed to, so caves on other pages are positioned too and are not drawn here.",
+    "axisTitle": "Axis {{axis}} ({{share}} % of the variation)",
     "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
     "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
     "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
@@ -7945,12 +8043,15 @@
     "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
     "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
     "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterPopulationAxes": "Grouped and positioned over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them or position them on the axes, and they are absent from the chart rather than drawn in it.",
     "clusterUngrouped": "Not grouped",
     "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
     "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
+    "modeAxes": "Principal axes",
+    "modeMeasures": "Chosen measures",
     "nothingMeasured": "No cave on this page has a surveyed length.",
     "powerLawFit": "Power-law fit (exponent {{exponent}})",
     "rank": "Rank",
@@ -8065,6 +8166,23 @@
     "measured": "Measured",
     "box": "10th · 25th · median · 75th · 90th",
     "tooFewForABox": "Too few measured caves to draw"
+  },
+  "featurePassages": {
+    "title": "Passages beneath this feature",
+    "intro": "Caves whose passage lies within {{distance}} m of this feature in plan, nearest first. Only caves you may place exactly are considered.",
+    "reach": "Reach (m)",
+    "empty": "No passage you may place lies within this reach.",
+    "noTerrain": "No elevation data has been prepared on this installation, so the rock overhead is not known; the offsets are.",
+    "truncated": "More caves qualify than are listed; the nearest are shown.",
+    "cave": "Cave",
+    "offset": "Offset",
+    "offsetUnder": "Under the outline",
+    "altitude": "Passage altitude",
+    "overburden": "Rock overhead",
+    "notMeasured": "—",
+    "unitMetres": "{{value}} m",
+    "approximate": "approximate",
+    "noAltitudes": "No altitudes surveyed"
   },
   "morphometry": {
     "title": "Measured shape",
@@ -8646,7 +8764,7 @@
     "unitDegrees": "°",
     "noDivergence": "One side has nothing in it, so there is no disagreement to report. Nought here would claim agreement with a structure nobody has mapped.",
     "divergenceScale": "Nought means the two lie along each other; one means they lie across each other, a quarter turn apart.",
-    "linesOnly": "Only mapped fracture and fault lines are compared. Bedding and joint readings taken at a station are a different kind of record and this installation stores none.",
+    "linesOnly": "Mapped fracture and fault lines are compared here rose against rose, by length. Structural readings taken at a point — bedding, joints, fault planes — are plotted on a stereonet, and a cave's passages are tested against their strikes.",
     "dolineModeElsewhere": "The comparison of depression long axes against fault strikes is asked of an area, on that area's own page.",
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
@@ -8687,7 +8805,12 @@
       "noData": "The elevation data records nothing here"
     },
     "markLabel": "{{value}} of rock overhead",
-    "markLabelAbsent": "Rock overhead not known here"
+    "markLabelAbsent": "Rock overhead not known here",
+    "leastCover": "Least rock cover",
+    "leastCoverAt": "{{value}} at {{distance}} along the passage",
+    "leastCoverNote": "The thinnest of the readings taken along the passage, not the true minimum between them.",
+    "showLeastCover": "Show on the map",
+    "leastCoverMark": "Least cover: {{value}}"
   },
   "altitudeCheck": {
     "title": "Entrance altitudes against the ground",
@@ -8741,6 +8864,28 @@
     "noSurveyAltitudes": "The survey carries no altitudes, so depth and height cannot be measured from it. A plan drawing is not a cave of no depth.",
     "explained": "Depth is measured from the highest entrance down to the lowest point the survey reaches, and height from the lowest entrance up to the highest. The resurgence level is the lowest spring cave entrance in the area that contains this cave, among those you may place; potential depth is the highest entrance less that level."
   },
+  "areaSystemFigures": {
+    "title": "Depth and height of the system",
+    "loading": "Measuring across the member caves…",
+    "noCaves": "No cave filed under this one is a cave you may place, so there is nothing to measure.",
+    "caves": "Member caves measured",
+    "surveyedCaves": "of them with a survey carrying altitudes",
+    "entrances": "Entrances",
+    "highestEntrance": "Highest entrance of the system",
+    "lowestEntrance": "Lowest entrance of the system",
+    "entranceSpread": "Height between the system's entrances",
+    "totalDepth": "System depth below its highest entrance",
+    "height": "Height above its lowest entrance",
+    "resurgenceLevel": "Resurgence level under this area",
+    "potentialDepth": "Potential depth to the resurgence level",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "basisDeclared": "Taken over the caves declared to be filed under this one, and only those whose position you may see. A cave closed to you adds nothing here, not even to the count.",
+    "truncated": "More caves are filed here than one answer measures, so these figures describe the first {{count}} of them.",
+    "approximate": "At least one cave's depth comes from a shape-based reduction of its drawn line, not from survey legs, so those figures are approximate.",
+    "noSurveyAltitudes": "No member's survey carries altitudes, so depth and height cannot be measured from them.",
+    "explained": "System depth runs from the highest entrance of any member cave down to the lowest point any member's survey reaches; height from the lowest entrance up to the highest surveyed point. The resurgence level is the lowest spring cave entrance under this area that you may place; potential depth is the highest entrance less that level."
+  },
   "depthProfile": {
     "title": "Depth profile",
     "loading": "Drawing the profile…",
@@ -8779,6 +8924,8 @@
     "noLayer": "No picture of the terrain has been computed for this measure yet. An administrator can compute one from the terrain page.",
     "needsSlope": "Facing is counted only on sloping ground, and that needs the slope picture.",
     "slopeUnit": "The slope picture exists only in percent; the classes are cut in degrees.",
+    "analysisUnavailable": "Landforms are computed by the terrain-analysis program (WhiteboxTools), which this installation does not run, and none were computed earlier. An administrator can set it up.",
+    "landformNote": "Landforms are read from the newest landform picture on the terrain page. Its search distance sets their scale: the same hillside is a slope at 100 m and a shoulder at 1 km. Ground the picture left unclassified, such as its outermost cells, is not counted.",
     "entrances": "Entrances",
     "sinkholes": "Sinkholes",
     "background": "Ground of the area",
@@ -8787,7 +8934,8 @@
     "measure": {
       "slope": "Slope",
       "aspect": "Facing",
-      "position": "Position on the relief"
+      "position": "Position on the relief",
+      "landform": "Landform"
     },
     "classes": {
       "lt5": "under 5°",
@@ -10293,5 +10441,92 @@
     "preview": "Preview",
     "none": "No symbol (plain dot)",
     "sources": "Symbol sources: the club’s own speleological set; OpenStreetMap Carto (CC0); QGIS (GPL-2.0-or-later); the FGDC Digital Cartographic Standard for Geologic Map Symbolization (USGS)."
+  },
+  "geology": {
+    "lithology": {
+      "limestone": "Limestone",
+      "dolomite": "Dolomite",
+      "marble": "Marble",
+      "gypsum_anhydrite": "Gypsum / anhydrite",
+      "salt": "Rock salt",
+      "conglomerate_calcareous": "Conglomerate (calcareous)",
+      "sandstone": "Sandstone",
+      "shale_marl": "Shale / marl",
+      "granite": "Granite",
+      "crystalline_schist": "Crystalline schist",
+      "volcanic": "Volcanic rock",
+      "unconsolidated": "Unconsolidated deposits",
+      "other": "Other"
+    },
+    "unclassified": "Unclassified",
+    "karstifiable": "karstifiable",
+    "unrecognised": "not in the vocabulary",
+    "legend": {
+      "title": "Geological units"
+    },
+    "area": {
+      "title": "Geology inside the area",
+      "basisPlaceable": "Measured on the map, over the geological units and entrances you may place exactly — so its entrance counts are not the declared totals above.",
+      "noneMapped": "No geological unit you may place is mapped inside this area.",
+      "lithology": "Lithology",
+      "areaKm2": "Outcrop (km²)",
+      "share": "Share of area",
+      "entrances": "Entrances",
+      "entrancesPerKm2": "Entrances per km²",
+      "notMeasured": "not measured",
+      "karstifiableArea": "Karstifiable outcrop (km²)",
+      "karstifiableDensity": "Entrances per km² of karstifiable outcrop",
+      "unmappedArea": "Ground with no unit mapped (km²)",
+      "unmappedEntrances": "Entrances on unmapped ground"
+    }
+  },
+  "structural": {
+    "types": {
+      "bedding": "Bedding",
+      "joint": "Joint",
+      "fault": "Fault plane",
+      "cleavage": "Cleavage",
+      "fracture": "Fracture",
+      "other": "Other"
+    },
+    "fields": {
+      "measurement_type": "Measured plane",
+      "dip_direction": "Dip direction (°)",
+      "dip": "Dip (°)",
+      "note": "Note",
+      "measured_on": "Measured on (YYYY-MM-DD)"
+    },
+    "entry": {
+      "label": "Orientation entered as",
+      "dipDirection": "Dip direction and dip",
+      "strike": "Strike and dip (right-hand rule)",
+      "strikeField": "Strike (°, right-hand rule: the plane dips to the right of it)"
+    },
+    "stereonet": {
+      "title": "Stereonet of structural readings",
+      "areaTitle": "Structural readings in this area",
+      "loading": "Plotting…",
+      "noReadings": "No structural reading you may place was recorded here.",
+      "readingCount": "{{count}} readings plotted",
+      "caveReach": "{{count}} readings within {{radius}} m of the cave",
+      "measurementType": "Readings of",
+      "allTypes": "every kind",
+      "description": "Equal-area net, lower hemisphere: each dot is the pole of one plane (the line at right angles to it, taken pointing down). A plane dipping gently plots near the centre; a steep one near the rim, on the side opposite its dip.",
+      "densityLegend": "Shading: Kamb density, a band every {{interval}} standard deviations. Readings scattered at random would read {{expected}} everywhere; the densest spot here reads {{max}}.",
+      "poleLabel": "{{type}}: dip {{dip}}° towards {{dipDirection}}°",
+      "north": "N"
+    },
+    "strikeComparison": {
+      "title": "Passage against measured strikes (Watson U²)",
+      "statistic": "U²",
+      "pValue": "Probability",
+      "counts": "{{legs}} survey legs against {{readings}} strikes",
+      "tooFew": "The test needs at least {{min}} survey legs and {{min}} readings with a strike; here there are {{legs}} and {{readings}}.",
+      "different": "The passage trends and the strikes are unlikely to come from one distribution (probability {{p}}).",
+      "alike": "Nothing here shows the passage trends and the strikes to differ (probability {{p}}).",
+      "caveat": "Each survey leg and each reading counts once. Legs along one passage are not independent of each other, so a small probability says less than it reads. U² compares the whole spread of trends, not only the mean direction: a straight passage against scattered strikes with the same mean still differs.",
+      "strikeRose": "Strikes of the readings ({{count}})",
+      "noStrikes": "No reading you may place within reach has a strike."
+    }
   }
 }

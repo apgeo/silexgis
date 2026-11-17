@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Geodata;
@@ -186,7 +187,7 @@ public static class SharedViewMapEndpoints
         var rows = await query
             .OrderBy(f => f.Id)
             .Take(mapOptions.Value.MaxPoints)
-            .Select(f => new { f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
+            .Select(f => new { f.Id, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
             .ToListAsync(ct);
 
         var typeIds = rows.Where(r => r.FeatureTypeId != null)
@@ -195,6 +196,23 @@ public static class SharedViewMapEndpoints
             .Where(t => typeIds.Contains(t.Id))
             .Select(t => new { t.Id, t.Code, t.SymbolFile })
             .ToDictionaryAsync(t => t.Id, ct);
+
+        // A structural reading's tick is drawn turned to its plane, as on the signed-in map; without
+        // its orientation the bundled tick would point east and misstate the plane. The orientation
+        // says how the plane lies, never where.
+        var readingIds = rows
+            .Where(r => r.FeatureTypeId is { } t && types.GetValueOrDefault(t)?.Code == FeatureTypeSeeds.StructuralMeasurement)
+            .Select(r => r.Id)
+            .ToList();
+        var orientations = readingIds.Count == 0
+            ? new Dictionary<Guid, PlaneOrientation>()
+            : (await db.Features.AsNoTracking()
+                    .Where(f => readingIds.Contains(f.Id))
+                    .Select(f => new { f.Id, f.Properties })
+                    .ToListAsync(ct))
+                .Select(f => (f.Id, Orientation: StructuralMeasurement.ReadOrientation(f.Properties)))
+                .Where(f => f.Orientation is not null)
+                .ToDictionary(f => f.Id, f => f.Orientation!.Value);
 
         var features = new List<GeoFeature>(rows.Count);
         foreach (var row in rows)
@@ -207,6 +225,11 @@ public static class SharedViewMapEndpoints
                 ["typeCode"] = type?.Code,
                 ["symbol"] = type?.SymbolFile,
             };
+            if (orientations.TryGetValue(row.Id, out var plane))
+            {
+                properties["dipDirection"] = plane.DipDirectionDegrees;
+                properties["dip"] = plane.DipDegrees;
+            }
 
             // A protected row never reaches here; were one to, it would be left off rather than drawn.
             if (!row.IsProtectedEffective)

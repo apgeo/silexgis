@@ -55,6 +55,7 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'terrain_derivative.build_not_finished': 'terrain.problems.derivativeBuildNotFinished',
   'terrain_derivative.not_found': 'terrain.problems.derivativeNotFound',
   'terrain_derivative.not_ready': 'terrain.problems.derivativeNotReady',
+  'terrain_derivative.analysis_unavailable': 'terrain.problems.derivativeAnalysisUnavailable',
 };
 
 export function terrainProblemMessage(

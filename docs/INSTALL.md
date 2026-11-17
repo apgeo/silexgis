@@ -9,6 +9,7 @@ are a database password, an admin account, and the public URL.
 - [Encryption at rest](#encryption-at-rest)
 - [Showing Word and Excel files](#showing-word-and-excel-files)
 - [Survey compiler (optional)](#survey-compiler-optional)
+- [Terrain analysis with WhiteboxTools (optional)](#terrain-analysis-with-whiteboxtools-optional)
 - [Terrain (optional)](#terrain-optional)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
@@ -838,6 +839,134 @@ To check the compiler is there, open the device capabilities the phone reads,
 `compiler.version` names Therion once the service has answered. To stop compiling, stop the
 service and set the mode back to `none`; runs that fail meanwhile say the compiler is not available
 and can be run again with *Rerun*.
+
+## Terrain analysis with WhiteboxTools (optional)
+
+Some terrain analyses — geomorphons, the landform class (peak, ridge, valley, pit and six more) of
+every cell of the elevation model, first — are not something the application's own raster library
+can compute. They are run by [WhiteboxTools](https://www.whiteboxgeo.com/), a separate program
+(the MIT-licensed open core, version 2.4.0), when the installation chooses to run it. Without it
+those analyses are listed as not available, saying why; everything else works as before. What the
+program is given is an elevation raster and nothing else — never a cave's position.
+
+**In Docker**, start the analysis overlay and tell the application to use it:
+
+```bash
+# in deploy/.env
+SILEXGIS__Analysis__Whitebox__Mode=service
+
+docker compose -f docker-compose.yml -f docker-compose.whitebox.yml up -d
+```
+
+The overlay builds an image from the server sources with WhiteboxTools compiled from the source of
+its tagged release, checked against a pinned checksum (the build stops if the download ever
+differs), and starts it as `whitebox`, with no published port, on an internal network the application shares
+with it and which has no way out. It runs with a read-only filesystem, no capabilities, a memory
+limit (`SILEXGIS_WHITEBOX_MEMORY`, default `6g`), a processor limit (`SILEXGIS_WHITEBOX_CPUS`,
+default `2`) and a process limit, and holds nothing worth reading — no database password, no stored
+files, none of the application's settings. It runs only the tools the application has an analysis
+for. Each run is further bounded by `SILEXGIS__Analysis__Whitebox__TimeoutSeconds`,
+`__MaxMemoryBytes` and `__MaxOutputFileBytes`, runs one at a time
+(`SILEXGIS__WhiteboxService__MaxConcurrentRuns`, default `1`), takes inputs of at most
+`SILEXGIS__WhiteboxService__MaxInputBytes` (default 2 GB), and its directory (on the
+`silexgis-whitebox-work` volume) is deleted when it ends. Compiling the program makes the first
+build of this image slower — a couple of minutes on a large machine, longer on a small server, and
+about two gigabytes more of build cache — and later builds reuse it. It is compiled for the server's own processor, ARM included.
+
+As with the survey compiler, the program is not wrapped in bubblewrap inside the container: under
+Docker's default security profile bubblewrap cannot create its namespaces, and the container is the
+sandbox there.
+
+**Natively on Linux** (the scripted [Non-Docker install](#non-docker-install) does not do this for
+you), download the Linux archive, check it, and put the program somewhere of its own that the
+account the API runs as can read but not write:
+
+```bash
+curl -fsSLO https://www.whiteboxgeo.com/WBT_Linux/WhiteboxTools_linux_amd64.zip
+echo "370493b569aaf84977fde95921f96d4a39c1820a2d36d907da9d53772295f440  WhiteboxTools_linux_amd64.zip" | sha256sum -c -
+unzip -q WhiteboxTools_linux_amd64.zip
+sudo install -d /opt/whitebox
+sudo install -m 0755 WhiteboxTools_linux_amd64/WBT/whitebox_tools /opt/whitebox/
+echo "96bb47a9d1f0fe8a3cb46df524242c990eab9bc2ae1930e540e09328331172e4  /opt/whitebox/whitebox_tools" | sha256sum -c -
+printf '{\n  "verbose_mode": false,\n  "working_directory": "",\n  "compress_rasters": true,\n  "max_procs": -1\n}\n' \
+  | sudo tee /opt/whitebox/settings.json > /dev/null
+/opt/whitebox/whitebox_tools --version    # WhiteboxTools v2.4.0 …
+sudo apt-get install bubblewrap
+```
+
+These are the checksums of the vendor's archive and program of version 2.4.0. The vendor publishes
+each release at the same address, so a mismatch means it has published a newer one, not
+necessarily that the download is damaged — move to the newer one deliberately, or build 2.4.0 from
+its tagged source as the analysis image does (`deploy/whitebox/Dockerfile` names the source
+archive, its checksum and the compiler version). Only the program is needed, with a `settings.json` of your own beside it (the one
+above is the one the analysis image writes): not the `plugins` folder beside it in the archive, two
+of whose programs download and install software, and not the vendor's `settings.json`, which names
+a working directory on its author's machine. Then, in the API's configuration
+(`/etc/silexgis/silexgis.env` on a scripted install), and restart:
+
+```bash
+SILEXGIS__Analysis__Whitebox__Mode=local
+SILEXGIS__Analysis__Whitebox__WhiteboxPath=/opt/whitebox/whitebox_tools
+```
+
+The API then starts the program itself, inside a bubblewrap sandbox (no network, its own folder
+read-only, the run's directory as the only place it reads and writes, limits on time, memory and
+file size, none of the API's environment), and refuses to run it without one unless
+`SILEXGIS__Analysis__Whitebox__AllowUnsandboxed=true`. Each run is made in a directory of its own
+beside the picture it computes, under `SILEXGIS__Terrain__BuildRoot`, and deleted when it ends; that
+path must not contain `=` or a quote, which the program cannot be handed (a run refuses, saying so).
+
+**Natively on Windows**, the same, by hand. Download
+`https://www.whiteboxgeo.com/WBT_Windows/WhiteboxTools_win_amd64.zip` and check it in PowerShell:
+
+```powershell
+(Get-FileHash .\WhiteboxTools_win_amd64.zip -Algorithm SHA256).Hash
+# 2B39F0FC90F73B295467850BD470BFACD3DAB34E84B8550C049D30B4F7600D6B for version 2.4.0
+```
+
+Unpack it and copy `WBT\whitebox_tools.exe` (SHA-256 `1212C668F89048E3189B9AD73F2670E60F8CD4B7A976272FC27F502C5157C925`)
+and `WBT\LICENSE.txt` into a folder of their own, for example `C:\Program Files\WhiteboxTools`,
+with a `settings.json` beside them holding the same contents as on Linux above. Leave the
+`plugins` folder out here above all, because nothing on Windows stops a program it starts from
+reaching the network. Then add to `C:\ProgramData\SilexGIS\config\silexgis.env`:
+
+```
+SILEXGIS__Analysis__Whitebox__Mode=local
+SILEXGIS__Analysis__Whitebox__WhiteboxPath=C:\Program Files\WhiteboxTools\whitebox_tools.exe
+SILEXGIS__Analysis__Whitebox__AllowUnsandboxed=true
+```
+
+and run the installer again, which copies the settings into the Windows service (see
+[Windows](#windows) under the non-Docker install). Windows has no bubblewrap, so the third line is
+required, and what the program gets is less than on Linux: it runs as the API's own account, with
+the application's settings removed from its environment, its temporary files in the run's
+directory, and stopped at the time limit; its outputs are measured against
+`__MaxOutputFileBytes` and `__MaxOutputBytes` after it ends. There is no memory limit and no
+filesystem of its own — it could read whatever the API's account can. What it is handed is an
+elevation raster and nothing else, so this is a choice about trusting the program you downloaded,
+not about cave data; an installation that wants the boundary runs the analysis service in Docker
+instead.
+
+**Checking it works.** On the *Terrain* page, the *Derived pictures* form lists **Landform
+classes** among the kinds; where the installation cannot compute it, the entry reads *(not
+available here)* and the line under the field says why — not configured, the program not found, or
+(on Linux) the sandbox not found. The same answer is `GET /api/v1/terrain/derivatives/kinds`, for
+an account that may read terrain. In `service` mode the kind is always offered; a service that does
+not answer fails that picture, after the job queue's own retries, with a message saying so.
+
+A mode other than `none`, `local` or `service`, or `service` without a usable `http(s)` address,
+stops the application at start with a message naming the setting. In `local` mode a missing
+program or a missing sandbox is not fatal: the API log says which at start, and the analyses are
+listed as not available with that reason.
+
+**Switching it off** (`SILEXGIS__Analysis__Whitebox__Mode=none`, or stopping the overlay) keeps
+every landform picture already computed: it is elevation already turned into classes, so it still
+draws on the map and the area statistics still count against it. Only new ones cannot be asked for.
+
+**When the image build stops at the checksum**, the source archive it downloaded is not the one
+the release was pinned to. A tagged release's archive does not change, so treat it as a damaged or
+tampered download, not as a newer release: the build refuses it rather than compile code nobody
+checked. The pin in `deploy/whitebox/Dockerfile` moves only with a SilexGIS update.
 
 ## Terrain (optional)
 
@@ -2625,6 +2754,11 @@ otherwise) and `--web-server none`. What that covers, and what it does not:
   `C:\ProgramData\SilexGIS\config\nginx-silexgis.conf`, ready for nginx for Windows. IIS in front
   needs URL Rewrite and Application Request Routing, and the site's headers and log scrubbing
   rebuilt by hand (see [The web server](#the-web-server)).
+- **Not covered: the optional programs.** The terrain-analysis program (WhiteboxTools) is set up by
+  hand, in `local` mode and without a sandbox — see
+  [Terrain analysis with WhiteboxTools (optional)](#terrain-analysis-with-whiteboxtools-optional).
+  Leave its folder under `C:\Program Files`, where the service's account can read and run it but
+  not change it.
 - **File permissions** are set as described above in `windows-service` mode only; in `process` mode
   the directories inherit ProgramData's, which every local account can read — restrict `config\`
   to Administrators yourself.
@@ -2718,6 +2852,17 @@ the reasoning beside each one.
 | `SILEXGIS__TherionService__MaxConcurrentCompiles` | `1` | *read by the survey compiler container, not the API* (the overlay passes it through): how many compiles it runs at once; the rest wait their turn. Each compile can use up to `SILEXGIS__SurveyCompiler__MaxMemoryBytes`, so raise `SILEXGIS_THERION_MEMORY` with it. One at a time also means a run's files are the only survey files in the container while it compiles |
 | `SILEXGIS__TherionService__MaxProjectBytes` | `268435456` | *read by the survey compiler container, not the API* (the overlay passes it through): the most one project sent to it may hold, sources and drawings together (256 MB). A larger one is refused, that run fails (as `survey_pipeline.unexpected`), and the API log names the refusal. Never below 1 MB |
 | `SILEXGIS__SurveyCompiler__WorkDir` | *(empty)* | where compile runs are made, one directory per run, deleted when the run ends however it ends. Empty, `survey-work` under `SILEXGIS__Files__Root` — on the volume already sized for files. Do not point it at a memory-backed temporary directory: a run writes the project, Therion's own temporary files and every output |
+| `SILEXGIS__Analysis__Whitebox__Mode` | `none` | whether and where WhiteboxTools runs the terrain analyses that need it (see *Terrain analysis with WhiteboxTools (optional)*). `none` runs nothing: those analyses are listed as not available. `local` starts the `whitebox_tools` program installed beside the API, inside a bubblewrap sandbox. `service` hands each run to the analysis container; a service that does not answer fails that run as not available, and the job queue tries it again. **Checked at start:** any other value stops the application with a message naming the setting |
+| `SILEXGIS__Analysis__Whitebox__Url` | *(empty)* | the analysis service's address in `service` mode. The overlay sets it to `http://whitebox:3200`. **Checked at start:** `service` without an `http` or `https` address stops the application |
+| `SILEXGIS__Analysis__Whitebox__WhiteboxPath` | *(empty)* | the WhiteboxTools program `local` mode runs. Empty, the first `whitebox_tools` on the search path. Its folder (which holds the program's `settings.json`) is made visible to the sandbox read-only |
+| `SILEXGIS__Analysis__Whitebox__BwrapPath` | *(empty)* | the bubblewrap program `local` mode starts WhiteboxTools through. Empty, the first `bwrap` on the search path |
+| `SILEXGIS__Analysis__Whitebox__AllowUnsandboxed` | `false` | whether `local` mode may run WhiteboxTools without the sandbox when bubblewrap is not found. `false` makes the analyses unavailable (the API log says why); `true` runs the program directly with the same limits and an emptied environment, and the API log warns at start-up. Windows has no bubblewrap and needs `true` |
+| `SILEXGIS__Analysis__Whitebox__TimeoutSeconds` | `1800` | how long one run may take before it is stopped. **Checked at start:** outside 10 to 21600 seconds stops the application |
+| `SILEXGIS__Analysis__Whitebox__MaxMemoryBytes` | `4294967296` | the address space one run may use (4 GB). Size it against the memory the server is guaranteed, not the total it reports; in the analysis container keep `SILEXGIS_WHITEBOX_MEMORY` above it. Never below 256 MB |
+| `SILEXGIS__Analysis__Whitebox__MaxOutputFileBytes` | `2147483648` | the largest single file one run may write (2 GB). A larger output is removed and the run fails. Never below 1 MB |
+| `SILEXGIS__Analysis__Whitebox__MaxOutputBytes` | `4294967296` | the most the outputs of one run may hold together (4 GB) — in `service` mode also the most one answer may carry. More fails the run rather than being stored. Never below 1 MB |
+| `SILEXGIS__WhiteboxService__MaxConcurrentRuns` | `1` | *read by the analysis container, not the API* (the overlay passes it through): how many runs it makes at once; the rest wait their turn. Raise `SILEXGIS_WHITEBOX_MEMORY` with it |
+| `SILEXGIS__WhiteboxService__MaxInputBytes` | `2147483648` | *read by the analysis container, not the API* (the overlay passes it through): the most the inputs of one run may hold (2 GB). A larger run is refused. Never below 1 MB |
 | `SILEXGIS__TripTracking__PublishRealNames` | `true` | whether a **published** trip names the party for real. On by default, and the one setting here that defaults to showing something: a club publishes a trip so that families and friends can watch a party come out, and a page that will not say which person is still underground does not answer the question it was opened for. Set it to `false` and every published page in this installation goes back to naming nobody — each person appears as their place in the party ("Caver 2") and the page says nothing else about who they are. It applies as each page is read rather than being stored on a share, so it moves links already handed out in both directions: turning it off closes the disclosure on every live link with nothing to re-issue, and turning it on — which is what upgrading from a build before this setting existed does — opens it on links minted when the page named nobody. An installation with follow links in circulation should decide in the same step as the upgrade; see "Upgrading across the release that names the party on published trips" above. Two things it does not decide. An administrator can give one person a name of their own for a trip's page, and that name is what the page shows whichever way this is set — which is how somebody who does not want to appear is kept off a public page without the club turning names off for everybody. And a cave whose coordinates are protected still cannot be published at all, whatever this says. Note that where a club has also allowed its own website to embed the page, that site is told the party the same way |
 | `SILEXGIS__TripTracking__PublishExpectedReturn` | `false` | whether a **published** trip says the hour its party planned to be out by. **Off by decision, not by oversight:** the question "may a published page show the hour a party planned to be out?" was put to this project's owner, who answered no, so this default is deliberate, is not waiting to be flipped, and should not be "corrected" to `true` by a later change on the assumption that somebody forgot it. The setting stays because it is how an installation whose own answer differs — or a later change of mind — gets it without new code. Off unless you turn it on: it tells people without an account something about the party's plan that a published page does not otherwise say, and whether your club wants that said in public is yours to decide. Set it to `true` and the page of a trip that is being followed gains one line under "followed since" — "planned out by 17:00" — for as long as somebody of that party is still underground; once the hour has passed the line says so in the same calm words and nothing more. It is the hour typed into the trip as "expected back", and only that: the alarm hour of the trip's overdue callout, whether that callout has gone off or been stood down, and anything else about it are never published, and switching this on sends nothing and alerts nobody. An hour that is not later than the moment the watch was started is left out, because it belongs to an earlier outing of the same trip record. Finished trips never show it — not in the list of past trips and not in a replay. Like the setting above it is read as each page is drawn, so it applies to links already handed out, in both directions |
 | `SILEXGIS__TripTracking__PublishClubs` | `false` | whether a **published** trip says which caving groups each person named on it belongs to. Off unless you turn it on: whom somebody caves with is a fact about them no published page said before, and whether people without an account read it is yours to decide. Set it to `true` and each person named by their own name carries the names of their caving groups, in alphabetical order, on a trip being followed, on the list of trips being followed and on a finished trip's replay — what a club's journal page needs to count its figures per club without keeping a list of its own. Never beside a caption (that is how somebody is kept off a public page, and their club beside it would point at them), never where `PublishRealNames` is off, and nothing about a person's role in a group. Read as each page is drawn, so a person who joins or leaves a group is shown so on the next read, and it applies to links already handed out, in both directions |

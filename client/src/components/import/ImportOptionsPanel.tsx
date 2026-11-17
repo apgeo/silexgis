@@ -262,11 +262,51 @@ export default function ImportOptionsPanel({ options, onChange, geofileId, isDel
             ),
           },
           {
+            key: 'areas',
+            label: t('vectorImport.optionsAreas'),
+            children: (
+              <Row gutter={[16, 8]}>
+                <Col xs={24}>
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                    {t('vectorImport.areasHint')}
+                  </Typography.Paragraph>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('vectorImport.areas')} style={{ marginBottom: 8 }}>
+                    <Select
+                      value={options.areas ?? 'ignore'}
+                      onChange={(value) => set('areas', value)}
+                      data-testid="import-areas"
+                      options={[
+                        { value: 'ignore', label: t('vectorImport.areasIgnore') },
+                        { value: 'importAsArea', label: t('vectorImport.areasAsArea') },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('vectorImport.areaKind')} style={{ marginBottom: 8 }}>
+                    <Select
+                      allowClear
+                      disabled={options.areas !== 'importAsArea'}
+                      value={options.areaFeatureTypeCode ?? undefined}
+                      onChange={(value?: string) => set('areaFeatureTypeCode', value ?? null)}
+                      data-testid="import-area-kind"
+                      options={(featureTypes.data ?? [])
+                        .filter((type) => type.acceptedGeometryClasses.some((c) => c.includes('olygon')))
+                        .map((type) => ({ value: type.code, label: type.name }))}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            ),
+          },
+          {
             key: 'mapping',
             label: t('vectorImport.optionsMapping'),
             children: (
               <Row gutter={[16, 8]}>
-                {(['nameField', 'descriptionField', 'codeField', 'elevationField'] as const).map((field) => (
+                {(['nameField', 'descriptionField', 'codeField', 'elevationField', 'lithologyField'] as const).map((field) => (
                   <Col xs={24} md={12} key={field}>
                     <Form.Item label={t(`vectorImport.mapping.${field}`)} style={{ marginBottom: 8 }}>
                       {/* A delimited file knows its own columns, so the mapping is a choice

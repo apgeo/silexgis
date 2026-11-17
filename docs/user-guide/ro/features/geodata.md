@@ -43,6 +43,10 @@ peșteri, intrări și fenomene de suprafață, propunând ce este fiecare porni
 denumire ale clubului. Acesta este un flux întreg:
 [Importul unui sezon de puncte GPS](../workflows/import-a-gps-file.md).
 
+Contururile nu sunt propuse după nume: revizuirii i se spune o singură dată în ce tip de zonă
+devine fiecare contur. O hartă geologică de poligoane devine **unități geologice**, iar coloana ei
+de tip de rocă devine litologia lor — vezi [Importul unei hărți geologice](geology.md#importul-unei-hărți-geologice).
+
 ### Administrare
 
 Caută după nume, editează detaliile unui fișier, șterge-l — ceea ce îi șterge și obiectele

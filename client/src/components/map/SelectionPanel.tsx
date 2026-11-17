@@ -48,6 +48,7 @@ import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import type { PanelScope } from '../../stores/panelPrefs.ts';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
+import { typedFieldLabel, typedValueText } from '../geology/lithology.ts';
 
 /**
  * The panel beside the map: what is selected, in the sections this person arranged.
@@ -392,15 +393,19 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     if (!feature || typeof feature.properties !== 'object' || feature.properties === null) {
       return [];
     }
+    const typeCode = featureType?.code;
     const labels = new Map(
-      parsePropertiesSchema(featureType?.propertiesSchema).map((f) => [f.key, f.label]),
+      parsePropertiesSchema(featureType?.propertiesSchema).map((f) => [
+        f.key,
+        typedFieldLabel(t, typeCode, f.key, f.label),
+      ]),
     );
     return Object.entries(feature.properties as Record<string, unknown>).map(([key, value]) => ({
       key,
       label: labels.get(key) ?? key,
-      value: typeof value === 'boolean' ? (value ? '✓' : '✗') : String(value),
+      value: typedValueText(t, typeCode, key, value),
     }));
-  }, [feature, featureType]);
+  }, [feature, featureType, t]);
 
   if (isPending || !envelope || !feature) {
     return (
