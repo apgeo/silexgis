@@ -46,7 +46,7 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
-const { PhotoLibrariesForm } = await import('./MessagingSettingsPage.tsx');
+const { default: PhotoLibrariesForm } = await import('./PhotoLibrariesForm.tsx');
 
 const onSaved = vi.fn();
 
