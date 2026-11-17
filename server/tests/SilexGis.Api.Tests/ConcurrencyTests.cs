@@ -976,6 +976,23 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         handled.ShouldBeFalse("a unique violation is not a collision that sending again cures");
     }
 
+    /// <summary>
+    /// The phone synchronisation routes are answered by applications released outside this
+    /// repository, which retry a server fault but may give up on a 409 — so a collision there stays
+    /// the server fault it was until those applications know the retryable code.
+    /// </summary>
+    [Fact]
+    public async Task A_collision_on_a_phone_sync_route_is_left_to_the_server_fault_it_was()
+    {
+        var deadlock = await ProvokeAsync(DeadlockAsync);
+
+        var (handled, _, _, _) = await HandleAsync(deadlock, "/api/v1/sync/sets");
+        handled.ShouldBeFalse("a phone sync route must not start answering 409 before the phone applications know the code");
+
+        var (elsewhere, _, _, _) = await HandleAsync(deadlock, "/api/v1/caves");
+        elsewhere.ShouldBeTrue("every other route answers the collision as worth retrying");
+    }
+
     private async Task ShouldAnswerRetryableConflictAsync(Exception exception)
     {
         var (handled, status, body, retryAfter) = await HandleAsync(exception);
@@ -990,10 +1007,12 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// Runs the application's own exception handlers, in the order the exception-handling
     /// middleware asks them, against a request context of the running application.
     /// </summary>
-    private async Task<(bool Handled, int Status, string Body, string? RetryAfter)> HandleAsync(Exception exception)
+    private async Task<(bool Handled, int Status, string Body, string? RetryAfter)> HandleAsync(
+        Exception exception, string path = "/api/v1/caves")
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.Path = path;
         await using var body = new MemoryStream();
         context.Response.Body = body;
 

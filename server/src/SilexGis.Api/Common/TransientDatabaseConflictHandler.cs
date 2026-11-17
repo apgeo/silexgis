@@ -41,7 +41,7 @@ public sealed class TransientDatabaseConflictHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        if (!IsTransientConflict(exception))
+        if (!IsTransientConflict(exception) || IsPhoneSync(httpContext.Request.Path))
         {
             return false;
         }
@@ -54,6 +54,16 @@ public sealed class TransientDatabaseConflictHandler : IExceptionHandler
             .ExecuteAsync(httpContext);
         return true;
     }
+
+    /// <summary>
+    /// The phone synchronisation routes keep answering a collision as the server fault they always
+    /// answered. Their callers are phone applications released outside this repository, which retry
+    /// a 5xx but may treat any 409 as final; a new status on those routes would turn a step they
+    /// used to send again into one they give up on. They move to the retryable answer only once the
+    /// phone applications know its code.
+    /// </summary>
+    private static bool IsPhoneSync(PathString path) =>
+        path.StartsWithSegments("/api/v1/sync", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether the database refused the work for colliding with another transaction.</summary>
     public static bool IsTransientConflict(Exception exception)
