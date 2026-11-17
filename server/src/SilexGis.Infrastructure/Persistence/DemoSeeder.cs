@@ -778,7 +778,7 @@ public static class DemoSeeder
         var areaId = await db.Features
             .Where(f => f.Name == "Platoul Demo").Select(f => (Guid?)f.Id).FirstOrDefaultAsync(ct);
 
-        if (!await db.Features.AnyAsync(f => f.Name == "Dolina Demo Mare", ct))
+        if (!await db.Features.AnyAsync(f => f.Name == "Dolina Mare Demo", ct))
         {
             const double centreLongitude = 25.4448;
             const double centreLatitude = 45.5292;
@@ -803,7 +803,7 @@ public static class DemoSeeder
             await writer.CreateGenericAsync(
                 new Feature
                 {
-                    Name = "Dolina Demo Mare",
+                    Name = "Dolina Mare Demo",
                     FeatureTypeId = sinkholeTypeId,
                     Geom = new Polygon(new LinearRing(ring)) { SRID = 4326 },
                     Description = "Demo sinkhole drawn as an outline, over the first demo cave's gallery.",
