@@ -294,6 +294,25 @@ describe('the shared detail panel', () => {
     expect(camera.flyTo).toHaveBeenCalledWith(25.11, 45.21, 16);
   });
 
+  it.each([
+    ['refused for want of the right', new ApiError(403, 'forbidden'), 'You are not allowed to make that change.'],
+    ['cut off by a lost connection', new TypeError('Failed to fetch'), 'The deletion failed. Please try again.'],
+  ])('names a delete %s and keeps the feature selected and drawn', async (_label, failure, words) => {
+    deleteFeature.mockRejectedValueOnce(failure);
+    const heard = vi.fn();
+    const stopListening = onSurfaceFeaturesChanged(heard);
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(heard).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().selection).toEqual({ kind: 'feature', featureId: 'feature-1' });
+    expect(screen.queryByText('Deleted.')).toBeNull();
+    stopListening();
+  });
+
   it('frames a feature geometry in it rather than in a map that may not be showing', () => {
     renderPanel({ kind: 'feature', featureId: 'feature-1' });
 
@@ -467,9 +486,14 @@ describe('editing a feature from a dialog opened before it was read again', () =
     fireEvent.click(await screen.findByTestId('feature-edit-submit'));
 
     await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // A second press refused for another reason draws its own sentence. Messages are drawn in the
+    // order they were asked for, so once that one is on screen anything the stale refusal had asked
+    // for would be too — no wait on the clock is needed to see that it asked for nothing.
+    updateFeature.mockRejectedValue(new ApiError(403, 'forbidden'));
+    fireEvent.click(screen.getByTestId('feature-edit-submit'));
+    expect(await screen.findByText('You are not allowed to make that change.')).toBeTruthy();
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(screen.queryByText(/Someone else changed this since you loaded it/)).toBeNull();
     // Still open, holding what was typed.
     expect(screen.getByTestId('feature-edit-submit')).toBeTruthy();
   });

@@ -56,22 +56,9 @@ const start = vi.fn();
 const remove = vi.fn();
 const cancel = vi.fn();
 
-class FakeApiError extends Error {
-  readonly status: number;
-  readonly code?: string;
-  readonly detail?: string;
-  readonly problem?: Record<string, unknown>;
-
-  constructor(status: number, code?: string, detail?: string, problem?: Record<string, unknown>) {
-    super(code);
-    this.status = status;
-    this.code = code;
-    this.detail = detail;
-    this.problem = problem;
-  }
-}
-
-vi.mock('../../api/client.ts', () => ({ ApiError: FakeApiError }));
+// The page tells refusals apart by the client's own error class, so the tests throw that class and
+// not a look-alike: a copy would keep passing after the real one changed shape.
+const { ApiError } = await vi.importActual<typeof import('../../api/client.ts')>('../../api/client.ts');
 vi.mock('../../api/hooks.ts', () => ({
   useTestDataOverview: () => ({ data: overview, isLoading: false, isError: false }),
   useTestDataCoverage: () => ({ data: [], isLoading: false }),
@@ -115,7 +102,7 @@ describe('TestDataPage', () => {
 
   it('starts the chosen profile as edited, and asks before generating beside existing data', async () => {
     start
-      .mockRejectedValueOnce(new FakeApiError(409, 'testdata.existing_data_confirm_required', undefined, { existing: { caves: 3, trips: 1, documents: 0 } }))
+      .mockRejectedValueOnce(new ApiError(409, 'testdata.existing_data_confirm_required', undefined, { existing: { caves: 3, trips: 1, documents: 0 } }))
       .mockResolvedValueOnce(run({ id: 'r2', status: 'queued' }));
     show();
 

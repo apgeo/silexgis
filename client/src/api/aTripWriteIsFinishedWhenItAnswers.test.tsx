@@ -18,7 +18,9 @@ vi.mock('./client.ts', () => ({
     POST: (...args: unknown[]) => post(...args),
   },
   ApiError: class ApiError extends Error {},
-  lastReadETag: () => '"7"',
+  // Only the trip itself has a version on file, so a lookup under any other path finds none
+  // and the save would go without the header the assertions below look for.
+  lastReadETag: (path: string) => (path === '/api/v1/trip-logs/trip-1' ? '"7"' : undefined),
 }));
 
 const { queryKeys, useImportTripTrack, useMoveTripLog, useTripLog, useUpdateTripLog } = await import('./hooks.ts');

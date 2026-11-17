@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MapObjectSelector from './MapObjectSelector.tsx';
@@ -56,6 +56,9 @@ vi.mock('../selector/ObjectSelector.tsx', () => ({
     return <div data-testid="stand-in" />;
   },
 }));
+
+const NOT_FOR_MAP =
+  'That saved filter does not ask about features, or cannot be run with your access, so it was not applied to the map.';
 
 const hit = (world: string, id: string) =>
   ({ world, id, title: 'x', subtitle: null, symbol: null, placeable: true });
@@ -137,7 +140,11 @@ describe('picking from the map selector', () => {
   it('applies a saved view on the map instead of opening a page', async () => {
     pick('mapView', 'v1');
 
-    await waitFor(() => expect(setSearchParams).toHaveBeenCalled());
+    await waitFor(() => expect(setSearchParams).toHaveBeenCalledTimes(1));
+    const write = setSearchParams.mock.calls[0][0] as (p: URLSearchParams) => URLSearchParams;
+    const next = write(new URLSearchParams('filter=keep'));
+    expect(next.get('view')).toBe('v1');
+    expect(next.get('filter')).toBe('keep');
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -167,20 +174,35 @@ describe('picking from the map selector', () => {
       document: { version: 1, scope: [{ world: 'tripLog', where: null }], sort: 'updated', descending: true },
     });
     pick('savedFilter', 's2');
-    await waitFor(() => expect(fetchSavedFilter).toHaveBeenCalledWith('s2'));
+    // The warning is the signal that the refusal path has run to its end; only after it can the
+    // absence of an address write mean anything.
+    expect(await screen.findByText(NOT_FOR_MAP)).toBeInTheDocument();
+    expect(setSearchParams).not.toHaveBeenCalled();
 
     cleanup();
     fetchSavedFilter.mockResolvedValueOnce({ id: 's3', state: 'unreadable', document: null });
     pick('savedFilter', 's3');
-    await waitFor(() => expect(fetchSavedFilter).toHaveBeenCalledWith('s3'));
-
+    expect(await screen.findByText(NOT_FOR_MAP)).toBeInTheDocument();
+    expect(fetchSavedFilter).toHaveBeenCalledWith('s3');
     expect(setSearchParams).not.toHaveBeenCalled();
+  });
+
+  it('says so when the saved filter cannot be read at all', async () => {
+    fetchSavedFilter.mockRejectedValueOnce(new Error('offline'));
+    pick('savedFilter', 's4');
+
+    expect(await screen.findByText('Could not open this record.')).toBeInTheDocument();
+    expect(setSearchParams).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('does nothing loudly when a later world has no destination here', async () => {
     pick('somethingNew', 'x1');
 
-    await waitFor(() => expect(navigate).not.toHaveBeenCalled());
+    // "Loudly" is the point: a pick that leads nowhere must still say so.
+    expect(await screen.findByText('Nothing to open for that yet.')).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(setSearchParams).not.toHaveBeenCalled();
     expect(fitGeoJsonGeometry).not.toHaveBeenCalled();
   });
 });

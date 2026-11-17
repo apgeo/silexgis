@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { useEffect } from 'react';
@@ -12,26 +12,44 @@ const CONFLICT = 'Someone else changed this since you loaded it. Reload and reap
 
 let held: QueryClient | undefined;
 
-function Probe({ failWith }: { failWith?: unknown }) {
+/**
+ * Fires one failing save on mount and, once that has settled, an optional second one. The second
+ * is how a negative case gets a positive twin inside the same test: the cache's error handler has
+ * certainly run for the first failure before the second starts, so counting the warnings after
+ * the second tells whether the first drew one too.
+ */
+function Probe({ failWith, thenFailWith }: { failWith?: unknown; thenFailWith?: unknown }) {
   const client = useQueryClient();
   held = client;
   const save = useMutation({
     mutationFn: () => Promise.reject(failWith),
   });
+  const later = useMutation({
+    mutationFn: () => Promise.reject(thenFailWith),
+  });
   useEffect(() => {
     if (failWith !== undefined) {
-      save.mutate();
+      save.mutate(undefined, {
+        onSettled: () => {
+          if (thenFailWith !== undefined) later.mutate();
+        },
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fired once per mount
   }, []);
-  return <span>{save.isError ? 'failed' : 'idle'}</span>;
+  return (
+    <span>
+      {save.isError ? 'failed' : 'idle'}
+      {later.isError ? ' then failed' : ''}
+    </span>
+  );
 }
 
-function host(failWith?: unknown) {
+function host(failWith?: unknown, thenFailWith?: unknown) {
   return render(
     <AntApp>
       <QueryProvider>
-        <Probe failWith={failWith} />
+        <Probe failWith={failWith} thenFailWith={thenFailWith} />
       </QueryProvider>
     </AntApp>,
   );
@@ -65,10 +83,12 @@ describe('the query client every screen shares', () => {
     ['a validation refusal', new ApiError(400, 'validation.failed')],
     ['no answer at all', new TypeError('Failed to fetch')],
   ])('says nothing about a conflict for %s', async (_, error) => {
-    host(error);
-    expect(await screen.findByText('failed')).toBeInTheDocument();
-    // Give the cache's error handler the same chance it had in the positive cases.
-    await waitFor(() => expect(screen.queryByText(CONFLICT)).not.toBeInTheDocument());
+    // The failure under test, then a stale save: the stale one must draw exactly one warning, so
+    // a warning wrongly drawn for the first would show as a second copy.
+    host(error, new ApiError(412, undefined));
+    expect(await screen.findByText('failed then failed')).toBeInTheDocument();
+    expect(await screen.findByText(CONFLICT)).toBeInTheDocument();
+    expect(screen.getAllByText(CONFLICT)).toHaveLength(1);
   });
 });
 

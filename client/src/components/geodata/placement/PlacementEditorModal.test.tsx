@@ -358,7 +358,9 @@ describe('the placement editor', () => {
     fireEvent.click(screen.getByText('Two points'));
     expect(screen.getByTestId('fake-sheet')).toBeInTheDocument();
     expect(screen.getByTestId('placement-save')).toBeDisabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(1);
   });
 });
@@ -389,7 +391,9 @@ describe('the placement editor with control points', () => {
     await addTyped(0, 24.001, 45.5015);
     await addTyped(1, 24.003, 45.5015);
     expect(screen.getByTestId('placement-too-few')).toHaveTextContent('Affine needs at least 3 complete points; there are 2.');
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(1);
     // The third point's ground half is chosen on the map.
     fireEvent.click(screen.getByTestId('fake-sheet-pick'));
@@ -416,7 +420,9 @@ describe('the placement editor with control points', () => {
       'Perspective needs at least 4 complete points; there are 3.',
     );
     expect(screen.getByTestId('placement-save')).toBeDisabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(asked);
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Transformation' }));
     fireEvent.click(await screen.findByText('Thin-plate spline — at least 3 points'));

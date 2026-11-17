@@ -126,8 +126,10 @@ describe('reading a position in any format', () => {
     expect(reading.kind).toBe('parsed');
     if (reading.kind !== 'parsed') return;
     expect(reading.candidates.map((c) => c.format)).toEqual([format]);
-    expect(reading.candidates[0].lat).toBeCloseTo(45.53, 1);
-    expect(reading.candidates[0].lon).toBeCloseTo(25.45, 1);
+    // Within about fifty metres of the one place every text above names: a reader that put the
+    // point in the next valley would still be a wrong reader.
+    expect(reading.candidates[0].lat).toBeCloseTo(45.53127, 3);
+    expect(reading.candidates[0].lon).toBeCloseTo(25.44721, 3);
   });
 
   it('round-trips every format at its default settings', () => {

@@ -109,4 +109,16 @@ describe('PointPickerModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /Use this point/ }));
     expect(onPick).toHaveBeenCalledWith([24, 46]);
   });
+
+  it('returns the coordinates typed into its fields, not the ones it opened with', async () => {
+    render(dialog(true));
+    const [longitude, latitude] = await screen.findAllByRole('spinbutton');
+    fireEvent.change(longitude, { target: { value: '10.5' } });
+    fireEvent.change(latitude, { target: { value: '20.25' } });
+    // A field cleared after a typed value keeps the typed one, not the opening one.
+    fireEvent.change(latitude, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /Use this point/ }));
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick).toHaveBeenCalledWith([10.5, 20.25]);
+  });
 });
