@@ -146,7 +146,7 @@ describe('RulesTab before the stored rules are known', () => {
       fireEvent.click(saveButton());
     });
     expect(replace).toHaveBeenCalledTimes(1);
-    const sent = replace.mock.calls[0][0] as { actions: string }[];
+    const sent = (replace.mock.calls[0][0] as { entries: { actions: string }[] }).entries;
     expect(sent).toHaveLength(2);
   });
 });
@@ -267,7 +267,7 @@ describe('RulesTab keeping a rule valid as its domain or scope changes', () => {
     await act(async () => {
       fireEvent.click(saveButton());
     });
-    const sent = replace.mock.calls[0][0] as { actions: string; scopeKind: string }[];
+    const sent = (replace.mock.calls[0][0] as { entries: { actions: string; scopeKind: string }[] }).entries;
     expect(sent[0]).toMatchObject({ scopeKind: 'own', actions: 'read' });
   });
 
@@ -277,7 +277,7 @@ describe('RulesTab keeping a rule valid as its domain or scope changes', () => {
     await act(async () => {
       fireEvent.click(saveButton());
     });
-    const sent = replace.mock.calls[0][0] as { actions: string; domain: string }[];
+    const sent = (replace.mock.calls[0][0] as { entries: { actions: string; domain: string }[] }).entries;
     expect(sent[0]).toMatchObject({ domain: 'tripLogs', actions: 'read' });
   });
 });

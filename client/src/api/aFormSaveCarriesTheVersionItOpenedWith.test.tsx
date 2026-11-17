@@ -52,6 +52,13 @@ const {
   useCave,
   useFeature,
   useDeleteChecklist,
+  useDeleteExpedition,
+  useDocument,
+  useObjectAccess,
+  usePermissionGroupEntries,
+  useReplaceObjectAccess,
+  useReplacePermissionGroupEntries,
+  useUpdateDocument,
   useEditEventSeriesFollowing,
   useEvent,
   useExpedition,
@@ -137,6 +144,7 @@ describe('each form-backed write sends the version it is handed', () => {
     ['a callout', '/api/v1/trip-logs/trip-1', useArrangeTripCallout, { id: 'trip-1' }],
     ['a checklist', '/api/v1/checklists/l-1', useUpdateChecklist, { id: 'l-1', body: {} }],
     ['a checklist deleted', '/api/v1/checklists/l-1', useDeleteChecklist, { id: 'l-1' }],
+    ['a camp deleted', '/api/v1/expeditions/x-1', useDeleteExpedition, { id: 'x-1' }],
   ];
 
   it.each(cases)('%s', async (_name, resource, hook, variables) => {
@@ -280,5 +288,58 @@ describe('a trip read again after a refusal', () => {
     expect(sent.filter((request) => request.method === 'GET')).toHaveLength(2);
     expect((again.trip as unknown as { revision: number }).revision).toBe(2);
     expect(again.version).toBe('"2"');
+  });
+});
+
+/**
+ * A document's details and the two whole rulesets — a permission group's rules, the rules authored
+ * on one object — are saved whole, so each save carries the version of the reading its form was
+ * filled from, even when a newer version has been filed for the address since.
+ */
+describe('a whole save from a form filled from a cached reading', () => {
+  beforeEach(() => {
+    sent.length = 0;
+    version = 1;
+    readTakesMs = 0;
+  });
+
+  it.each([
+    [
+      "a document's details",
+      '/api/v1/documents/d-1',
+      () => useDocument('d-1'),
+      useUpdateDocument,
+      (ifMatch?: string) => ({
+        id: 'd-1', ifMatch, title: 'T', documentTypeId: null, metadata: null,
+        visibility: 'private', cavingGroupId: null, language: null,
+      }),
+    ],
+    [
+      "a permission group's rules",
+      '/api/v1/permission-groups/g-1/entries',
+      () => usePermissionGroupEntries('g-1'),
+      () => useReplacePermissionGroupEntries('g-1'),
+      (ifMatch?: string) => ({ entries: [], ifMatch }),
+    ],
+    [
+      "an object's rules",
+      '/api/v1/objects/tripLog/t-1/access',
+      () => useObjectAccess('tripLog', 't-1', true),
+      () => useReplaceObjectAccess('tripLog', 't-1'),
+      (ifMatch?: string) => ({ entries: [], ifMatch }),
+    ],
+  ] as const)('of %s carries the version it was filled from', async (_name, resource, useRead, useSave, variables) => {
+    const { result } = renderHook(() => ({ read: useRead(), save: useSave() }), { wrapper });
+    await waitFor(() => expect(result.current.read.data).toBeDefined());
+    const filledFrom = versionReadWith(result.current.read.data);
+    expect(filledFrom).toBe('"1"');
+
+    version = 2;
+    await api.GET(resource as never, {} as never);
+    expect(lastReadETag(resource)).toBe('"2"');
+
+    const save = result.current.save as { mutateAsync: (v: unknown) => Promise<unknown> };
+    await act(() => save.mutateAsync(variables(filledFrom)));
+    expect(lastPut()?.headers.get('If-Match')).toBe('"1"');
   });
 });

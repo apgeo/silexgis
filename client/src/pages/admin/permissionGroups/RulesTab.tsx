@@ -4,6 +4,8 @@ import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Alert, Checkbox, Flex, Select, Table, Tag, theme } from 'antd';
 import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../../api/client.ts';
+import { versionReadWith } from '../../../api/readingVersion.ts';
 import {
   parseAccessActions,
   usePermissionGroupEntries,
@@ -58,11 +60,12 @@ interface RulesTabProps {
  * today — not what the unsaved deny would take away — and the warning says exactly that, with a
  * reminder after the save to look again once the deny is live.
  *
- * Saving replaces the whole ruleset and carries no version, so another administrator's save made
- * while these drafts were open would be undone without a word. The rules the drafts were built
- * from are therefore remembered: a read that brings different ones (a background refetch, or the
- * fresh read made just before every save) stops the save until the administrator either loads the
- * stored rules or says to keep their own.
+ * Saving replaces the whole ruleset, so another administrator's save made while these drafts were
+ * open would be undone without a word. The rules the drafts were built from are therefore
+ * remembered: a read that brings different ones (a background refetch, or the fresh read made just
+ * before every save) stops the save until the administrator either loads the stored rules or says
+ * to keep their own. The save also carries the version of the rules the drafts were built from,
+ * so the server refuses it when a save landed between that last read and this one.
  */
 export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, onRequestPreview }: RulesTabProps) {
   const { t } = useTranslation();
@@ -87,12 +90,16 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
 
   // The stored rules the drafts were built from, as text, and whether a later read differed.
   const baselineRef = useRef<string | null>(null);
+  // The version of that reading, which the save is held to: the server refuses a save made from
+  // a ruleset another administrator has saved over since, however the two reads lined up here.
+  const baselineVersionRef = useRef<string | undefined>(undefined);
   const [storedMoved, setStoredMoved] = useState(false);
 
   const isFullAdministrators = group.isProtected && group.slug === 'full-administrators';
 
   const fillFrom = (stored: AccessEntry[]) => {
     baselineRef.current = JSON.stringify(stored);
+    baselineVersionRef.current = versionReadWith(stored);
     setStoredMoved(false);
     setDrafts(stored.map((entry) => ({
       key: nextKey.current++,
@@ -129,6 +136,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
   // The administrator has seen that the stored rules moved and chooses to replace them anyway.
   const keepMine = () => {
     baselineRef.current = JSON.stringify(entries);
+    baselineVersionRef.current = versionReadWith(entries);
     setStoredMoved(false);
   };
 
@@ -208,19 +216,29 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
     }
     const savedWithDeny = hasDeny;
     try {
-      await replaceEntries.mutateAsync(drafts.map((d) => ({
-        effect: d.effect,
-        domain: d.domain,
-        actions: joinActions(d.actions),
-        scopeKind: d.scopeKind,
-        scopeId: d.scopeId,
-        featureKind: d.featureKind,
-        featureTypeId: d.featureTypeId,
-      })));
+      await replaceEntries.mutateAsync({
+        entries: drafts.map((d) => ({
+          effect: d.effect,
+          domain: d.domain,
+          actions: joinActions(d.actions),
+          scopeKind: d.scopeKind,
+          scopeId: d.scopeId,
+          featureKind: d.featureKind,
+          featureTypeId: d.featureTypeId,
+        })),
+        ifMatch: baselineVersionRef.current,
+      });
       // The save invalidates the stored rules; the read that follows refills the drafts.
       markDirty(false);
       message.success(t(savedWithDeny ? 'permissionGroups.savedWithDeny' : 'common.saved'), savedWithDeny ? 8 : undefined);
     } catch (error) {
+      // Saved over since the drafts were built: the application's conflict warning says so, and
+      // the read that follows brings the stored rules, which holds the save until the
+      // administrator loads them or keeps their own.
+      if (isConcurrencyConflict(error)) {
+        void refetch();
+        return;
+      }
       message.error(
         accessRuleProblem(error, t),
       );

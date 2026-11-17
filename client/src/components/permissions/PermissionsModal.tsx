@@ -4,7 +4,8 @@ import { DeleteOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-desig
 import { App, Alert, Checkbox, Collapse, Flex, Modal, Select, Table, Tag, theme } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
   useEffectiveAccess,
   useMember,
@@ -154,13 +155,16 @@ export default function PermissionsModal({
   // Only the feature world contains other objects, so only it offers subtree reach.
   const scopedToFeature = entityType === 'feature';
 
-  // Saving replaces every direct rule and carries no version, so a save built on rules that
-  // another reader has changed since would undo that change without a word. The rules the drafts
-  // were built from are remembered; a later read that differs — a background refetch, or the read
-  // made just before every save — holds the save until the reader loads the stored rules or says
-  // to keep their own. A read that arrives while nothing has been edited simply refills the table.
+  // Saving replaces every direct rule, so a save built on rules that another reader has changed
+  // since would undo that change without a word. The rules the drafts were built from are
+  // remembered; a later read that differs — a background refetch, or the read made just before
+  // every save — holds the save until the reader loads the stored rules or says to keep their own.
+  // A read that arrives while nothing has been edited simply refills the table. The save carries
+  // the version of the rules the drafts were built from, so the server refuses it when a save
+  // landed between that last read and this one.
   const editedRef = useRef(false);
   const baselineRef = useRef<string | null>(null);
+  const baselineVersionRef = useRef<string | undefined>(undefined);
   const [storedMoved, setStoredMoved] = useState(false);
   const edit = (next: DraftRule[]) => {
     editedRef.current = true;
@@ -169,6 +173,7 @@ export default function PermissionsModal({
 
   const fillFrom = (stored: ObjectAccessEntry[]) => {
     baselineRef.current = JSON.stringify(stored);
+    baselineVersionRef.current = versionReadWith(stored);
     setStoredMoved(false);
     setEntries(stored.map((entry: ObjectAccessEntry) => ({
         subjectKind: entry.subjectKind,
@@ -208,6 +213,7 @@ export default function PermissionsModal({
 
   const keepMine = () => {
     baselineRef.current = JSON.stringify(rules);
+    baselineVersionRef.current = versionReadWith(rules);
     setStoredMoved(false);
   };
 
@@ -286,7 +292,7 @@ export default function PermissionsModal({
       return;
     }
     try {
-      await replaceRules.mutateAsync(entries
+      await replaceRules.mutateAsync({ ifMatch: baselineVersionRef.current, entries: entries
         // A rule a camp wrote is not this object's to replace: the server keeps it whatever
         // this save says, so sending it back would only invite it to be sent as something else.
         .filter((e) => e.grantedViaExpeditionId === null)
@@ -303,10 +309,17 @@ export default function PermissionsModal({
               : e.actions,
           ),
           scopeKind: e.scopeKind,
-        })));
+        })) });
       message.success(t('common.saved'));
       onClose();
     } catch (error) {
+      // Saved over since the drafts were built: the application's conflict warning says so, and
+      // the read that follows brings the stored rules, which holds the save until the reader
+      // loads them or keeps their own.
+      if (isConcurrencyConflict(error)) {
+        void refetch();
+        return;
+      }
       message.error(accessRuleProblem(error, t));
     }
   };

@@ -2,7 +2,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import type { components } from '../schema';
-import { retryUnlessRefused, unwrap, unwrapVoid } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
+import { retryUnlessRefused, unwrap, unwrapVersioned, unwrapVoid } from './shared.ts';
 import type { EntityType } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -134,10 +135,12 @@ export type ObjectAccessEntryWrite = components['schemas']['ObjectAccessEntryWri
 export function useObjectAccess(entityType: EntityType, entityId: string | undefined, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.objectAccess(entityType, entityId ?? ''),
+    // Read with the version of the rules a save replaces, which the save is held to.
     queryFn: () =>
-      unwrap(api.GET('/api/v1/objects/{entityType}/{id}/access', {
+      unwrapVersioned(api.GET('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId! } },
       })),
+    structuralSharing: sharesKeepingVersion,
     enabled: enabled && !!entityId,
     retry: false,
   });
@@ -146,10 +149,14 @@ export function useObjectAccess(entityType: EntityType, entityId: string | undef
 export function useReplaceObjectAccess(entityType: EntityType, entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (entries: ObjectAccessEntryWrite[]) =>
+    // `ifMatch` names the version of the rules the drafts were built from: the save replaces
+    // every rule authored here, so one built on rules somebody has changed since is refused
+    // rather than undoing their change. Left out, the newest version read is sent.
+    mutationFn: ({ entries, ifMatch }: { entries: ObjectAccessEntryWrite[]; ifMatch?: string }) =>
       unwrap(api.PUT('/api/v1/objects/{entityType}/{id}/access', {
         params: { path: { entityType, id: entityId } },
         body: { entries },
+        headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
       })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['object-access'] });
@@ -243,8 +250,10 @@ export function useDeletePermissionGroup() {
 export function usePermissionGroupEntries(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.permissionGroupEntries(id ?? ''),
+    // Read with the version of the whole ruleset, which a save of it is held to.
     queryFn: () =>
-      unwrap(api.GET('/api/v1/permission-groups/{id}/entries', { params: { path: { id: id! } } })),
+      unwrapVersioned(api.GET('/api/v1/permission-groups/{id}/entries', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id,
     retry: false,
   });
@@ -253,10 +262,14 @@ export function usePermissionGroupEntries(id: string | undefined) {
 export function useReplacePermissionGroupEntries(id: string) {
   const invalidate = useInvalidatePermissionModel();
   return useMutation({
-    mutationFn: (entries: AccessEntryWrite[]) =>
+    // `ifMatch` names the version of the ruleset the drafts were built from: the save replaces
+    // the whole set, so one built on rules another administrator has saved since is refused
+    // rather than undoing their save. Left out, the newest version read is sent.
+    mutationFn: ({ entries, ifMatch }: { entries: AccessEntryWrite[]; ifMatch?: string }) =>
       unwrap(api.PUT('/api/v1/permission-groups/{id}/entries', {
         params: { path: { id } },
         body: { entries },
+        headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
       })),
     onSuccess: () => invalidate(),
   });
