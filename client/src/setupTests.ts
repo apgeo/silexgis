@@ -2,6 +2,12 @@
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, vi } from 'vitest';
+import { installConsoleErrorReport, noteConsoleError } from './testConsoleErrors.ts';
+
+// Every other console.error a test provokes is recorded and summed up at the end of the run (see
+// `testConsoleErrors.ts`). Registered first so that its "after" hooks run last and also hear what
+// the unmount below provokes.
+installConsoleErrorReport();
 
 // Testing Library registers its own automatic unmount only when the runner exposes its hooks
 // as globals, and this project keeps them as explicit imports. Without that unmount, every
@@ -52,11 +58,17 @@ const unlabelledIconButtons: string[] = [];
 const reportError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const line = args.map(String).join(' ');
-  if (/\[antd: [^\]]+\].*deprecated/.test(line)) {
+  const deprecated = /\[antd: [^\]]+\].*deprecated/.test(line);
+  if (deprecated) {
     antdDeprecations.push(line);
   }
-  if (line.startsWith(ICON_ONLY_UNLABELLED)) {
+  const unlabelled = line.startsWith(ICON_ONLY_UNLABELLED);
+  if (unlabelled) {
     unlabelledIconButtons.push(line);
+  }
+  // Those two already fail the test; everything else goes to the report-only record.
+  if (!deprecated && !unlabelled) {
+    noteConsoleError(args);
   }
   reportError(...args);
 };
