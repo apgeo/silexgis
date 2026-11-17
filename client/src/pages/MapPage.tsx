@@ -97,6 +97,7 @@ import { useFilterLayers } from '../components/map/useFilterLayers.ts';
 import { useWorkspaceDocks } from '../components/map/workspace/useWorkspaceDocks.tsx';
 import { useWorkspaceRow } from '../components/map/workspace/useWorkspaceRow.tsx';
 import { useMapUrlRequests } from '../components/map/useMapUrlRequests.ts';
+import { claimHomeView } from '../components/map/homeViewClaim.ts';
 import { useMapShortcuts } from '../components/map/useMapShortcuts.ts';
 import './MapPage.css';
 
@@ -429,10 +430,9 @@ export default function MapPage() {
   // of the views whichever path runs, so that a requested view or a shared position can never
   // be overwritten by the home view later in the session.
   useEffect(() => {
-    if (!savedViews || sessionStorage.getItem('silexgis.homeApplied')) {
+    if (!savedViews || !claimHomeView()) {
       return;
     }
-    sessionStorage.setItem('silexgis.homeApplied', '1');
     // An explicit view request and a shareable position in the URL both outrank the home view.
     // A 3D position counts: arriving on a shared 3D link and then opening the map must not have
     // the home view quietly take the position the link was sent for.
