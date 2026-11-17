@@ -268,15 +268,18 @@ public static class DemoSeeder
         var report = await (from version in db.DocumentVersions.AsNoTracking()
                             join reported in db.Documents.AsNoTracking() on version.DocumentId equals reported.Id
                             join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
-                            where version.IsCurrent && reported.Title.EndsWith("1987 survey report")
+                            where version.IsCurrent && reported.Title == "Peștera Demo Mare — 1987 survey report"
                             select new { reported.Id, FileId = file.Id }).FirstOrDefaultAsync(ct);
         if (report is null)
         {
             return;
         }
 
-        var cabinetId = await db.Cabinets.AsNoTracking()
-            .Where(c => c.Name == "Survey reports")
+        // The demo's own shelf — under the demo archive — not any cabinet that happens to share its name.
+        var cabinetId = await (from reports in db.Cabinets.AsNoTracking()
+                               join archive in db.Cabinets.AsNoTracking() on reports.ParentId equals (Guid?)archive.Id
+                               where reports.Name == "Survey reports" && archive.Name == "Demo archive" && archive.ParentId == null
+                               select reports)
             .Select(c => (Guid?)c.Id)
             .FirstOrDefaultAsync(ct);
 
@@ -857,7 +860,11 @@ public static class DemoSeeder
 
         await db.SaveChangesAsync(ct);
 
+        // The demo's own caves only, found by the code the dataset gives them. Seeded alongside a
+        // real register, "the first four caves by code" would be real ones — a code like 1000/1
+        // sorts before DEMO- — and the demo's trips would be tied to them.
         var caveIds = await db.Caves
+            .Where(c => c.IdentificationCode != null && c.IdentificationCode.StartsWith("DEMO-"))
             .OrderBy(c => c.IdentificationCode)
             .Select(c => c.Id)
             .Take(4)

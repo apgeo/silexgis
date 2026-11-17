@@ -53,6 +53,8 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
         TestDataProfile profile, Guid requestedBy, bool confirmAlongsideExistingData, bool queueJob, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TestDataRunLockSql.TakeAsync(db, ct);
         var existing = await ExistingDataAsync(ct);
         if (await db.TestDataRuns.AnyAsync(r => Active.Contains(r.Status), ct))
         {
@@ -82,6 +84,7 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return new TestDataStartResult(TestDataStartOutcome.Queued, run, existing);
     }
 
@@ -109,6 +112,9 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
     /// <summary>Queues the removal of a finished run; false when the run is still going or already gone.</summary>
     public async Task<bool> RequestRemovalAsync(Guid runId, Guid requestedBy, bool queueJob, CancellationToken ct)
     {
+        // Removing counts as the run in progress, so it is decided under the same lock as a start.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TestDataRunLockSql.TakeAsync(db, ct);
         var run = await db.TestDataRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run is null || run.Status is not (TestDataRunStatus.Succeeded or TestDataRunStatus.Failed or TestDataRunStatus.Cancelled))
         {
@@ -122,6 +128,7 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
         }
 
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return true;
     }
 

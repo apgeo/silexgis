@@ -34,6 +34,13 @@ public class Checklist : IProtectedEntity, ITimestamped, IAuditable
 
     public Visibility Visibility { get; set; } = Visibility.Private;
 
+    /// <summary>
+    /// Whether this is the list the product ships. What the seeder looks for, so the shipped list
+    /// is recognised after an administrator renames it, and a list of somebody's own that happens
+    /// to carry the shipped title does not stand in for it.
+    /// </summary>
+    public bool IsSeeded { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

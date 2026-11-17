@@ -70,6 +70,10 @@ The first start creates the database schema, seeds taxonomies, default map layer
 built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
+The built-in groups are given to an installation once. Administrators, Caving Group Managers,
+Editors and Reviewers can be deleted, and a deleted one stays deleted through restarts and
+updates; Full Administrators and All Users cannot be deleted and are always present.
+
 To load a small demo dataset (six caves with their entrances, a containing karst area and two
 surface features, trips with the people on them, four camps with a roster and the trips they
 gathered, two leads on the camp's board, club dates including a series and one with answers, two
@@ -81,6 +85,19 @@ something to show; re-running it puts back any row that was lost and leaves the 
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo
+```
+
+**It refuses a database that already holds real data.** It writes nothing — says how much it
+found, in counts only, and exits with code 2 so a script that runs it sees the refusal — when the database holds an account other than the bootstrap administrator
+and the built-in development accounts (`admin@test.local`, `editor@test.local`,
+`viewer@test.local`, `member@dev.local`), or a cave, trip or document that is not one of its own
+(its caves are coded `DEMO-…`, its trips are titled `Demo: …`, its documents carry "demo" in their
+titles). An installation that really is meant to have the demo beside real data says so
+explicitly; the demo set then still ties its trips, links and texts only to the caves, cabinets
+and documents it made itself:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll seed-demo --alongside-real-data
 ```
 
 **The demo set publishes its followed trip, and the address is not a secret.** So that a fresh
@@ -163,7 +180,14 @@ without handing out accounts — can announce working demo credentials on its ow
 ```bash
 SILEXGIS__TestLogins__Enabled=true
 # SILEXGIS__TestLogins__Password=test-login-pass-1   # the default; all three accounts share it
+# SILEXGIS__TestLogins__AllowOnRealData=true        # only if the database holds other accounts — see below
 ```
+
+The switch refuses a database that holds real data: with it on, the installation does not start
+when its database holds an account other than the bootstrap administrator and the built-in
+development accounts, or a cave, trip or document owned by such an account, and the log says how
+many of each it found. A test installation whose visitors may register accounts of their own
+needs `SILEXGIS__TestLogins__AllowOnRealData=true` to keep starting once one does.
 
 At the next start this seeds three accounts and the sign-in page lists them, each with a
 fill-in button and a note on what it may do:
@@ -2528,7 +2552,9 @@ sudo node deploy/native/update.mjs --no-pull  # build the checkout as it is, wit
 
 The same procedure as the Docker path's update script: one update at a time; fetch and
 fast-forward the checkout, submodules included; **back up first** (to
-`/var/backups/silexgis/<timestamp>/`, keeping the newest `SILEXGIS_BACKUP_KEEP`, default 10); build
+`/var/backups/silexgis/<timestamp>/`, keeping as many as the nightly backup timer keeps — the
+installer's `--backup-keep`, recorded at install time, default 14; `SILEXGIS_BACKUP_KEEP` overrides
+it for one run); build
 the new version beside the running one, so a build that fails changes nothing; bring the nginx site
 and the unit up to date; switch, start, wait for `/health/ready` (up to
 `SILEXGIS_HEALTH_TIMEOUT` seconds, default 300) and run the check. **If the new version is not
@@ -2747,6 +2773,7 @@ the reasoning beside each one.
 | `SILEXGIS__MapSymbols__ApproximateEntranceSymbol` | `shape:cave:d46b08` | the marker of a protected entrance shown only approximately (snapped to the protection grid for a reader without exact view). Same values and the same rules as the line above; choose something a reader can tell from it — a drawn shape is also given a dashed outline here |
 | `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
 | `SILEXGIS__TestLogins__Password` | `test-login-pass-1` | the one password all three demo accounts share. A change is applied to existing accounts at the next start, so the page never advertises a credential that does not work |
+| `SILEXGIS__TestLogins__AllowOnRealData` | `false` | with the test logins switched on, the installation refuses to start when its database holds an account other than the bootstrap administrator and the built-in development accounts, or a cave, trip or document owned by such an account — so an environment file copied from a test host cannot publish an administrator password on a real one. `true` says that is known and wanted |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |

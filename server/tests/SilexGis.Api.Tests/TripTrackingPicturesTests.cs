@@ -658,6 +658,77 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
         }
     }
 
+    /// <summary>
+    /// Taking the last photograph off a moment takes the link only when nothing else is on it but
+    /// what the attach wrote around the pictures. A member a curator added by hand is theirs, and
+    /// stays — with the moment it is about.
+    /// </summary>
+    [Fact]
+    public async Task Taking_the_last_photograph_off_keeps_a_member_a_curator_added_to_the_moment()
+    {
+        var context = await TrackedTripAsync("Curated");
+        var photo = await PictureAsync("curated");
+        var attached = await AttachAsync(owner, context.Trip, new[]
+        {
+            new { documentId = photo.DocumentId, at = At(11, 40), caverId = (Guid?)context.Cavers[0], caption = (string?)null },
+        });
+        var memberId = attached.GetProperty("attached")[0].GetProperty("memberId").GetGuid();
+
+        Guid linkId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            linkId = (await db.ResLinkMembers.AsNoTracking().SingleAsync(m => m.Id == memberId)).ResLinkId;
+            db.ResLinkMembers.Add(new ResLinkMember { ResLinkId = linkId, FeatureId = context.Cave, SortOrder = 5, Note = "added by a curator" });
+            await db.SaveChangesAsync();
+        }
+
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{context.Trip}/tracking/pictures/{memberId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ResLinks.AsNoTracking().AnyAsync(l => l.Id == linkId)).ShouldBeTrue("the curated link was deleted");
+            var left = await db.ResLinkMembers.AsNoTracking().Where(m => m.ResLinkId == linkId).ToListAsync();
+            left.ShouldContain(m => m.FeatureId == context.Cave);
+            left.ShouldNotContain(m => m.Id == memberId);
+        }
+    }
+
+    /// <summary>
+    /// Off and back on in one unit of work, a photograph is on the moment afterwards: the attach
+    /// does not count a membership the same unit is deleting, nor extend a link it is deleting.
+    /// </summary>
+    [Fact]
+    public async Task A_photograph_taken_off_and_put_back_in_one_unit_of_work_is_on_the_moment()
+    {
+        var context = await TrackedTripAsync("Again");
+        var photo = await PictureAsync("again");
+        var at = At(12, 15);
+        var attached = await AttachAsync(owner, context.Trip, new[]
+        {
+            new { documentId = photo.DocumentId, at, caverId = (Guid?)null, caption = (string?)null },
+        });
+        var memberId = attached.GetProperty("attached")[0].GetProperty("memberId").GetGuid();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var pictures = new TripMomentPictures(db);
+            (await pictures.DetachAsync(context.Trip, memberId, CancellationToken.None)).ShouldBeTrue();
+            var again = await pictures.AttachAsync(context.Trip, photo.DocumentId, at, null, null, ownerUserId, CancellationToken.None);
+            again.Outcome.ShouldBe(TripMomentPictureOutcome.Attached);
+            await db.SaveChangesAsync();
+        }
+
+        var links = await MomentLinksAsync(owner, context.Trip);
+        links.SelectMany(MembersOf)
+            .Count(m => m.GetProperty("targetType").GetString() == "document"
+                && m.GetProperty("targetId").GetGuid() == photo.DocumentId)
+            .ShouldBe(1);
+    }
+
     // ---- plumbing --------------------------------------------------------------------------
 
     private sealed record TrackedTrip(Guid Trip, List<Guid> Cavers, Guid Cave, Guid Model);

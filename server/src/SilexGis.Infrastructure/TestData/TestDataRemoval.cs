@@ -13,7 +13,10 @@ namespace SilexGis.Infrastructure.TestData;
 /// <summary>
 /// Takes a run's rows out of the database for good, the reverse of the order they were written,
 /// by the registry alone. A generated row that somebody has since hung data of their own on is
-/// kept, with a note, rather than taken away with that data.
+/// kept, with a note, rather than taken away with that data: a place with features of somebody's
+/// own beneath it, and a cave or place people have used — a file attached to it, a survey
+/// uploaded for it, a trip or a document linked to it, a map drawn of it. Purging a feature
+/// deletes all of those with it by cascade, so "in use" has to be decided before the purge.
 /// </summary>
 public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider clock, ILogger<TestDataRemoval> logger)
 {
@@ -41,6 +44,39 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
                 .ToListAsync(ct);
         }
 
+        try
+        {
+            await RemoveRowsAsync(runId, rows, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Left as Removing, the run would count as the one run in progress for good — refusing
+            // every new run — and could not be asked to remove again either. Closed as failed it
+            // can be removed again, which picks up from what is still listed.
+            logger.LogError(e, "Removing test-data run {RunId} failed", runId);
+            await FailAsync(runId, e);
+            throw;
+        }
+    }
+
+    /// <summary>The prefix of the error a failed removal leaves on its run, cleared by the removal that then succeeds.</summary>
+    public const string RemovalFailedPrefix = "Removal failed: ";
+
+    private async Task FailAsync(Guid runId, Exception e)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var message = e.GetBaseException().Message;
+        await db.TestDataRuns.Where(r => r.Id == runId && r.Status == TestDataRunStatus.Removing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.Status, TestDataRunStatus.Failed)
+                .SetProperty(r => r.Phase, (string?)null)
+                .SetProperty(r => r.Error, RemovalFailedPrefix + (message.Length <= 480 ? message : message[..480])),
+                CancellationToken.None);
+    }
+
+    private async Task RemoveRowsAsync(Guid runId, List<TestDataRow> rows, CancellationToken ct)
+    {
         var unknown = rows.Select(r => r.TableName).Distinct().Where(t => !RemovableTables.Contains(t)).ToList();
         if (unknown.Count > 0)
         {
@@ -49,9 +85,12 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
 
         var notes = new List<string>();
         var kept = 0;
+        var keptInUse = 0;
         var removed = 0;
+        var keptIds = new HashSet<Guid>();
         var features = rows.Where(r => r.TableName == "features").Select(r => Guid.Parse(r.RowId)).ToList();
         var generatedAnywhere = await GeneratedFeatureIdsAsync(ct);
+        var held = await HeldAsync(features, ct);
 
         foreach (var chunk in features.Chunk(Chunk))
         {
@@ -61,6 +100,8 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // Asked again inside the transaction, so a use made while the removal ran still counts.
+            var inUse = await InUseAsync(db, chunk, ct);
             foreach (var id in chunk)
             {
                 if (!await db.Features.IgnoreQueryFilters().AnyAsync(f => f.Id == id, ct))
@@ -68,14 +109,23 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
                     continue;
                 }
 
+                if (inUse.Contains(id) || held.Contains(id))
+                {
+                    keptIds.Add(id);
+                    keptInUse++;
+                    continue;
+                }
+
                 // Leaves were written last and go first, so by the time an area's turn comes its
-                // generated caves are gone. Anything still beneath it is somebody's own.
+                // generated caves are gone. Anything still beneath it is somebody's own, or a
+                // generated row kept because it is in use — which the purge would take with it.
                 var foreignBelow = await db.FeatureAncestors
                     .Where(a => a.AncestorId == id && a.FeatureId != id)
                     .Select(a => a.FeatureId)
                     .ToListAsync(ct);
-                if (foreignBelow.Any(f => !generatedAnywhere.Contains(f)))
+                if (foreignBelow.Any(f => !generatedAnywhere.Contains(f) || keptIds.Contains(f)))
                 {
+                    keptIds.Add(id);
                     kept++;
                     continue;
                 }
@@ -88,9 +138,14 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             await transaction.CommitAsync(ct);
         }
 
+        if (keptInUse > 0)
+        {
+            notes.Add(TestDataNotes.WithCount(TestDataNotes.KeptInUse, keptInUse));
+        }
+
         if (kept > 0)
         {
-            notes.Add($"{kept} generated area(s) or cave(s) were kept because data not created by a test-data run is attached beneath them.");
+            notes.Add(TestDataNotes.WithCount(TestDataNotes.KeptBeneath, kept));
         }
 
         await using (var scope = scopes.CreateAsyncScope())
@@ -110,13 +165,85 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             run.Status = TestDataRunStatus.Removed;
             run.RemovedAt = clock.GetUtcNow();
             run.Phase = null;
+            if (run.Error?.StartsWith(RemovalFailedPrefix, StringComparison.Ordinal) == true)
+            {
+                run.Error = null;
+            }
+
             var allNotes = JsonSerializer.Deserialize<List<string>>(run.Notes) ?? [];
             allNotes.AddRange(notes);
             run.Notes = JsonSerializer.Serialize(allNotes);
             await db.SaveChangesAsync(ct);
         }
 
-        logger.LogInformation("Test-data run {RunId} removed: {Removed} features removed, {Kept} kept", runId, removed, kept);
+        logger.LogInformation(
+            "Test-data run {RunId} removed: {Removed} features removed, {KeptInUse} kept because in use, {Kept} kept for data beneath them",
+            runId, removed, keptInUse, kept);
+    }
+
+    /// <summary>
+    /// The run's features that are in use, and the generated features beneath them — a cave kept
+    /// because a trip names it keeps its entrances too. Asked once before anything goes, because
+    /// the entrances were written after their cave and so come up for removal before it does.
+    /// </summary>
+    private async Task<HashSet<Guid>> HeldAsync(List<Guid> features, CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var inUse = await InUseAsync(db, [.. features], ct);
+        if (inUse.Count == 0)
+        {
+            return inUse;
+        }
+
+        var used = inUse.ToList();
+        var beneath = await db.FeatureAncestors
+            .Where(a => used.Contains(a.AncestorId))
+            .Select(a => a.FeatureId)
+            .ToListAsync(ct);
+        inUse.UnionWith(beneath);
+        return inUse;
+    }
+
+    /// <summary>
+    /// Which of <paramref name="ids"/> people have used. The generator writes features and tags
+    /// only, so every row found here was made by somebody; a later part of the generator that
+    /// writes attachments, surveys or links of its own has to leave its own rows out of this
+    /// question, or nothing it touched would ever be removed.
+    /// </summary>
+    private static async Task<HashSet<Guid>> InUseAsync(SilexGisDbContext db, Guid[] ids, CancellationToken ct)
+    {
+        var used = new HashSet<Guid>();
+        async Task Add(IQueryable<Guid?> references) =>
+            used.UnionWith(await references
+                .Where(r => r != null && ids.Contains(r.Value))
+                .Select(r => r!.Value)
+                .Distinct()
+                .ToListAsync(ct));
+
+        await Add(db.Attachments.IgnoreQueryFilters().Select(a => a.FeatureId));
+        await Add(db.ResLinkMembers.IgnoreQueryFilters().Select(m => m.FeatureId));
+        await Add(db.SurveyModels.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.CaveSurveys.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.SurveyUploads.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.SurveySources.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.SurveyCompilations.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.TripTrackings.IgnoreQueryFilters().Select(t => t.CaveFeatureId));
+        await Add(db.TripRecordings.IgnoreQueryFilters().Select(t => (Guid?)t.CaveFeatureId));
+        await Add(db.RasterMaps.IgnoreQueryFilters().Select(m => (Guid?)m.CaveFeatureId));
+        await Add(db.RasterMaps.IgnoreQueryFilters().Select(m => m.CaveAreaFeatureId));
+        await Add(db.GeoreferencedMaps.IgnoreQueryFilters().Select(m => m.CaveFeatureId));
+        await Add(db.Albums.IgnoreQueryFilters().Select(a => a.SubjectFeatureId));
+        await Add(db.FeatureLinks.IgnoreQueryFilters().Select(l => (Guid?)l.FromId));
+        await Add(db.FeatureLinks.IgnoreQueryFilters().Select(l => (Guid?)l.ToId));
+        await Add(db.FeatureSetMembers.IgnoreQueryFilters().Select(m => (Guid?)m.FeatureId));
+        await Add(db.FeatureShares.IgnoreQueryFilters().Select(s => (Guid?)s.FeatureId));
+        await Add(db.SyncSetMembers.IgnoreQueryFilters().Select(m => (Guid?)m.RootFeatureId));
+        await Add(db.CaveQrPublications.IgnoreQueryFilters().Select(p => (Guid?)p.FeatureId));
+        await Add(db.CaveDepthPlaces.IgnoreQueryFilters().Select(p => (Guid?)p.CaveFeatureId));
+        await Add(db.AccessEntries.IgnoreQueryFilters().Select(e => e.ScopeFeatureId));
+        await Add(db.FeatureExternalIds.IgnoreQueryFilters().Select(x => (Guid?)x.FeatureId));
+        return used;
     }
 
     /// <summary>Every feature any run lists, so one run's area is not held back by another run's cave.</summary>

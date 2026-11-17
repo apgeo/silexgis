@@ -869,26 +869,33 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         return;
     }
 
-    // `dotnet run -- seed-demo`: load the demo dataset and exit.
+    // `dotnet run -- seed-demo [--alongside-real-data]`: load the demo dataset and exit. It refuses
+    // on a database holding accounts or content it did not create unless the switch is given.
     if (args.Contains("seed-demo"))
     {
         using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
-        var admins = await userManager.GetUsersInRoleAsync(GlobalRoles.Admin);
-        if (admins.Count == 0)
+        var seeded = await DemoSeedCommand.RunAsync(scope.ServiceProvider, args);
+        switch (seeded.Outcome)
         {
-            Log.Error("seed-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
-            return;
+            case DemoSeedOutcome.NoAdministrator:
+                Log.Error("seed-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
+                Environment.ExitCode = 1;
+                return;
+            case DemoSeedOutcome.RefusedRealData:
+                // A code of its own, so a script that runs the command can tell "refused because of
+                // real data" from a failure; never zero, which every caller reads as "loaded".
+                Environment.ExitCode = DemoSeedCommand.RefusedExitCode;
+                Log.Error(
+                    "seed-demo refused: this database holds {Foreign} that the demonstration dataset did not "
+                    + "create, and the dataset would attach its trips and texts to them. Pass {Switch} if this "
+                    + "installation really is meant to have the demo alongside real data",
+                    seeded.Foreign!.Describe(),
+                    DemoSeedCommand.AlongsideRealDataSwitch);
+                return;
+            default:
+                Log.Information("Demo data seeded (owner: {Email})", seeded.OwnerEmail);
+                return;
         }
-
-        await DemoSeeder.SeedAsync(
-            db,
-            admins[0].Id,
-            scope.ServiceProvider.GetRequiredService<DocumentWriteService>(),
-            scope.ServiceProvider.GetRequiredService<IFileStore>());
-        Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
-        return;
     }
 
     // `dotnet run -- generate-test-data [--profile small|default|large|<file.json>] [--seed <n>]

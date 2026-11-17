@@ -1,19 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Settings;
 
 namespace SilexGis.Infrastructure.Persistence;
 
 /// <summary>
-/// Startup seeding of the well-known permission groups. Idempotent by slug and
-/// deliberately create-only: a group that exists is never touched again, because its
-/// entries are editable content an operator may have tightened — reseeding must not
-/// undo policy. When the groups are created for the first time, existing Identity role
-/// holders are mapped onto them (Admin → Full Administrators; Manager → Editors +
-/// Caving Group Managers; Editor → Editors; Viewer → All Users only), which is how a
-/// pre-redesign database keeps its people's capabilities.
+/// Startup seeding of the well-known permission groups. Deliberately create-only: a group
+/// that exists is never touched again, because its entries are editable content an operator
+/// may have tightened — reseeding must not undo policy. When the groups are created for the
+/// first time, existing Identity role holders are mapped onto them (Admin → Full
+/// Administrators; Manager → Editors + Caving Group Managers; Editor → Editors; Viewer → All
+/// Users only), which is how a pre-redesign database keeps its people's capabilities.
+///
+/// Each group is seeded once per installation, not once per start. Which shipped groups the
+/// installation has already been given is recorded in a settings row, and a group named there
+/// is not created again when it is missing: an operator who deletes Editors to take editing away
+/// from everybody has made a decision, and a restart or an update must not quietly reverse it
+/// and re-enrol every legacy editor. The two protected groups are the exception — they cannot be
+/// deleted through the application, the bootstrap administrator's grant hangs off one of them,
+/// and so they are put back whenever they are missing. A group shipped by a later release is not
+/// in the record yet and is created on the first start that knows it.
 ///
 /// One consequence is worth stating because it is easy to get wrong: adding a resource
 /// domain to the lists below changes what a group is created with, and nothing else. On a
@@ -45,11 +55,13 @@ public static class PermissionGroupSeeder
     public static async Task SeedAsync(SilexGisDbContext db, CancellationToken ct = default)
     {
         var created = new List<string>();
+        var record = await db.AppSettings.FirstOrDefaultAsync(s => s.Key == AppSettingSections.SeededPermissionGroups, ct);
+        var seeded = ReadRecord(record);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.FullAdministratorsSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.FullAdministratorsSlug,
             SeededPermissionGroups.FullAdministratorsName, isProtected: true, entries: _ => [], ct);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.AllUsersSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.AllUsersSlug,
             SeededPermissionGroups.AllUsersName, isProtected: true, entries: id =>
             [
                 // The baseline authenticated reads every account holds — where today's
@@ -80,7 +92,7 @@ public static class PermissionGroupSeeder
                 RulesetEntry(id, AccessDomain.Events, AccessAction.Create),
             ], ct);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.AdministratorsSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.AdministratorsSlug,
             SeededPermissionGroups.AdministratorsName, isProtected: false, entries: id =>
             [
                 .. Enum.GetValues<AccessDomain>()
@@ -88,7 +100,7 @@ public static class PermissionGroupSeeder
                     .Select(domain => RulesetEntry(id, domain, AccessActions.Everything)),
             ], ct);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.CavingGroupManagersSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.CavingGroupManagersSlug,
             SeededPermissionGroups.CavingGroupManagersName, isProtected: false, entries: id =>
             [
                 // Trust assumption, stated: roster writes move inherited rights, so this
@@ -99,7 +111,7 @@ public static class PermissionGroupSeeder
                     AccessAction.Read | AccessAction.Create | AccessAction.Write | AccessAction.ManagePermissions),
             ], ct);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.EditorsSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.EditorsSlug,
             SeededPermissionGroups.EditorsName, isProtected: false, entries: id =>
             [
                 // Execute keeps geofile import and raster reprocess working for the
@@ -109,7 +121,7 @@ public static class PermissionGroupSeeder
                     | AccessAction.Share | AccessAction.Execute)),
             ], ct);
 
-        await EnsureGroupAsync(db, created, SeededPermissionGroups.ReviewersSlug,
+        await EnsureGroupAsync(db, created, seeded, SeededPermissionGroups.ReviewersSlug,
             SeededPermissionGroups.ReviewersName, isProtected: false, entries: id =>
             [
                 // Reads past visibility — an auditing role.
@@ -121,7 +133,38 @@ public static class PermissionGroupSeeder
             await MapExistingRoleHoldersAsync(db, created, ct);
         }
 
+        var recorded = JsonSerializer.Serialize(seeded.Order(StringComparer.Ordinal).ToArray());
+        if (record is null)
+        {
+            db.AppSettings.Add(new AppSetting { Key = AppSettingSections.SeededPermissionGroups, Value = recorded });
+        }
+        else if (record.Value != recorded)
+        {
+            record.Value = recorded;
+        }
+
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The slugs of the shipped groups this installation has been given. A row that
+    /// cannot be read counts as naming nothing, which errs towards putting a group back rather
+    /// than towards an installation that never receives one.</summary>
+    private static HashSet<string> ReadRecord(AppSetting? record)
+    {
+        if (record is null)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            var slugs = JsonSerializer.Deserialize<string[]>(record.Value) ?? [];
+            return new HashSet<string>(slugs, StringComparer.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
     }
 
     /// <summary>The permission groups a legacy global role maps onto.</summary>
@@ -211,13 +254,24 @@ public static class PermissionGroupSeeder
     private static async Task EnsureGroupAsync(
         SilexGisDbContext db,
         List<string> created,
+        HashSet<string> seeded,
         string slug,
         string name,
         bool isProtected,
         Func<Guid, IEnumerable<AccessEntry>> entries,
         CancellationToken ct)
     {
-        if (await db.PermissionGroups.AnyAsync(g => g.Slug == slug, ct))
+        // Given once already and gone since: somebody deleted it, and that stands.
+        if (!isProtected && seeded.Contains(slug))
+        {
+            return;
+        }
+
+        // Present without being recorded — an installation seeded before the record existed, or
+        // one whose settings row was lost: it has been given, so it is recorded and left alone.
+        var alreadyThere = await db.PermissionGroups.AnyAsync(g => g.Slug == slug, ct);
+        seeded.Add(slug);
+        if (alreadyThere)
         {
             return;
         }

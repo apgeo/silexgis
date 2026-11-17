@@ -129,6 +129,17 @@ public static class TestDataGeographyWriter
         var vocabulary = session.Vocabulary;
         var protectedCaves = new List<Guid>();
 
+        // A generated code is shaped like a register code on purpose, and so can be one an
+        // installation's own cave already carries. Written again, it would make a lookup or an
+        // import by code ambiguous between the real cave and an invented one; so a code already
+        // in use is left off the generated cave, and the run says how many were.
+        var plannedCodes = caves.Select(c => c.IdentificationCode).ToList();
+        var taken = (await db.Caves.IgnoreQueryFilters()
+                .Where(c => c.IdentificationCode != null && plannedCodes.Contains(c.IdentificationCode))
+                .Select(c => c.IdentificationCode!)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
+
         writer.BeginDeferredDerivedState();
         foreach (var planned in caves)
         {
@@ -142,7 +153,12 @@ public static class TestDataGeographyWriter
                 // There is no caving group to bind a cave to until the generator makes clubs, so
                 // the share asked for as club-only is written as signed-in-only meanwhile.
                 visibility = Visibility.Authenticated;
-                session.Note("Club-only visibility is written as signed-in-only until the generator creates caving groups.");
+                session.Note(TestDataNotes.ClubOnlyAsSignedIn);
+            }
+
+            if (taken.Contains(planned.IdentificationCode))
+            {
+                session.NoteCount(TestDataNotes.CodesTaken);
             }
 
             var cave = await writer.CreateCaveAsync(
@@ -156,7 +172,7 @@ public static class TestDataGeographyWriter
                 new Cave
                 {
                     OtherToponyms = planned.OtherToponyms,
-                    IdentificationCode = planned.IdentificationCode,
+                    IdentificationCode = taken.Contains(planned.IdentificationCode) ? null : planned.IdentificationCode,
                     CaveTypeId = vocabulary.CaveTypes[planned.CaveTypeCode],
                     RockTypeId = vocabulary.RockTypes.TryGetValue(planned.RockTypeCode, out var rock) ? rock : null,
                     Website = planned.Website,
