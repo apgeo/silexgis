@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
 import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateAttachments } from './shared.ts';
@@ -43,17 +43,53 @@ export function useAttachments(
 
 export type HistoryEvent = components['schemas']['HistoryEventDto'];
 
-/** Change history for an entity (incl. its children's events via audit roots). */
-/** @param enabled false keeps the request from being made — see {@link useAttachments}. */
+const HISTORY_PAGE_SIZE = 100;
+
+/**
+ * Change history for an entity (incl. its children's events via audit roots), newest first, read a
+ * page at a time: the newest page at once, each older one when the reader asks for it.
+ *
+ * The server pages by position, so a change recorded between two reads pushes every row one place
+ * down and the next page starts with a row already shown; rows are therefore kept once by id.
+ * A failed older page leaves the rows already read in place (`moreFailed`), so the reader is told
+ * the older part failed rather than losing the timeline to an error.
+ *
+ * @param enabled false keeps the request from being made — see {@link useAttachments}.
+ */
 export function useHistory(entityType: string, entityId: string | undefined, enabled = true) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.history(entityType, entityId ?? ''),
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       unwrap(api.GET('/api/v1/history', {
-        params: { query: { entityType, entityId: entityId!, pageSize: 100 } },
+        params: { query: { entityType, entityId: entityId!, page: pageParam, pageSize: HISTORY_PAGE_SIZE } },
       })),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.items.length > 0 && last.page * last.pageSize < last.totalItems ? last.page + 1 : undefined,
     enabled: enabled && !!entityId,
   });
+  const pages = query.data?.pages;
+  const data = useMemo(() => {
+    if (!pages) {
+      return undefined;
+    }
+    const seen = new Set<number>();
+    const items = pages.flatMap((page) => page.items).filter((e) => !seen.has(e.id) && !!seen.add(e.id));
+    return { items, totalItems: pages[pages.length - 1].totalItems };
+  }, [pages]);
+  const { fetchNextPage, refetch } = query;
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
+  return {
+    data,
+    isLoading: query.isLoading,
+    // Only a failure of the first page leaves nothing to show; an older page's failure is `moreFailed`.
+    isError: query.isError && !pages,
+    refetch,
+    hasMore: query.hasNextPage,
+    loadMore,
+    loadingMore: query.isFetchingNextPage,
+    moreFailed: query.isFetchNextPageError,
+  };
 }
 
 /**

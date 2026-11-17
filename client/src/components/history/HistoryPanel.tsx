@@ -86,8 +86,9 @@ export default function HistoryPanel({
   const history = useHistory(entityType, entityId, enabled);
   const { data, isLoading } = history;
   const events = data?.items ?? [];
-  // The newest page only: a long-lived feature can carry more changes than is worth drawing,
-  // and saying so keeps a cut-off timeline from reading as the whole story.
+  // The newest page first: a long-lived feature can carry more changes than is worth drawing at
+  // once. Saying how many are left keeps a cut-off timeline from reading as the whole story, and
+  // the older pages are read only when the reader asks for them.
   const notShown = data ? data.totalItems - events.length : 0;
 
   const body = (
@@ -125,6 +126,34 @@ export default function HistoryPanel({
         <Typography.Text type="secondary" data-testid="history-partial">
           {t('history.partial', { shown: events.length, total: data?.totalItems })}
         </Typography.Text>
+      )}
+      {!history.isError && history.moreFailed ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('history.loadMoreFailed')}
+          style={{ marginTop: 8 }}
+          action={
+            <Button size="small" onClick={() => history.loadMore()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : (
+        !history.isError &&
+        history.hasMore && (
+          <div>
+            <Button
+              size="small"
+              type="link"
+              loading={history.loadingMore}
+              onClick={() => history.loadMore()}
+              data-testid="history-load-more"
+            >
+              {t('history.loadMore')}
+            </Button>
+          </div>
+        )
       )}
     </>
   );

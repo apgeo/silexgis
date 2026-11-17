@@ -3210,6 +3210,8 @@
     "empty": "Nicio modificare înregistrată încă.",
     "loadFailed": "Istoricul nu a putut fi încărcat.",
     "partial": "Se arată ultimele {{shown}} din {{total}} modificări.",
+    "loadMore": "Arată modificările mai vechi",
+    "loadMoreFailed": "Modificările mai vechi nu au putut fi încărcate.",
     "hidden": "Valoare ascunsă (locație protejată)",
     "geometrySummary": "Geometrie cu {{points}} puncte (prea mare pentru a fi înregistrată integral)",
     "systemUser": "Sistem",
