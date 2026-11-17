@@ -10,7 +10,7 @@ import { queryKeys, type AdminSettings, type MapSymbolSettings } from '../../api
 import { DEFAULT_APPROXIMATE_ENTRANCE_SYMBOL, DEFAULT_ENTRANCE_SYMBOL } from '../../map/entranceSymbols.ts';
 import { entrancePalette } from '../../map/markerPalette.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 
 /**
  * The markers the installation draws its cave entrances with: one for an entrance at its surveyed
@@ -20,9 +20,12 @@ import { settingsSaveProblem } from './settingsProblems.ts';
 export default function MapSymbolsSettingsForm({
   settings,
   onSaved,
+  onStale,
 }: {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -37,9 +40,15 @@ export default function MapSymbolsSettingsForm({
   const save = async (values: MapSymbolSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/map-symbols', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/map-symbols', {
+        headers: sectionIfMatch(settings.versions?.mapSymbols),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

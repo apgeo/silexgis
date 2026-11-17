@@ -59,7 +59,13 @@ import {
   type SmsSettingsWrite,
 } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsNotice, settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
+import {
+  isSettingsConflict,
+  sectionIfMatch,
+  settingsNotice,
+  settingsSaveProblem,
+  testSendProblem,
+} from './settingsProblems.ts';
 
 /** Stands in for a secret that is already stored; the real one is never sent to the browser. */
 const SECRET_KEPT = '••••••••';
@@ -67,6 +73,8 @@ const SECRET_KEPT = '••••••••';
 interface SectionProps {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }
 
 /**
@@ -82,9 +90,12 @@ export default function MessagingSettingsPage() {
   const { data: me } = useMe();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.settings, 'read');
-  const { data: settings, isLoading } = useAdminSettings(canRead);
+  const { data: settings, isLoading, refetch } = useAdminSettings(canRead);
 
   const onSaved = (next: AdminSettings) => queryClient.setQueryData(queryKeys.adminSettings, next);
+  // A section somebody saved over since this page read it: the stored values are read again, and
+  // the form refills from them with the version a save of them is held to.
+  const onStale = () => void refetch();
 
   // While capabilities load, render nothing rather than flashing a refusal at people
   // who do hold the right; the server enforces regardless.
@@ -114,7 +125,7 @@ export default function MessagingSettingsPage() {
                   <MailOutlined /> {t('admin.messaging.mailTab')}
                 </span>
               ),
-              children: <MailForm settings={settings} onSaved={onSaved} defaultTestRecipient={me?.email ?? ''} />,
+              children: <MailForm settings={settings} onSaved={onSaved} onStale={onStale} defaultTestRecipient={me?.email ?? ''} />,
             },
             {
               key: 'sms',
@@ -123,7 +134,7 @@ export default function MessagingSettingsPage() {
                   <MobileOutlined /> {t('admin.messaging.smsTab')}
                 </span>
               ),
-              children: <SmsForm settings={settings} onSaved={onSaved} />,
+              children: <SmsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'policy',
@@ -132,7 +143,7 @@ export default function MessagingSettingsPage() {
                   <SafetyOutlined /> {t('admin.messaging.policyTab')}
                 </span>
               ),
-              children: <PolicyForm settings={settings} onSaved={onSaved} />,
+              children: <PolicyForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'protection',
@@ -141,7 +152,7 @@ export default function MessagingSettingsPage() {
                   <EnvironmentOutlined /> {t('admin.messaging.protectionTab')}
                 </span>
               ),
-              children: <ProtectionForm settings={settings} onSaved={onSaved} />,
+              children: <ProtectionForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'import',
@@ -150,7 +161,7 @@ export default function MessagingSettingsPage() {
                   <ImportOutlined /> {t('admin.messaging.importTab')}
                 </span>
               ),
-              children: <ImportForm settings={settings} onSaved={onSaved} />,
+              children: <ImportForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'sync',
@@ -159,7 +170,7 @@ export default function MessagingSettingsPage() {
                   <SyncOutlined /> {t('admin.messaging.syncTab')}
                 </span>
               ),
-              children: <SyncSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <SyncSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'notifications',
@@ -170,8 +181,8 @@ export default function MessagingSettingsPage() {
               ),
               children: (
                 <Flex vertical gap={32}>
-                  <NotificationsForm settings={settings} onSaved={onSaved} />
-                  <AnnouncementsForm settings={settings} onSaved={onSaved} />
+                  <NotificationsForm settings={settings} onSaved={onSaved} onStale={onStale} />
+                  <AnnouncementsForm settings={settings} onSaved={onSaved} onStale={onStale} />
                 </Flex>
               ),
             },
@@ -182,7 +193,7 @@ export default function MessagingSettingsPage() {
                   <CameraOutlined /> {t('admin.messaging.photoLibrariesTab')}
                 </span>
               ),
-              children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} />,
+              children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'survey-uploads',
@@ -191,7 +202,7 @@ export default function MessagingSettingsPage() {
                   <CloudUploadOutlined /> {t('admin.messaging.surveyUploadsTab')}
                 </span>
               ),
-              children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'map-symbols',
@@ -200,7 +211,7 @@ export default function MessagingSettingsPage() {
                   <AimOutlined /> {t('mapSymbols.tab')}
                 </span>
               ),
-              children: <MapSymbolsSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <MapSymbolsSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'test-data',
@@ -209,7 +220,7 @@ export default function MessagingSettingsPage() {
                   <ExperimentOutlined /> {t('admin.messaging.testDataTab')}
                 </span>
               ),
-              children: <TestDataSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <TestDataSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'workspace',
@@ -218,7 +229,7 @@ export default function MessagingSettingsPage() {
                   <AppstoreOutlined /> {t('workspace.admin.tab')}
                 </span>
               ),
-              children: <WorkspaceDefaultForm settings={settings} onSaved={onSaved} />,
+              children: <WorkspaceDefaultForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               // Not a section of the stored settings: it is kept on the catalogue's own rows,
@@ -269,6 +280,7 @@ function SaveNotices({ codes }: { codes: string[] }) {
 export function MailForm({
   settings,
   onSaved,
+  onStale,
   defaultTestRecipient,
 }: SectionProps & { defaultTestRecipient: string }) {
   const { t } = useTranslation();
@@ -289,6 +301,7 @@ export function MailForm({
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/mail', {
+        headers: sectionIfMatch(settings.versions?.mail),
         body: {
           ...values,
           // Both blank and the placeholder mean "unchanged", so re-saving a form the operator
@@ -298,6 +311,9 @@ export function MailForm({
       });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -417,7 +433,7 @@ export function MailForm({
   );
 }
 
-export function SmsForm({ settings, onSaved }: SectionProps) {
+export function SmsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<SmsSettingsWrite & { authHeader?: string }>();
@@ -435,6 +451,7 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/sms', {
+        headers: sectionIfMatch(settings.versions?.sms),
         body: {
           ...values,
           // Extra headers are not editable here yet; passing the stored set back keeps a save
@@ -445,6 +462,9 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
       });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -558,7 +578,7 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
   );
 }
 
-function PolicyForm({ settings, onSaved }: SectionProps) {
+function PolicyForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<SecuritySettings>();
@@ -569,9 +589,15 @@ function PolicyForm({ settings, onSaved }: SectionProps) {
   const save = async (values: SecuritySettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/security', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/security', {
+        headers: sectionIfMatch(settings.versions?.security),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -648,7 +674,7 @@ function PolicyForm({ settings, onSaved }: SectionProps) {
  * files handed out; which reader may be told a location stays the server's rule either way.
  * Exported for its test.
  */
-export function ProtectionForm({ settings, onSaved }: SectionProps) {
+export function ProtectionForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<ProtectionSettings>();
@@ -659,9 +685,15 @@ export function ProtectionForm({ settings, onSaved }: SectionProps) {
   const save = async (values: ProtectionSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/protection', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/protection', {
+        headers: sectionIfMatch(settings.versions?.protection),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -736,7 +768,7 @@ export function ProtectionForm({ settings, onSaved }: SectionProps) {
  * proved: rules are a guess about somebody's naming habits, and the difference between a bad
  * review and a bad auto-import is four hundred objects in the registry.
  */
-function ImportForm({ settings, onSaved }: SectionProps) {
+function ImportForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<ImportSettings>();
@@ -747,9 +779,15 @@ function ImportForm({ settings, onSaved }: SectionProps) {
   const save = async (values: ImportSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/import', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/import', {
+        headers: sectionIfMatch(settings.versions?.import),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -799,7 +837,7 @@ function ImportForm({ settings, onSaved }: SectionProps) {
  * still readable as one: an installation that never opens this tab keeps whatever its environment
  * says, and what is saved here replaces it from the next prune onwards.
  */
-function NotificationsForm({ settings, onSaved }: SectionProps) {
+function NotificationsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<NotificationSettings>();
@@ -810,9 +848,15 @@ function NotificationsForm({ settings, onSaved }: SectionProps) {
   const save = async (values: NotificationSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', {
+        headers: sectionIfMatch(settings.versions?.notifications),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -852,7 +896,7 @@ function NotificationsForm({ settings, onSaved }: SectionProps) {
  * switch about spending money back to its default, and a switch that turns itself off when
  * somebody edits an unrelated field is worse than no switch.
  */
-function AnnouncementsForm({ settings, onSaved }: SectionProps) {
+function AnnouncementsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<AnnouncementSettings>();
@@ -863,9 +907,15 @@ function AnnouncementsForm({ settings, onSaved }: SectionProps) {
   const save = async (values: AnnouncementSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/announcements', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/announcements', {
+        headers: sectionIfMatch(settings.versions?.announcements),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
@@ -949,7 +999,7 @@ const STOP_COMMAND: Partial<Record<string, string>> = {
  * somebody removed from the deployment.
  * </p>
  */
-export function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
+export function PhotoLibrariesForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -976,9 +1026,15 @@ export function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
         ...(current?.photoLibraries ?? settings.photoLibraries),
         [field]: suspended,
       };
-      const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', { body });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', {
+        headers: sectionIfMatch(settings.versions?.photoLibraries),
+        body,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
