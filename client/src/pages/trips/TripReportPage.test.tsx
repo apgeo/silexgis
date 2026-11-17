@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { DownloadError } from '../../api/download.ts';
 import type { TripLogInfo } from '../../api/hooks.ts';
 
@@ -67,6 +68,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useFileConfig: () => fileConfigSpy(),
   // Somebody who may change the trip, so that both ways of producing a document are on the page.
   useCan: () => true,
+  useCreateDoor: () => ({ canCreate: false, unbound: false, cavingGroups: [] }),
   useKeepTripReport: () => ({ mutate: keepSpy, isPending: false }),
   parseAccessActions: () => new Set<string>(),
   hasAccessAction: () => true,
@@ -160,6 +162,10 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
 function show(subject: TripLogInfo, photos: unknown[] = []) {
   tripSpy.mockReturnValue({ data: subject, isPending: false });
   photosSpy.mockReturnValue({ data: { items: photos }, isPending: false });
+  return renderAlone();
+}
+
+function renderAlone() {
   return render(
     // Inside the application's own message host, as the page is when it is really on screen:
     // what it tells its reader after a download is said through it.
@@ -183,6 +189,42 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TripReportPage', () => {
+  /**
+   * The server answers 404 for a trip that is not there and for one the caller may not read, and
+   * a settled refusal is not retried: a page that only knew "loading" would spin for good on a
+   * bookmarked write-up of a deleted trip.
+   */
+  it('says "no such trip" for a refused read instead of loading forever', () => {
+    tripSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'trip.not_found'),
+    });
+    photosSpy.mockReturnValue({ data: undefined, isPending: true });
+    renderAlone();
+
+    expect(screen.getByText('No such trip')).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+  });
+
+  it('says the trip could not be read, with a retry, when the read never reached the server', () => {
+    const refetch = vi.fn();
+    tripSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    photosSpy.mockReturnValue({ data: undefined, isPending: true });
+    renderAlone();
+
+    expect(screen.getByTestId('read-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('reads as the write-up of one trip: what it was for, who was there, and what it did', () => {
     const { container } = show(trip());
 

@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { Drawer, Tabs } from 'antd';
+import { App, Drawer, Tabs } from 'antd';
 import { useUnsavedEditsGuard } from '../components/map/useUnsavedEditsGuard.ts';
 import { useSelectionInUrl } from '../components/map/useSelectionInUrl.ts';
 import { useFeatureRights } from '../api/hooks/objectRights.ts';
@@ -75,7 +75,8 @@ import {
   setDesiredOverlayOrder,
 } from '../map/mapContext.ts';
 import ShortcutHelpDialog from '../components/ShortcutHelpDialog.tsx';
-import { geometryFor, isGeographic } from '../viewlinks/geoTargets.ts';
+import { isGeographic } from '../viewlinks/geoTargets.ts';
+import { followReveal } from '../viewlinks/reveal.ts';
 import { useViewControl } from '../viewlinks/useViewControl.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspacePanesStore } from '../stores/workspacePanesStore.ts';
@@ -112,6 +113,7 @@ const LibraryPhotoFeatureModal = lazy(
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   // A vector background's labels follow the language the interface is read in.
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const isMobile = useIsMobile();
@@ -250,7 +252,7 @@ export default function MapPage() {
     labelKey: 'viewLinks.controls.map2d',
     canReveal: isGeographic,
     reveal: (ref) => {
-      void geometryFor(queryClient, ref).then((target) => {
+      followReveal(queryClient, ref, (target) => {
         // Protection has two outcomes and this used to answer only one. A shape whose position is
         // withheld comes back with nothing, and not moving is the honest answer. A point comes
         // back SNAPPED — present, and wrong by up to the grid — so the comment that stood here,
@@ -261,7 +263,7 @@ export default function MapPage() {
         if (target !== null) {
           fitGeoJsonGeometry(target.geometry, target.approximate ? APPROXIMATE_MAX_ZOOM : undefined);
         }
-      });
+      }, (problem) => void message.warning(t(problem)));
     },
   });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);

@@ -9,6 +9,7 @@ import type Point from 'ol/geom/Point';
 import { fromLonLat, transformExtent } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { isSettledRefusal } from '../api/client.ts';
 import { fetchSharedView } from '../api/hooks.ts';
 import { backgroundLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
@@ -37,7 +38,12 @@ export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
   const mapTarget = useRef<HTMLDivElement>(null);
   const [name, setName] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  // `refused` is the server's settled answer that the link is no good — wrong, revoked or expired,
+  // which it does not tell apart and neither does this page. `failed` is everything else: no
+  // answer, a server error, a request refused for coming too often, or a map that could not be
+  // drawn from what came back. None of those says anything about the link, so it is offered again.
+  const [outcome, setOutcome] = useState<'ok' | 'refused' | 'failed'>('ok');
+  const [attempt, setAttempt] = useState(0);
   const [noBackground, setNoBackground] = useState(false);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [cluster, setCluster] = useState<number | null>(null);
@@ -48,11 +54,19 @@ export default function SharedViewPage() {
     let detach: (() => void) | undefined;
 
     const boot = async () => {
+      let shared: Awaited<ReturnType<typeof fetchSharedView>>;
       try {
-        const shared = await fetchSharedView(token!);
-        if (disposed) {
-          return;
+        shared = await fetchSharedView(token!);
+      } catch (error) {
+        if (!disposed) {
+          setOutcome(isSettledRefusal(error) ? 'refused' : 'failed');
         }
+        return;
+      }
+      if (disposed) {
+        return;
+      }
+      try {
         setName(shared.name);
         const camera = shared.camera;
         const reach = shared.reach;
@@ -112,7 +126,7 @@ export default function SharedViewPage() {
         });
       } catch {
         if (!disposed) {
-          setFailed(true);
+          setOutcome('failed');
         }
       }
     };
@@ -123,12 +137,38 @@ export default function SharedViewPage() {
       detach?.();
       map?.setTarget(undefined);
     };
-  }, [token, language]);
+  }, [token, language, attempt]);
 
-  if (failed) {
+  if (outcome === 'refused') {
     return (
       <Flex align="center" justify="center" style={{ height: '100vh' }}>
-        <Alert type="warning" showIcon title={t('views.sharedNotFound')} />
+        <Alert type="warning" showIcon data-testid="shared-view-not-found" title={t('views.sharedNotFound')} />
+      </Flex>
+    );
+  }
+
+  if (outcome === 'failed') {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100vh' }}>
+        <Alert
+          type="error"
+          showIcon
+          data-testid="shared-view-load-failed"
+          title={t('common.loadFailed')}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                // Back to the page first, in the same render, so the map's container exists by the
+                // time the next attempt's answer builds a map into it.
+                setOutcome('ok');
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          }
+        />
       </Flex>
     );
   }

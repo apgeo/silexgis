@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { MapFilterParams } from '../api/hooks/map.ts';
 import { emptyDocument, whereOf, withWhere } from '../filters/document.ts';
+import { isFilterRefusal } from '../filters/refusal.ts';
 import { decodeFilter, encodeFilter, FILTER_PARAM } from '../filters/url.ts';
 import type { FilterDocument, FilterNode } from '../filters/types.ts';
 
@@ -195,14 +196,8 @@ export function mapFilterAddressKey(params: URLSearchParams): string {
   return `${params.get(FILTER_PARAM) ?? ''}|${params.get(MAP_SAVED_FILTER_PARAM) ?? ''}`;
 }
 
-/**
- * Whether an error is a map route refusing the filter it was sent. Matched by prefix because the
- * server's vocabulary of reasons grows; every one of them means "this filter was not run".
- */
-export function isMapFilterRefusal(error: unknown): error is { code: string } {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && (code.startsWith('filter.') || code.startsWith('saved_filter.'));
-}
+/** Whether an error is a map route refusing the filter it was sent; the lists ask the same question. */
+export const isMapFilterRefusal = isFilterRefusal;
 
 export function onMapFilterRefusal(listener: (code: string) => void): () => void {
   refusalListeners.add(listener);

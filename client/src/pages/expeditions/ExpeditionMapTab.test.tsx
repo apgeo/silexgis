@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Map from 'ol/Map';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 
 const { mapSpy } = vi.hoisted(() => ({ mapSpy: vi.fn() }));
 
@@ -90,5 +91,20 @@ describe("a camp's map", () => {
     render(<ExpeditionMapTab expeditionId={CAMP} active />);
 
     expect(screen.getByText(/Nothing to draw for this camp/)).toBeTruthy();
+  });
+});
+
+describe("a camp's map that could not be read", () => {
+  it('says the map could not be read and offers to ask again, rather than leaving a blank map', () => {
+    const refetch = vi.fn();
+    mapSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch });
+    render(<ExpeditionMapTab expeditionId={CAMP} active />);
+
+    expect(screen.getByTestId('expedition-map-unavailable').textContent).toContain(
+      i18n.t('expeditions.mapUnavailable'),
+    );
+    expect(screen.queryByText(i18n.t('expeditions.mapEmpty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

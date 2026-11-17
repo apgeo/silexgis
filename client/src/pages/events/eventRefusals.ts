@@ -21,6 +21,26 @@ export const EVENT_REFUSALS: Readonly<Record<string, string>> = {
   'event.series_partly_forbidden': 'events.seriesPartlyForbidden',
   'event.series_move_out_of_range': 'events.seriesMoveOutOfRange',
   'event.not_in_series': 'events.notInSeries',
+  'event.recurrence_overlapping': 'events.recurrenceOverlapping',
+  'event.recurrence_frequency_invalid': 'events.recurrenceFrequencyInvalid',
+  'event.series_frequency_series_only': 'events.seriesFrequencySeriesOnly',
+  'event.state_transition_invalid': 'events.stateTransitionInvalid',
+  // One sentence for "gone" and "no longer yours to see", because the server gives them one answer
+  // and telling them apart would tell somebody which events exist.
+  'event.not_found': 'events.goneOrUnreadable',
+};
+
+/**
+ * The event codes the server has that no event surface here can be refused with, each with the
+ * reason. Kept beside the table so that the check holding the table to the server's list of codes
+ * has every code accounted for: a new server code is either worded above or argued for here.
+ */
+export const EVENT_CODES_WITHOUT_WORDS: Readonly<Record<string, string>> = {
+  // Both narrow the event list by a value from the list's own choices, which are the server's
+  // states and kinds. Only a hand-edited address reaches them, and what it meets is a list that
+  // could not be read, not a refusal of anything done to an event.
+  'event.kind_invalid': 'list narrowing only',
+  'event.state_invalid': 'list narrowing only',
 };
 
 /**

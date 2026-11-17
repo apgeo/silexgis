@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import type { TripLogInfo } from '../../api/hooks.ts';
 
 const { tripsSpy } = vi.hoisted(() => ({ tripsSpy: vi.fn() }));
@@ -88,5 +89,20 @@ describe('the trips gathered into a camp', () => {
     show();
 
     expect(screen.getByText(/Showing 1 of 84/)).toBeTruthy();
+  });
+});
+
+describe("a camp's trips that could not be read", () => {
+  it('says the trips could not be read, offers to ask again, and never says the camp has none', () => {
+    const refetch = vi.fn();
+    tripsSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch });
+    show();
+
+    expect(screen.getByTestId('expedition-trips-unavailable').textContent).toContain(
+      i18n.t('expeditions.tripsUnavailable'),
+    );
+    expect(screen.queryByText(i18n.t('expeditions.noTripsVisible'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { PlusOutlined } from '@ant-design/icons';
-import { DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
+import { Alert, DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
@@ -45,7 +45,7 @@ export default function ExpeditionListPage() {
   const [params, setParams] = useState<ExpeditionListParams>({ page: 1, pageSize: 20 });
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useExpeditions({ ...params, search: search || undefined });
+  const { data, isFetching, isError, refetch } = useExpeditions({ ...params, search: search || undefined });
   // A domain-level hint for whether to draw the button at all; the server decides the create
   // itself, and refuses it for anybody this check would have shown the form to by mistake.
   const canCreate = useCan('expeditions', 'create');
@@ -63,11 +63,11 @@ export default function ExpeditionListPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('expeditions.title')}
         </Typography.Title>
-        <Flex gap={8}>
+        <Flex gap={8} wrap>
           {/* What somebody may be recorded as having been at a camp as — reached from the list
               the vocabulary governs, not only from the configuration group in the rail, the same
               door the trip list offers for its own three. */}
@@ -119,6 +119,21 @@ export default function ExpeditionListPage() {
           }
         />
       </Flex>
+      {isError && !data && (
+        // Without this an empty table would read as "there are no camps".
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="expedition-list-unavailable"
+          title={t('expeditions.listUnavailable')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <Table<ExpeditionInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"

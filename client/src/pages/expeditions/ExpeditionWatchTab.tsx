@@ -49,7 +49,10 @@ export default function ExpeditionWatchTab({
     return <div data-testid="expedition-watch-tab" />;
   }
 
-  if (error) {
+  // A poll that fails keeps the last answer and sets the error beside it. That answer is still the
+  // best count there is, so it stays on screen with a notice; the warning alone is for a camp
+  // whose count was never read.
+  if (error && !data) {
     return (
       <div data-testid="expedition-watch-tab">
         <Alert
@@ -73,6 +76,15 @@ export default function ExpeditionWatchTab({
   return (
     <div data-testid="expedition-watch-tab">
       <Typography.Paragraph type="secondary">{t('expeditions.watch.intro')}</Typography.Paragraph>
+      {error && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="expedition-watch-refresh-failed"
+          title={t('common.refreshFailed')}
+        />
+      )}
       {data.truncated && (
         <Alert
           type="info"

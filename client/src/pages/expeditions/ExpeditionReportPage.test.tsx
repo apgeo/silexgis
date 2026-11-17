@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { DownloadError } from '../../api/download.ts';
 import type { ExpeditionInfo } from '../../api/hooks.ts';
 
@@ -84,6 +85,40 @@ function renderPage() {
 }
 
 afterEach(cleanup);
+
+describe('a camp whose read failed', () => {
+  // The camp read is not retried, so a refusal settles at once: a page that only knew "loading"
+  // would spin for good on a bookmarked write-up of a camp that was deleted or narrowed.
+  it('says there is no such camp, instead of loading forever', () => {
+    campSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'expedition.not_found'),
+    });
+    renderPage();
+
+    expect(screen.getByText('No such camp')).toBeTruthy();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+  });
+
+  it('says the camp could not be read, with a retry, when the read never reached the server', () => {
+    const refetch = vi.fn();
+    campSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.getByTestId('read-failed')).toBeTruthy();
+    expect(screen.queryByText('No such camp')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false });
   accessSpy.mockReturnValue({ data: { actions: 'read' } });

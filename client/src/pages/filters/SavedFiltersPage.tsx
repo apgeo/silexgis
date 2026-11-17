@@ -125,7 +125,12 @@ export default function SavedFiltersPage() {
 
   const saveEdit = async () => {
     if (!editing) return;
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       await update.mutateAsync({
         id: editing.id,
@@ -169,7 +174,7 @@ export default function SavedFiltersPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('savedFilters.title')}
         </Typography.Title>
