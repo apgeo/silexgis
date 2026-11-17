@@ -197,8 +197,8 @@ describe('ChecklistsPage', () => {
     expect(screen.getByTestId('checklist-permissions-11111111-1111-1111-1111-111111111111')).toBeTruthy();
   });
   /**
-   * The page's listing carries no version per list, so the dialog reads the one list it is about
-   * to rewrite and fills itself from that answer. The rewrite is whole — every line it does not
+   * A listing row without a version per list makes the dialog read the one list it is about
+   * to rewrite and fill itself from that answer. The rewrite is whole — every line it does not
    * name is taken off — so a dialog filled from an older listing would quietly drop a line
    * somebody added since, and the version it carries has to be the one its lines came from.
    */
@@ -261,6 +261,58 @@ describe('ChecklistsPage', () => {
     ).toBeTruthy();
     expect(deleteMutate).not.toHaveBeenCalled();
     expect(refetchLists).toHaveBeenCalled();
+  });
+
+  /**
+   * A listing row that carries its version needs no read of its own: the dialog is filled from
+   * the row — lines included — and the rewrite is held to the row's version, so a list changed
+   * since the row was read is refused rather than rewritten from lines nobody saw.
+   */
+  it('edits from a listed row that carries its version, and saves against that version', async () => {
+    listRead = { data: [{ ...checklists[0], version: '"4"' }], isLoading: false };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await screen.findByDisplayValue('Key collected');
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(updateMutate).toHaveBeenCalled());
+    expect(updateMutate.mock.calls[0][0]).toMatchObject({
+      id: '11111111-1111-1111-1111-111111111111',
+      ifMatch: '"4"',
+    });
+    expect(readForChange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The delete is held to the version of the row the person saw — not to one read afterwards,
+   * which a change that left the time stamp alone would slip past.
+   */
+  it('deletes a listed row that carries its version against that version, reading nothing', async () => {
+    listRead = { data: [{ ...checklists[0], version: '"4"' }], isLoading: false };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this checklist' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalled());
+    expect(deleteMutate.mock.calls[0][0]).toEqual({
+      id: '11111111-1111-1111-1111-111111111111',
+      ifMatch: '"4"',
+    });
+    expect(readForChange).not.toHaveBeenCalled();
+  });
+
+  it('shows the lists again when a delete held to the row version is refused as stale', async () => {
+    listRead = { data: [{ ...checklists[0], version: '"4"' }], isLoading: false };
+    deleteMutate.mockImplementation((_variables, options: { onError: (error: unknown) => void }) =>
+      options.onError(new ApiError(412, 'concurrency.version_mismatch', 'Stale.')),
+    );
+    show();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this checklist' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(refetchLists).toHaveBeenCalled());
+    expect(screen.queryByText('Stale.')).toBeNull();
   });
 
   it('says why a save was refused, in its own words', async () => {

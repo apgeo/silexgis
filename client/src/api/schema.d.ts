@@ -2244,6 +2244,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/phone/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Drops the number waiting for its code, keeping the confirmed number and its texted sign-in codes. */
+        delete: operations["mePhoneCancelPending"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/username": {
         parameters: {
             query?: never;
@@ -9506,6 +9523,22 @@ export interface components {
             mailConfigured: boolean;
             smsConfigured: boolean;
             notices: string[];
+            versions: components["schemas"]["AdminSettingsVersionsDto"];
+        };
+        AdminSettingsVersionsDto: {
+            mail: string;
+            sms: string;
+            security: string;
+            protection: string;
+            import: string;
+            interface: string;
+            notifications: string;
+            announcements: string;
+            photoLibraries: string;
+            sync: string;
+            surveyUploads: string;
+            testData: string;
+            mapSymbols: string;
         };
         AdminUserCavingGroupRefDto: {
             /** Format: uuid */
@@ -10774,6 +10807,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            version?: null | string;
         };
         ChecklistItemDto: {
             /** Format: uuid */
@@ -11349,6 +11383,7 @@ export interface components {
             /** Format: date */
             surveyedAt: null | string;
             approximateLocation: boolean;
+            version?: null | string;
         };
         EntranceWriteRequest: {
             name: null | string;
@@ -25025,6 +25060,42 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mePhoneCancelPending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

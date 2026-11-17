@@ -235,9 +235,10 @@ export default function CaveDetailPage() {
 
   // A refused delete leaves the row where it was, so the reader is told why. A version conflict is
   // already reported by the application-wide handler; a second toast here would contradict it.
-  const onDeleteEntrance = async (entranceId: string) => {
+  // The delete is held to the version of the row the table showed.
+  const onDeleteEntrance = async (entrance: Entrance) => {
     try {
-      await deleteEntrance.mutateAsync(entranceId);
+      await deleteEntrance.mutateAsync({ id: entrance.id, ifMatch: entrance.version ?? undefined });
     } catch (e) {
       if (!isConcurrencyConflict(e)) {
         message.error(entranceWriteProblem(e, t, 'common.deleteFailed'));
@@ -477,7 +478,7 @@ export default function CaveDetailPage() {
                         <Popconfirm
                           title={t('entrances.deleteConfirm')}
                           description={t('entrances.deleteRestorable')}
-                          onConfirm={() => void onDeleteEntrance(e.id)}
+                          onConfirm={() => void onDeleteEntrance(e)}
                         >
                           <Button
                             size="small"

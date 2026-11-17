@@ -311,10 +311,10 @@ export function useUpdateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    // `ifMatch` is the version the editing form opened at. Nothing else supplies one: the entrance
-    // list carries no version, and the version an entrance write answers with is filed under the
-    // feature's own address, not this route's — so without it the save overwrites whatever
-    // somebody else saved since the form was opened.
+    // `ifMatch` is the version of the listing row the editing form was filled from (each row of a
+    // cave's entrance listing carries one). Nothing else supplies it: the version an entrance
+    // write answers with is filed under the feature's own address, not this route's — so without
+    // it the save overwrites whatever somebody else saved since the row was read.
     mutationFn: ({ id, body, ifMatch }: { id: string; body: EntranceWrite; ifMatch?: string }) =>
       unwrap(
         api.PUT('/api/v1/cave-entrances/{id}', {
@@ -334,12 +334,16 @@ export function useDeleteEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/cave-entrances/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    // `ifMatch` is the version of the listing row the delete was decided on, so an entrance
+    // somebody changed since is refused rather than deleted unseen. The refusal keeps its status
+    // and code, which is what lets a stale delete reach the shared conflict prompt.
+    mutationFn: ({ id, ifMatch }: { id: string; ifMatch?: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/cave-entrances/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+        }),
+      ),
     onSuccess: () => {
       invalidate(caveId);
       invalidateHistory();

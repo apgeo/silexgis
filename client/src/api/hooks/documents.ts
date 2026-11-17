@@ -3,7 +3,8 @@ import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateAttachments } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
+import { invalidateAfterDelete, unwrap, unwrapVersioned, unwrapVoid, useInvalidateAttachments } from './shared.ts';
 import type {
   AnnotatedText,
   AnnotatedTextCreate,
@@ -245,7 +246,9 @@ export function useFileConfig() {
 export function useDocument(id: string | undefined, enabled = true) {
   return useQuery({
     queryKey: queryKeys.document(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
+    // The details form is filled from this reading and saves under the version it was answered at.
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id && enabled,
     // Reading a document's text runs in a background job, so "being read" is a state that
     // resolves on its own while the panel is open. Poll only through that one state: every
@@ -272,15 +275,23 @@ export function useUpdateDocument() {
   const invalidateAttachments = useInvalidateAttachments();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: {
+    // `ifMatch` names the version the form was filled from: the save rewrites every field, so
+    // one filled before another save (or before reading the text set the language) is refused
+    // rather than putting the old values back. Left out, the newest version read is sent.
+    mutationFn: ({ id, ifMatch, ...body }: {
       id: string;
+      ifMatch?: string;
       title: string;
       documentTypeId: number | null;
       metadata: Record<string, unknown> | null;
       visibility: Visibility;
       cavingGroupId: string | null;
       language: string | null;
-    }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
+    }) => unwrap(api.PUT('/api/v1/documents/{id}', {
+      params: { path: { id } },
+      body,
+      headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+    })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
       void queryClient.invalidateQueries({ queryKey: ['cabinets'] });

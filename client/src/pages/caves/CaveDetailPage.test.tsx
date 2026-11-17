@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
@@ -486,7 +486,28 @@ describe('CaveDetailPage deleting an entrance', () => {
     const confirm = await screen.findByRole('tooltip');
     fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
 
-    expect(deleteEntrance).toHaveBeenCalledWith('e1');
+    expect(deleteEntrance.mock.calls[0][0]).toMatchObject({ id: 'e1' });
     expect(await screen.findByText('You are not allowed to make that change.')).toBeInTheDocument();
+  });
+
+  // The delete is decided on the row as the table showed it, so it is held to that row's version:
+  // an entrance somebody changed since is refused rather than deleted unseen.
+  it('deletes against the version of the row the table showed', async () => {
+    can = true;
+    entrances = [{ ...entrance('e1', 22.5, 46.5, false), version: '"3"' }];
+    deleteEntrance.mockResolvedValue(undefined);
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete the entrance Entrance e1' }));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    await waitFor(() => expect(deleteEntrance).toHaveBeenCalledWith({ id: 'e1', ifMatch: '"3"' }));
   });
 });

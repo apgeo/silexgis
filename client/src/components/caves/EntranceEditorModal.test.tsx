@@ -142,6 +142,23 @@ describe('EntranceEditorModal', () => {
     expect(fetchVersion).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * The listing row the dialog is opened from carries its version, and the form is filled from
+   * that row: the save is held to the version of what is on screen, not to whatever a read made
+   * as the dialog opens would answer — which, after somebody else's save, is theirs.
+   */
+  it('saves against the version of the listed row it was filled from, without reading another', async () => {
+    updateEntrance.mockResolvedValue({});
+    fetchVersion.mockResolvedValue('"9"');
+    render(dialog(true, () => {}, { ...surveyed, version: '"7"' }));
+    await waitFor(() => expect(screen.getByDisplayValue('Upper')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(updateEntrance).toHaveBeenCalledTimes(1));
+    expect(updateEntrance.mock.calls[0][0]).toMatchObject({ id: 'entrance-1', ifMatch: '"7"' });
+    expect(fetchVersion).not.toHaveBeenCalled();
+  });
+
   it('leaves a save somebody else overtook to the one conflict prompt, and stays open', async () => {
     updateEntrance.mockRejectedValue(new ApiError(412, 'concurrency.stale'));
     fetchVersion.mockResolvedValue('"7"');

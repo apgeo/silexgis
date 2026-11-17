@@ -67,11 +67,13 @@ export default function EntranceEditorModal({
   const updateEntrance = useUpdateEntrance(caveId);
 
   /**
-   * The version of the entrance this form was opened at, read once when it opens and sent with the
-   * save, so a change somebody else saved meanwhile is refused and offered back rather than
-   * overwritten. Read here because the entrance list carries no version; pinned at opening because
-   * the page goes on re-reading the record while the form is open, and a version read then would
-   * present their change as already seen. A read that fails leaves the save unguarded, as it was.
+   * The version of the entrance this form was filled from, sent with the save so a change somebody
+   * else saved meanwhile is refused and offered back rather than overwritten. The form is filled
+   * from the listing row it was opened on, and that row carries its own version, so the save is
+   * held to exactly what is on screen; a version read now could already be somebody else's and
+   * would present their change as seen. Only a row without one is read for it as the form opens
+   * (a read that fails leaves that save unguarded). Pinned at opening because the page goes on
+   * re-reading the listing while the form is open.
    */
   const openedVersion = useRef<Promise<string | undefined> | null>(null);
 
@@ -145,7 +147,11 @@ export default function EntranceEditorModal({
           positionQuality: 'gps',
         };
     form.setFieldsValue(initial);
-    openedVersion.current = entrance ? fetchFeatureVersion(entrance.id).catch(() => undefined) : null;
+    openedVersion.current = !entrance
+      ? null
+      : entrance.version
+        ? Promise.resolve(entrance.version)
+        : fetchFeatureVersion(entrance.id).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
 

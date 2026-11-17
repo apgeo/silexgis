@@ -105,7 +105,12 @@ const cases = [
     listing: '/api/v1/expeditions',
     useOwn: () => [hooks.useExpedition('gone')],
     useListing: () => hooks.useExpeditions({}),
-    useDelete: () => hooks.useDeleteExpedition(),
+    // The camp's delete takes the version the page showed beside the id; this case is about the
+    // reads that follow, so it names none.
+    useDelete: () => {
+      const remove = hooks.useDeleteExpedition();
+      return { mutateAsync: (id: string) => remove.mutateAsync({ id }) };
+    },
     held: [hooks.queryKeys.expedition('gone')],
   },
   {

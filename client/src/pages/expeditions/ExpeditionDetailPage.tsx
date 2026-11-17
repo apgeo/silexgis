@@ -21,6 +21,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { expeditionProblemKey } from './expeditionProblems.ts';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -124,7 +125,7 @@ export default function ExpeditionDetailPage() {
 
   const onDelete = async () => {
     try {
-      await deleteCamp.mutateAsync(camp.id);
+      await deleteCamp.mutateAsync({ id: camp.id, ifMatch: versionReadWith(camp) });
       message.success(t('common.deleted'));
       void navigate('/expeditions');
     } catch (error) {
