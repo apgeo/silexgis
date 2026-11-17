@@ -14,6 +14,7 @@ import { reloadEntrances } from '../../map/entranceLayer.ts';
 import type { PlacementMode } from '../../map/mapEdit.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import DialogHost from '../DialogHost.tsx';
+import { useFormEdits } from '../useDiscardGuard.ts';
 import EntranceEditorModal from '../caves/EntranceEditorModal.tsx';
 import { entranceWriteProblem } from '../caves/entranceWriteProblems.ts';
 import { featureProblemMessage } from '../features/featureProblems.ts';
@@ -53,6 +54,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
   const formatPosition = useCoordinateFormatter();
   const { message } = App.useApp();
   const [form] = Form.useForm<NewCaveFormValues>();
+  const edits = useFormEdits(mode === 'add-cave' && lonLat !== null);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
   const { data: caveTypes } = useCaveTypes();
@@ -203,6 +205,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
         title={t('mapEdit.newCaveHere')}
         open={mode === 'add-cave' && lonLat !== null}
         onCancel={cancelNewCave}
+        dirty={edits.edited}
         onOk={() => void submitNewCave()}
         okLoading={saving}
       >
@@ -227,6 +230,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
           form={form}
           layout="vertical"
           initialValues={{ visibility: 'private', locationProtected: false }}
+          onValuesChange={edits.onValuesChange}
         >
           <Form.Item name="name" label={t('caves.name')} rules={[{ required: true }, { max: 255 }]}>
             <Input autoFocus disabled={createdCaveId !== null} />

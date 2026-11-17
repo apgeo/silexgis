@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { FeatureType, FeatureTypeWrite } from '../../api/hooks.ts';
@@ -165,5 +165,44 @@ describe('FeatureTypesPage', () => {
     fireEvent.click(screen.getByText('Save'));
 
     expect(await screen.findByText(/Features of this kind exist/)).toBeInTheDocument();
+  });
+});
+
+describe('leaving the FeatureTypes dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: nothing was typed, so no question follows.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '{"type":"object"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Keep editing' }).at(-1)!);
+    expect(screen.getByLabelText('Description')).toHaveValue('{"type":"object"}');
+  });
+
+  it('is not closed by a click beside it', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '{"type":"object"}' } });
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByLabelText('Description')).toHaveValue('{"type":"object"}');
+    // A close starts the dialog's leaving animation; it must not have begun.
+    expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');
   });
 });

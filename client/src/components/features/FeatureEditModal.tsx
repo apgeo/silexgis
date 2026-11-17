@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useGenericFeatureTypes, type FeatureDetail, type FeatureType } from '../../api/hooks.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
+import { useFormEdits } from '../useDiscardGuard.ts';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
 
@@ -90,6 +91,7 @@ export default function FeatureEditModal({
 }: FeatureEditModalProps) {
   const { t } = useTranslation();
   const [form] = Form.useForm<FormValues>();
+  const edits = useFormEdits(open);
   const { data: featureTypes } = useGenericFeatureTypes();
 
   const typeOptions = useMemo(
@@ -165,11 +167,12 @@ export default function FeatureEditModal({
       title={title}
       open={open}
       onCancel={onCancel}
+      dirty={edits.edited}
       onOk={() => void onOk()}
       okLoading={busy}
       width={560}
     >
-      <Form<FormValues> form={form} layout="vertical">
+      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Form.Item name="name" label={t('features.name')}>
           <Input maxLength={200} />
         </Form.Item>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { PlusOutlined, ProfileOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -53,8 +54,10 @@ export default function DocumentTypesPage() {
   const [editing, setEditing] = useState<DocumentType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<DocumentTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
 
   useEffect(() => {
     if (open) {
@@ -180,7 +183,8 @@ export default function DocumentTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.documentTypes.edit') : t('admin.documentTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -188,7 +192,7 @@ export default function DocumentTypesPage() {
         destroyOnHidden
         width={640}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item
             name="name"
             label={t('admin.documentTypes.name')}

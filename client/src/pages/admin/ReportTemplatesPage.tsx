@@ -17,6 +17,7 @@ import {
   Upload,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -82,6 +83,7 @@ export default function ReportTemplatesPage() {
   const [creating, setCreating] = useState(false);
   const [shippedKind, setShippedKind] = useState<ReportTemplateKind>('trip');
   const [form] = Form.useForm<ReportTemplateWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const kindOptions: { value: ReportTemplateKind; label: string }[] = [
     { value: 'trip', label: t('admin.reportTemplates.kindTrip') },
@@ -102,6 +104,7 @@ export default function ReportTemplatesPage() {
   const draftKind = Form.useWatch('kind', form);
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   useEffect(() => {
     if (open) {
       form.setFieldsValue(
@@ -164,6 +167,8 @@ export default function ReportTemplatesPage() {
     // A file edited on Windows comes back with carriage returns and a byte-order mark, neither of
     // which is part of a line the parser is asked to read.
     form.setFieldValue('body', text.replace(/^﻿/, '').replace(/\r\n/g, '\n'));
+    // Set from code, so the form does not count it as an edit by itself.
+    edits.onValuesChange();
   };
 
   if (!capabilities) {
@@ -269,7 +274,8 @@ export default function ReportTemplatesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.reportTemplates.edit') : t('admin.reportTemplates.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createTemplate.isPending || updateTemplate.isPending}
         okText={t('common.save')}
@@ -277,7 +283,7 @@ export default function ReportTemplatesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item name="name" label={t('admin.reportTemplates.name')} rules={[{ required: true, max: 120 }]}>
             <Input />
           </Form.Item>

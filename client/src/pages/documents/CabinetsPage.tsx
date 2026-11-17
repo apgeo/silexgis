@@ -9,6 +9,7 @@ import {
   Select, Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -129,6 +130,8 @@ function CabinetEditModal({
     defaultTagIds?: number[];
     requiredMetadataKeys?: string[];
   }>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits();
 
   const submit = async () => {
     // A rule that fails is already marked on its field, and the rejection has nothing more to say;
@@ -152,7 +155,8 @@ function CabinetEditModal({
     <Modal
       title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
       open
-      onCancel={onCancel}
+      onCancel={() => requestDiscard(edits.edited, onCancel)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       onOk={() => void submit()}
       confirmLoading={busy}
       destroyOnHidden
@@ -161,6 +165,7 @@ function CabinetEditModal({
         form={form}
         layout="vertical"
         requiredMark={false}
+        onValuesChange={edits.onValuesChange}
         initialValues={
           editing === 'new'
             ? { parentId: defaultParentId }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { CompassOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -67,8 +68,10 @@ export default function TripTypesPage() {
   const [editing, setEditing] = useState<TripType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<TripTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   useEffect(() => {
     if (open) {
       form.setFieldsValue(editing ? { ...editing } : emptyDraft);
@@ -213,7 +216,8 @@ export default function TripTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.tripTypes.edit') : t('admin.tripTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -221,7 +225,7 @@ export default function TripTypesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item name="name" label={t('admin.tripTypes.name')} rules={[{ required: true, max: 100 }]}>
             <Input />
           </Form.Item>

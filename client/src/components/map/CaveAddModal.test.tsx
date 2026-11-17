@@ -254,3 +254,32 @@ describe('the new-entrance cave picker', () => {
     expect(screen.getByTestId('new-entrance-cave-picker-input')).toHaveValue('');
   });
 });
+
+describe('leaving the new-cave dialog with typed work', () => {
+  function showClosable() {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Avenul de test' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -496,5 +496,31 @@ describe('AddMemberModal', () => {
 
     const preview = screen.getByText(/Peștera Mare/);
     expect(within(preview).getByText(/Contained in/)).toBeDefined();
+  });
+});
+
+describe('leaving the add-member dialog with typed work', () => {
+  afterEach(cleanup);
+  function showClosable() {
+    const onClose = vi.fn();
+    open({ onClose });
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'Seen from the second pitch' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });

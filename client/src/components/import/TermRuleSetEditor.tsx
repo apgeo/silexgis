@@ -19,6 +19,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { TERM_RULE_REFUSALS } from './termRuleProblems.ts';
@@ -87,7 +88,7 @@ function saveProblem(error: unknown, t: TFunction): string {
  */
 export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const detail = useTermRuleSet(setId ?? undefined);
   const create = useCreateTermRuleSet();
   const update = useUpdateTermRuleSet();
@@ -147,20 +148,8 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
     setDirty(true);
   };
 
-  const requestClose = () => {
-    if (!dirty) {
-      onClose();
-      return;
-    }
-    modal.confirm({
-      title: t('termRules.discardTitle'),
-      content: t('termRules.discardBody'),
-      okText: t('termRules.discardOk'),
-      okButtonProps: { danger: true },
-      cancelText: t('termRules.keepEditing'),
-      onOk: onClose,
-    });
-  };
+  const requestDiscard = useDiscardGuard();
+  const requestClose = () => requestDiscard(dirty, onClose);
 
   const patch = (index: number, changes: Partial<TermRule>) =>
     changeRules((current) => current.map((rule, i) => (i === index ? { ...rule, ...changes } : rule)));
@@ -213,6 +202,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
       size="min(900px, 96vw)"
       title={creating ? t('termRules.newSet') : t('termRules.edit')}
       onClose={requestClose}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       extra={
         <Space>

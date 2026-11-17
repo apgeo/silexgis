@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
 const documentTypes = [
@@ -123,5 +123,44 @@ describe('DocumentTypesPage', () => {
     fireEvent.click(screen.getAllByText('Edit')[1]);
     await waitFor(() => expect(screen.getByLabelText('Code')).toHaveValue('field_note'));
     expect(screen.getByLabelText('Code')).toBeEnabled();
+  });
+});
+
+describe('leaving the DocumentTypes dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    render(<App><DocumentTypesPage /></App>);
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: nothing was typed, so no question follows.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    render(<App><DocumentTypesPage /></App>);
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Details schema (JSON Schema)')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Details schema (JSON Schema)'), { target: { value: '{"type":"object"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Keep editing' }).at(-1)!);
+    expect(screen.getByLabelText('Details schema (JSON Schema)')).toHaveValue('{"type":"object"}');
+  });
+
+  it('is not closed by a click beside it', async () => {
+    render(<App><DocumentTypesPage /></App>);
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Details schema (JSON Schema)')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Details schema (JSON Schema)'), { target: { value: '{"type":"object"}' } });
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByLabelText('Details schema (JSON Schema)')).toHaveValue('{"type":"object"}');
+    // A close starts the dialog's leaving animation; it must not have begun.
+    expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');
   });
 });

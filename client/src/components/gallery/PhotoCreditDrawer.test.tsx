@@ -139,3 +139,40 @@ describe('PhotoCreditDrawer', () => {
     expect(hooks.updateCredit.mock.calls[0][0]).toMatchObject({ documentId: 'p1', caption: 'Stored caption' });
   });
 });
+
+describe('leaving the photo credit drawer with typed work', () => {
+  function showClosable() {
+    hooks.photo = photo('p1', 'Stored caption');
+    const onClose = vi.fn();
+    render(
+      <App>
+        <PhotoCreditDrawer documentId="p1" onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+  const closeCross = () => fireEvent.click(document.querySelector('.ant-drawer-close') as HTMLElement);
+
+  it('closes at once when nothing was typed into the filled form', async () => {
+    const onClose = showClosable();
+    await screen.findByLabelText('Caption');
+    closeCross();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing a typed caption away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(await screen.findByLabelText('Caption'), { target: { value: 'A long caption' } });
+    closeCross();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click on the mask', async () => {
+    const onClose = showClosable();
+    fireEvent.change(await screen.findByLabelText('Caption'), { target: { value: 'A long caption' } });
+    fireEvent.click(document.querySelector('.ant-drawer-mask') as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

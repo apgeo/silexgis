@@ -326,3 +326,34 @@ describe('CabinetsPage', () => {
     expect(screen.getByText(i18n.t('common.refreshFailed'))).toBeTruthy();
   });
 });
+
+describe('leaving the cabinet dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    fireEvent.click(screen.getByText('New'));
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByLabelText('Name')).toBeNull());
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing a typed name away, and a click beside it does not close it', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    fireEvent.click(screen.getByText('New'));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Survey notes' } });
+
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(screen.getByLabelText('Name')).toHaveValue('Survey notes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Name')).toHaveValue('Survey notes');
+  });
+});

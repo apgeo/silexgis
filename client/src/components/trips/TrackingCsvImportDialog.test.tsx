@@ -1524,3 +1524,43 @@ describe('TrackingCsvImportDialog', () => {
     });
   });
 });
+
+describe('leaving the sheet import with pasted rows', () => {
+  afterEach(cleanup);
+
+  function showClosable() {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <TrackingCsvImportDialog tripLogId="trip-1" tripDay="2026-09-12" teams={TEAMS} open onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was pasted or chosen', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing pasted rows away, and is not closed by a click beside it', async () => {
+    const onClose = showClosable();
+    fireEvent.click(screen.getByRole('radio', { name: 'Pasted rows' }));
+    fireEvent.change(await screen.findByRole('textbox', { name: "The sheet's rows, header row first" }), {
+      target: { value: 'Data si ora\tSpeologi\n12.09.2026 08:15\tIon\n' },
+    });
+
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
+
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});

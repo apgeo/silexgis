@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { Alert, App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useCapabilities,
@@ -61,6 +62,8 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<CreditForm>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(documentId !== null);
 
   const {
     data: photo,
@@ -96,6 +99,8 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       return;
     }
     filledFor.current = photo.documentId;
+    // A different picture starts with nothing typed for it.
+    edits.forget();
 
     form.setFieldsValue({
       attribution: photo.credit.photographerCaverId ? 'roster' : 'other',
@@ -105,7 +110,7 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       licenceCode: photo.credit.licenceCode ?? undefined,
       placeName: photo.credit.placeName ?? undefined,
     });
-  }, [photo, form]);
+  }, [photo, form, edits]);
 
   const submit = async () => {
     if (!documentId || !loaded || filledFor.current !== documentId) {
@@ -154,7 +159,8 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   return (
     <Drawer
       open={documentId !== null}
-      onClose={onClose}
+      onClose={() => requestDiscard(edits.edited, onClose)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       placement="right"
       size="large"
       title={t('gallery.editCredit')}
@@ -183,7 +189,13 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
         />
       )}
       {isPending || !loaded ? null : (
-        <Form form={form} layout="vertical" requiredMark={false} data-testid="photo-credit-form">
+        <Form
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          data-testid="photo-credit-form"
+          onValuesChange={edits.onValuesChange}
+        >
           <Form.Item name="attribution" label={t('gallery.photographer')}>
             <Segmented
               options={[

@@ -149,10 +149,10 @@ describe('closing the rule editor', () => {
     fireEvent.click(screen.getByText(i18n.t('common.cancel')));
 
     // The dialog names itself for assistive technology as well, so the title is found twice.
-    expect((await screen.findAllByText(i18n.t('termRules.discardTitle'))).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(i18n.t('common.discardTitle'))).length).toBeGreaterThan(0);
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText(i18n.t('termRules.keepEditing')));
+    fireEvent.click(screen.getByText(i18n.t('common.keepEditing')));
     // The dialog leaves through an animation that never ends here, so what is asserted is the
     // outcome: nothing closed, and the change is still in the field.
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -166,7 +166,7 @@ describe('closing the rule editor', () => {
     fireEvent.change(await screen.findByDisplayValue('Club rules'), { target: { value: 'Mine' } });
 
     fireEvent.click(screen.getByText(i18n.t('common.cancel')));
-    fireEvent.click(await screen.findByText(i18n.t('termRules.discardOk')));
+    fireEvent.click(await screen.findByText(i18n.t('common.discardOk')));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });

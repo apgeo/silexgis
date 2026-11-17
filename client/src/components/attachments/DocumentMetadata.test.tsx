@@ -325,3 +325,34 @@ describe('DocumentMetadata', () => {
     document.textExtraction = 'extracted';
   });
 });
+
+describe('closing the metadata popover with typed work', () => {
+  function show() {
+    render(
+      <App>
+        <DocumentMetadata documentId="doc-1" />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+  }
+
+  it('closes on a click outside without asking when nothing was typed', async () => {
+    show();
+    await screen.findByDisplayValue('Ridicare topografică');
+    fireEvent.mouseDown(window.document.body);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before a click outside throws a typed title away, and keeps it on "keep editing"', async () => {
+    show();
+    fireEvent.change(await screen.findByDisplayValue('Ridicare topografică'), {
+      target: { value: 'Ridicare 2024' },
+    });
+    fireEvent.mouseDown(window.document.body);
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Keep editing' }).at(-1)!);
+    expect(screen.getByDisplayValue('Ridicare 2024')).toBeInTheDocument();
+    expect(window.document.querySelector('.ant-popover-hidden')).toBeNull();
+  });
+});

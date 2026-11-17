@@ -341,6 +341,10 @@ export default function AddMemberModal({
       open={open}
       title={creating ? t('resLinks.createTitle') : t('resLinks.addMemberTitle')}
       onCancel={onClose}
+      // What took the user effort to compose: a chosen member, a drawn anchor, a placed point, a note.
+      dirty={
+        targetId !== null || anchor !== null || point !== null || note.trim() !== '' || pointName.trim() !== ''
+      }
       onOk={() => void submit()}
       okLoading={createLink.isPending || addMember.isPending || updateLink.isPending}
       // Nothing to send is refused where the button is, not silently on the click.
