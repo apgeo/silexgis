@@ -45,6 +45,14 @@ function sentBody(): Record<string, unknown> {
 }
 
 describe('ResetPasswordPage', () => {
+  it('says a link with no token is broken before asking for a password', () => {
+    show('email=someone%40example.test');
+
+    expect(screen.getByTestId('reset-link-broken')).toBeTruthy();
+    expect(screen.queryByLabelText('New password')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('keeps the access keys unless the switch is turned on', async () => {
     show('email=invented%40example.test&token=invented-token');
     expect(screen.getByRole('switch', { name: 'Also revoke my access keys' })).not.toBeChecked();

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { AttachmentInfo } from '../../api/hooks.ts';
 
 function attachment(over: Partial<AttachmentInfo> & { kind?: string; name?: string } = {}): AttachmentInfo {
@@ -65,8 +65,14 @@ function useFakeMutation<V>(spy: (variables: V) => Promise<void>) {
   };
 }
 
+/** What the read of the attachments failed with, when a test makes it fail. */
+let attachmentsFailure: unknown;
+
 vi.mock('../../api/hooks.ts', () => ({
-  useAttachments: () => ({ data: attachments }),
+  useAttachments: () =>
+    attachmentsFailure === undefined
+      ? { data: attachments, isError: false, error: null, refetch: vi.fn() }
+      : { data: undefined, isError: true, error: attachmentsFailure, refetch: vi.fn() },
   useFileConfig: () => ({ data: { maxUploadBytes: 1024 * 1024 } }),
   useUploadFile: () => ({ mutateAsync: vi.fn() }),
   useCreateAttachment: () => ({ mutateAsync: vi.fn() }),
@@ -97,10 +103,20 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   attachments = [];
+  attachmentsFailure = undefined;
   setPrimaryAnswer = () => Promise.resolve();
 });
 
 describe('AttachmentSection', () => {
+  it('says the attachments could not be read, with no "none yet" and no upload under a list never read', () => {
+    attachmentsFailure = new TypeError('Failed to fetch');
+    draw(true);
+
+    expect(screen.getByTestId('attachments-load-failed')).toBeTruthy();
+    expect(screen.queryByText('No photos or documents yet.')).toBeNull();
+    expect(screen.queryByText(i18n.t('attachments.uploadPrompt'))).toBeNull();
+  });
+
   it('names the headline star by what pressing it will do, and says whether it is pressed', () => {
     attachments = [attachment()];
     draw();

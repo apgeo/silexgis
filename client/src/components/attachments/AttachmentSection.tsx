@@ -7,6 +7,7 @@ import {
   App, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload, theme,
 } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -72,7 +73,8 @@ export default function AttachmentSection({
 }: AttachmentSectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: attachments } = useAttachments(entityType, entityId, enabled);
+  const attachmentsRead = useAttachments(entityType, entityId, enabled);
+  const attachments = attachmentsRead.data;
   const { data: fileConfig } = useFileConfig();
   const uploadFile = useUploadFile();
   const createAttachment = useCreateAttachment();
@@ -154,8 +156,21 @@ export default function AttachmentSection({
     }
   };
 
-  const body = (
+  // A list that was never read is not an empty one: "no attachments" and an upload control under
+  // it would invite a second copy of what is already there. Held rows stay, under a notice.
+  const readFailedAlert = (
+    <ReadFailedAlert
+      isError={attachmentsRead.isError}
+      error={attachmentsRead.error}
+      held={attachments !== undefined}
+      onRetry={attachmentsRead.refetch}
+      title={t('attachments.loadFailed')}
+      testId="attachments-load-failed"
+    />
+  );
+  const body = attachmentsRead.isError && attachments === undefined ? readFailedAlert : (
     <>
+      {readFailedAlert}
       {reportSlot && (
         <div style={{ marginBottom: 16 }}>
           <Typography.Text strong>{t('attachments.reportDocument')}</Typography.Text>

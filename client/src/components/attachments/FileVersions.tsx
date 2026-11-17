@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { DeleteOutlined, DownloadOutlined, HistoryOutlined, UploadOutlined } from '@ant-design/icons';
 import { App, Popconfirm, Popover, Tag, Upload } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -28,7 +29,7 @@ export default function FileVersions({
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
   const [open, setOpen] = useState(false);
-  const { data: versions, isLoading } = useFileVersions(fileId, open);
+  const { data: versions, isLoading, isError, error, refetch } = useFileVersions(fileId, open);
   const uploadVersion = useUploadFileVersion();
   const deleteVersion = useDeleteFileVersion();
   const { data: fileConfig } = useFileConfig();
@@ -79,12 +80,21 @@ export default function FileVersions({
           {t('attachments.uploadVersion')}
         </Button>
       </Upload>
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={versions !== undefined}
+        onRetry={refetch}
+        title={t('attachments.versionsLoadFailed')}
+        testId="file-versions-load-failed"
+        style={{ marginTop: 8, marginBottom: 0 }}
+      />
       <List
         size="small"
         loading={isLoading}
         style={{ marginTop: 8 }}
         dataSource={versions ?? []}
-        locale={{ emptyText: t('attachments.noVersions') }}
+        locale={{ emptyText: isError && !versions ? <span /> : t('attachments.noVersions') }}
         renderItem={(version) => (
           <List.Item
             actions={[

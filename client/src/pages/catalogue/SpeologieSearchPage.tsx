@@ -14,6 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import SpeologieCaveDrawer from '../../components/catalogue/SpeologieCaveDrawer.tsx';
 import { speologieErrorMessage } from '../../components/catalogue/errorMessage.ts';
+import SpeologieStatusNotice from '../../components/catalogue/SpeologieStatusNotice.tsx';
 import { ROMANIAN_COUNTIES } from '../../components/catalogue/counties.ts';
 
 /**
@@ -168,15 +169,7 @@ export default function SpeologieSearchPage() {
         </Typography.Link>
       </Flex>
 
-      {status.data && !status.data.configured ? (
-        <Alert
-          type="warning"
-          showIcon
-          title={t('speologie.notConfigured.title')}
-          description={t('speologie.notConfigured.body')}
-          data-testid="speologie-not-configured"
-        />
-      ) : null}
+      <SpeologieStatusNotice status={status} />
 
       <Card size="small">
         <Flex gap={8} wrap align="center">

@@ -56,16 +56,32 @@ const navigate = vi.fn();
 /** Set by the mocked map so a test can drive a placement without a real OpenLayers canvas. */
 let placeHandler: ((id: number, position: [number, number]) => void) | null = null;
 
+/** How the status read answers: configured, not configured, or failed. */
+let statusAnswer: 'configured' | 'unconfigured' | 'failed' = 'configured';
+const refetchStatus = vi.fn();
+
 vi.mock('../../api/hooks.ts', () => ({
-  useSpeologieStatus: () => ({
-    data: { configured: true, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
-  }),
+  useSpeologieStatus: () =>
+    statusAnswer === 'failed'
+      ? { data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: refetchStatus }
+      : {
+          data: {
+            configured: statusAnswer === 'configured',
+            maxPageSize: 50,
+            maxSelection: 100,
+            portalUrl: 'https://www.speologie.org',
+          },
+          isError: false,
+          error: null,
+          refetch: refetchStatus,
+        },
   useSpeologieCaves: (requested: readonly number[]) =>
-    requested.map((id) => ({
-      data: [fresh, known].find((c) => c.id === id),
-      isPending: false,
-      error: undefined,
-    })),
+    requested.map((id) =>
+      statusAnswer === 'configured'
+        ? { data: [fresh, known].find((c) => c.id === id), isPending: false, isLoading: false, error: undefined }
+        : // A read that is never sent: pending for good, and never loading.
+          { data: undefined, isPending: true, isLoading: false, error: undefined },
+    ),
   useCaveTypes: () => ({ data: [{ id: 1, code: 'cave', name: 'Cave' }, { id: 2, code: 'pit', name: 'Pit / Aven' }] }),
   useCavingGroups: () => ({ data: [], isLoading: false }),
   useImportFromSpeologie: () => ({ mutateAsync: commitMutate, isPending: false }),
@@ -107,6 +123,8 @@ afterEach(cleanup);
 describe('SpeologieImportPage', () => {
   beforeEach(() => {
     ids = '63,64';
+    statusAnswer = 'configured';
+    refetchStatus.mockReset();
     placeHandler = null;
     navigate.mockReset();
     commitMutate.mockReset();
@@ -117,6 +135,24 @@ describe('SpeologieImportPage', () => {
       skippedCount: 0,
       failures: [],
     });
+  });
+
+  it('says the installation has no catalogue key, rather than spinning on reads it never sends', () => {
+    statusAnswer = 'unconfigured';
+    show();
+
+    expect(screen.getByTestId('speologie-not-configured')).toBeTruthy();
+    expect(document.querySelector('.ant-table .ant-spin-spinning')).toBeNull();
+  });
+
+  it('says the status could not be read, with a way to ask again, rather than spinning', () => {
+    statusAnswer = 'failed';
+    show();
+
+    expect(screen.getByTestId('speologie-status-failed')).toBeTruthy();
+    expect(document.querySelector('.ant-table .ant-spin-spinning')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetchStatus).toHaveBeenCalledTimes(1);
   });
 
   it('says plainly that the catalogue carries no coordinates', () => {

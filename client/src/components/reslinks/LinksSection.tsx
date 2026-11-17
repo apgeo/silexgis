@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { App, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/hooks.ts';
@@ -206,7 +207,7 @@ export default function LinksSection({
   // which read as the panel forgetting what had just been opened.
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
-  const { data } = useResLinksForTarget(
+  const { data, isError, error, refetch } = useResLinksForTarget(
     entityType,
     entityId,
     { pageSize: MAX_ROWS },
@@ -257,6 +258,23 @@ export default function LinksSection({
       )}
     </Flex>
   );
+
+  // A read that failed is not "nothing recorded": the links it would have found are said to be
+  // unread, where an empty section would otherwise be left out without a word.
+  if (isError && data === undefined) {
+    return (
+      <div style={{ marginTop: 12 }}>
+        <ReadFailedAlert
+          isError
+          error={error}
+          held={false}
+          onRetry={refetch}
+          title={t('resLinks.loadFailed')}
+          testId="links-load-failed"
+        />
+      </div>
+    );
+  }
 
   // Nothing recorded: no empty section, just the quiet invitation to record the first one.
   if (total === 0) {

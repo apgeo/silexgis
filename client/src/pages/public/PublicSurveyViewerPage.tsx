@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { ArrowLeftOutlined, ExportOutlined, LoginOutlined } from '@ant-design/icons';
 import { Alert, Skeleton } from 'antd';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
@@ -40,7 +41,7 @@ export default function PublicSurveyViewerPage() {
   const { token } = useParams<{ token: string }>();
   const location = useLocation();
   const { user, signIn } = useAuth();
-  const { data: view, isPending, error } = usePublicSurveyUpload(token);
+  const { data: view, isPending, error, refetch } = usePublicSurveyUpload(token);
   useSendersLanguage(view?.language);
   const settled = !!view && !surveyUploadUnsettled(view.status);
   const figures = usePublicSurveyUploadFigures(token, settled);
@@ -50,6 +51,13 @@ export default function PublicSurveyViewerPage() {
   const lineWork = usePublicSurveyUploadLineWork(token, settled && placed);
   const inApp = useSurveyUploadByPublicLink(token, !!user && !!view);
   const here = location.pathname + location.search + location.hash;
+  // Beginning the sign-in first reads the sign-in server's own description, so it fails when that
+  // server cannot be reached; said here, because the button would otherwise seem to do nothing.
+  const [signInUnreachable, setSignInUnreachable] = useState(false);
+  const startSignIn = () => {
+    setSignInUnreachable(false);
+    signIn(here).catch(() => setSignInUnreachable(true));
+  };
 
   if (isPending && !error) {
     return (
@@ -67,9 +75,9 @@ export default function PublicSurveyViewerPage() {
           showIcon
           data-testid="public-survey-sign-in"
           title={t('publicSurvey.signInRequired')}
-          description={t('publicSurvey.signInRequiredHint')}
+          description={signInUnreachable ? t('auth.serverUnreachable') : t('publicSurvey.signInRequiredHint')}
           action={
-            <Button type="primary" data-testid="public-survey-sign-in-button" onClick={() => void signIn(here)}>
+            <Button type="primary" data-testid="public-survey-sign-in-button" onClick={startSignIn}>
               {t('publicSurvey.signIn')}
             </Button>
           }
@@ -79,13 +87,16 @@ export default function PublicSurveyViewerPage() {
   }
 
   if (error || !view || !token) {
+    const unknown = isUnknownPublicLink(error);
     return (
       <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
         <Alert
-          type={isUnknownPublicLink(error) ? 'warning' : 'error'}
+          type={unknown ? 'warning' : 'error'}
           showIcon
           data-testid="public-survey-unavailable"
-          title={isUnknownPublicLink(error) ? t('publicSurvey.notFound') : t('publicSurvey.loadFailed')}
+          title={unknown ? t('publicSurvey.notFound') : t('publicSurvey.loadFailed')}
+          // A dead link is the server's answer; anything else is a read that can be made again.
+          action={unknown ? undefined : <Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
         />
       </div>
     );
@@ -111,8 +122,13 @@ export default function PublicSurveyViewerPage() {
   const pageUrl = new URL(publicSurveyViewerPath(`/p/survey/${encodeURIComponent(token)}`), window.location.origin).toString();
 
   const openInApp = !user ? (
-    <Button icon={<LoginOutlined />} onClick={() => void signIn(here)} data-testid="survey-viewer-sign-in-to-open">
-      {t('surveyViewer.header.signInToOpen')}
+    <Button
+      icon={<LoginOutlined />}
+      onClick={startSignIn}
+      title={signInUnreachable ? t('auth.serverUnreachable') : undefined}
+      data-testid="survey-viewer-sign-in-to-open"
+    >
+      {signInUnreachable ? t('auth.serverUnreachable') : t('surveyViewer.header.signInToOpen')}
     </Button>
   ) : inApp.data ? (
     <Link to={surveyUploadViewerPath(inApp.data.statusPageUrl)} data-testid="survey-viewer-open-in-app">

@@ -35,6 +35,8 @@ const page = <T,>(items: T[]) => ({ items, page: 1, pageSize: 50, totalItems: it
 
 let current = batch('running');
 let gets: string[] = [];
+/** Paths whose read answers a server error, for the tests about a failed read. */
+let failing: string[] = [];
 const unhandled: unknown[] = [];
 const record = (reason: unknown) => unhandled.push(reason);
 
@@ -43,10 +45,14 @@ beforeEach(() => {
   current = batch('running');
   gets = [];
   fullAdmin = false;
+  failing = [];
   unhandled.length = 0;
   process.on('unhandledRejection', record);
   vi.spyOn(api, 'GET').mockImplementation(((path: string) => {
     gets.push(path);
+    if (failing.includes(path)) {
+      return Promise.resolve({ data: undefined, error: { status: 500 }, response: new Response(null, { status: 500 }) });
+    }
     const data =
       path === '/api/v1/upload-batches'
         ? page([current])
@@ -126,6 +132,25 @@ describe('UploadsPage', () => {
     show();
     const when = new Date('2026-07-15T10:00:00Z').toLocaleString('ro');
     expect(await screen.findByText(when)).toBeInTheDocument();
+  });
+
+  it('says the uploads could not be read, rather than that there are none', async () => {
+    failing = ['/api/v1/upload-batches'];
+    show();
+
+    expect(await screen.findByTestId('upload-batches-load-failed')).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('uploads.batchesEmpty'))).not.toBeInTheDocument();
+  });
+
+  it('says the import directories could not be read, rather than that none are configured', async () => {
+    fullAdmin = true;
+    failing = ['/api/v1/upload-batches/import-roots'];
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(i18n.t('uploads.importDirectory')) }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByTestId('import-roots-load-failed')).toBeInTheDocument();
+    expect(within(dialog).queryByText(i18n.t('uploads.importNoRoots'))).not.toBeInTheDocument();
   });
 
   it('keeps a directory import with no path open, marks the field and starts nothing', async () => {

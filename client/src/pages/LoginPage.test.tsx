@@ -29,6 +29,28 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
+  it('says the ways to sign in could not be read, and reads them again on Retry', async () => {
+    const answers = [
+      Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve(null) } as unknown as Response),
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ openRegistration: false, externalOnly: false, providers: [], testLogins: null }),
+      } as unknown as Response),
+    ];
+    vi.stubGlobal('fetch', vi.fn(() => answers.shift()!));
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId('login-config-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByTestId('login-config-failed')).not.toBeInTheDocument());
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  });
+
   it('shows no demo accounts on an ordinary installation', async () => {
     stubAuthConfig({ openRegistration: false, externalOnly: false, providers: [], testLogins: null });
 

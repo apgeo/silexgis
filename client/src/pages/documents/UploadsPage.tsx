@@ -6,6 +6,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { cabinetPathOptions } from '../../components/documents/cabinetChoices.ts';
 import { ApiError } from '../../api/client.ts';
@@ -48,7 +49,7 @@ export default function UploadsPage() {
   const [openBatchId, setOpenBatchId] = useState<string>();
   const [importing, setImporting] = useState(false);
 
-  const { data: batches, isFetching } = useUploadBatches(page, pageSize);
+  const { data: batches, isFetching, isError, error, refetch } = useUploadBatches(page, pageSize);
 
   return (
     <div style={{ padding: 24, overflow: 'auto', height: '100%' }}>
@@ -63,13 +64,21 @@ export default function UploadsPage() {
         )}
       </Flex>
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={batches !== undefined}
+        onRetry={refetch}
+        title={t('uploads.batchesLoadFailed')}
+        testId="upload-batches-load-failed"
+      />
       <Table<UploadBatchInfo>
         rowKey="id"
         size="middle"
         scroll={{ x: 'max-content' }}
         loading={isFetching && !batches}
         dataSource={batches?.items}
-        locale={{ emptyText: t('uploads.batchesEmpty') }}
+        locale={{ emptyText: isError && !batches ? <span /> : t('uploads.batchesEmpty') }}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);
           setPageSize(pagination.pageSize ?? 20);
@@ -249,7 +258,8 @@ function DirectoryImportModal({
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: roots } = useImportRoots(open);
+  const rootsRead = useImportRoots(open);
+  const roots = rootsRead.data;
   const { data: cabinets } = useCabinets(open);
   const start = useImportDirectory();
   const [form] = Form.useForm<{ path: string; label?: string; cabinetId?: string; tagName?: string }>();
@@ -291,7 +301,18 @@ function DirectoryImportModal({
     >
       <Typography.Paragraph type="secondary">{t('uploads.importDirectoryHint')}</Typography.Paragraph>
 
-      {configured ? (
+      {/* A failed read of the directories is not an installation with none configured: that
+          sentence would send an operator to change a setting that is fine. */}
+      {rootsRead.isError && roots === undefined ? (
+        <ReadFailedAlert
+          isError
+          error={rootsRead.error}
+          held={false}
+          onRetry={rootsRead.refetch}
+          title={t('uploads.importRootsLoadFailed')}
+          testId="import-roots-load-failed"
+        />
+      ) : roots === undefined ? null : configured ? (
         <Card size="small" style={{ marginBottom: 12 }} title={t('uploads.importRoots')}>
           <Space orientation="vertical" size={2}>
             {roots!.roots.map((root) => (

@@ -33,6 +33,9 @@ export default function ResetPasswordPage() {
   const email = params.get('email');
   const token = params.get('token');
   const invite = params.get('invite') === '1';
+  // A link missing what it needs is broken before anything is typed; asking for a new password
+  // first and saying so only after would waste the reader's effort on a form that cannot work.
+  const linkBroken = !email || !token;
 
   const onFinish = async (values: ResetFormValues) => {
     if (!email || !token) {
@@ -92,7 +95,20 @@ export default function ResetPasswordPage() {
 
         {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
 
-        {done ? (
+        {linkBroken ? (
+          <>
+            <Alert
+              type="error"
+              showIcon
+              data-testid="reset-link-broken"
+              title={t('auth.resetLinkInvalid')}
+              style={{ marginBottom: 16 }}
+            />
+            <Link to="/login">
+              <Button block>{t('auth.signIn')}</Button>
+            </Link>
+          </>
+        ) : done ? (
           <>
             <Alert type="success" showIcon title={invite ? t('auth.invitePasswordDone') : t('auth.resetPasswordDone')} style={{ marginBottom: 16 }} />
             <Link to="/login">

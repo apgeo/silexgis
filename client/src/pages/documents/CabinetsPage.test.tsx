@@ -103,6 +103,8 @@ let capabilities = { domains: { documents: 'read' } };
 const refetchCabinets = vi.fn();
 const cabinetsLoaded = () => ({ data: cabinets, isPending: false, isError: false, refetch: refetchCabinets });
 let cabinetsRead: () => unknown = cabinetsLoaded;
+/** What a cabinet's listing failed with, when a test makes it fail. */
+let documentsFailure: unknown;
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -110,10 +112,10 @@ vi.mock('../../api/hooks.ts', async () => {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
     useCabinets: () => cabinetsRead(),
-    useCabinetDocuments: (id: string | undefined) => ({
-      data: id ? shelf : undefined,
-      isFetching: false,
-    }),
+    useCabinetDocuments: (id: string | undefined) =>
+      documentsFailure !== undefined && id
+        ? { data: undefined, isFetching: false, isError: true, error: documentsFailure, refetch: vi.fn() }
+        : { data: id ? shelf : undefined, isFetching: false, isError: false, error: null, refetch: vi.fn() },
     useCreateCabinet: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateCabinet: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteCabinet: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -134,6 +136,7 @@ afterEach(() => {
   cleanup();
   cabinetsRead = cabinetsLoaded;
   refetchCabinets.mockReset();
+  documentsFailure = undefined;
 });
 
 function renderPage() {
@@ -184,6 +187,17 @@ describe('CabinetsPage', () => {
     // A reader gets no control that would move access — no filing, no unfiling, no edit.
     expect(screen.queryByText('New')).not.toBeInTheDocument();
     expect(screen.queryByText('File elsewhere')).not.toBeInTheDocument();
+  });
+
+  it('says a failed listing of a cabinet failed, rather than that nothing is filed in it', () => {
+    capabilities = { domains: { documents: 'read' } };
+    documentsFailure = new TypeError('Failed to fetch');
+    renderPage();
+
+    fireEvent.click(screen.getByText('Surveys (2)'));
+
+    expect(screen.getByTestId('cabinet-documents-load-failed')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing filed here that you may read.')).not.toBeInTheDocument();
   });
 
   it('offers filing to a writer, and files rather than moving so a document can sit on several shelves', async () => {
