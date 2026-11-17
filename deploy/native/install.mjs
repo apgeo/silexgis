@@ -43,6 +43,7 @@ import {
   accountIds,
   acquireLock,
   activateRelease,
+  backupKeepFor,
   adminAccess,
   buildConnectionString,
   buildRelease,
@@ -282,6 +283,9 @@ export async function main(argv) {
   const facts = machineFacts();
   const configDir = resolveConfigDir(values, env);
   const recorded = readRecord(path.join(configDir, INSTALL_RECORD));
+  // Checked before anything is built or switched, and defaulting to what an earlier install chose,
+  // so that a re-run without the option does not quietly reset the rotation to the default.
+  const backupKeep = values['no-backup-timer'] ? null : backupKeepFor(recorded, {}, values['backup-keep']);
   const layout = resolveLayout(values, env, recorded, facts);
   layout.sourceDir = path.resolve(layout.sourceDir);
 
@@ -421,9 +425,7 @@ export async function main(argv) {
     }
 
     if (!values['no-backup-timer']) {
-      const keep = Number(values['backup-keep'] ?? 14);
-      if (!Number.isInteger(keep) || keep < 1) fail('--backup-keep must be a whole number, 1 or more');
-      record = writeRecord(layout, record, convergeBackupTimer(layout, record, keep));
+      record = writeRecord(layout, record, convergeBackupTimer(layout, record, backupKeep));
     }
 
     say('Installed');

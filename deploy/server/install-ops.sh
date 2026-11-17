@@ -18,8 +18,9 @@
 # being run from inside it. Two reasons, both learned the hard way: a script that lives in the
 # tree it is about to `git pull` can be rewritten underneath the shell executing it, and a copy
 # placed into the checkout by hand collides with the pull the moment the same path arrives from
-# upstream ("untracked working tree files would be overwritten"). Re-run this script after an
-# update to refresh the copy from the checkout.
+# upstream ("untracked working tree files would be overwritten"). A successful update refreshes
+# its own copy, $SILEXGIS_OPS_DIR/update.sh, from the checkout it has just updated; re-run this
+# script after an update only to refresh the wrappers, the timers and the other scripts copied here.
 set -euo pipefail
 
 DEPLOY_USER="${SILEXGIS_DEPLOY_USER:-silexgis}"
@@ -59,7 +60,8 @@ cat > /usr/local/sbin/silexgis-update <<EOF
 #!/usr/bin/env bash
 # Entry point for updating this SilexGIS installation. The logic lives in $OPS_DIR,
 # outside the checkout, so a pull cannot rewrite the script that is running it.
-# Refresh it from the checkout with: sudo bash $APP_DIR/deploy/server/install-ops.sh
+# A successful update refreshes $OPS_DIR/update.sh from the checkout itself; this wrapper
+# and the other scripts there are refreshed with: sudo bash $APP_DIR/deploy/server/install-ops.sh
 set -euo pipefail
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
 	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups --reset-env \\

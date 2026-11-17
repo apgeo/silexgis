@@ -8,6 +8,8 @@
 // would tell both efforts the API holds when nothing was checked.
 
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +18,7 @@ import { after, describe, it } from 'node:test';
 import {
   LIVE_SWITCH,
   UP_READY_MARKER,
+  killTree,
   liveTestFiles,
   renderReport,
   runName,
@@ -126,5 +129,26 @@ describe('waiting for the server', () => {
     assert.ok(marker > 0, 'speleoloc-dev.mjs no longer prints the line this script waits for');
     assert.ok(dev.lastIndexOf('proveSyncContent(baseUrl') < dev.lastIndexOf('printSummary(baseUrl, capabilities)'),
       'the summary must be printed after the proof');
+  });
+});
+
+describe('stopping a run that hung', () => {
+  it('takes the processes the test command started with it, so the run is not left waiting on them', {
+    skip: process.platform === 'win32' ? 'the group signal is a POSIX one; Windows uses taskkill /T' : false,
+    timeout: 20_000,
+  }, async () => {
+    // A command that starts a child sharing its output pipes and then waits — as flutter does
+    // with the test processes it starts. Killing only the command leaves the child holding the
+    // pipes, and "close" never comes.
+    const grandchild = "setTimeout(() => {}, 60000)";
+    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'inherit' }); setTimeout(() => {}, 60000)`;
+    const child = spawn(process.execPath, ['-e', parent], { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout.resume();
+    child.stderr.resume();
+    await new Promise((done) => setTimeout(done, 500));
+    const closed = once(child, 'close');
+    killTree(child);
+    const outcome = await Promise.race([closed.then(() => 'closed'), new Promise((done) => setTimeout(() => done('hung'), 10_000))]);
+    assert.equal(outcome, 'closed');
   });
 });

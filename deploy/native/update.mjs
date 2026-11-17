@@ -19,7 +19,8 @@
 //   5. bring the rendered nginx site and systemd unit up to date (an edited one is left alone);
 //   6. switch, start, wait for /health/ready and run the installation check; if either fails, put
 //      the previous build back, start it, and say which backup to restore if a migration ran;
-//   7. keep the newest SILEXGIS_BACKUP_KEEP backups (default 10).
+//   7. keep the newest backups, as many as the installation's nightly timer keeps
+//      (recorded at install time; SILEXGIS_BACKUP_KEEP overrides it, the default is 14).
 //
 // Environment: SILEXGIS_HEALTH_TIMEOUT (seconds, default 300), SILEXGIS_BACKUP_KEEP,
 // SILEXGIS_SKIP_BACKUP, and SILEXGIS_CONFIG_DIR for an installation outside the default place.
@@ -34,6 +35,7 @@ import { runChecks } from './check.mjs';
 import {
   acquireLock,
   activateRelease,
+  backupKeepFor,
   backupStamp,
   buildRelease,
   convergeUnit,
@@ -157,7 +159,7 @@ export async function main(argv) {
     });
 
     say('Housekeeping');
-    pruneBackups(layout.backupDir, Number(process.env.SILEXGIS_BACKUP_KEEP || 10));
+    pruneBackups(layout.backupDir, backupKeepFor(recorded));
     say(`Updated ${installed?.commit?.slice(0, 12) ?? 'unknown'} -> ${state.commit.slice(0, 12)}${state.dirty ? ' (with local changes)' : ''}`);
     return 0;
   } finally {

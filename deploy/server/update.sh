@@ -23,6 +23,13 @@
 #   SILEXGIS_SKIP_BACKUP    default 0      set 1 to skip the pre-update backup (discouraged)
 #   SILEXGIS_UPDATE_LOCK    default /tmp/silexgis-update.lock   shared with reset.sh
 #
+# What "up to date" compares: the commit last deployed -- recorded only once a version has answered
+# healthy -- against the branch, never the checkout's HEAD against it. The checkout is
+# fast-forwarded before the build, so after an update cut short (an SSH session dropped mid-build,
+# a host shutdown, a failed submodule update) HEAD already equals the branch while the previous
+# build is still what runs; comparing HEAD made every later run say "already up to date" and the
+# new code never deployed. An installation that has no record yet counts its HEAD as deployed.
+#
 # Exit status: 0 only when the new version was built, started and answered healthy. Any other
 # outcome exits 1 with a FAILED line saying what failed, whether the previous version is running
 # again, and whether the database may already have been migrated.
@@ -33,7 +40,8 @@ set -euo pipefail
 # pull`, and bash reads a script incrementally as it executes: replacing the file underneath a
 # running shell can make it resume at a byte offset that is now the middle of a different
 # line. Copying to a temporary file and re-execing once removes the whole class of problem.
-# The next run picks up whatever the pull brought.
+# Where the script was started from is remembered first, because after the re-exec $0 names the
+# temporary copy: a successful update refreshes that original from the checkout (see the end).
 # ---------------------------------------------------------------------------
 if [ "${SILEXGIS_UPDATE_REEXEC:-}" != 1 ]; then
 	_self="$(mktemp /tmp/silexgis-update.XXXXXX.sh)"
@@ -41,6 +49,8 @@ if [ "${SILEXGIS_UPDATE_REEXEC:-}" != 1 ]; then
 	chmod +x "$_self"
 	export SILEXGIS_UPDATE_REEXEC=1
 	export SILEXGIS_UPDATE_SELFCOPY="$_self"
+	SILEXGIS_UPDATE_ORIGINAL="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+	export SILEXGIS_UPDATE_ORIGINAL
 	exec "$_self" "$@"
 fi
 trap '[ -n "${SILEXGIS_UPDATE_SELFCOPY:-}" ] && rm -f "$SILEXGIS_UPDATE_SELFCOPY"' EXIT
@@ -85,9 +95,25 @@ HEALTH_URL="${PUBLIC_URL%/}/health/ready"
 exec 9>"${SILEXGIS_UPDATE_LOCK:-/tmp/silexgis-update.lock}"
 flock -n 9 || fail "another update is already running"
 
+# A signal (a dropped SSH session, a shutdown) ends the run with a FAILED line rather than silently.
+# Nothing is rolled back here: a rollback is a rebuild, too long to start from a signal handler, and
+# the deployed-commit record below makes the next run finish the update instead.
+trap 'fail "interrupted by SIGHUP -- the previous version is still running; run the update again to finish it"' HUP
+trap 'fail "interrupted by SIGINT -- the previous version is still running; run the update again to finish it"' INT
+trap 'fail "interrupted by SIGTERM -- the previous version is still running; run the update again to finish it"' TERM
+
 BRANCH="$(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD)"
 git -C "$APP_DIR" fetch --quiet origin "$BRANCH"
-CURRENT="$(git -C "$APP_DIR" rev-parse HEAD)"
+DEPLOYED_RECORD="$(git -C "$APP_DIR" rev-parse --path-format=absolute --git-path silexgis-deployed-commit)"
+CURRENT=""
+if [ -s "$DEPLOYED_RECORD" ]; then
+	CURRENT="$(head -n 1 "$DEPLOYED_RECORD")"
+	if ! git -C "$APP_DIR" cat-file -e "${CURRENT}^{commit}" 2>/dev/null; then
+		echo "warning: the recorded deployed commit $CURRENT is not in this checkout; using HEAD" >&2
+		CURRENT=""
+	fi
+fi
+[ -n "$CURRENT" ] || CURRENT="$(git -C "$APP_DIR" rev-parse HEAD)"
 TARGET="$(git -C "$APP_DIR" rev-parse "origin/$BRANCH")"
 
 echo "branch:  $BRANCH"
@@ -142,6 +168,11 @@ else
 	say "Backup skipped (SILEXGIS_SKIP_BACKUP=1)"
 fi
 
+# Written down before HEAD moves: an installation updated before the record existed has none (what
+# it runs is what its HEAD says), and a run cut short after the fast-forward must still leave the
+# previous version named as the one deployed.
+echo "$CURRENT" > "$DEPLOYED_RECORD"
+
 say "Updating checkout to $(git -C "$APP_DIR" rev-parse --short "$TARGET")"
 git -C "$APP_DIR" merge --ff-only "origin/$BRANCH" || \
 	fail "cannot fast-forward -- the checkout has diverged from origin/$BRANCH"
@@ -149,8 +180,8 @@ git -C "$APP_DIR" merge --ff-only "origin/$BRANCH" || \
 # A fast-forward moves the submodule *pointer* without touching the submodule's working tree.
 # Skipping this builds new application code against the old survey readers, which either fails
 # to compile or -- worse -- succeeds against the wrong version.
-git -C "$APP_DIR" submodule update --init --recursive --quiet || \
-	fail "could not update submodules"
+SUBMODULES_UPDATED=1
+git -C "$APP_DIR" submodule update --init --recursive --quiet || SUBMODULES_UPDATED=0
 
 # Every step below is a single command tested on its own. They used to be two commands inside a
 # function called as an `if` condition -- and bash ignores `set -e` for everything inside such a
@@ -207,6 +238,8 @@ $BACKUP_NOTE."
 $schema"
 }
 
+[ "$SUBMODULES_UPDATED" = 1 ] || abort_update "the submodules could not be updated (the error is above)"
+
 say "Build"
 docker compose build --pull || abort_update "the new version did not build (the error is above)"
 
@@ -217,6 +250,7 @@ docker compose up -d --remove-orphans || \
 say "Waiting for $HEALTH_URL"
 wait_healthy || abort_update "the new version did not become healthy within ${HEALTH_TIMEOUT}s" migrated
 say "Healthy at $(git -C "$APP_DIR" rev-parse --short HEAD)"
+git -C "$APP_DIR" rev-parse HEAD > "$DEPLOYED_RECORD"
 
 say "Housekeeping"
 docker image prune -f >/dev/null || true
@@ -234,3 +268,21 @@ fi
 df -h / | tail -1 | sed 's/^/    disk: /'
 
 say "Updated $(git -C "$APP_DIR" rev-parse --short "$CURRENT") -> $(git -C "$APP_DIR" rev-parse --short HEAD)"
+
+# The update runs from a copy installed outside the checkout (the silexgis-update wrapper's), which
+# nothing else refreshes, so a fix to this script would reach the host only when an operator re-ran
+# the installer. Now that the new version is deployed, the checkout's copy replaces the installed
+# one -- written beside it and renamed over it, so a run starting at that moment reads one whole
+# file or the other. A run from the checkout's own copy has nothing to refresh.
+CHECKOUT_COPY="$(readlink -f "$APP_DIR/deploy/server/update.sh" 2>/dev/null || true)"
+INSTALLED_COPY="${SILEXGIS_UPDATE_ORIGINAL:-}"
+if [ -n "$INSTALLED_COPY" ] && [ -f "$CHECKOUT_COPY" ] && [ "$INSTALLED_COPY" != "$CHECKOUT_COPY" ] \
+	&& ! cmp -s "$CHECKOUT_COPY" "$INSTALLED_COPY"; then
+	staged="$INSTALLED_COPY.new.$$"
+	if cp "$CHECKOUT_COPY" "$staged" && chmod 755 "$staged" && mv -f "$staged" "$INSTALLED_COPY"; then
+		echo "    refreshed $INSTALLED_COPY from the checkout"
+	else
+		rm -f "$staged"
+		echo "warning: could not refresh $INSTALLED_COPY from the checkout; re-run deploy/server/install-ops.sh" >&2
+	fi
+fi
