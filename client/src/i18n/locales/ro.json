@@ -3882,6 +3882,7 @@
     "unlinkConfirm": "Elimini acest cont asociat?",
     "unlinked": "Cont dezasociat.",
     "unlinkFailed": "Contul nu a putut fi dezasociat.",
+    "unlinkLastLogin": "Setează o parolă înainte de a elimina singura metodă de autentificare.",
     "method_authenticator": "Aplicație de autentificare",
     "method_email": "Cod prin e-mail",
     "method_sms": "Cod prin SMS",

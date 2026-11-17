@@ -108,16 +108,22 @@ export default function SecuritySettingsPage() {
 
   const unlink = async (provider: string) => {
     let failed: boolean;
+    let code: string | undefined;
     try {
       const { error } = await api.DELETE('/api/v1/me/external-logins/{provider}', {
         params: { path: { provider } },
       });
       failed = error !== undefined;
+      code = (error as { code?: string } | undefined)?.code;
     } catch {
       failed = true;
     }
     if (failed) {
-      message.error(t('security.unlinkFailed'));
+      // The server keeps the last guard too (the list here can be stale): its refusal says what to
+      // do instead, which "could not be unlinked" does not.
+      message.error(
+        t(code === 'auth.external_last_login' ? 'security.unlinkLastLogin' : 'security.unlinkFailed'),
+      );
       return;
     }
     message.success(t('security.unlinked'));

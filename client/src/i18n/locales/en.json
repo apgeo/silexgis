@@ -3882,6 +3882,7 @@
     "unlinkConfirm": "Remove this linked account?",
     "unlinked": "Account unlinked.",
     "unlinkFailed": "The account could not be unlinked.",
+    "unlinkLastLogin": "Set a password before removing your only sign-in method.",
     "method_authenticator": "Authenticator app",
     "method_email": "Emailed code",
     "method_sms": "Texted code",
