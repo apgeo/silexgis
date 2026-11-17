@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import { useCan, useCapabilities, useReviewQueue, type HeldBatch } from '../../api/hooks.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { SectionTags } from '../../components/review/ReviewParts.tsx';
 import { sourceLabel } from '../../components/review/reviewModel.ts';
@@ -45,13 +46,21 @@ export default function ReviewQueuePage() {
       <Typography.Paragraph type="warning" data-testid="review-whole-view">
         {t('review.wholeView')}
       </Typography.Paragraph>
+      <ReadFailedAlert
+        error={queue.error}
+        isError={queue.isError}
+        held={queue.data !== undefined}
+        onRetry={queue.refetch}
+        title={t('review.queueLoadFailed')}
+        testId="review-queue-load-failed"
+      />
       <Table<HeldBatch>
         size="small"
         rowKey="id"
         scroll={{ x: 'max-content' }}
         loading={queue.isFetching && !queue.data}
         dataSource={queue.data?.items}
-        locale={{ emptyText: t('review.queueEmpty') }}
+        locale={{ emptyText: queue.isError ? ' ' : t('review.queueEmpty') }}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);
           setPageSize(pagination.pageSize ?? 25);

@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { App, Alert, Card, Flex, Form, Segmented, Spin, Switch, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   NOTIFICATION_CHANNELS,
@@ -31,7 +32,7 @@ export default function NotificationSettingsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
-  const { data: prefs, isPending } = useNotificationPreferences();
+  const { data: prefs, isPending, isError, error: readError, refetch } = useNotificationPreferences();
   const update = useUpdateNotificationPreferences();
   const live = Form.useWatch('cells', form);
 
@@ -50,6 +51,18 @@ export default function NotificationSettingsPage() {
     }
   }, [prefs, form]);
 
+  if (isError && !prefs) {
+    return (
+      <ReadFailedAlert
+        error={readError}
+        isError
+        held={false}
+        onRetry={refetch}
+        title={t('settings.notifications.loadFailed')}
+        testId="notification-settings-load-failed"
+      />
+    );
+  }
   if (isPending || !prefs) {
     return <Spin />;
   }

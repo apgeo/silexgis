@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { App, Alert, Card, Flex, Form, Input, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -26,7 +27,7 @@ export default function EmailSettingsPage() {
   const { message } = App.useApp();
   const [form] = Form.useForm<{ newEmail: string }>();
   const [params, setParams] = useSearchParams();
-  const { data: me, isPending } = useMe();
+  const { data: me, isPending, isError, error: readError, refetch } = useMe();
   const { refreshSession } = useAuth();
 
   const request = useRequestEmailChange();
@@ -63,6 +64,18 @@ export default function EmailSettingsPage() {
       });
   }, [params, setParams, confirm, message, t, refreshSession]);
 
+  if (isError && !me) {
+    return (
+      <ReadFailedAlert
+        error={readError}
+        isError
+        held={false}
+        onRetry={refetch}
+        title={t('settings.meLoadFailed')}
+        testId="email-settings-load-failed"
+      />
+    );
+  }
   if (isPending || !me) {
     return <Spin />;
   }
