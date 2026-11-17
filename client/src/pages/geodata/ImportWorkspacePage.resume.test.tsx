@@ -110,6 +110,7 @@ const preview: ImportPreview = {
   scannedRowCount: 1,
   ruleHits: [],
   ruleSet: null,
+  lithologyValues: [],
 };
 
 vi.mock('../../api/hooks.ts', async () => {
