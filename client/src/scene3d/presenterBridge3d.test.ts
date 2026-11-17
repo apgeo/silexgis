@@ -30,6 +30,7 @@ function target(settledAfter: number): Scene3DPresenterTarget & { renders: numbe
     isSettled: () => fake.renders > settledAfter,
     groundHeight: () => 0,
     modelSphere: () => undefined,
+    loadedModelCount: () => 3,
     setModelTint: vi.fn(),
     positionToScreen: vi.fn(() => ({ x: 12, y: 34 })),
     setVerticalExaggeration: vi.fn(),

@@ -2983,6 +2983,36 @@ describe('models the scene loads', () => {
     session.release();
   });
 
+  it('counts the models it holds off what it draws, hidden ones included, and none once removed', async () => {
+    const session = acquire();
+    const first = session.engine.loadModel('cave-mesh', {
+      url: MESH_URL,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    const second = session.engine.loadModel('other-mesh', {
+      url: `${MESH_URL}?other`,
+      anchor: anchor(),
+      placement: anchored,
+    });
+    engine.Model.deliver(MESH_URL);
+    engine.Model.deliver(`${MESH_URL}?other`);
+    await Promise.all([first, second]);
+    // Something that is not a model does not count.
+    scene().primitives.add({});
+    // Asked of the scene the way a scripted recording's handle asks it.
+    const held = session.engine as unknown as { loadedModelCount(): number };
+
+    expect(held.loadedModelCount()).toBe(2);
+    // Hidden is still on the graphics card.
+    session.engine.setModelVisible('cave-mesh', false);
+    expect(held.loadedModelCount()).toBe(2);
+    session.engine.removeModel('cave-mesh');
+    session.engine.removeModel('other-mesh');
+    expect(held.loadedModelCount()).toBe(0);
+    session.release();
+  });
+
   it('draws a model where it was surveyed once the ground has relief', async () => {
     const session = acquire();
 
