@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Card, Empty, Flex, Typography } from 'antd';
+import { App, Card, Empty, Flex, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -54,6 +54,7 @@ function ExpeditionAlbums({
   expeditionName: string;
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { data: capabilities } = useCapabilities();
@@ -126,7 +127,7 @@ function ExpeditionAlbums({
                   <Flex
                     align="center"
                     justify="center"
-                    style={{ height: 100, background: 'rgba(0,0,0,0.04)' }}
+                    style={{ height: 100, background: token.colorFillQuaternary }}
                   >
                     <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
                   </Flex>

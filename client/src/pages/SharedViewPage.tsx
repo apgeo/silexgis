@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Flex, Spin, Typography } from 'antd';
+import { Alert, Card, Flex, Spin, Typography, theme } from 'antd';
 import Button from '../components/Button.tsx';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -33,6 +33,7 @@ interface Picked {
  */
 export default function SharedViewPage() {
   const { t, i18n } = useTranslation();
+  const { token: colors } = theme.useToken();
   // A vector background's labels follow the language the page is read in.
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const { token } = useParams<{ token: string }>();
@@ -175,7 +176,7 @@ export default function SharedViewPage() {
 
   return (
     <Flex vertical style={{ height: '100vh' }}>
-      <Flex align="center" style={{ padding: '8px 16px', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
+      <Flex align="center" style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.colorBorderSecondary}` }}>
         <Typography.Title level={5} style={{ margin: 0, flex: 1 }}>
           {name ?? <Spin size="small" />}
         </Typography.Title>
@@ -185,7 +186,7 @@ export default function SharedViewPage() {
           would itself tell the reader that something protected lies in view. */}
       <Typography.Text
         type="secondary"
-        style={{ padding: '4px 16px', fontSize: 12, borderBottom: '1px solid rgba(128,128,128,0.25)' }}
+        style={{ padding: '4px 16px', fontSize: 12, borderBottom: `1px solid ${colors.colorBorderSecondary}` }}
         data-testid="shared-view-protection-note"
       >
         {t('views.sharedProtectedNote')}

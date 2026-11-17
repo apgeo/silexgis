@@ -190,3 +190,9 @@ html[data-reduce-motion='true'] *::after {
 .ant-table-tbody > tr.table-row-map-picked > td:first-child {
   box-shadow: inset 4px 0 0 var(--ant-color-primary);
 }
+
+/* Secondary text a panel puts under or beside a control: one size for every such hint, instead of
+   a size written beside each one. */
+.hint-text {
+  font-size: var(--ant-font-size-sm, 12px);
+}

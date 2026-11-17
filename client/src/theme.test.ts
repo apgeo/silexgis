@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { theme } from 'antd';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildThemeConfig, resolveDark, calendarDayContentStyle } from './theme.ts';
+import { buildThemeConfig, resolveDark, calendarDayContentStyle, translucent } from './theme.ts';
 import { DEFAULT_APPEARANCE } from './stores/uiPrefsStore.ts';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -407,5 +407,15 @@ describe('overrides the stylesheet draws for the higher-contrast dark theme', ()
     for (const property of properties) {
       expect(contrast(token[tokenOf(property)], token.colorBgContainer), property).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe('translucent', () => {
+  it('makes a theme colour see-through for a fill under its own outline', () => {
+    expect(translucent('#146262', 0.15)).toBe('rgba(20, 98, 98, 0.15)');
+  });
+
+  it('leaves a colour it cannot read as it is', () => {
+    expect(translucent('rgb(1, 2, 3)', 0.5)).toBe('rgb(1, 2, 3)');
   });
 });

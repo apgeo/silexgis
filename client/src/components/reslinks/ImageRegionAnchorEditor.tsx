@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { Alert, Flex, Segmented, Skeleton, Typography } from 'antd';
+import { Alert, Flex, Segmented, Skeleton, Typography, theme } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useDocument, useFile } from '../../api/hooks.ts';
 import { displayableImageUrl } from '../documents/derivativeUrl.ts';
+import { translucent } from '../../theme.ts';
 import ImageRegionCanvas from '../../imagelink/ImageRegionCanvas.tsx';
 import {
   IMAGE_REGION_SHAPES,
@@ -41,6 +42,7 @@ export default function ImageRegionAnchorEditor({
   target?: { targetType: string; targetId: string };
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [shape, setShape] = useState<ImageRegionShape>('rect');
 
   const documentId = target?.targetType === 'document' ? target.targetId : undefined;
@@ -88,8 +90,8 @@ export default function ImageRegionAnchorEditor({
     : [{
         id: 'draft',
         region: drawn,
-        stroke: '#1677ff',
-        fill: 'rgba(22, 119, 255, 0.2)',
+        stroke: token.colorPrimary,
+        fill: translucent(token.colorPrimary, 0.2),
         label: t('resLinks.anchorEditors.regionDrawn'),
       }];
 

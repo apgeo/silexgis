@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Flex, Image, Typography } from 'antd';
+import { Flex, Image, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { SurveyUploadPointCloudPictures } from '../../api/hooks.ts';
 
@@ -17,6 +17,7 @@ const SCAN_PICTURE_RAMP = ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'
  */
 export default function ScanPictures({ pictures }: { pictures: SurveyUploadPointCloudPictures }) {
   const { t, i18n } = useTranslation();
+  const { token } = theme.useToken();
   const number = (value: number, digits = 1) =>
     new Intl.NumberFormat(i18n.language, { maximumFractionDigits: digits }).format(value);
   const centimetres = (metres: number) => number(metres * 100, 1);
@@ -31,7 +32,7 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
           <Image
             src={pictures.planUrl}
             alt={t('surveyUploads.pictures.plan')}
-            style={{ maxHeight: 320, objectFit: 'contain', background: '#f5f5f5' }}
+            style={{ maxHeight: 320, objectFit: 'contain', background: token.colorFillQuaternary }}
             data-testid="scan-picture-plan"
           />
           <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="scan-picture-plan-caption">
@@ -47,7 +48,7 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
             <Image
               src={pictures.profileUrl}
               alt={t('surveyUploads.pictures.profile')}
-              style={{ maxHeight: 320, objectFit: 'contain', background: '#f5f5f5' }}
+              style={{ maxHeight: 320, objectFit: 'contain', background: token.colorFillQuaternary }}
               data-testid="scan-picture-profile"
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="scan-picture-profile-caption">

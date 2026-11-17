@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Badge, Card, Flex, Typography } from 'antd';
+import { Badge, Card, Flex, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 interface RuleHit {
@@ -25,6 +25,7 @@ interface Props {
  */
 export default function RuleHitList({ hits, unmatched, activeRule, onPick }: Props) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
 
   return (
     <Card size="small" title={t('vectorImport.dryRun')} data-testid="import-rule-hits">
@@ -47,15 +48,15 @@ export default function RuleHitList({ hits, unmatched, activeRule, onPick }: Pro
               paddingInline: 6,
               paddingBlock: 2,
               borderRadius: 4,
-              background: activeRule === hit.ruleId ? 'rgba(20, 98, 98, 0.12)' : undefined,
+              background: activeRule === hit.ruleId ? token.colorPrimaryBg : undefined,
             }}
           >
             <Typography.Text type={hit.count === 0 ? 'secondary' : undefined}>{hit.ruleName}</Typography.Text>
             <Badge
               count={hit.count}
               showZero
-              color={hit.count === 0 ? '#d9d9d9' : '#146262'}
-              style={{ color: hit.count === 0 ? '#595959' : undefined }}
+              color={hit.count === 0 ? token.colorFillSecondary : token.colorPrimary}
+              style={{ color: hit.count === 0 ? token.colorTextSecondary : undefined }}
             />
           </Flex>
         ))}
@@ -75,12 +76,12 @@ export default function RuleHitList({ hits, unmatched, activeRule, onPick }: Pro
             paddingInline: 6,
             paddingBlock: 2,
             borderRadius: 4,
-            borderTop: '1px solid rgba(0,0,0,0.06)',
-            background: activeRule === 'none' ? 'rgba(20, 98, 98, 0.12)' : undefined,
+            borderTop: `1px solid ${token.colorSplit}`,
+            background: activeRule === 'none' ? token.colorPrimaryBg : undefined,
           }}
         >
           <Typography.Text type="secondary">{t('vectorImport.noRule')}</Typography.Text>
-          <Badge count={unmatched} showZero color="#d9d9d9" style={{ color: '#595959' }} />
+          <Badge count={unmatched} showZero color={token.colorFillSecondary} style={{ color: token.colorTextSecondary }} />
         </Flex>
       </Flex>
     </Card>
