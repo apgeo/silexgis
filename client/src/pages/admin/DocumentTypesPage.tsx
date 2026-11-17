@@ -68,7 +68,12 @@ export default function DocumentTypesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     // A blank box means "this kind has no schema", which is a different thing from an empty
     // JSON object — the latter would accept anything and stamp a version for no reason.
     const body: DocumentTypeWrite = {

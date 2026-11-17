@@ -155,7 +155,12 @@ export default function CaversPage() {
   ];
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body = {
       fullName: values.fullName,
       // Sent on every save, an empty one included: the server writes what it is given, so a

@@ -113,4 +113,23 @@ describe('ReportTemplatesPage', () => {
     expect(screen.getByRole('columnheader', { name: 'Writes up' })).toBeTruthy();
     expect(screen.getByText('A trip')).toBeTruthy();
   });
+
+  it('Save with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click(screen.getByRole('button', { name: /Add a layout/ }));
+      const name = screen.getByLabelText('Name');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(createMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
 });

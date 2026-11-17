@@ -162,4 +162,29 @@ describe('creating a feature set', () => {
     expect(await screen.findByText('A feature set name needs at least one letter or digit.')).toBeTruthy();
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
+
+  it('OK with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    createSpy.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      render(
+        <App>
+          <FeatureSetsPage />
+        </App>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /New feature set/ }));
+      const dialog = await screen.findByRole('dialog');
+      const name = within(dialog).getByLabelText('Name');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
 });

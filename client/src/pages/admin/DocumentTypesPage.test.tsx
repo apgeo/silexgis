@@ -124,4 +124,32 @@ describe('DocumentTypesPage', () => {
     await waitFor(() => expect(screen.getByLabelText('Code')).toHaveValue('field_note'));
     expect(screen.getByLabelText('Code')).toBeEnabled();
   });
+
+  it('Save with the name emptied marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    updateMutate.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      render(
+        <App>
+          <DocumentTypesPage />
+        </App>,
+      );
+
+      fireEvent.click(screen.getAllByText('Edit')[1]);
+      const name = await screen.findByLabelText('Name');
+      await waitFor(() => expect(name).toHaveValue('Field note'));
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(screen.getByText('Save'));
+
+      await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(updateMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
 });

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { api } from '../../api/client.ts';
 
-vi.mock('../../components/reslinks/permissions.ts', () => ({ useIsFullAdmin: () => false }));
+let fullAdmin = false;
+vi.mock('../../components/reslinks/permissions.ts', () => ({ useIsFullAdmin: () => fullAdmin }));
 
 const { default: UploadsPage } = await import('./UploadsPage.tsx');
 
@@ -34,11 +35,16 @@ const page = <T,>(items: T[]) => ({ items, page: 1, pageSize: 50, totalItems: it
 
 let current = batch('running');
 let gets: string[] = [];
+const unhandled: unknown[] = [];
+const record = (reason: unknown) => unhandled.push(reason);
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   current = batch('running');
   gets = [];
+  fullAdmin = false;
+  unhandled.length = 0;
+  process.on('unhandledRejection', record);
   vi.spyOn(api, 'GET').mockImplementation(((path: string) => {
     gets.push(path);
     const data =
@@ -46,13 +52,18 @@ beforeEach(() => {
         ? page([current])
         : path === '/api/v1/upload-batches/{id}'
           ? current
-          : page([]);
+          : path === '/api/v1/upload-batches/import-roots'
+            ? { roots: ['/srv/import'] }
+            : path === '/api/v1/cabinets'
+              ? []
+              : page([]);
     return Promise.resolve({ data, error: undefined, response: new Response(null, { status: 200 }) });
   }) as never);
 });
 
 afterEach(async () => {
   cleanup();
+  process.off('unhandledRejection', record);
   vi.restoreAllMocks();
   vi.useRealTimers();
   await i18n.changeLanguage('en');
@@ -115,5 +126,25 @@ describe('UploadsPage', () => {
     show();
     const when = new Date('2026-07-15T10:00:00Z').toLocaleString('ro');
     expect(await screen.findByText(when)).toBeInTheDocument();
+  });
+
+  it('keeps a directory import with no path open, marks the field and starts nothing', async () => {
+    fullAdmin = true;
+    const post = vi.spyOn(api, 'POST');
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(i18n.t('uploads.importDirectory')) }));
+    const dialog = await screen.findByRole('dialog');
+    // The roots arrive before the start is offered; pressing it with the path empty is the case here.
+    expect(await within(dialog).findByText('/srv/import')).toBeInTheDocument();
+    const ok = within(dialog).getByRole('button', { name: /OK/i });
+    await waitFor(() => expect(ok).toBeEnabled());
+    fireEvent.click(ok);
+
+    const path = within(dialog).getByLabelText(i18n.t('uploads.importPath'));
+    await waitFor(() => expect(path.getAttribute('aria-invalid')).toBe('true'));
+    // Long enough for a rejection with no handler to be reported.
+    await tick(50);
+    expect(post).not.toHaveBeenCalled();
+    expect(unhandled).toEqual([]);
   });
 });

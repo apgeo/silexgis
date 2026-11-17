@@ -14,6 +14,7 @@ import { ApiError } from '../../../api/client.ts';
 const t = i18n.getFixedT('en');
 const refetchGroups = vi.fn();
 const deleteGroup = vi.fn();
+const createGroup = vi.fn();
 let groupsQuery: { data: unknown[] | undefined; isPending: boolean; isError: boolean };
 
 const FULL = { id: 'g-full', name: 'Full Administrators', slug: 'full-administrators', description: null, isProtected: true, isSeeded: true, memberCount: 1, entryCount: 0 };
@@ -26,7 +27,7 @@ vi.mock('../../../api/hooks.ts', async (importOriginal) => {
     useCapabilities: () => ({ data: { domains: { permissionGroups: 'read, create, update, delete' } } }),
     usePermissionGroups: () => ({ ...groupsQuery, refetch: refetchGroups }),
     useAccessCatalog: () => ({ data: { domains: [], featureSets: [] }, isError: false, refetch: vi.fn() }),
-    useCreatePermissionGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useCreatePermissionGroup: () => ({ mutateAsync: createGroup, isPending: false }),
     useDeletePermissionGroup: () => ({ mutateAsync: deleteGroup, isPending: false }),
   };
 });
@@ -103,5 +104,26 @@ describe('PermissionGroupsPage', () => {
     expect(screen.getByTestId('permission-groups-load-failed')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: t('common.retry') }));
     expect(refetchGroups).toHaveBeenCalledOnce();
+  });
+
+  it('OK with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    createGroup.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click(screen.getByRole('button', { name: /New permission group/ }));
+      const dialog = await screen.findByRole('dialog');
+      const name = within(dialog).getByLabelText('Name');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(createGroup).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 });

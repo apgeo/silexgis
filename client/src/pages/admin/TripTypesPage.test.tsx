@@ -121,4 +121,24 @@ describe('TripTypesPage', () => {
     // and publish a schema version for no reason.
     expect(body.logisticsSchema).toBeNull();
   });
+
+  it('Save with the name emptied marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
+      const name = screen.getByLabelText('Name');
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(updateMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
 });

@@ -78,7 +78,12 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
     if (!lonLat) {
       return;
     }
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     setSaving(true);
     try {
       // The write contract requires every field; everything not asked in this
