@@ -17,6 +17,8 @@ const ANONYMOUS = [
   '/auth/callback',
   '/confirm-email',
   '/reset-password',
+  '/forgot-password',
+  '/register',
   '/unsubscribe',
   '/shared/view/:token',
   '/shared/features/:token',

@@ -4,8 +4,10 @@ import { GithubOutlined, GoogleOutlined, InfoCircleOutlined, LoginOutlined } fro
 import { Alert, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
 import { authTransportProblem, fetchOrNull } from '../auth/authTransportProblem.ts';
+import { useAuthConfig } from '../auth/useAuthConfig.ts';
 
 type TwoFactorMethod = 'authenticator' | 'email' | 'sms';
 
@@ -13,25 +15,6 @@ interface LoginFormValues {
   email: string;
   password: string;
   twoFactorCode?: string;
-}
-
-interface ExternalProvider {
-  name: string;
-  displayName: string;
-}
-
-/** A demo account a test installation announces on this page, credentials included. */
-interface TestLogin {
-  email: string;
-  password: string;
-  role: string;
-}
-
-interface AuthConfig {
-  openRegistration: boolean;
-  externalOnly: boolean;
-  providers: ExternalProvider[];
-  testLogins?: TestLogin[] | null;
 }
 
 /** The second-factor step the server asked for, as described by the 401 that started it. */
@@ -96,6 +79,36 @@ function TwoFactorFields({ challenge, method, useRecovery, sending, onMethod, on
   );
 }
 
+/**
+ * The sentence for a provider sign-in the server bounced back with `?error=<code>`.
+ *
+ * Several of these can never succeed by trying again — the provider may not open accounts here,
+ * or has not verified the address — so each says what would let the person in. Literal keys, not
+ * composed ones, so the translation guard can read every key out of the source.
+ */
+function externalSignInProblem(code: string, t: TFunction): string {
+  switch (code) {
+    // A locked account is said as such: "try again or use your password" would send the person
+    // to a password sign-in that the same lock refuses.
+    case 'auth.locked_out':
+      return t('auth.lockedOut');
+    case 'auth.external_no_account':
+      return t('auth.externalNoAccount');
+    case 'auth.external_email_unverified':
+      return t('auth.externalEmailUnverified');
+    case 'auth.external_link_required':
+      return t('auth.externalLinkRequired');
+    case 'auth.external_no_email':
+      return t('auth.externalNoEmail');
+    case 'auth.external_not_allowed':
+      return t('auth.externalNotAllowed');
+    case 'auth.external_provider_unknown':
+      return t('auth.externalProviderUnknown');
+    default:
+      return t('auth.externalFailed');
+  }
+}
+
 function providerIcon(name: string) {
   if (name === 'google') return <GoogleOutlined />;
   if (name === 'github') return <GithubOutlined />;
@@ -129,7 +142,7 @@ export default function LoginPage() {
   const [method, setMethod] = useState<TwoFactorMethod | null>(null);
   const [useRecovery, setUseRecovery] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  const [config, setConfig] = useState<AuthConfig | null>(null);
+  const { config, failed: configFailed, reload: reloadConfig } = useAuthConfig();
 
   const returnUrl = params.get('returnUrl');
   // An external provider vouched for the account and the server is holding the sign-in at its
@@ -140,14 +153,8 @@ export default function LoginPage() {
     // A failed external sign-in bounces back with ?error=<code>.
     const bounced = params.get('error');
     if (bounced) {
-      // A locked account is said as such: "try again or use your password" would send the person
-      // to a password sign-in that the same lock refuses.
-      setError(bounced === 'auth.locked_out' ? t('auth.lockedOut') : t('auth.externalFailed'));
+      setError(externalSignInProblem(bounced, t));
     }
-    void fetch('/api/v1/auth/config')
-      .then((r) => (r.ok ? (r.json() as Promise<AuthConfig>) : null))
-      .then((c) => setConfig(c))
-      .catch(() => setConfig(null));
   }, [params, t]);
 
   // Asked once, not on every render: with an emailed or texted code as the preferred method the
@@ -420,6 +427,18 @@ export default function LoginPage() {
           {t('app.name')}
         </Typography.Title>
         {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
+        {configFailed && (
+          <Alert
+            type="warning"
+            title={t('auth.configFailed')}
+            style={{ marginBottom: 16 }}
+            action={
+              <Button size="small" onClick={reloadConfig}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        )}
         {notice && <Alert type="success" title={notice} style={{ marginBottom: 16 }} />}
         {unconfirmedEmail && (
           <Button
@@ -487,7 +506,16 @@ export default function LoginPage() {
             <Form.Item name="email" label={t('auth.email')} rules={[{ required: true }, { type: 'email' }]}>
               <Input autoComplete="username" autoFocus disabled={challenge !== null} />
             </Form.Item>
-            <Form.Item name="password" label={t('auth.password')} rules={[{ required: true }]}>
+            <Form.Item
+              name="password"
+              label={t('auth.password')}
+              rules={[{ required: true }]}
+              extra={
+                // The server answers a reset request the same way whether or not the address has an
+                // account, so the link is offered to everybody who signs in with a password.
+                challenge === null && <Link to="/forgot-password">{t('auth.forgotPassword')}</Link>
+              }
+            >
               <Input.Password autoComplete="current-password" disabled={challenge !== null} />
             </Form.Item>
 
@@ -507,6 +535,12 @@ export default function LoginPage() {
             </Button>
 
             {recoveryToggle}
+
+            {config?.openRegistration && challenge === null && (
+              <Flex justify="center" style={{ marginTop: 12 }}>
+                <Link to="/register">{t('auth.createAccount')}</Link>
+              </Flex>
+            )}
           </Form>
         )}
 
