@@ -55,6 +55,20 @@ public sealed class RowStall : IAsyncDisposable
     }
 
     /// <summary>
+    /// Holds the whole feature table against writes until released, while leaving it readable,
+    /// so that requests which look before they write each look, and then park at their first
+    /// write with what they saw still in hand.
+    /// </summary>
+    public static async Task<RowStall> HoldFeatureWritesAsync(SilexGisApiFactory factory)
+    {
+        var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("LOCK TABLE features IN SHARE MODE");
+        return new RowStall(scope, db, transaction);
+    }
+
+    /// <summary>
     /// Takes the lock under which a cave's survey readings decide which centerline is its first,
     /// until released, so that readings of that cave's models park before they look.
     /// </summary>
