@@ -22,6 +22,7 @@ import {
 } from '../../api/hooks.ts';
 import { downloadFile } from '../../api/download.ts';
 import TermRuleSetEditor from '../../components/import/TermRuleSetEditor.tsx';
+import { termRuleProblem } from '../../components/import/termRuleProblems.ts';
 
 /**
  * The club's naming habits, configured once.
@@ -55,8 +56,8 @@ export default function TermRulesPage() {
         copyFromId: row.id,
       });
       setEditing(copy.set.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'common.saveFailed'));
     }
   };
 
@@ -64,8 +65,8 @@ export default function TermRulesPage() {
     try {
       await remove.mutateAsync(id);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'common.deleteFailed'));
     }
   };
 
@@ -76,8 +77,8 @@ export default function TermRulesPage() {
         body: { scope: 'installation', cavingGroupId: null, isDefault: true },
       });
       message.success(t('termRules.promoted'));
-    } catch {
-      message.error(t('termRules.promoteFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'termRules.errors.promoteFailed'));
     }
   };
 

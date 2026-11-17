@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
+import { Alert, App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -62,13 +62,23 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   const { message } = App.useApp();
   const [form] = Form.useForm<CreditForm>();
 
-  const { data: photo, isPending } = usePhoto(documentId ?? undefined);
+  const {
+    data: photo,
+    isPending,
+    isError,
+    refetch: refetchPhoto,
+  } = usePhoto(documentId ?? undefined);
   const { data: cavers } = useCavers();
   const { data: capabilities } = useCapabilities();
   const updateCredit = useUpdatePhotoCredit();
   const setPublic = useSetPhotoPublic();
 
   const attribution = Form.useWatch('attribution', form);
+
+  // Every credit field is written on Save, so a save from a form that was never filled from the
+  // stored photograph would blank the stored credit. Saving is possible only once the picture
+  // this drawer is open on has been read.
+  const loaded = photo !== undefined && photo.documentId === documentId;
 
   // Loaded rather than initial values: the drawer stays mounted while a different picture is
   // opened from the viewer behind it, so the form has to be refilled rather than constructed.
@@ -98,7 +108,7 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   }, [photo, form]);
 
   const submit = async () => {
-    if (!documentId) {
+    if (!documentId || !loaded || filledFor.current !== documentId) {
       return;
     }
 
@@ -150,12 +160,29 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       title={t('gallery.editCredit')}
       destroyOnHidden
       extra={
-        <Button type="primary" loading={updateCredit.isPending} onClick={() => void submit()}>
+        <Button
+          type="primary"
+          disabled={!loaded}
+          loading={updateCredit.isPending}
+          onClick={() => void submit()}
+        >
           {t('common.save')}
         </Button>
       }
     >
-      {isPending || !photo ? null : (
+      {isError && !loaded && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('gallery.creditLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetchPhoto()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {isPending || !loaded ? null : (
         <Form form={form} layout="vertical" requiredMark={false} data-testid="photo-credit-form">
           <Form.Item name="attribution" label={t('gallery.photographer')}>
             <Segmented

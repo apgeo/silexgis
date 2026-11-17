@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Spin, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +18,8 @@ import { versionReadWith } from '../../api/readingVersion.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
 import { featureProblemMessage } from '../../components/features/featureProblems.ts';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -30,7 +32,7 @@ export default function CaveFormPage() {
   const isEdit = !!id;
   const [form] = Form.useForm<CaveFormValues>();
 
-  const { data: cave } = useCave(id);
+  const { data: cave, isError, error: readError, refetch } = useCave(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
   const { data: featureTypes } = useFeatureTypes();
@@ -79,6 +81,11 @@ export default function CaveFormPage() {
     });
 
   const onFinish = async (values: CaveFormValues) => {
+    // An edit writes every field, so one sent before the form holds the stored cave would blank
+    // it; the page shows no form until then, and this is the same rule where the save is sent.
+    if (isEdit && !seeded.current) {
+      return;
+    }
     const source = isEdit ? seeded.current?.cave : undefined;
     const body: CaveWrite = {
       ...values,
@@ -113,6 +120,33 @@ export default function CaveFormPage() {
       <InputNumber min={0} style={{ width: '100%' }} />
     </Form.Item>
   );
+
+  // An edit form shown before the cave is read is a blank form that saves blanks, and without its
+  // version the save is refused as if somebody else had changed the cave. A failed read is said
+  // as such, with a way to ask again; a deleted or unreadable cave as gone.
+  if (isEdit && readFailureEndsPage(isError, cave, readError)) {
+    return (
+      <ReadFailedResult
+        error={readError}
+        onRetry={() => void refetch()}
+        notFoundTitle={t('caves.notFound')}
+        notFoundDetail={t('caves.notFoundDetail')}
+        actions={
+          <Button type="primary" onClick={() => void navigate('/caves')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (isEdit && !cave) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Spin size="large" />
+      </Flex>
+    );
+  }
 
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
@@ -152,7 +186,7 @@ export default function CaveFormPage() {
                       >
                         <Select options={caveTypes?.map((x) => ({ value: x.id, label: x.name }))} />
                       </Form.Item>
-                      <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280 }}>
+                      <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280, maxWidth: '100%' }}>
                         <Input />
                       </Form.Item>
                     </Flex>
@@ -179,7 +213,7 @@ export default function CaveFormPage() {
                     <Form.Item name="tributaryRiver" label={t('caves.fields.tributaryRiver')} style={{ width: 220 }}>
                       <Input />
                     </Form.Item>
-                    <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340 }}>
+                    <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340, maxWidth: '100%' }}>
                       <Input />
                     </Form.Item>
                     <Form.Item name="landRegistryNumber" label={t('caves.fields.landRegistryNumber')} style={{ width: 220 }}>
@@ -257,7 +291,7 @@ export default function CaveFormPage() {
                     <Form.Item name="discoveryDate" label={t('caves.fields.discoveryDate')} style={{ width: 220 }}>
                       <Input placeholder="1952 / 1952-07 / 1952-07-14" />
                     </Form.Item>
-                    <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340 }}>
+                    <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340, maxWidth: '100%' }}>
                       <Input />
                     </Form.Item>
                   </Flex>
@@ -295,7 +329,7 @@ export default function CaveFormPage() {
                       children: (
                         <Flex gap={16} wrap data-testid="cave-club-fields">
                           {clubFields.map((field) => (
-                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280 }}>
+                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280, maxWidth: '100%' }}>
                               <TypedField
                                 field={field}
                                 value={extra[field.key]}

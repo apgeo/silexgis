@@ -52,7 +52,11 @@ interface DraftMember {
 function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members, isPending } = useFeatureSetMembers(set.id);
+  const { data: members, isPending, isError, refetch } = useFeatureSetMembers(set.id);
+  // Save replaces the whole membership with the list on screen, and membership moves access:
+  // until the stored members have been read, that list is empty only because nothing arrived,
+  // so neither adding nor saving is offered.
+  const loaded = members !== undefined;
   const replaceMembers = useReplaceFeatureSetMembers(set.id);
   const { data: featureTypes } = useFeatureTypes();
   const [drafts, setDrafts] = useState<DraftMember[]>([]);
@@ -93,6 +97,9 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
   };
 
   const onSave = async () => {
+    if (!loaded) {
+      return;
+    }
     try {
       await replaceMembers.mutateAsync(drafts.map((draft) => draft.id));
       message.success(t('common.saved'));
@@ -112,7 +119,12 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       footer={
         <Flex justify="flex-end" gap={8}>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="primary" onClick={() => void onSave()} loading={replaceMembers.isPending}>
+          <Button
+            type="primary"
+            onClick={() => void onSave()}
+            loading={replaceMembers.isPending}
+            disabled={!loaded}
+          >
             {t('common.save')}
           </Button>
         </Flex>
@@ -120,6 +132,18 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
     >
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title={t('featureSets.membershipMovesAccess')} />
+        {isError && !loaded && (
+          <Alert
+            type="error"
+            showIcon
+            title={t('featureSets.membersLoadFailed')}
+            action={
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        )}
         <Flex gap={8} align="flex-start">
           <div style={{ flex: 1, minWidth: 0 }}>
             <ObjectSelector
@@ -135,7 +159,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
               data-testid="feature-set-member-picker"
             />
           </div>
-          <Button icon={<PlusOutlined />} onClick={addPicked} disabled={!picked}>
+          <Button icon={<PlusOutlined />} onClick={addPicked} disabled={!picked || !loaded}>
             {t('featureSets.addFeature')}
           </Button>
         </Flex>

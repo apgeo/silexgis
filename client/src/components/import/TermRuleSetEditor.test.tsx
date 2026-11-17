@@ -27,9 +27,16 @@ const detailOf = (name: string) => ({
 });
 
 let detail: ReturnType<typeof detailOf> | undefined = detailOf('Club rules');
+let detailFailed = false;
+const refetchDetail = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
-  useTermRuleSet: () => ({ data: detail }),
+  useTermRuleSet: () => ({
+    data: detail,
+    isPending: detail === undefined && !detailFailed,
+    isError: detailFailed,
+    refetch: refetchDetail,
+  }),
   useCreateTermRuleSet: () => ({ mutateAsync: createMutate, isPending: false }),
   useUpdateTermRuleSet: () => ({ mutateAsync: updateMutate, isPending: false }),
   useCaveTypes: () => ({ data: [] }),
@@ -55,6 +62,39 @@ beforeEach(() => {
   updateMutate.mockReset();
   createMutate.mockReset();
   detail = detailOf('Club rules');
+  detailFailed = false;
+  refetchDetail.mockReset();
+});
+
+describe('a set that has not been read', () => {
+  it('offers no save while the set is still being read', async () => {
+    detail = undefined;
+    render(editor(vi.fn()));
+
+    const save = await screen.findByTestId('term-rules-save');
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
+  it('says the read failed, offers a retry, and never saves an empty set over the stored one', async () => {
+    detail = undefined;
+    detailFailed = true;
+    render(editor(vi.fn()));
+
+    expect(
+      await screen.findByText('The rule set could not be read, so it cannot be changed yet.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetchDetail).toHaveBeenCalledTimes(1);
+
+    const save = screen.getByTestId('term-rules-save');
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
 });
 
 describe('saving a rule set the server refuses', () => {

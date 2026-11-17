@@ -12,7 +12,10 @@ const updateCave = vi.fn();
 const createCave = vi.fn();
 
 /** The cave as the page's read of it answers at this moment; reassigned to stand for a re-read. */
-let caveOnScreen: Record<string, unknown>;
+let caveOnScreen: Record<string, unknown> | undefined;
+/** What the page's read of the cave failed with, when it failed. */
+let caveReadError: unknown;
+const refetchCave = vi.fn();
 
 // The newest version the transport has filed for the cave at this moment. It can be ahead of the
 // copy the page holds: a save files its own version before the page's re-read of the cave lands.
@@ -24,7 +27,13 @@ vi.mock('../../api/client.ts', async (original) => ({
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
-  useCave: () => ({ data: caveOnScreen }),
+  useCave: () => ({
+    data: caveOnScreen,
+    isPending: caveOnScreen === undefined && caveReadError === undefined,
+    isError: caveReadError !== undefined,
+    error: caveReadError ?? null,
+    refetch: refetchCave,
+  }),
   useCaveTypes: () => ({ data: [{ id: 1, name: 'Cave' }] }),
   useRockTypes: () => ({ data: [] }),
   useFeatureTypes: () => ({ data: [] }),
@@ -82,8 +91,32 @@ beforeEach(() => {
   createCave.mockReset();
   versionOnFile.mockReset().mockReturnValue(undefined);
   caveOnScreen = aCave();
+  caveReadError = undefined;
+  refetchCave.mockReset();
 });
 afterEach(cleanup);
+
+describe('editing a cave that has not been read', () => {
+  it('shows no form, and so offers no save, while the cave is still being read', async () => {
+    caveOnScreen = undefined;
+    render(page());
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(updateCave).not.toHaveBeenCalled();
+  });
+
+  it('says the read failed and offers it again rather than a blank form that saves', async () => {
+    caveOnScreen = undefined;
+    caveReadError = new ApiError(503, undefined);
+    render(page());
+
+    fireEvent.click(await screen.findByTestId('read-failed-retry'));
+    expect(refetchCave).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(updateCave).not.toHaveBeenCalled();
+  });
+});
 
 /**
  * The page reads the cave again under the form — on a return to the browser tab, after an entrance

@@ -7,11 +7,18 @@ import PhotoCreditDrawer from './PhotoCreditDrawer.tsx';
 
 const hooks = vi.hoisted(() => ({
   photo: undefined as unknown,
+  photoFailed: false,
+  refetchPhoto: vi.fn(),
   updateCredit: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
-  usePhoto: () => ({ data: hooks.photo, isPending: false }),
+  usePhoto: () => ({
+    data: hooks.photo,
+    isPending: hooks.photo === undefined && !hooks.photoFailed,
+    isError: hooks.photoFailed,
+    refetch: hooks.refetchPhoto,
+  }),
   useCavers: () => ({ data: [] }),
   useCapabilities: () => ({ data: { isFullAdmin: false } }),
   useUpdatePhotoCredit: () => ({ mutateAsync: hooks.updateCredit, isPending: false }),
@@ -42,6 +49,8 @@ function view(documentId: string) {
 }
 
 beforeEach(() => {
+  hooks.photoFailed = false;
+  hooks.refetchPhoto.mockReset();
   hooks.updateCredit.mockReset();
   hooks.updateCredit.mockResolvedValue(undefined);
 });
@@ -91,5 +100,42 @@ describe('PhotoCreditDrawer', () => {
       window.removeEventListener('unhandledrejection', unhandled);
       process.off('unhandledRejection', unhandled);
     }
+  });
+
+  it('sends nothing while the photograph is still being read, so stored credit is never blanked', async () => {
+    hooks.photo = undefined;
+    render(view('p1'));
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(save);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(hooks.updateCredit).not.toHaveBeenCalled();
+  });
+
+  it('says the photograph could not be read, offers a retry, and sends nothing on Save', async () => {
+    hooks.photo = undefined;
+    hooks.photoFailed = true;
+    render(view('p1'));
+
+    expect(await screen.findByText('The photograph could not be read, so its credit cannot be changed yet.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(hooks.refetchPhoto).toHaveBeenCalledTimes(1);
+
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(save);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(hooks.updateCredit).not.toHaveBeenCalled();
+
+    // The positive case: once the read succeeds the same button saves.
+    hooks.photo = photo('p1', 'Stored caption');
+    hooks.photoFailed = false;
+    cleanup();
+    render(view('p1'));
+    await screen.findByLabelText('Caption');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(hooks.updateCredit).toHaveBeenCalledTimes(1));
+    expect(hooks.updateCredit.mock.calls[0][0]).toMatchObject({ documentId: 'p1', caption: 'Stored caption' });
   });
 });
