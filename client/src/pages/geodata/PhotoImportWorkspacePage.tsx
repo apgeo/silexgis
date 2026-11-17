@@ -19,6 +19,7 @@ import ImportResultModal from '../../components/import/ImportResultModal.tsx';
 import PhotoCandidateMap from '../../components/import/PhotoCandidateMap.tsx';
 import PhotoCandidateTable from '../../components/import/PhotoCandidateTable.tsx';
 import PhotoImportOptionsPanel from '../../components/import/PhotoImportOptionsPanel.tsx';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
 import { refusalText } from '../../components/geodata/refusalText.ts';
 import { uploadErrorText } from '../../components/geodata/uploadErrorText.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -209,7 +210,7 @@ export default function PhotoImportWorkspacePage() {
         </Space>
         <Button
           type="primary"
-          disabled={selected.size === 0 || preview.isError}
+          disabled={selected.size === 0 || preview.isError || saveSession.isError}
           loading={commit.isPending}
           onClick={() => void onCommit()}
           data-testid="photo-import-commit"
@@ -217,6 +218,12 @@ export default function PhotoImportWorkspacePage() {
           {t('photoImport.createSelected', { count: selected.size })}
         </Button>
       </Flex>
+
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
 
       {/* The identifier sits on a wrapper because the dragger does not forward it to its own
           element — and an unscoped file-input locator on this page would find whichever other

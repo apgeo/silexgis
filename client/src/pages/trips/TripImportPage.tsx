@@ -19,6 +19,7 @@ import {
   type TripImportOptions,
   type TripImportPreviewRequest,
 } from '../../api/hooks.ts';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
 import TripImportOptionsPanel from '../../components/import/TripImportOptionsPanel.tsx';
 import TripImportProblemList from '../../components/import/TripImportProblemList.tsx';
 import TripImportResultModal from '../../components/import/TripImportResultModal.tsx';
@@ -26,6 +27,7 @@ import TripImportRowTable from '../../components/import/TripImportRowTable.tsx';
 import TripImportSummary from '../../components/import/TripImportSummary.tsx';
 import TripImportTypeTable from '../../components/import/TripImportTypeTable.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 
 /** What the review starts from before the server's session has arrived. */
 const BLANK_OPTIONS: TripImportOptions = {
@@ -76,6 +78,9 @@ export default function TripImportPage() {
 
   const session = useTripImportSession(fileId);
   const saveSession = useSaveTripImportSession();
+  // At phone width the two review columns stack instead of holding their desktop widths, which
+  // would push the page sideways.
+  const isMobile = useIsMobile();
   const commit = useCommitTripImport();
   const upload = useUploadFile();
 
@@ -148,37 +153,38 @@ export default function TripImportPage() {
       return next;
     });
 
-  const failed = (error: unknown) => {
+  /**
+   * A refusal in the page's own words, from its code. The server's sentence is never shown: it is
+   * written in English whatever language the page is read in. One function for the confirmation
+   * and the dry run, since the same codes reach both and two lists of them drift.
+   */
+  const errorText = (error: unknown, fallback: 'commitFailed' | 'previewFailed') => {
     const code = error instanceof ApiError ? error.code : undefined;
     switch (code) {
       case 'file.not_found':
-        message.error(t('tripImport.errors.fileNotFound'));
-        return;
+        return t('tripImport.errors.fileNotFound');
       case 'access.create_forbidden':
-        message.error(t('tripImport.errors.createForbidden'));
-        return;
+        return t('tripImport.errors.createForbidden');
       case 'access.caving_group_binding_forbidden':
-        message.error(t('tripImport.errors.groupBindingForbidden'));
-        return;
+        return t('tripImport.errors.groupBindingForbidden');
       case 'trip_import.file_unreadable':
-        message.error(t('tripImport.errors.fileUnreadable'));
-        return;
+        return t('tripImport.errors.fileUnreadable');
       case 'trip_import.file_too_large':
-        message.error(t('tripImport.errors.fileTooLarge'));
-        return;
+        return t('tripImport.errors.fileTooLarge');
       case 'trip_import.selection_empty':
-        message.error(t('tripImport.errors.selectionEmpty'));
-        return;
+        return t('tripImport.errors.selectionEmpty');
       case 'trip_import.selection_too_large':
-        message.error(t('tripImport.errors.selectionTooLarge'));
-        return;
+        return t('tripImport.errors.selectionTooLarge');
       case 'trip_import.nothing_created':
-        message.error(t('tripImport.errors.nothingCreated'));
-        return;
+        return t('tripImport.errors.nothingCreated');
       default:
-        message.error(t('tripImport.errors.commitFailed'));
+        return fallback === 'previewFailed'
+          ? t('tripImport.errors.previewFailed')
+          : t('tripImport.errors.commitFailed');
     }
   };
+
+  const failed = (error: unknown) => message.error(errorText(error, 'commitFailed'));
 
   const uploadSheet = async (file: File, allowDuplicate: boolean) => {
     try {
@@ -267,7 +273,7 @@ export default function TripImportPage() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: isMobile ? 12 : 24 }}>
       <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trip-logs')}>
@@ -285,7 +291,7 @@ export default function TripImportPage() {
             the same trips, undoable only as a separate act. */}
         <Button
           type="primary"
-          disabled={takenLines.length === 0 || result !== null}
+          disabled={takenLines.length === 0 || result !== null || saveSession.isError}
           loading={commit.isPending}
           onClick={() => void onCommit()}
           data-testid="trip-import-commit"
@@ -294,6 +300,12 @@ export default function TripImportPage() {
         </Button>
       </Flex>
 
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
+
       {previewError && (
         <Alert
           type="error"
@@ -301,7 +313,11 @@ export default function TripImportPage() {
           style={{ marginBottom: 16 }}
           data-testid="trip-import-preview-error"
           title={t('tripImport.errors.previewFailed')}
-          description={previewError instanceof ApiError ? previewError.detail : undefined}
+          description={
+            previewError instanceof ApiError && previewError.code
+              ? errorText(previewError, 'previewFailed')
+              : undefined
+          }
         />
       )}
 
@@ -319,7 +335,11 @@ export default function TripImportPage() {
       )}
 
       <Flex gap={16} align="start" wrap>
-        <Flex vertical gap={16} style={{ flex: '1 1 640px', minWidth: 420 }}>
+        <Flex
+          vertical
+          gap={16}
+          style={{ flex: isMobile ? '1 1 100%' : '1 1 640px', minWidth: isMobile ? 0 : 420 }}
+        >
           <TripImportOptionsPanel
             options={options}
             onChange={setOptions}
@@ -377,7 +397,11 @@ export default function TripImportPage() {
           </Spin>
         </Flex>
 
-        <Flex vertical gap={16} style={{ flex: '1 1 380px', minWidth: 320 }}>
+        <Flex
+          vertical
+          gap={16}
+          style={{ flex: isMobile ? '1 1 100%' : '1 1 380px', minWidth: isMobile ? 0 : 320 }}
+        >
           {data && (
             <TripImportSummary proposals={data.proposals} options={options} onChange={setOptions} />
           )}

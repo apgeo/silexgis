@@ -9,6 +9,11 @@ import type { PhotoCandidate, PhotoPreview, PhotoPreviewRequest, PhotoSession } 
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
 const uploadMutate = vi.fn();
 const previewRefetch = vi.fn();
 const previewCalls: { body: PhotoPreviewRequest; enabled: boolean }[] = [];
@@ -138,7 +143,7 @@ preview = fullPreview;
 
 vi.mock('../../api/hooks.ts', () => ({
   usePhotoImportSession: () => ({ data: session, isError: false }),
-  useSavePhotoImportSession: () => ({ mutate: saveSessionMutate }),
+  useSavePhotoImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
   usePhotoImportPreview: (body: PhotoPreviewRequest, enabled: boolean) => {
     previewCalls.push({ body, enabled });
     return previewFailure
@@ -192,6 +197,9 @@ describe('PhotoImportWorkspacePage', () => {
       failures: [],
     });
     saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
     uploadMutate.mockReset();
     previewRefetch.mockReset();
     previewCalls.length = 0;
@@ -227,6 +235,26 @@ describe('PhotoImportWorkspacePage', () => {
     const boxes = screen.getAllByRole('checkbox');
     // The header box plus one per row; the unplaced row's is disabled.
     expect(boxes.some((box) => (box as HTMLInputElement).disabled)).toBe(true);
+  });
+
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { fileIds: ['file-1'], options: {}, decisions: {} };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('photo-import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('photo-import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
   });
 
   it('creates only what was selected, and nothing until the button is pressed', async () => {
