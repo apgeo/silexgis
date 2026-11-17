@@ -227,6 +227,16 @@ public static class ProcessingJobKinds
     public const string TerrainDerivative = "terrain-derivative";
 
     /// <summary>
+    /// Run one cave-potential model over one area: make each of its evidence layers on the run's
+    /// grid, weigh them, and write the favourability map beside the row that asked for it.
+    /// </summary>
+    /// <remarks>
+    /// On the terrain lane, because it reads the surfaces computed from a build's rasters and
+    /// writes a raster of its own with a library that is safe on one thread at a time.
+    /// </remarks>
+    public const string CavePotentialRun = "cave-potential-run";
+
+    /// <summary>
     /// Download a region of a planet build of OpenStreetMap vector tiles as the installation's own
     /// basemap, and make it the one served. Asked for by an administrator, one at a time.
     /// </summary>
@@ -320,7 +330,10 @@ public static class ProcessingJobKinds
     /// </para>
     /// </remarks>
     public static readonly IReadOnlyList<string> TerrainLane =
-        [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline, TestDataGenerate, TestDataRemove];
+        [
+            TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline, TestDataGenerate,
+            TestDataRemove, CavePotentialRun,
+        ];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is

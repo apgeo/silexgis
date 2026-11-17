@@ -8406,6 +8406,147 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cave-potential/evidence-layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The kinds of evidence a model can weigh, and how each may be scored. */
+        get: operations["cavePotentialModelEvidenceLayers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The cave-potential models the caller may read. */
+        get: operations["cavePotentialModelList"];
+        put?: never;
+        /** Saves a model; the caller becomes owner. */
+        post: operations["cavePotentialModelCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/models/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One cave-potential model, with the weights it comes to. */
+        get: operations["cavePotentialModelGet"];
+        /** Renames, describes, shares or rewrites a model (its author or a full administrator, holding Write permission). */
+        put: operations["cavePotentialModelUpdate"];
+        post?: never;
+        /** Deletes a model (its author or a full administrator, holding Delete permission). */
+        delete: operations["cavePotentialModelDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/models/{id}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copies a model the caller may read into a private one of their own. */
+        post: operations["cavePotentialModelClone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/models/weighting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The weights an unsaved definition comes to, with the consistency of its pairwise comparisons. Stores nothing. */
+        post: operations["cavePotentialModelWeighting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The cave-potential results the caller may read, newest first, optionally those over one area. */
+        get: operations["cavePotentialResultList"];
+        put?: never;
+        /** Queues a run of a model over an area at a cell size. Needs the right to read the terrain; the run reads as the caller. */
+        post: operations["cavePotentialResultRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/results/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One cave-potential result, with the model as it was run. */
+        get: operations["cavePotentialResultGet"];
+        put?: never;
+        post?: never;
+        /** Deletes a result and its map (whoever asked for it, or a full administrator). */
+        delete: operations["cavePotentialResultDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cave-potential/results/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The favourability map as a cloud-optimised raster. Token-validated; supports Range. */
+        get: operations["cavePotentialResultContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings": {
         parameters: {
             query?: never;
@@ -10554,6 +10695,146 @@ export interface components {
             canManagePermissions: boolean;
             canViewExactLocation: boolean;
         };
+        /** @enum {unknown} */
+        CavePotentialMethod: "directWeights" | "pairwiseComparison";
+        CavePotentialModelCloneRequest: {
+            name: string;
+        };
+        CavePotentialModelDefinition: {
+            layers: components["schemas"]["EvidenceLayerSetting"][];
+            pairwise?: null | number[][];
+        };
+        CavePotentialModelDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            method: components["schemas"]["CavePotentialMethod"];
+            definition: null | components["schemas"]["CavePotentialModelDefinition"];
+            weighting: null | components["schemas"]["CavePotentialWeightingDto"];
+            usesPositions: boolean;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility: components["schemas"]["Visibility"];
+            mine: boolean;
+            authorName: null | string;
+            mayEdit: boolean;
+            mayDelete: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CavePotentialModelWriteRequest: {
+            name: string;
+            description: null | string;
+            method: components["schemas"]["CavePotentialMethod"];
+            definition: components["schemas"]["CavePotentialModelDefinition"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            visibility?: components["schemas"]["Visibility"];
+        };
+        CavePotentialResultDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            modelId: null | string;
+            modelName: null | string;
+            method: components["schemas"]["CavePotentialMethod"];
+            definition: null | components["schemas"]["CavePotentialModelDefinition"];
+            weighting: null | components["schemas"]["CavePotentialWeightingDto"];
+            /** Format: uuid */
+            terrainBuildId: null | string;
+            terrainBuildActive: null | boolean;
+            terrainInputs: components["schemas"]["CavePotentialTerrainInputDto"][];
+            /** Format: uuid */
+            areaFeatureId: string;
+            areaName: null | string;
+            /** Format: double */
+            cellMeters: number;
+            status: components["schemas"]["CavePotentialResultStatus"];
+            errorCode: null | string;
+            message: null | string;
+            usesPositions: boolean;
+            /** Format: int32 */
+            evidenceFeatures: number;
+            /** Format: int32 */
+            protectedFeatures: number;
+            summary: null | components["schemas"]["CavePotentialResultSummaryDto"];
+            /** Format: double */
+            west: null | number;
+            /** Format: double */
+            south: null | number;
+            /** Format: double */
+            east: null | number;
+            /** Format: double */
+            north: null | number;
+            /** Format: int32 */
+            columns: null | number;
+            /** Format: int32 */
+            rows: null | number;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: double */
+            noData: number;
+            mine: boolean;
+            requestedByName: null | string;
+            ranAsFullAdministrator: boolean;
+            mayDelete: boolean;
+            url: null | string;
+            /** Format: date-time */
+            computedAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CavePotentialResultLayerDto: {
+            layer: string;
+            /** Format: double */
+            weight: number;
+            /** Format: int32 */
+            features: number;
+            /** Format: int32 */
+            protectedFeatures: number;
+            /** Format: int32 */
+            cells: number;
+        };
+        /** @enum {unknown} */
+        CavePotentialResultStatus: "queued" | "computing" | "ready" | "failed";
+        CavePotentialResultSummaryDto: {
+            layers: components["schemas"]["CavePotentialResultLayerDto"][];
+            /** Format: int32 */
+            areaCells: number;
+            /** Format: int32 */
+            scoredCells: number;
+            /** Format: double */
+            minimum: null | number;
+            /** Format: double */
+            maximum: null | number;
+            /** Format: double */
+            mean: null | number;
+        };
+        CavePotentialRunRequest: {
+            /** Format: uuid */
+            modelId: string;
+            /** Format: uuid */
+            areaFeatureId: string;
+            /** Format: double */
+            cellMeters: number;
+        };
+        CavePotentialTerrainInputDto: {
+            layer: string;
+            /** Format: uuid */
+            derivativeLayerId: null | string;
+            settings: null | string;
+        };
+        CavePotentialWeightingDto: {
+            weights: components["schemas"]["EvidenceLayerWeightDto"][];
+            consistency: null | components["schemas"]["PairwiseConsistencyDto"];
+        };
+        CavePotentialWeightingRequest: {
+            method: components["schemas"]["CavePotentialMethod"];
+            definition: components["schemas"]["CavePotentialModelDefinition"];
+        };
         CaveQrPublicationDto: {
             published: boolean;
             /** Format: uuid */
@@ -11674,6 +11955,52 @@ export interface components {
             recurrence?: null | components["schemas"]["EventRecurrenceRequest"];
             seriesFrequency?: null | components["schemas"]["EventRecurrenceFrequency"];
         };
+        EvidenceCategoryScore: {
+            code: string;
+            /** Format: double */
+            score: null | number;
+        };
+        EvidenceClass: {
+            /** Format: double */
+            upperBound: null | number;
+            /** Format: double */
+            score: null | number;
+        };
+        EvidenceLayerDto: {
+            code: string;
+            valueKind: components["schemas"]["EvidenceValueKind"];
+            source: components["schemas"]["EvidenceSource"];
+            usesPositions: boolean;
+            unit: null | string;
+            transforms: components["schemas"]["EvidenceTransformKind"][];
+            categories: string[];
+        };
+        EvidenceLayerSetting: {
+            layer: string;
+            transform: components["schemas"]["EvidenceTransform"];
+            /** Format: double */
+            weight?: null | number;
+        };
+        EvidenceLayerWeightDto: {
+            layer: string;
+            /** Format: double */
+            weight: number;
+        };
+        /** @enum {unknown} */
+        EvidenceSource: "terrain" | "features";
+        EvidenceTransform: {
+            kind: components["schemas"]["EvidenceTransformKind"];
+            classes?: null | components["schemas"]["EvidenceClass"][];
+            /** Format: double */
+            low?: null | number;
+            /** Format: double */
+            high?: null | number;
+            categories?: null | components["schemas"]["EvidenceCategoryScore"][];
+        };
+        /** @enum {unknown} */
+        EvidenceTransformKind: "classes" | "fuzzyLinear" | "categories";
+        /** @enum {unknown} */
+        EvidenceValueKind: "continuous" | "circular" | "categorical";
         ExpeditionDto: {
             /** Format: uuid */
             id: string;
@@ -14166,6 +14493,17 @@ export interface components {
             /** Format: double */
             maxSeparationM: number;
             rose: components["schemas"]["OrientationSummary"];
+        };
+        PairwiseConsistencyDto: {
+            /** Format: double */
+            principalEigenvalue: number;
+            /** Format: double */
+            index: number;
+            /** Format: double */
+            randomIndex: number;
+            /** Format: double */
+            ratio: number;
+            acceptable: boolean;
         };
         ParentEdgeRequest: {
             /** Format: uuid */
@@ -43282,6 +43620,451 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    cavePotentialModelEvidenceLayers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceLayerDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialModelDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CavePotentialModelWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialModelDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CavePotentialModelWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelClone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CavePotentialModelCloneRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialModelDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialModelWeighting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CavePotentialWeightingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialWeightingDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialResultList: {
+        parameters: {
+            query?: {
+                areaFeatureId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialResultDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialResultRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CavePotentialRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialResultGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CavePotentialResultDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialResultDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cavePotentialResultContent: {
+        parameters: {
+            query?: {
+                token?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

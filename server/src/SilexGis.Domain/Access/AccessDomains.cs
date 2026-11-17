@@ -20,6 +20,9 @@ public static class AccessDomains
         // A saved filter is saved workspace state like a view, and a club's rules over its saved
         // views should reach its saved filters without a second set of rules to keep in step.
         SavedFilter => AccessDomain.MapViews,
+        // A cave-potential model is a kept recipe, saved workspace like a view or a filter, and
+        // holds no position; what a run of it may read is decided when it runs.
+        CavePotentialModel => AccessDomain.MapViews,
         Document => AccessDomain.Documents,
         // An album is an arrangement of documents and is governed with them: one right over
         // "the club's photographs" should reach the albums made of them, and a second domain

@@ -455,6 +455,9 @@ public static class AccessEntryMapping
             [typeof(SavedFilter)] = Protected(
                 (db, id, ct) => db.SavedFilters.AnyAsync(x => x.Id == id, ct),
                 db => db.SavedFilters),
+            [typeof(CavePotentialModel)] = Protected(
+                (db, id, ct) => db.CavePotentialModels.AnyAsync(x => x.Id == id, ct),
+                db => db.CavePotentialModels),
             [typeof(Document)] = Protected(
                 (db, id, ct) => db.Documents.AnyAsync(x => x.Id == id, ct),
                 db => db.Documents.IgnoreQueryFilters()),

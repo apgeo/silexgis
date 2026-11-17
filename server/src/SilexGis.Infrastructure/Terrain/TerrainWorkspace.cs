@@ -184,6 +184,9 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// </remarks>
     private const string DerivativesDirectoryName = "derivatives";
 
+    /// <summary>Not a build's name: those are thirty-two hexadecimal digits.</summary>
+    private const string CavePotentialDirectoryName = "cave-potential";
+
     private readonly string root = Path.GetFullPath(options.Value.BuildRoot, AppContext.BaseDirectory);
     private readonly string spool = Path.GetFullPath(options.Value.SpoolRoot, AppContext.BaseDirectory);
     private readonly string published = Path.GetFullPath(options.Value.PublishRoot, AppContext.BaseDirectory);
@@ -318,6 +321,21 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// </remarks>
     public void RemoveDerivative(Guid buildId, Guid layerId) =>
         Discard(Path.Combine(DerivativesFor(buildId), layerId.ToString("N")));
+
+    /// <summary>
+    /// Where one run of a cave-potential model keeps its map, whether or not it has been written.
+    /// </summary>
+    /// <remarks>
+    /// On the terrain volume, since it is a raster of the same kind and size as the pictures drawn
+    /// from elevation, but beside the builds rather than inside one. A run is dated and kept: it
+    /// says what the evidence came to on the day it was computed, and replacing the elevation
+    /// afterwards must not take away the record of what was found before.
+    /// </remarks>
+    public string CavePotentialResultFor(Guid resultId) =>
+        Path.Combine(root, CavePotentialDirectoryName, resultId.ToString("N"));
+
+    /// <summary>Takes one run's map away.</summary>
+    public void RemoveCavePotentialResult(Guid resultId) => Discard(CavePotentialResultFor(resultId));
 
     /// <summary>Whether this build's pyramid is where terrain is served from, asked of the disk.</summary>
     /// <remarks>

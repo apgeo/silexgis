@@ -540,6 +540,10 @@ public static class DependencyInjection
         // scoped because they read and write rows; the job kind runs on the terrain worker, which is
         // what keeps a picture from being drawn from rasters a build is in the middle of rewriting.
         services.AddScoped<Terrain.TerrainDerivativeCatalogue>();
+        services.AddScoped<Analysis.CavePotentialEvidenceBuilder>();
+        services.AddSingleton<Analysis.CavePotentialRasterWriter>();
+        services.AddScoped<Analysis.CavePotentialResultAccess>();
+        services.AddScoped<IProcessingJobHandler, CavePotentialRunHandler>();
         services.AddScoped<IProcessingJobHandler, TerrainDerivativeHandler>();
 
         // Turning those rasters into tiles. The program that does that is a command-line tool, run

@@ -92,7 +92,7 @@ public static class TestDataTables
         ["trip_tracking"] = P(TestDataParts.Activity), ["trip_tracking_shares"] = P(TestDataParts.Activity), ["trip_tracking_participants"] = P(TestDataParts.Activity),
         ["trip_position_events"] = P(TestDataParts.Activity), ["trip_checklist_ticks"] = P(TestDataParts.Activity), ["checklists"] = P(TestDataParts.Activity),
         ["checklist_items"] = P(TestDataParts.Activity), ["expeditions"] = P(TestDataParts.Activity), ["expedition_trips"] = P(TestDataParts.Activity), ["expedition_roster"] = P(TestDataParts.Activity),
-        ["events"] = P(TestDataParts.Activity), ["report_templates"] = P(TestDataParts.Activity), ["saved_filters"] = P(TestDataParts.Activity), ["map_views"] = P(TestDataParts.Activity),
+        ["events"] = P(TestDataParts.Activity), ["report_templates"] = P(TestDataParts.Activity), ["saved_filters"] = P(TestDataParts.Activity), ["cave_potential_models"] = P(TestDataParts.Activity), ["cave_potential_results"] = D("a run of a cave-potential model"), ["map_views"] = P(TestDataParts.Activity),
         ["res_links"] = P(TestDataParts.Activity), ["res_link_members"] = P(TestDataParts.Activity), ["res_link_relation_types"] = P(TestDataParts.Activity, "custom relation types"),
         ["trip_types"] = P(TestDataParts.Activity, "a custom type with section schemas"), ["trip_type_schemas"] = P(TestDataParts.Activity),
         ["trip_participant_roles"] = P(TestDataParts.Activity, "extra roles"), ["expedition_roster_roles"] = P(TestDataParts.Activity, "extra roles"),

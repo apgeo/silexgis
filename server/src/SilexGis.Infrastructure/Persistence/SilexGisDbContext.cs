@@ -185,6 +185,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     /// <summary>Filters somebody named and kept; each describes a question and grants nothing.</summary>
     public DbSet<SavedFilter> SavedFilters => Set<SavedFilter>();
 
+    public DbSet<CavePotentialModel> CavePotentialModels => Set<CavePotentialModel>();
+
+    public DbSet<CavePotentialResult> CavePotentialResults => Set<CavePotentialResult>();
+
     public DbSet<Checklist> Checklists => Set<Checklist>();
 
     /// <summary>Dated things a club runs that are not trips and not camps.</summary>

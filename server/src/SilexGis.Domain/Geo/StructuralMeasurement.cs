@@ -51,7 +51,10 @@ public static class StructuralMeasurement
     /// rows carry it, and a comparison that picks readings of one kind finds them by it.
     /// </summary>
     public static readonly IReadOnlyList<string> Types =
-        ["bedding", "joint", "fault", "cleavage", "fracture", "other"];
+        ["bedding", "joint", FaultType, "cleavage", "fracture", "other"];
+
+    /// <summary>The kind of plane a fault is: the readings that say the rock is broken there.</summary>
+    public const string FaultType = "fault";
 
     private const double FullTurn = 360d;
     private const double QuarterTurn = 90d;

@@ -23,6 +23,7 @@ using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Calendar;
 using SilexGis.Api.Features.Catalogue;
+using SilexGis.Api.Features.CavePotential;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.AnnotatedTexts;
@@ -210,6 +211,7 @@ try
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
     builder.Services.AddSingleton<ITerrainRasterTokenService, TerrainRasterTokenService>();
+    builder.Services.AddSingleton<ICavePotentialRasterTokenService, CavePotentialRasterTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
@@ -712,6 +714,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapUserAdminEndpoints();
     api.MapMapViewEndpoints();
     api.MapSavedFilterEndpoints();
+    api.MapCavePotentialModelEndpoints();
+    api.MapCavePotentialResultEndpoints();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
