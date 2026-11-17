@@ -2,6 +2,7 @@
 import { DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { App, Card, Popconfirm, Table, Tag, Tooltip, Typography, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useDeleteSurveySource,
@@ -52,7 +53,7 @@ const KIND_LABEL_KEYS: Record<SurveySourceInfo['kind'], string> = {
 export default function SurveySourceSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: sources } = useSurveySources(caveId);
+  const { data: sources, isError: sourcesFailed, error: sourcesError, refetch: refetchSources } = useSurveySources(caveId);
   const upload = useUploadSurveySource();
   const remove = useDeleteSurveySource();
 
@@ -76,7 +77,9 @@ export default function SurveySourceSection({ caveId, canEdit }: { caveId: strin
       title={t('surveySources.title')}
       style={{ marginTop: 16 }}
       extra={
-        canEdit && (
+        // Offered once the list has been read: adding under a list that was never read invites
+        // a second copy of something already there.
+        canEdit && sources !== undefined && (
           <Tooltip title={t('surveySources.acceptHint')}>
             <Upload
               accept={ACCEPTED_SOURCE_EXTENSIONS}
@@ -98,13 +101,22 @@ export default function SurveySourceSection({ caveId, canEdit }: { caveId: strin
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
         {t('surveySources.explanation')}
       </Typography.Paragraph>
+      <ReadFailedAlert
+        error={sourcesError}
+        isError={sourcesFailed}
+        held={sources !== undefined}
+        onRetry={refetchSources}
+        title={t('surveySources.loadFailed')}
+        testId="survey-sources-load-failed"
+      />
       <Table<SurveySourceInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={sources}
         pagination={false}
-        locale={{ emptyText: t('surveySources.empty') }}
+        // Said only after a read that landed: a failed one is named above, and is not an empty list.
+        locale={{ emptyText: sourcesFailed ? <span /> : t('surveySources.empty') }}
         columns={[
           { title: t('caves.name'), dataIndex: 'name' },
           {

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../i18n';
+import i18n from '../../../i18n';
 import { ApiError } from '../../../api/client.ts';
 import type { RasterMapInfo } from '../../../api/hooks.ts';
 import { cornersToPlacement, type Corners } from '../../../geodata/placement/placement.ts';
@@ -26,6 +26,9 @@ const live = vi.hoisted(() => ({
   systems: undefined as unknown,
   stations: undefined as unknown,
   background: null as unknown,
+  /** Whether the dialog's read of the map, while it watches it publish, failed. */
+  watchFailed: false,
+  refetchWatched: vi.fn(),
 }));
 
 vi.mock('../../../api/hooks.ts', () => ({
@@ -36,7 +39,11 @@ vi.mock('../../../api/hooks.ts', () => ({
   fetchRasterAnnotation: vi.fn(),
   useMapLayers: () => ({ data: [] }),
   usePlacementSystems: () => ({ data: live.systems }),
-  useRasterMap: (_id: string, watch: boolean) => ({ data: watch ? live.watched : undefined }),
+  useRasterMap: (_id: string, watch: boolean) => ({
+    data: watch ? live.watched : undefined,
+    isError: watch && live.watchFailed,
+    refetch: live.refetchWatched,
+  }),
   useSheetStationPoints: (_id: string, enabled: boolean) => ({ data: enabled ? live.stations : undefined }),
 }));
 
@@ -202,6 +209,8 @@ beforeEach(() => {
   live.systems = undefined;
   live.stations = undefined;
   live.background = null;
+  live.watchFailed = false;
+  live.refetchWatched.mockReset();
   onClose.mockReset();
 });
 
@@ -286,6 +295,22 @@ describe('the placement editor', () => {
     expect(fitGeometry).toHaveBeenCalledWith(bbox);
     expect(navigateTo).toHaveBeenCalledWith('/map');
     expect(onClose).toHaveBeenCalled();
+  });
+
+  /**
+   * The dialog learns that the map was published only by reading it again. When that read does not
+   * land, a spinner that goes on saying "placing the map" says something nobody knows; the dialog
+   * says the read failed and offers to read again.
+   */
+  it('says when it cannot read whether the map was published, and offers Retry', async () => {
+    live.watched = undefined;
+    live.watchFailed = true;
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('placement-save'));
+    expect(await screen.findByTestId('placement-watch-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(live.refetchWatched).toHaveBeenCalledTimes(1);
   });
 
   it('goes back to editing, with the reason, when publishing fails', async () => {

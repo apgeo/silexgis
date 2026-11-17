@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Descriptions, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ReadFailedLine } from '../../components/ReadFailedAlert.tsx';
 import { useCavers, useTripLogs, useTripTypes, type TripLogInfo, type TripType } from '../../api/hooks.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import {
@@ -46,7 +47,7 @@ function schemaOf(type: TripType | undefined, section: (typeof TRIP_SECTIONS)[nu
  */
 export default function ExpeditionTripAccounts({ expeditionId }: { expeditionId: string }) {
   const { t, i18n } = useTranslation();
-  const { data } = useTripLogs({ expeditionId, page: 1, pageSize: EXPEDITION_TRIPS_PAGE_SIZE });
+  const { data, isError, error, refetch } = useTripLogs({ expeditionId, page: 1, pageSize: EXPEDITION_TRIPS_PAGE_SIZE });
   const { data: tripTypes } = useTripTypes();
   const { data: cavers } = useCavers();
 
@@ -63,6 +64,24 @@ export default function ExpeditionTripAccounts({ expeditionId }: { expeditionId:
       return { trip, sections };
     })
     .filter(({ trip, sections }) => !!trip.description || !!trip.results || sections.length > 0);
+
+  // A read that failed is not a camp whose trips wrote nothing: leaving the part out would make the
+  // circulated document say so.
+  if (isError && data === undefined) {
+    return (
+      <section className="trip-report-section" style={{ marginTop: 24 }} data-testid="expedition-report-accounts">
+        <Typography.Title level={4} style={{ marginBottom: 8 }}>
+          {t('expeditions.report.accounts')}
+        </Typography.Title>
+        <ReadFailedLine
+          error={error}
+          onRetry={refetch}
+          text={t('trips.accountsUnread')}
+          testId="expedition-report-accounts-unread"
+        />
+      </section>
+    );
+  }
 
   if (accounts.length === 0) {
     return null;

@@ -136,6 +136,16 @@ describe('ExpeditionTripAccounts', () => {
     expect(screen.queryByText(/Carry day/)).toBeNull();
   });
 
+  it('prints that the accounts could not be read when the trips read failed, rather than leaving the part out', () => {
+    tripsSpy.mockReturnValue({ data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: vi.fn() });
+
+    render(<ExpeditionTripAccounts expeditionId={CAMP} />);
+
+    expect(screen.getByTestId('expedition-report-accounts-unread').textContent).toContain(
+      'The trip accounts could not be read when this was printed.',
+    );
+  });
+
   it('shows no part at all when none of the trips wrote anything', () => {
     answer([trip({ id: 'silent', title: 'Carry day' })]);
 

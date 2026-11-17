@@ -26,6 +26,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -92,7 +93,7 @@ export default function CaveDetailPage() {
 
   const { data: cave, isPending, isError, error, refetch } = useCave(id);
   const { data: summary } = useCaveSummary(id);
-  const { data: entrances } = useEntrances(id);
+  const { data: entrances, isError: entrancesFailed, error: entrancesError, refetch: refetchEntrances } = useEntrances(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: featureTypes } = useFeatureTypes();
   const { data: rockTypes } = useRockTypes();
@@ -373,7 +374,9 @@ export default function CaveDetailPage() {
       <Card
         title={t('caves.entrances')}
         extra={
-          canEdit && (
+          // Offered once the list has been read: adding under a list that was never read invites
+          // a second copy of something already there.
+          canEdit && entrances !== undefined && (
             <Button
               size="small"
               icon={<PlusOutlined />}
@@ -387,12 +390,23 @@ export default function CaveDetailPage() {
           )
         }
       >
+        <ReadFailedAlert
+          error={entrancesError}
+          isError={entrancesFailed}
+          held={entrances !== undefined}
+          onRetry={refetchEntrances}
+          title={t('entrances.loadFailed')}
+          testId="cave-entrances-load-failed"
+        />
         <Table<Entrance>
           scroll={{ x: 'max-content' }}
           rowKey="id"
           size="small"
           dataSource={entrances}
           pagination={false}
+          // A failed read is named above and is not an empty list, so the table's own "no data"
+          // picture is not drawn under it.
+          locale={entrancesFailed && entrances === undefined ? { emptyText: <span /> } : undefined}
           columns={[
             { title: t('caves.name'), dataIndex: 'name' },
             { title: t('caves.type'), dataIndex: 'entranceTypeId', render: entranceTypeName, width: 160 },

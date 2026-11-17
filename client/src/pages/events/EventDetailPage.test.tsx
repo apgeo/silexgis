@@ -129,7 +129,13 @@ describe('the event page', () => {
    * message and no way back.
    */
   it('says the event is not there rather than spinning forever when the read is refused', () => {
-    eventSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    eventSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'event.not_found'),
+      refetch: vi.fn(),
+    });
     renderPage();
 
     expect(screen.getByText('No such event')).toBeTruthy();
@@ -299,5 +305,54 @@ describe('an occurrence of something that comes round again', () => {
     expect(deleteSpy).not.toHaveBeenCalled();
     // What stayed is reported beside what went: it is the half that surprises people.
     await waitFor(() => expect(screen.getByText(/3 had already happened/)).toBeTruthy());
+  });
+
+  /**
+   * A read that did not land says nothing about the event. Telling somebody whose connection
+   * dropped that the event is not theirs to read is false, and offers no way to ask again.
+   */
+  it('says a read that did not land failed, with Retry, rather than that the event is not there', () => {
+    const refetch = vi.fn();
+    eventSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('offline'),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.getByTestId('read-failed')).toBeTruthy();
+    expect(screen.queryByText('No such event')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an open event on screen when a later read fails, and says it may be out of date', () => {
+    eventSpy.mockReturnValue({
+      data: anEvent(),
+      isPending: false,
+      isError: true,
+      error: new ApiError(503),
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByTestId('event-title').textContent).toBe('Committee night');
+    expect(screen.getByTestId('event-refresh-failed')).toBeTruthy();
+  });
+
+  it('ends an open page when a later read is refused, because the event has gone from this reader', () => {
+    eventSpy.mockReturnValue({
+      data: anEvent(),
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'event.not_found'),
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('No such event')).toBeTruthy();
+    expect(screen.queryByTestId('event-title')).toBeNull();
   });
 });

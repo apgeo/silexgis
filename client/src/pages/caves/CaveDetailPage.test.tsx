@@ -4,7 +4,7 @@ import { App } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { CaveDetail, CaveSummary, Entrance } from '../../api/hooks.ts';
 import { takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 
@@ -27,6 +27,8 @@ const setSelection = vi.fn();
 const permissionsModal = vi.fn();
 
 let entrances: Entrance[] = [];
+/** A read of the entrances that did not land, switched on by the test that needs it. */
+const entrancesRead = vi.hoisted(() => ({ failed: false, refetch: vi.fn() }));
 // The cave's own read, as the page receives it.
 let caveQuery: Record<string, unknown> = {};
 const deleteEntrance = vi.fn();
@@ -63,7 +65,10 @@ vi.mock('../../api/hooks.ts', () => ({
   surveyModelCanPlaceACaver: () => false,
   useWriteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useEntrances: () => ({ data: entrances }),
+  useEntrances: () =>
+    entrancesRead.failed
+      ? { data: undefined, isError: true, refetch: entrancesRead.refetch }
+      : { data: entrances, isError: false, refetch: entrancesRead.refetch },
   useCaveTypes: () => ({ data: [] }),
   useFeatureTypes: () => ({ data: [] }),
   useRockTypes: () => ({ data: [] }),
@@ -488,5 +493,40 @@ describe('CaveDetailPage deleting an entrance', () => {
 
     expect(deleteEntrance).toHaveBeenCalledWith('e1');
     expect(await screen.findByText('You are not allowed to make that change.')).toBeInTheDocument();
+  });
+});
+
+describe('a read of the entrances that did not land', () => {
+  it('offers no Add entrance under a list that was never read, and does once it has been', () => {
+    can = true;
+    show();
+    expect(screen.queryByText(i18n.t('entrances.add'))).toBeTruthy();
+    cleanup();
+
+    entrancesRead.failed = true;
+    try {
+      show();
+      expect(screen.queryByText(i18n.t('entrances.add'))).toBeNull();
+    } finally {
+      entrancesRead.failed = false;
+      can = false;
+    }
+  });
+
+  it('says the read failed and offers Retry, rather than drawing an empty table', () => {
+    entrancesRead.failed = true;
+    try {
+      show();
+      expect(screen.getByTestId('cave-entrances-load-failed')).toBeTruthy();
+      fireEvent.click(
+        within(screen.getByTestId('cave-entrances-load-failed')).getByRole('button', {
+          name: i18n.t('common.retry'),
+        }),
+      );
+      expect(entrancesRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      entrancesRead.failed = false;
+      entrancesRead.refetch.mockReset();
+    }
   });
 });

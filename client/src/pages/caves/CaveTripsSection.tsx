@@ -5,6 +5,7 @@ import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { RowLink } from '../../components/RowOpeners.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTripLogs, useTripTypes, type TripLogInfo } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
@@ -28,7 +29,7 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const { data, isFetching } = useTripLogs({ caveId, page, pageSize: PAGE_SIZE });
+  const { data, isFetching, isError: dataFailed, error: dataError, refetch: refetchData } = useTripLogs({ caveId, page, pageSize: PAGE_SIZE });
   const { data: tripTypes } = useTripTypes();
 
   const onTableChange = (pagination: TablePaginationConfig) => {
@@ -37,6 +38,14 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
 
   return (
     <Card title={t('trips.title')} style={{ marginTop: 16 }}>
+      <ReadFailedAlert
+        error={dataError}
+        isError={dataFailed}
+        held={data !== undefined}
+        onRetry={refetchData}
+        title={t('caves.tripLogsLoadFailed')}
+        testId="cave-trips-load-failed"
+      />
       <Table<TripLogInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
@@ -48,7 +57,8 @@ export default function CaveTripsSection({ caveId }: { caveId: string }) {
           onClick: () => navigate(`/trip-logs/${trip.id}`),
           style: { cursor: 'pointer' },
         })}
-        locale={{ emptyText: t('caves.tripLogsEmpty') }}
+        // Said only after a read that landed: a failed one is named above, and is not an empty list.
+        locale={{ emptyText: dataFailed ? <span /> : t('caves.tripLogsEmpty') }}
         pagination={{
           current: data?.page,
           pageSize: data?.pageSize ?? PAGE_SIZE,

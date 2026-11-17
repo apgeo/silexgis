@@ -175,9 +175,9 @@ export function useEvent(id: string | undefined) {
     queryFn: () => unwrapVersioned(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
     structuralSharing: sharesKeepingVersion,
     enabled: !!id,
-    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
-    // three times only delays the page saying so.
-    retry: false,
+    // No retry setting of its own: the client's default already answers a settled refusal at once
+    // (retrying one only delays the page saying so) while still asking again after a read that did
+    // not land, which says nothing about the event.
   });
 }
 

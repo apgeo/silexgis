@@ -84,6 +84,20 @@ function show() {
   );
 }
 
+describe('a failed read of the roster', () => {
+  it('says the people could not be read, rather than drawing an empty roster', async () => {
+    const roster = get.getMockImplementation()!;
+    get.mockImplementation((path: string, init?: unknown) =>
+      path === '/api/v1/cavers'
+        ? Promise.resolve({ data: undefined, error: { status: 500 }, response: new Response(null, { status: 500 }) })
+        : roster(path, init),
+    );
+    show();
+
+    expect(await screen.findByTestId('cavers-load-failed')).toBeTruthy();
+  });
+});
+
 describe('who is offered the delete button', () => {
   it('offers it to an account that may delete people', async () => {
     show();

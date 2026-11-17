@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { PlusOutlined } from '@ant-design/icons';
 import { Card, Dropdown, Flex } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useResLinksForTarget } from '../../api/hooks.ts';
 import RoleField from '../../components/reslinks/RoleField.tsx';
@@ -49,7 +50,7 @@ export default function TripRoleFields({
   // One unfiltered read decides which roles have content. Each field still reads its own
   // relation — that is what it draws from — but this is what keeps a trip with two roles
   // recorded from mounting ten fields and asking ten times.
-  const { data } = useResLinksForTarget('tripLog', tripId, { pageSize: MAX_ROWS });
+  const { data, isError, error, refetch } = useResLinksForTarget('tripLog', tripId, { pageSize: MAX_ROWS });
   const recorded = new Set(
     (data?.items ?? []).map((link) => link.relationType?.code).filter((code) => Boolean(code)),
   );
@@ -64,13 +65,24 @@ export default function TripRoleFields({
   );
   const hidden = TRIP_ROLE_CODES.filter((code) => !shown.includes(code));
 
-  if (shown.length === 0) {
+  // A failed read hides nothing: the roles it would have found are said to be unread, not absent.
+  const readFailed = isError && data === undefined;
+  if (shown.length === 0 && !readFailed) {
     return null;
   }
 
   return (
     <Card size="small" title={t('trips.rolesTitle')} style={{ marginTop: 16 }}>
       <Flex vertical gap={8}>
+        <ReadFailedAlert
+          isError={readFailed}
+          error={error}
+          held={false}
+          onRetry={refetch}
+          title={t('trips.rolesLoadFailed')}
+          testId="trip-roles-load-failed"
+          style={{ marginBottom: 0 }}
+        />
         {shown.map((code) => (
           <RoleField
             key={code}

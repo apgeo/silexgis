@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { SurveySourceInfo } from '../../api/hooks.ts';
 import en from '../../i18n/locales/en.json';
@@ -33,12 +33,15 @@ function source(overrides: Partial<SurveySourceInfo> = {}): SurveySourceInfo {
 }
 
 let sources: SurveySourceInfo[] = [];
+/** A read of the list that did not land, switched on by the test that needs it. */
+const failedRead = vi.hoisted(() => ({ on: false, refetch: vi.fn() }));
+const failedAnswer = () => ({ data: undefined, isError: true, isFetching: false, refetch: failedRead.refetch });
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     ...actual,
-    useSurveySources: () => ({ data: sources }),
+    useSurveySources: () => (failedRead.on ? failedAnswer() : { data: sources }),
     useUploadSurveySource: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveySource: () => ({ mutateAsync: deleteMutate, isPending: false }),
   };
@@ -127,5 +130,27 @@ describe('SurveySourceSection', () => {
         expect(typeof value, `${key} in one of the locales`).toBe('string');
       }
     }
+  });
+});
+
+describe('a read of the list that did not land', () => {
+  afterEach(() => {
+    failedRead.on = false;
+    failedRead.refetch.mockReset();
+  });
+
+  it('says the read failed and offers Retry, rather than saying there is nothing', () => {
+    failedRead.on = true;
+    show();
+    expect(screen.getByTestId('survey-sources-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('surveySources.empty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no upload under a list that was never read', () => {
+    failedRead.on = true;
+    show(true);
+    expect(screen.queryByText(i18n.t('surveySources.upload'))).toBeNull();
   });
 });

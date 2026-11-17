@@ -9,7 +9,7 @@ vi.mock('react-router-dom', async () => ({
   ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
   useNavigate: () => navigate,
 }));
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import { surveyModelPollInterval } from '../../api/hooks.ts';
 import type { CaveSummary, SurveyModelInfo } from '../../api/hooks.ts';
@@ -84,6 +84,9 @@ function summaryWith(exact: boolean): CaveSummary {
 }
 
 let models: SurveyModelInfo[] = [];
+/** A read of the list that did not land, switched on by the test that needs it. */
+const failedRead = vi.hoisted(() => ({ on: false, refetch: vi.fn() }));
+const failedAnswer = () => ({ data: undefined, isError: true, isFetching: false, refetch: failedRead.refetch });
 /** Undefined while the summary request is still in the air, which is a state of its own. */
 let summary: CaveSummary | undefined = summaryWith(true);
 
@@ -95,7 +98,7 @@ vi.mock('../../api/hooks.ts', async () => {
     surveyModelUnsettled: actual.surveyModelUnsettled,
     surveyModelWorkOutstanding: actual.surveyModelWorkOutstanding,
     surveyModelReadableByViewer: actual.surveyModelReadableByViewer,
-    useSurveyModels: () => ({ data: models }),
+    useSurveyModels: () => (failedRead.on ? failedAnswer() : { data: models }),
     useCaveSummary: () => ({ data: summary }),
     useUploadSurveyModel: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -954,5 +957,27 @@ describe('uploading a survey model', () => {
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText('Upload failed')).toBeInTheDocument();
+  });
+});
+
+describe('a read of the list that did not land', () => {
+  afterEach(() => {
+    failedRead.on = false;
+    failedRead.refetch.mockReset();
+  });
+
+  it('says the read failed and offers Retry, rather than saying there is nothing', () => {
+    failedRead.on = true;
+    show();
+    expect(screen.getByTestId('survey-models-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('surveyModels.empty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no upload under a list that was never read', () => {
+    failedRead.on = true;
+    show(true);
+    expect(screen.queryByText(i18n.t('surveyModels.upload'))).toBeNull();
   });
 });

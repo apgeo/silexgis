@@ -2,6 +2,7 @@
 import { DeleteOutlined, StarFilled, StarOutlined, UploadOutlined } from '@ant-design/icons';
 import { App, Card, Popconfirm, Table, Tag, Tooltip, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { isConcurrencyConflict } from '../../api/client.ts';
 import {
@@ -22,7 +23,7 @@ import {
 export default function CenterlineSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: centerlines } = useCenterlines(caveId);
+  const { data: centerlines, isError: centerlinesFailed, error: centerlinesError, refetch: refetchCenterlines } = useCenterlines(caveId);
   const upload = useUploadCenterline();
   const update = useUpdateCenterline();
   const remove = useDeleteCenterline();
@@ -71,7 +72,9 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       title={t('centerlines.title')}
       style={{ marginTop: 16 }}
       extra={
-        canEdit && (
+        // Offered once the list has been read: adding under a list that was never read invites
+        // a second copy of something already there.
+        canEdit && centerlines !== undefined && (
           <Upload
             accept=".gpx,.geojson,.json"
             showUploadList={false}
@@ -87,13 +90,22 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
         )
       }
     >
+      <ReadFailedAlert
+        error={centerlinesError}
+        isError={centerlinesFailed}
+        held={centerlines !== undefined}
+        onRetry={refetchCenterlines}
+        title={t('centerlines.loadFailed')}
+        testId="centerlines-load-failed"
+      />
       <Table<CenterlineInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={centerlines}
         pagination={false}
-        locale={{ emptyText: t('centerlines.empty') }}
+        // Said only after a read that landed: a failed one is named above, and is not an empty list.
+        locale={{ emptyText: centerlinesFailed ? <span /> : t('centerlines.empty') }}
         columns={[
           { title: t('caves.name'), dataIndex: 'name' },
           {

@@ -10,7 +10,8 @@ import type { ExpeditionInfo } from '../../api/hooks.ts';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy, fileConfigSpy } = vi.hoisted(() => ({
+const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy, fileConfigSpy, photosSpy } = vi.hoisted(() => ({
+  photosSpy: vi.fn(),
   campSpy: vi.fn(),
   accessSpy: vi.fn(),
   canSpy: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useKeepExpeditionReport: () => ({ mutate: keepMutate, isPending: false }),
   useFileConfig: () => fileConfigSpy(),
-  usePhotos: () => ({ data: { items: [] }, isPending: false }),
+  usePhotos: () => photosSpy(),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
 
@@ -121,6 +122,7 @@ describe('a camp whose read failed', () => {
 });
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false });
+  photosSpy.mockReset().mockReturnValue({ data: { items: [] }, isPending: false });
   accessSpy.mockReturnValue({ data: { actions: 'read' } });
   canSpy.mockReturnValue(false);
   keepMutate.mockReset();
@@ -130,6 +132,22 @@ beforeEach(() => {
 });
 
 describe('the camp write-up', () => {
+  it('prints that the pictures could not be read, never that there are none, when their read failed', () => {
+    canSpy.mockImplementation((domain: string, action: string) => domain === 'documents' && action === 'read');
+    photosSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByTestId('expedition-report-photographs-unread').textContent).toContain(
+      'The photographs could not be read when this was printed.',
+    );
+  });
+
   it('lays the camp out as a document: its facts, its account, its trips and its roster', () => {
     renderPage();
 

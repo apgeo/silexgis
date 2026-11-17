@@ -15,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -106,7 +107,7 @@ export default function CaveDepthPlacesSection({
 }) {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
-  const { data: places } = useCaveDepthPlaces(caveId);
+  const { data: places, isError: placesFailed, error: placesError, refetch: refetchPlaces } = useCaveDepthPlaces(caveId);
   const { data: models } = useSurveyModels(caveId);
   // The survey names are offered from: the one marked as the cave's current line plot, once it
   // has been read — which is, by the same rule, the only survey the server judges each row's
@@ -237,7 +238,9 @@ export default function CaveDepthPlacesSection({
       style={{ marginBottom: 16 }}
       data-testid="cave-depth-places"
       extra={
-        canEdit && !adding ? (
+        // Declaring writes over whatever is already declared at that depth, so it is not offered
+        // under a list that was never read: it would replace a declaration nobody could see.
+        canEdit && !adding && places !== undefined ? (
           <Button
             size="small"
             icon={<PlusOutlined />}
@@ -252,6 +255,15 @@ export default function CaveDepthPlacesSection({
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
         {t('caves.depthPlaces.help')}
       </Typography.Paragraph>
+
+      <ReadFailedAlert
+        error={placesError}
+        isError={placesFailed}
+        held={places !== undefined}
+        onRetry={refetchPlaces}
+        title={t('caves.depthPlaces.loadFailed')}
+        testId="cave-depth-places-load-failed"
+      />
 
       {places && places.length > 0 ? (
         <Table<CaveDepthPlace>
@@ -349,7 +361,7 @@ export default function CaveDepthPlacesSection({
               : []),
           ]}
         />
-      ) : (
+      ) : places === undefined ? null : (
         <Empty
           image={null}
           description={t('caves.depthPlaces.none')}

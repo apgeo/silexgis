@@ -2,6 +2,7 @@
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Card, Empty, Flex, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -105,7 +106,15 @@ function ExpeditionAlbums({
         )
       }
     >
-      {albums.length === 0 ? (
+      <ReadFailedAlert
+        isError={albumsQuery.isError}
+        error={albumsQuery.error}
+        held={albumsQuery.data !== undefined}
+        onRetry={albumsQuery.refetch}
+        title={t('expeditions.albumsLoadFailed')}
+        testId="expedition-albums-load-failed"
+      />
+      {albumsQuery.isError && albumsQuery.data === undefined ? null : albums.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noAlbums')} />
       ) : (
         <Flex wrap gap={12}>

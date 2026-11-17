@@ -9,7 +9,6 @@ import {
   Flex,
   Popconfirm,
   Radio,
-  Result,
   Space,
   Spin,
   Tabs,
@@ -17,6 +16,9 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -56,7 +58,7 @@ export default function EventDetailPage() {
   const navigate = useNavigate();
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: event, isPending, isError } = useEvent(id);
+  const { data: event, isPending, isError, error, refetch } = useEvent(id);
   const { data: effective } = useEffectiveAccess('event', id);
   const domainFallback = useCan('events', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
@@ -66,16 +68,19 @@ export default function EventDetailPage() {
   const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   // An event this reader may not open and one that does not exist answer identically, and the
-  // page must not try to tell them apart. The read is not retried, so a refusal settles at once —
-  // without this branch the page would hold a spinner that never resolves, which is what somebody
-  // following a link to an event whose grant has since been withdrawn would be left looking at.
-  if (isError) {
+  // page must not try to tell them apart. A refusal settles at once — without this branch the page
+  // would hold a spinner that never resolves, which is what somebody following a link to an event
+  // whose grant has since been withdrawn would be left looking at. A read that did not land (a
+  // dropped connection, a server restarting) is not that answer: it says nothing about the event,
+  // so it is named as a failure with a way to ask again, and an event already on screen stays.
+  if (readFailureEndsPage(isError, event, error)) {
     return (
-      <Result
-        status="404"
-        title={t('events.notFound')}
-        subTitle={t('events.notFoundDetail')}
-        extra={
+      <ReadFailedResult
+        error={error}
+        onRetry={() => void refetch()}
+        notFoundTitle={t('events.notFound')}
+        notFoundDetail={t('events.notFoundDetail')}
+        actions={
           <Button type="primary" onClick={() => void navigate('/events')}>
             {t('common.back')}
           </Button>
@@ -193,6 +198,13 @@ export default function EventDetailPage() {
 
   return (
     <div style={{ padding: 24 }}>
+      <ReadFailedAlert
+        error={error}
+        isError={isError}
+        held
+        onRetry={refetch}
+        testId="event-refresh-failed"
+      />
       <Flex justify="space-between" align="start" wrap gap={12} style={{ marginBottom: 16 }}>
         <div>
           <Typography.Title level={3} style={{ margin: 0 }} data-testid="event-title">

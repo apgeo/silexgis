@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Flex, Form, Input, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useCaveTypes, useCavingGroups, useTags } from '../../api/hooks.ts';
@@ -77,7 +78,7 @@ export default function SavedFiltersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const { data: filters, isLoading } = useSavedFilters();
+  const { data: filters, isLoading, isError, error, refetch } = useSavedFilters();
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
   // Every club, to name the group a listed filter is shared with. The share control offers the
@@ -181,13 +182,21 @@ export default function SavedFiltersPage() {
         <Button onClick={() => navigate('/caves')}>{t('savedFilters.toRegistry')}</Button>
       </Flex>
       <Typography.Paragraph type="secondary">{t('savedFilters.intro')}</Typography.Paragraph>
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={filters !== undefined}
+        onRetry={refetch}
+        title={t('savedFilters.loadFailed')}
+        testId="saved-filters-load-failed"
+      />
       <Table<SavedFilter>
         rowKey="id"
         size="middle"
         loading={isLoading}
         dataSource={filters}
         data-testid="saved-filters-table"
-        locale={{ emptyText: t('savedFilters.empty') }}
+        locale={{ emptyText: isError && !filters ? <span /> : t('savedFilters.empty') }}
         columns={[
           {
             title: t('savedFilters.name'),

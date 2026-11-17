@@ -23,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -118,7 +119,7 @@ export default function CaversPage() {
   const debounced = useDebouncedValue(search);
   // The previous rows stay while a changed search is answered: an emptied table takes with it
   // whatever stood open on a row — a delete confirmation somebody was about to answer.
-  const { data: cavers, isFetching } = useCavers(debounced || undefined, undefined, {
+  const { data: cavers, isFetching, isError, error, refetch } = useCavers(debounced || undefined, undefined, {
     keepRows: true,
   });
   const createCaver = useCreateCaver();
@@ -245,11 +246,20 @@ export default function CaversPage() {
         </Flex>
       </Flex>
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={cavers !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="cavers-load-failed"
+      />
       <Table<CaverInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !cavers}
+        locale={isError && !cavers ? { emptyText: <span /> } : undefined}
         dataSource={cavers}
         pagination={false}
         columns={[

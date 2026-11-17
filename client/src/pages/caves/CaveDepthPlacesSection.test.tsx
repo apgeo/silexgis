@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 
 const write = vi.fn();
@@ -12,12 +12,17 @@ const places = vi.fn();
 const models = vi.fn();
 /** The stations of one survey beginning with what has been typed, and which survey was asked. */
 const stationSearch = vi.fn();
+/** A read of the declarations that did not land, switched on by the test that needs it. */
+const placesRead = { failed: false, held: undefined as unknown, refetch: vi.fn() };
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     ...actual,
-    useCaveDepthPlaces: () => ({ data: places() }),
+    useCaveDepthPlaces: () =>
+      placesRead.failed
+        ? { data: placesRead.held, isError: true, refetch: placesRead.refetch }
+        : { data: places(), isError: false, refetch: placesRead.refetch },
     useWriteCaveDepthPlace: () => ({ mutateAsync: write, isPending: false }),
     useDeleteCaveDepthPlace: () => ({ mutateAsync: remove, isPending: false }),
     useSurveyModels: () => ({ data: models() }),
@@ -633,6 +638,45 @@ describe('CaveDepthPlacesSection', () => {
       await waitFor(() => expect(write).toHaveBeenCalledOnce());
       expect(write.mock.calls[0][0]).toMatchObject({ stationName: 'deep.4' });
       expect(stationSearch.mock.calls.every(([model]) => model === undefined)).toBe(true);
+    });
+  });
+
+  describe('a read of the declarations that did not land', () => {
+    afterEach(() => {
+      placesRead.failed = false;
+      placesRead.held = undefined;
+      placesRead.refetch.mockReset();
+    });
+
+    /**
+     * Declaring writes over whatever is already declared at that depth. Offered under a list that
+     * was never read, it would replace an existing declaration somebody could not see, so the
+     * section says the read failed, offers to read again, and offers no way to declare.
+     */
+    it('says the read failed, offers Retry, and offers no way to declare', () => {
+      placesRead.failed = true;
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      expect(screen.getByTestId('cave-depth-places-load-failed')).toBeInTheDocument();
+      expect(screen.queryByTestId('cave-depth-places-empty')).toBeNull();
+      expect(screen.queryByTestId('cave-depth-place-add')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(placesRead.refetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the declarations already on screen and says they may be out of date', () => {
+      placesRead.failed = true;
+      placesRead.held = DECLARED;
+      render(
+        <App>
+          <CaveDepthPlacesSection caveId="cave-1" canEdit />
+        </App>,
+      );
+      expect(screen.getByText('upper.2')).toBeInTheDocument();
+      expect(screen.getByTestId('cave-depth-places-load-failed')).toBeInTheDocument();
     });
   });
 });
