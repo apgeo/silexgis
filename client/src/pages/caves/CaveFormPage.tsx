@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Spin, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -49,6 +50,11 @@ export default function CaveFormPage() {
     [featureTypes],
   );
   const [extra, setExtra] = useState<Record<string, unknown>>({});
+  // The club's own fields live beside the antd form, so the form's own record of what was touched
+  // does not see them; a change to one is noted here for the question Cancel asks.
+  const extraTouched = useRef(false);
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits();
 
   // The cave the form was filled from, and the version of it, taken once per cave. The page goes
   // on reading the cave under the form — on a return to the browser tab, after an entrance is
@@ -69,7 +75,8 @@ export default function CaveFormPage() {
     }
   }, [cave, isEdit, form]);
 
-  const setExtraValue = (key: string, value: unknown) =>
+  const setExtraValue = (key: string, value: unknown) => {
+    extraTouched.current = true;
     setExtra((current) => {
       const next = { ...current };
       if (value === undefined || value === null || value === '') {
@@ -79,6 +86,7 @@ export default function CaveFormPage() {
       }
       return next;
     });
+  };
 
   const onFinish = async (values: CaveFormValues) => {
     // An edit writes every field, so one sent before the form holds the stored cave would blank
@@ -154,7 +162,13 @@ export default function CaveFormPage() {
         {isEdit ? t('caves.editCave') : t('caves.newCave')}
       </Typography.Title>
       <Card>
-        <Form<CaveFormValues> form={form} layout="vertical" onFinish={(v) => void onFinish(v)} requiredMark>
+        <Form<CaveFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={(v) => void onFinish(v)}
+          onValuesChange={edits.onValuesChange}
+          requiredMark
+        >
           <Collapse
             defaultActiveKey={['identification', 'localization', 'access', 'clubFields']}
             items={[
@@ -346,7 +360,11 @@ export default function CaveFormPage() {
             ]}
           />
           <Flex gap={8} justify="end" style={{ marginTop: 16 }}>
-            <Button onClick={() => navigate(-1)}>{t('common.cancel')}</Button>
+            <Button
+              onClick={() => requestDiscard(() => edits.edited() || extraTouched.current, () => navigate(-1))}
+            >
+              {t('common.cancel')}
+            </Button>
             <Button type="primary" htmlType="submit" loading={createCave.isPending || updateCave.isPending}>
               {t('common.save')}
             </Button>

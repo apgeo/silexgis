@@ -16,6 +16,7 @@ import {
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import {
   useCavingGroups,
   useCreateEvent,
@@ -113,6 +114,8 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
   const create = useCreateEvent();
   const update = useUpdateEvent();
   const editFollowing = useEditEventSeriesFollowing();
@@ -271,12 +274,13 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
     <Modal
       open={open}
       title={event ? t('events.edit') : t('events.create')}
-      onCancel={onClose}
+      onCancel={() => requestDiscard(edits.edited, onClose)}
       onOk={() => void submit()}
       confirmLoading={create.isPending || update.isPending || editFollowing.isPending}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" data-testid="event-form">
+      <Form form={form} layout="vertical" data-testid="event-form" onValuesChange={edits.onValuesChange}>
         {/* What an edit of one occurrence reaches. Asked before anything else on the form, because
             it changes the meaning of every field below it — and defaulted to the narrow answer:
             somebody correcting one evening's place must not silently rewrite the next two years,

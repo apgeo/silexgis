@@ -187,3 +187,40 @@ describe('editing a cave the page reads again meanwhile', () => {
     expect(screen.queryByTestId('cave-sheet')).toBeNull();
   });
 });
+
+describe('CaveFormPage left with typed work', () => {
+  /** Opened from the cave's sheet, so Cancel has somewhere to go back to. */
+  function fromSheet() {
+    return (
+      <MemoryRouter initialEntries={['/caves/cave-1', '/caves/cave-1/edit']} initialIndex={1}>
+        <App>
+          <Routes>
+            <Route path="/caves/:id/edit" element={<CaveFormPage />} />
+            <Route path="/caves/:id" element={<div data-testid="cave-sheet" />} />
+          </Routes>
+        </App>
+      </MemoryRouter>
+    );
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('goes back at once when nothing was typed', async () => {
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    cancel();
+    expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+  });
+
+  it('asks before Cancel throws typing away, and stays on the form until told', async () => {
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Half a description' } });
+    cancel();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('cave-sheet')).toBeNull();
+    expect(screen.getByLabelText('Description')).toHaveValue('Half a description');
+    fireEvent.click(screen.getByTestId('discard-confirm'));
+    expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+  });
+});

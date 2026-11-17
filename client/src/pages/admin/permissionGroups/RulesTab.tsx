@@ -43,6 +43,8 @@ interface RulesTabProps {
   previewSeen: boolean;
   /** Any edit invalidates a previously seen preview. */
   onRulesChanged: () => void;
+  /** Told whenever the drafts start or stop holding edits not yet saved. */
+  onDirtyChange?: (dirty: boolean) => void;
   /** "Preview first" affordance jumps to the preview tab. */
   onRequestPreview: () => void;
 }
@@ -64,7 +66,14 @@ interface RulesTabProps {
  * fresh read made just before every save) stops the save until the administrator either loads the
  * stored rules or says to keep their own.
  */
-export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, onRequestPreview }: RulesTabProps) {
+export default function RulesTab({
+  group,
+  catalog,
+  previewSeen,
+  onRulesChanged,
+  onDirtyChange,
+  onRequestPreview,
+}: RulesTabProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken();
@@ -83,6 +92,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
   const markDirty = (value: boolean) => {
     dirtyRef.current = value;
     setDirty(value);
+    onDirtyChange?.(value);
   };
 
   // The stored rules the drafts were built from, as text, and whether a later read differed.

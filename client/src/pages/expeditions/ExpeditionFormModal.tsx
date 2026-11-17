@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { App, DatePicker, Flex, Form, Input, Modal, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import {
   useCavingGroups,
   useCreateExpedition,
@@ -52,6 +53,8 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
   const createCamp = useCreateExpedition();
   const updateCamp = useUpdateExpedition();
   const { data: cavingGroups } = useCavingGroups();
@@ -140,14 +143,15 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
     <Modal
       title={camp ? t('expeditions.edit') : t('expeditions.new')}
       open={open}
-      onCancel={() => onClose()}
+      onCancel={() => requestDiscard(edits.edited, () => onClose())}
       onOk={() => void onOk()}
       confirmLoading={createCamp.isPending || updateCamp.isPending}
       width={720}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       afterOpenChange={setShown}
     >
-      <Form<FormValues> form={form} layout="vertical">
+      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Form.Item name="name" label={t('expeditions.nameField')} rules={[{ required: true }]}>
           <Input maxLength={255} data-testid="expedition-form-name" />
         </Form.Item>

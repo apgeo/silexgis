@@ -403,3 +403,22 @@ describe('ChecklistsPage', () => {
     expect(refetchLists).toHaveBeenCalled();
   });
 });
+
+describe('leaving the checklist dialog with typed lines', () => {
+  it('asks before throwing typed lines away, and a later opening starts with nothing typed', async () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /New checklist/ }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Winter trips' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(document.querySelector('.ant-modal-wrap:not([style*="display: none"]) [data-testid="checklist-form"]')).toBeNull());
+
+    // Opened again and left untouched, it closes without a question.
+    const asked = screen.queryAllByTestId('discard-confirm').length;
+    fireEvent.click(screen.getByRole('button', { name: /New checklist/ }));
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1)!);
+    expect(screen.queryAllByTestId('discard-confirm').length).toBe(asked);
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+});

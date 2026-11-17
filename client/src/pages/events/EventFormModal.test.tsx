@@ -299,3 +299,42 @@ describe('a save from a dialog opened before the event was read again', () => {
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 });
+
+describe('leaving the event dialog with typed work', () => {
+  afterEach(cleanup);
+
+  function showClosable() {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <EventFormModal open onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Committee night' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click beside it', () => {
+    const onClose = showClosable();
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

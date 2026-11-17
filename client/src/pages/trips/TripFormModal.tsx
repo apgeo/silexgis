@@ -15,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
@@ -269,6 +270,8 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
   const createTrip = useCreateTripLog();
   const createPlan = useCreateTripPlan();
   const updateTrip = useUpdateTripLog();
@@ -513,14 +516,15 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
     <Modal
       title={trip ? t('trips.edit') : planning ? t('trips.plan.new') : t('trips.new')}
       open={open}
-      onCancel={() => onClose()}
+      onCancel={() => requestDiscard(edits.edited, () => onClose())}
       onOk={() => void onOk()}
       confirmLoading={createTrip.isPending || createPlan.isPending || updateTrip.isPending}
       width={720}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       afterOpenChange={setShown}
     >
-      <Form<FormValues> form={form} layout="vertical">
+      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Form.Item name="title" label={t('trips.titleField')} rules={[{ required: true }]}>
           <Input maxLength={255} />
         </Form.Item>
