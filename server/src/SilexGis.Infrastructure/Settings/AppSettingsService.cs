@@ -106,6 +106,8 @@ public sealed class AppSettingsService(
             () => PhotoLibrarySuspensionSettings.EverythingStopped,
             ct);
 
+    public void Forget(string section) => cache.Remove(CacheKey(section));
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {

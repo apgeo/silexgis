@@ -109,7 +109,30 @@ public sealed record AdminSettingsDto(
     MapSymbolSettingsDto MapSymbols,
     bool MailConfigured,
     bool SmsConfigured,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    AdminSettingsVersionsDto Versions);
+
+/// <summary>
+/// The version of each section as this read shows it. A section is saved whole, so its save names
+/// the version the form was filled from as <c>If-Match</c>, and a save made from a section
+/// somebody else has saved over since is refused rather than putting their values back. Each is a
+/// digest of the section exactly as answered here — secrets appear only as whether one is stored —
+/// so it moves when, and only when, what the page shows of that section moves.
+/// </summary>
+public sealed record AdminSettingsVersionsDto(
+    string Mail,
+    string Sms,
+    string Security,
+    string Protection,
+    string Import,
+    string Interface,
+    string Notifications,
+    string Announcements,
+    string PhotoLibraries,
+    string Sync,
+    string SurveyUploads,
+    string TestData,
+    string MapSymbols);
 
 /// <summary>
 /// What the installation has decided about surveys sent from a field device: whether a cave an

@@ -489,6 +489,8 @@ public sealed class PhotoLibrarySuspensionTests
 
         public ValueTask<MapSymbolSettings> GetMapSymbolsAsync(CancellationToken ct = default) => throw NotAsked();
 
+        public void Forget(string section) => throw NotAsked();
+
         public Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
             where T : class => throw NotAsked();
 
