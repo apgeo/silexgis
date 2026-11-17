@@ -194,8 +194,10 @@ export default function FeatureDetailPage() {
       surfaceFeaturesChanged();
       message.success(t('common.deleted'));
       navigate('/features');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 

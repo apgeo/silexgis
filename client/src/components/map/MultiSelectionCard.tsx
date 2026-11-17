@@ -4,6 +4,8 @@ import { AimOutlined, ClearOutlined, SaveOutlined, TagsOutlined } from '@ant-des
 import { App, Descriptions, Empty, Flex, Form, Input, Modal, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { savedFilterSaveFailedKey } from '../filters/useSavedFilterAudienceChoice.ts';
 import type { FeatureListItem } from '../../api/hooks.ts';
 import { useCreateSavedFilter } from '../../api/hooks/savedFilters.ts';
 import { useSelectionSummary } from '../../api/hooks/workingSet.ts';
@@ -51,8 +53,10 @@ export default function MultiSelectionCard() {
       setSaving(false);
       form.resetFields();
       message.success(t('listFilters.saved', { name: created.name }));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(savedFilterSaveFailedKey(error)));
+      }
     }
   };
 

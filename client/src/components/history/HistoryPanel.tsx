@@ -7,6 +7,7 @@ import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   useHistory,
   useRestoreFromHistory,
@@ -251,8 +252,10 @@ function HistoryEventItem({
           setOutcome(result);
         }
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('history.restoreFailed'));
+      }
     } finally {
       setRestoring(null);
     }

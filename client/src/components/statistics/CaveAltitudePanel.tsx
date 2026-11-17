@@ -2,6 +2,7 @@
 import { App, Card, Empty, Typography } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 import {
   useCaveAltitudeDisagreement,
@@ -39,8 +40,11 @@ export default function CaveAltitudePanel({ caveId, canEdit }: { caveId: string;
     try {
       await fill.mutateAsync(entranceId);
       message.success(t('altitudeCheck.filled'));
-    } catch {
-      message.error(t('altitudeCheck.fillFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('altitudeCheck.fillFailed'));
+      }
     } finally {
       setFilling(null);
     }

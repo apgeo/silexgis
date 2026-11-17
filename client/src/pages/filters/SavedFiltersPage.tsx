@@ -4,6 +4,7 @@ import { DeleteOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SearchOut
 import { App, Flex, Form, Input, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import { useNavigate } from 'react-router-dom';
 import { useCaveTypes, useCavingGroups, useTags } from '../../api/hooks.ts';
 import {
@@ -308,7 +309,11 @@ export default function SavedFiltersPage() {
                       title={t('savedFilters.deleteConfirm')}
                       okText={t('savedFilters.delete')}
                       onConfirm={() =>
-                        remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
+                        remove.mutateAsync(filter.id).catch((error: unknown) => {
+                          if (!isConcurrencyConflict(error)) {
+                            message.error(t('common.deleteFailed'));
+                          }
+                        })}
                     >
                       <Button
                         size="small"

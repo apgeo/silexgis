@@ -4,6 +4,8 @@ import { UndoOutlined } from '@ant-design/icons';
 import { App, Drawer, Flex, Popconfirm, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { refusalText } from '../../components/geodata/refusalText.ts';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useImportBatch,
@@ -152,8 +154,10 @@ export default function ImportBatchesTab() {
       } else {
         message.warning(t('vectorImport.upload.undoneWithLeft', { count: left.length }));
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(refusalText(error, t, 'vectorImport.revertFailed'));
+      }
     }
   };
 

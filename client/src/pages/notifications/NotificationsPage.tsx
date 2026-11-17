@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import { Alert, App, Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { CheckOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
@@ -50,12 +50,13 @@ type Scope = 'all' | 'unread';
  */
 export default function NotificationsPage() {
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [category, setCategory] = useState<NotificationCategoryName | undefined>(undefined);
   const [scope, setScope] = useState<Scope>('all');
 
-  const { data, isFetching } = useNotifications({
+  const { data, isFetching, isError, refetch } = useNotifications({
     page,
     pageSize,
     category,
@@ -70,7 +71,7 @@ export default function NotificationsPage() {
    */
   const open = (record: NotificationItem) => {
     if (record.readAt === null) {
-      markRead.mutate(record.id);
+      markRead.mutate(record.id, { onError: () => message.error(t('notifications.markFailed')) });
     }
   };
 
@@ -105,7 +106,9 @@ export default function NotificationsPage() {
         </Typography.Title>
         <Button
           icon={<CheckOutlined />}
-          onClick={() => markAllRead.mutate()}
+          onClick={() =>
+            markAllRead.mutate(undefined, { onError: () => message.error(t('notifications.markFailed')) })
+          }
           loading={markAllRead.isPending}
         >
           {t('notifications.markAllRead')}
@@ -139,13 +142,29 @@ export default function NotificationsPage() {
           }))}
         />
       </Flex>
+      {/* A failed read is not an empty inbox: this list carries security alerts and review
+          decisions, so "nothing to read" would be the one wrong answer. */}
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="notifications-read-failed"
+          title={t('notifications.readFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <Table<NotificationItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         loading={isFetching && !data}
         dataSource={data?.items}
-        locale={{ emptyText: t('notifications.empty') }}
+        locale={{ emptyText: isError && !data ? ' ' : t('notifications.empty') }}
         onRow={(record) => ({ onClick: () => open(record) })}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);

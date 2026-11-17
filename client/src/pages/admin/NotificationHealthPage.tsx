@@ -117,11 +117,15 @@ export default function NotificationHealthPage() {
       onOk: async () => {
         setRetrying(row.id);
         try {
-          const { data, error } = await api.POST(
-            '/api/v1/admin/notifications/deliveries/{id}/retry',
-            { params: { path: { id: row.id } } },
-          );
-          if (error !== undefined || !data) {
+          // A request that never arrived throws rather than answering; it is said in the same
+          // words as a refusal instead of escaping the dialog as an unhandled rejection.
+          const answer = await api
+            .POST('/api/v1/admin/notifications/deliveries/{id}/retry', {
+              params: { path: { id: row.id } },
+            })
+            .catch(() => null);
+          const data = answer?.data;
+          if (answer === null || answer.error !== undefined || !data) {
             message.error(t('notificationHealth.retryFailed'));
             return;
           }

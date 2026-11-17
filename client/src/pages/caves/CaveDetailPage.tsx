@@ -75,6 +75,7 @@ import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
 import { entranceWriteProblem } from '../../components/caves/entranceWriteProblems.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ReadFailedResult from '../../components/ReadFailedResult.tsx';
 import { readFailureEndsPage } from '../../components/readFailure.ts';
 import { isConcurrencyConflict } from '../../api/client.ts';
@@ -228,8 +229,11 @@ export default function CaveDetailPage() {
       await deleteCave.mutateAsync(cave.id);
       message.success(t('common.deleted'));
       navigate('/caves');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 

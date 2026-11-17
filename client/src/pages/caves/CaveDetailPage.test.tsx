@@ -4,7 +4,7 @@ import { App } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { CaveDetail, CaveSummary, Entrance } from '../../api/hooks.ts';
 import { takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 
@@ -30,6 +30,7 @@ let entrances: Entrance[] = [];
 // The cave's own read, as the page receives it.
 let caveQuery: Record<string, unknown> = {};
 const deleteEntrance = vi.fn();
+const deleteCave = vi.fn();
 // What the domain capability answers, which is what the page falls back on with no summary.
 let can = false;
 // What this cave's own summary answers about the caller, or nothing while it is still on its way.
@@ -68,7 +69,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({ data: [] }),
   useRockTypes: () => ({ data: [] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'shaft', name: 'Shaft' }] }),
-  useDeleteCave: () => ({ mutateAsync: vi.fn() }),
+  useDeleteCave: () => ({ mutateAsync: deleteCave }),
   useDeleteEntrance: () => ({ mutateAsync: deleteEntrance }),
   useUpdateCave: () => ({ mutateAsync: vi.fn() }),
   useUpdateEntrance: () => ({ mutateAsync: vi.fn() }),
@@ -209,6 +210,7 @@ beforeEach(() => {
   summary = undefined;
   caveQuery = { data: cave(), isPending: false };
   deleteEntrance.mockReset();
+  deleteCave.mockReset();
 });
 
 afterEach(cleanup);
@@ -464,6 +466,50 @@ describe('CaveDetailPage when the cave cannot be read', () => {
     expect(screen.queryByText('No such cave')).toBeNull();
     fireEvent.click(screen.getByTestId('read-failed-retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CaveDetailPage deleting the cave', () => {
+  it('says a refused delete in the words of a delete, not of a failed save', async () => {
+    can = true;
+    entrances = [];
+    deleteCave.mockRejectedValue(new ApiError(503, undefined));
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
+  it('leaves a version conflict to the application\'s own notice', async () => {
+    can = true;
+    entrances = [];
+    deleteCave.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    await vi.waitFor(() => expect(deleteCave).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 });
 

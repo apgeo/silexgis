@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { NotificationItem, NotificationListParams } from '../../api/hooks.ts';
 
 const markReadMutate = vi.fn();
@@ -26,6 +27,9 @@ function line(overrides: Partial<NotificationItem> & { id: number }): Notificati
 let items: NotificationItem[] = [];
 // What the envelope claims exists, which is not what this page is holding.
 let totalItems = 0;
+// A failed read: no page held, and the query settled as an error.
+let readFailed = false;
+const refetch = vi.fn();
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -33,6 +37,9 @@ vi.mock('../../api/hooks.ts', async () => {
     ...actual,
     useNotifications: (params: NotificationListParams) => {
       asked.push(params);
+      if (readFailed) {
+        return { data: undefined, isFetching: false, isError: true, refetch };
+      }
       return {
         data: {
           items,
@@ -41,6 +48,8 @@ vi.mock('../../api/hooks.ts', async () => {
           totalItems: totalItems || items.length,
         },
         isFetching: false,
+        isError: false,
+        refetch,
       };
     },
     useMarkNotificationRead: () => ({ mutate: markReadMutate, isPending: false }),
@@ -56,14 +65,18 @@ beforeEach(() => {
   asked.length = 0;
   items = [];
   totalItems = 0;
+  readFailed = false;
+  refetch.mockReset();
 });
 afterEach(cleanup);
 
 function show() {
   return render(
-    <MemoryRouter>
-      <NotificationsPage />
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter>
+        <NotificationsPage />
+      </MemoryRouter>
+    </App>,
   );
 }
 
@@ -73,6 +86,31 @@ function lastAsked() {
 }
 
 describe('NotificationsPage', () => {
+  it('says a failed read failed, with a Retry, rather than calling the inbox empty', () => {
+    readFailed = true;
+    show();
+    expect(screen.getByText('Your notifications could not be read just now.')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('notifications.empty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('says so when marking one line or every line as read fails', async () => {
+    items = [line({ id: 7 })];
+    show();
+
+    fireEvent.click(screen.getByText('Ana shared Bat Cave with you').closest('tr')!);
+    expect(markReadMutate).toHaveBeenCalledWith(7, expect.anything());
+    markReadMutate.mock.calls[0][1].onError(new Error('offline'));
+    expect(await screen.findByText(i18n.t('notifications.markFailed'))).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mark all as read/ }));
+    expect(markAllMutate).toHaveBeenCalledWith(undefined, expect.anything());
+    markAllMutate.mock.calls[0][1].onError(new Error('offline'));
+    await waitFor(() =>
+      expect(screen.getAllByText(i18n.t('notifications.markFailed')).length).toBeGreaterThan(0));
+  });
+
   it('lists what happened, with a link to the thing it happened to', () => {
     items = [line({ id: 7 })];
     show();
@@ -154,7 +192,7 @@ describe('NotificationsPage', () => {
     show();
 
     fireEvent.click(screen.getByRole('link', { name: 'Ana shared Bat Cave with you' }));
-    expect(markReadMutate).toHaveBeenCalledWith(7);
+    expect(markReadMutate).toHaveBeenCalledWith(7, expect.anything());
 
     // Reading an already-read line again would rewrite nothing on the server, but asking is noise.
     markReadMutate.mockReset();
@@ -166,7 +204,7 @@ describe('NotificationsPage', () => {
     items = [line({ id: 21, targetWithheld: true, title: null, url: null })];
     show();
     fireEvent.click(screen.getByTestId('notification-withheld'));
-    expect(markReadMutate).toHaveBeenCalledWith(21);
+    expect(markReadMutate).toHaveBeenCalledWith(21, expect.anything());
   });
 
   it('marks everything read in one act', () => {
