@@ -69,7 +69,12 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const remove = useDeleteSurveyModel();
   const makeCurrent = useMakeSurveyModelCurrent();
   const readAgain = useReadSurveyModelAgain();
-  const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
+  // Held by id and read off the list on every render, never kept as the row it was opened from:
+  // the list is asked again every few minutes because each model's address is signed for only
+  // ten, and a viewer left open past that reads the file again (another tab, a retry) through
+  // whatever address it was handed. A model gone from the list closes the viewer.
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const viewing = viewingId === null ? null : (models?.find((m) => m.id === viewingId) ?? null);
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -325,7 +330,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                 )}
                 {surveyModelReadableByViewer(model) && (
                   <>
-                    <Button size="small" icon={<EyeOutlined />} onClick={() => setViewing(model)}>
+                    <Button size="small" icon={<EyeOutlined />} onClick={() => setViewingId(model.id)}>
                       {t('surveyModels.view')}
                     </Button>
                     {/* The same model in the two other places it can be looked at. Behind the same
@@ -499,7 +504,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         />
       )}
 
-      <SurveyModelViewerModal model={viewing} onClose={() => setViewing(null)} />
+      <SurveyModelViewerModal model={viewing} onClose={() => setViewingId(null)} />
       <LazyTrackingMovieDialog surveyModelId={movieModelId} onClose={() => setMovieModelId(null)} />
     </Card>
   );
