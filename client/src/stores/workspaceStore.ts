@@ -167,6 +167,13 @@ interface WorkspaceState {
   visibleTerrainDerivativeIds: string[];
   setTerrainDerivativeVisible: (id: string, visible: boolean) => void;
   /**
+   * The cave-potential maps shown on the map. Session state only: a result is listed for a reader
+   * under a rule the server re-asks at every reading, so which of them were on is not something a
+   * saved view should carry to another reader.
+   */
+  visibleCavePotentialIds: string[];
+  setCavePotentialVisible: (id: string, visible: boolean) => void;
+  /**
    * Per-overlay opacity (0..1) for the built-in vector overlays (keyed by their layer id:
    * 'entrances', 'surface-features', 'centerlines') and for each geofile (keyed by geofile
    * id). A missing key means fully opaque. Rasters keep their own `rasterOpacity`.
@@ -384,6 +391,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       visibleTerrainDerivativeIds: visible
         ? [...new Set([...state.visibleTerrainDerivativeIds, id])]
         : state.visibleTerrainDerivativeIds.filter((x) => x !== id),
+    })),
+  visibleCavePotentialIds: [],
+  setCavePotentialVisible: (id, visible) =>
+    set((state) => ({
+      visibleCavePotentialIds: visible
+        ? [...new Set([...state.visibleCavePotentialIds, id])]
+        : state.visibleCavePotentialIds.filter((x) => x !== id),
     })),
   overlayOpacity: {},
   setOverlayOpacity: (key, opacity) =>

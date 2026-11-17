@@ -21,6 +21,7 @@ import {
   usePhotoLibraries,
   useRasterMaps,
   useTerrainDerivatives,
+  useCavePotentialResults,
   useSurveyModel,
   type SurveyModelInfo,
 } from '../api/hooks.ts';
@@ -283,6 +284,8 @@ export default function MapPage() {
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const visibleTerrainDerivativeIds = useWorkspaceStore((s) => s.visibleTerrainDerivativeIds);
   const setTerrainDerivativeVisible = useWorkspaceStore((s) => s.setTerrainDerivativeVisible);
+  const visibleCavePotentialIds = useWorkspaceStore((s) => s.visibleCavePotentialIds);
+  const setCavePotentialVisible = useWorkspaceStore((s) => s.setCavePotentialVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
   const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
   const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
@@ -305,6 +308,10 @@ export default function MapPage() {
   const mayReadTerrain = useCan('terrain', 'read');
   const { data: terrainDerivatives } = useTerrainDerivatives(mayReadTerrain);
   const derivativeLayers = useMemo(() => terrainDerivatives ?? [], [terrainDerivatives]);
+  // The cave-potential maps this reader may read. Asked for only with the terrain right, which
+  // the route requires of everybody: without it the request is a refusal every few minutes.
+  const { data: cavePotential } = useCavePotentialResults(mayReadTerrain);
+  const cavePotentialResults = useMemo(() => cavePotential ?? [], [cavePotential]);
 
   // The toolbar mixes drawing new features with modifying existing ones, so either
   // domain-level right shows it — and so does the right to change the one feature selected, which
@@ -357,10 +364,12 @@ export default function MapPage() {
     importedGeofiles,
     readyRasters,
     derivativeLayers,
+    cavePotentialResults,
     visibleGeofileIds,
     visibleTileOverlayIds,
     visibleRasterIds,
     visibleTerrainDerivativeIds,
+    visibleCavePotentialIds,
     overlayOpacity,
     tileOverlayOpacity,
     rasterOpacity,
@@ -681,6 +690,9 @@ export default function MapPage() {
       terrainDerivatives={derivativeLayers}
       visibleTerrainDerivativeIds={visibleTerrainDerivativeIds}
       onTerrainDerivativeVisibleChange={setTerrainDerivativeVisible}
+      cavePotentialResults={cavePotentialResults}
+      visibleCavePotentialIds={visibleCavePotentialIds}
+      onCavePotentialVisibleChange={setCavePotentialVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
       suspendedPhotoLibraries={suspendedPhotoLibraries}

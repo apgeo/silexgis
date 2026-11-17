@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LayerGroup from 'ol/layer/Group';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { LibraryPhotoHealth, LibraryPhotoProvider, MapLayerInfo } from '../../api/hooks.ts';
+import type {
+  CavePotentialResultInfo,
+  LibraryPhotoHealth,
+  LibraryPhotoProvider,
+  MapLayerInfo,
+} from '../../api/hooks.ts';
 import type { LibraryPhotoLoadState, LibraryPhotoLoadStates } from '../../map/libraryPhotoLayer.ts';
 import LayerPanel from './LayerPanel.tsx';
 import type { FilterLayerRowInfo } from './FilterLayerRow.tsx';
@@ -102,6 +107,9 @@ interface PanelOverrides {
   filterLayers?: FilterLayerRowInfo[];
   filterLayerCandidates?: { id: string; name: string }[];
   onAddFilterLayer?: (savedFilterId: string) => void;
+  cavePotentialResults?: CavePotentialResultInfo[];
+  visibleCavePotentialIds?: string[];
+  onCavePotentialVisibleChange?: (id: string, visible: boolean) => void;
 }
 
 function renderPanel(overrides: PanelOverrides = {}) {
@@ -131,6 +139,9 @@ function panel(overrides: PanelOverrides = {}) {
       terrainDerivatives={[]}
       visibleTerrainDerivativeIds={[]}
       onTerrainDerivativeVisibleChange={vi.fn()}
+      cavePotentialResults={overrides.cavePotentialResults}
+      visibleCavePotentialIds={overrides.visibleCavePotentialIds}
+      onCavePotentialVisibleChange={overrides.onCavePotentialVisibleChange}
       onOverlayVisibilityChanged={vi.fn()}
       photoLibraries={overrides.photoLibraries ?? [library(healthy)]}
       unconfiguredPhotoLibraries={overrides.unconfiguredPhotoLibraries ?? []}
@@ -541,5 +552,96 @@ describe('adding a layer from a saved filter', () => {
   it('is not shown where the page offers no filter layers', () => {
     renderPanel();
     expect(screen.queryByRole('combobox', { name: /add a layer from a saved filter/i })).toBeNull();
+  });
+});
+
+/** Every name, id and date below is invented. */
+function potentialResult(overrides: Partial<CavePotentialResultInfo> = {}): CavePotentialResultInfo {
+  return {
+    id: '11111111-1111-1111-1111-111111111111',
+    modelId: null,
+    modelName: 'Invented model',
+    method: 'directWeights',
+    definition: null,
+    weighting: null,
+    areaFeatureId: '33333333-3333-3333-3333-333333333333',
+    areaName: 'Invented plateau',
+    cellMeters: 50,
+    status: 'ready',
+    errorCode: null,
+    message: null,
+    usesPositions: false,
+    evidenceFeatures: 0,
+    protectedFeatures: 0,
+    summary: null,
+    west: 0,
+    south: 0,
+    east: 1,
+    north: 1,
+    columns: 10,
+    rows: 10,
+    sizeBytes: 1024,
+    noData: -9999,
+    mine: true,
+    requestedByName: null,
+    ranAsFullAdministrator: false,
+    terrainBuildId: null,
+    terrainBuildActive: null,
+    terrainInputs: [],
+    mayDelete: true,
+    url: '/api/v1/cave-potential/results/x/content?token=t',
+    computedAt: '2026-01-01T00:00:00Z',
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('the cave-potential maps in the layer panel', () => {
+  afterEach(cleanup);
+
+  it('lists nothing when the reader has no result to read', () => {
+    renderPanel();
+    expect(screen.queryByTestId('cave-potential-list')).toBeNull();
+  });
+
+  it('names a result by its model, its area and its cell size, and switches it on', () => {
+    const onChange = vi.fn();
+    const result = potentialResult();
+    renderPanel({ cavePotentialResults: [result], onCavePotentialVisibleChange: onChange });
+
+    const row = screen.getByTestId(`cave-potential-${result.id}`);
+    expect(row.textContent).toContain('Invented model');
+    expect(row.textContent).toContain('Invented plateau');
+    expect(row.textContent).toContain('50 m cells');
+    // No key until the map is on: a legend under a map that is not drawn explains nothing.
+    expect(screen.queryByTestId('cave-potential-legend')).toBeNull();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Invented model' }));
+    expect(onChange).toHaveBeenCalledWith(result.id, true);
+  });
+
+  it('shows the key and says what the map is not, once the map is on', () => {
+    const result = potentialResult();
+    renderPanel({ cavePotentialResults: [result], visibleCavePotentialIds: [result.id] });
+
+    expect(screen.getByTestId('cave-potential-legend').textContent).toContain('More favourable');
+    const caveat = screen.getByTestId('cave-potential-caveat').textContent ?? '';
+    expect(caveat).toMatch(/not a finding/i);
+    expect(caveat).not.toMatch(/recorded positions/i);
+  });
+
+  it('warns that a map made from recorded positions is not to be passed on', () => {
+    const result = potentialResult({ usesPositions: true, evidenceFeatures: 3, protectedFeatures: 1 });
+    renderPanel({ cavePotentialResults: [result], visibleCavePotentialIds: [result.id] });
+
+    expect(screen.getByTestId('cave-potential-caveat').textContent).toMatch(/recorded positions/i);
+  });
+
+  it('cannot switch on a run that has not finished, and says where it has got to', () => {
+    const result = potentialResult({ status: 'failed', url: null, message: 'roughness: no_layer' });
+    renderPanel({ cavePotentialResults: [result] });
+
+    expect((screen.getByRole('checkbox', { name: 'Invented model' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByTestId('cave-potential-status').textContent).toBe('Failed');
   });
 });

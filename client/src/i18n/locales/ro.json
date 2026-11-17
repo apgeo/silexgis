@@ -65,6 +65,7 @@
     "speleolocImport": "Importă o înregistrare",
     "registryRegions": "Regiuni",
     "registryCategories": "Categorii",
+    "cavePotential": "Potențial speologic",
     "publishedTrips": "Ture publicate",
     "testData": "Date de test"
   },
@@ -10497,6 +10498,174 @@
       "caveat": "Fiecare viză și fiecare măsurătoare contează o dată. Vizele de-a lungul aceleiași galerii nu sunt independente, deci o probabilitate mică spune mai puțin decât pare. U² compară întreaga împrăștiere a direcțiilor, nu doar direcția medie: o galerie dreaptă față de direcții împrăștiate cu aceeași medie tot diferă.",
       "strikeRose": "Direcțiile măsurătorilor ({{count}})",
       "noStrikes": "Nicio măsurătoare pe care o poți localiza în apropiere nu are direcție."
+    }
+  },
+  "cavePotential": {
+    "layers": {
+      "title": "Potențial speologic",
+      "hint": "Hărți care arată unde sunt mai favorabile dovezile cântărite de un model, fiecare pentru o zonă, la data afișată.",
+      "cell": "celule de {{meters}} m"
+    },
+    "statuses": {
+      "queued": "În așteptare",
+      "computing": "Se calculează",
+      "ready": "Gata",
+      "failed": "Eșuat"
+    },
+    "legend": {
+      "low": "Mai puțin favorabil",
+      "high": "Mai favorabil",
+      "caveat": "O cântărire a dovezilor, așa cum o descrie modelul, nu o constatare: nimic de aici nu a fost verificat pe teren. Doar pentru uz intern.",
+      "positionsCaveat": "Realizată din poziții înregistrate, dintre care unele pot fi protejate; o vezi pentru că le poți localiza exact pe toate. Nu o transmite mai departe."
+    },
+    "page": {
+      "title": "Potențial speologic",
+      "intro": "Un model cântărește dovezi — forma reliefului, roca, ce a fost înregistrat — într-o hartă a locurilor unde peșterile sunt mai mult sau mai puțin probabile. Hărțile sunt o cântărire a acestor dovezi, nu o constatare, și sunt doar pentru uz intern.",
+      "models": "Modele",
+      "newModel": "Model nou",
+      "noModels": "Niciun model încă. Scrie unul pentru a spune ce dovezi contează și cât de mult.",
+      "unreadableModel": "Acest model nu poate fi citit de această versiune.",
+      "results": "Hărți calculate",
+      "noResults": "Nicio hartă încă. Rulează un model pe o zonă pentru a calcula una.",
+      "needsTerrain": "Rularea unui model și citirea hărților lui cer dreptul de a citi relieful, pe care contul tău nu îl are.",
+      "columns": {
+        "name": "Nume",
+        "method": "Ponderi",
+        "layers": "Dovezi și pondere",
+        "author": "Scris de",
+        "audience": "Partajat cu",
+        "actions": "Acțiuni",
+        "model": "Model",
+        "area": "Zonă",
+        "cell": "Mărimea celulei",
+        "status": "Stare",
+        "computed": "Data",
+        "requestedBy": "Cerut de"
+      },
+      "you": "Tu",
+      "someone": "Un membru al clubului",
+      "positionsTag": "Folosește poziții înregistrate",
+      "positionsTagHint": "Cântărește un strat făcut din poziții înregistrate. O hartă calculată din el este arătată doar cititorilor care pot localiza exact fiecare obiect din care a fost calculată.",
+      "run": "Rulează",
+      "editOf": "Modifică {{name}}",
+      "copyOf": "Copiază {{name}}",
+      "deleteOf": "Șterge {{name}}",
+      "deleteResultOf": "Șterge harta modelului {{name}}",
+      "modelHidden": "Un model pe care nu îl poți deschide",
+      "groundReplaced": "Teren mai vechi",
+      "groundReplacedHint": "Această hartă a fost făcută dintr-o construcție de elevație care nu mai este cea activă. Rulează modelul din nou pentru a citi terenul curent.",
+      "copyName": "Copie a {{name}}",
+      "copied": "Copiat. Copia este a ta și este privată.",
+      "saved": "Model salvat.",
+      "deleteModelConfirm": "Ștergi acest model? Hărțile deja calculate din el rămân.",
+      "deleteResultConfirm": "Ștergi această hartă?",
+      "showOnMap": "Arată pe hartă",
+      "unnamedArea": "Zonă fără nume",
+      "summary": "{{scored}} din {{cells}} celule evaluate · media {{mean}}"
+    },
+    "methods": {
+      "directWeights": "Ponderi date direct",
+      "pairwiseComparison": "Comparații pe perechi"
+    },
+    "audiences": {
+      "private": "Doar eu",
+      "authenticated": "Toți cei autentificați",
+      "cavingGroup": "Membrii {{name}}",
+      "someGroup": "Un grup de speologie"
+    },
+    "evidence": {
+      "elevation": "Altitudine",
+      "slope": "Pantă",
+      "aspect": "Orientare",
+      "position_index": "Poziție topografică",
+      "ruggedness": "Asperitate",
+      "roughness": "Rugozitate",
+      "geomorphons": "Formă de relief",
+      "fault_distance": "Distanța până la falii",
+      "lithology": "Tipul rocii",
+      "sinkhole_distance": "Distanța până la doline",
+      "entrance_density": "Densitatea intrărilor de peșteră"
+    },
+    "units": {
+      "m": "m",
+      "deg": "°",
+      "per_km2": "pe km²"
+    },
+    "transforms": {
+      "classes": "Un tabel de clase",
+      "fuzzyLinear": "O rampă între două valori",
+      "categories": "Un scor pentru fiecare clasă"
+    },
+    "editor": {
+      "titleNew": "Model nou de potențial speologic",
+      "titleEdit": "Modifică modelul",
+      "name": "Nume",
+      "description": "Descriere",
+      "audience": "Partajat cu",
+      "method": "Cum sunt cântărite straturile",
+      "layers": "Straturi de dovezi",
+      "addLayer": "Stratul de dovezi de adăugat",
+      "addLayerConfirm": "Adaugă stratul",
+      "removeLayer": "Elimină {{name}}",
+      "scoring": "Evaluat prin",
+      "scoringOf": "Cum este evaluat stratul {{name}}",
+      "weight": "Pondere",
+      "weightOf": "Ponderea stratului {{name}}",
+      "low": "Valoarea cu scorul 0",
+      "high": "Valoarea cu scorul 1",
+      "lowOf": "Valoarea din {{name}} cu scorul 0",
+      "highOf": "Valoarea din {{name}} cu scorul 1",
+      "rampHint": "Scorul crește liniar între cele două valori. Pune întâi valoarea mai mare când valorile mici sunt cele favorabile — de la 500 m în jos până la 0 m dă scorul 1 locului aflat pe o falie.",
+      "classUpTo": "Până la",
+      "classAbove": "Tot ce este peste",
+      "classBoundOf": "Limita superioară a clasei {{row}} din {{name}}",
+      "classScoreOf": "Scorul clasei {{row}} din {{name}}",
+      "score": "scor",
+      "addClass": "Adaugă o clasă",
+      "removeClass": "Elimină clasa {{row}}",
+      "categoryScoreOf": "Scorul pentru {{category}} în {{name}}",
+      "categoriesHint": "Scorurile merg de la 0 la 1. O clasă lăsată goală are scorul 0.",
+      "comparisons": "Comparații",
+      "comparisonsHint": "Pentru fiecare pereche, spune cu cât este mai important primul strat decât al doilea. Ponderile rezultă din comparații.",
+      "compare": "{{first}} față de {{second}}",
+      "judgment": {
+        "equal": "La fel de important",
+        "more": "de {{n}} ori mai important",
+        "less": "de {{n}} ori mai puțin important"
+      },
+      "weights": "Ponderi",
+      "unfinished": "Ponderile apar aici după ce fiecare strat este completat.",
+      "consistency": "Raport de consistență {{ratio}}",
+      "consistencyFine": "Comparațiile se potrivesc între ele suficient de bine (cel mult 0,1).",
+      "consistencyWarning": "Peste 0,1 comparațiile se contrazic mai mult decât se obișnuiește; ia în calcul revizuirea lor. Modelul poate fi totuși salvat și rulat.",
+      "weightsFailed": "Ponderile nu au putut fi calculate.",
+      "positionsNotice": "Acest model cântărește un strat făcut din poziții înregistrate. O hartă calculată din el arată unde se află acele obiecte, așa că este arătată doar cititorilor care le pot localiza exact pe toate."
+    },
+    "run": {
+      "title": "Rulează {{name}}",
+      "area": "Zonă",
+      "areaPlaceholder": "Scrie numele unei zone",
+      "noArea": "Nicio zonă cu acest nume",
+      "cell": "Mărimea celulei (m)",
+      "cellHint": "Între {{min}} și {{max}} m. O zonă mare cere o celulă mai mare.",
+      "start": "Rulează",
+      "queued": "Pus în așteptare. Harta apare în listă când este gata.",
+      "failed": "Rularea nu a putut fi pusă în așteptare.",
+      "positionsNotice": "Acest model folosește poziții înregistrate. Rularea citește doar obiectele pe care le poți localiza exact, iar harta este arătată doar cititorilor care le pot localiza pe toate."
+    },
+    "failures": {
+      "access_changed": "Contul care a cerut-o nu mai poate citi ce îi trebuie rulării.",
+      "model_invalid": "Modelul, așa cum a fost rulat, nu mai poate fi rulat.",
+      "area_unusable": "Zona nu mai poate fi acoperită la această mărime a celulei.",
+      "evidence_unavailable": "O parte din dovezile modelului nu este disponibilă aici",
+      "nothing_scored": "Nicio parte a zonei nu a avut o valoare din fiecare strat.",
+      "failed": "Harta nu a putut fi calculată."
+    },
+    "unavailable": {
+      "no_terrain": "nicio elevație construită",
+      "no_layer": "necalculat pentru elevația curentă",
+      "slope_unit": "panta calculată doar în procente",
+      "too_many_features": "prea multe obiecte înregistrate în rază"
     }
   }
 }

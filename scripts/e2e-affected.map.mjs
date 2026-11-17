@@ -25,6 +25,8 @@ export const specs = {
   about: [],
   // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
   analysis: ['terrain-derivatives.spec.ts'],
+  // Cave-potential models: written, run over an area and drawn on the map.
+  cavePotential: ['cave-potential.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
@@ -325,6 +327,7 @@ export const clientAreas = {
   'client/src/pages/admin/': 'admin',
   'client/src/pages/calendar/': 'calendar',
   'client/src/pages/catalogue/': 'catalogue',
+  'client/src/pages/cavePotential/': 'cavePotential',
   'client/src/pages/cavers/': 'cavers',
   'client/src/pages/caves/': 'caves',
   'client/src/pages/caves/CaveSurveysSection': 'surveyUploads',

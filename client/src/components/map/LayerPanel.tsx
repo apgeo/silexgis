@@ -17,6 +17,7 @@ import {
   type MapLayerInfo,
   type RasterMapInfo,
   type TerrainDerivativeLayerInfo,
+  type CavePotentialResultInfo,
 } from '../../api/hooks.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
@@ -70,6 +71,8 @@ import type { FilterLayerColor } from '../../map/markerPalette.ts';
 import { FilterLayerRowTitle, type FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
 import LandformLegend from './LandformLegend.tsx';
+import CavePotentialLegend from './CavePotentialLegend.tsx';
+import { cavePotentialFailureText } from './cavePotentialFailure.ts';
 
 /**
  * The refusal a library gives when it will not accept the credential this installation is
@@ -121,6 +124,10 @@ interface LayerPanelProps {
   terrainDerivatives: TerrainDerivativeLayerInfo[];
   visibleTerrainDerivativeIds: string[];
   onTerrainDerivativeVisibleChange: (id: string, visible: boolean) => void;
+  /** The cave-potential results this reader may read. Optional: a panel shown without them lists none. */
+  cavePotentialResults?: CavePotentialResultInfo[];
+  visibleCavePotentialIds?: string[];
+  onCavePotentialVisibleChange?: (id: string, visible: boolean) => void;
   /** Fired when a layer's checkbox in the composer tree is toggled. */
   onOverlayVisibilityChanged: (layer: OlLayerBase, visible: boolean) => void;
   /** The photo libraries this installation is pointed at, as this account may see them; empty when none. */
@@ -210,6 +217,9 @@ export default function LayerPanel({
   terrainDerivatives,
   visibleTerrainDerivativeIds,
   onTerrainDerivativeVisibleChange,
+  cavePotentialResults = [],
+  visibleCavePotentialIds = [],
+  onCavePotentialVisibleChange,
   onOverlayVisibilityChanged,
   photoLibraries,
   unconfiguredPhotoLibraries,
@@ -1075,6 +1085,61 @@ export default function LayerPanel({
                 )}
                 {derivative.derivative === 'geomorphons' &&
                   visibleTerrainDerivativeIds.includes(derivative.id) && <LandformLegend />}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {cavePotentialResults.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('cavePotential.layers.title')}</Typography.Text>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('cavePotential.layers.hint')}
+            </Typography.Text>
+          </div>
+          <div
+            data-testid="cave-potential-list"
+            style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}
+          >
+            {cavePotentialResults.map((result) => (
+              <div
+                key={result.id}
+                data-testid={`cave-potential-${result.id}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
+              >
+                <Checkbox
+                  disabled={result.status !== 'ready'}
+                  checked={visibleCavePotentialIds.includes(result.id)}
+                  onChange={(e) => onCavePotentialVisibleChange?.(result.id, e.target.checked)}
+                >
+                  {result.modelName ?? t('cavePotential.page.modelHidden')}
+                </Checkbox>
+                {/* A result is known by where it was run and when: the same model run twice over
+                    one area gives two rows that only the date tells apart. */}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {[
+                    result.areaName,
+                    t('cavePotential.layers.cell', { meters: result.cellMeters }),
+                    result.computedAt ? new Date(result.computedAt).toLocaleDateString(i18n.resolvedLanguage) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' \u00b7 ')}
+                </Typography.Text>
+                {result.status !== 'ready' && (
+                  <Tooltip title={result.status === 'failed' ? cavePotentialFailureText(t, result) : undefined}>
+                    <Tag
+                      color={result.status === 'failed' ? 'error' : undefined}
+                      data-testid="cave-potential-status"
+                    >
+                      {t(`cavePotential.statuses.${result.status}`)}
+                    </Tag>
+                  </Tooltip>
+                )}
+                {result.status === 'ready' && visibleCavePotentialIds.includes(result.id) && (
+                  <CavePotentialLegend usesPositions={result.usesPositions} />
+                )}
               </div>
             ))}
           </div>

@@ -59,6 +59,7 @@ const RegistryCorrelationPage = lazyRetrying(
 );
 const RegistryRegionsPage = lazyRetrying(() => import('./pages/statistics/RegistryRegionsPage.tsx'));
 const RegistryCategoriesPage = lazyRetrying(() => import('./pages/statistics/RegistryCategoriesPage.tsx'));
+const CavePotentialPage = lazyRetrying(() => import('./pages/cavePotential/CavePotentialPage.tsx'));
 const TripLogDetailPage = lazyRetrying(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazyRetrying(() => import('./pages/trips/TripReportPage.tsx'));
 const EventListPage = lazyRetrying(() => import('./pages/events/EventListPage.tsx'));
@@ -232,6 +233,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/statistics/correlation', element: <Loadable><RegistryCorrelationPage /></Loadable> },
           { path: '/statistics/regions', element: <Loadable><RegistryRegionsPage /></Loadable> },
           { path: '/statistics/categories', element: <Loadable><RegistryCategoriesPage /></Loadable> },
+          { path: '/cave-potential', element: <Loadable><CavePotentialPage /></Loadable> },
           { path: '/trip-logs/import', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/speleoloc-import', element: <Loadable><SpeleolocImportPage /></Loadable> },

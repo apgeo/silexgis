@@ -21,6 +21,7 @@ export const NAV_SECTIONS = [
   // 'statistics' prefix would resolve them all to a key no menu item carries, and nothing would
   // light up at all.
   'statistics/distribution', 'statistics/correlation', 'statistics/regions', 'statistics/categories',
+  'cave-potential',
   // Both importers stand before the trip list, because the list's own prefix matches their paths
   // too and the first match is the one taken. Behind it, the reviewer reading a spreadsheet or a
   // phone's recording is shown the rail highlighting the trip list — a destination they are not on.

@@ -32,6 +32,7 @@ import type {
   TripTrackingState,
   SurveyModelInfo,
   TerrainDerivativeLayerInfo,
+  CavePotentialResultInfo,
 } from '../api/hooks.ts';
 import type { components } from '../api/schema';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
@@ -376,6 +377,14 @@ const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], tr
   failed: true,
 };
 
+/** Where a run of a cave-potential model has got to; the badge beside a result is looked up from it. */
+const cavePotentialStatuses: Record<CavePotentialResultInfo['status'], true> = {
+  queued: true,
+  computing: true,
+  ready: true,
+  failed: true,
+};
+
 /** Why a picture is out of date; the hint under the badge is looked up from the reason sent. */
 const terrainDerivativeStaleReasons: Record<TerrainDerivativeStaleReason, true> = {
   elevationReplaced: true,
@@ -681,6 +690,12 @@ describe('i18n locales', () => {
       expect(Object.keys(enNames).sort()).toEqual(names.sort());
       expect(Object.keys(roNames).sort()).toEqual(names.sort());
     }
+  });
+
+  it('every state of a cave-potential run is named in both locales', () => {
+    const names = Object.keys(cavePotentialStatuses);
+    expect(Object.keys(en.cavePotential.statuses).sort()).toEqual([...names].sort());
+    expect(Object.keys(ro.cavePotential.statuses).sort()).toEqual([...names].sort());
   });
 
   it('every kind of derived picture, its states and its choices are named in both locales', () => {

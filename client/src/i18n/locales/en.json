@@ -65,6 +65,7 @@
     "speleolocImport": "Import a recording",
     "registryRegions": "Regions",
     "registryCategories": "Categories",
+    "cavePotential": "Cave potential",
     "publishedTrips": "Published trips",
     "testData": "Test data"
   },
@@ -10484,6 +10485,174 @@
       "caveat": "Each survey leg and each reading counts once. Legs along one passage are not independent of each other, so a small probability says less than it reads. U² compares the whole spread of trends, not only the mean direction: a straight passage against scattered strikes with the same mean still differs.",
       "strikeRose": "Strikes of the readings ({{count}})",
       "noStrikes": "No reading you may place within reach has a strike."
+    }
+  },
+  "cavePotential": {
+    "layers": {
+      "title": "Cave potential",
+      "hint": "Maps of where the evidence a model weighs is most favourable, each over one area on the date shown.",
+      "cell": "{{meters}} m cells"
+    },
+    "statuses": {
+      "queued": "Queued",
+      "computing": "Computing",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "legend": {
+      "low": "Less favourable",
+      "high": "More favourable",
+      "caveat": "A weighing of evidence as its model describes it, not a finding: nothing here has been checked on the ground. For use inside the group only.",
+      "positionsCaveat": "Made from recorded positions, some of which may be protected; you see it because you may place all of them. Do not pass it on."
+    },
+    "page": {
+      "title": "Cave potential",
+      "intro": "A model weighs evidence — the shape of the ground, the rock, what has been recorded — into a map of where caves are more or less likely. The maps are a weighing of that evidence and not a finding, and are for use inside the group only.",
+      "models": "Models",
+      "newModel": "New model",
+      "noModels": "No model yet. Write one to say which evidence counts and how much.",
+      "unreadableModel": "This model cannot be read by this version.",
+      "results": "Maps computed",
+      "noResults": "No map yet. Run a model over an area to compute one.",
+      "needsTerrain": "Running a model and reading its maps need the right to read the terrain, which your account does not hold.",
+      "columns": {
+        "name": "Name",
+        "method": "Weights",
+        "layers": "Evidence and weight",
+        "author": "Written by",
+        "audience": "Shared with",
+        "actions": "Actions",
+        "model": "Model",
+        "area": "Area",
+        "cell": "Cell size",
+        "status": "State",
+        "computed": "Date",
+        "requestedBy": "Asked for by"
+      },
+      "you": "You",
+      "someone": "A club member",
+      "positionsTag": "Uses recorded positions",
+      "positionsTagHint": "Weighs a layer made from recorded positions. A map computed from it is shown only to readers who may place every feature it was computed from.",
+      "run": "Run",
+      "editOf": "Change {{name}}",
+      "copyOf": "Copy {{name}}",
+      "deleteOf": "Delete {{name}}",
+      "deleteResultOf": "Delete the map of {{name}}",
+      "modelHidden": "A model you cannot open",
+      "groundReplaced": "Older ground",
+      "groundReplacedHint": "This map was made from an elevation build that is no longer the active one. Run the model again to read the current ground.",
+      "copyName": "Copy of {{name}}",
+      "copied": "Copied. The copy is yours and private.",
+      "saved": "Model saved.",
+      "deleteModelConfirm": "Delete this model? Maps already computed from it are kept.",
+      "deleteResultConfirm": "Delete this map?",
+      "showOnMap": "Show on the map",
+      "unnamedArea": "Unnamed area",
+      "summary": "{{scored}} of {{cells}} cells scored · mean {{mean}}"
+    },
+    "methods": {
+      "directWeights": "Weights given outright",
+      "pairwiseComparison": "Pairwise comparisons"
+    },
+    "audiences": {
+      "private": "Only me",
+      "authenticated": "Everyone signed in",
+      "cavingGroup": "Members of {{name}}",
+      "someGroup": "A caving group"
+    },
+    "evidence": {
+      "elevation": "Elevation",
+      "slope": "Slope",
+      "aspect": "Aspect",
+      "position_index": "Topographic position",
+      "ruggedness": "Ruggedness",
+      "roughness": "Roughness",
+      "geomorphons": "Landform",
+      "fault_distance": "Distance to faults",
+      "lithology": "Rock type",
+      "sinkhole_distance": "Distance to sinkholes",
+      "entrance_density": "Cave-entrance density"
+    },
+    "units": {
+      "m": "m",
+      "deg": "°",
+      "per_km2": "per km²"
+    },
+    "transforms": {
+      "classes": "A table of classes",
+      "fuzzyLinear": "A ramp between two values",
+      "categories": "A score per class"
+    },
+    "editor": {
+      "titleNew": "New cave-potential model",
+      "titleEdit": "Change the model",
+      "name": "Name",
+      "description": "Description",
+      "audience": "Shared with",
+      "method": "How the layers are weighed",
+      "layers": "Evidence layers",
+      "addLayer": "Evidence layer to add",
+      "addLayerConfirm": "Add the layer",
+      "removeLayer": "Remove {{name}}",
+      "scoring": "Scored by",
+      "scoringOf": "How {{name}} is scored",
+      "weight": "Weight",
+      "weightOf": "Weight of {{name}}",
+      "low": "Value that scores 0",
+      "high": "Value that scores 1",
+      "lowOf": "Value of {{name}} that scores 0",
+      "highOf": "Value of {{name}} that scores 1",
+      "rampHint": "Scores rise in a straight line between the two values. Put the larger value first when smaller values are the favourable ones — from 500 m down to 0 m scores ground on a fault as 1.",
+      "classUpTo": "Up to",
+      "classAbove": "Everything above",
+      "classBoundOf": "Upper bound of class {{row}} of {{name}}",
+      "classScoreOf": "Score of class {{row}} of {{name}}",
+      "score": "score",
+      "addClass": "Add a class",
+      "removeClass": "Remove class {{row}}",
+      "categoryScoreOf": "Score of {{category}} in {{name}}",
+      "categoriesHint": "Scores run from 0 to 1. A class left empty scores 0.",
+      "comparisons": "Comparisons",
+      "comparisonsHint": "For each pair, say how much more important the first layer is than the second. The weights follow from the comparisons.",
+      "compare": "{{first}} compared with {{second}}",
+      "judgment": {
+        "equal": "Equally important",
+        "more": "{{n}} × more important",
+        "less": "{{n}} × less important"
+      },
+      "weights": "Weights",
+      "unfinished": "The weights appear here once every layer is filled in.",
+      "consistency": "Consistency ratio {{ratio}}",
+      "consistencyFine": "The comparisons agree with each other well enough (0.1 or less).",
+      "consistencyWarning": "Above 0.1 the comparisons contradict each other more than is customary; consider revising them. The model can still be saved and run.",
+      "weightsFailed": "The weights could not be worked out.",
+      "positionsNotice": "This model weighs a layer made from recorded positions. A map computed from it shows where those features are, so it is shown only to readers who may place every one of them."
+    },
+    "run": {
+      "title": "Run {{name}}",
+      "area": "Area",
+      "areaPlaceholder": "Type the name of an area",
+      "noArea": "No area of that name",
+      "cell": "Cell size (m)",
+      "cellHint": "Between {{min}} and {{max}} m. A large area needs a larger cell.",
+      "start": "Run",
+      "queued": "Queued. The map appears in the list when it is ready.",
+      "failed": "The run could not be queued.",
+      "positionsNotice": "This model uses recorded positions. The run reads only the features you may place exactly, and the map is shown only to readers who may place all of them."
+    },
+    "failures": {
+      "access_changed": "The account that asked for it may no longer read what the run needs.",
+      "model_invalid": "The model as it was run is not one that can be run.",
+      "area_unusable": "The area can no longer be covered at that cell size.",
+      "evidence_unavailable": "Some of the model's evidence is not available here",
+      "nothing_scored": "No part of the area had a value from every layer.",
+      "failed": "The map could not be computed."
+    },
+    "unavailable": {
+      "no_terrain": "no elevation built",
+      "no_layer": "not computed for the current elevation",
+      "slope_unit": "slope computed only as a percentage",
+      "too_many_features": "too many recorded features in reach"
     }
   }
 }

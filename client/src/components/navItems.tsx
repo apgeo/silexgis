@@ -8,6 +8,7 @@ import {
   BarChartOutlined,
   BlockOutlined,
   BoxPlotOutlined,
+  HeatMapOutlined,
   BorderOuterOutlined,
   CalculatorOutlined,
   CalendarOutlined,
@@ -271,6 +272,10 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       { key: 'statistics/correlation', icon: <LineChartOutlined />, label: t('nav.registryCorrelation') },
       { key: 'statistics/regions', icon: <PieChartOutlined />, label: t('nav.registryRegions') },
       { key: 'statistics/categories', icon: <BoxPlotOutlined />, label: t('nav.registryCategories') },
+      // Weighing evidence into a map of where caves may be. A model is saved workspace that every
+      // signed-in reader may write; running one and reading its maps need the terrain right, which
+      // the page itself says to a reader who lacks it.
+      { key: 'cave-potential', icon: <HeatMapOutlined />, label: t('nav.cavePotential') },
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.

@@ -35,6 +35,7 @@ export * from './hooks/featurePassages.ts';
 export * from './hooks/passageDepth.ts';
 export * from './hooks/statistics.ts';
 export * from './hooks/terrain.ts';
+export * from './hooks/cavePotential.ts';
 export * from './hooks/resLinks.ts';
 export * from './hooks/sync.ts';
 export * from './hooks/review.ts';
