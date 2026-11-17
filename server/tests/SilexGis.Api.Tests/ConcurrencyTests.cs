@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
@@ -24,13 +28,17 @@ namespace SilexGis.Api.Tests;
 public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
+    private readonly string connectionString;
     private HttpClient owner = null!;
     private Guid ownerCaverId;
     private long caveTypeId;
     private long entranceTypeId;
 
-    public ConcurrencyTests(PostgresFixture postgres) =>
+    public ConcurrencyTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(postgres.ConnectionString);
+    }
 
     public async ValueTask InitializeAsync()
     {
@@ -921,6 +929,166 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         positionQuality = "gps",
         surveyedAt,
     };
+
+    // ---- the database breaking up two transactions that collided ----
+
+    /// <summary>
+    /// Two transactions that each hold a row the other wants are broken up by the database, which
+    /// rolls one of them back. Nothing about that request was wrong, and the same request sent
+    /// again succeeds, so it is answered as a conflict that says so rather than as a server fault —
+    /// whether the database's answer arrives bare or wrapped in the persistence library's own.
+    /// </summary>
+    [Fact]
+    public async Task A_deadlock_the_database_broke_up_is_answered_as_a_conflict_worth_retrying()
+    {
+        var deadlock = await ProvokeAsync(DeadlockAsync);
+        deadlock.SqlState.ShouldBe(PostgresErrorCodes.DeadlockDetected);
+
+        await ShouldAnswerRetryableConflictAsync(deadlock);
+        await ShouldAnswerRetryableConflictAsync(new DbUpdateException("The save was refused.", deadlock));
+    }
+
+    /// <summary>
+    /// A transaction that read a row another one then changed and committed is refused at
+    /// repeatable read or above. Like a deadlock it is the timing that was wrong, not the request.
+    /// </summary>
+    [Fact]
+    public async Task A_serialization_failure_is_answered_as_a_conflict_worth_retrying()
+    {
+        var failure = await ProvokeAsync(SerializationFailureAsync);
+        failure.SqlState.ShouldBe(PostgresErrorCodes.SerializationFailure);
+
+        await ShouldAnswerRetryableConflictAsync(
+            new InvalidOperationException("The transaction failed.", new DbUpdateException("The save was refused.", failure)));
+    }
+
+    /// <summary>
+    /// Only the two refusals that sending again can cure are answered that way. Any other database
+    /// error is left to the server fault it is, so a defect is not dressed up as a collision.
+    /// </summary>
+    [Fact]
+    public async Task Any_other_database_error_is_not_answered_as_a_conflict()
+    {
+        var duplicate = await ProvokeAsync(UniqueViolationAsync);
+        duplicate.SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
+
+        var (handled, _, _, _) = await HandleAsync(new DbUpdateException("The save was refused.", duplicate));
+        handled.ShouldBeFalse("a unique violation is not a collision that sending again cures");
+    }
+
+    private async Task ShouldAnswerRetryableConflictAsync(Exception exception)
+    {
+        var (handled, status, body, retryAfter) = await HandleAsync(exception);
+
+        handled.ShouldBeTrue("no exception handler answered the database's refusal, so it would be a bare 500");
+        status.ShouldBe(StatusCodes.Status409Conflict, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe("concurrency.transaction_conflict");
+        retryAfter.ShouldNotBeNullOrEmpty();
+    }
+
+    /// <summary>
+    /// Runs the application's own exception handlers, in the order the exception-handling
+    /// middleware asks them, against a request context of the running application.
+    /// </summary>
+    private async Task<(bool Handled, int Status, string Body, string? RetryAfter)> HandleAsync(Exception exception)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        await using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        var handled = false;
+        foreach (var handler in scope.ServiceProvider.GetServices<IExceptionHandler>())
+        {
+            if (await handler.TryHandleAsync(context, exception, CancellationToken.None))
+            {
+                handled = true;
+                break;
+            }
+        }
+
+        return (
+            handled,
+            context.Response.StatusCode,
+            Encoding.UTF8.GetString(body.ToArray()),
+            context.Response.Headers.RetryAfter.FirstOrDefault());
+    }
+
+    /// <summary>
+    /// Has the database itself raise the refusal, on a table of two rows made for the purpose, so
+    /// the exception is the one the data provider really produces rather than a hand-built copy.
+    /// </summary>
+    private async Task<PostgresException> ProvokeAsync(Func<string, string, Task<PostgresException>> provoke)
+    {
+        var table = $"conflict_probe_{Guid.NewGuid():N}";
+        await using (var setup = new NpgsqlConnection(connectionString))
+        {
+            await setup.OpenAsync();
+            await ExecuteAsync(setup, $"CREATE TABLE {table} (id int PRIMARY KEY, v int NOT NULL)");
+            await ExecuteAsync(setup, $"INSERT INTO {table} VALUES (1, 0), (2, 0)");
+        }
+
+        return await provoke(connectionString, table);
+    }
+
+    private static async Task<PostgresException> DeadlockAsync(string connectionString, string table)
+    {
+        await using var a = new NpgsqlConnection(connectionString);
+        await using var b = new NpgsqlConnection(connectionString);
+        await a.OpenAsync();
+        await b.OpenAsync();
+        await using var ta = await a.BeginTransactionAsync();
+        await using var tb = await b.BeginTransactionAsync();
+
+        await ExecuteAsync(a, $"UPDATE {table} SET v = v + 1 WHERE id = 1");
+        await ExecuteAsync(b, $"UPDATE {table} SET v = v + 1 WHERE id = 2");
+
+        // Each now wants the row the other holds; the database picks one of the two to roll back.
+        var crossed = await Task.WhenAll(
+            RefusalOfAsync(ExecuteAsync(a, $"UPDATE {table} SET v = v + 1 WHERE id = 2")),
+            RefusalOfAsync(ExecuteAsync(b, $"UPDATE {table} SET v = v + 1 WHERE id = 1")));
+        return crossed.OfType<PostgresException>().ShouldHaveSingleItem();
+    }
+
+    private static async Task<PostgresException> SerializationFailureAsync(string connectionString, string table)
+    {
+        await using var reader = new NpgsqlConnection(connectionString);
+        await using var other = new NpgsqlConnection(connectionString);
+        await reader.OpenAsync();
+        await other.OpenAsync();
+        await using var transaction = await reader.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+
+        await ExecuteAsync(reader, $"SELECT v FROM {table} WHERE id = 1");
+        await ExecuteAsync(other, $"UPDATE {table} SET v = v + 1 WHERE id = 1");
+        return (await RefusalOfAsync(ExecuteAsync(reader, $"UPDATE {table} SET v = v + 1 WHERE id = 1")))
+            .ShouldNotBeNull();
+    }
+
+    private static async Task<PostgresException> UniqueViolationAsync(string connectionString, string table)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        return (await RefusalOfAsync(ExecuteAsync(connection, $"INSERT INTO {table} VALUES (1, 0)"))).ShouldNotBeNull();
+    }
+
+    private static async Task<PostgresException?> RefusalOfAsync(Task statement)
+    {
+        try
+        {
+            await statement;
+            return null;
+        }
+        catch (PostgresException e)
+        {
+            return e;
+        }
+    }
+
+    private static async Task ExecuteAsync(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
 
     public ValueTask DisposeAsync()
     {

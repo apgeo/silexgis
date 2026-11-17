@@ -156,6 +156,9 @@ try
     builder.Services.PostConfigure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(
         options => options.ThrowOnBadRequest = true);
     builder.Services.AddExceptionHandler<SilexGis.Api.Common.BindingProblemHandler>();
+    // A deadlock the database broke up, or a serialization failure, is a collision with another
+    // request rather than a fault: answered as a conflict the client may send again.
+    builder.Services.AddExceptionHandler<SilexGis.Api.Common.TransientDatabaseConflictHandler>();
 
     // A large upload passes three independent ceilings before a handler sees it: the request
     // body limit, the multipart form limit, and the reverse proxy's own cap. The first two
