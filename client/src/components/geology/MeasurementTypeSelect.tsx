@@ -20,6 +20,7 @@ export default function MeasurementTypeSelect({
       <Typography.Text>{t('structural.stereonet.measurementType')}</Typography.Text>
       <Select
         data-testid={testId}
+        aria-label={t('structural.stereonet.measurementType')}
         size="small"
         style={{ minWidth: 160 }}
         value={value}
