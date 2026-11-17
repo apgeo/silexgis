@@ -148,9 +148,69 @@ describe('editing a cave the page reads again meanwhile', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateCave).toHaveBeenCalledTimes(1));
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+
+    // A second press refused for another reason draws its own sentence. Messages are drawn in the
+    // order they were asked for, so once that one is on screen anything the stale refusal had
+    // asked for would be too — no wait on the clock is needed to see that it asked for nothing.
+    updateCave.mockRejectedValue(new ApiError(403, 'forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(FORBIDDEN)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+    expect(screen.queryByText(CONFLICT)).toBeNull();
     expect(screen.queryByTestId('cave-sheet')).toBeNull();
+  });
+});
+
+const SAVE_FAILED = 'The operation failed. Please try again.';
+const FORBIDDEN = 'You are not allowed to make that change.';
+const CONFLICT = 'Someone else changed this since you loaded it. Reload and reapply your changes.';
+
+describe('what a cave save sends', () => {
+  it('sends the form with the cave’s own fields, parent and group carried over unchanged', async () => {
+    caveOnScreen = aCave({
+      properties: { clubCode: 'K-12', notOnThisForm: { kept: true } },
+      parents: [
+        { id: 'karst-area', isPrimary: false },
+        { id: 'massif', isPrimary: true },
+      ],
+      cavingGroupId: 'group-1',
+      visibility: 'internal',
+      locationProtected: true,
+    });
+    const view = render(page());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    fireEvent.change(nameInput(view.container), { target: { value: 'Peștera Nouă' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateCave).toHaveBeenCalledTimes(1));
+    const { body } = updateCave.mock.calls[0][0] as { body: CaveWrite };
+    expect(body).toMatchObject({
+      name: 'Peștera Nouă',
+      caveTypeId: 1,
+      visibility: 'internal',
+      locationProtected: true,
+      isShowCave: false,
+      explorationStatus: 'unknown',
+      cavingGroupId: 'group-1',
+      parentId: 'massif',
+      properties: { clubCode: 'K-12', notOnThisForm: { kept: true } },
+    });
+    expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['refused for want of the right', new ApiError(403, 'forbidden'), FORBIDDEN],
+    ['cut off by a lost connection', new TypeError('Failed to fetch'), SAVE_FAILED],
+  ])('names a save %s and stays on the form with what was typed', async (_label, failure, words) => {
+    updateCave.mockRejectedValue(failure);
+    const view = render(page());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    fireEvent.change(nameInput(view.container), { target: { value: 'Peștera Nouă' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(words)).toBeInTheDocument();
+    expect(screen.queryByTestId('cave-sheet')).toBeNull();
+    expect(nameInput(view.container)).toHaveValue('Peștera Nouă');
   });
 });

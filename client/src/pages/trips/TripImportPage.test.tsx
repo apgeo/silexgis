@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { TripImportPreview, TripImportSession } from '../../api/hooks.ts';
 
@@ -488,5 +488,56 @@ describe('TripImportPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('trip-import-commit')).toHaveProperty('disabled', true),
     );
+  });
+});
+
+describe('a confirmation the server refuses', () => {
+  // Every refusal the confirm route can answer has words of its own, and none of them sets the rows
+  // aside: nothing was created, so the same rows must still be there to fix and confirm again.
+  it.each([
+    ['file.not_found', 'tripImport.errors.fileNotFound'],
+    ['access.create_forbidden', 'tripImport.errors.createForbidden'],
+    ['access.caving_group_binding_forbidden', 'tripImport.errors.groupBindingForbidden'],
+    ['trip_import.file_unreadable', 'tripImport.errors.fileUnreadable'],
+    ['trip_import.file_too_large', 'tripImport.errors.fileTooLarge'],
+    ['trip_import.selection_empty', 'tripImport.errors.selectionEmpty'],
+    ['trip_import.selection_too_large', 'tripImport.errors.selectionTooLarge'],
+    ['trip_import.nothing_created', 'tripImport.errors.nothingCreated'],
+    [undefined, 'tripImport.errors.commitFailed'],
+  ])('words %s and keeps every row taken', async (code, key) => {
+    commitMutate.mockRejectedValue(new ApiError(code === undefined ? 500 : 400, code));
+    show();
+    await waitFor(() => expect(screen.getByTestId('trip-import-commit').textContent).toContain('2'));
+
+    fireEvent.click(screen.getByTestId('trip-import-commit'));
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(commitMutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('trip-import-commit').textContent).toContain('2');
+    expect(screen.getByTestId('trip-import-commit')).toHaveProperty('disabled', false);
+  });
+
+  it('says the confirmation failed when it never reached the server', async () => {
+    commitMutate.mockRejectedValue(new TypeError('Failed to fetch'));
+    show();
+    await waitFor(() => expect(screen.getByTestId('trip-import-commit').textContent).toContain('2'));
+
+    fireEvent.click(screen.getByTestId('trip-import-commit'));
+
+    expect(await screen.findByText(i18n.t('tripImport.errors.commitFailed'))).toBeInTheDocument();
+  });
+
+  it('says an upload failed when the refusal names no stored copy', async () => {
+    params = {};
+    uploadMutate.mockRejectedValue(new ApiError(413, 'file.too_large'));
+    show();
+
+    fireEvent.change(document.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['a,b\n1,2\n'], 'ture.csv', { type: 'text/csv' })] },
+    });
+
+    expect(await screen.findByText(i18n.t('tripImport.errors.uploadFailed'))).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-import-duplicate')).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

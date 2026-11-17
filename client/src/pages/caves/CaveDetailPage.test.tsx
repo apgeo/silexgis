@@ -32,6 +32,7 @@ const entrancesRead = vi.hoisted(() => ({ failed: false, refetch: vi.fn() }));
 // The cave's own read, as the page receives it.
 let caveQuery: Record<string, unknown> = {};
 const deleteEntrance = vi.fn();
+const deleteCave = vi.fn();
 // What the domain capability answers, which is what the page falls back on with no summary.
 let can = false;
 // What this cave's own summary answers about the caller, or nothing while it is still on its way.
@@ -73,7 +74,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({ data: [] }),
   useRockTypes: () => ({ data: [] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'shaft', name: 'Shaft' }] }),
-  useDeleteCave: () => ({ mutateAsync: vi.fn() }),
+  useDeleteCave: () => ({ mutateAsync: deleteCave }),
   useDeleteEntrance: () => ({ mutateAsync: deleteEntrance }),
   useUpdateCave: () => ({ mutateAsync: vi.fn() }),
   useUpdateEntrance: () => ({ mutateAsync: vi.fn() }),
@@ -214,6 +215,7 @@ beforeEach(() => {
   summary = undefined;
   caveQuery = { data: cave(), isPending: false };
   deleteEntrance.mockReset();
+  deleteCave.mockReset();
 });
 
 afterEach(cleanup);
@@ -528,5 +530,66 @@ describe('a read of the entrances that did not land', () => {
       entrancesRead.failed = false;
       entrancesRead.refetch.mockReset();
     }
+  });
+});
+
+describe('CaveDetailPage deleting the cave', () => {
+  function allowedToDelete(): CaveSummary {
+    const answer = summaryAnswering(false);
+    (answer.permissions as { canDelete: boolean }).canDelete = true;
+    return answer;
+  }
+
+  async function confirmDelete() {
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    const popover = (await screen.findByText(i18n.t('caves.deleteConfirm'))).closest('.ant-popover');
+    await act(async () => {
+      fireEvent.click(within(popover as HTMLElement).getByRole('button', { name: /OK|Yes/ }));
+    });
+  }
+
+  function showInApp() {
+    return render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+  }
+
+  it('deletes this cave only once confirmed, says so and goes back to the list', async () => {
+    entrances = [];
+    summary = allowedToDelete();
+    deleteCave.mockResolvedValue(undefined);
+    showInApp();
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    await screen.findByText(i18n.t('caves.deleteConfirm'));
+    expect(deleteCave).not.toHaveBeenCalled();
+    cleanup();
+
+    showInApp();
+    await confirmDelete();
+
+    expect(await screen.findByText(i18n.t('common.deleted'))).toBeInTheDocument();
+    expect(deleteCave).toHaveBeenCalledWith('cave-1');
+    expect(navigate).toHaveBeenCalledWith('/caves');
+  });
+
+  it.each([
+    ['refused', new ApiError(403, 'forbidden')],
+    ['cut off by a lost connection', new TypeError('Failed to fetch')],
+  ])('says a delete that was %s failed and stays on the cave', async (_label, failure) => {
+    entrances = [];
+    summary = allowedToDelete();
+    deleteCave.mockRejectedValue(failure);
+    showInApp();
+
+    await confirmDelete();
+
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.deleted'))).not.toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalledWith('/caves');
   });
 });

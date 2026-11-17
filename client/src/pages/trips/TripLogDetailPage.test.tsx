@@ -59,7 +59,12 @@ vi.mock('./TripChecklistTab.tsx', () => ({
 vi.mock('./TripTrackingTab.tsx', () => ({
   default: () => <div>where the party is</div>,
 }));
-vi.mock('./TripFormModal.tsx', () => ({ default: () => <div /> }));
+// The two dialogs are drawn only while the page holds them open, as the real ones are, so a test can
+// tell a press that opened one from a page that never did.
+vi.mock('./TripFormModal.tsx', () => ({
+  default: ({ open, trip }: { open: boolean; trip: { id: string } }) =>
+    open ? <div data-testid="trip-form-open">{trip.id}</div> : null,
+}));
 vi.mock('./TripStateControl.tsx', () => ({ default: () => <div /> }));
 vi.mock('../../components/trips/TripCover.tsx', () => ({ default: () => <div /> }));
 vi.mock('../../components/trips/TripGallerySection.tsx', () => ({
@@ -78,7 +83,10 @@ vi.mock('../../components/history/HistoryPanel.tsx', () => ({
   default: () => <div>what was changed and by whom</div>,
 }));
 vi.mock('../../components/tags/TagChips.tsx', () => ({ default: () => <span /> }));
-vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({ default: () => <div /> }));
+vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
+  default: ({ open, entityType, entityId }: { open: boolean; entityType: string; entityId: string }) =>
+    open ? <div data-testid="trip-permissions-open">{`${entityType}:${entityId}`}</div> : null,
+}));
 
 function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
   return {
@@ -245,6 +253,19 @@ describe('the trip page', () => {
     canSpy.mockReturnValue(true);
     renderPage(`/trip-logs/${TRIP}?tab=photos`);
     expect(screen.getByTestId('trip-photo-import')).toBeTruthy();
+  });
+
+  it('opens the edit and permissions dialogs only when asked, on this trip', () => {
+    canSpy.mockReturnValue(true);
+    renderPage();
+    expect(screen.queryByTestId('trip-form-open')).toBeNull();
+    expect(screen.queryByTestId('trip-permissions-open')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/ }));
+    expect(screen.getByTestId('trip-form-open')).toHaveTextContent(TRIP);
+
+    fireEvent.click(screen.getByTestId('trip-permissions'));
+    expect(screen.getByTestId('trip-permissions-open')).toHaveTextContent(`tripLog:${TRIP}`);
   });
 
   it('says "no such trip" for a trip the server refused, instead of loading forever', () => {
