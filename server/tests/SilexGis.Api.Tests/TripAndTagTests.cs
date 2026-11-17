@@ -759,6 +759,30 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
             .GetProperty("items").GetArrayLength().ShouldBe(0);
     }
 
+    /// <summary>
+    /// A page number in the millions used to wrap the offset negative, which the database refuses —
+    /// a server fault. 4,294,969 × 500 is the first such offset past the largest whole number.
+    /// </summary>
+    [Theory]
+    [InlineData(4_294_969, 500)]
+    [InlineData(int.MaxValue, 500)]
+    public async Task A_page_of_the_audit_trail_far_past_the_end_is_empty_and_never_an_error(int page, int pageSize)
+    {
+        await CreateCaveAsync($"Audited page {Guid.NewGuid():N}", "private");
+        (await admin.GetFromJsonAsync<JsonElement>("/api/v1/audit?pageSize=1"))
+            .GetProperty("items").GetArrayLength().ShouldBe(1);
+
+        using var response = await admin.GetAsync($"/api/v1/audit?page={page}&pageSize={pageSize}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        (await owner.GetAsync($"/api/v1/audit?page={page}&pageSize={pageSize}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/audit?page={page}&pageSize={pageSize}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task Audit_trail_is_admin_only_and_carries_change_diffs()
     {

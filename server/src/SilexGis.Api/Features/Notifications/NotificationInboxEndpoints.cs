@@ -156,7 +156,7 @@ public static class NotificationInboxEndpoints
 
         // The identity column is the arrival order, so this is also the index's own order.
         var rows = await query.OrderByDescending(n => n.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         var items = await PresentAsync(db, access, renderer, ctx, user.UserId, http, rows, ct);
         return TypedResults.Ok(new PagedResult<NotificationDto>(items, p, size, total));

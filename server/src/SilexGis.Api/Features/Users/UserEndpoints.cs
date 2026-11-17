@@ -156,7 +156,7 @@ public static class UserEndpoints
 
         var total = await ordered.CountAsync(ct);
         var ids = await ordered
-            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Skip(Paging.Offset(normalizedPage, normalizedPageSize))
             .Take(normalizedPageSize)
             .Select(u => u.Id)
             .ToListAsync(ct);

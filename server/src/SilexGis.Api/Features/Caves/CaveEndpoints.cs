@@ -215,7 +215,7 @@ public static class CaveEndpoints
         // caller could see, not only those that happened to fall on the page being fetched.
         var listableQuery = query.Where(f => f.Cave != null);
         var total = await listableQuery.CountAsync(ct);
-        var rows = await listableQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var rows = await listableQuery.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         ReportSubtypeless(loggers, await subtypelessQuery.ToListAsync(ct));
 

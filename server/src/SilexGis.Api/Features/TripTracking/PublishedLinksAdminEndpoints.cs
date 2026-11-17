@@ -435,7 +435,7 @@ public static class PublishedLinksAdminEndpoints
         };
         var ordered = (descending ? keyed.ThenByDescending(j => j.Row.Id) : keyed.ThenBy(j => j.Row.Id)).ToList();
 
-        var listed = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var listed = ordered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
 
         // Names for the page only. The caves are read under the ordinary filters, so one that has
         // been deleted is named by nothing; no visibility narrowing, because the caller is a full

@@ -127,7 +127,7 @@ internal static class FeatureDeletionEndpoints
             .OrderByDescending(r => r.DeletedAt)
             .ThenByDescending(r => r.Id)
             .ToList();
-        var shown = mine.Skip((p - 1) * size).Take(size).ToList();
+        var shown = mine.Skip(Paging.Offset(p, size)).Take(size).ToList();
 
         var typeIds = shown.Where(r => r.FeatureTypeId != null).Select(r => r.FeatureTypeId!.Value).Distinct().ToArray();
         var typeCodes = typeIds.Length == 0

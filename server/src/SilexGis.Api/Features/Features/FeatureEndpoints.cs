@@ -177,7 +177,7 @@ public static class FeatureEndpoints
         var total = await query.CountAsync(ct);
         // The id breaks ties so that rows written in one transaction keep their place between pages.
         var rows = await FeatureFilterWorld.NewestFirst(query)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         var types = await FeatureTypesOfAsync(db, rows, ct);
         var exact = await protection.ExactViewIdsAsync(ctx, rows.Select(f => f.Id).ToList(), ct);

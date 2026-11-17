@@ -657,7 +657,7 @@ public static partial class SurveyUploadEndpoints
         var rows = await visible
             .OrderByDescending(u => u.CreatedAt)
             .ThenByDescending(u => u.Id)
-            .Skip((number - 1) * size)
+            .Skip(Paging.Offset(number, size))
             .Take(size)
             .ToListAsync(ct);
 
