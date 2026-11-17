@@ -26,6 +26,7 @@ import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
+import { announcementProblem } from '../../components/cavingGroups/cavingGroupProblems.ts';
 import { cavingGroupCreateProblem } from '../../components/cavingGroups/cavingGroupProblems.ts';
 import { useTranslation } from 'react-i18next';
 import {
@@ -162,18 +163,18 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
   const [message, setMessage] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [sent, setSent] = useState<{ recipients: number; queued: boolean } | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const written = message.trim();
   const recipients = audience?.recipients ?? 0;
 
   const send = async () => {
-    setFailed(false);
+    setFailed(null);
     try {
       const result = await announce.mutateAsync({ message: written });
       setSent({ recipients: result.recipients, queued: result.queued });
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(announcementProblem(error, t));
     }
   };
 
@@ -274,7 +275,7 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
               type="error"
               showIcon
               style={{ marginTop: 12 }}
-              title={t('cavingGroups.announce.failed')}
+              title={failed}
             />
           )}
         </>

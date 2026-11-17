@@ -3,6 +3,7 @@ import { DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/ic
 import { App, Card, Popconfirm, Table, Tag, Tooltip, Typography, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   useDeleteSurveySource,
   useSurveySources,
@@ -148,8 +149,10 @@ export default function SurveySourceSection({ caveId, canEdit }: { caveId: strin
                     onConfirm={async () => {
                       try {
                         await remove.mutateAsync({ id: source.id, caveId });
-                      } catch {
-                        message.error(t('common.saveFailed'));
+                      } catch (error) {
+                        if (!isConcurrencyConflict(error)) {
+                          message.error(surveySourceProblemMessage(error, t, 'common.deleteFailed'));
+                        }
                       }
                     }}
                   >

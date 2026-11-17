@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { FileVersionInfo } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 
@@ -12,11 +12,12 @@ const versions: FileVersionInfo[] = [
 ];
 
 const uploadVersion = vi.fn((_: unknown) => Promise.resolve());
+const deleteVersion = vi.fn((_: unknown) => Promise.resolve());
 
 vi.mock('../../api/hooks.ts', () => ({
   useFileVersions: () => ({ data: versions, isLoading: false }),
   useUploadFileVersion: () => ({ mutateAsync: uploadVersion, isPending: false }),
-  useDeleteFileVersion: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
+  useDeleteFileVersion: () => ({ mutateAsync: deleteVersion, isPending: false }),
   useFileConfig: () => ({ data: { maxUploadBytes: 1000 } }),
 }));
 
@@ -85,5 +86,27 @@ describe('FileVersions', () => {
 
     await waitFor(() => expect(uploadVersion).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('This file type is not accepted')).toBeInTheDocument();
+  });
+
+  // A version still in use (a link or a reading points at it) or the current one cannot be
+  // deleted; "save failed" would send the person to try again at something that cannot work.
+  it.each([
+    ['file.version_in_use', 'attachments.versionInUse'],
+    ['file.head_undeletable', 'attachments.headUndeletable'],
+  ])('says why deleting a version was refused (%s)', async (code, key) => {
+    deleteVersion.mockClear();
+    deleteVersion.mockRejectedValueOnce(new ApiError(409, code));
+    render(
+      <App>
+        <FileVersions fileId="f" versionNumber={2} canEdit />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    await screen.findByText('Upload new version');
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('iconButtons.delete') })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteVersion).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
   });
 });

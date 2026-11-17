@@ -24,6 +24,12 @@ export function rosterWriteProblem(error: unknown, t: TFunction): string {
       return t('cavers.rosterProblems.memberRaced');
     case 'permission_group.last_full_admin':
       return t('cavers.rosterProblems.lastFullAdmin');
+    case 'caver.merge_two_accounts':
+      return t('cavers.rosterProblems.mergeTwoAccounts');
+    case 'caver.merge_self':
+      return t('cavers.rosterProblems.mergeSelf');
+    case 'caver.merge_raced':
+      return t('cavers.rosterProblems.mergeRaced');
     default:
       return t('common.saveFailed');
   }

@@ -10,6 +10,8 @@ import AddMemberModal, { type LinkOrigin } from '../components/reslinks/AddMembe
 import { memberRoute } from '../components/reslinks/registry.ts';
 import { relationPhraseFor } from '../components/reslinks/relations.ts';
 import { useDeleteResLink } from '../api/hooks.ts';
+import { isConcurrencyConflict } from '../api/client.ts';
+import { resLinkProblemMessage } from '../components/reslinks/problems.ts';
 import { resolveDark } from '../theme.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
@@ -54,7 +56,7 @@ export default function AnnotatedTextPanel({
   mayPopOut = true,
 }: AnnotatedTextPanelProps) {
   const { t } = useTranslation();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const navigate = useNavigate();
   const dark = useUiPrefsStore((s) => resolveDark(s.appearance.theme));
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -170,10 +172,21 @@ export default function AnnotatedTextPanel({
         title: t('textLink.edit.deleteTitle'),
         content: t('textLink.edit.deleteBody'),
         okButtonProps: { danger: true },
-        onOk: () => deleteLink.mutateAsync(highlight.linkId),
+        // Settles whatever the answer, so the dialog closes rather than hanging on a rejected
+        // promise, and a refusal is said in words. A conflict is already spoken by the
+        // application's own notice.
+        onOk: async () => {
+          try {
+            await deleteLink.mutateAsync(highlight.linkId);
+          } catch (error) {
+            if (!isConcurrencyConflict(error)) {
+              message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
+            }
+          }
+        },
       });
     },
-    [modal, t, deleteLink],
+    [modal, message, t, deleteLink],
   );
 
   if (isPending) {

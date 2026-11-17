@@ -11,6 +11,9 @@ describe('rosterWriteProblem', () => {
     'access_entry.exceeds_own_rights',
     'caving_group.member_raced',
     'permission_group.last_full_admin',
+    'caver.merge_two_accounts',
+    'caver.merge_self',
+    'caver.merge_raced',
   ];
 
   it('has words of its own for every refusal it names, in both languages', () => {

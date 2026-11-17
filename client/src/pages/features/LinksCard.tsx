@@ -11,7 +11,9 @@ import {
   useSetFeatureLinks,
   type FeatureLink,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import Button from '../../components/Button.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 
@@ -125,8 +127,11 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
       });
       setEditing(false);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 

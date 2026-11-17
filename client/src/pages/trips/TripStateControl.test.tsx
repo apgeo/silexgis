@@ -2,7 +2,8 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ActivityState, Visibility } from '../../api/hooks.ts';
 
 const move = vi.fn();
@@ -138,6 +139,17 @@ describe('TripStateControl', () => {
 
     fireEvent.click(newDateButton()!);
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'planned' }));
+  });
+
+  // The server refuses a move the trip's present state does not allow, which here means somebody
+  // moved it meanwhile; "the save failed, try again" would fail the same way every time.
+  it('says a refused move is not possible from where the trip now stands', async () => {
+    move.mockRejectedValue(new ApiError(409, 'trip_log.state_transition_invalid'));
+    show('delayed');
+
+    fireEvent.click(newDateButton()!);
+    expect(await screen.findByText(i18n.t('trips.stateTransitionInvalid'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 
   it('offers nothing for a value the trip table says nothing about', () => {

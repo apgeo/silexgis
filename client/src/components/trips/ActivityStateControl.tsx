@@ -14,7 +14,7 @@ import Button from '../Button.tsx';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActivityState, Visibility } from '../../api/hooks.ts';
-import { isConcurrencyConflict } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 
 /**
  * The names of the strings a move is drawn with. Each is looked up under `trips.` unless the
@@ -222,7 +222,11 @@ export default function ActivityStateControl({
       // A stale version is worded once, by the application's conflict warning; a "save failed"
       // beside it would contradict it.
       if (!isConcurrencyConflict(error)) {
-        message.error(t('common.saveFailed'));
+        // Trips, expeditions and events each refuse a move their present state does not allow
+        // under a code of their own with the same suffix.
+        const refusedMove =
+          error instanceof ApiError && (error.code?.endsWith('.state_transition_invalid') ?? false);
+        message.error(t(refusedMove ? 'trips.stateTransitionInvalid' : 'common.saveFailed'));
       }
     }
   };

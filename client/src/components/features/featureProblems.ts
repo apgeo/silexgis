@@ -37,6 +37,11 @@ export const FEATURE_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'feature_set.name_invalid': 'featureSets.nameInvalid',
   'feature_set.name_taken': 'featureSets.nameTaken',
   'feature_set.in_use': 'featureSets.inUse',
+  // A feature's links to other features, replaced as a whole by the links card.
+  'feature.link_self': 'features.problems.linkSelf',
+  'feature.link_kind_unknown': 'features.problems.linkKindUnknown',
+  'feature.link_duplicate': 'features.problems.linkDuplicate',
+  'feature.link_target_not_found': 'features.problems.linkTargetNotFound',
 };
 
 /**
