@@ -276,7 +276,11 @@ public sealed class StructuralStereonetTests : IAsyncLifetime, IDisposable, ICla
         (await anonymous.GetAsync($"/api/v1/features/{cave}/stereonet")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {

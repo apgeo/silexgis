@@ -167,7 +167,11 @@ public sealed class StructuralMeasurementTests : IAsyncLifetime, IDisposable, IC
         (await anonymous.GetAsync($"/api/v1/map/features?bbox={bbox}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     public void Dispose()
     {
