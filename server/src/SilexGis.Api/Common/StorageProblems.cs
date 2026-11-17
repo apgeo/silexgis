@@ -36,6 +36,43 @@ public static class StorageProblems
             });
     }
 
+    /// <summary>
+    /// The refusal of a write that the disk holding the file store had no room for at the moment
+    /// of writing — found by the write failing, not foreseen — so how much room there was is not
+    /// known and is not claimed. Insufficient Storage rather than a conflict: nothing the request
+    /// says is wrong, and the same request is taken once room has been made.
+    /// </summary>
+    public static ProblemHttpResult StoreDiskFull(long neededBytes) =>
+        TypedResults.Problem(
+            detail: string.Create(
+                CultureInfo.InvariantCulture,
+                $"The disk that holds the file store has no room for these {neededBytes:N0} bytes. Nothing was stored; send it again once room has been made."),
+            statusCode: StatusCodes.Status507InsufficientStorage,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = InsufficientCode,
+                ["limit"] = LimitName(StorageLimitKind.StoreDisk),
+                ["neededBytes"] = neededBytes,
+            });
+
+    /// <summary>Whether a failed write failed because the device, or the account's share of it, is full.</summary>
+    /// <remarks>
+    /// The runtime raises a plain <see cref="IOException"/> for these and tells them apart only by
+    /// the number it carries: on Linux and macOS the error number itself (no space left on the
+    /// device; over the disk quota — 122 on Linux), on Windows the system error wrapped as a
+    /// result code (disk full; handle disk full).
+    /// </remarks>
+    public static bool IsOutOfSpace(IOException e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        const int NoSpaceLeft = 28;
+        const int QuotaExceededLinux = 122;
+        const int DiskFullWindows = unchecked((int)0x80070070);
+        const int HandleDiskFullWindows = unchecked((int)0x80070027);
+        return e.HResult is NoSpaceLeft or DiskFullWindows or HandleDiskFullWindows
+            || (e.HResult == QuotaExceededLinux && OperatingSystem.IsLinux());
+    }
+
     private static string Sentence(StorageShortfall shortfall)
     {
         var where = shortfall.Kind switch

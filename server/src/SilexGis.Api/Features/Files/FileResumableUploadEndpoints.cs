@@ -279,9 +279,21 @@ public static partial class FileEndpoints
 
             // Written at the session's length, not wherever the file ends: anything beyond it is
             // the remains of a piece that was never recorded, and is written over. A body that
-            // could not be read to its end answers false with the piece already cut back out; a
-            // store that cannot write throws, and is answered as the server fault it is.
-            if (!await blob.WriteAtAsync(session.ReceivedBytes, httpRequest.Body, length, ct))
+            // could not be read to its end answers false with the piece already cut back out. A
+            // store that cannot write throws, with the piece cut back out too: for a full disk
+            // that is said as such, since a person can make room and the client can send the same
+            // piece again; any other failure is the server fault it is.
+            bool written;
+            try
+            {
+                written = await blob.WriteAtAsync(session.ReceivedBytes, httpRequest.Body, length, ct);
+            }
+            catch (IOException e) when (StorageProblems.IsOutOfSpace(e))
+            {
+                return StorageProblems.StoreDiskFull(length);
+            }
+
+            if (!written)
             {
                 return OutOfOrder(session);
             }
