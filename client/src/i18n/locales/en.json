@@ -9750,6 +9750,13 @@
     "removeBody": "Everything the run generated is deleted for good. Data the run did not create is left alone, and so is a generated area somebody has since put data of their own in.",
     "removeFailed": "The removal could not be started.",
     "notes": "Notes",
+    "noteCodes": {
+      "keptInUse": "{{count}} generated cave(s) or place(s) were kept because they are in use: somebody attached a file, uploaded a survey, linked a trip, a document or another feature, or drew a map for them.",
+      "keptBeneath": "{{count}} generated area(s) or cave(s) were kept because data not created by a test-data run is attached beneath them.",
+      "inventedElevations": "Elevations come from an invented surface; real ground heights from a terrain build come in a later part of the generator.",
+      "clubOnlyAsSignedIn": "Club-only visibility is written as signed-in-only until the generator creates caving groups.",
+      "codesTaken": "{{count}} generated cave(s) were written without an identification code, because a cave on this installation already carries the code planned for them."
+    },
     "coverage": "What the run wrote, table by table",
     "table": "Table",
     "rows": "Rows",

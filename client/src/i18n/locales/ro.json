@@ -9763,6 +9763,13 @@
     "removeBody": "Tot ce a generat rularea este șters definitiv. Datele pe care rularea nu le-a creat rămân neatinse, la fel și o zonă generată în care cineva a pus între timp date proprii.",
     "removeFailed": "Ștergerea nu a putut fi pornită.",
     "notes": "Note",
+    "noteCodes": {
+      "keptInUse": "{{count}} peșteri sau locuri generate au fost păstrate pentru că sunt folosite: cineva a atașat un fișier, a încărcat o topografie, a legat o tură, un document sau alt obiect ori a desenat o hartă pentru ele.",
+      "keptBeneath": "{{count}} zone sau peșteri generate au fost păstrate pentru că sub ele se află date care nu au fost create de o rulare de date de test.",
+      "inventedElevations": "Altitudinile provin dintr-o suprafață inventată; altitudinile reale ale terenului dintr-o construcție de teren vor veni într-o parte ulterioară a generatorului.",
+      "clubOnlyAsSignedIn": "Vizibilitatea doar pentru club este scrisă ca vizibilitate pentru utilizatorii autentificați, până când generatorul va crea grupuri de speologi.",
+      "codesTaken": "{{count}} peșteri generate au fost scrise fără cod de identificare, pentru că o peșteră din această instalare are deja codul plănuit pentru ele."
+    },
     "coverage": "Ce a scris rularea, tabel cu tabel",
     "table": "Tabel",
     "rows": "Rânduri",

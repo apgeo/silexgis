@@ -134,6 +134,23 @@ describe('TestDataPage', () => {
     expect(start.mock.calls[1][0]).toMatchObject({ confirmAlongsideExistingData: true });
   });
 
+  it('words the notes the server stores as codes in the reader\'s language, and shows one it does not know as stored', async () => {
+    overview = { ...overview, runs: [run({ notes: ['keptInUse:3', 'a note from an older server'] })] };
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /expand row/i }));
+    const details = await screen.findByTestId('test-data-run-details');
+    expect(within(details).getByText(/^3 generated cave\(s\) or place\(s\) were kept because they are in use/)).toBeTruthy();
+    expect(within(details).getByText('a note from an older server')).toBeTruthy();
+    expect(within(details).queryByText('keptInUse:3')).toBeNull();
+
+    cleanup();
+    await i18n.changeLanguage('ro');
+    show();
+    fireEvent.click(screen.getAllByRole('button').find((b) => b.className.includes('ant-table-row-expand-icon'))!);
+    const romanian = await screen.findByTestId('test-data-run-details');
+    expect(within(romanian).getByText(/^3 peșteri sau locuri generate au fost păstrate/)).toBeTruthy();
+  });
+
   it('refuses to start from a profile that is not JSON', () => {
     show();
     fireEvent.change(screen.getByTestId('test-data-json'), { target: { value: '{ not json' } });
