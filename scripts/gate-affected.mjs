@@ -184,12 +184,24 @@ export async function selectionFor(base = 'master', mapFile = DEFAULT_MAP) {
   return { base, changed: files.length, ...classify(files, map) };
 }
 
-/** The working tree's changes against `base`: tracked differences and untracked files. */
-export function changedFiles(base) {
-  const opts = { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 };
-  const diff = execFileSync('git', ['diff', '--name-only', base, '--'], opts);
-  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], opts);
-  return [...new Set((diff + untracked).split('\n').map((l) => l.trim()).filter(Boolean))];
+/**
+ * The working tree's changes against `base`: tracked differences and untracked files, as paths
+ * from the repository root whatever directory this runs from.
+ *
+ * Every flag here closes a way of selecting too little. `--no-renames` lists a moved file under
+ * both names, so the owners of the name it left are selected as well as those of the name it
+ * took. `--full-name` stops ls-files answering relative to a subdirectory, which matches no map
+ * entry. `-z` hands paths over raw: without it a name with a non-ASCII letter comes back quoted
+ * and escaped, and matches nothing either.
+ */
+export function changedFiles(base, cwd = process.cwd()) {
+  const opts = { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, cwd };
+  const root = execFileSync('git', ['rev-parse', '--show-toplevel'], opts).trim();
+  const inRoot = { ...opts, cwd: root };
+  const diff = execFileSync('git', ['-C', root, 'diff', '--name-only', '--no-renames', '-z', base, '--'], inRoot);
+  const untracked = execFileSync(
+    'git', ['-C', root, 'ls-files', '--others', '--exclude-standard', '--full-name', '-z'], inRoot);
+  return [...new Set(`${diff}\0${untracked}`.split('\0').filter(Boolean))];
 }
 
 async function main() {

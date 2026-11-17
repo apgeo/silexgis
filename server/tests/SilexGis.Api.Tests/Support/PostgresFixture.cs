@@ -160,7 +160,7 @@ public sealed class PostgresFixture : IAsyncLifetime
                 return maintenanceConnectionString;
             }
 
-            var container = new PostgreSqlBuilder("postgis/postgis:17-3.5")
+            var builder = new PostgreSqlBuilder("postgis/postgis:17-3.5")
                 .WithDatabase("postgres")
                 .WithUsername("silexgis")
                 .WithPassword("silexgis")
@@ -169,8 +169,17 @@ public sealed class PostgresFixture : IAsyncLifetime
                 // left alone — they bought nothing, because the time goes on building hosts rather
                 // than on writing to disk, and turning fsync off leaves a cluster whose corruption
                 // nobody can afterwards explain.
-                .WithCommand("-c", "max_connections=400")
-                .Build();
+                .WithCommand("-c", "max_connections=400");
+            // A runner that starts several test processes names its run here, so that when it is
+            // stopped and has to kill a process outright — one that then never reaches the stop at
+            // process exit — it can still find and remove the container that process left.
+            var runLabel = Environment.GetEnvironmentVariable("SILEXGIS_TEST_CONTAINER_LABEL");
+            if (!string.IsNullOrEmpty(runLabel))
+            {
+                builder = builder.WithLabel("silexgis.test-run", runLabel);
+            }
+
+            var container = builder.Build();
             await container.StartAsync();
             liveContainer = container;
             var maintenance = container.GetConnectionString();

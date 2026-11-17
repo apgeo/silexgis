@@ -51,9 +51,9 @@
 // adds up the same lines it would have read from a single run. The exit code is 0 only when every
 // one's was.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, constants } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
@@ -282,10 +282,71 @@ const elapsed = (sinceMs) => {
   return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`;
 };
 
+/**
+ * The test processes still running, and what the runner does when it is told to stop.
+ *
+ * A runner killed by pid — by the lock's watch on the assemblies, by a harness timeout, by an
+ * operator — used to die alone, and its shards ran on for tens of minutes with their database
+ * servers while the lock it had held was free for the next whole suite: exactly the collision the
+ * lock exists to prevent. So each shard is started as the head of a process group of its own (on
+ * POSIX), which takes in the test host `dotnet test` starts, and a stop signals the whole group.
+ * Being in a group of its own also means a terminal's Ctrl-C no longer reaches a shard directly,
+ * which is why SIGINT is handled here like the others.
+ *
+ * The test host stops its own database container when it exits normally, which a SIGTERM allows;
+ * one that has to be killed outright cannot, so every container a shard starts carries a label
+ * naming this run, and whatever is left under that label is removed last.
+ */
+const live = new Set();
+let stopping = false;
+const ShardGraceMs = Number(process.env.SILEXGIS_SHARD_GRACE_MS || 60_000);
+export const ContainerLabel = 'silexgis.test-run';
+
+/** Signals a shard and everything it started. */
+export function stopTree(child, signal, platform = process.platform) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (platform === 'win32') {
+    // No process groups to signal: taskkill walks the tree. It cannot ask politely, so a Windows
+    // stop is always the outright kind and the label clean-up below does the containers' part.
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    // The group is already gone.
+  }
+}
+
+/** Removes every container a test process of this run started and left behind. */
+export function removeContainers(runId) {
+  const listed = spawnSync('docker', ['ps', '-aq', '--filter', `label=${ContainerLabel}=${runId}`], { encoding: 'utf8' });
+  if (listed.error || listed.status !== 0) return 0;
+  const ids = listed.stdout.split(/\s+/).filter(Boolean);
+  if (ids.length > 0) spawnSync('docker', ['rm', '-f', ...ids], { stdio: 'ignore' });
+  return ids.length;
+}
+
+async function stopEverything(signal, runId) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: stopping ${live.size} test process${live.size === 1 ? '' : 'es'}`);
+  for (const child of live) stopTree(child, 'SIGTERM');
+  const deadline = Date.now() + ShardGraceMs;
+  while (live.size > 0 && Date.now() < deadline) {
+    await new Promise((wait) => setTimeout(wait, 200));
+  }
+  for (const child of live) stopTree(child, 'SIGKILL');
+  const removed = removeContainers(runId);
+  if (removed > 0) console.log(`removed ${removed} container${removed === 1 ? '' : 's'} the test processes left`);
+  process.exit(128 + (constants.signals[signal] ?? 15));
+}
+
 /** One `dotnet test` over `classes`, its output kept in `<name>.log`; resolves when it ends. */
-function run({ name, classes, project, results, threads, startedAt, mode }) {
+function run({ name, classes, project, results, threads, startedAt, mode, runId }) {
   const log = join(results, `${name}.log`);
   const account = join(results, `${name}.hosts.json`);
+  if (stopping) return Promise.resolve({ name, log, account, exitCode: 1 });
   rmSync(account, { force: true });
   const out = createWriteStream(log);
   const child = spawn(
@@ -299,22 +360,27 @@ function run({ name, classes, project, results, threads, startedAt, mode }) {
     ],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         SILEXGIS_TEST_MODE: mode,
+        SILEXGIS_TEST_CONTAINER_LABEL: runId,
         SILEXGIS_TEST_HOST_STATS: account,
         ...(therionRequirementOf() === undefined ? {} : { SILEXGIS_TEST_THERION: therionRequirementOf() }),
       },
     },
   );
+  live.add(child);
   child.stdout.pipe(out, { end: false });
   child.stderr.pipe(out, { end: false });
   return new Promise((done) => {
     child.on('error', (error) => {
+      live.delete(child);
       console.log(`${name}: could not start (${error.message})`);
       done({ name, log, account, exitCode: 1 });
     });
     child.on('close', (code) => {
+      live.delete(child);
       out.end();
       console.log(`${name}: exit ${code ?? 1} after ${elapsed(startedAt)} (${classes.length} classes)`);
       done({ name, log, account, exitCode: code ?? 1 });
@@ -377,18 +443,27 @@ async function main() {
   );
   console.log(`test mode: ${mode}`);
   const startedAt = Date.now();
+  const runId = `${process.pid}-${startedAt}`;
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => void stopEverything(signal, runId));
+  }
 
   const running = [];
   for (const index of shards) {
     const classes = shard(dealt, index, count);
     if (classes.length === 0) continue;
-    running.push(run({ name: `shard-${index}`, classes, project, results, threads, startedAt, mode }));
+    if (stopping) break;
+    running.push(run({ name: `shard-${index}`, classes, project, results, threads, startedAt, mode, runId }));
     // A moment between starts: each shard asks the container runtime for a database server of its
     // own as its first act, and eight such requests in one instant is the one place the shards
     // would otherwise contend before any test has run.
     await new Promise((wait) => setTimeout(wait, 3000));
   }
   const ended = await Promise.all(running);
+  // A stop in progress ends the process itself once its clean-up is done; carrying on from here
+  // would print a verdict and exit before the containers were removed.
+  const halt = () => (stopping ? new Promise(() => {}) : null);
+  await halt();
   if (shards.length > 0) {
     console.log(`all shards ended after ${elapsed(startedAt)}`);
   }
@@ -396,9 +471,10 @@ async function main() {
   if (wanted('quiet') && quiet.length > 0) {
     // Its own thread count is the suite's: nothing is beside it now, in this process or another.
     ended.push(
-      await run({ name: 'quiet', classes: quiet, project, results, threads: null, startedAt, mode }));
+      await run({ name: 'quiet', classes: quiet, project, results, threads: null, startedAt, mode, runId }));
   }
 
+  await halt();
   console.log(`\neverything ended after ${elapsed(startedAt)}`);
   const hosts = hostsOf(
     ended.map(({ account }) => {

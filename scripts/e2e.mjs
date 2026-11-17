@@ -53,6 +53,7 @@ import process from 'node:process';
 
 import { pruneDependencyCaches } from './dependency-caches.mjs';
 import { selectionFor } from './e2e-affected.mjs';
+import { forTheApi, leftoverApiPid, playwrightCommand, processStartTime } from './e2e-env.mjs';
 import { describeFast, fastRun, modeOf, suiteOf } from './e2e-mode.mjs';
 import { REFUSED_EXIT_CODE, portRefusal } from './e2e-ports.mjs';
 import {
@@ -98,11 +99,17 @@ const ADMIN_PASSWORD = 'dev-admin-pass-1';
 const PID_FILE = join(
   repoRoot, 'client', 'node_modules', '.cache', `silexgis-e2e-api-${API_PORT}.pid`);
 
-/** Kill an API this script left behind, so a stale one can never quietly serve the run. */
+/**
+ * Kill an API this script left behind, so a stale one can never quietly serve the run — but only
+ * when the pid still names that API. The file survives a reboot, after which its number belongs
+ * to whatever process was given it, perhaps another checkout's test host; so the start time
+ * recorded with the pid has to match too. Anything else is left alone, and the port check that
+ * follows refuses the run if the port is taken.
+ */
 function killPreviousApi() {
   if (!existsSync(PID_FILE)) return;
-  const pid = Number(readFileSync(PID_FILE, 'utf8').trim());
-  if (Number.isInteger(pid) && pid > 0) {
+  const pid = leftoverApiPid(readFileSync(PID_FILE, 'utf8'));
+  if (pid !== null) {
     try {
       process.kill(pid);
       console.log(`Stopped an API left by an earlier run (pid ${pid}).`);
@@ -182,11 +189,10 @@ function prepareScanHandoff() {
     readFileSync(join(repoRoot, 'client', 'e2e', 'fixtures', 'e2e-hdmapping-odometry-defaults.json')));
 }
 
-const apiEnv = {
-  ...process.env,
+const apiEnv = forTheApi(process.env, {
   ASPNETCORE_ENVIRONMENT: 'Development',
   ASPNETCORE_URLS: `http://localhost:${API_PORT}`,
-  Db__ConnectionString:
+  SILEXGIS__Db__ConnectionString:
     `Host=localhost;Port=${DB_PORT};Database=silexgis;Username=silexgis;Password=silexgis`,
   // The bootstrap administrator the specs sign in as. Demo credentials against a throwaway
   // database on loopback; there is nothing here worth protecting and the specs need to know
@@ -216,7 +222,7 @@ const apiEnv = {
   // be willing to send a browser back to. Without this every sign-in dies at the redirect.
   SILEXGIS__Auth__AdditionalRedirectUris__0: `http://localhost:${DEV_PORT}/auth/callback`,
   SILEXGIS__Scans__HandoffRoot: SCAN_HANDOFF_DIR,
-};
+});
 
 function run(cmd, argv, opts = {}) {
   const r = spawnSync(cmd, argv, { stdio: 'inherit', ...opts });
@@ -272,7 +278,8 @@ function teardown() {
 function browserRun(argv, outputDir) {
   const reportFile = join(clientDir, outputDir, 'report.json');
   rmSync(reportFile, { force: true });
-  const status = run('npx', ['playwright', 'test', ...withReport(argv)], {
+  const playwright = playwrightCommand(clientDir, withReport(argv));
+  const status = run(playwright.command, playwright.args, {
     cwd: clientDir,
     env: {
       ...process.env,
@@ -398,7 +405,7 @@ try {
     mkdirSync(dirname(PID_FILE), { recursive: true });
     // Written before the wait, not after: a run killed while the API is still starting is exactly
     // the case that strands one, and a pid recorded only on success would miss it.
-    writeFileSync(PID_FILE, String(api.pid));
+    writeFileSync(PID_FILE, `${api.pid} ${processStartTime(api.pid) ?? ''}`.trim());
     await waitFor('API', async () => {
       try {
         const r = await fetch(`http://localhost:${API_PORT}/openapi/v1.json`);

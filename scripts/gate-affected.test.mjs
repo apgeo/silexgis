@@ -13,9 +13,13 @@ import { strict as assert } from 'node:assert';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, renameSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import {
+  changedFiles,
   classify,
   deriveCrossCutting,
   filterExpression,
@@ -227,5 +231,42 @@ describe('the map cannot rot', () => {
     assert.ok(!out.includes('Old'), 'the old names are gone');
     assert.ok(out.startsWith('export const before = 1;') && out.endsWith('export const after = 2;'));
     assert.throws(() => withCrossCutting('nothing here', { permissionClasses: [], locationClasses: [] }));
+  });
+});
+
+describe('the changed-file listing', () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'gate-affected-test-'));
+  after(() => rmSync(scratch, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: scratch, encoding: 'utf8' });
+
+  git('init', '-q');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'test');
+  // The setting that makes a plain listing quote a non-ASCII name.
+  git('config', 'core.quotePath', 'true');
+  mkdirSync(join(scratch, 'server', 'src'), { recursive: true });
+  writeFileSync(join(scratch, 'server', 'src', 'Old.cs'), 'class Old {}\n');
+  writeFileSync(join(scratch, 'server', 'src', 'Still.cs'), 'class Still {}\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'base');
+
+  renameSync(join(scratch, 'server', 'src', 'Old.cs'), join(scratch, 'server', 'src', 'New.cs'));
+  git('add', '-A');
+  writeFileSync(join(scratch, 'server', 'src', 'Peșteră.cs'), 'class P {}\n');
+
+  it('lists a moved file under the name it left as well as the one it took', () => {
+    const files = changedFiles('HEAD', scratch);
+    assert.ok(files.includes('server/src/Old.cs'), files.join(', '));
+    assert.ok(files.includes('server/src/New.cs'), files.join(', '));
+  });
+
+  it('lists a non-ASCII name as it is, not quoted', () => {
+    assert.ok(changedFiles('HEAD', scratch).includes('server/src/Peșteră.cs'));
+  });
+
+  it('answers paths from the repository root when run from a subdirectory', () => {
+    const files = changedFiles('HEAD', join(scratch, 'server'));
+    assert.ok(files.includes('server/src/Peșteră.cs'), files.join(', '));
+    assert.ok(files.every((f) => f.startsWith('server/src/')), files.join(', '));
   });
 });
