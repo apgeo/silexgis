@@ -140,6 +140,25 @@ export default function PhoneNumberCard() {
     }
   };
 
+  const cancelPending = async () => {
+    setBusy(true);
+    try {
+      const { error } = await api.DELETE('/api/v1/me/phone/pending');
+      if (error !== undefined) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      setCode('');
+      setReplacing(false);
+      refresh();
+      message.success(t('security.phonePendingCancelled'));
+    } catch {
+      message.error(t('common.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const numberEntry = (
     <Flex gap={8} wrap>
       <Input
@@ -215,20 +234,24 @@ export default function PhoneNumberCard() {
               </Button>
             </Flex>
             {/* A code that never arrived can be asked for again; a mistyped number is replaced by
-                sending to the right one. Nothing here clears the pending number on its own: the
-                only route that does also removes a confirmed number and its texted sign-in codes. */}
-            {status.smsConfigured && (
-              <Flex gap={8} wrap>
+                sending to the right one, or simply dropped. Dropping it touches nothing else: a
+                confirmed number and its texted sign-in codes stay as they were. It needs no text
+                gateway, so it is offered even where codes cannot be sent. */}
+            <Flex gap={8} wrap>
+              {status.smsConfigured && (
                 <Button size="small" disabled={busy} onClick={() => void resend()}>
                   {t('security.phoneResend')}
                 </Button>
-                {!replacing && (
-                  <Button size="small" type="link" onClick={() => setReplacing(true)}>
-                    {t('security.phoneUseOther')}
-                  </Button>
-                )}
-              </Flex>
-            )}
+              )}
+              {status.smsConfigured && !replacing && (
+                <Button size="small" type="link" onClick={() => setReplacing(true)}>
+                  {t('security.phoneUseOther')}
+                </Button>
+              )}
+              <Button size="small" type="link" disabled={busy} onClick={() => void cancelPending()}>
+                {t('security.phoneCancelPending')}
+              </Button>
+            </Flex>
             {status.smsConfigured && replacing && numberEntry}
           </Flex>
         ) : (

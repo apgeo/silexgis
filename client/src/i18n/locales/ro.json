@@ -3880,6 +3880,8 @@
     "phoneResendTooSoon": "Așteaptă un minut înainte să ceri din nou codul.",
     "phoneNothingPending": "Niciun număr nu mai așteaptă codul.",
     "phoneUseOther": "Folosește alt număr",
+    "phoneCancelPending": "Renunță la acest număr",
+    "phonePendingCancelled": "Ai renunțat la numărul care aștepta codul.",
     "phoneSendFailed": "Codul nu a putut fi trimis la acel număr.",
     "phoneTaken": "Alt cont folosește deja acel număr.",
     "phoneHint": "Folosit doar pentru codurile de autentificare. Introdu-l în format internațional, de exemplu +40712345678.",

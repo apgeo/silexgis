@@ -3880,6 +3880,8 @@
     "phoneResendTooSoon": "Wait a minute before asking for the code again.",
     "phoneNothingPending": "No number is waiting for its code any more.",
     "phoneUseOther": "Use a different number",
+    "phoneCancelPending": "Cancel this number",
+    "phonePendingCancelled": "The number waiting for its code has been dropped.",
     "phoneSendFailed": "The code could not be sent to that number.",
     "phoneTaken": "Another account already uses that number.",
     "phoneHint": "Used only for sign-in codes. Enter it in international form, for example +40712345678.",
