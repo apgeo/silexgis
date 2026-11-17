@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import { useFeaturePassages, type FeaturePassage } from '../../api/hooks.ts';
+import { hasAccessAction, useCapabilities, useFeaturePassages, type FeaturePassage } from '../../api/hooks.ts';
 
 interface FeaturePassagesCardProps {
   featureId: string;
@@ -38,7 +38,11 @@ const DEFAULT_REACH_M = 50;
 export default function FeaturePassagesCard({ featureId, geometryType, kind }: FeaturePassagesCardProps) {
   const { t } = useTranslation();
   const [reach, setReach] = useState<number>(DEFAULT_REACH_M);
-  const enabled = kind === 'generic' && geometryType !== null && askable.has(geometryType);
+  const { data: capabilities } = useCapabilities();
+  // The answer reads the elevation model, which needs the right to read terrain. Without it the
+  // server refuses; asking anyway would put a failed request on every such page for nothing.
+  const canReadTerrain = hasAccessAction(capabilities?.domains.terrain, 'read');
+  const enabled = canReadTerrain && kind === 'generic' && geometryType !== null && askable.has(geometryType);
   const { data, isError } = useFeaturePassages(featureId, reach, enabled);
 
   if (!enabled || isError) {

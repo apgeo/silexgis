@@ -6,11 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { FeaturePassages } from '../../api/hooks.ts';
 
-const { passagesSpy } = vi.hoisted(() => ({ passagesSpy: vi.fn() }));
-
-vi.mock('../../api/hooks.ts', () => ({
-  useFeaturePassages: (...args: unknown[]) => passagesSpy(...args),
+const { passagesSpy, rights } = vi.hoisted(() => ({
+  passagesSpy: vi.fn(),
+  rights: { terrain: 'read' as string | undefined },
 }));
+
+vi.mock('../../api/hooks.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
+  return {
+    // The real predicate, so the card's gate is the one that ships.
+    hasAccessAction: actual.hasAccessAction,
+    useCapabilities: () => ({ data: { domains: { terrain: rights.terrain }, isFullAdmin: false } }),
+    useFeaturePassages: (...args: unknown[]) => passagesSpy(...args),
+  };
+});
 
 const { default: FeaturePassagesCard } = await import('./FeaturePassagesCard.tsx');
 
@@ -69,7 +78,11 @@ function show(
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  rights.terrain = 'read';
+  passagesSpy.mockReset();
+});
 
 describe('FeaturePassagesCard', () => {
   it('lists the caves beneath with the offset and the rock overhead', () => {
@@ -103,5 +116,13 @@ describe('FeaturePassagesCard', () => {
     cleanup();
     show('generic', 'LineString', answer);
     expect(screen.queryByTestId('feature-passages')).toBeNull();
+  });
+
+  it('does not ask at all for a reader without the right to read terrain', () => {
+    rights.terrain = undefined;
+    show('generic', 'Polygon', answer);
+    expect(screen.queryByTestId('feature-passages')).toBeNull();
+    // The query is built switched off, so no request is sent and no refusal is logged.
+    expect(passagesSpy).toHaveBeenCalledWith('feature-1', 50, false);
   });
 });
