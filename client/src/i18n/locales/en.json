@@ -755,6 +755,12 @@
     "notAvailable": "not available to you",
     "otherClubs": "Other clubs — you may not be allowed to share with these",
     "groupNotAllowed": "You may not share filters with this club. Choose one of your own clubs, Only me or Everyone signed in.",
+    "saveRefused": {
+      "forbidden": "You may not save filters on this installation. Ask an administrator for the right to create them.",
+      "holdsPosition": "This filter holds a typed point, a pasted polygon or a place to measure nearest first from, and a saved filter never stores one. Measure from an object or a named area instead.",
+      "notSavable": "The server could not save this filter as it stands. Check its conditions, change the one it cannot use and save again.",
+      "gone": "This saved filter was deleted or is no longer shared with you since you opened it, so the change was not saved. Reload the list to see the filters you can still change."
+    },
     "parts": {
       "search": "Name contains “{{text}}”",
       "region": "Region contains “{{text}}”",
@@ -5325,7 +5331,7 @@
       "importIntro": "An imported file is reviewed before anything is created. This is where that step can be removed, and how far duplicate detection looks by default.",
       "allowWithoutReview": "Let a trusted user create objects without reviewing them",
       "allowWithoutReviewHint": "Off by default. Rules are a guess about somebody’s naming habits, and the first import against a set nobody has tuned is where that guess is worst. Turning this on never widens who may create — the importer still needs the right to create features — it only removes the step in between.",
-      "duplicateRadius": "Look for something already there within",
+      "duplicateRadius": "Look for something already there within (metres)",
       "duplicateRadiusHint": "The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against.",
       "duplicateSimilarity": "Names count as the same above",
       "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it.",

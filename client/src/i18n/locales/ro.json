@@ -755,6 +755,12 @@
     "notAvailable": "indisponibil pentru tine",
     "otherClubs": "Alte cluburi — e posibil să nu ai voie să partajezi cu ele",
     "groupNotAllowed": "Nu ai voie să partajezi filtre cu acest club. Alege unul dintre cluburile tale, „Doar eu” sau „Toți cei autentificați”.",
+    "saveRefused": {
+      "forbidden": "Nu poți salva filtre pe această instalare. Cere unui administrator dreptul de a le crea.",
+      "holdsPosition": "Filtrul conține un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat”, iar un filtru salvat nu le păstrează niciodată. Măsoară în schimb de la un obiect sau de la o zonă numită.",
+      "notSavable": "Serverul nu a putut salva filtrul în forma actuală. Verifică condițiile, schimbă-o pe cea pe care nu o poate folosi și salvează din nou.",
+      "gone": "Filtrul salvat a fost șters sau nu mai este partajat cu tine de când l-ai deschis, așa că modificarea nu a fost salvată. Reîncarcă lista ca să vezi filtrele pe care le mai poți modifica."
+    },
     "parts": {
       "search": "Numele conține „{{text}}”",
       "region": "Regiunea conține „{{text}}”",
@@ -5338,7 +5344,7 @@
       "importIntro": "Un fișier importat este verificat înainte să se creeze ceva. Aici acest pas poate fi eliminat și tot aici se stabilește cât de departe caută implicit detectarea duplicatelor.",
       "allowWithoutReview": "Permite unui utilizator de încredere să creeze obiecte fără verificare",
       "allowWithoutReviewHint": "Dezactivat implicit. Regulile sunt o presupunere despre obiceiurile de denumire ale cuiva, iar primul import cu un set pe care nimeni nu l-a ajustat este exact momentul în care presupunerea este cea mai slabă. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea obiecte — ci doar elimină pasul intermediar.",
-      "duplicateRadius": "Caută ceva deja existent pe o rază de",
+      "duplicateRadius": "Caută ceva deja existent pe o rază de (metri)",
       "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
       "duplicateSimilarity": "Numele se consideră identice peste",
       "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape.",
