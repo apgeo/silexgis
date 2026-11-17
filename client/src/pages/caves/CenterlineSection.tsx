@@ -11,6 +11,7 @@ import {
   useUploadCenterline,
   type CenterlineInfo,
 } from '../../api/hooks.ts';
+import { centerlineProblemMessage } from './centerlineProblems.ts';
 
 /**
  * Cave centerlines: uploaded GeoJSON/GPX line work shown as a map overlay. The server
@@ -31,8 +32,8 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
     try {
       await upload.mutateAsync({ caveId, file });
       message.success(t('centerlines.uploaded'));
-    } catch {
-      message.error(t('centerlines.uploadFailed'));
+    } catch (e) {
+      message.error(centerlineProblemMessage(e, t, 'centerlines.uploadFailed'));
     }
   };
 
@@ -49,8 +50,11 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
         },
       });
       message.success(t('centerlines.promoted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (e) {
+      // A version conflict is already reported by the application-wide handler.
+      if (!isConcurrencyConflict(e)) {
+        message.error(centerlineProblemMessage(e, t, 'common.saveFailed'));
+      }
     }
   };
 
@@ -61,7 +65,7 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       await remove.mutateAsync({ id, caveId });
     } catch (e) {
       if (!isConcurrencyConflict(e)) {
-        message.error(t('common.deleteFailed'));
+        message.error(centerlineProblemMessage(e, t, 'common.deleteFailed'));
       }
     }
   };
@@ -73,7 +77,7 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
       extra={
         canEdit && (
           <Upload
-            accept=".gpx,.geojson,.json"
+            accept=".gpx,.geojson,.json,.kml,.kmz"
             showUploadList={false}
             beforeUpload={(file) => {
               void onUpload(file);

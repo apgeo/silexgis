@@ -58,13 +58,20 @@ export default function StoragePage() {
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
       onOk: async () => {
+        let result;
         try {
-          const result = await reclaim.mutateAsync(row.group);
-          message.success(t('fileStorage.reclaimed', { items: number(result.items), size: formatBytes(result.freedBytes) }));
-          // The report is a snapshot; measure again so the page shows the room given back.
-          await measure.mutateAsync();
+          result = await reclaim.mutateAsync(row.group);
         } catch {
           message.error(t('fileStorage.reclaimFailed'));
+          return;
+        }
+        message.success(t('fileStorage.reclaimed', { items: number(result.items), size: formatBytes(result.freedBytes) }));
+        // The report is a snapshot; measure again so the page shows the room given back. The
+        // files are gone by now, so a failure here is about the figures, not the delete.
+        try {
+          await measure.mutateAsync();
+        } catch {
+          message.error(t('fileStorage.remeasureFailed'));
         }
       },
     });
@@ -103,7 +110,16 @@ export default function StoragePage() {
     return (
       <div style={{ padding: 24, maxWidth: 1200 }}>
         {header}
-        <Alert type="error" showIcon title={t('fileStorage.loadFailed')} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('fileStorage.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void report.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       </div>
     );
   }

@@ -58,7 +58,12 @@ function invented(overrides: Partial<StorageReport> = {}): StorageReport {
   };
 }
 
-let report: { data: StorageReport | null | undefined; isLoading: boolean; isError: boolean };
+let report: {
+  data: StorageReport | null | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  refetch?: () => void;
+};
 let canExecute = true;
 const measure = vi.fn();
 const reclaim = vi.fn();
@@ -135,6 +140,40 @@ describe('the storage page', () => {
 
     await waitFor(() => expect(reclaim).toHaveBeenCalledWith('superseded-scan-products'));
     await waitFor(() => expect(measure).toHaveBeenCalledTimes(1));
+  });
+
+  it('says a failed delete failed, and measures nothing after it', async () => {
+    reclaim.mockRejectedValueOnce(new Error('offline'));
+    show();
+    fireEvent.click(screen.getByTestId('storage-reclaim-superseded-scan-products'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete them' }));
+
+    expect(await screen.findByText('The group could not be deleted. Nothing was deleted.')).toBeInTheDocument();
+    expect(measure).not.toHaveBeenCalled();
+  });
+
+  it('does not call a delete that went through failed when only the measuring after it fails', async () => {
+    measure.mockRejectedValueOnce(new Error('offline'));
+    show();
+    fireEvent.click(screen.getByTestId('storage-reclaim-superseded-scan-products'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete them' }));
+
+    expect(await screen.findByText('Deleted 3 items and gave back 12.0 GB.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'The files were deleted, but storage could not be measured again: the figures shown are from before.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('The group could not be deleted. Nothing was deleted.')).toBeNull();
+  });
+
+  it('says the report could not be read and offers to read it again', () => {
+    const refetch = vi.fn();
+    report = { data: undefined, isLoading: false, isError: true, refetch };
+    show();
+    expect(screen.getByText('The storage report could not be read.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('shows the figures but no delete or measure to an administrator who may only read', () => {
