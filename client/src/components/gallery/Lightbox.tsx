@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { downloadTitle } from '../attachments/downloadTitle.ts';
 import LocationRemovedTag from '../attachments/LocationRemovedTag.tsx';
 import { LIGHTBOX_SHORTCUTS, matchesAny } from '../../hooks/shortcutRegistry.ts';
+import { isTyping } from '../../hooks/useShortcuts.ts';
 
 /** What the viewer needs of a picture. The public gallery supplies a subset. */
 export interface LightboxPhoto {
@@ -91,6 +92,7 @@ export default function Lightbox({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [facts, setFacts] = useState(false);
   const dragging = useRef<{ x: number; y: number } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
 
   const open = index !== null && index >= 0 && index < photos.length;
   const photo = open ? photos[index] : undefined;
@@ -121,6 +123,10 @@ export default function Lightbox({
     }
 
     const onKey = (event: KeyboardEvent) => {
+      if (belongsToALayerAbove(event.target, root.current)) {
+        return;
+      }
+
       const keys = LIGHTBOX_SHORTCUTS;
       if (matchesAny(keys.close, event)) {
         onClose();
@@ -154,6 +160,7 @@ export default function Lightbox({
 
   return (
     <div
+      ref={root}
       data-testid="lightbox"
       role="dialog"
       aria-modal="true"
@@ -334,4 +341,35 @@ export default function Lightbox({
       </Drawer>
     </div>
   );
+}
+
+/** The overlays the component library draws in portals of their own. */
+const OverlayLayers = '.ant-modal-wrap, .ant-drawer, .ant-dropdown, .ant-popover';
+
+/**
+ * Whether a key belongs to something opened over the viewer rather than to the viewer.
+ *
+ * <p>
+ * The viewer listens on the window because focus is rarely inside it — it usually stays on the
+ * thumbnail that opened it. But the credit drawer and the facts drawer are drawn in portals of
+ * their own, so their keystrokes reach the window too. A field's keys are its own: '-', '+', '='
+ * and '0' are characters in a place name or a photographer's name, and an arrow moves the caret.
+ * And a key pressed anywhere inside an overlay belongs to that overlay — Escape closes the
+ * drawer, not the drawer and the viewer behind it.
+ * </p>
+ * <p>
+ * An overlay that <em>contains</em> the viewer is not above it: a trip's photographs are shown
+ * in a drawer and the viewer is opened from there, with focus left on a thumbnail in that drawer.
+ * </p>
+ */
+function belongsToALayerAbove(target: EventTarget | null, viewer: HTMLElement | null): boolean {
+  if (isTyping(target)) {
+    return true;
+  }
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const layer = target.closest(OverlayLayers);
+  return layer !== null && (viewer === null || !layer.contains(viewer));
 }

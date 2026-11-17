@@ -30,8 +30,13 @@ export default function PermissionGroupsPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.permissionGroups, 'read');
   const canCreate = hasAccessAction(capabilities?.domains.permissionGroups, 'create');
-  const { data: groups, isPending } = usePermissionGroups(canRead);
-  const { data: catalog } = useAccessCatalog(canRead);
+  const groupsRead = usePermissionGroups(canRead);
+  const catalogRead = useAccessCatalog(canRead);
+  const { data: groups, isPending } = groupsRead;
+  const { data: catalog } = catalogRead;
+  // Either read failing leaves the page unable to do its job — no list, or no editor to open — and
+  // that is said, rather than shown as a page with no groups or a link that does nothing.
+  const readFailed = groupsRead.isError || catalogRead.isError;
   const createGroup = useCreatePermissionGroup();
   const deleteGroup = useDeletePermissionGroup();
   const [creating, setCreating] = useState(false);
@@ -97,12 +102,38 @@ export default function PermissionGroupsPage() {
       </Flex>
       <Typography.Paragraph type="secondary">{t('permissionGroups.intro')}</Typography.Paragraph>
 
+      {readFailed && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="permission-groups-load-failed"
+          title={t('permissionGroups.loadFailed')}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                if (groupsRead.isError) {
+                  void groupsRead.refetch();
+                }
+                if (catalogRead.isError) {
+                  void catalogRead.refetch();
+                }
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+
       <Table<PermissionGroup>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
-        loading={isPending}
+        loading={isPending && !groupsRead.isError}
         dataSource={groups}
+        locale={groupsRead.isError ? { emptyText: t('permissionGroups.loadFailed') } : undefined}
         pagination={false}
         columns={[
           {

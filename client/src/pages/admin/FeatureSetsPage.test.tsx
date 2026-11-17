@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 /** The membership editor of a feature set. Every name and identifier below is invented. */
 
@@ -10,8 +11,9 @@ const MEMBER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TYPED = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
-const { replaceSpy, queryCalls, stored } = vi.hoisted(() => ({
+const { replaceSpy, createSpy, queryCalls, stored } = vi.hoisted(() => ({
   replaceSpy: vi.fn(),
+  createSpy: vi.fn(),
   queryCalls: [] as { body: unknown; enabled: boolean }[],
   // One array for every render, as a query cache would hand back: the drawer copies the members
   // into its draft whenever this changes.
@@ -34,7 +36,7 @@ vi.mock('../../api/hooks.ts', () => ({
     data: stored.sets,
     isPending: false,
   }),
-  useCreateFeatureSet: () => ({ mutateAsync: vi.fn() }),
+  useCreateFeatureSet: () => ({ mutateAsync: createSpy, isPending: false }),
   useDeleteFeatureSet: () => ({ mutateAsync: vi.fn() }),
   useUpdateFeatureSet: () => ({ mutateAsync: vi.fn() }),
   useFeatureSetMembers: () => ({
@@ -88,6 +90,7 @@ async function openMembersAndSearch() {
 afterEach(cleanup);
 beforeEach(() => {
   replaceSpy.mockReset().mockResolvedValue(undefined);
+  createSpy.mockReset().mockResolvedValue(undefined);
   queryCalls.length = 0;
 });
 
@@ -138,5 +141,25 @@ describe('the feature set member picker', () => {
     fireEvent.keyDown(row, { key: 'Enter' });
 
     expect(screen.getByRole('button', { name: /Add/ })).toBeEnabled();
+  });
+});
+
+describe('creating a feature set', () => {
+  it('names a refused name in words rather than as a failed save', async () => {
+    createSpy.mockRejectedValue(new ApiError(400, 'feature_set.name_invalid'));
+    render(
+      <App>
+        <FeatureSetsPage />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /New feature set/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: '***' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledWith({ name: '***', description: null }));
+    expect(await screen.findByText('A feature set name needs at least one letter or digit.')).toBeTruthy();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 });

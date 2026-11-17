@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import PointField from './PointField.tsx';
+import { nextSortOrder } from './addressOrder.ts';
 
 /** Mirrors the server's cap; the list is a few places a person lives, not storage. */
 const MAX_ADDRESSES = 10;
@@ -65,7 +66,7 @@ export default function AddressList({ addresses }: Props) {
       city: values.city ?? null,
       addressText: values.addressText ?? null,
       geom: values.point ? { type: 'Point', coordinates: values.point } : null,
-      sortOrder: editing?.sortOrder ?? addresses.length,
+      sortOrder: editing?.sortOrder ?? nextSortOrder(addresses),
     };
 
     try {

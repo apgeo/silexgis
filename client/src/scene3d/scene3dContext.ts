@@ -199,6 +199,19 @@ const GROUND_HEIGHT_LIMIT_METERS = 12_000;
 const POINT_FIT_ZOOM = 17;
 
 /**
+ * The least height over the ground, in drawn metres, the zoom arithmetic is given. A camera at or
+ * below the surface — which is where this view goes to look at passages — has no positive height
+ * over it, and the cone arithmetic answers NaN for that: no zoom, no box, and every loader and the
+ * coupled map stop following. How far it is from the surface, either way, is what still describes
+ * how much detail it is close enough to want.
+ */
+const MINIMUM_SAMPLE_HEIGHT_METERS = 1;
+
+/** How far a camera may be from where a framing put it and still count as not moved since. */
+const FRAMING_TOLERANCE_DEGREES = 1e-7;
+const FRAMING_TOLERANCE_METERS = 0.5;
+
+/**
  * How far from the pixel a hit test may reach, in pixels, by pointer type. The same figures the
  * flat map uses: a finger lands nowhere near as precisely as a cursor, and a marker is only a few
  * pixels of ink. Measured on this renderer, a wider tolerance is free — the hit test costs the
@@ -737,6 +750,23 @@ class CesiumScene3D implements Scene3DCore {
    */
   private terrainSeq = 0;
   private removeTileLoadHandler: (() => void) | undefined;
+  /**
+   * The last camera placement made as "this high over the ground here", kept so it can be made
+   * again when the real ground arrives. Just after a camera lands somewhere new the globe answers
+   * from a coarse surface tile, so the ground a zoom-to was measured from is not yet the ground it
+   * will be drawn over. Dropped by any other placement; ignored once the camera has moved away.
+   */
+  /**
+   * The view box last worked out, and the camera and picture it was worked out for. Every loader
+   * asks for the box when the camera comes to rest, and each answer reads the depth of the
+   * picture, synchronously — a column of reads when the middle of the screen is sky. For the same
+   * camera over the same drawn frame the answer cannot differ, so it is worked out once. Cleared
+   * whenever a frame is drawn: arriving tiles change the depth under a camera that did not move.
+   */
+  private visibleBoundsMemo: { key: string; bounds: Scene3DBounds | undefined } | undefined;
+  private groundFraming:
+    | { longitude: number; latitude: number; clearance: number; placedHeight: number }
+    | undefined;
 
   /**
    * Every model in the scene, under the id its caller chose.
@@ -895,6 +925,7 @@ class CesiumScene3D implements Scene3DCore {
     // on, a height read out of either is undone by this factor; see `trueHeight`.
     const onPostRender = () => {
       this.lastFrameExaggeration = scene.verticalExaggeration;
+      this.visibleBoundsMemo = undefined;
     };
     // Before any tile is stretched, and through every one; see the function.
     mendTerrainPickerRebuilds(UntypedTerrainPicker as { prototype: TerrainPickerPrototype } | undefined);
@@ -913,6 +944,7 @@ class CesiumScene3D implements Scene3DCore {
     const onTileLoadProgress = (queuedTileCount: number) => {
       if (queuedTileCount === 0) {
         this.refreshCutawayGround();
+        this.reframeOverSettledGround();
       }
     };
     scene.globe.tileLoadProgressEvent.addEventListener(onTileLoadProgress);
@@ -1455,6 +1487,7 @@ class CesiumScene3D implements Scene3DCore {
   }
 
   setCamera(state: Scene3DCameraState, options: Scene3DCameraOptions = {}): void {
+    this.groundFraming = undefined;
     const destination = this.toDrawnCartesian(state);
     const orientation = {
       heading: CesiumMath.toRadians(state.heading),
@@ -1578,17 +1611,50 @@ class CesiumScene3D implements Scene3DCore {
     // engine on the next camera move — including, when this move is animated, by every frame of
     // the flight it has just started.
     const height = this.cameraHeightForZoom(zoom, latitude);
-    this.setCamera(
-      {
-        longitude,
-        latitude,
-        height: Number.isFinite(height) ? height : 0,
-        heading: 0,
-        pitch: -90,
-        roll: 0,
-      },
-      options,
-    );
+    this.placeOverGround(longitude, latitude, Number.isFinite(height) ? height : 0, options);
+  }
+
+  /**
+   * Stands the camera straight down over a point, `clearance` true metres above the ground drawn
+   * there. A zoom is a height over the ground being looked at; handed to the engine as a height
+   * over the ellipsoid it would put a close-up of an entrance on a 1,100 m hill inside the hill.
+   */
+  private placeOverGround(
+    longitude: number,
+    latitude: number,
+    clearance: number,
+    options: Scene3DCameraOptions,
+  ): void {
+    const height = this.groundHeightAt(longitude, latitude) + clearance;
+    this.setCamera({ longitude, latitude, height, heading: 0, pitch: -90, roll: 0 }, options);
+    this.groundFraming = { longitude, latitude, clearance, placedHeight: height };
+  }
+
+  /**
+   * Makes the last framing again over the ground as it is now drawn, once the surface tiles have
+   * settled — but only while the camera is still where that framing put it. A flight still under
+   * way is not there yet and is left to land; a camera the viewer has moved is theirs.
+   */
+  private reframeOverSettledGround(): void {
+    const framing = this.groundFraming;
+    if (!framing || this.widget.isDestroyed()) {
+      return;
+    }
+    const camera = this.getCamera();
+    if (
+      Math.abs(camera.longitude - framing.longitude) > FRAMING_TOLERANCE_DEGREES ||
+      Math.abs(camera.latitude - framing.latitude) > FRAMING_TOLERANCE_DEGREES ||
+      Math.abs(camera.height - framing.placedHeight) > FRAMING_TOLERANCE_METERS
+    ) {
+      return;
+    }
+    const height = this.groundHeightAt(framing.longitude, framing.latitude) + framing.clearance;
+    if (Math.abs(height - framing.placedHeight) <= FRAMING_TOLERANCE_METERS) {
+      return;
+    }
+    this.setCamera({ ...camera, longitude: framing.longitude, latitude: framing.latitude, height });
+    this.groundFraming = { ...framing, placedHeight: height };
+    this.widget.scene.requestRender();
   }
 
   fitBounds(bounds: Scene3DBounds, options: Scene3DCameraOptions = {}): void {
@@ -1605,13 +1671,22 @@ class CesiumScene3D implements Scene3DCore {
       this.flyToZoom((west + east) / 2, (south + north) / 2, POINT_FIT_ZOOM, options);
       return;
     }
-    const destination = Rectangle.fromDegrees(west, south, east, north);
+    // Where the engine would stand to frame the box is worked out from the ellipsoid; the ground
+    // it is drawn over is added here, so a box a few hundred metres across on a high plateau is
+    // framed from above the plateau rather than from inside it.
     const { camera } = this.widget.scene;
-    if (options.animate) {
-      camera.flyTo({ destination, duration: FLIGHT_SECONDS });
-    } else {
-      camera.setView({ destination });
+    const standing = Cartographic.fromCartesian(
+      camera.getRectangleCameraCoordinates(Rectangle.fromDegrees(west, south, east, north)),
+    );
+    if (!standing) {
+      return;
     }
+    this.placeOverGround(
+      CesiumMath.toDegrees(standing.longitude),
+      CesiumMath.toDegrees(standing.latitude),
+      this.trueHeight(standing.height),
+      options,
+    );
   }
 
   getPseudoZoom(): number {
@@ -1623,6 +1698,20 @@ class CesiumScene3D implements Scene3DCore {
     const width = this.viewportWidthPixels();
     const height = this.viewportHeightPixels();
     const camera = this.getCamera();
+    const key = JSON.stringify([camera, width, height, this.exaggeration, this.getOrthoHalfWidth()]);
+    if (this.visibleBoundsMemo?.key === key) {
+      return this.visibleBoundsMemo.bounds;
+    }
+    const bounds = this.workOutVisibleBounds(width, height, camera);
+    this.visibleBoundsMemo = { key, bounds };
+    return bounds;
+  }
+
+  private workOutVisibleBounds(
+    width: number,
+    height: number,
+    camera: Scene3DCameraState,
+  ): Scene3DBounds | undefined {
     // The ground under the middle of the screen, which is what the view is about — and, when the
     // middle of the screen is sky, the ground the viewer is looking at instead of it.
     const center =
@@ -3383,9 +3472,13 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
     return cameraGroundSampleDistance({
       // The distance the ground is drawn at, which is what decides how much of it a pixel covers:
       // under a stretched scene the camera stands as many times higher over the stretched ground.
-      heightMeters:
-        this.drawnHeight(camera.height) -
-        this.drawnHeight(this.groundHeightAt(camera.longitude, camera.latitude)),
+      heightMeters: Math.max(
+        Math.abs(
+          this.drawnHeight(camera.height) -
+            this.drawnHeight(this.groundHeightAt(camera.longitude, camera.latitude)),
+        ),
+        MINIMUM_SAMPLE_HEIGHT_METERS,
+      ),
       latitudeDegrees: camera.latitude,
       fieldOfViewRadians: this.fieldOfViewRadians(),
       viewportHeightPixels: this.viewportHeightPixels(),

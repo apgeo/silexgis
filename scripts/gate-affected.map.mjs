@@ -443,11 +443,7 @@ export const groups = {
     'AccessKeySurfaceTests', 'AccessKeyTests', 'OptionsDocumentationTests', 'SurveySourceTests',
     'SurveyUploadPipelineTests', 'TopoDroidArchiveReaderTests', 'SurveyUploadContractTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests', 'ScanStepSchemaTests',
-    'ScanExternalOutputCheckTests', 'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests',
-    'ProcessingProfileUseTests',
-    // The scan worker's hand-off directory and the check a product made elsewhere passes before
-    // it is kept.
-    'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests', 'ScanExternalOutputCheckTests',
+    'ProcessingProfileUseTests', 'ScanExternalOutputCheckTests', 'ScanWorkerHandoffFilesTests', 'ScanWorkerHandoffRootsTests',
     // The real compiler in its sandbox, where the machine has it.
     'SurveyUploadTherionTests',
     // The compiler service, and the application handing it a project.

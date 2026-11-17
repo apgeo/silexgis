@@ -4,9 +4,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ExpeditionInfo, ExpeditionWrite } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 
 const createCamp = vi.fn();
 const updateCamp = vi.fn();
+
+// The version on file for the camp, as the transport would answer it at this moment.
+const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Clubul Speo' }] }),
@@ -62,6 +71,7 @@ function show(subject: ExpeditionInfo | null, onClose: (savedId?: string) => voi
 
 describe('ExpeditionFormModal', () => {
   beforeEach(() => {
+    versionOnFile.mockReset().mockReturnValue(undefined);
     createCamp.mockReset().mockResolvedValue({ id: 'new-camp' });
     updateCamp.mockReset().mockResolvedValue({ id: 'camp-1' });
   });
@@ -129,5 +139,49 @@ describe('ExpeditionFormModal', () => {
     // The form's own required rule stops the submit; nothing reaches the mutation.
     await screen.findByText(/required/i);
     expect(createCamp).not.toHaveBeenCalled();
+  });
+
+  it('saves against the version it opened with, not the one a later read of the camp filed', async () => {
+    // The page behind the dialog goes on reading the camp — on a return to the browser tab, after
+    // a state move — and each read files a newer version. Sending that one with the values the
+    // form was filled from would present somebody else's change as already seen and write over it.
+    versionOnFile.mockImplementation((path) => (path === '/api/v1/expeditions/camp-1' ? '"1"' : undefined));
+    const onClose = vi.fn();
+    const view = render(
+      <App>
+        <ExpeditionFormModal open camp={camp()} onClose={onClose} />
+      </App>,
+    );
+
+    versionOnFile.mockImplementation((path) => (path === '/api/v1/expeditions/camp-1' ? '"2"' : undefined));
+    view.rerender(
+      <App>
+        <ExpeditionFormModal open camp={camp({ name: 'Renamed by somebody else' })} onClose={onClose} />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateCamp).toHaveBeenCalled());
+    const sent = updateCamp.mock.calls[0][0] as { ifMatch?: string; body: ExpeditionWrite };
+    expect(sent.ifMatch).toBe('"1"');
+    expect(sent.body.name).toBe('Bihor summer camp');
+  });
+
+  it('leaves a refusal for a stale version to the one conflict warning and keeps the form open', async () => {
+    // The application words a conflict once, for every save; a second, generic "failed" from the
+    // form would say the opposite of what to do — the values are fine, the camp moved on.
+    updateCamp.mockRejectedValue(
+      new ApiError(412, 'concurrency.version_mismatch', 'Changed since you opened it.'),
+    );
+    const onClose = vi.fn();
+    show(camp(), onClose);
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateCamp).toHaveBeenCalled());
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('expedition-form-name')).toHaveValue('Bihor summer camp');
   });
 });

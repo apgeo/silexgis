@@ -4,7 +4,7 @@ import {
   DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import {
-  Alert, App, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin,
+  Alert, App, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin, Tooltip,
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
@@ -21,7 +21,9 @@ import {
   useUpdateAlbum,
   type AlbumInfo,
   type AlbumWrite,
+  type Visibility,
 } from '../../api/hooks.ts';
+import { visibilityOptions } from '../../components/attachments/visibilityChoices.ts';
 
 /**
  * Albums: named, ordered sets of photographs somebody put together.
@@ -38,8 +40,12 @@ export default function AlbumsPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.documents, 'write');
+  // Minting a link is allowed on the share right alone, as well as to whoever may write the
+  // album; editing, deleting and revoking need write.
+  const canShare = canWrite || hasAccessAction(capabilities?.domains.documents, 'share');
 
-  const { data, isPending } = useAlbums({ pageSize: 100 }, canRead);
+  const albumsQuery = useAlbums({ pageSize: 100 }, canRead);
+  const { data, isPending } = albumsQuery;
   const createAlbum = useCreateAlbum();
   const updateAlbum = useUpdateAlbum();
   const deleteAlbum = useDeleteAlbum();
@@ -94,6 +100,85 @@ export default function AlbumsPage() {
     }
   };
 
+  const revokeLink = async (album: AlbumInfo) => {
+    try {
+      await revoke.mutateAsync(album.id);
+      message.success(t('gallery.shareRevoked'));
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
+
+  const removeAlbum = async (album: AlbumInfo) => {
+    try {
+      await deleteAlbum.mutateAsync(album.id);
+      message.success(t('common.deleted'));
+    } catch {
+      message.error(t('common.deleteFailed'));
+    }
+  };
+
+  const cardActions = (album: AlbumInfo) => {
+    const actions = [];
+    if (canWrite) {
+      actions.push(
+        <Tooltip key="edit" title={t('gallery.editAlbum')}>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            aria-label={t('gallery.editAlbum')}
+            onClick={() => setEditing(album)}
+          />
+        </Tooltip>,
+      );
+    }
+    if (album.hasActiveShare && canWrite) {
+      actions.push(
+        <Popconfirm key="revoke" title={t('gallery.revokeConfirm')} onConfirm={() => revokeLink(album)}>
+          <Tooltip title={t('gallery.revokeShare')}>
+            {/* Coloured as the one action that is "on": the album has a live link. */}
+            <Button
+              type="text"
+              size="small"
+              color="primary"
+              variant="text"
+              icon={<ShareAltOutlined />}
+              aria-label={t('gallery.revokeShare')}
+            />
+          </Tooltip>
+        </Popconfirm>,
+      );
+    } else if (!album.hasActiveShare && canShare) {
+      actions.push(
+        <Tooltip key="share" title={t('gallery.shareAlbum')}>
+          <Button
+            type="text"
+            size="small"
+            icon={<ShareAltOutlined />}
+            aria-label={t('gallery.shareAlbum')}
+            onClick={() => void mintLink(album)}
+          />
+        </Tooltip>,
+      );
+    }
+    if (canWrite) {
+      actions.push(
+        <Popconfirm
+          key="delete"
+          title={t('gallery.deleteAlbumConfirm')}
+          description={t('gallery.deleteAlbumHint')}
+          onConfirm={() => removeAlbum(album)}
+        >
+          <Tooltip title={t('gallery.deleteAlbum')}>
+            <Button type="text" size="small" icon={<DeleteOutlined />} aria-label={t('gallery.deleteAlbum')} />
+          </Tooltip>
+        </Popconfirm>,
+      );
+    }
+    return actions.length > 0 ? actions : undefined;
+  };
+
   const albums = data?.items ?? [];
 
   return (
@@ -109,7 +194,18 @@ export default function AlbumsPage() {
         )}
       </Flex>
 
-      {isPending ? (
+      {albumsQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('gallery.albumsLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void albumsQuery.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : isPending ? (
         <Spin />
       ) : albums.length === 0 ? (
         <Empty description={t('gallery.noAlbums')} style={{ marginTop: '15vh' }} />
@@ -138,32 +234,7 @@ export default function AlbumsPage() {
                   </Flex>
                 )
               }
-              actions={
-                canWrite
-                  ? [
-                      <EditOutlined key="edit" onClick={() => setEditing(album)} />,
-                      album.hasActiveShare ? (
-                        <Popconfirm
-                          key="revoke"
-                          title={t('gallery.revokeConfirm')}
-                          onConfirm={() => void revoke.mutateAsync(album.id)}
-                        >
-                          <ShareAltOutlined style={{ color: '#1677ff' }} />
-                        </Popconfirm>
-                      ) : (
-                        <ShareAltOutlined key="share" onClick={() => void mintLink(album)} />
-                      ),
-                      <Popconfirm
-                        key="delete"
-                        title={t('gallery.deleteAlbumConfirm')}
-                        description={t('gallery.deleteAlbumHint')}
-                        onConfirm={() => void deleteAlbum.mutateAsync(album.id)}
-                      >
-                        <DeleteOutlined />
-                      </Popconfirm>,
-                    ]
-                  : undefined
-              }
+              actions={cardActions(album)}
             >
               <Card.Meta
                 title={<Link to={`/albums/${album.id}`}>{album.title}</Link>}
@@ -204,22 +275,29 @@ function AlbumEditModal({
   onSubmit: (body: AlbumWrite) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [form] = Form.useForm<{ title: string; description?: string; visibility: string }>();
+  const [form] = Form.useForm<{ title: string; description?: string; visibility: Visibility }>();
+
+  const save = async () => {
+    let values: { title: string; description?: string; visibility: Visibility };
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The fields say what is wrong with them; there is nothing to send.
+      return;
+    }
+    await onSubmit({
+      title: values.title,
+      description: values.description ?? null,
+      visibility: values.visibility,
+    });
+  };
 
   return (
     <Modal
       open
       title={editing === 'new' ? t('gallery.newAlbum') : t('gallery.editAlbum')}
       onCancel={onCancel}
-      onOk={() =>
-        void form.validateFields().then((values) =>
-          onSubmit({
-            title: values.title,
-            description: values.description ?? null,
-            visibility: values.visibility,
-          }),
-        )
-      }
+      onOk={() => void save()}
       confirmLoading={busy}
       destroyOnHidden
     >
@@ -244,12 +322,7 @@ function AlbumEditModal({
           <Input.TextArea rows={2} />
         </Form.Item>
         <Form.Item name="visibility" label={t('documents.visibility')}>
-          <Select
-            options={(['private', 'cavingGroup', 'internal', 'public'] as const).map((value) => ({
-              value,
-              label: t(`caves.visibilityValues.${value}`),
-            }))}
-          />
+          <Select options={visibilityOptions(t)} />
         </Form.Item>
       </Form>
     </Modal>

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect } from 'react';
 import { ErrorResponse } from 'oidc-client-ts';
 import { userManager } from './auth.tsx';
 
@@ -60,4 +61,44 @@ export function signInAgain(returnTo: string): Promise<void> {
 export function onSignInRenewed(listener: () => void): () => void {
   userManager.events.addUserLoaded(listener);
   return () => userManager.events.removeUserLoaded(listener);
+}
+
+/** A token with less than this left is renewed on return rather than spent on the next request. */
+const RENEW_ON_RETURN_WITHIN_S = 60;
+
+/**
+ * Renews the held sign-in when the tab gets its connection back or is looked at again, if its
+ * token has run out or is about to.
+ *
+ * The automatic renewal fires once, shortly before the token runs out; a laptop that slept or a
+ * phone that lost signal across that moment comes back with an expired token and no renewal set.
+ * The transport recovers from the first refused request anyway, but renewing here first means the
+ * screens that refetch on return ask with a good token instead of each being refused once. Only a
+ * renewal is started: a sign-in found to be over is left to the next refused request, which knows
+ * the address to come back to — a redirect merely for looking at a tab would surprise.
+ */
+export function renewOnReturn(): () => void {
+  const check = () => {
+    if (document.visibilityState === 'hidden') return;
+    void userManager
+      .getUser()
+      .then((user) => {
+        const left = user?.expires_in;
+        if (user?.refresh_token && left !== undefined && left <= RENEW_ON_RETURN_WITHIN_S) {
+          void renewSignIn();
+        }
+      })
+      .catch(() => undefined);
+  };
+  window.addEventListener('online', check);
+  document.addEventListener('visibilitychange', check);
+  return () => {
+    window.removeEventListener('online', check);
+    document.removeEventListener('visibilitychange', check);
+  };
+}
+
+/** {@link renewOnReturn} for as long as the calling component is mounted. */
+export function useRenewSignInOnReturn(): void {
+  useEffect(() => renewOnReturn(), []);
 }

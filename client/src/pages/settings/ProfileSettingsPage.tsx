@@ -14,6 +14,7 @@ import CavingGroupPicker from '../../components/cavingGroups/CavingGroupPicker.t
 import AddressList from '../../components/settings/AddressList.tsx';
 import AvatarPicker from '../../components/settings/AvatarPicker.tsx';
 import FieldVisibilityToggle from '../../components/settings/FieldVisibilityToggle.tsx';
+import { meProblemMessage } from './meProblems.ts';
 
 interface FormValues {
   firstName?: string;
@@ -84,8 +85,8 @@ export default function ProfileSettingsPage() {
         visibility: values.visibility,
       });
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(meProblemMessage(error, t));
     }
   };
 

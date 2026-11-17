@@ -82,7 +82,7 @@ export const specs = {
     'cave-registry-filters.spec.ts',
   ],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'feature-sets.spec.ts'],
-  featureShares: [],
+  featureShares: ['shared-feature.spec.ts'],
   files: [
     'uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts',
     'attachment-default-set.spec.ts', 'place-map.spec.ts',
@@ -137,10 +137,16 @@ export const specs = {
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
   basemap: ['map-background-kinds.spec.ts'],
-  me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts'],
+  me: [
+    'settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts',
+    'account-pages-phone.spec.ts',
+  ],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
-  notifications: ['notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts'],
+  notifications: [
+    'notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts',
+    'account-pages-phone.spec.ts',
+  ],
   photoLibraries: [
     'photo-library-smoke.spec.ts', 'photo-library-browse.spec.ts',
     'photo-library-health.spec.ts', 'photo-library-pictures.spec.ts',
@@ -181,6 +187,9 @@ export const specs = {
     'scene3d-relief.spec.ts',
     // The engine's download dropped: asked for again, and said to be a download when it never arrives.
     'scene3d-download.spec.ts',
+    // The controls over the scene pressed where they are drawn: presets, projection, coupling, the
+    // callout beside them, the saved picture read back, a lost drawing context rebuilt and reloaded.
+    'scene3d-overlay-controls.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
@@ -207,6 +216,8 @@ export const specs = {
     'cave-morphometry.spec.ts', 'cave-levels.spec.ts', 'scene3d-walls.spec.ts',
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
     'caveview-label-size-mobile.spec.ts',
+    // A survey opened and closed many times in its dialog without a page load: one live drawing.
+    'caveview-open-close.spec.ts',
   ],
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
@@ -252,7 +263,7 @@ export const specs = {
   // Which protected rows a window holds, decided on the position each reader is shown — the
   // workspace map's entrance and feature layers, and a shared view's link.
   windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts', 'shared-view.spec.ts'],
-  workAreas: ['karst-density.spec.ts'],
+  workAreas: ['karst-density.spec.ts', 'work-areas.spec.ts'],
 };
 
 /** Client path prefix → the area, or areas, it belongs to. Longest prefix wins. */
@@ -349,6 +360,7 @@ export const clientAreas = {
   'client/src/pages/QrLandingPage': 'qr',
   'client/src/pages/MapPage': 'map',
   'client/src/pages/SharedViewPage': 'mapViews',
+  'client/src/pages/SharedFeaturePage': 'featureShares',
 };
 
 /**

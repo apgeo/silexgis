@@ -43,6 +43,11 @@ function build(overrides: Partial<TerrainBuild>): TerrainBuild {
 
 let builds: TerrainBuild[] = [];
 let detail: TerrainBuildDetail | undefined;
+// Whether the list read and the selected build's read failed rather than answered.
+let listFailed = false;
+let detailFailed = false;
+const listRefetch = vi.fn();
+const detailRefetch = vi.fn();
 
 vi.mock('../../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../../api/hooks.ts')>(
@@ -54,10 +59,17 @@ vi.mock('../../../api/hooks.ts', async () => {
     terrainListPollInterval: actual.terrainListPollInterval,
     terrainBuildUnsettled: actual.terrainBuildUnsettled,
     useTerrainBuilds: () => ({
-      data: { items: builds, page: 1, pageSize: 10, totalItems: builds.length },
+      data: listFailed ? undefined : { items: builds, page: 1, pageSize: 10, totalItems: builds.length },
       isLoading: false,
+      isError: listFailed,
+      refetch: listRefetch,
     }),
-    useTerrainBuild: () => ({ data: detail, isLoading: detail === undefined }),
+    useTerrainBuild: () => ({
+      data: detailFailed ? undefined : detail,
+      isLoading: !detailFailed && detail === undefined,
+      isError: detailFailed,
+      refetch: detailRefetch,
+    }),
     useChooseTerrainBuild: () => ({ mutateAsync: chooseMutate, isPending: false }),
     useStopDrawingTerrainBuild: () => ({ mutateAsync: stopMutate, isPending: false }),
     useDeleteTerrainBuild: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -96,6 +108,10 @@ beforeEach(() => {
   retryMutate.mockReset().mockResolvedValue({});
   builds = [build({})];
   detail = { build: builds[0], logTail: null, sources: [] };
+  listFailed = false;
+  detailFailed = false;
+  listRefetch.mockReset();
+  detailRefetch.mockReset();
 });
 
 afterEach(cleanup);
@@ -556,5 +572,31 @@ describe('the pipeline view', () => {
 
     expect(screen.getByTestId('terrain-phase-pending')).toBeInTheDocument();
     expect(screen.queryByTestId('terrain-log-tail')).not.toBeInTheDocument();
+  });
+});
+
+describe('a read that failed', () => {
+  // A failed read is not an empty installation: told "no builds yet", an administrator may
+  // start a duplicate bake of hours over tiles that already exist.
+  it('says the builds could not be read, not that there are none, and offers to read again', () => {
+    listFailed = true;
+    show();
+
+    expect(screen.queryByTestId('terrain-no-builds')).not.toBeInTheDocument();
+    expect(screen.getByText('The terrain builds could not be loaded.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(listRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  // A build deleted in another tab answers 404 here; a skeleton would wait for it for ever.
+  it('says the chosen build could not be read instead of drawing a skeleton for ever', () => {
+    detailFailed = true;
+    show();
+
+    const panel = screen.getByTestId('terrain-build-detail');
+    expect(panel.querySelector('.ant-skeleton')).toBeNull();
+    expect(screen.getByText('This build could not be loaded. It may have been deleted.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(detailRefetch).toHaveBeenCalledTimes(1);
   });
 });

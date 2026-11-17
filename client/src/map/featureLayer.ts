@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
+import type Feature from 'ol/Feature';
 import type { FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
@@ -31,6 +32,40 @@ const format = new GeoJSON();
 /** The live feature source — the edit controller draws into and snaps against it. */
 export function getSurfaceFeatureSource(): VectorSource {
   return source;
+}
+
+/** Set by the edit controller on a saved feature whose reshaped geometry is not saved yet. */
+export const PENDING_RESHAPE = 'pendingReshape';
+
+/**
+ * Set by the edit controller on an unsaved edit the server refused on the last Save, until it is
+ * saved, discarded or sent again. It is drawn marked: a batch of drawings looks alike, and a message
+ * saying one of them was refused is of no use if the editor cannot tell which.
+ */
+export const SAVE_REFUSED = 'saveRefused';
+
+/**
+ * Whether a feature in the source is an unsaved edit: a drawing not yet created, or a saved
+ * feature reshaped and not yet stored. Such a feature belongs to the editor, not to the server's
+ * answer, so a reload must keep it — the object itself, which the edit history and the pending
+ * list refer to — rather than replace it with the server's copy or drop it.
+ */
+function isPendingEdit(feature: Feature): boolean {
+  return feature.get('pendingNew') === true || feature.get(PENDING_RESHAPE) === true;
+}
+
+/**
+ * Replaces the loaded features with a fresh answer, keeping every unsaved edit (and hiding the
+ * server's copy of a feature being reshaped). The removal is announced feature by feature rather
+ * than taken on the fast path: the reshaping and snapping tools index the source's features and
+ * let go of one only when told it was removed, so a silent clear would leave them dragging and
+ * snapping to features no longer on the map.
+ */
+function replaceLoadedFeatures(fresh: Feature[]): void {
+  const held = source.getFeatures().filter(isPendingEdit);
+  const heldIds = new Set(held.map((feature) => feature.get('id') as string | undefined).filter(Boolean));
+  source.clear();
+  source.addFeatures([...fresh.filter((feature) => !heldIds.has(feature.get('id') as string)), ...held]);
 }
 
 // Feature-type names and symbols live in a catalog of their own, free of any drawing library,
@@ -141,6 +176,17 @@ const selectionHalo = new Style({
   }),
 });
 
+const refusedHalo = new Style({
+  image: new CircleStyle({
+    declutterMode: 'obstacle',
+    radius: 14,
+    fill: new Fill({ color: palette.refusedHalo }),
+    stroke: new Stroke({ color: palette.refused, width: 2 }),
+  }),
+});
+
+const refusedCasing = new Style({ stroke: new Stroke({ color: palette.refused, width: 7 }) });
+
 onFeatureTypeCatalogChanged(() => source.changed()); // restyle loaded features with the fresh names
 
 export function setFeatureTypeSymbols(types: FeatureType[]): void {
@@ -186,19 +232,18 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
       if (seq !== requestSeq) {
         return; // a newer request superseded this one
       }
-      source.clear(true);
-      source.addFeatures(
+      replaceLoadedFeatures(
         format
           .readFeatures(collection, { featureProjection: 'EPSG:3857' })
           // A protected non-point feature the viewer may not see exactly arrives as a
           // readable row with a null geometry — nothing to draw, list or hit-test here.
-          .filter((feature) => feature.getGeometry() !== undefined),
+          .filter((feature): feature is Feature => feature.getGeometry() !== undefined),
       );
     } catch (error) {
       // Keep previous features on transient errors; next moveend retries. A refused filter is
       // not transient, and what was drawn before it was asked for is not what it selects.
       if (seq === requestSeq) {
-        handleMapFilterError(error, () => source.clear(true));
+        handleMapFilterError(error, () => replaceLoadedFeatures([]));
       }
     }
   };
@@ -221,6 +266,17 @@ export function attachSurfaceFeatureLoader(map: Map): () => void {
 }
 
 function featureStyle(feature: FeatureLike): Style | Style[] {
+  const styles = baseFeatureStyle(feature);
+  if (feature.get(SAVE_REFUSED) !== true) {
+    return styles;
+  }
+  // Drawn under the feature's own style, so the symbol or line still says what the feature is.
+  const geometryType = feature.getGeometry()?.getType();
+  const mark = geometryType === 'Point' || geometryType === 'MultiPoint' ? refusedHalo : refusedCasing;
+  return [mark, ...(Array.isArray(styles) ? styles : [styles])];
+}
+
+function baseFeatureStyle(feature: FeatureLike): Style | Style[] {
   const geometryType = feature.getGeometry()?.getType();
   const selected = selectedFeatureId !== null && feature.get('id') === selectedFeatureId;
 

@@ -324,6 +324,49 @@ describe('attachCaveData3d', () => {
     handle.detach();
   });
 
+  it('says a load failed, and stops saying so once one goes through', async () => {
+    const engine = new FakeEngine();
+    responses.entrances = () => Promise.reject(new Error('Request failed with status 500'));
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+
+    responses.entrances = () => Promise.resolve(entranceCollection());
+    handle.reload();
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(handle.getState().loadFailed).toBe(false);
+    handle.detach();
+  });
+
+  it('empties every layer the map filter governs when the filter is refused, and says it was refused', async () => {
+    const { onMapFilterRefusal } = await import('../map/mapFilters.ts');
+    const heard: string[] = [];
+    const off = onMapFilterRefusal((code) => heard.push(code));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(1));
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1);
+
+    // What was drawn before is not what the refused filter selects, so it cannot stay.
+    const refusal = { code: 'saved_filter.not_found', status: 404 };
+    responses.centerlines = () => Promise.reject(refusal);
+    responses.entrances = () => Promise.reject(refusal);
+    responses.features = () => Promise.reject(refusal);
+    handle.reload();
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(0));
+
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(engine.sources.get(SURFACE_FEATURE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(engine.sources.get(SURFACE_FEATURE_LINE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(heard).toEqual(Array(3).fill('saved_filter.not_found'));
+    // Refused is not failed: trying again would only be refused again.
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(handle.getState().loadFailed).toBe(false);
+    off();
+    handle.detach();
+  });
+
   it('reports what the server held back and what it could only send flat', async () => {
     responses.centerlines = () =>
       Promise.resolve(centerlineCollection({ withheldCount: 3, flatCount: 2, detail: false }));
@@ -342,6 +385,7 @@ describe('attachCaveData3d', () => {
       // Neither capped layer reached a limit, and here none has been published to reach.
       surfaceFeaturesCappedAt: 0,
       entrancesCappedAt: 0,
+      loadFailed: false,
     });
     // Loading is announced as well as finished, so chrome can say the view is still filling in.
     expect(seen.length).toBeGreaterThan(1);

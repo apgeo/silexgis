@@ -21,7 +21,8 @@ import type { AdminSettings } from '../../api/hooks.ts';
 const get = vi.fn();
 const put = vi.fn();
 
-vi.mock('../../api/client.ts', () => ({
+vi.mock('../../api/client.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/client.ts')>()),
   api: {
     GET: (...args: unknown[]) => get(...args),
     PUT: (...args: unknown[]) => put(...args),

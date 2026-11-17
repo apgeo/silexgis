@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { useCapabilities, useCreateDoor } from '../../api/hooks/access.ts';
 import { useSaveAccountPreferences } from '../../api/hooks/accountPrefs.ts';
+import { meProblemMessage } from './meProblems.ts';
 import {
   SAVED_FILTER_AUDIENCE_ANCHOR,
   audienceFromKey,
@@ -73,8 +74,15 @@ export default function SavedFilterSettingsPage() {
       : t(`savedFilters.explain.${effective.visibility}`);
 
   const choose = (key: string) => {
+    // Put back on a failed save: the page must not go on showing an audience the account lacks.
+    const previous = stored;
     setStored(audienceFromKey(key));
-    save.mutate(undefined, { onError: () => message.error(t('common.saveFailed')) });
+    save.mutate(undefined, {
+      onError: (error) => {
+        setStored(previous);
+        message.error(meProblemMessage(error, t));
+      },
+    });
   };
 
   return (

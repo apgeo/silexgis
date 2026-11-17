@@ -12,7 +12,12 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
  * turns the names on, sees a wall of text over the passage they are trying to read, and makes it
  * smaller until it is not. What they choose is theirs and is kept for every model they open.
  */
-export default function CaveViewLabelScale() {
+export default function CaveViewLabelScale({
+  popupContainer,
+}: {
+  /** Where the size menu opens: inside the model while it covers the screen, else the page. */
+  popupContainer?: HTMLElement;
+} = {}) {
   const { t } = useTranslation();
   const stored = useUiPrefsStore((state) => state.modelLabelScale);
   const setScale = useUiPrefsStore((state) => state.setModelLabelScale);
@@ -21,6 +26,7 @@ export default function CaveViewLabelScale() {
   return (
     <Dropdown
       trigger={['click']}
+      getPopupContainer={popupContainer ? () => popupContainer : undefined}
       menu={{
         selectable: true,
         selectedKeys: [String(current)],

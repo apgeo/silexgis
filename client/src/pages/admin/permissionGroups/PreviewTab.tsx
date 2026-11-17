@@ -1,42 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { EyeOutlined } from '@ant-design/icons';
-import { App, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import { App, Empty, Flex, Table, Tag, Typography } from 'antd';
 import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useAccessPreview,
-  useCavingGroups,
-  useUserSearch,
   type AccessCatalog,
   type AccessPreview,
   type AccessSubjectKind,
 } from '../../../api/hooks.ts';
-import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
+import SubjectPicker from '../../../components/permissions/SubjectPicker.tsx';
 import AccessExplanationList from '../../../components/permissions/AccessExplanationList.tsx';
 import { actionSetLabels } from '../../../components/permissions/accessDisplay.ts';
 
 interface PreviewTabProps {
   catalog: AccessCatalog;
-  /** Called when a preview result has actually been looked at — unlocks saving a deny. */
+  /** Called when a preview result has been shown — unlocks saving a ruleset that holds a deny. */
   onPreviewed: () => void;
 }
 
 /**
  * "View as…": what the model would answer for a chosen user or caving group, with the
- * server's explanation of each verdict rendered verbatim. This is the look the rules tab
- * demands before a deny may be saved — the only honest way to see what it costs.
+ * server's explanation of each verdict rendered verbatim. The server answers from the rules
+ * already saved: the rules tab asks for a look here before a deny is saved, to see whom the group
+ * reaches today, and points back here after the save to see the deny's effect.
  */
 export default function PreviewTab({ catalog, onPreviewed }: PreviewTabProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const preview = useAccessPreview();
-  const { data: cavingGroups } = useCavingGroups();
   const [subjectKind, setSubjectKind] = useState<AccessSubjectKind>('user');
   const [subjectId, setSubjectId] = useState<string>();
-  const [userQuery, setUserQuery] = useState('');
-  const debouncedUserQuery = useDebouncedValue(userQuery);
-  const { data: users } = useUserSearch(debouncedUserQuery);
   const [result, setResult] = useState<AccessPreview | null>(null);
 
   const onRun = async () => {
@@ -68,44 +63,20 @@ export default function PreviewTab({ catalog, onPreviewed }: PreviewTabProps) {
   return (
     <Flex vertical gap={12}>
       <Flex gap={8} wrap>
-        <Select
-          value={subjectKind}
-          style={{ width: 140 }}
-          onChange={(kind: AccessSubjectKind) => {
+        <SubjectPicker
+          kind={subjectKind}
+          subjectId={subjectId}
+          // A result shown under another subject's name would read as this one's rights.
+          onKindChange={(kind) => {
             setSubjectKind(kind);
             setSubjectId(undefined);
+            setResult(null);
           }}
-          options={[
-            { value: 'user', label: t('permissions.user') },
-            { value: 'cavingGroup', label: t('permissions.cavingGroup') },
-          ]}
+          onSubjectChange={(id) => {
+            setSubjectId(id);
+            setResult(null);
+          }}
         />
-        {subjectKind === 'cavingGroup' ? (
-          <Select
-            style={{ flex: 1, minWidth: 200 }}
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('permissions.pickCavingGroup')}
-            value={subjectId}
-            onChange={setSubjectId}
-            options={cavingGroups?.map((cavingGroup) => ({ value: cavingGroup.id, label: cavingGroup.name }))}
-          />
-        ) : (
-          <Select
-            style={{ flex: 1, minWidth: 200 }}
-            showSearch
-            filterOption={false}
-            placeholder={t('permissions.pickUser')}
-            value={subjectId}
-            onSearch={setUserQuery}
-            onChange={setSubjectId}
-            options={users?.map((user) => ({
-              value: user.id,
-              label: user.email ? `${user.label} (${user.email})` : user.label,
-            }))}
-            notFoundContent={null}
-          />
-        )}
         <Button
           type="primary"
           icon={<EyeOutlined />}

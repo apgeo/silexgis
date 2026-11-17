@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import {
+  Alert,
   App,
   Card,
   Empty,
@@ -89,7 +90,7 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
   const [page, setPage] = useState(1);
   const [chosen, setChosen] = useState<string | null>(null);
   const [editingAccuracy, setEditingAccuracy] = useState<TerrainBuild | null>(null);
-  const { data, isLoading } = useTerrainBuilds({ page, pageSize: TERRAIN_PAGE_SIZE });
+  const { data, isLoading, isError, refetch } = useTerrainBuilds({ page, pageSize: TERRAIN_PAGE_SIZE });
   const choose = useChooseTerrainBuild();
   const stopDrawing = useStopDrawingTerrainBuild();
   const remove = useDeleteTerrainBuild();
@@ -113,6 +114,18 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
 
   return (
     <Flex vertical gap={16}>
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('terrain.listLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <Card size="small" title={t('terrain.list.title')} styles={{ body: { padding: 0 } }}>
         <Table
           rowKey="id"
@@ -125,8 +138,9 @@ export default function TerrainBuildList({ canExecute, canDelete }: Props) {
             // An installation that has never built anything is the state every installation
             // starts in, so it is answered with what to do next rather than with "no data".
             // Nothing is said while the first answer is still coming back: an emptiness that has
-            // not been established yet is not a fact about the installation.
-            emptyText: isLoading ? (
+            // not been established yet is not a fact about the installation, and neither is a
+            // read that failed — the error above says that instead.
+            emptyText: isLoading || (isError && !data) ? (
               <span />
             ) : (
               <Empty

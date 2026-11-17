@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { Profiler, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -72,7 +72,11 @@ vi.mock('../../api/hooks.ts', () => ({
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);
   },
-  fetchEntranceFeatures: () => Promise.resolve(entranceResponse),
+  fetchEntranceFeatures: () => {
+    entranceRequestCount += 1;
+    const failure = entranceFailures.shift();
+    return failure ? Promise.reject(failure) : Promise.resolve(entranceResponse);
+  },
   fetchMapFeatures: () => Promise.resolve(featureResponse),
   // Named here because leaving it out is not an empty answer: the mock factory replaces the whole
   // module, so the loader's call would raise on the property access, be swallowed by its own
@@ -97,14 +101,14 @@ vi.mock('../../api/hooks.ts', () => ({
   // What a reveal reads to find out where the thing it names is, through the query cache.
   featureQuery: (id: string) => ({
     queryKey: ['features', id],
-    queryFn: () => Promise.resolve(featureRows[id]),
+    queryFn: () => (id in featureFailures ? Promise.reject(featureFailures[id]) : Promise.resolve(featureRows[id])),
   }),
 }));
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
 const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
 const { useUiPrefsStore } = await import('../../stores/uiPrefsStore.ts');
-const { default: Scene3DView } = await import('./Scene3DView.tsx');
+const { default: Scene3DView, TERRAIN_OFFER_SETTLE_MILLISECONDS } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
 /** What was handed to the browser to save, and what the credits were written onto and with. */
@@ -128,6 +132,9 @@ let centerlineResponse: unknown = {
 let featureResponse: unknown = emptyCollection;
 /** What the entrance layer answers with; empty unless a test is about entrances. */
 let entranceResponse: unknown = emptyCollection;
+/** Errors the next entrance requests fail with, in order; once used up they answer again. */
+let entranceFailures: unknown[] = [];
+let entranceRequestCount = 0;
 /** Which caves the wall-mesh loader asked about, and what it was told they hold. */
 let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
@@ -142,6 +149,8 @@ let geofileRequests: [string, string][] = [];
 let geofileResponses: Record<string, unknown> = {};
 /** What a read of one feature answers with, by id — the envelope a reveal reads its geometry from. */
 let featureRows: Record<string, unknown> = {};
+/** What a read of one feature fails with instead, by id. */
+let featureFailures: Record<string, unknown> = {};
 
 /** A rectangle as a build's extent is drawn: [longitude, latitude] corners, closed. */
 function rectangle(west: number, south: number, east: number, north: number) {
@@ -271,6 +280,8 @@ beforeEach(() => {
   centerlineRequests = [];
   featureResponse = emptyCollection;
   entranceResponse = emptyCollection;
+  entranceFailures = [];
+  entranceRequestCount = 0;
   surveyModelRequests = [];
   surveyModels = [];
   caveMeshRequests = [];
@@ -282,6 +293,7 @@ beforeEach(() => {
   geofileRequests = [];
   geofileResponses = {};
   featureRows = {};
+  featureFailures = {};
   // The slot is module state; a request a test left behind would send the next scene somewhere.
   takePendingReveal3d();
   centerlineResponse = {
@@ -354,8 +366,14 @@ describe('Scene3DView', () => {
     // The displaced mount is inert: it does not load a second copy of the cave data into the one
     // scene, which would build two batches under each source id and take each other's out of it.
     expect(screen.getAllByTestId('scene3d-camera-controls')).toHaveLength(1);
-    const sourceIds = engine.engineState.widgets[0].scene.primitives.items.length;
-    expect(sourceIds).toBeGreaterThan(0);
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const drawn = engine.engineState.widgets[0].scene.primitives.items.length;
+    expect(drawn).toBeGreaterThan(0);
+    // Past the loaders' settle, nothing more was asked for or added: one view's worth, not two.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 2 * TERRAIN_OFFER_SETTLE_MILLISECONDS)));
+    expect(centerlineRequests).toHaveLength(1);
+    expect(caveMeshRequests.length).toBeLessThanOrEqual(1);
+    expect(engine.engineState.widgets[0].scene.primitives.items.length).toBe(drawn);
     first.unmount();
   });
 
@@ -367,6 +385,50 @@ describe('Scene3DView', () => {
     view.unmount();
 
     await waitFor(() => expect(engine.engineState.widgets[0].isDestroyed()).toBe(true));
+  });
+
+  it('builds the scene again where it was after the browser takes the context, and stops at a second loss', async () => {
+    withWebGl2(true);
+    // The repeat guard reads the clock, and the window's one drawing surface keeps its guard for
+    // the whole file: step past anything an earlier test left in it.
+    const start = Date.now() + 3_600_000;
+    let elapsed = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => start + elapsed);
+    // A docked pane, which owns no address: nothing but the scene itself remembers its camera.
+    useWorkspaceStore.setState({ scene3dCoupledToMap: false });
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const first = engine.engineState.widgets[0];
+    first.scene.camera.positionWC = { longitudeDegrees: 22.7, latitudeDegrees: 46.5, height: 3000 };
+
+    // A second after opening — a phone backgrounded straight away. A first loss is rebuilt from,
+    // however soon after opening it comes.
+    elapsed = 1000;
+    act(() => {
+      (first.canvas as EventTarget).dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+    });
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(2));
+    expect(first.isDestroyed()).toBe(true);
+    expect(screen.queryByTestId('scene3d-context-lost')).toBeNull();
+    // The rebuilt scene asks for its caves again, and opens where the lost one was looking.
+    await waitFor(() => expect(centerlineRequests).toHaveLength(2));
+    const rebuilt = engine.engineState.widgets[1].scene.camera.positionWC;
+    expect(rebuilt.longitudeDegrees).toBeCloseTo(22.7, 6);
+    expect(rebuilt.latitudeDegrees).toBeCloseTo(46.5, 6);
+    expect(rebuilt.height).toBeCloseTo(3000, 3);
+
+    // Lost again moments after coming back: a rebuild loop is not offered, a reload is.
+    elapsed = 3000;
+    act(() => {
+      (engine.engineState.widgets[1].canvas as EventTarget).dispatchEvent(
+        new Event('webglcontextlost', { cancelable: true }),
+      );
+    });
+    const lost = await screen.findByTestId('scene3d-context-lost');
+    expect(lost).toHaveTextContent('Reload');
+    expect(engine.engineState.widgets).toHaveLength(2);
   });
 
   it('switches coupling to the flat map without reloading the cave it is drawing', async () => {
@@ -568,6 +630,44 @@ describe('Scene3DView', () => {
     });
 
     expect(await screen.findByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
+  });
+
+  it('does not redraw the whole view while the pointer moves over the same thing', async () => {
+    // The hover pick runs once per animation frame while the pointer moves. A new state object on
+    // each one is a full reconciliation of this view per frame, on the same main thread the scene
+    // is drawn on in software — for a name that has not changed.
+    withWebGl2(true);
+    let commits = 0;
+    render(
+      <Profiler id="scene" onRender={() => (commits += 1)}>
+        <Around>
+          <Scene3DView />
+        </Around>
+      </Profiler>,
+    );
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+    const handler = engine.engineState.eventHandlers[0];
+    engine.engineState.widgets[0].scene.pickResult = { id: { kind: 'feature', featureId: 'f1', label: 'Dolina Demo' } };
+    const moveTo = async (x: number) => {
+      handler.raise('mouseMove', { endPosition: new engine.Cartesian2(x, 50) });
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+      });
+    };
+    await moveTo(40);
+    expect(await screen.findByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
+    await waitFor(() => expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'));
+
+    // One move more before counting: React may call a component once more after a state update
+    // that changed nothing, before it learns to skip it — once, not once per frame.
+    await moveTo(41);
+    commits = 0;
+    for (let x = 42; x <= 51; x += 1) {
+      await moveTo(x);
+    }
+
+    expect(commits).toBe(0);
+    expect(screen.getByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
   });
 
   it('stops naming what the pointer was on once the pointer has left the scene', async () => {
@@ -1429,10 +1529,14 @@ describe('finer ground under the camera', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
 
-    // Leaving and coming back is the ordinary way a declined offer would nag; it must not.
+    // Leaving and coming back is the ordinary way a declined offer would nag; it must not. On a
+    // clock this test drives: a real wait could end before a starved timer fired, and the absence
+    // checked below would then prove nothing about the offer logic.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     flyAndSettle(26.5, 46.5);
     flyAndSettle(25.3, 45.2);
-    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    await act(() => vi.advanceTimersByTimeAsync(TERRAIN_OFFER_SETTLE_MILLISECONDS));
+    vi.useRealTimers();
     expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
     expect(engine.engineState.terrainRequests).toHaveLength(1);
   });
@@ -1493,6 +1597,44 @@ describe('arriving with a cave to reveal', () => {
     await waitFor(() => expect(engine.engineState.widgets).toHaveLength(2));
     await waitFor(() => expect(centerlineRequests.length).toBeGreaterThanOrEqual(2));
     expect(engine.engineState.widgets[1].scene.camera.framed).toHaveLength(0);
+  });
+
+  it('says a link to something gone or not theirs to see could not be shown, and leaves the camera be', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    const rejections: unknown[] = [];
+    const onRejection = (event: PromiseRejectionEvent | Event) => rejections.push(event);
+    window.addEventListener('unhandledrejection', onRejection);
+    const unhandled = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', unhandled);
+    try {
+      featureFailures = { 'cave-gone': new ApiError(404, 'feature.not_found') };
+      requestReveal3d({ targetType: 'feature', targetId: 'cave-gone', label: 'Coiba Mare' });
+      renderView();
+      await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+      expect(
+        await screen.findByText('What this link points at no longer exists, so the scene stayed where it was.'),
+      ).toBeInTheDocument();
+      expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(rejections).toEqual([]);
+    } finally {
+      window.removeEventListener('unhandledrejection', onRejection);
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('says a link to something the reader may not see could not be shown', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    featureFailures = { 'cave-hidden': new ApiError(403, 'acl.forbidden') };
+    requestReveal3d({ targetType: 'feature', targetId: 'cave-hidden', label: 'Coiba Mare' });
+    renderView();
+
+    expect(
+      await screen.findByText('You may not see what this link points at, so the scene stayed where it was.'),
+    ).toBeInTheDocument();
   });
 
   it('leaves the camera where the scene opens when nothing was asked for', async () => {
@@ -1712,6 +1854,41 @@ describe('saving the view as an image', () => {
     fireEvent.click(save);
     await waitFor(() => expect(savedFiles).toHaveLength(1));
     expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
+  });
+});
+
+describe('cave data the server would not give', () => {
+  it('says the caves of this view could not be loaded, rather than drawing an area with none, and tries again', async () => {
+    withWebGl2(true);
+    // A server error or a rate limit as the scene opens: the globe draws, the loading flag drops,
+    // and without a word an area full of caves reads as one with none.
+    entranceFailures = [Object.assign(new Error('Request failed with status 500'), { status: 500 })];
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-data-failed');
+    expect(notice).toHaveTextContent('The caves of this view could not be loaded.');
+    expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(entranceRequestCount).toBe(2));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-data-failed')).toBeNull());
+  });
+
+  it('says the map filter was refused, instead of emptying the scene without a reason', async () => {
+    withWebGl2(true);
+    const { setMapFilter } = await import('../../map/mapFilters.ts');
+    setMapFilter({ kind: 'saved', savedFilterId: 'sf-1' });
+    try {
+      entranceFailures = [{ code: 'saved_filter.not_found', status: 404 }];
+      renderView();
+
+      expect(await screen.findByText(/The map's filter could not be run with your access/)).toBeInTheDocument();
+      // A refusal is not a hiccup to retry: the filter has to change.
+      expect(screen.queryByTestId('scene3d-data-failed')).toBeNull();
+    } finally {
+      setMapFilter(null);
+    }
   });
 });
 

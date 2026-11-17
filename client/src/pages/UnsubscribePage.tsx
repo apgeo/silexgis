@@ -53,7 +53,7 @@ export default function UnsubscribePage() {
 
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
-      <Card style={{ width: 420 }}>
+      <Card style={{ width: 420, maxWidth: '100%' }}>
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
           {t('unsubscribe.title')}
         </Typography.Title>

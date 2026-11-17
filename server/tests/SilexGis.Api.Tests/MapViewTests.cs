@@ -326,6 +326,36 @@ public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     }
 
     /// <summary>
+    /// "Home" is answered per reader: a list holding somebody else's home view (shared with the
+    /// reader) never marks it as the reader's home, nor sorts it ahead of the reader's own, or
+    /// the map would open on a colleague's starting point. The owner still sees their own home.
+    /// </summary>
+    [Fact]
+    public async Task Another_owners_home_view_is_never_the_readers_home()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        // "A…" sorts before "Z…": on the stored flag alone the owner's home would lead the list.
+        var ownersHome = await CreateAsync($"A owner home {suffix}", isHome: true);
+        await ReplaceViewAccessRulesAsync(owner, ownersHome, [(outsiderId, AccessAction.Read)]);
+
+        // The reader with no home of their own: the shared view is listed, and not as home.
+        var before = await ViewsAsync(outsider);
+        var shared = before.Single(x => x.GetProperty("id").GetGuid() == ownersHome);
+        shared.GetProperty("isHome").GetBoolean().ShouldBeFalse();
+        before.ShouldNotContain(x => x.GetProperty("isHome").GetBoolean());
+
+        // The reader's own home is the one home in their list, and it comes first.
+        var readersHome = await CreateAsAsync(outsider, $"Z reader home {suffix}", isHome: true);
+        var after = await ViewsAsync(outsider);
+        after.Where(x => x.GetProperty("isHome").GetBoolean()).Select(x => x.GetProperty("id").GetGuid())
+            .ShouldBe([readersHome]);
+        after[0].GetProperty("id").GetGuid().ShouldBe(readersHome);
+
+        // The owner's own list still marks their home.
+        (await HomesAsync(owner, ownersHome)).ShouldBe([ownersHome]);
+    }
+
+    /// <summary>
     /// A view is shown to whoever it is shared with, so it never stores a place somebody typed into
     /// its filter — a point, an outline, or the place nearest first was measured from — whether it
     /// is created that way or updated to it, and a refused update leaves the view as it was. A

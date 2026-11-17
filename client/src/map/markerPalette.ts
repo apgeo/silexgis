@@ -26,6 +26,9 @@ export const surfaceFeaturePalette = {
   stroke: '#ffffff',
   highlight: '#1677ff',
   highlightHalo: 'rgba(22, 119, 255, 0.25)',
+  /** An unsaved edit the server refused on the last Save: it has to be found among its look-alikes. */
+  refused: '#cf1322',
+  refusedHalo: 'rgba(207, 19, 34, 0.25)',
 } as const;
 
 /**

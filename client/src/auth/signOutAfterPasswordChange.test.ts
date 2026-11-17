@@ -19,6 +19,7 @@ vi.mock('../api/hooks/accountPrefs.ts', () => ({
 }));
 
 const { signOutAfterPasswordChange } = await import('./signOutAfterPasswordChange.ts');
+const { signOutOfThisBrowser } = await import('./signOut.ts');
 
 afterEach(() => {
   useUiPrefsStore.getState().releaseAccount();
@@ -38,5 +39,16 @@ describe('signOutAfterPasswordChange', () => {
     ]);
     expect(useUiPrefsStore.getState().accountId).toBeUndefined();
     expect(useUiPrefsStore.getState().coordinateFormat).toBe('dd');
+  });
+});
+
+// The one sequence every sign-out follows; the account menu asks for it with the home page.
+describe('signOutOfThisBrowser', () => {
+  it('writes what is waiting, releases this browser’s copy, then ends the session', async () => {
+    useUiPrefsStore.getState().adoptAccount('account-a');
+
+    await signOutOfThisBrowser();
+
+    expect(order).toEqual(['flush while held by account-a', 'end the session, held by nobody, for /']);
   });
 });

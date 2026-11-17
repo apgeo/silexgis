@@ -40,6 +40,32 @@ const cabinets = [
     documentCount: 2,
     defaults: noDefaults,
   },
+  {
+    // A shelf with settings of its own, and a name that repeats elsewhere in the tree — the
+    // two things a careless write or a bare-name picker would lose.
+    id: 'c3',
+    parentId: null,
+    name: 'Bulletins',
+    description: null,
+    ancestorIds: ['c3'],
+    documentCount: 0,
+    defaults: {
+      ...noDefaults,
+      documentTypeId: 7,
+      visibility: 'cavingGroup',
+      tagIds: [4],
+      requiredMetadataKeys: ['author'],
+    },
+  },
+  {
+    id: 'c4',
+    parentId: 'c1',
+    name: 'Bulletins',
+    description: null,
+    ancestorIds: ['c1', 'c4'],
+    documentCount: 0,
+    defaults: noDefaults,
+  },
 ];
 
 // Two documents on the shelf and a count of two, so the page is exercised on the case
@@ -88,6 +114,8 @@ vi.mock('../../api/hooks.ts', async () => {
     useUpdateCabinet: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteCabinet: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useFileDocument: () => ({ mutateAsync: fileMutate, isPending: false }),
+    useDocumentTypes: () => ({ data: [] }),
+    useTags: () => ({ data: [] }),
   };
 });
 
@@ -194,5 +222,59 @@ describe('CabinetsPage', () => {
     fireEvent.click(screen.getByText('Surveys (2)'));
     expect(screen.getByText('Cave survey 2026')).toBeInTheDocument();
     mobile = false;
+  });
+
+  it('moves a cabinet in the tree without clearing the settings it carries', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    updateMutate.mockClear();
+    renderPage();
+
+    // The cabinet route replaces what it is sent, so a move that sends only the new parent
+    // would wipe this shelf's own type, audience, tags and required keys.
+    // The root-level one: roots follow the club archive's subtree in the drawn tree.
+    const dragged = screen.getAllByText('Bulletins').at(-1)!.closest('.ant-tree-treenode')!;
+    const target = screen.getByText('Surveys (2)').closest('.ant-tree-treenode')!;
+    fireEvent.dragStart(dragged);
+    fireEvent.dragEnter(target);
+    fireEvent.dragOver(target);
+    fireEvent.drop(target);
+
+    await waitFor(() => expect(updateMutate).toHaveBeenCalledTimes(1));
+    expect(updateMutate).toHaveBeenCalledWith({
+      id: 'c3',
+      name: 'Bulletins',
+      description: null,
+      parentId: 'c2',
+      defaultDocumentTypeId: 7,
+      defaultVisibility: 'cavingGroup',
+      defaultTagIds: [4],
+      requiredMetadataKeys: ['author'],
+    });
+  });
+
+  it('offers a cabinet the four audiences the server knows, each named', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+
+    fireEvent.click(screen.getByText('New'));
+    const field = await screen.findByLabelText('Who can read it');
+    fireEvent.mouseDown(field);
+
+    for (const label of ['Private', 'Caving group', 'Authenticated users', 'Public']) {
+      await waitFor(() => expect(screen.getAllByTitle(label).length).toBeGreaterThan(0));
+    }
+    expect(screen.queryByText(/visibilityValues/)).not.toBeInTheDocument();
+  });
+
+  it('names every filing target by its whole path, so two shelves of one name can be told apart', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+
+    fireEvent.click(screen.getByText('Surveys (2)'));
+    fireEvent.click(screen.getByText('File elsewhere'));
+    fireEvent.mouseDown(screen.getByText('Choose a cabinet'));
+
+    await waitFor(() => expect(screen.getAllByTitle('Club archive / Bulletins').length).toBeGreaterThan(0));
+    expect(screen.getAllByTitle('Bulletins').length).toBeGreaterThan(0);
   });
 });

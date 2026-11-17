@@ -86,6 +86,15 @@ public static class AuditActions
     public const string UploadReviewMarked = "upload_review_marked";
 
     /// <summary>
+    /// A sign-in through an external provider (Google, an OIDC issuer) proved the address of a
+    /// local account nobody had confirmed, and took the account over: the address was marked
+    /// confirmed and every way in the unproven holder had set up — the password, any provider
+    /// sign-in linked before, any second factor, open sessions and access keys — was removed. Its own name because account rows are
+    /// not recorded field by field, and this is the moment an account changed hands.
+    /// </summary>
+    public const string ExternalAccountLinked = "external_account_linked";
+
+    /// <summary>
     /// Data left the installation as a file. Its own name because it is not a change to
     /// anything: nothing in the database is different afterwards, and yet it is the act most
     /// worth being able to reconstruct later — a file outlives every permission check that

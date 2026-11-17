@@ -28,6 +28,8 @@ import {
   type CabinetInfo,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { cabinetPathOptions, cabinetWriteOf } from '../../components/documents/cabinetChoices.ts';
+import { visibilityOptions } from '../../components/attachments/visibilityChoices.ts';
 import ConfigureLink from '../../components/ConfigureLink.tsx';
 import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
@@ -185,9 +187,9 @@ function CabinetEditModal({
             placeholder={t('cabinets.noParent')}
             // A cabinet cannot sit inside itself; the server refuses a cycle outright,
             // and offering the option here would only be a way to discover that.
-            options={cabinets
-              .filter((cabinet) => editing === 'new' || cabinet.id !== editing.id)
-              .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+            options={cabinetPathOptions(cabinets).filter(
+              (option) => editing === 'new' || option.value !== editing.id,
+            )}
           />
         </Form.Item>
 
@@ -209,10 +211,7 @@ function CabinetEditModal({
           <Select
             allowClear
             placeholder={t('cabinets.defaultInherit')}
-            options={(['private', 'cavingGroup', 'internal', 'public'] as const).map((value) => ({
-              value,
-              label: t(`caves.visibilityValues.${value}`),
-            }))}
+            options={visibilityOptions(t)}
           />
         </Form.Item>
         <Form.Item name="defaultTagIds" label={t('cabinets.defaultTags')}>
@@ -363,12 +362,7 @@ export default function CabinetsPage() {
     }
     void (async () => {
       try {
-        await updateCabinet.mutateAsync({
-          id: cabinet.id,
-          name: cabinet.name,
-          description: cabinet.description,
-          parentId,
-        });
+        await updateCabinet.mutateAsync({ id: cabinet.id, ...cabinetWriteOf(cabinet, { parentId }) });
         message.success(t('common.saved'));
       } catch (error) {
         failed(error);
@@ -724,9 +718,7 @@ export default function CabinetsPage() {
           placeholder={t('cabinets.pickCabinet')}
           value={refileTarget}
           onChange={setRefileTarget}
-          options={(cabinets ?? [])
-            .filter((cabinet) => cabinet.id !== selected)
-            .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+          options={cabinetPathOptions(cabinets ?? []).filter((option) => option.value !== selected)}
         />
       </Modal>
     </>

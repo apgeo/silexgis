@@ -159,10 +159,10 @@ async function serveBackgrounds(context: BrowserContext) {
     }),
   );
   await context.route(`**${GEOTIFF_URL}`, serveRanged(backgroundGeoTiff()));
-  await context.route(`**${UNREADABLE_URL}`, (route) => route.fulfill({ status: 404, body: 'not here' }));
+  await context.route(`**${UNREADABLE_URL}`, (route) => route.fulfill({ status: 410, body: 'not here' }));
   await context.route(`**${SHAPES_URL}`, (route) => route.fulfill({ status: 200, json: SHAPES }));
   await context.route(`**${STYLE_URL}`, (route) => route.fulfill({ status: 200, json: STYLE }));
-  await context.route(`**${MISSING_STYLE_URL}`, (route) => route.fulfill({ status: 404, body: 'not here' }));
+  await context.route(`**${MISSING_STYLE_URL}`, (route) => route.fulfill({ status: 410, body: 'not here' }));
   await context.route(/\/api\/v1\/map-layers(\?.*)?$/, async (route) => {
     const response = await route.fetch();
     const rows = (await response.json()) as unknown[];
@@ -260,8 +260,8 @@ test.describe('catalogue backgrounds the 3D scene draws itself', () => {
     consoleErrors,
   }) => {
     consoleErrors.allow(
-      /Failed to load resource: .*404/,
-      'the unreadable GeoTIFF this test adds to the catalogue is answered 404 on purpose',
+      /Failed to load resource: the server responded with a status of 410/,
+      'the unreadable GeoTIFF this test adds to the catalogue is answered 410 on purpose — a status no other route in this flow answers, so a missing tile, glyph or API route still fails the test',
     );
     await serveBackgrounds(page.context());
     await login(page);
@@ -310,8 +310,8 @@ test.describe('catalogue backgrounds the 3D scene draws itself', () => {
     consoleErrors,
   }) => {
     consoleErrors.allow(
-      /Failed to load resource: .*404/,
-      'the style this test names for one vector background is answered 404 on purpose',
+      /Failed to load resource: the server responded with a status of 410/,
+      'the style this test names for one vector background is answered 410 on purpose — a status no other route in this flow answers, so a missing tile, glyph or API route still fails the test',
     );
     await serveBackgrounds(page.context());
     await login(page);

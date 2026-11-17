@@ -83,12 +83,27 @@ export default function HistoryPanel({
   variant?: 'card' | 'bare';
 }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useHistory(entityType, entityId, enabled);
+  const history = useHistory(entityType, entityId, enabled);
+  const { data, isLoading } = history;
   const events = data?.items ?? [];
+  // The newest page only: a long-lived feature can carry more changes than is worth drawing,
+  // and saying so keeps a cut-off timeline from reading as the whole story.
+  const notShown = data ? data.totalItems - events.length : 0;
 
   const body = (
     <>
-      {isLoading ? (
+      {history.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('history.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void history.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : isLoading ? (
         <Spin />
       ) : events.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('history.empty')} />
@@ -105,6 +120,11 @@ export default function HistoryPanel({
               ),
           }))}
         />
+      )}
+      {!history.isError && notShown > 0 && (
+        <Typography.Text type="secondary" data-testid="history-partial">
+          {t('history.partial', { shown: events.length, total: data?.totalItems })}
+        </Typography.Text>
       )}
     </>
   );

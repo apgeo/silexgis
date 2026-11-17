@@ -51,6 +51,11 @@ export interface LoadedPdf {
     textLayer: HTMLElement;
     /** CSS pixels the page should be drawn across; the scale follows from the page's own size. */
     width: number;
+    /**
+     * Stops the drawing. The promise then rejects, and only once the canvas and the text
+     * container have been let go of, so the next page can be drawn into them as soon as it does.
+     */
+    signal?: AbortSignal;
   }) => Promise<RenderedPdfPage>;
   /** Reads a page's text as one string, in the order the library reports its runs. */
   pageText: (page: number) => Promise<string>;
@@ -105,8 +110,10 @@ export async function loadPdf({ url, signal }: LoadPdfOptions): Promise<LoadedPd
   return {
     pageCount: doc.numPages,
 
-    async renderPage({ page, canvas, textLayer, width }) {
+    async renderPage({ page, canvas, textLayer, width, signal }) {
+      signal?.throwIfAborted();
       const pdfPage = await doc.getPage(page);
+      signal?.throwIfAborted();
       const unscaled = pdfPage.getViewport({ scale: 1 });
       const scale = width / unscaled.width;
       const viewport = pdfPage.getViewport({ scale });
@@ -143,7 +150,27 @@ export async function loadPdf({ url, signal }: LoadPdfOptions): Promise<LoadedPd
         viewport,
       });
 
-      await Promise.all([task.promise, text.render()]);
+      const textDone = text.render();
+
+      // The library refuses a second drawing onto a canvas whose first is still running, so a
+      // drawing nobody waits for any more has to be stopped, not merely ignored.
+      const cancel = () => {
+        task.cancel();
+        text.cancel();
+      };
+      signal?.addEventListener('abort', cancel, { once: true });
+      try {
+        await Promise.all([task.promise, textDone]);
+      } catch (error) {
+        // Either half failing — or being cancelled — leaves the other still writing into the
+        // canvas or the container. Stop both and wait until they have let go before answering.
+        cancel();
+        await Promise.allSettled([task.promise, textDone]);
+        pdfPage.cleanup();
+        throw error;
+      } finally {
+        signal?.removeEventListener('abort', cancel);
+      }
 
       return {
         width: viewport.width,

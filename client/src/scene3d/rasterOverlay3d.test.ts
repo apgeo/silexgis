@@ -123,6 +123,55 @@ describe('syncRasterImagery', () => {
     expect(engine.layers.get(rasterImageryLayerId('a'))?.visible).toBe(true);
   });
 
+  it('does not drape a sheet that was unticked while it was being rendered', async () => {
+    const engine = new FakeImagery();
+    let finish: (url: string) => void = () => {};
+    const rasterize = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const sheets = [raster({ id: 'a' })];
+
+    const ticked = syncRasterImagery(engine, sheets, new Set(['a']), {}, rasterize);
+    // Unticked within the seconds the render takes: this sync has nothing to add or show.
+    await syncRasterImagery(engine, sheets, new Set(), {}, rasterize);
+    finish('data:image/png;base64,AAAA');
+    await ticked;
+
+    // Kept, because the render was paid for, but not on the globe.
+    expect(engine.layers.get(rasterImageryLayerId('a'))?.visible ?? false).toBe(false);
+  });
+
+  it('renders a sheet once when a second sync asks for it while the first is still rendering it', async () => {
+    const engine = new FakeImagery();
+    let finish: (url: string) => void = () => {};
+    const rasterize = vi.fn(
+      (_url: string, _bounds: Scene3DBounds) =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const sheets = [raster({ id: 'a' }), raster({ id: 'b' })];
+
+    // Two sheets ticked a second apart: the second tick's sync finds the first sheet still being
+    // rendered. A second render of it would be a second drawing context alive at once.
+    const first = syncRasterImagery(engine, sheets, new Set(['a']), {}, rasterize);
+    const second = syncRasterImagery(engine, sheets, new Set(['a', 'b']), {}, rasterize);
+    finish('data:image/png;base64,AAAA');
+    await vi.waitFor(() => expect(rasterize).toHaveBeenCalledTimes(2));
+    finish('data:image/png;base64,BBBB');
+    await Promise.all([first, second]);
+
+    expect(rasterize.mock.calls.map(([url]) => url)).toEqual([
+      'https://files.example/a.tif',
+      'https://files.example/b.tif',
+    ]);
+    expect(engine.layers.get(rasterImageryLayerId('a'))?.visible).toBe(true);
+    expect(engine.layers.get(rasterImageryLayerId('b'))?.visible).toBe(true);
+  });
+
   it('drops a raster that has left the catalogue', async () => {
     // Deleted, or no longer readable by this viewer. Either way it must come off the globe, not
     // merely stop being listed in the panel.

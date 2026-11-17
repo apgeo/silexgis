@@ -72,6 +72,8 @@
     "title": "Terrain",
     "noBuilds": "No elevation surface has been built for this installation yet.",
     "noBuildsHint": "Draw a rectangle above and start the first one.",
+    "listLoadFailed": "The terrain builds could not be loaded.",
+    "buildLoadFailed": "This build could not be loaded. It may have been deleted.",
     "intro": "Draw a rectangle, say where its elevation data comes from, and the installation builds the ground the 3D scene draws.",
     "area": {
       "draw": "Draw rectangle",
@@ -465,6 +467,17 @@
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
     "serverUnreachable": "Cannot reach the server",
     "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
+    "unreachable": "The server could not be reached. Check the connection, then try again.",
+    "serverFailed": "The server could not complete this right now. Try again in a moment.",
+    "tooManyAttempts": "Too many sign-in requests from this network. Wait a minute, then try again.",
+    "tooManyAttemptsWait": "Too many sign-in requests from this network. Try again in {{seconds}} s.",
+    "callbackFailed": "Signing in could not be completed.",
+    "callbackFailedHint": "The return from the sign-in page was not accepted. This can happen when the device's clock is wrong or the sign-in took too long. Check the clock, then try again.",
+    "signInLapsedTitle": "Your sign-in has ended",
+    "signInLapsedBody": "The server no longer accepts this sign-in, so nothing can be read or saved until you sign in again. Signing in leaves this page and comes back to it: copy anything you have typed and not yet saved first.",
+    "signInLapsedSignIn": "Sign in again",
+    "signInLapsedStay": "Stay on this page",
+    "mfaMethodUnavailable": "That method is not available on this account. Choose another.",
     "mfaMethod": "Send the code by",
     "mfaMethod_authenticator": "Authenticator",
     "mfaMethod_email": "Email",
@@ -818,6 +831,10 @@
     }
   },
   "caves": {
+    "problems": {
+      "typeUnknown": "The chosen cave type no longer exists. Pick another one and save again.",
+      "rockTypeUnknown": "The chosen rock type no longer exists. Pick another one and save again."
+    },
     "title": "Caves",
     "newCave": "New cave",
     "editCave": "Edit cave",
@@ -947,7 +964,12 @@
       "map": "From map",
       "estimated": "Estimated"
     },
-    "surveyedAt": "Surveyed"
+    "surveyedAt": "Surveyed",
+    "problems": {
+      "locationForbidden": "You may not choose the main entrance of a cave whose exact location is withheld from you. Save it as a further entrance, or ask somebody who may see the cave’s position.",
+      "notFound": "This entrance is no longer there. It may have been deleted.",
+      "caveNotFound": "The cave this entrance belongs to is no longer there, or you can no longer see it."
+    }
   },
   "features": {
     "title": "Features",
@@ -1033,6 +1055,10 @@
     "noParents": "No parents",
     "editParents": "Edit parents",
     "parentFixed": "An entrance or a centreline sits under its own cave and nowhere else. To protect it, protect its cave, or put the cave under the protected area.",
+    "problems": {
+      "typeChangeForbidden": "You may not edit features of the type you are changing this one into, so nothing was saved. Keep its current type, or ask someone who may edit that type.",
+      "parentPrimaryHidden": "This feature's main parent is one you cannot see, so you cannot change its parents. Ask someone who can see that parent."
+    },
     "parentFixedNote": "An entrance or a centreline sits under its own cave and nowhere else, so its parent cannot be changed here. To protect it, protect its cave, or put the cave under the protected area.",
     "addParent": "Add parent…",
     "parentSearchPlaceholder": "Search features…",
@@ -1087,7 +1113,9 @@
       "other": "Other"
     },
     "makePrimary": "Use as the headline picture",
-    "clearPrimary": "Stop using as the headline picture"
+    "clearPrimary": "Stop using as the headline picture",
+    "primarySet": "This is now the headline picture.",
+    "primaryCleared": "It is no longer the headline picture."
   },
   "documents": {
     "deletion": {
@@ -1478,6 +1506,11 @@
     "duplicateUnknown": "These contents are already stored. Store this copy as well?",
     "duplicateStoreAnyway": "Store anyway",
     "duplicateSkip": "Skip it",
+    "stop": "Stop uploading",
+    "stopTitle": "Stop this upload?",
+    "stopContent": "{{stored}} of {{total}} files are stored and stay where they are. The other {{rest}} will not be sent.",
+    "stopConfirm": "Stop",
+    "keepGoing": "Keep uploading",
     "batches": "Uploads",
     "batchesEmpty": "Nothing has been uploaded in a batch yet.",
     "batchSource": "From",
@@ -1495,6 +1528,7 @@
       "failed": "Failed"
     },
     "batchCounts": "{{stored}} stored · {{skipped}} skipped · {{failed}} failed",
+    "batchCountsTitle": "Files",
     "batchReport": "Report",
     "importDirectory": "Import from a server directory",
     "importDirectoryHint": "Copies files the server can already reach, without sending them over the network. Folders become cabinets.",
@@ -1511,7 +1545,19 @@
       "pathRefused": "This folder path cannot be filed",
       "filingRefused": "You may not file into that cabinet",
       "unreadable": "The file could not be read",
-      "failed": "Upload failed"
+      "failed": "Upload failed",
+      "lengthRequired": "The server was not told how long a piece was; something between you and it may be removing that",
+      "sessionEnded": "The upload ended before the file was confirmed. It may already be stored: check before sending it again",
+      "outOfStep": "The server's copy and this file got out of step",
+      "connectionLost": "The connection was lost before the file arrived",
+      "serverFault": "The server could not store the file; it may be out of room",
+      "archiveUnreadable": "The archive could not be opened",
+      "archiveTooManyEntries": "The archive holds more files than this installation accepts",
+      "archiveTooLarge": "The archive unpacks to more than this installation accepts",
+      "archiveSuspicious": "The archive is compressed in a way that looks unsafe, so it was not unpacked",
+      "importDirectoryNotFound": "The directory was not found on the server",
+      "importPathNotAllowed": "The directory is outside the ones this installation may import from",
+      "importNoRoots": "No import directories are configured on this installation"
     },
     "batchStarted": "Uploaded"
   },
@@ -1576,6 +1622,11 @@
     "shareTitle": "Share link",
     "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. Revoke and mint a new one if it is lost.",
     "revokeConfirm": "Revoke this album’s share link?",
+    "shareAlbum": "Make a share link",
+    "revokeShare": "Revoke the share link",
+    "deleteAlbum": "Delete album",
+    "shareRevoked": "Share link revoked.",
+    "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
       "cc0": "Public domain (CC0)",
@@ -1609,6 +1660,27 @@
     "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
   },
   "geodata": {
+    "refusals": {
+      "connection": "The server could not be reached. Check the connection and try again.",
+      "signedOut": "You are signed out. Sign in again and repeat this.",
+      "forbidden": "Your account may not do this.",
+      "gone": "It is no longer there: somebody may have deleted it. Reload the list.",
+      "server": "The server failed (error {{status}}). Try again in a moment.",
+      "busy": "It is still being processed. Try again once it has finished.",
+      "groupNotAllowed": "You may not give it to that caving group.",
+      "fileNotReady": "The file has not finished being read, so there is nothing to review yet.",
+      "selectionTooLarge": "Too many rows are chosen for one confirmation. Choose fewer and confirm in parts.",
+      "nothingCreated": "Every chosen row was set aside, so nothing would be created.",
+      "reviewRequired": "Imports here are reviewed first: choose the rows and confirm them.",
+      "tooLargeWithoutReview": "The file is too large to create without a review: choose the rows and confirm them.",
+      "noFiles": "None of the chosen pictures could be read.",
+      "ruleSetGone": "The chosen rule set is no longer there. Choose another one."
+    },
+    "deleteFailed": "It was not deleted.",
+    "exportFailed": "The file could not be exported.",
+    "cavingGroup": "Caving group",
+    "cavingGroupRequired": "Choose the caving group that may read it.",
+    "editLoadFailed": "The current settings could not be read, so it cannot be edited now.",
     "title": "Geodata",
     "name": "Name",
     "format": "Format",
@@ -1623,6 +1695,19 @@
     "uploadPrompt": "Click or drag vector files here to upload",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background. Up to 150 MB per file.",
     "uploadQueued": "{{name}} uploaded — import queued.",
+    "encoding": {
+      "action": "Character encoding",
+      "title": "Character encoding of this table",
+      "hint": "If letters such as ă, ș, à or ñ show up wrong in this file's names, say how the file was saved. The file is then read again from the start with that encoding, keeping its separator and coordinate columns.",
+      "detect": "Detect it from the file",
+      "confirm": "Read it again",
+      "queued": "{{name}} is being read again.",
+      "inProgress": "This file is still being read. Wait until that finishes, then choose the encoding again.",
+      "forbidden": "Your account may not change this file.",
+      "gone": "This file no longer exists, or you may no longer see it.",
+      "failed": "The file could not be read again. Try again in a moment.",
+      "busy": "Available once the file has been read"
+    },
     "upload": {
       "sending": "Uploading — {{sent}} of {{total}}",
       "checking": "Sent — the server is checking the file…",
@@ -1825,6 +1910,24 @@
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
     "discard": "Discard edits",
+    "discardConfirm": "Throw away {{count}} unsaved edits? Drawings disappear and reshaped features go back to their saved shape. This cannot be undone.",
+    "discardConfirmOk": "Discard",
+    "leaveTitle": "Leave the map with unsaved edits?",
+    "leaveBody": "{{count}} edits on the map are not saved. Leaving the map throws them away.",
+    "leaveOk": "Leave and discard",
+    "leaveStay": "Stay on the map",
+    "saveIncomplete": "{{saved}} saved, {{failed}} not saved. What was not saved is still on the map, marked in red; correct it and press Save again. First problem: {{reason}}",
+    "typeUnresolved": "The type of this feature could not be found in the list of feature types, so its new shape was not sent. Reload the page and try again.",
+    "problems": {
+      "geometryInvalid": "A shape is not one the server accepts, for example an outline that crosses itself.",
+      "typeRequired": "A feature has no type, or a type this installation does not have.",
+      "typeNotAllowed": "You may not create or change features of that type.",
+      "propertiesInvalid": "A feature’s attributes do not fit what its type asks for.",
+      "parentRequired": "A feature of this type has to sit inside another feature. Choose the one it belongs to.",
+      "parentUnavailable": "The feature chosen to contain it is no longer there, or you cannot see it.",
+      "forbidden": "You are not allowed to make that change.",
+      "notFound": "That feature is no longer there. It may have been deleted."
+    },
     "finishDrawing": "Finish",
     "finishDrawingHint": "Place more points before finishing this shape.",
     "removeLastPoint": "Point",
@@ -3150,6 +3253,8 @@
   "history": {
     "title": "History",
     "empty": "No changes recorded yet.",
+    "loadFailed": "The history could not be loaded.",
+    "partial": "Showing the latest {{shown}} of {{total}} changes.",
     "hidden": "Value hidden (protected location)",
     "geometrySummary": "Geometry of {{points}} points (too large to record in full)",
     "systemUser": "System",
@@ -3391,6 +3496,10 @@
     "empty": "No phone has sent anything yet.",
     "forbidden": "The list of phone users is open to accounts that may read the roster of cavers.",
     "loadFailed": "The phone users could not be loaded.",
+    "refreshFailed": "The list of phone users could not be read again; what is shown may be out of date.",
+    "relinkTitle": "Link this phone user to somebody else?",
+    "relinkBody": "{{user}} is linked to {{from}} now. Linking them to {{to}} replaces that link.",
+    "relinkOk": "Link to the new person",
     "errors": {
       "caverNotFound": "That caver is no longer on the roster.",
       "userNotFound": "That phone user is no longer listed."
@@ -3547,6 +3656,12 @@
     }
   },
   "permissions": {
+    "subjectKindLabel": "Kind of subject",
+    "userLabel": "Account",
+    "cavingGroupLabel": "Caving group",
+    "actionFor": "{{action}} for {{subject}}",
+    "scopeFor": "Reach of the rule for {{subject}}",
+    "removeRuleFor": "Remove the rule for {{subject}}",
     "title": "Permissions",
     "button": "Permissions",
     "subject": "Subject",
@@ -3556,6 +3671,10 @@
     "pickCavingGroup": "Pick a caving group…",
     "addRule": "Add rule",
     "notManager": "You cannot manage permissions on this object.",
+    "loadFailed": "This object's permissions could not be loaded, so they cannot be changed yet.",
+    "storedRulesMoved": "Someone changed this object's rules since you opened them. Saving now would replace that change with yours.",
+    "loadStoredRules": "Load the stored rules (drops your changes)",
+    "keepMyRules": "Keep my changes and save over theirs",
     "scope": "Applies to",
     "scopeObject": "This object only",
     "scopeSubtree": "This object and everything inside",
@@ -3661,18 +3780,30 @@
     "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
+    "denyFullAdministrators": "Refused: no deny can reach Full Administrators — membership of that group is the grant itself.",
+    "subjectUnknown": "The account or caving group chosen no longer exists. Pick it again and save.",
+    "anchorNotFound": "The object a rule is tied to no longer exists. Pick another one and save again.",
+    "scopeInvalid": "One rule's reach does not fit what it protects. Change the reach or the actions and save again.",
+    "forbidden": "You may not change the rules here.",
+    "rulesLoadFailed": "The group's rules could not be loaded, so they cannot be edited yet.",
+    "loadFailed": "The permission groups could not be loaded.",
+    "membersLoadFailed": "The group's members could not be loaded.",
+    "storedRulesMoved": "The group's rules were changed by someone else since you opened them. Saving now would replace that change with your rules.",
+    "loadStoredRules": "Load the stored rules (drops your changes)",
+    "keepMyRules": "Keep my changes and save over theirs",
+    "savedWithDeny": "Saved. The ruleset holds a deny: open the preview now to see what people affected hold with it in force.",
     "rulesTab": "Rules",
     "membersTab": "Members",
     "previewTab": "Preview",
     "addRule": "Add rule",
     "fullAdminNoRules": "Full Administrators holds no rules: membership itself is the grant, decided before any rule — which is also why no deny can reach it.",
-    "previewRequired": "This ruleset contains a deny. Open the preview and look at what somebody affected would hold before saving — a blind deny can lock people out.",
+    "previewRequired": "This ruleset contains a deny. Open the preview before saving and look at whom this group reaches. The preview answers from the rules already saved, so it shows what people hold today, not what this deny would take away — check it again once the deny is saved, because a deny can lock people out.",
     "openPreview": "Open the preview",
     "addMember": "Add",
     "noMembers": "No members yet.",
     "removeMemberConfirm": "Remove this member?",
     "runPreview": "Preview",
-    "previewIntro": "Pick a user or caving group to see the rights they would hold.",
+    "previewIntro": "Pick a user or caving group to see the rights they hold under the rules saved now. Unsaved changes on the Rules tab are not part of this answer.",
     "previewLegend": "Expand a row to see which rule decided each action.",
     "noRights": "nothing",
     "narrowKind": "Narrow to kind…",
@@ -3700,6 +3831,7 @@
     "noMembers": "No features in this set.",
     "deleteConfirm": "Delete this feature set?",
     "inUse": "Rules still point at this feature set; remove them first.",
+    "nameInvalid": "A feature set name needs at least one letter or digit.",
     "nameTaken": "A feature set with this name already exists."
   },
   "cavingGroupPicker": {
@@ -3744,11 +3876,13 @@
     "disableConfirm": "Disable two-factor authentication?",
     "recoveryLeft": "Recovery codes left: {{count}}",
     "recoveryTitle": "Store these recovery codes now — they are shown only once.",
+    "recoveryKept": "I have stored them",
     "linkedAccounts": "Linked accounts",
     "linkedIntro": "Sign in with an external provider in addition to your password.",
     "linkWith": "Link {{provider}}",
     "linkAdded": "Account linked.",
     "linkFailed": "That account could not be linked. It may already be linked elsewhere.",
+    "loginsLoadFailed": "Your sign-in methods could not be read, so the password and linked-account settings are not shown.",
     "unlink": "Unlink",
     "unlinkConfirm": "Remove this linked account?",
     "unlinked": "Account unlinked.",
@@ -3786,6 +3920,10 @@
     "phoneConfirmed": "Your number is confirmed.",
     "phoneNumber": "Phone number",
     "phonePending": "Waiting for the code texted to {{number}}.",
+    "phoneResend": "Send the code again",
+    "phoneResendTooSoon": "Wait a minute before asking for the code again.",
+    "phoneNothingPending": "No number is waiting for its code any more.",
+    "phoneUseOther": "Use a different number",
     "phoneSendFailed": "The code could not be sent to that number.",
     "phoneTaken": "Another account already uses that number.",
     "phoneHint": "Used only for sign-in codes. Enter it in international form, for example +40712345678.",
@@ -3871,7 +4009,15 @@
     "shareExplain": "Anyone with this link can open the view without an account. It shows the area the view looks at over a public background, with the layers the view had on — limited to what is public in its own right, with protected caves and features left out entirely.",
     "shareWithoutData": "This view is narrowed by a saved filter or by a filter from a link, which a link cannot run — so the link shows the area and its background without the caves and features. Layers drawn from saved filters are never shown through a link either.",
     "shareWithoutFilterLayers": "Layers drawn from saved filters are never shown through a link; the link shows the view's other layers.",
-    "shareQr": "The link to the view {{name}} as a QR code"
+    "deleteConfirm": "Delete this saved view? This cannot be undone.",
+    "shareQr": "The link to the view {{name}} as a QR code",
+    "problems": {
+      "createForbidden": "You may not save map views on this installation. Ask an administrator for the right to create them.",
+      "groupForbidden": "You may not share a view with that caving group.",
+      "notFound": "This saved view is no longer there. Somebody may have deleted it.",
+      "invalid": "The view's name is missing or longer than 200 characters.",
+      "forbidden": "You are not allowed to change this saved view."
+    }
   },
   "panel": {
     "unknown": "Unknown panel.",
@@ -4081,7 +4227,12 @@
     "scansInViewNone": "No cave in view has a placed scan to draw.",
     "scansInViewShown": "Scans of {{shown}} of {{total}} caves in view — {{size}}.",
     "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
-    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once."
+    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
+    "dataFailed": "The caves of this view could not be loaded.",
+    "revealGone": "What this link points at no longer exists, so the scene stayed where it was.",
+    "revealForbidden": "You may not see what this link points at, so the scene stayed where it was.",
+    "revealFailed": "Where this link points could not be read, so the scene stayed where it was. Follow it again in a moment.",
+    "tryAgain": "Try again"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4093,6 +4244,16 @@
       "station": "Station clicked: {{name}}"
     },
     "loadError": "Failed to load the 3D model",
+    "loadFailed": {
+      "unreadable": "The survey file could not be read. It may be damaged, or written by a version of the survey program the viewer does not know.",
+      "stalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
+      "missing": "The survey file is no longer on the server.",
+      "refused": "The survey file was refused. Its address may have lapsed while the page was open; try again.",
+      "server": "The server could not hand over the survey file (error {{status}}). Try again in a while.",
+      "viewer": "The 3D viewer could not be loaded. Check the connection and try again.",
+      "network": "The survey file could not be downloaded. Check the connection and try again."
+    },
+    "tryAgain": "Try again",
     "linkThisPart": "Link this…",
     "notInThisModel": "That point is not in this model",
     "labelSize": "Size of station names",
@@ -4172,7 +4333,6 @@
       "openFailedStale": "The movie maker did not finish downloading: the connection was too slow or dropped before it arrived, or the application was updated after this page was opened. Nothing is wrong with your data. Reload the page to try again.",
       "previewLoadingSoFar": "Loading the model for the preview… {{received}} so far",
       "previewLoadingOf": "Loading the model for the preview… {{received}} of {{total}}",
-      "previewStalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
       "previewRetry": "Try again",
       "make": "Make a movie",
       "makeHelp": "Export a movie of this model with its tracked trips moving through it",
@@ -4627,6 +4787,11 @@
     "paths": "Paths"
   },
   "settings": {
+    "problems": {
+      "cavingClubUnknown": "That caving club no longer exists. Choose another one and save again.",
+      "emailNotUsable": "That address cannot be used to sign in here. Choose another one.",
+      "preferencesBusy": "Your preferences are being saved from another window or device at this moment. Try again in a moment."
+    },
     "scanProfiles": {
       "title": "Processing profiles",
       "intro": "Named sets of settings a scan processing step runs with. Keep them for yourself, for a caving group or for the whole installation, choose one when you upload a recording, and carry HDMapping's own parameter files in and out.",
@@ -5043,6 +5208,7 @@
       "createdAt": "Opened",
       "actions": "Actions",
       "you": "you",
+      "loadFailed": "The accounts could not be loaded.",
       "statusActive": "Can sign in",
       "statusLocked": "Locked",
       "statusNoPassword": "No password yet",
@@ -5123,6 +5289,10 @@
         "fullAdministratorAccount": "Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."
       }
     },
+    "settingsProblems": {
+      "invalid": "A value on this form was refused. Check what you entered and save again.",
+      "forbidden": "You may not change these settings."
+    },
     "messaging": {
       "title": "Messaging",
       "intro": "Where email and text messages go, and what signing in requires. These can also be set from the deployment environment; anything saved here replaces it.",
@@ -5177,6 +5347,9 @@
       "testSent": "Test message sent.",
       "testFailed": "Sending failed: {{error}}",
       "testNotConfigured": "Configure and save the channel first.",
+      "testTooSoon": "A test text was sent a moment ago. Wait a little before sending another.",
+      "testRecipientInvalid": "That recipient cannot be used for a test. Check the address or number.",
+      "testRequestFailed": "The test could not be asked for. Try again.",
       "sendConfirmation": "Send a confirmation message when an account is created",
       "requireConfirmed": "Require a confirmed address to sign in",
       "requireConfirmedHint": "Accounts that have not confirmed their address will be refused at sign-in and offered a new confirmation message.",
@@ -5271,6 +5444,12 @@
       "latestDownload": "Latest download:",
       "cancel": "Cancel download",
       "loadFailed": "The basemap's state could not be read.",
+      "requestFailed": "The request could not be completed. Try again.",
+      "boxIncomplete": "Fill in all four sides of the box.",
+      "boxInverted": "West must be less than east, and south less than north.",
+      "cancelTitle": "Stop this download?",
+      "cancelBody": "What has been fetched so far is discarded, and the map keeps serving the basemap it has now.",
+      "cancelFailed": "The download could not be stopped. Try again.",
       "state": {
         "queued": "queued",
         "running": "running",
@@ -5544,6 +5723,7 @@
       "name_email_confirm_address": "Confirm your address",
       "name_email_change_address": "Confirm a new address",
       "name_email_password_reset": "Password reset",
+      "name_email_already_registered": "Registration of an address that already has an account",
       "name_email_account_invitation": "Invitation to a new account",
       "name_email_two_factor_code": "Sign-in code by email",
       "name_sms_two_factor_code": "Sign-in code by text",
@@ -6178,6 +6358,8 @@
     "held": "Your account's imports wait for a reviewer. Nothing has been created yet; it will be once a reviewer accepts it."
   },
   "vectorImport": {
+    "previewFailed": "The review could not be worked out for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Review and import",
     "reviewAndImport": "Review and import into the registry",
     "mapPreview": "Map preview",
@@ -6372,6 +6554,9 @@
     "saving": "All {{total}} rows reached; saving them"
   },
   "photoImport": {
+    "uploadFailedNamed": "{{name}} was not uploaded: {{reason}}",
+    "previewFailed": "The pictures could not be grouped into places for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Features from photographs",
     "openFromGeodata": "From photographs",
     "openFromTrip": "Derive features from this trip's photographs",
@@ -6486,6 +6671,16 @@
     }
   },
   "termRules": {
+    "errors": {
+      "notEditable": "This set cannot be changed here. Make a copy of your own and change that.",
+      "notFound": "This set is no longer there: somebody may have deleted it.",
+      "groupNotFound": "The caving group this set belongs to is no longer there.",
+      "forbidden": "Your account may not change this set."
+    },
+    "discardTitle": "Close without saving?",
+    "discardBody": "The changes made to this set are lost.",
+    "discardOk": "Close and lose them",
+    "keepEditing": "Keep editing",
     "title": "Detection rules",
     "intro": "What a waypoint called Peștera, P., aven, izbuc, ponor or doline is proposed to become. Order decides: when two rules claim one candidate, the earlier one wins.",
     "name": "Name",
@@ -7219,7 +7414,18 @@
       "authenticated": "Anyone signed in",
       "public": "Everyone"
     },
-    "delete": "Delete this checklist"
+    "delete": "Delete this checklist",
+    "loadFailed": "The checklists could not be loaded.",
+    "changedSinceShown": "Somebody changed this checklist since the page showed it. Look at it again before deleting it.",
+    "problems": {
+      "openFailed": "That checklist could not be opened. Try again.",
+      "deleteFailed": "That checklist could not be deleted.",
+      "notFound": "That checklist is no longer there, or you may no longer see it.",
+      "forbidden": "You may not change this checklist.",
+      "createForbidden": "You may not create a checklist for that caving group. Choose another group, or ask its administrator.",
+      "groupNotAllowed": "You may not hand a checklist to that caving group.",
+      "invalid": "Something in the checklist is not valid: check the title, the description and every line."
+    }
   },
   "workAreas": {
     "title": "Work areas",
@@ -8138,12 +8344,22 @@
       "searchTooDeep": "This search has more results than can be paged through. Narrow it with a county or a longer name.",
       "caveNotFound": "The catalogue no longer publishes that cave.",
       "selectionTooLarge": "Too many caves were chosen for one import. Bring them in smaller batches — each one can be undone on its own.",
-      "importFailed": "The import could not be completed."
+      "importFailed": "The import could not be completed.",
+      "createForbidden": "Your account may not create caves, so it cannot bring caves in from the catalogue.",
+      "selectionEmpty": "Nothing was chosen to import.",
+      "nothingCreated": "Every chosen cave was set aside, so there was nothing to import.",
+      "recordMissing": "The catalogue no longer publishes this cave.",
+      "updateForbidden": "You may not change the cave this entry was imported as.",
+      "caveMissing": "The cave this entry was imported as is no longer a cave here.",
+      "positionInvalid": "The position given for this cave is not on the earth.",
+      "typeUnknown": "The chosen cave or entrance type does not exist on this installation.",
+      "parentNotFound": "The chosen parent no longer exists, or you may not see it."
     },
     "paging": {
       "previous": "Previous",
       "next": "Next",
-      "page": "Page {{page}}"
+      "page": "Page {{page}}",
+      "backTo": "Back to page {{page}}"
     }
   },
   "tripImport": {
@@ -8794,7 +9010,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Linked parts of this picture: {{count}}"
+    "regionCount": "Linked parts of this picture: {{count}}",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are drawn on this picture."
   },
   "tripStats": {
     "title": "Trip insights",

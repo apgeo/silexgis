@@ -58,7 +58,7 @@ public sealed class SignInProtectionTests : IDisposable, IClassFixture<PostgresF
         var email = Email("lock");
         const string password = "a-long-password-1";
         (await Browser().PostAsJsonAsync("/api/v1/auth/register", new { email, password }))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         // The positive half: the account signs in, so every refusal below is the lock's.
         (await Browser().PostAsJsonAsync(Login, new { email, password })).StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -289,7 +289,7 @@ public sealed class SignInProtectionTests : IDisposable, IClassFixture<PostgresF
         // The positive half: a well-formed request registers.
         (await Browser().PostAsJsonAsync(
             "/api/v1/auth/register", new { email = Email("reg-ok"), password = "a-long-password-1" }))
-            .StatusCode.ShouldBe(HttpStatusCode.Created);
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
 
         var shortEmail = Email("reg-short");
         var tooShort = await Browser().PostAsJsonAsync(
@@ -310,6 +310,63 @@ public sealed class SignInProtectionTests : IDisposable, IClassFixture<PostgresF
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.Users.CountAsync(u => u.Email == shortEmail || u.Email == "not-an-address")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task An_unknown_address_costs_the_same_password_work_as_a_known_one()
+    {
+        // Answers that are word for word the same still tell accounts apart if one of them skips the
+        // deliberately slow password hash. Counting the hasher's work stands in for timing, which a
+        // test cannot measure reliably on a shared machine.
+        var hashes = new PasswordWork();
+        using var counted = new SilexGisApiFactory(postgres.ConnectionString, Settings(), services =>
+        {
+            services.AddSingleton(hashes);
+            services.AddScoped<IPasswordHasher<SilexGisUser>, CountingPasswordHasher>();
+        });
+        var known = Email("work-known");
+        await AuthHelper.CreateUserAsync(counted, GlobalRoles.Viewer, known);
+        using var client = counted.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        // Signing in with a wrong password.
+        hashes.Reset();
+        var knownLogin = await client.PostAsJsonAsync(Login, new { email = known, password = WrongPassword });
+        var knownChecks = hashes.Verified;
+        hashes.Reset();
+        var unknownLogin = await client.PostAsJsonAsync(Login, new { email = Email("work-unknown"), password = WrongPassword });
+        var unknownChecks = hashes.Verified;
+
+        (await CodeOfAsync(knownLogin)).ShouldBe("auth.invalid_credentials");
+        (await CodeOfAsync(unknownLogin)).ShouldBe("auth.invalid_credentials");
+        knownChecks.ShouldBe(1);
+        unknownChecks.ShouldBe(knownChecks, "an unknown address skipped the password check");
+
+        // An account with no password at all (one that signs in through a provider, or an
+        // invitation not yet taken up) has nothing for Identity to hash, and must not answer faster
+        // than the other two either.
+        var passwordless = Email("work-passwordless");
+        using (var scope = counted.Services.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            (await userManager.CreateAsync(new SilexGisUser { UserName = passwordless, Email = passwordless, EmailConfirmed = true }))
+                .Succeeded.ShouldBeTrue();
+        }
+
+        hashes.Reset();
+        var passwordlessLogin = await client.PostAsJsonAsync(Login, new { email = passwordless, password = WrongPassword });
+        (await CodeOfAsync(passwordlessLogin)).ShouldBe("auth.invalid_credentials");
+        hashes.Verified.ShouldBe(knownChecks, "an account without a password skipped the password check");
+
+        // Registering: a taken address hashes the offered password as a new one does.
+        hashes.Reset();
+        (await client.PostAsJsonAsync("/api/v1/auth/register", new { email = Email("work-new"), password = "a-long-password-1" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var newHashes = hashes.Hashed;
+        hashes.Reset();
+        (await client.PostAsJsonAsync("/api/v1/auth/register", new { email = known, password = "a-long-password-1" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        newHashes.ShouldBe(1);
+        hashes.Hashed.ShouldBe(newHashes, "a taken address skipped the password hash");
     }
 
     [Fact]
@@ -346,7 +403,7 @@ public sealed class SignInProtectionTests : IDisposable, IClassFixture<PostgresF
         // So the person can simply try again, rather than being told the address is taken.
         var retry = await Browser().PostAsJsonAsync(
             "/api/v1/auth/register", new { email, password, displayName = "Ana" });
-        retry.StatusCode.ShouldBe(HttpStatusCode.Created, await retry.Content.ReadAsStringAsync());
+        retry.StatusCode.ShouldBe(HttpStatusCode.Accepted, await retry.Content.ReadAsStringAsync());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -505,6 +562,46 @@ public sealed class SignInProtectionTests : IDisposable, IClassFixture<PostgresF
     public void Dispose() => factory.Dispose();
 
     private static string Email(string what) => $"{what}-{Guid.NewGuid():N}@t.local";
+
+    /// <summary>How much password hashing the application did since the last reset.</summary>
+    private sealed class PasswordWork
+    {
+        private int hashed;
+        private int verified;
+
+        public int Hashed => Volatile.Read(ref hashed);
+
+        public int Verified => Volatile.Read(ref verified);
+
+        public void Reset()
+        {
+            Volatile.Write(ref hashed, 0);
+            Volatile.Write(ref verified, 0);
+        }
+
+        public void CountHash() => Interlocked.Increment(ref hashed);
+
+        public void CountVerify() => Interlocked.Increment(ref verified);
+    }
+
+    /// <summary>Identity's own hasher, counting what it is asked to do.</summary>
+    private sealed class CountingPasswordHasher(PasswordWork work, IOptions<PasswordHasherOptions> options)
+        : IPasswordHasher<SilexGisUser>
+    {
+        private readonly PasswordHasher<SilexGisUser> inner = new(options);
+
+        public string HashPassword(SilexGisUser user, string password)
+        {
+            work.CountHash();
+            return inner.HashPassword(user, password);
+        }
+
+        public PasswordVerificationResult VerifyHashedPassword(SilexGisUser user, string hashedPassword, string providedPassword)
+        {
+            work.CountVerify();
+            return inner.VerifyHashedPassword(user, hashedPassword, providedPassword);
+        }
+    }
 
     private HttpClient Browser() =>
         factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

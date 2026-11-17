@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
@@ -26,15 +27,36 @@ function comment(over: Record<string, unknown> = {}) {
 
 let items: ReturnType<typeof comment>[] = [comment()];
 
+// Requests that never answer: a slow link, where a second click lands while the first is out.
+const createSpy = vi.fn((_: unknown) => new Promise<void>(() => {}));
+const updateSpy = vi.fn((_: unknown) => new Promise<void>(() => {}));
+const deleteSpy = vi.fn((_: unknown) => new Promise<void>(() => {}));
+
+/** A mutation whose pending flag follows its request, as TanStack Query's does. */
+function useFakeMutation(spy: (variables: unknown) => Promise<void>) {
+  const [isPending, setPending] = useState(false);
+  return {
+    isPending,
+    mutateAsync: async (variables: unknown) => {
+      setPending(true);
+      try {
+        await spy(variables);
+      } finally {
+        setPending(false);
+      }
+    },
+  };
+}
+
 vi.mock('../../api/hooks.ts', () => ({
   useDocumentComments: () => ({
     data: { items, page: 1, pageSize: 200, totalItems: items.length },
     isPending: false,
     isError: false,
   }),
-  useCreateDocumentComment: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateDocumentComment: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDeleteDocumentComment: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateDocumentComment: () => useFakeMutation(createSpy),
+  useUpdateDocumentComment: () => useFakeMutation(updateSpy),
+  useDeleteDocumentComment: () => useFakeMutation(deleteSpy),
 }));
 
 const { default: DocumentComments } = await import('./DocumentComments.tsx');
@@ -49,6 +71,7 @@ function draw() {
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   items = [comment()];
 });
 
@@ -128,5 +151,38 @@ describe('DocumentComments', () => {
     items = [comment()];
     draw();
     expect(screen.queryByText(/edited/)).toBeNull();
+  });
+  it('posts a reply once when Post is pressed twice while the first is on its way', () => {
+    draw();
+    fireEvent.click(screen.getByText('Reply'));
+    fireEvent.change(screen.getByLabelText('Write a reply'), { target: { value: 'Agreed.' } });
+    const post = screen.getAllByRole('button', { name: 'Post' })[0];
+    fireEvent.click(post);
+    fireEvent.click(post);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves an edit once when Save is pressed twice, and offers no Save for an emptied remark', () => {
+    items = [comment({ mayEdit: true })];
+    draw();
+    fireEvent.click(screen.getByText('Edit'));
+    const box = screen.getByLabelText('Remark');
+    fireEvent.change(box, { target: { value: '   ' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    fireEvent.change(box, { target: { value: 'The fourth sketch.' } });
+    const save = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+  });
+  it('deletes once when the confirmation is pressed twice while the first is on its way', async () => {
+    items = [comment({ mayDelete: true })];
+    draw();
+    fireEvent.click(screen.getByText('Delete'));
+    const ok = await screen.findByRole('button', { name: 'OK' });
+    fireEvent.click(ok);
+    fireEvent.click(ok);
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
   });
 });

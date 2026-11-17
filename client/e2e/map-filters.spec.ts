@@ -202,6 +202,8 @@ test('a pinned saved filter narrows the map, a filter layer and the filter come 
     await expect(chip).toHaveCount(0);
     await expect(page.getByTestId('map-quick-filters')).toContainText('No pinned filters');
     await page.getByRole('button', { name: `Delete the view ${viewName}` }).click();
+    // Deleting a saved view asks first.
+    await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   } finally {
     for (const id of created) {
       await asPerson(page, 'DELETE', `/api/v1/saved-filters/${id}`).catch(() => undefined);

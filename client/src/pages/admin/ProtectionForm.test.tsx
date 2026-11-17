@@ -47,15 +47,18 @@ const stored = {
   describeLocationFreeCopies: false,
 };
 
-function show() {
-  const settings = { protection: stored } as unknown as AdminSettings;
-  return render(
+function form(settings: AdminSettings) {
+  return (
     <QueryClientProvider client={new QueryClient()}>
       <App>
         <ProtectionForm settings={settings} onSaved={onSaved} />
       </App>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+function show() {
+  return render(form({ protection: stored } as unknown as AdminSettings));
 }
 
 function switchLabelled(label: RegExp) {
@@ -94,5 +97,24 @@ describe('ProtectionForm', () => {
     await vi.waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0][0]).toBe('/api/v1/admin/settings/protection');
     expect(put.mock.calls[0][1].body).toEqual({ ...stored, describeLocationFreeCopies: true });
+  });
+
+  // Every section's save answers the whole stored document, so every open section form is
+  // handed a new settings object. Only a change to its own section may put stored values back.
+  it('keeps an unsaved switch when another section of the settings is saved', () => {
+    const view = render(form({ protection: stored, mail: { host: 'a' } } as unknown as AdminSettings));
+    const fingerprint = () => switchLabelled(/Tell phones the size and fingerprint/);
+    fireEvent.click(fingerprint());
+    expect(fingerprint().getAttribute('aria-checked')).toBe('true');
+
+    view.rerender(form({ protection: { ...stored }, mail: { host: 'b' } } as unknown as AdminSettings));
+    expect(fingerprint().getAttribute('aria-checked')).toBe('true');
+
+    // A change to this section itself — its own save, or another administrator's — is shown.
+    view.rerender(form({
+      protection: { ...stored, describeLocationFreeCopies: false, calendarFeedEnabled: true },
+      mail: { host: 'b' },
+    } as unknown as AdminSettings));
+    expect(fingerprint().getAttribute('aria-checked')).toBe('false');
   });
 });

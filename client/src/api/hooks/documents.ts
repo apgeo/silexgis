@@ -570,9 +570,14 @@ export function useUploadFileVersion() {
       }));
     },
     // The attachment now points at the new head; both the gallery and any version list refresh.
+    // So does the document behind the file — its current file, version number, size and type
+    // all name the head — and the file records, or a document page open on the old head keeps
+    // showing it until the tab is refocused.
     onSuccess: () => {
       invalidateAttachments();
       void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+      void queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 }
@@ -651,11 +656,17 @@ export function useUploadBatches(page = 1, pageSize = 20, enabled = true) {
   });
 }
 
+/** Whether a drop is still taking files: open to more, or being worked through in the background. */
+export function uploadBatchUnsettled(batch: { status: string } | undefined): boolean {
+  return batch?.status === 'open' || batch?.status === 'running';
+}
+
 /**
  * One drop and its counts.
  *
- * Polled while the work is still running, because an archive expansion and a directory import
- * happen in the background and the page has nothing else to learn from.
+ * With `poll`, asked again while the work is still running, because an archive expansion and a
+ * directory import happen in the background and the page has nothing else to learn from — and
+ * no longer once it has settled, since a finished drop does not change.
  */
 export function useUploadBatch(id: string | undefined, poll = false) {
   return useQuery({
@@ -663,16 +674,21 @@ export function useUploadBatch(id: string | undefined, poll = false) {
     queryFn: () =>
       unwrap(api.GET('/api/v1/upload-batches/{id}', { params: { path: { id: id! } } })),
     enabled: Boolean(id),
-    refetchInterval: poll ? 2000 : false,
+    refetchInterval: (query) => (poll && uploadBatchUnsettled(query.state.data) ? 2000 : false),
     retry: false,
   });
 }
 
-/** The per-file report of one drop. */
+/**
+ * The per-file report of one drop. `poll` asks again every two seconds — what a caller passes
+ * while the drop is still running, so the report grows with the work instead of keeping the
+ * first, short answer.
+ */
 export function useUploadBatchItems(
   id: string | undefined,
   params: UploadBatchItemParams = {},
   enabled = true,
+  poll = false,
 ) {
   return useQuery({
     queryKey: queryKeys.uploadBatchItems(id ?? '', params),
@@ -681,6 +697,7 @@ export function useUploadBatchItems(
         params: { path: { id: id! }, query: params },
       })),
     enabled: Boolean(id) && enabled,
+    refetchInterval: poll ? 2000 : false,
     placeholderData: keepPreviousData,
     retry: false,
   });

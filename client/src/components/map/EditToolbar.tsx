@@ -16,7 +16,7 @@ import {
   RedoOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
-import { App, Badge, Divider, Segmented, Space, Tooltip } from 'antd';
+import { App, Badge, Divider, Popconfirm, Segmented, Space, Tooltip } from 'antd';
 import Button from '../Button.tsx';
 import type Feature from 'ol/Feature';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +39,7 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
 import CaveAddModal from './CaveAddModal.tsx';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 import FeaturePalette, { FeatureSymbol } from './FeaturePalette.tsx';
 import { drawShapeForType, drawShapesForType } from './featureTypeGroups.ts';
 
@@ -165,48 +166,103 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
     setMeasure(next);
   };
 
+  // Each entry is sent on its own and taken off the pending list the moment the server accepts it,
+  // so a save that fails part way leaves only what was not saved, and pressing Save again sends
+  // only that — never a second copy of a feature that was already created. One refusal does not
+  // stop the rest: each entry stands alone, so whatever the server would accept is saved in one
+  // press rather than one entry per attempt.
   const save = async () => {
     setSaving(true);
+    let saved = 0;
+    let failed = 0;
+    // The first refusal is the one reported: one sentence the editor can act on, rather than a
+    // list of every failure, which in a batch of identical drawings is usually the same rule.
+    let firstReason: string | undefined;
+    // Each refused entry is also marked on the map: in a batch of look-alike drawings the
+    // sentence alone does not say which one to correct.
+    const refused = (reason: string, mark: () => void) => {
+      failed += 1;
+      firstReason ??= reason;
+      mark();
+    };
     try {
+      controller.clearRefused();
       const { created, modified } = controller.getPendingEdits();
       for (const { feature } of created) {
         const attrs = feature.get('pendingAttrs') as FeatureAttributeValues | undefined;
-        await createFeature({
-          kind: 'generic',
-          name: attrs?.name ?? null,
-          featureTypeId: attrs?.featureTypeId ?? Number(feature.get('featureTypeId') ?? typeId ?? 0),
-          geometry: MapEditController.toGeoJsonGeometry(feature.getGeometry()!) as never,
-          description: attrs?.description ?? null,
-          properties: (attrs?.properties ?? null) as never,
-          parents: attrs?.primaryParentId
-            ? [{ parentId: attrs.primaryParentId, isPrimary: true }]
-            : null,
-          locationProtected: attrs?.locationProtected ?? false,
-          cavingGroupId: null,
-          visibility: attrs?.visibility ?? 'private',
-        });
+        const featureTypeId = attrs?.featureTypeId ?? Number(feature.get('featureTypeId') ?? typeId ?? 0);
+        if (!featureTypeId) {
+          // Nothing names a type for this drawing; sending it would only earn the same refusal.
+          refused(t('mapEdit.problems.typeRequired'), () => controller.markCreatedRefused(feature));
+          continue;
+        }
+        try {
+          const answer = await createFeature({
+            kind: 'generic',
+            name: attrs?.name ?? null,
+            featureTypeId,
+            geometry: MapEditController.toGeoJsonGeometry(feature.getGeometry()!) as never,
+            description: attrs?.description ?? null,
+            properties: (attrs?.properties ?? null) as never,
+            parents: attrs?.primaryParentId
+              ? [{ parentId: attrs.primaryParentId, isPrimary: true }]
+              : null,
+            locationProtected: attrs?.locationProtected ?? false,
+            cavingGroupId: null,
+            visibility: attrs?.visibility ?? 'private',
+          });
+          controller.markCreatedSaved(feature, answer.id);
+          saved += 1;
+        } catch (error) {
+          refused(featureProblemMessage(error, t), () => controller.markCreatedRefused(feature));
+        }
       }
       for (const [id, geometry] of modified) {
-        // The detail DTO carries the type as its code; the update contract wants the id.
-        const { feature: current } = await fetchFeature(id);
-        await updateFeature(id, {
-          name: current.name,
-          featureTypeId: Number(
-            featureTypes?.find((ft) => ft.code === current.featureTypeCode)?.id ?? 0,
-          ),
-          geometry: geometry as never,
-          description: current.description,
-          properties: current.properties,
-          locationProtected: current.locationProtected,
-          cavingGroupId: current.cavingGroupId,
-          visibility: current.visibility,
-        });
+        const markRefused = () => controller.markModifiedRefused(id);
+        try {
+          // The version the reshaping began from, not the one the read below finds: that read is
+          // made now, and a change somebody else saved since the editor took hold of the shape
+          // would pass a check against it and be overwritten. A refusal leaves the shape pending,
+          // and pressing Save again is refused again — the way on is to discard and reshape the
+          // newer one. Only when that version could not be read does the save carry the newest
+          // one read.
+          const ifMatch = await controller.openedVersion(id);
+          const { feature: current } = await fetchFeature(id);
+          // The detail DTO carries the type as its code; the update contract wants the id. A type
+          // that cannot be found in the catalogue is not guessed: an update is a full replacement,
+          // so a made-up id would either be refused or move the feature to another type.
+          const currentTypeId = featureTypes?.find((ft) => ft.code === current.featureTypeCode)?.id;
+          if (currentTypeId === undefined) {
+            refused(t('mapEdit.typeUnresolved'), markRefused);
+            continue;
+          }
+          await updateFeature(id, {
+            name: current.name,
+            featureTypeId: Number(currentTypeId),
+            geometry: geometry as never,
+            description: current.description,
+            properties: current.properties,
+            locationProtected: current.locationProtected,
+            cavingGroupId: current.cavingGroupId,
+            visibility: current.visibility,
+          }, ifMatch);
+          controller.markModifiedSaved(id, geometry);
+          saved += 1;
+        } catch (error) {
+          refused(featureProblemMessage(error, t), markRefused);
+        }
       }
-      controller.reset();
-      surfaceFeaturesChanged();
-      message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+      if (failed === 0) {
+        controller.reset();
+        message.success(t('common.saved'));
+      } else {
+        // What was saved is already off the pending list; the rest stays on the map, pending —
+        // the layer keeps unsaved edits through a reload — for the editor to correct and save again.
+        message.error(t('mapEdit.saveIncomplete', { saved, failed, reason: firstReason }));
+      }
+      if (saved > 0) {
+        surfaceFeaturesChanged();
+      }
     } finally {
       setSaving(false);
     }
@@ -430,15 +486,24 @@ export default function EditToolbar({ controller, mayModify = true, rightsPendin
           {t('common.save')}
         </Button>
       </Badge>
-      <Tooltip title={t('mapEdit.discard')}>
-        <Button
-          size="small"
-          icon={<CloseOutlined />}
-          aria-label={t('mapEdit.discard')}
-          disabled={state.dirty === 0}
-          onClick={discard}
-        />
-      </Tooltip>
+      {/* Asks first: nothing brings a discarded drawing back, and on a phone this button sits
+          right beside Save. */}
+      <Popconfirm
+        title={t('mapEdit.discardConfirm', { count: state.dirty })}
+        okText={t('mapEdit.discardConfirmOk')}
+        okButtonProps={{ danger: true }}
+        onConfirm={discard}
+        disabled={state.dirty === 0}
+      >
+        <Tooltip title={t('mapEdit.discard')}>
+          <Button
+            size="small"
+            icon={<CloseOutlined />}
+            aria-label={t('mapEdit.discard')}
+            disabled={state.dirty === 0}
+          />
+        </Tooltip>
+      </Popconfirm>
     </Space>
   );
 

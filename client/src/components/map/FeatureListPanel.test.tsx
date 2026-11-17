@@ -4,13 +4,19 @@ import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContex
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { getEntranceSource } from '../../map/entranceLayer.ts';
 import { getSurfaceFeatureSource } from '../../map/featureLayer.ts';
-import { getWorkspaceMap } from '../../map/mapContext.ts';
+import { fitExtent, getWorkspaceMap } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import FeatureListPanel from './FeatureListPanel.tsx';
+
+// The map view's own fit needs a sized map; what the list asks it to fit is what is under test.
+vi.mock('../../map/mapContext.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../map/mapContext.ts')>()),
+  fitExtent: vi.fn(),
+}));
 
 afterEach(cleanup);
 
@@ -32,8 +38,8 @@ function cluster(count: number): Feature {
   return feature;
 }
 
-function mapFeature(id: string, name: string, typeCode: string): Feature {
-  const feature = new Feature(new Point([0, 0]));
+function mapFeature(id: string, name: string, typeCode: string, at: [number, number] = [0, 0]): Feature {
+  const feature = new Feature(new Point(at));
   feature.setProperties({ id, name, typeCode });
   return feature;
 }
@@ -97,5 +103,78 @@ describe('FeatureListPanel', () => {
     fireEvent.click(open);
 
     expect(useWorkspaceStore.getState().selection).toEqual({ kind: 'feature', featureId: 'f7' });
+  });
+
+  it('settles once the sources are still, instead of restyling and re-deriving forever', async () => {
+    const aven = entrance('e1', 'c1', 'Aven');
+    const field = mapFeature('f1', 'Doline field', 'doline');
+    getEntranceSource().addFeatures([aven]);
+    getSurfaceFeatureSource().addFeatures([field]);
+    renderPanel();
+    await screen.findByText('Aven');
+    // One change on a source — a reload, a selection highlight — starts a refresh; what it does
+    // has to end there, not set off the next one.
+    getEntranceSource().changed();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const restyled = [vi.spyOn(aven, 'setStyle'), vi.spyOn(field, 'setStyle')];
+
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    for (const spy of restyled) {
+      expect(spy).not.toHaveBeenCalled();
+    }
+  });
+
+  it('takes the checked-row marker off the shared map features when it closes', async () => {
+    const field = mapFeature('f1', 'Doline field', 'doline');
+    getSurfaceFeatureSource().addFeatures([field]);
+    const { unmount } = renderPanel();
+    await screen.findByText('Doline field');
+    fireEvent.click(screen.getAllByRole('checkbox').at(-1)!);
+    expect(field.getStyle()).toBeTruthy();
+
+    unmount();
+
+    expect(field.getStyle()).toBeFalsy();
+  });
+
+  it('says nothing is in view when the sources are empty, rather than showing two empty tables', async () => {
+    renderPanel();
+
+    expect(await screen.findByText('Nothing loaded in the current view.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('zooms to the extent that holds every checked row, and only those', async () => {
+    getSurfaceFeatureSource().addFeatures([
+      mapFeature('f1', 'West sink', 'doline', [100, 200]),
+      mapFeature('f2', 'East sink', 'doline', [900, 600]),
+      mapFeature('f3', 'Far sink', 'doline', [50000, 50000]),
+    ]);
+    renderPanel();
+    await screen.findByText('Far sink');
+    const rowCheckbox = (name: string) =>
+      screen.getByText(name).closest('tr')!.querySelector('input[type="checkbox"]')!;
+    fireEvent.click(rowCheckbox('West sink'));
+    fireEvent.click(rowCheckbox('East sink'));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    vi.mocked(fitExtent).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom to selected/ }));
+
+    expect(fitExtent).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fitExtent).mock.calls[0][0]).toEqual([100, 200, 900, 600]);
+  });
+
+  it('takes the hover marker off a map feature when the list closes under the pointer', async () => {
+    const field = mapFeature('f1', 'Doline field', 'doline');
+    getSurfaceFeatureSource().addFeatures([field]);
+    const { unmount } = renderPanel();
+    fireEvent.mouseOver((await screen.findByText('Doline field')).closest('tr')!);
+    expect(field.getStyle()).toBeTruthy();
+
+    unmount();
+
+    expect(field.getStyle()).toBeFalsy();
   });
 });

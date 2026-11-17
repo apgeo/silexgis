@@ -107,9 +107,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function show() {
+function show(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <App>
           <PhoneUsersPage />
@@ -180,6 +180,29 @@ describe('who may map', () => {
 
     expect(await screen.findByTestId('phone-users-error')).toHaveTextContent('open to accounts that may read the roster');
   });
+
+  it('names a failed first read and reads again on retry', async () => {
+    listFailure = new TypeError('Failed to fetch');
+    show();
+
+    expect(await screen.findByTestId('phone-users-error')).toHaveTextContent('The phone users could not be loaded.');
+    listFailure = null;
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByTestId('phone-user-pick-aaaaaaaa')).toBeInTheDocument();
+  });
+
+  it('keeps the table when a later read fails, and says so above it', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    show(client);
+    await screen.findByTestId('phone-user-pick-aaaaaaaa');
+
+    listFailure = new TypeError('Failed to fetch');
+    await client.refetchQueries();
+
+    expect(await screen.findByTestId('phone-users-refresh-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('phone-users-error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('phone-user-pick-aaaaaaaa')).toBeInTheDocument();
+  });
 });
 
 describe('mapping and unmapping', () => {
@@ -193,6 +216,26 @@ describe('mapping and unmapping', () => {
     await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     expect(put).toHaveBeenCalledWith('/api/v1/phone-users/{deviceUserId}/link', {
       params: { path: { deviceUserId: UNMAPPED.deviceUserId } },
+      body: { caverId: 'caver-ana' },
+    });
+  });
+
+  it('moves a mapped phone user to somebody else only once the change, naming both people, is confirmed', async () => {
+    show();
+
+    const pick = await screen.findByTestId('phone-user-pick-bbbbbbbb');
+    fireEvent.mouseDown(within(pick).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('Ana Invented'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Demo Caver');
+    expect(dialog).toHaveTextContent('Ana Invented');
+    expect(put).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Link to the new person' }));
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith('/api/v1/phone-users/{deviceUserId}/link', {
+      params: { path: { deviceUserId: MAPPED.deviceUserId } },
       body: { caverId: 'caver-ana' },
     });
   });

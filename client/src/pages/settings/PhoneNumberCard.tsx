@@ -24,6 +24,8 @@ export default function PhoneNumberCard() {
   const [number, setNumber] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  // Whether the person asked to send the code to another number while one is waiting for its code.
+  const [replacing, setReplacing] = useState(false);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.phone });
@@ -59,8 +61,40 @@ export default function PhoneNumberCard() {
         return;
       }
       setCode('');
+      setReplacing(false);
       refresh();
       message.success(t('security.codeSent', { destination: data.destination }));
+    } catch {
+      message.error(t('security.phoneSendFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Texts the waiting code again to the number already pending; a mistyped number is corrected
+  // by sending to another one instead, which replaces the pending number.
+  const resend = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await api.POST('/api/v1/me/phone/resend');
+      if (error !== undefined || !data) {
+        const problem = codeOf(error);
+        message.error(
+          problem === 'me.phone_resend_too_soon'
+            ? t('security.phoneResendTooSoon')
+            : problem === 'me.phone_change_missing'
+              ? t('security.phoneNothingPending')
+              : t('security.phoneSendFailed'),
+        );
+        if (problem === 'me.phone_change_missing') {
+          refresh();
+        }
+        return;
+      }
+      setCode('');
+      message.success(t('security.codeSent', { destination: data.destination }));
+    } catch {
+      message.error(t('security.phoneSendFailed'));
     } finally {
       setBusy(false);
     }
@@ -85,20 +119,43 @@ export default function PhoneNumberCard() {
       setCode('');
       refresh();
       message.success(t('security.phoneConfirmed'));
+    } catch {
+      message.error(t('common.saveFailed'));
     } finally {
       setBusy(false);
     }
   };
 
   const remove = async () => {
-    const { error } = await api.DELETE('/api/v1/me/phone');
-    if (error !== undefined) {
+    try {
+      const { error } = await api.DELETE('/api/v1/me/phone');
+      if (error !== undefined) {
+        message.error(t('common.saveFailed'));
+        return;
+      }
+      refresh();
+      message.success(t('security.phoneRemoved'));
+    } catch {
       message.error(t('common.saveFailed'));
-      return;
     }
-    refresh();
-    message.success(t('security.phoneRemoved'));
   };
+
+  const numberEntry = (
+    <Flex gap={8} wrap>
+      <Input
+        style={{ width: 220 }}
+        aria-label={t('security.phoneNumber')}
+        placeholder="+40712345678"
+        value={number}
+        maxLength={32}
+        onChange={(e) => setNumber(e.target.value)}
+        onPressEnter={() => void start()}
+      />
+      <Button loading={busy} disabled={number.trim().length < 8} onClick={() => void start()}>
+        {status.confirmed || status.pendingPhoneNumber ? t('security.phoneChange') : t('security.phoneAdd')}
+      </Button>
+    </Flex>
+  );
 
   return (
     <Card
@@ -157,24 +214,25 @@ export default function PhoneNumberCard() {
                 {t('security.confirm')}
               </Button>
             </Flex>
+            {/* A code that never arrived can be asked for again; a mistyped number is replaced by
+                sending to the right one. Nothing here clears the pending number on its own: the
+                only route that does also removes a confirmed number and its texted sign-in codes. */}
+            {status.smsConfigured && (
+              <Flex gap={8} wrap>
+                <Button size="small" disabled={busy} onClick={() => void resend()}>
+                  {t('security.phoneResend')}
+                </Button>
+                {!replacing && (
+                  <Button size="small" type="link" onClick={() => setReplacing(true)}>
+                    {t('security.phoneUseOther')}
+                  </Button>
+                )}
+              </Flex>
+            )}
+            {status.smsConfigured && replacing && numberEntry}
           </Flex>
         ) : (
-          status.smsConfigured && (
-            <Flex gap={8} wrap>
-              <Input
-                style={{ width: 220 }}
-                aria-label={t('security.phoneNumber')}
-                placeholder="+40712345678"
-                value={number}
-                maxLength={32}
-                onChange={(e) => setNumber(e.target.value)}
-                onPressEnter={() => void start()}
-              />
-              <Button loading={busy} disabled={number.trim().length < 8} onClick={() => void start()}>
-                {status.confirmed ? t('security.phoneChange') : t('security.phoneAdd')}
-              </Button>
-            </Flex>
-          )
+          status.smsConfigured && numberEntry
         )}
 
         <Typography.Text type="secondary">{t('security.phoneHint')}</Typography.Text>

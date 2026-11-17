@@ -306,24 +306,61 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         }
     }
 
-    /// <summary>An account can be removed, and the person it belonged to is not.</summary>
+    /// <summary>
+    /// An account can be removed, and the person it belonged to is not: the roster entry and its
+    /// club memberships stay as club history, while what the account was granted goes with it.
+    /// </summary>
     /// <remarks>
     /// A club's roster outlives the logins attached to it: somebody who leaves takes their account
     /// with them, and the trips they were on keep naming them. So the directory entry survives the
     /// delete with its link cleared, rather than cascading away and taking its history with it.
+    /// The account's permission rows (its trustee places in permission groups and the rules naming
+    /// it as their subject) carry no foreign key, so the database would not remove them: left
+    /// behind they show as nameless trustees and keep granting to an id that no longer exists.
     /// </remarks>
     [Fact]
     public async Task Deleting_an_account_leaves_the_person_behind()
     {
         var doomedEmail = $"ua-gone-{tag}@t.local";
         var doomedId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, doomedEmail);
+        // A second account given the same rows, which the delete must leave alone.
+        var keptId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ua-kept-{tag}@t.local");
 
         Guid caverId;
+        Guid clubId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var caver = await db.Cavers.FirstAsync(c => c.UserId == doomedId);
             caverId = caver.Id;
+
+            var club = new CavingGroup { Name = $"Departure club {tag}", Slug = $"departure-club-{tag}" };
+            db.CavingGroups.Add(club);
+            clubId = club.Id;
+            db.CavingGroupMemberships.Add(new CavingGroupMembership { CaverId = caverId, CavingGroupId = club.Id });
+
+            var trustees = await db.PermissionGroups.Where(g => g.Slug == SeededPermissionGroups.EditorsSlug).Select(g => g.Id).SingleAsync();
+            foreach (var account in new[] { doomedId, keptId })
+            {
+                db.PermissionGroupMembers.Add(new PermissionGroupMember
+                {
+                    PermissionGroupId = trustees,
+                    MemberKind = AccessSubjectKind.User,
+                    MemberId = account,
+                });
+                db.AccessEntries.Add(new AccessEntry
+                {
+                    SubjectKind = AccessSubjectKind.User,
+                    SubjectId = account,
+                    Domain = AccessDomain.Documents,
+                    Actions = AccessAction.Read,
+                    Effect = AccessEffect.Allow,
+                    ScopeKind = AccessScopeKind.All,
+                });
+            }
+
+            await db.SaveChangesAsync();
+            (await UserPermissionRowsAsync(db, doomedId)).ShouldBeGreaterThan(0);
         }
 
         (await admin.DeleteAsync($"/api/v1/users/{doomedId}")).StatusCode
@@ -336,6 +373,11 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
 
             var caver = await db.Cavers.AsNoTracking().SingleAsync(c => c.Id == caverId);
             caver.UserId.ShouldBeNull("the person outlives the account, with the link cleared");
+            (await db.CavingGroupMemberships.CountAsync(m => m.CaverId == caverId && m.CavingGroupId == clubId))
+                .ShouldBe(1, "club membership is club history and stays with the person");
+
+            (await UserPermissionRowsAsync(db, doomedId)).ShouldBe(0, "the account's trustee places and rules go with it");
+            (await UserPermissionRowsAsync(db, keptId)).ShouldBeGreaterThanOrEqualTo(2, "another account's rows are untouched");
         }
 
         (await admin.GetAsync($"/api/v1/users/{doomedId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -450,4 +492,9 @@ public sealed class UserAdministrationTests : IAsyncLifetime, IDisposable, IClas
         editor?.Dispose();
         factory.Dispose();
     }
+
+    /// <summary>Trustee rows plus rules naming the account as their subject.</summary>
+    private static async Task<int> UserPermissionRowsAsync(SilexGisDbContext db, Guid userId) =>
+        await db.PermissionGroupMembers.CountAsync(m => m.MemberKind == AccessSubjectKind.User && m.MemberId == userId)
+        + await db.AccessEntries.CountAsync(e => e.SubjectKind == AccessSubjectKind.User && e.SubjectId == userId);
 }

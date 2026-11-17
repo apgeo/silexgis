@@ -112,7 +112,7 @@ test('a grant is announced in the inbox, counted in the header, and degrades whe
     // otherwise pile up until a bare delete click had no single target.
     const staleGrants = modal.getByRole('row', { name: /E2E Grantee / });
     while ((await staleGrants.count()) > 0) {
-      await staleGrants.first().getByRole('button', { name: 'delete' }).click();
+      await staleGrants.first().getByRole('button', { name: /^Remove the rule for / }).click();
     }
     await modal.locator('.ant-select').nth(1).click();
     await adminPage.keyboard.type(granteeName);

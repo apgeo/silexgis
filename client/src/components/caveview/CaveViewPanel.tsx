@@ -16,7 +16,11 @@ import {
 } from '../../caveview/loadCaveView.ts';
 import { markerLabelTheme, type MarkerLabelPlate } from '../../caveview/markerLabelTheme.ts';
 import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
-import { downloadSurveyFile } from '../../caveview/surveyFileDownload.ts';
+import {
+  caveViewerFailureMessage,
+  startCaveViewer,
+  type CaveViewerFailure,
+} from '../../caveview/viewerLifecycle.ts';
 import {
   focusForRef,
   partFromLeg,
@@ -63,6 +67,7 @@ import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { markerLine } from '../../caveview/markerLine.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
+import Button from '../Button.tsx';
 import Lightbox from '../gallery/Lightbox.tsx';
 import CaveViewCompare from './CaveViewCompare.tsx';
 import CaveViewTrackingOverlay, { type TrackedPlace } from './CaveViewTrackingOverlay.tsx';
@@ -411,7 +416,9 @@ export default function CaveViewPanel({
   containerIdRef.current ??= `caveview-panel-${panelSequence++}`;
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [errorDetail, setErrorDetail] = useState<string>();
+  const [failure, setFailure] = useState<CaveViewerFailure | null>(null);
+  // Counts the reader's asks to try again: each builds another viewer for the same file.
+  const [attempt, setAttempt] = useState(0);
   /** Set when a link named a part of the survey this model turned out not to hold. */
   const [missingPart, setMissingPart] = useState(false);
   const [showMarkerTimes, setShowMarkerTimes] = useState(false);
@@ -622,9 +629,8 @@ export default function CaveViewPanel({
 
   useEffect(() => {
     let disposed = false;
-    let ui: CaveViewUi | null = null;
-    let built: CaveViewer | null = null;
     setStatus('loading');
+    setFailure(null);
     setMissingPart(false);
     setOpenCaverId(null);
     // A mark belongs to the model it was put on, and a new model has none. Left standing it would
@@ -651,25 +657,112 @@ export default function CaveViewPanel({
     // under it would leave a photograph of another cave's pitch head sitting over the new one.
     setOpenedPictures(null);
 
-    (async () => {
-      const cv2 = await loadCaveView();
+    const stop = startCaveViewer({
       // Shared with any other viewer on the page reading the same file — a movie dialog opened
       // over this one reads the bytes this panel has just read.
-      const blob = await downloadSurveyFile(fileUrlRef.current);
-      if (disposed) return;
-
+      containerId: containerIdRef.current!,
+      files: [{ url: fileUrlRef.current, fileName }],
       // Built with what every viewer here is built with — see `caveViewerOptions` for why none of
       // it is this component's to choose. A caller with no account cannot reach this installation's
       // coordinate-system registry and supplies a lookup of its own; see the prop.
       // The labels' plate is the one thing a caller may choose, and a caller that chooses nothing
       // adds no option at all.
-      const labelTheme = markerLabelTheme(markerLabelsRef.current);
-      const viewer = new cv2.CaveViewer(containerIdRef.current!, {
-        ...caveViewerOptions(languageRef.current, crsLookupRef.current),
-        ...(labelTheme === undefined ? {} : { theme: labelTheme }),
-      });
-      viewer.addEventListener('newCave', () => {
-        if (disposed) return;
+      options: () => {
+        const labelTheme = markerLabelTheme(markerLabelsRef.current);
+        return {
+          ...caveViewerOptions(languageRef.current, crsLookupRef.current),
+          ...(labelTheme === undefined ? {} : { theme: labelTheme }),
+        };
+      },
+      onBuilt: (viewer, ui) => {
+        viewerRef.current = { viewer, ui };
+        viewer.addEventListener('entrance', (event) => {
+          const name = (event as { displayName?: unknown }).displayName;
+          if (!disposed && typeof name === 'string' && name) {
+            onEntrancePickRef.current?.(name);
+          }
+        });
+
+        // Both are watched unconditionally and answer only when somebody is listening, because the
+        // listeners are attached once with the viewer and the caller's interest can change without
+        // the survey being reloaded.
+        //
+        // `handled` is deliberately left alone. The bundle reads it back after dispatching and
+        // treats a true as "the application dealt with this click", which would stop the viewer
+        // selecting and highlighting what was clicked — so offering to link a station would take
+        // away the ability to simply look at one.
+        //
+        // <b>A tap is not answered with a camera move, and used to be.</b> The reasoning for that was
+        // that the strip is a hover and a finger cannot hover, so the only way to it was focusing the
+        // station — which flies and recentres the camera. It is not: the viewer reports a station
+        // tapped as well as hovered, and shows the strip for it where it stands. Driven against the
+        // vendored bundle on a 286px surface, a stationary tap on a station dispatched `station` and
+        // then `stationHover` with `pointerType` touch and drew the strip at the station, with
+        // nothing having called `focusStation`; a tap on empty space took it off again, which is the
+        // dismissal a finger otherwise has to be given. So the move bought nothing, and it cost the
+        // most on the one surface where a tap means something else — the tracking tab, where somebody
+        // taps the station the party is at and then reaches for "Record here" while the model slides
+        // out from under their finger.
+        viewer.addEventListener('station', (event) => {
+          if (disposed) return;
+          const part = partFromStation((event as { node?: unknown }).node);
+          if (part === null) return;
+          onPartPickRef.current?.(part);
+        });
+        // A thumbnail of the strip was clicked. Taken over from the viewer's own popup, which draws
+        // the picture into the model at the station: that is the right fallback for a host with
+        // nowhere better to put it, but this application has a picture viewer, and a photograph of a
+        // pitch head is worth more than a small square floating in a line drawing — it can be
+        // zoomed, panned, read with its caption and dismissed with Escape.
+        //
+        // `handled` is set only once there is something to show. A malformed entry leaves it alone
+        // so the viewer still does whatever it would have done, rather than the click doing nothing
+        // at all because this listener claimed it and then declined.
+        viewer.addEventListener('mediaOpen', (event) => {
+          if (disposed) return;
+          const opened = event as { entry?: CaveViewMediaEntry; station?: unknown; handled?: boolean };
+          const entry = opened.entry;
+          if (entry == null || typeof entry.url !== 'string' || entry.url.length === 0) {
+            return;
+          }
+          opened.handled = true;
+          // Where it has to be drawn is a question about this moment — whether the model is covering
+          // the screen right now — so it is asked now, with the element the viewer would have put
+          // into the top layer in hand.
+          setPictureHost(screenCoveringSurface(document.getElementById(containerIdRef.current!)));
+          setOpenedPictures(openedFrom(stationMediaRef.current, opened.station, entry));
+        });
+        viewer.addEventListener('leg', (event) => {
+          const part = partFromLeg((event as { leg?: unknown }).leg);
+          if (!disposed && part !== null) {
+            onPartPickRef.current?.(part);
+          }
+        });
+        // Resting on a caver's marker opens that caver's card. `handled` is left alone here too,
+        // and now decides nothing: what it suppresses is the marker's own hover line, and no marker
+        // this panel draws is given one — everything the switches ask for is on the label, where a
+        // collapsed marker can say it too. Left unset rather than set, so a hover line added here
+        // later is not swallowed by a flag nobody would think to look for.
+        viewer.addEventListener('liveMarkerHover', (event) => {
+          const id = (event as { id?: unknown }).id;
+          if (!disposed && typeof id === 'string') {
+            setOpenCaverId(id);
+          }
+        });
+        // A caver standing with others is not the same event: the viewer collapses them and
+        // reports the group, so listening only for the one above leaves a party of three
+        // answering nothing — which is most of them, because a party moves together. The card
+        // is per person, so the group's first line is opened; the list beside the model is how
+        // a reader reaches the rest, and it is already showing them together.
+        viewer.addEventListener('liveMarkerCluster', (event) => {
+          const markers = (event as { markers?: readonly { id?: unknown }[] }).markers;
+          const first = markers?.find((marker) => typeof marker.id === 'string')?.id;
+          if (!disposed && typeof first === 'string') {
+            setOpenCaverId(first);
+          }
+        });
+      },
+      onLoaded: (viewer) => {
         setStatus('ready');
         setModelLoads((count) => count + 1);
         // The parsed survey is the only thing that knows its stations; asked here, once,
@@ -689,108 +782,16 @@ export default function CaveViewPanel({
           }
           onStationsLoadedRef.current(stations);
         }
-      });
-      viewer.addEventListener('entrance', (event) => {
-        const name = (event as { displayName?: unknown }).displayName;
-        if (!disposed && typeof name === 'string' && name) {
-          onEntrancePickRef.current?.(name);
-        }
-      });
-
-      // Both are watched unconditionally and answer only when somebody is listening, because the
-      // listeners are attached once with the viewer and the caller's interest can change without
-      // the survey being reloaded.
-      //
-      // `handled` is deliberately left alone. The bundle reads it back after dispatching and
-      // treats a true as "the application dealt with this click", which would stop the viewer
-      // selecting and highlighting what was clicked — so offering to link a station would take
-      // away the ability to simply look at one.
-      //
-      // <b>A tap is not answered with a camera move, and used to be.</b> The reasoning for that was
-      // that the strip is a hover and a finger cannot hover, so the only way to it was focusing the
-      // station — which flies and recentres the camera. It is not: the viewer reports a station
-      // tapped as well as hovered, and shows the strip for it where it stands. Driven against the
-      // vendored bundle on a 286px surface, a stationary tap on a station dispatched `station` and
-      // then `stationHover` with `pointerType` touch and drew the strip at the station, with
-      // nothing having called `focusStation`; a tap on empty space took it off again, which is the
-      // dismissal a finger otherwise has to be given. So the move bought nothing, and it cost the
-      // most on the one surface where a tap means something else — the tracking tab, where somebody
-      // taps the station the party is at and then reaches for "Record here" while the model slides
-      // out from under their finger.
-      viewer.addEventListener('station', (event) => {
-        if (disposed) return;
-        const part = partFromStation((event as { node?: unknown }).node);
-        if (part === null) return;
-        onPartPickRef.current?.(part);
-      });
-      // A thumbnail of the strip was clicked. Taken over from the viewer's own popup, which draws
-      // the picture into the model at the station: that is the right fallback for a host with
-      // nowhere better to put it, but this application has a picture viewer, and a photograph of a
-      // pitch head is worth more than a small square floating in a line drawing — it can be
-      // zoomed, panned, read with its caption and dismissed with Escape.
-      //
-      // `handled` is set only once there is something to show. A malformed entry leaves it alone
-      // so the viewer still does whatever it would have done, rather than the click doing nothing
-      // at all because this listener claimed it and then declined.
-      viewer.addEventListener('mediaOpen', (event) => {
-        if (disposed) return;
-        const opened = event as { entry?: CaveViewMediaEntry; station?: unknown; handled?: boolean };
-        const entry = opened.entry;
-        if (entry == null || typeof entry.url !== 'string' || entry.url.length === 0) {
-          return;
-        }
-        opened.handled = true;
-        // Where it has to be drawn is a question about this moment — whether the model is covering
-        // the screen right now — so it is asked now, with the element the viewer would have put
-        // into the top layer in hand.
-        setPictureHost(screenCoveringSurface(document.getElementById(containerIdRef.current!)));
-        setOpenedPictures(openedFrom(stationMediaRef.current, opened.station, entry));
-      });
-      viewer.addEventListener('leg', (event) => {
-        const part = partFromLeg((event as { leg?: unknown }).leg);
-        if (!disposed && part !== null) {
-          onPartPickRef.current?.(part);
-        }
-      });
-      // Resting on a caver's marker opens that caver's card. `handled` is left alone here too,
-      // and now decides nothing: what it suppresses is the marker's own hover line, and no marker
-      // this panel draws is given one — everything the switches ask for is on the label, where a
-      // collapsed marker can say it too. Left unset rather than set, so a hover line added here
-      // later is not swallowed by a flag nobody would think to look for.
-      viewer.addEventListener('liveMarkerHover', (event) => {
-        const id = (event as { id?: unknown }).id;
-        if (!disposed && typeof id === 'string') {
-          setOpenCaverId(id);
-        }
-      });
-      // A caver standing with others is not the same event: the viewer collapses them and
-      // reports the group, so listening only for the one above leaves a party of three
-      // answering nothing — which is most of them, because a party moves together. The card
-      // is per person, so the group's first line is opened; the list beside the model is how
-      // a reader reaches the rest, and it is already showing them together.
-      viewer.addEventListener('liveMarkerCluster', (event) => {
-        const markers = (event as { markers?: readonly { id?: unknown }[] }).markers;
-        const first = markers?.find((marker) => typeof marker.id === 'string')?.id;
-        if (!disposed && typeof first === 'string') {
-          setOpenCaverId(first);
-        }
-      });
-
-      ui = new cv2.CaveViewUI(viewer);
-      built = viewer;
-      viewerRef.current = { viewer, ui };
-      ui.loadCave(new File([blob], fileName));
-    })().catch((error: unknown) => {
-      if (disposed) return;
-      setStatus('error');
-      setErrorDetail(error instanceof Error ? error.message : String(error));
+      },
+      onFailed: (reason) => {
+        setStatus('error');
+        setFailure(reason);
+      },
     });
 
     return () => {
       disposed = true;
       viewerRef.current = null;
-      ui?.dispose();
-      ui = null;
       // A disposed viewer is asked to draw once more. The load handed to it above is not awaited —
       // nothing here can await it — so this panel is routinely pointed at another file while the
       // last one is still parsing: every pick of a past trip and every way back on the public page
@@ -798,15 +799,12 @@ export default function CaveViewPanel({
       // event of that parse and once more half a second after it ends, against a renderer that
       // `dispose()` has already let go of. The viewer loaded now returns from such a call without
       // effect; an earlier build threw — an uncaught TypeError on the one surface strangers read
-      // with nobody watching its console. There is nothing left to draw either way, so the late
-      // asks are still answered with nothing here, and this panel does not rest on the viewer's own
+      // with nobody watching its console. There is nothing left to draw either way, so ending the
+      // viewer answers the late asks with nothing, and this panel does not rest on the viewer's own
       // guard alone.
-      if (built !== null) {
-        built.renderView = () => {};
-        built = null;
-      }
+      stop();
     };
-  }, [fileIdentity, fileName]);
+  }, [fileIdentity, fileName, attempt]);
 
   // ---- Re-asking the viewer what a group says ----
   //
@@ -1338,6 +1336,29 @@ export default function CaveViewPanel({
     };
   }, [stationMedia, status]);
 
+  // ---- Following the screen for the controls drawn over the model ----
+  //
+  // While the model covers the screen nothing outside its surface is drawn, so the name-size
+  // control moves inside it. Watched for as long as there is a control to move: the class the
+  // viewer pins the surface with raises no event, so it is observed rather than waited for.
+  const [coveringSurface, setCoveringSurface] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const surface = document.getElementById(containerIdRef.current!);
+    if (!toolbarWanted || status !== 'ready' || surface === null) {
+      setCoveringSurface(null);
+      return;
+    }
+    const settle = () => setCoveringSurface(screenCoveringSurface(surface));
+    settle();
+    const observer = new MutationObserver(settle);
+    observer.observe(surface, { attributes: true, attributeFilter: ['class'] });
+    document.addEventListener('fullscreenchange', settle);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('fullscreenchange', settle);
+    };
+  }, [toolbarWanted, status]);
+
   // ---- Following the screen under an open picture ----
   //
   // Which element the picture viewer belongs in is settled when a thumbnail is clicked, and one
@@ -1371,10 +1392,26 @@ export default function CaveViewPanel({
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="caveview-loading" />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('caveview.loadError')}
+          description={failure === null ? undefined : caveViewerFailureMessage(failure, t)}
+          action={
+            <Button size="small" onClick={() => setAttempt((count) => count + 1)} data-testid="caveview-retry">
+              {t('caveview.tryAgain')}
+            </Button>
+          }
+          data-testid="caveview-error"
+        />
       )}
-      {/* Beside the viewer's own controls, which is where the names it sizes are turned on. */}
-      {toolbarWanted && status === 'ready' && <CaveViewLabelScale />}
+      {/* Beside the viewer's own controls, which is where the names it sizes are turned on — and
+          inside the model while it covers the screen, where nothing outside it is drawn. */}
+      {toolbarWanted &&
+        status === 'ready' &&
+        (coveringSurface
+          ? createPortal(<CaveViewLabelScale popupContainer={coveringSurface} />, coveringSurface)
+          : <CaveViewLabelScale />)}
       {missingPart && (
         <Alert
           className="caveview-panel-notice"

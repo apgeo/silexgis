@@ -6,7 +6,7 @@ import Point from 'ol/geom/Point';
 import Polygon from 'ol/geom/Polygon';
 import type Style from 'ol/style/Style';
 import { describe, expect, it } from 'vitest';
-import { createSurfaceFeatureLayer, setFeatureTypeSymbols } from './featureLayer.ts';
+import { createSurfaceFeatureLayer, SAVE_REFUSED, setFeatureTypeSymbols } from './featureLayer.ts';
 import { lithologyPalette } from './markerPalette.ts';
 
 describe('feature styling', () => {
@@ -59,6 +59,22 @@ describe('feature styling', () => {
     expect(none.getStroke()?.getLineDash()).not.toBeNull();
     // Any other area keeps the ordinary outline style.
     expect(plain.getStroke()?.getColor()).not.toBe(lithologyPalette.classes.limestone);
+  });
+
+  it('marks an edit the server refused, so it can be told from the ones that saved', () => {
+    const point = pointLike(new Point([0, 0]));
+    const plain = stylesFor(point);
+    point.set(SAVE_REFUSED, true);
+    const marked = stylesFor(point);
+    expect(marked).toHaveLength(plain.length + 1);
+    expect(marked.slice(1)).toEqual(plain);
+
+    const line = new Feature(new LineString([[0, 0], [1, 1]]));
+    const plainLine = stylesFor(line);
+    line.set(SAVE_REFUSED, true);
+    const markedLine = stylesFor(line);
+    expect(markedLine).toHaveLength(plainLine.length + 1);
+    expect(markedLine[0].getStroke()?.getWidth()).toBeGreaterThan(plainLine[0].getStroke()!.getWidth()!);
   });
 
   it('renders lines with a stroke and no image', () => {

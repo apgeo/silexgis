@@ -103,6 +103,35 @@ describe('AttachmentDetails', () => {
     expect(updateFileSpy).not.toHaveBeenCalled();
   });
 
+  it('keeps an unsaved edit when the attachment comes back from the server as a new object', async () => {
+    const { rerender } = render(
+      <App>
+        <AttachmentDetails attachment={attachment} />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    const caption = await screen.findByDisplayValue('Main entrance');
+    fireEvent.change(caption, { target: { value: 'Winter view' } });
+
+    // A refetch, or flipping the phones' default set, hands back an equal attachment as a new
+    // object: what is being typed must survive it.
+    rerender(
+      <App>
+        <AttachmentDetails attachment={{ ...attachment, inDeviceDefaultSet: true, file: { ...attachment.file } }} />
+      </App>,
+    );
+    expect(screen.getByDisplayValue('Winter view')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Main entrance')).not.toBeInTheDocument();
+  });
+
+  it('refills from the stored values when reopened after closing without saving', async () => {
+    open();
+    fireEvent.change(await screen.findByDisplayValue('Main entrance'), { target: { value: 'Winter view' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByDisplayValue('Main entrance')).toBeInTheDocument();
+  });
+
   it('flips the phones\' default download on its own route, without touching the other fields', async () => {
     open();
     const toggle = await screen.findByRole('switch', { name: "Include in the phones' default download" });

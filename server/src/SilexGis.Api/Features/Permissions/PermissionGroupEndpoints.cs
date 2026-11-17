@@ -307,7 +307,17 @@ public static class PermissionGroupEndpoints
             return ApiProblems.Conflict(ProtectedCode, "This permission group cannot be deleted.");
         }
 
-        // Entries and trustee rows cascade; both only ever narrow access when they go.
+        // Entries and trustee rows cascade. An allow or a trustee row only ever narrows access
+        // when it goes, but a deny of the group's widens it for every member, so deleting the
+        // group is bounded exactly as removing each of its denies from the list would be.
+        var denies = await db.AccessEntries.AsNoTracking()
+            .Where(e => e.PermissionGroupId == id && e.Effect == AccessEffect.Deny)
+            .ToListAsync(ct);
+        if (await AccessEntryMapping.RejectRemovalsAsync(db, ctx, denies, ct) is { } refused)
+        {
+            return refused;
+        }
+
         db.PermissionGroups.Remove(group);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -390,7 +400,11 @@ public static class PermissionGroupEndpoints
         }
 
         var current = await db.AccessEntries.Where(e => e.PermissionGroupId == id).ToListAsync(ct);
-        AccessEntryMapping.StageReplace(db, current, staged);
+        if (await AccessEntryMapping.StageReplaceAsync(db, ctx, current, staged, ct) is { } refused)
+        {
+            return refused;
+        }
+
         await db.SaveChangesAsync(ct);
 
         var saved = await db.AccessEntries.AsNoTracking()
@@ -578,6 +592,16 @@ public static class PermissionGroupEndpoints
         if (member is null)
         {
             return ApiProblems.NotFound("permission_group.member_not_found");
+        }
+
+        // Taking a trustee out lifts every deny of the group's for them, so it is bounded exactly
+        // as removing those denies from the list would be — the remover's own membership included.
+        var denies = await db.AccessEntries.AsNoTracking()
+            .Where(e => e.PermissionGroupId == id && e.Effect == AccessEffect.Deny)
+            .ToListAsync(ct);
+        if (await AccessEntryMapping.RejectRemovalsAsync(db, ctx, denies, ct) is { } refused)
+        {
+            return refused;
         }
 
         // This is the one path that can empty Full Administrators outright, so it is the

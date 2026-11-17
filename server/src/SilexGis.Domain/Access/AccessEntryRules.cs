@@ -14,6 +14,13 @@ public static class AccessEntryRules
 
     public const string ExceedsOwnRightsCode = "access_entry.exceeds_own_rights";
 
+    /// <summary>
+    /// A save would remove a deny whose withheld rights the author does not hold. Separate from
+    /// <see cref="ExceedsOwnRightsCode"/> so a page can say it is the removal, not an addition,
+    /// that was refused.
+    /// </summary>
+    public const string RemovalExceedsOwnRightsCode = "access_entry.removal_exceeds_own_rights";
+
     public const string DenyFullAdministratorsCode = "access_entry.deny_full_administrators";
 
     /// <summary>Domains whose rows carry the owner/caving-group/visibility trio — the
@@ -166,6 +173,21 @@ public static class AccessEntryRules
 
         return exceeded;
     }
+
+    /// <summary>
+    /// The no-amplification rule for removals. Taking a deny away hands back exactly what it
+    /// withheld, so it is bounded the way granting those actions would be: a caller who is not a
+    /// Full Administrator may remove a deny only when they hold an effective ALLOW for each of
+    /// its actions at the deny's own anchor (the same <paramref name="anchorFacts"/> the
+    /// authoring check uses). Removing an allow only ever narrows access and is not bounded.
+    /// Returns the withheld actions the author does NOT hold — <see cref="AccessAction.None"/>
+    /// means the removal is within bounds.
+    /// </summary>
+    public static AccessAction ExceededByRemoval(
+        AccessContext author, AccessEntrySnapshot removed, AccessTargetFacts? anchorFacts) =>
+        removed.Effect == AccessEffect.Deny
+            ? ExceededActions(author, removed, anchorFacts)
+            : AccessAction.None;
 }
 
 /// <summary>The individual action flags, for code that must iterate them.</summary>

@@ -149,3 +149,142 @@ describe('CaveView CRS lookup', () => {
     await expect(lookup('31700')).resolves.toBeNull();
   });
 });
+
+/**
+ * Every unit test of a host drives a hand-written fake of the viewer, so nothing there would notice
+ * a vendored upgrade that renamed a method or an event the application relies on: the type check
+ * reads the hand-written interface, not the bundle. This reads the names out of that interface and
+ * looks each one up in the shipped bundle, so the interface cannot promise what the bundle no
+ * longer has. A minified bundle keeps public property and event names as written, which is what
+ * makes a text search meaningful.
+ */
+describe('the viewer surface the application calls', () => {
+  const vendored = import.meta.glob('../../public/caveview/*/js/CaveView2.min.js', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+  const bundle = Object.entries(vendored).find(([key]) => key.includes(CAVEVIEW_HOME))?.[1] ?? '';
+  const source = Object.values(
+    import.meta.glob('./loadCaveView.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
+  )[0];
+
+  /** The member names of one exported interface, as its two-space-indented lines declare them. */
+  function membersOf(name: string): string[] {
+    const start = source.search(new RegExp(`^export interface ${name}\\b[^\\n]*\\{$`, 'm'));
+    expect(start, `interface ${name}`).toBeGreaterThanOrEqual(0);
+    const body = source.slice(start, source.indexOf('\n}', start));
+    return [...body.matchAll(/^ {2}(?:readonly )?([A-Za-z_]\w*)\??\s*[(:<]/gm)].map((match) => match[1]);
+  }
+
+  /** The string members of one exported union type. */
+  function unionOf(name: string): string[] {
+    const start = source.indexOf(`export type ${name} =`);
+    expect(start, `type ${name}`).toBeGreaterThanOrEqual(0);
+    const body = source.slice(start, source.indexOf(';', start));
+    return [...body.matchAll(/\|\s*'([^']+)'/g)].map((match) => match[1]);
+  }
+
+  it('is read from the version the application loads', () => {
+    expect(bundle.length).toBeGreaterThan(0);
+  });
+
+  it.each(['CaveViewer', 'CaveViewUi', 'CaveViewToolbar', 'Cv2Namespace'])(
+    'has every member of %s in the bundle',
+    (name) => {
+      const members = membersOf(name);
+      // A parse that found nothing would pass the check below for any bundle at all.
+      expect(members.length).toBeGreaterThan(0);
+      expect(members.filter((member) => !bundle.includes(member))).toEqual([]);
+    },
+  );
+
+  it('has every event the application listens for, dispatched under that name', () => {
+    const events = unionOf('CaveViewerEvent');
+    expect(events).toContain('newCave');
+    expect(events.filter((event) => !new RegExp(`type:\\s*["']${event}["']`).test(bundle))).toEqual([]);
+  });
+
+  it('has every model layer the application switches', () => {
+    const layers = unionOf('CaveViewModelLayer');
+    expect(layers.length).toBeGreaterThan(0);
+    expect(layers.filter((layer) => !bundle.includes(layer))).toEqual([]);
+  });
+});
+
+/**
+ * The bundle is loaded once per page by a script element; these drive that element by hand, since
+ * the test document fetches nothing. Each test takes a fresh copy of the module, because the
+ * promise of the load is held for the life of the page.
+ */
+describe('loading the viewer’s bundle', () => {
+  const freshLoader = async () => {
+    vi.resetModules();
+    return (await import('./loadCaveView.ts')).loadCaveView;
+  };
+  const scripts = () => Array.from(document.head.querySelectorAll<HTMLScriptElement>('script'))
+    .filter((script) => script.src.includes(`${CAVEVIEW_HOME}js/`));
+  const links = () => Array.from(document.head.querySelectorAll('link'))
+    .filter((link) => link.href.includes(`${CAVEVIEW_HOME}css/`));
+  const fakeCv2 = {} as NonNullable<Window['CV2']>;
+
+  beforeEach(() => {
+    for (const element of [...scripts(), ...links()]) element.remove();
+    window.CV2 = undefined;
+  });
+
+  afterEach(() => {
+    window.CV2 = undefined;
+  });
+
+  it('answers the global the bundle defines, from one script and one stylesheet however often it is asked', async () => {
+    const loadCaveView = await freshLoader();
+    const first = loadCaveView();
+    const second = loadCaveView();
+    expect(scripts()).toHaveLength(1);
+    expect(links()).toHaveLength(1);
+
+    window.CV2 = fakeCv2;
+    scripts()[0].onload?.(new Event('load'));
+    await expect(first).resolves.toBe(fakeCv2);
+    await expect(second).resolves.toBe(fakeCv2);
+  });
+
+  it('tries again after a script that failed to load, without a second stylesheet', async () => {
+    const loadCaveView = await freshLoader();
+    const failed = loadCaveView();
+    scripts()[0].onerror?.(new Event('error'));
+    await expect(failed).rejects.toThrow('failed to load the CaveView bundle');
+    expect(scripts()).toHaveLength(0);
+
+    const retried = loadCaveView();
+    expect(scripts()).toHaveLength(1);
+    expect(links()).toHaveLength(1);
+    window.CV2 = fakeCv2;
+    scripts()[0].onload?.(new Event('load'));
+    await expect(retried).resolves.toBe(fakeCv2);
+  });
+
+  it('tries again after a script that loaded but defined no viewer, rather than failing for the life of the page', async () => {
+    // What a deploy answering the bundle's path with an error page and a 200 looks like.
+    const loadCaveView = await freshLoader();
+    const failed = loadCaveView();
+    scripts()[0].onload?.(new Event('load'));
+    await expect(failed).rejects.toThrow('CV2 global is missing');
+    expect(scripts()).toHaveLength(0);
+
+    const retried = loadCaveView();
+    expect(scripts()).toHaveLength(1);
+    window.CV2 = fakeCv2;
+    scripts()[0].onload?.(new Event('load'));
+    await expect(retried).resolves.toBe(fakeCv2);
+  });
+
+  it('adds nothing to the page when the viewer is already there', async () => {
+    window.CV2 = fakeCv2;
+    const loadCaveView = await freshLoader();
+    await expect(loadCaveView()).resolves.toBe(fakeCv2);
+    expect(scripts()).toHaveLength(0);
+    expect(links()).toHaveLength(0);
+  });
+});

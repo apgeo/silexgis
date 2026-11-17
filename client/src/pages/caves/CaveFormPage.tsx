@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
@@ -13,8 +13,11 @@ import {
   useUpdateCave,
   type CaveWrite,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -45,8 +48,20 @@ export default function CaveFormPage() {
   );
   const [extra, setExtra] = useState<Record<string, unknown>>({});
 
+  // The cave the form was filled from, and the version of it, taken once per cave. The page goes
+  // on reading the cave under the form — on a return to the browser tab, after an entrance is
+  // edited elsewhere — and each read is a new object. Filling the form again from every one threw
+  // away whatever was being typed; and a save carrying the newest version with values from an
+  // earlier read would present somebody else's change as already seen and write over it. So the
+  // form keeps what it was filled from, and the save names the version that very reading was
+  // answered at — not the newest one filed for the cave, which a save a moment ago can have moved
+  // ahead of the cached copy. A change made meanwhile is refused, and the conflict warning says to
+  // reload.
+  const seeded = useRef<{ cave: NonNullable<typeof cave>; version: string | undefined } | null>(null);
+
   useEffect(() => {
-    if (cave && isEdit) {
+    if (cave && isEdit && seeded.current?.cave.id !== cave.id) {
+      seeded.current = { cave, version: versionReadWith(cave) };
       form.setFieldsValue(cave as unknown as CaveFormValues);
       setExtra((cave.properties as Record<string, unknown> | null) ?? {});
     }
@@ -64,25 +79,32 @@ export default function CaveFormPage() {
     });
 
   const onFinish = async (values: CaveFormValues) => {
+    const source = isEdit ? seeded.current?.cave : undefined;
     const body: CaveWrite = {
       ...values,
       isShowCave: values.isShowCave ?? false,
       locationProtected: values.locationProtected ?? false,
       explorationStatus: values.explorationStatus ?? 'unknown',
       visibility: values.visibility ?? 'private',
-      cavingGroupId: cave?.cavingGroupId ?? null,
+      cavingGroupId: source?.cavingGroupId ?? null,
       // The stored document with the club's own fields as edited here; every key this form does
       // not offer is sent back unchanged. The cave stays under its current primary parent (the
       // write DTO addresses containment by parent id).
-      properties: { ...((cave?.properties as Record<string, unknown> | null) ?? {}), ...extra },
-      parentId: cave?.parents.find((p) => p.isPrimary)?.id ?? null,
+      properties: { ...((source?.properties as Record<string, unknown> | null) ?? {}), ...extra },
+      parentId: source?.parents.find((p) => p.isPrimary)?.id ?? null,
     };
     try {
-      const saved = isEdit ? await updateCave.mutateAsync(body) : await createCave.mutateAsync(body);
+      const saved = isEdit
+        ? await updateCave.mutateAsync({ body, ifMatch: seeded.current?.version })
+        : await createCave.mutateAsync(body);
       message.success(t('common.saved'));
       navigate(`/caves/${saved.id}`);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The form stays with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 

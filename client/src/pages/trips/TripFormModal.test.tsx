@@ -734,6 +734,28 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     expect(sent.body.title).toBe('Digging weekend');
   });
 
+  it('leaves a stale-version refusal to the conflict warning and stays open with its values', async () => {
+    // The application's conflict warning says what happened and what to do; a "save failed"
+    // beside it would contradict it, and closing the form would throw away what was typed.
+    versionOnFile.mockReturnValue('"1"');
+    const onClose = vi.fn();
+    render(
+      <App>
+        <TripFormModal open trip={trip()} onClose={onClose} />
+      </App>,
+    );
+    updateTrip.mockReset().mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Digging weekend')).toBeInTheDocument();
+  });
+
   it('takes the version afresh each time it is opened', async () => {
     versionOnFile.mockReturnValue('"1"');
     const view = show(trip());

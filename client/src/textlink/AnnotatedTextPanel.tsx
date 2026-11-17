@@ -14,10 +14,10 @@ import { resolveDark } from '../theme.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
-import { refreshRoster, reveal, subscribeToRoster } from '../viewlinks/viewTargets.ts';
+import { allControls, refreshRoster, reveal, subscribeToRoster } from '../viewlinks/viewTargets.ts';
 import AnnotatedTextView from './AnnotatedTextView.tsx';
 import { canonicalText } from './blocks.ts';
-import { highlightsFrom, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
+import { DOCUMENT_LINK_PAGE_SIZE, highlightsFrom, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
 import LinkHoverCard from './LinkHoverCard.tsx';
 import { anchorFor, type GlobalRange } from './ranges.ts';
 
@@ -63,7 +63,9 @@ export default function AnnotatedTextPanel({
   // Every link on the document in one read. The panel has no paging of its own: a passage the
   // page did not fetch would be text with no highlight on it, which reads as "nothing is linked
   // here" — the one answer that is worse than a slow load.
-  const { data: linkPage } = useResLinksForTarget('document', documentId, { pageSize: 200 });
+  const { data: linkPage } = useResLinksForTarget('document', documentId, {
+    pageSize: DOCUMENT_LINK_PAGE_SIZE,
+  });
   const deleteLink = useDeleteResLink();
 
   const [editing, setEditing] = useState(false);
@@ -74,16 +76,14 @@ export default function AnnotatedTextPanel({
 
   useEffect(() => {
     let alive = true;
-    const read = () => {
-      void refreshRoster().then((roster) => {
-        if (alive) {
-          setControls(roster);
-        }
-      });
-    };
-
-    read();
-    const unsubscribe = subscribeToRoster(read);
+    // One roll call when the panel opens; after that the roster announces its own changes, so
+    // following it is a re-read of what is held, not another round of asking every window.
+    void refreshRoster().then((roster) => {
+      if (alive) {
+        setControls(roster);
+      }
+    });
+    const unsubscribe = subscribeToRoster(() => setControls(allControls()));
     return () => {
       alive = false;
       unsubscribe();

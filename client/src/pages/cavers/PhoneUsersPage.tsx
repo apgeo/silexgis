@@ -59,7 +59,7 @@ function CaverPicker({
 }: {
   user: PhoneUser;
   busy: boolean;
-  onChoose: (caverId: string) => void;
+  onChoose: (caverId: string, caverName: string) => void;
 }) {
   const { t } = useTranslation();
   const controlSize = useCoarsePointer() ? 'middle' : 'small';
@@ -87,7 +87,8 @@ function CaverPicker({
       placeholder={t('phoneUsers.chooseCaver')}
       value={user.caverId ?? undefined}
       onSearch={setSearch}
-      onChange={(caverId: string) => onChoose(caverId)}
+      onChange={(caverId: string) =>
+        onChoose(caverId, options.find((option) => option.value === caverId)?.label ?? t('phoneUsers.unnamedCaver'))}
       options={options}
       data-testid={`phone-user-pick-${shortAccount(user.deviceUserId)}`}
     />
@@ -103,7 +104,7 @@ function CaverPicker({
  */
 export default function PhoneUsersPage() {
   const { t, i18n } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [page, setPage] = useState(1);
   const users = usePhoneUsers(page, PAGE_SIZE);
   const link = useLinkPhoneUser();
@@ -123,10 +124,7 @@ export default function PhoneUsersPage() {
     return t('common.saveFailed');
   };
 
-  const choose = async (user: PhoneUser, caverId: string) => {
-    if (caverId === user.caverId) {
-      return;
-    }
+  const linkTo = async (user: PhoneUser, caverId: string) => {
     setWorking(user.deviceUserId);
     try {
       await link.mutateAsync({ deviceUserId: user.deviceUserId, caverId });
@@ -136,6 +134,29 @@ export default function PhoneUsersPage() {
     } finally {
       setWorking(null);
     }
+  };
+
+  // A phone user already mapped — by the phone, an archive import or another administrator — is
+  // moved to somebody else only once the change has been read back: one keystroke or one stray
+  // click in the list must not silently replace a mapping somebody else made.
+  const choose = (user: PhoneUser, caverId: string, caverName: string) => {
+    if (caverId === user.caverId) {
+      return;
+    }
+    if (!user.caverId) {
+      void linkTo(user, caverId);
+      return;
+    }
+    modal.confirm({
+      title: t('phoneUsers.relinkTitle'),
+      content: t('phoneUsers.relinkBody', {
+        user: phoneUserLabel(user) ?? t('phoneUsers.deviceAccount', { id: shortAccount(user.deviceUserId) }),
+        from: user.caverName ?? t('phoneUsers.unnamedCaver'),
+        to: caverName,
+      }),
+      okText: t('phoneUsers.relinkOk'),
+      onOk: () => linkTo(user, caverId),
+    });
   };
 
   const remove = async (user: PhoneUser) => {
@@ -155,8 +176,16 @@ export default function PhoneUsersPage() {
   // Unmapped people are listed first, so the first row of the first page says whether any wait.
   const anyUnmapped = page === 1 && rows.length > 0 && !rows[0].caverId;
 
-  if (users.isError) {
-    const forbidden = users.error instanceof ApiError && users.error.status === 403;
+  const forbidden = users.error instanceof ApiError && users.error.status === 403;
+  const retry = (
+    <Button size="small" onClick={() => void users.refetch()}>
+      {t('common.retry')}
+    </Button>
+  );
+
+  // Nothing to show at all: the failure is the page. Once rows are on screen, a later read that
+  // fails is said above them instead, so the table somebody is working in stays where it was.
+  if (users.isError && !users.data) {
     return (
       <div style={{ padding: 24, maxWidth: 1000 }}>
         <Alert
@@ -164,6 +193,7 @@ export default function PhoneUsersPage() {
           showIcon
           data-testid="phone-users-error"
           title={forbidden ? t('phoneUsers.forbidden') : t('phoneUsers.loadFailed')}
+          action={forbidden ? undefined : retry}
         />
       </div>
     );
@@ -178,6 +208,17 @@ export default function PhoneUsersPage() {
         <Link to="/cavers">{t('phoneUsers.backToCavers')}</Link>
       </Flex>
       <Typography.Paragraph type="secondary">{t('phoneUsers.intro')}</Typography.Paragraph>
+
+      {users.isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="phone-users-refresh-error"
+          title={forbidden ? t('phoneUsers.forbidden') : t('phoneUsers.refreshFailed')}
+          action={forbidden ? undefined : retry}
+        />
+      )}
 
       {anyUnmapped && (
         <Alert
@@ -257,7 +298,7 @@ export default function PhoneUsersPage() {
                 <CaverPicker
                   user={user}
                   busy={working === user.deviceUserId}
-                  onChoose={(caverId) => void choose(user, caverId)}
+                  onChoose={(caverId, caverName) => choose(user, caverId, caverName)}
                 />
               ) : user.caverId ? (
                 <span>{user.caverName ?? t('phoneUsers.unnamedCaver')}</span>

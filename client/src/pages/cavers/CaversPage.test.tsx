@@ -4,7 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+
+const t = i18n.getFixedT('en');
 
 /**
  * The people page, over the real query hooks and a faked server.
@@ -198,6 +200,26 @@ describe('the groups somebody belongs to', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     expect(await screen.findByText(/could not be changed: New Club Invented/)).toBeInTheDocument();
     expect(put).toHaveBeenCalledOnce();
+  });
+
+  it('says why when the server names the reason a group could not be changed', async () => {
+    post.mockResolvedValue({ error: { code: 'caver.grants_full_admin' }, response: new Response(null, { status: 403 }) });
+    await openGroups();
+    fireEvent.click(await screen.findByTitle(NEW.name));
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/could not be changed: New Club Invented/)).toBeInTheDocument();
+    expect(await screen.findByText(t('cavers.rosterProblems.grantsFullAdmin'))).toBeInTheDocument();
+  });
+
+  it('words a refused save of the person, rather than a bare failure', async () => {
+    put.mockResolvedValue({ error: { code: 'caver.revokes_full_admin' }, response: new Response(null, { status: 403 }) });
+    show();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]);
+    await screen.findByTestId('caver-caving-groups');
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(t('cavers.rosterProblems.revokesFullAdmin'))).toBeInTheDocument();
   });
 });
 

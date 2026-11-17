@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
@@ -290,7 +291,17 @@ public static class DependencyInjection
     public static IServiceCollection AddSilexGisMessaging(this IServiceCollection services)
     {
         services.AddMemoryCache();
-        services.AddHttpClient(Sms.HttpSmsSender.HttpClientName);
+        services.AddOptions<Sms.SmsGatewayOptions>().BindConfiguration(Sms.SmsGatewayOptions.SectionName);
+        // Redirects are not followed: a gateway that answers "go over there" would otherwise
+        // carry the request, its authorisation header included, to an address nobody checked.
+        services.AddHttpClient(Sms.HttpSmsSender.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(sp => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                ConnectCallback = sp.GetRequiredService<IOptions<Sms.SmsGatewayOptions>>().Value.AllowInternalAddresses
+                    ? null
+                    : Sms.SmsGatewayAddress.ConnectToPublicAddressAsync,
+            });
 
         services.AddScoped<IAppSettingsService, AppSettingsService>();
         services.AddScoped<MessageTemplateStore>();

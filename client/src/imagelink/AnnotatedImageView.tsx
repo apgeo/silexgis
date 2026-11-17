@@ -11,7 +11,7 @@ import { resolveDark } from '../theme.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import { linkColors } from '../textlink/linkPalette.ts';
-import { refFor, type HighlightTarget } from '../textlink/highlights.ts';
+import { DOCUMENT_LINK_PAGE_SIZE, refFor, type HighlightTarget } from '../textlink/highlights.ts';
 import LinkHoverCard from '../textlink/LinkHoverCard.tsx';
 import { reveal } from '../viewlinks/viewTargets.ts';
 import ImageRegionCanvas, { type DrawnRegion } from './ImageRegionCanvas.tsx';
@@ -52,7 +52,7 @@ export default function AnnotatedImageView({
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
 
-  const { data } = useResLinksForTarget('document', documentId);
+  const { data } = useResLinksForTarget('document', documentId, { pageSize: DOCUMENT_LINK_PAGE_SIZE });
 
   const relationLabel = useCallback(
     (link: ResLink) => relationPhraseFor(link, 'document', documentId, t),
@@ -162,6 +162,11 @@ export default function AnnotatedImageView({
       {highlights.length > 0 && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {t('imageLink.regionCount', { count: highlights.length })}
+        </Typography.Text>
+      )}
+      {data && data.totalItems > data.items.length && (
+        <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          {t('imageLink.linksCutOff', { shown: data.items.length, total: data.totalItems })}
         </Typography.Text>
       )}
     </Flex>

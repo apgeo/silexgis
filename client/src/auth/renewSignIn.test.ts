@@ -11,7 +11,7 @@ vi.mock('./auth.tsx', () => ({
   },
 }));
 
-const { renewSignIn } = await import('./renewSignIn.ts');
+const { renewSignIn, renewOnReturn } = await import('./renewSignIn.ts');
 
 beforeEach(() => {
   getUser.mockReset().mockResolvedValue({ refresh_token: 'kept', expired: true });
@@ -77,5 +77,59 @@ describe('renewing the sign-in a tab holds', () => {
     signinSilent.mockResolvedValue({ expired: false });
     await renewSignIn();
     expect(signinSilent).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * A tab that comes back from sleep or an outage, holding a token that ran out while nothing could
+ * renew it, renews before the screens that refetch on return are each refused once.
+ */
+describe('renewing when the tab comes back', () => {
+  async function settle() {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  }
+
+  it('renews a token that ran out when the connection returns, and when the tab is looked at again', async () => {
+    getUser.mockResolvedValue({ refresh_token: 'kept', expires_in: -30, expired: true });
+    const stop = renewOnReturn();
+    try {
+      window.dispatchEvent(new Event('online'));
+      await settle();
+      expect(signinSilent).toHaveBeenCalledTimes(1);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      await settle();
+      expect(signinSilent).toHaveBeenCalledTimes(2);
+    } finally {
+      stop();
+    }
+  });
+
+  it('leaves a token with time left alone, and stops listening when asked', async () => {
+    getUser.mockResolvedValue({ refresh_token: 'kept', expires_in: 600, expired: false });
+    const stop = renewOnReturn();
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect(signinSilent).not.toHaveBeenCalled();
+
+    stop();
+    getUser.mockResolvedValue({ refresh_token: 'kept', expires_in: -30, expired: true });
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect(signinSilent).not.toHaveBeenCalled();
+  });
+
+  it('asks nothing while the tab is hidden', async () => {
+    getUser.mockResolvedValue({ refresh_token: 'kept', expires_in: -30, expired: true });
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const stop = renewOnReturn();
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await settle();
+      expect(signinSilent).not.toHaveBeenCalled();
+    } finally {
+      stop();
+      hidden.mockRestore();
+    }
   });
 });

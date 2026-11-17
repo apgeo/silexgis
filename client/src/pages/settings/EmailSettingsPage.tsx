@@ -13,6 +13,7 @@ import {
   useVerifyEmail,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import { meProblemMessage } from './meProblems.ts';
 
 /**
  * The account's email address and the verified flow for changing it.
@@ -73,8 +74,8 @@ export default function EmailSettingsPage() {
       // Deliberately non-committal: the server does not say whether the address is already in
       // use, because answering would let anyone test which addresses have an account here.
       message.success(t('settings.emails.requested'));
-    } catch {
-      message.error(t('settings.emails.requestFailed'));
+    } catch (error) {
+      message.error(meProblemMessage(error, t, 'settings.emails.requestFailed'));
     }
   };
 
@@ -99,7 +100,7 @@ export default function EmailSettingsPage() {
               onClick={() => {
                 verify.mutate(undefined, {
                   onSuccess: () => message.success(t('settings.emails.verifySent')),
-                  onError: () => message.error(t('settings.emails.tooSoon')),
+                  onError: (error) => message.error(meProblemMessage(error, t)),
                 });
               }}
             >
@@ -124,7 +125,7 @@ export default function EmailSettingsPage() {
                   onClick={() => {
                     resend.mutate(undefined, {
                       onSuccess: () => message.success(t('settings.emails.resent')),
-                      onError: () => message.error(t('settings.emails.tooSoon')),
+                      onError: (error) => message.error(meProblemMessage(error, t)),
                     });
                   }}
                 >

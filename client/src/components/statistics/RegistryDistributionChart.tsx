@@ -6,6 +6,7 @@ import type { EChartsOption } from 'echarts';
 
 import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
 import { useECharts } from './useECharts.ts';
+import { LOG_COUNT_AXIS_MIN } from './distributions.ts';
 import type { DistributionBar } from './registryDistribution.ts';
 
 /**
@@ -66,8 +67,9 @@ export function RegistryDistributionChart({
         name: countLabel,
         // An empty interval is an observation, not missing data. On a logarithmic axis it cannot
         // be drawn at all, so it is left as a gap rather than moved to one, which would invent a
-        // cave, or to zero, which would throw the axis away.
-        min: logCount ? 1 : 0,
+        // cave, or to zero, which would throw the axis away. The floor sits below one so an
+        // interval holding a single cave still has a bar of some height.
+        min: logCount ? LOG_COUNT_AXIS_MIN : 0,
         minInterval: logCount ? undefined : 1,
         ...axisStyle(token),
       },

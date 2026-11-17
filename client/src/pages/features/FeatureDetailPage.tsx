@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   AimOutlined,
   DeleteOutlined,
@@ -23,8 +23,11 @@ import {
   useFeatureTypes,
   useUpdateFeature,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import AreaAltitudeDisagreementCard from '../../components/features/AreaAltitudeDisagreementCard.tsx';
 import AreaTerrainStatisticsCard from '../../components/features/AreaTerrainStatisticsCard.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
@@ -77,6 +80,16 @@ export default function FeatureDetailPage() {
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
   const [editOpen, setEditOpen] = useState(false);
+  // The version of the feature the edit dialog was filled from, taken when it opens: the version
+  // the cached reading was answered at, not the newest one filed for the feature. A read made
+  // elsewhere, or a save whose re-read has not landed, files a newer one while the dialog is filled
+  // from the older copy; a save that carried it would present that change as already seen and
+  // write the older values over it.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+  const startEditing = () => {
+    openedAtVersion.current = versionReadWith(envelope);
+    setEditOpen(true);
+  };
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -155,6 +168,7 @@ export default function FeatureDetailPage() {
     try {
       await updateFeature.mutateAsync({
         id: feature.id,
+        ifMatch: openedAtVersion.current,
         body: {
           name: values.name,
           featureTypeId: values.featureTypeId,
@@ -169,8 +183,12 @@ export default function FeatureDetailPage() {
       surfaceFeaturesChanged();
       setEditOpen(false);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -236,7 +254,7 @@ export default function FeatureDetailPage() {
                 </Button>
               )}
               {canEdit && (
-                <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
+                <Button icon={<EditOutlined />} onClick={startEditing}>
                   {t('features.edit')}
                 </Button>
               )}

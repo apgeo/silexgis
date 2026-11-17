@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Drawer, Input } from 'antd';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import Lightbox, { type LightboxPhoto } from './Lightbox.tsx';
@@ -90,6 +91,72 @@ describe('Lightbox', () => {
     // Following a link would answer as a missing file, so none is offered — the control says
     // why instead of failing when it is used.
     expect(screen.getAllByLabelText('Download the original')[0].getAttribute('href')).toBeNull();
+  });
+
+  it('leaves typing in a field opened over it alone, and still answers keys on the picture', () => {
+    // The credit drawer is opened from the viewer's edit button and drawn in a portal, so its
+    // fields' keystrokes reach the viewer's window listener: a place called "Sala 10" or a
+    // photographer "Ion-Vasile" lost its 0 and its hyphen, and an arrow in the caption moved
+    // the picture behind the drawer.
+    const onIndexChange = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <>
+        <Lightbox photos={photos} index={0} onClose={onClose} onIndexChange={onIndexChange} />
+        <Drawer open title="Credit">
+          <Input aria-label="Place" />
+          <Input.TextArea aria-label="Caption" />
+        </Drawer>
+      </>,
+    );
+    const place = screen.getByLabelText('Place');
+    const caption = screen.getByLabelText('Caption');
+
+    for (const key of ['-', '=', '+', '0']) {
+      // fireEvent answers false when a listener cancelled the key: the character never lands.
+      expect(fireEvent.keyDown(place, { key })).toBe(true);
+    }
+    expect(fireEvent.keyDown(caption, { key: 'ArrowLeft' })).toBe(true);
+    expect(onIndexChange).not.toHaveBeenCalled();
+
+    // The positive case in the same render: the viewer itself still answers.
+    expect(fireEvent.keyDown(window, { key: 'ArrowRight' })).toBe(false);
+    expect(onIndexChange).toHaveBeenCalledWith(1);
+  });
+
+  it('lets Escape close only the drawer opened over it', () => {
+    const onClose = vi.fn();
+    render(
+      <>
+        <Lightbox photos={photos} index={0} onClose={onClose} onIndexChange={vi.fn()} />
+        <Drawer open title="Credit">
+          <button type="button">Save</button>
+        </Drawer>
+      </>,
+    );
+
+    // Focus inside the drawer, on something that is not a text field.
+    fireEvent.keyDown(screen.getByText('Save'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('still answers keys when it is itself opened from inside a drawer', () => {
+    // A trip's or an expedition's photographs are shown in a drawer and the viewer is opened
+    // from a thumbnail there: focus stays on that thumbnail, inside the drawer that holds the
+    // viewer, and the keys are the viewer's.
+    const onIndexChange = vi.fn();
+    render(
+      <Drawer open title="Trip">
+        <button type="button">thumbnail</button>
+        <Lightbox photos={photos} index={0} onClose={vi.fn()} onIndexChange={onIndexChange} />
+      </Drawer>,
+    );
+
+    fireEvent.keyDown(screen.getByText('thumbnail'), { key: 'ArrowRight' });
+    expect(onIndexChange).toHaveBeenCalledWith(1);
   });
 
   it('stops listening to the keyboard once it is closed', () => {

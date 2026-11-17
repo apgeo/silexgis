@@ -25,6 +25,7 @@ export function useResLinksForTarget(
   targetId: string,
   params: ResLinkPageParams = {},
   enabled = true,
+  options: { refetchInterval?: number } = {},
 ) {
   return useQuery({
     queryKey: queryKeys.resLinksForTarget(targetType, targetId, params),
@@ -35,6 +36,8 @@ export function useResLinksForTarget(
         }),
       ),
     enabled: enabled && Boolean(targetId),
+    // For a reader holding signed addresses out of the answer, which run out.
+    refetchInterval: options.refetchInterval,
     // Deliberately no placeholder from the previous key: this query is keyed by the entity,
     // and a section that showed the last entity's links under this one's heading would not
     // just be stale — the rows elide the entity whose page they are on, so the previous
