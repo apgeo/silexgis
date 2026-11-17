@@ -76,6 +76,8 @@ public static class MePhoneEndpoints
             .WithSummary("Completes a pending phone change with the texted code.");
         phone.MapDelete("/", RemoveAsync)
             .WithSummary("Removes the number, switching off SMS as a second factor with it (and two-factor sign-in, when it was the last method).");
+        phone.MapDelete("/pending", CancelPendingAsync)
+            .WithSummary("Drops the number waiting for its code, keeping the confirmed number and its texted sign-in codes.");
 
         return api;
     }
@@ -276,6 +278,38 @@ public static class MePhoneEndpoints
         // themselves — a stolen session removing the number must not quietly leave the account
         // protected by its password alone.
         await TwoFactorSwitch.SyncMasterSwitchAsync(user, userManager, db, ct);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Drops the number waiting for its code and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// The remedy for a mistyped new number. Removing the whole number would also take the
+    /// confirmed one, its texted sign-in codes and possibly two-factor sign-in with it — a heavy
+    /// price for a typo, and one that leaves the account weaker while the right number is found.
+    /// Nothing waiting is answered the same as something dropped, so a repeated request is
+    /// harmless. A code already texted to the dropped number confirms nothing afterwards: the
+    /// confirmation needs a waiting number, and the code is bound to the number it went to.
+    /// </remarks>
+    private static async Task<Results<NoContent, UnauthorizedHttpResult>> CancelPendingAsync(
+        ClaimsPrincipal principal,
+        UserManager<SilexGisUser> userManager,
+        SilexGisDbContext db,
+        CancellationToken ct)
+    {
+        var user = await userManager.GetUserAsync(principal);
+        if (user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (user.PendingPhoneNumber is not null)
+        {
+            user.PendingPhoneNumber = null;
+            await db.SaveChangesAsync(ct);
+        }
+
         return TypedResults.NoContent();
     }
 

@@ -331,6 +331,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // The roster and caving-group writes ask whether filling a trustee caving group hands an
     // account more than the caller holds; the permission area answers with its own rule judgement.
     builder.Services.AddScoped<ITrusteeRightsBound, SilexGis.Api.Features.Permissions.TrusteeRightsBound>();
+    // A trip leaving a camp, and a camp being deleted, take away the rules the camp's sharing wrote
+    // on its trips; lifting a deny among them is bounded by the permission area's own judgement.
+    builder.Services.AddScoped<IRuleRemovalBound, SilexGis.Api.Features.Permissions.RuleRemovalBound>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.

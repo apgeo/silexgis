@@ -184,6 +184,53 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
         (await TwoFactorOffAlertsAsync()).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Cancelling_a_pending_number_keeps_the_confirmed_one_and_its_texted_codes()
+    {
+        // The mistake this route exists for: a typo in a new number. Before it, the only way to
+        // drop the unconfirmed number was removing the confirmed one too, and with it texted
+        // sign-in codes and possibly two-factor sign-in altogether.
+        await GiveNumberAsync(Number(30), sms: true, authenticator: false);
+        factory.Messages.Clear();
+        var typo = Number(31);
+        var change = await me.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = typo });
+        change.StatusCode.ShouldBe(HttpStatusCode.OK, await change.Content.ReadAsStringAsync());
+        var code = factory.Messages.LastTo(typo).Code;
+
+        var cancelled = await me.DeleteAsync("/api/v1/me/phone/pending");
+        cancelled.StatusCode.ShouldBe(HttpStatusCode.NoContent, await cancelled.Content.ReadAsStringAsync());
+
+        var status = await me.GetFromJsonAsync<JsonElement>("/api/v1/me/phone/");
+        status.GetProperty("phoneNumber").GetString().ShouldBe(Number(30));
+        status.GetProperty("confirmed").GetBoolean().ShouldBeTrue();
+        status.GetProperty("pendingPhoneNumber").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var (twoFactor, sms) = await TwoFactorAsync();
+        twoFactor.ShouldBeTrue();
+        sms.ShouldBeTrue();
+        (await TwoFactorOffAlertsAsync()).ShouldBe(0);
+
+        // The code texted to the abandoned number confirms nothing any more.
+        var late = await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code });
+        late.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await late.Content.ReadAsStringAsync()).ShouldContain("me.phone_change_missing");
+    }
+
+    [Fact]
+    public async Task Cancelling_when_nothing_is_pending_changes_nothing_and_needs_a_signed_in_caller()
+    {
+        await GiveNumberAsync(Number(32), sms: false, authenticator: false);
+
+        // Asking twice — a double click, a retried request — is the same as asking once.
+        (await me.DeleteAsync("/api/v1/me/phone/pending")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var status = await me.GetFromJsonAsync<JsonElement>("/api/v1/me/phone/");
+        status.GetProperty("phoneNumber").GetString().ShouldBe(Number(32));
+        status.GetProperty("confirmed").GetBoolean().ShouldBeTrue();
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.DeleteAsync("/api/v1/me/phone/pending")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     /// <summary>
     /// A confirmed number and the second factors given, set up through Identity as the enrolment
     /// endpoints leave them — those routes need a working text gateway, which is not the subject.
