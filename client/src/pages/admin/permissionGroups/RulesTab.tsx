@@ -23,7 +23,7 @@ import { joinActions } from '../../../components/permissions/accessDisplay.ts';
 import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
 import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 import RuleAnchorPicker from './RuleAnchorPicker.tsx';
-import { accessRuleProblem } from './permissionGroupProblems.ts';
+import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
 
 interface DraftRule {
   key: number;

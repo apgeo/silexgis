@@ -1563,6 +1563,7 @@
     "revokeShare": "Revocă linkul de partajare",
     "deleteAlbum": "Șterge albumul",
     "shareRevoked": "Linkul de partajare a fost revocat.",
+    "shareForbidden": "Nu poți publica acest album: partajarea lui cere dreptul de partajare asupra albumului.",
     "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
     "licences": {
@@ -3734,6 +3735,7 @@
     "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
+    "removalExceedsOwnRights": "Nu poți elimina o interdicție care reține drepturi pe care nu le deții tu.",
     "denyFullAdministrators": "Refuzat: nicio interdicție nu îi poate atinge pe Administratorii deplini — apartenența la acel grup este însăși acordarea.",
     "subjectUnknown": "Contul sau grupul speologic ales nu mai există. Alege-l din nou și salvează.",
     "anchorNotFound": "Obiectul de care este legată o regulă nu mai există. Alege altul și salvează din nou.",
@@ -4183,6 +4185,8 @@
     "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
     "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
     "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
+    "tracksFailed": "Liniile unui fișier importat nu au putut fi încărcate.",
+    "filterLayersFailed": "Un strat desenat dintr-un filtru nu a putut fi încărcat.",
     "tryAgain": "Încearcă din nou"
   },
   "caveview": {
@@ -5255,7 +5259,11 @@
     },
     "settingsProblems": {
       "invalid": "O valoare din acest formular a fost refuzată. Verifică ce ai introdus și salvează din nou.",
-      "forbidden": "Nu ai dreptul să schimbi aceste setări."
+      "forbidden": "Nu ai dreptul să schimbi aceste setări.",
+      "smsGatewayInternal": "Adresa gateway-ului este pe acest server sau într-o rețea internă. Configurația instalării trebuie să permită acest lucru.",
+      "mailPasswordCleared": "Serverul de e-mail s-a schimbat, așa că parola salvată a fost ștearsă. Introdu-o din nou.",
+      "smsAuthHeaderCleared": "Adresa gateway-ului s-a schimbat, așa că antetul de autorizare salvat a fost șters. Introdu-l din nou.",
+      "noticeUnworded": "Setările au fost salvate, dar serverul a semnalat ceva despre această salvare pe care pagina nu îl poate exprima. Verifică valorile secțiunii."
     },
     "messaging": {
       "title": "Mesagerie",
@@ -8121,6 +8129,8 @@
   },
   "textLink": {
     "notAnnotated": "Acest document nu este un text cu legături.",
+    "linksCutOff": "În acest text sunt evidențiate doar primele {{shown}} din {{total}} legături.",
+    "linksFailed": "Legăturile acestui text nu au putut fi încărcate, așa că niciun pasaj nu este evidențiat.",
     "empty": "Textul nu conține încă nimic.",
     "popOut": "Deschide într-o fereastră separată",
     "controls": {

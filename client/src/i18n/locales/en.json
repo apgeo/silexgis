@@ -1563,6 +1563,7 @@
     "revokeShare": "Revoke the share link",
     "deleteAlbum": "Delete album",
     "shareRevoked": "Share link revoked.",
+    "shareForbidden": "You may not publish this album; sharing it takes the Share right on the album.",
     "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
@@ -3734,6 +3735,7 @@
     "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
+    "removalExceedsOwnRights": "You cannot remove a deny that withholds rights you do not hold yourself.",
     "denyFullAdministrators": "Refused: no deny can reach Full Administrators — membership of that group is the grant itself.",
     "subjectUnknown": "The account or caving group chosen no longer exists. Pick it again and save.",
     "anchorNotFound": "The object a rule is tied to no longer exists. Pick another one and save again.",
@@ -4183,6 +4185,8 @@
     "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
     "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
     "dataFailed": "The caves of this view could not be loaded.",
+    "tracksFailed": "The lines of an imported file could not be loaded.",
+    "filterLayersFailed": "A layer drawn from a filter could not be loaded.",
     "tryAgain": "Try again"
   },
   "caveview": {
@@ -5242,7 +5246,11 @@
     },
     "settingsProblems": {
       "invalid": "A value on this form was refused. Check what you entered and save again.",
-      "forbidden": "You may not change these settings."
+      "forbidden": "You may not change these settings.",
+      "smsGatewayInternal": "The gateway address is on this server or an internal network. The installation's configuration must allow that.",
+      "mailPasswordCleared": "The mail server changed, so the saved password was removed. Type it again.",
+      "smsAuthHeaderCleared": "The gateway address changed, so the saved authorisation header was removed. Type it again.",
+      "noticeUnworded": "The settings were saved, but the server noted something about this save that this page cannot put into words. Check the section's values."
     },
     "messaging": {
       "title": "Messaging",
@@ -8108,6 +8116,8 @@
   },
   "textLink": {
     "notAnnotated": "This document is not a link-annotated text.",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are highlighted in this text.",
+    "linksFailed": "The links of this text could not be loaded, so no passage is highlighted.",
     "empty": "This text has nothing in it yet.",
     "popOut": "Open in a window of its own",
     "controls": {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   BorderOutlined,
   DeleteOutlined,
@@ -10,19 +10,16 @@ import {
 import { Flex, Popover, Typography, theme } from 'antd';
 import Button from '../Button.tsx';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
+import type Map from 'ol/Map';
 import type Geometry from 'ol/geom/Geometry';
 import { Draw, Modify, Snap } from 'ol/interaction';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { tripPalette as palette } from '../../map/markerPalette.ts';
 import { coarsePointer } from '../../map/pointer.ts';
+import { useSmallMap } from '../map/useSmallMap.ts';
 import { readTripGeometry, writeTripGeometry, type TripGeometry, type TripShape } from './tripGeometry.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
@@ -91,8 +88,6 @@ export default function TripGeometryField({
 }: Props) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource<Feature<Geometry>>());
   const draw = useRef<Draw | null>(null);
   const modify = useRef<Modify | null>(null);
@@ -102,6 +97,8 @@ export default function TripGeometryField({
   const emitted = useRef<TripGeometry | null>(null);
   const emit = useRef(onChange);
   emit.current = onChange;
+  const current = useRef(value);
+  current.current = value;
 
   const [shape, setShape] = useState<TripShape | null>(null);
   const [hasShape, setHasShape] = useState(value != null);
@@ -113,47 +110,12 @@ export default function TripGeometryField({
     emit.current?.(next);
   };
 
-  const teardown = () => {
-    map.current?.setTarget(undefined);
-    // Every layer, source and interaction the map owns stays subscribed until the map is
-    // disposed; dropping the reference alone leaks the whole graph for the life of the page.
-    map.current?.dispose();
-    map.current = null;
-    draw.current = null;
-    modify.current = null;
-    snap.current = null;
-  };
-
-  // Detach if the page navigates away, or the dialog closes, while the map is up. This is the
-  // only place the map is torn down: doing it from the target ref instead would run on every
-  // re-render, because a callback ref with a fresh identity is detached and re-attached each
-  // time, and the map would be destroyed and rebuilt — losing wherever the user had panned to.
-  useEffect(() => () => teardown(), []);
-
-  const drawValue = (geom: TripGeometry | null | undefined) => {
-    source.current.clear();
-    const geometry = readTripGeometry(geom);
-    if (!geometry) {
-      return;
-    }
-    source.current.addFeature(new Feature({ geometry }));
-    const extent = source.current.getExtent();
-    // An empty source reports an infinite extent, and fitting one throws.
-    if (extent && Number.isFinite(extent[0])) {
-      map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 15 });
-    }
-  };
-
   /**
    * Snapping is re-attached rather than added once: the map hands a pointer event to its
    * interactions last-added first, so a snap sitting below a later-added draw would adjust the
    * coordinate only after the draw had already used it.
    */
-  const attachSnap = () => {
-    const instance = map.current;
-    if (!instance) {
-      return;
-    }
+  const attachSnap = (instance: Map) => {
     if (snap.current) {
       instance.removeInteraction(snap.current);
     }
@@ -161,25 +123,22 @@ export default function TripGeometryField({
     instance.addInteraction(snap.current);
   };
 
-  const buildMap = () => {
-    if (map.current || !target.current || !active) {
-      return;
-    }
-    map.current = new Map({
-      target: target.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: sketchStyle }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 9 }),
-    });
-    drawValue(value);
-    if (!readOnly) {
+  // The map is drawn over the background the reader chose on the workspace map, else the
+  // installation's default. It is built once its container is laid out and `active` is true, and
+  // disposed (with its interactions) when the dialog closes or the page goes away; the sketch's
+  // source outlives it, so a map built again draws the same shape.
+  const { targetRef, map, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 9,
+    active,
+    layers: () => [new VectorLayer({ source: source.current, style: sketchStyle })],
+    onCreate: (instance) => {
+      draw.current = null;
+      modify.current = null;
+      snap.current = null;
+      if (readOnly) {
+        return;
+      }
       const interaction = new Modify({
         source: source.current,
         pixelTolerance: coarsePointer() ? 16 : 10,
@@ -187,25 +146,30 @@ export default function TripGeometryField({
       interaction.on('modifyend', () => {
         publish(source.current.getFeatures()[0]?.getGeometry() ?? null);
       });
-      map.current.addInteraction(interaction);
+      instance.addInteraction(interaction);
       modify.current = interaction;
-      attachSnap();
+      attachSnap(instance);
+    },
+  });
+
+  // Stable, because `frame` is: the effects below name it without re-running.
+  const drawValue = useCallback((geom: TripGeometry | null | undefined) => {
+    source.current.clear();
+    const geometry = readTripGeometry(geom);
+    if (!geometry) {
+      return;
     }
-  };
+    source.current.addFeature(new Feature({ geometry }));
+    frame(JSON.stringify(geom), source.current.getExtent(), { padding: [24, 24, 24, 24], maxZoom: 15 });
+  }, [frame]);
 
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    target.current = el;
-    buildMap();
-  };
 
-  // The map may become buildable after the target is already mounted, when a dialog reports that
-  // its open transition has finished.
+  // A map built (or built again) frames the shape the host holds at that moment.
   useEffect(() => {
-    if (active) {
-      buildMap();
+    if (ready) {
+      drawValue(emitted.current ?? current.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- building is idempotent and guarded
-  }, [active]);
+  }, [ready, drawValue]);
 
   // The shape the host holds, whenever it is not the one this component just handed it.
   useEffect(() => {
@@ -214,13 +178,13 @@ export default function TripGeometryField({
       setHasShape(value != null);
       drawValue(value);
     }
-  }, [value]);
+  }, [value, drawValue]);
 
   // Arming a shape attaches a draw interaction; disarming, finishing or unmounting removes it, so
   // arming twice can never leave two attached.
   useEffect(() => {
     const instance = map.current;
-    if (!instance) {
+    if (!instance || !ready) {
       return;
     }
     if (draw.current) {
@@ -242,14 +206,15 @@ export default function TripGeometryField({
     });
     instance.addInteraction(interaction);
     draw.current = interaction;
-    attachSnap();
+    attachSnap(instance);
     return () => {
       instance.removeInteraction(interaction);
       if (draw.current === interaction) {
         draw.current = null;
       }
     };
-  }, [shape, readOnly, active]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the map ref is named by `ready`
+  }, [shape, readOnly, ready]);
 
   const clear = () => {
     source.current.clear();
@@ -310,7 +275,7 @@ export default function TripGeometryField({
         )}
         {warning}
       </Flex>
-      <div ref={onTargetRef} style={{ height, width: '100%' }} data-testid={`${testId}-map`} />
+      <div ref={targetRef} style={{ height, width: '100%' }} data-testid={`${testId}-map`} />
       {!readOnly && (
         <Typography.Text type="secondary">
           {shape ? t('trips.drawHint') : t('trips.geometryHint')}

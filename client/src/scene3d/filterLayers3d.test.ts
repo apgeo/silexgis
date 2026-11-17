@@ -209,4 +209,56 @@ describe('the layers drawn from saved filters, in the scene', () => {
     expect(calls.entrances.length).toBe(before + 1);
     handle.detach();
   });
+
+  it('says a layer could not be read and keeps what it drew, and stops saying it once a read succeeds', async () => {
+    const { engine, markers } = fakeEngine();
+    const handle = attachFilterLayers3d(engine);
+    handle.setLayers([spec()], new Set(), new Map());
+    await vi.waitFor(() => expect(markers[0].items.length).toBe(3));
+    // A read that succeeded is no failure.
+    expect(handle.getState().loadFailed).toBe(false);
+
+    const answered = responses.features;
+    responses.features = () => Promise.reject(new Error('network'));
+    try {
+      handle.reload();
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      expect(markers[0].items.length).toBe(3);
+    } finally {
+      responses.features = answered;
+    }
+
+    handle.reload();
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(false));
+    handle.detach();
+  });
+
+  it('does not call a refused filter, a hidden layer or a removed one a failure', async () => {
+    const answered = responses.features;
+    responses.features = () => Promise.reject(new Error('network'));
+    try {
+      const { engine } = fakeEngine();
+      const handle = attachFilterLayers3d(engine);
+      const seen: boolean[] = [];
+      handle.subscribe((state) => seen.push(state.loadFailed));
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+
+      handle.setLayers([spec({ visible: false })], new Set(), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      // Unreadable for this reader: the flat map's copy of the layer says so, not a failure here.
+      handle.setLayers([spec()], new Set([LAYER]), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      handle.setLayers([], new Set(), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      expect(seen).toEqual([true, false, true, false, true, false]);
+      handle.detach();
+    } finally {
+      responses.features = answered;
+    }
+  });
 });

@@ -14,7 +14,7 @@ import {
   type PermissionGroup,
 } from '../../../api/hooks.ts';
 import SubjectPicker from '../../../components/permissions/SubjectPicker.tsx';
-import { accessRuleProblem } from './permissionGroupProblems.ts';
+import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
 import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
 import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 

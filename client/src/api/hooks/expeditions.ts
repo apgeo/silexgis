@@ -6,10 +6,12 @@ import {
   invalidateAfterDelete,
   invalidateDatedRows,
   unwrap,
+  unwrapVersioned,
   unwrapVoid,
   useInvalidateAttachments,
   useInvalidateHistory,
 } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { ActivityState, ExpeditionListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -39,7 +41,9 @@ export function useExpeditions(params: ExpeditionListParams = {}) {
 export function useExpedition(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.expedition(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    queryFn: () =>
+      unwrapVersioned(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id,
     // A refusal here is a settled answer about the caller, not a transient failure: retrying it
     // three times only delays the page saying so.

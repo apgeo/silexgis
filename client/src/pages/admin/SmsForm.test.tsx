@@ -114,6 +114,32 @@ describe('SmsForm', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it('says when moving the gateway dropped the stored header, and only then', async () => {
+    show();
+    save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/so the saved authorisation header was removed/)).toBeNull();
+    cleanup();
+
+    put.mockResolvedValue({ data: { sms, notices: ['settings.sms_auth_header_cleared'] }, error: undefined });
+    show();
+    save();
+    expect(await screen.findByText(
+      'The gateway address changed, so the saved authorisation header was removed. Type it again.',
+    )).toBeInTheDocument();
+  });
+
+  it('says a gateway on an internal address is refused for that, not as a failed save', async () => {
+    put.mockResolvedValue({ data: undefined, error: { code: 'settings.sms_gateway_internal' } });
+    show();
+    save();
+    expect(await screen.findByText(
+      "The gateway address is on this server or an internal network. The installation's configuration must allow that.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(t('common.saveFailed'))).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('sends a test text to the number typed', async () => {
     show();
     sendTest();

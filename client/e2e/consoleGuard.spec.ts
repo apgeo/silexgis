@@ -75,6 +75,40 @@ test('a console error is recorded, and declaring it takes it back out', async ({
   expect(consoleErrors.captured()).toHaveLength(0);
 });
 
+// A failed request is reported by the browser as a bare "status of 404" whose route is only in the
+// line's location. Declaring it by route has to excuse that one request and leave another 404 in
+// the same test standing — otherwise a declaration by route would quietly excuse every refusal.
+test('a console error is declared by the address it was reported from, and only that one', async ({
+  page,
+  consoleErrors,
+}) => {
+  const origin = 'http://console-guard.invalid';
+  await page.route(`${origin}/**`, (route) =>
+    route.request().url().endsWith('/')
+      ? route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stand-in</title>' })
+      : route.fulfill({ status: 404, body: '' }),
+  );
+  await page.goto(`${origin}/`);
+  await page.evaluate(async () => {
+    await fetch('/declared-missing');
+    await fetch('/other-missing');
+  });
+
+  await expect
+    .poll(() => consoleErrors.captured().filter((error) => /status of 404/.test(error.message)).length, {
+      message: 'the browser reported no failed request to the console',
+    })
+    .toBe(2);
+
+  consoleErrors.allow(/\/declared-missing/, 'requested by this test to prove a declaration by address');
+  const left = consoleErrors.captured();
+  expect(left).toHaveLength(1);
+  expect(left[0].message).toMatch(/status of 404/);
+
+  consoleErrors.allow(/\/other-missing/, 'requested by this test to prove a declaration by address');
+  expect(consoleErrors.captured()).toHaveLength(0);
+});
+
 /** A request as the guard reads it, carrying an access token that names `email`. */
 function preferenceRequest(
   email: string,

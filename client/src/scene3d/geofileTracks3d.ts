@@ -61,9 +61,14 @@ const SETTLE_MILLISECONDS = 250;
 export interface GeofileTracks3DState {
   /** True while any file's request for the current view is still in the air. */
   loading: boolean;
+  /**
+   * True when the latest request of a shown file failed. What was drawn stays drawn, so without
+   * this a track that never arrived would look exactly like a file with nothing in the view.
+   */
+  loadFailed: boolean;
 }
 
-export const EMPTY_GEOFILE_TRACKS_3D_STATE: GeofileTracks3DState = { loading: false };
+export const EMPTY_GEOFILE_TRACKS_3D_STATE: GeofileTracks3DState = { loading: false, loadFailed: false };
 
 export interface GeofileTracks3DHandle {
   /**
@@ -178,6 +183,8 @@ interface FileEntry {
   requestSeq: number;
   /** The last response, kept so a change of colour or of placement is a redraw and not a fetch. */
   collection: unknown;
+  /** Whether the latest request for this file failed. */
+  failed: boolean;
 }
 
 /**
@@ -197,7 +204,7 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
   let detached = false;
 
   const publish = (next: GeofileTracks3DState) => {
-    if (next.loading === state.loading) {
+    if (next.loading === state.loading && next.loadFailed === state.loadFailed) {
       return;
     }
     state = next;
@@ -205,6 +212,8 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
       listener(state);
     }
   };
+
+  const anyFailed = () => [...entries.values()].some((entry) => entry.failed);
 
   const draw = (entry: FileEntry) => {
     entry.source.replace(
@@ -219,7 +228,7 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
     }
     const seq = ++entry.requestSeq;
     inFlight += 1;
-    publish({ loading: true });
+    publish({ loading: true, loadFailed: state.loadFailed });
     try {
       const collection = await fetchGeofileFeatureCollection(entry.file.id, boundsToBbox(bounds));
       // Dropped when a newer request for the file went out meanwhile, and when the file was
@@ -229,14 +238,19 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
         return;
       }
       entry.collection = collection;
+      entry.failed = false;
       draw(entry);
     } catch {
       // Keep what is already drawn: a dropped request is usually a network hiccup, and blanking
       // a track the viewer is following would be a worse answer than showing it a moment stale.
+      // It is still said, though, because a file that never arrived draws nothing at all.
+      if (!detached && entry.requestSeq === seq && entries.get(entry.file.id) === entry) {
+        entry.failed = true;
+      }
     } finally {
       inFlight -= 1;
       if (inFlight === 0 && !detached) {
-        publish({ loading: false });
+        publish({ loading: false, loadFailed: anyFailed() });
       }
     }
   };
@@ -275,6 +289,8 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
           entries.delete(id);
         }
       }
+      // A file turned off no longer has anything to fail at.
+      publish({ loading: state.loading, loadFailed: anyFailed() });
       for (const [id, file] of wanted) {
         const existing = entries.get(id);
         if (existing) {
@@ -289,7 +305,7 @@ export function attachGeofileTracks3d(engine: GeofileTracks3DEngine): GeofileTra
         }
         const source = engine.createPolylineSource(geofileLayerId(id));
         source.setOpacity(opacity.get(id) ?? 1);
-        const entry: FileEntry = { file, source, requestSeq: 0, collection: undefined };
+        const entry: FileEntry = { file, source, requestSeq: 0, collection: undefined, failed: false };
         entries.set(id, entry);
         void loadFile(entry);
       }

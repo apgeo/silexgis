@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n';
+import { ApiError } from '../../../api/client.ts';
 
 /**
  * The permission-groups list: the guards on protected groups, the address that opens one group's
@@ -12,6 +13,7 @@ import i18n from '../../../i18n';
 
 const t = i18n.getFixedT('en');
 const refetchGroups = vi.fn();
+const deleteGroup = vi.fn();
 let groupsQuery: { data: unknown[] | undefined; isPending: boolean; isError: boolean };
 
 const FULL = { id: 'g-full', name: 'Full Administrators', slug: 'full-administrators', description: null, isProtected: true, isSeeded: true, memberCount: 1, entryCount: 0 };
@@ -25,7 +27,7 @@ vi.mock('../../../api/hooks.ts', async (importOriginal) => {
     usePermissionGroups: () => ({ ...groupsQuery, refetch: refetchGroups }),
     useAccessCatalog: () => ({ data: { domains: [], featureSets: [] }, isError: false, refetch: vi.fn() }),
     useCreatePermissionGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
-    useDeletePermissionGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeletePermissionGroup: () => ({ mutateAsync: deleteGroup, isPending: false }),
   };
 });
 
@@ -50,6 +52,7 @@ const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElem
 beforeEach(() => {
   groupsQuery = { data: [FULL, SURVEYORS], isPending: false, isError: false };
   refetchGroups.mockReset();
+  deleteGroup.mockReset();
 });
 
 afterEach(cleanup);
@@ -60,6 +63,25 @@ describe('PermissionGroupsPage', () => {
 
     expect(within(rowOf('Full Administrators')).getByRole('button', { name: t('iconButtons.delete') })).toBeDisabled();
     expect(within(rowOf('Surveyors')).getByRole('button', { name: t('iconButtons.delete') })).toBeEnabled();
+  });
+
+  it('says why deleting a group was refused, in the words every rules screen uses', async () => {
+    // The allowed delete first: the same button, answered, says "deleted".
+    deleteGroup.mockResolvedValueOnce(undefined);
+    show();
+    fireEvent.click(within(rowOf('Surveyors')).getByRole('button', { name: t('iconButtons.delete') }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(t('common.deleted'))).toBeTruthy();
+    cleanup();
+
+    // A group whose denies withhold rights the deleting administrator does not hold.
+    deleteGroup.mockRejectedValueOnce(new ApiError(403, 'access_entry.removal_exceeds_own_rights'));
+    show();
+    fireEvent.click(within(rowOf('Surveyors')).getByRole('button', { name: t('iconButtons.delete') }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(
+      'You cannot remove a deny that withholds rights you do not hold yourself.',
+    )).toBeTruthy();
   });
 
   it('opens the editor of the group the address names', () => {

@@ -57,6 +57,13 @@ async function differing(page: Page, one: Buffer, other: Buffer): Promise<number
   );
 }
 
+/** Resolves once the page has drawn a frame that began after this call: the event before it has been taken. */
+async function nextFrameDrawn(page: Page) {
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+}
+
 test("the size of a model's station names is chosen on the model, redraws them, and is kept for the next model", async ({
   page,
 }) => {
@@ -79,14 +86,17 @@ test("the size of a model's station names is chosen on the model, redraws them, 
    * Brings the camera close to the middle of the cave. The viewer writes a station's name only
    * once the camera is near it — from where a model opens, showing the whole cave, it writes none
    * at any size — so two sizes can only be told apart from close in. Turned on the wheel as a
-   * reader would, in steps the viewer has time to take one at a time.
+   * reader would, in steps the viewer takes one at a time: each turn waits for the page to draw a
+   * frame after it, rather than for a fixed time, because under software GL a frame can take far
+   * longer than any pause chosen on a quiet machine, and turns that arrive before the viewer has
+   * drawn are merged into fewer, larger ones.
    */
   const closeIn = async () => {
     const box = (await viewer.getByTestId('caveview-container').boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     for (let turn = 0; turn < 72; turn++) {
       await page.mouse.wheel(0, -400);
-      await page.waitForTimeout(60);
+      await nextFrameDrawn(page);
     }
   };
   const choose = (percent: number) => chooseSize(page, viewer, percent);

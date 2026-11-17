@@ -123,6 +123,23 @@ describe('MailForm', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it('says when moving the mail server dropped the stored password, and only then', async () => {
+    // A save the server answers with no notice says nothing more than "saved"...
+    show();
+    save();
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/so the saved password was removed/)).toBeNull();
+    cleanup();
+
+    // ...while one that moved the server, sent with no password, is told to type it again.
+    put.mockResolvedValue({ data: { mail, notices: ['settings.mail_password_cleared'] }, error: undefined });
+    show();
+    save();
+    expect(await screen.findByText(
+      'The mail server changed, so the saved password was removed. Type it again.',
+    )).toBeInTheDocument();
+  });
+
   it('says the save failed when the request never reached the server', async () => {
     put.mockRejectedValue(new TypeError('Failed to fetch'));
     show();

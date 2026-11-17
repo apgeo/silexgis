@@ -237,7 +237,7 @@ export const specs = {
     'scene3d.spec.ts',
   ],
   trips: [
-    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts',
+    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts', 'trip-two-sessions.spec.ts',
     'trip-import.spec.ts', 'trip-restore.spec.ts', 'trip-report-map.spec.ts',
     'trip-tracking-writes.spec.ts', 'trip-tracking-writes-mobile.spec.ts', 'my-trips.spec.ts',
     'plan-trip.spec.ts', 'published-trips-admin.spec.ts', 'public-trip-offline.spec.ts',

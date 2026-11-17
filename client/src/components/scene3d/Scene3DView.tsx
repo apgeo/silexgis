@@ -610,6 +610,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [tracksState, setTracksState] = useState<GeofileTracks3DState>(
     EMPTY_GEOFILE_TRACKS_3D_STATE,
   );
+  // Whether the viewer's saved-filter layers, or a flyby's own, failed to load: each loader keeps
+  // what it drew, so a failure is otherwise a layer that looks like it matches nothing here.
+  const [filterLayersFailed, setFilterLayersFailed] = useState({ listed: false, flyby: false });
 
   // The view exchange, held in a ref for the same reason as the handles above: the effect that
   // owns it must not re-run when coupling is switched, so the switch reaches it from outside.
@@ -725,6 +728,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     filterLayersRef.current = filterLayers3d;
     const flybyFeatureLayers3d = attachFilterLayers3d(engine);
     flybyFeatureLayersRef.current = flybyFeatureLayers3d;
+    const unsubscribeFilterLayers = filterLayers3d.subscribe(({ loadFailed }) =>
+      setFilterLayersFailed((held) => ({ ...held, listed: loadFailed })),
+    );
+    const unsubscribeFlybyFeatureLayers = flybyFeatureLayers3d.subscribe(({ loadFailed }) =>
+      setFilterLayersFailed((held) => ({ ...held, flyby: loadFailed })),
+    );
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
     // Each cave's top is read through the loader at the moment its walls are placed, for the
@@ -940,10 +949,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setTracksState(EMPTY_GEOFILE_TRACKS_3D_STATE);
       data.detach();
       dataRef.current = null;
+      unsubscribeFilterLayers();
+      unsubscribeFlybyFeatureLayers();
       filterLayers3d.detach();
       filterLayersRef.current = null;
       flybyFeatureLayers3d.detach();
       flybyFeatureLayersRef.current = null;
+      setFilterLayersFailed({ listed: false, flyby: false });
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
       // would keep tens of megabytes for a view nobody is looking at.
       mesh.detach();
@@ -1894,6 +1906,29 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-data-failed">
             {t('scene3d.dataFailed')}
             <Button size="small" type="link" onClick={() => dataRef.current?.reload()}>
+              {t('scene3d.tryAgain')}
+            </Button>
+          </span>
+        )}
+        {tracksState.loadFailed && !tracksState.loading && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-tracks-failed">
+            {t('scene3d.tracksFailed')}
+            <Button size="small" type="link" onClick={() => tracksRef.current?.reload()}>
+              {t('scene3d.tryAgain')}
+            </Button>
+          </span>
+        )}
+        {(filterLayersFailed.listed || filterLayersFailed.flyby) && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-filter-layers-failed">
+            {t('scene3d.filterLayersFailed')}
+            <Button
+              size="small"
+              type="link"
+              onClick={() => {
+                filterLayersRef.current?.reload();
+                flybyFeatureLayersRef.current?.reload();
+              }}
+            >
               {t('scene3d.tryAgain')}
             </Button>
           </span>

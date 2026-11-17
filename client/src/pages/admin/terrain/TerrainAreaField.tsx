@@ -1,22 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BorderOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Flex, Typography } from 'antd';
 import Button from '../../../components/Button.tsx';
 import Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
 import type Geometry from 'ol/geom/Geometry';
 import Polygon, { fromExtent } from 'ol/geom/Polygon';
 import { Draw } from 'ol/interaction';
 import { createBox } from 'ol/interaction/Draw';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat, transformExtent } from 'ol/proj';
+import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
+import { useSmallMap } from '../../../components/map/useSmallMap.ts';
 import { type TerrainBbox, areaSquareDegrees, formatBbox } from './terrainArea.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
@@ -47,13 +44,10 @@ interface Props {
  * shared surface-feature source and would file a build's rectangle as a surface feature.
  *
  * Every map object lives in a ref. Holding one in React state would make React compare a mutable
- * object graph on every render, and an inline initialiser would construct a fresh map each time,
- * each leaking its layers, sources and subscriptions until a disposal that never comes.
+ * object graph on every render.
  */
 export default function TerrainAreaField({ value, onChange, height = 320 }: Props) {
   const { t } = useTranslation();
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource<Feature<Geometry>>());
   const draw = useRef<Draw | null>(null);
   // The value this component last produced. The host echoes it straight back as the next `value`,
@@ -61,6 +55,8 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
   const emitted = useRef<TerrainBbox | null>(null);
   const emit = useRef(onChange);
   emit.current = onChange;
+  const current = useRef(value);
+  current.current = value;
 
   const [armed, setArmed] = useState(false);
   const [bbox, setBbox] = useState<TerrainBbox | null>(value ?? null);
@@ -71,21 +67,20 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
     emit.current?.(next);
   };
 
-  const teardown = () => {
-    map.current?.setTarget(undefined);
-    // Every layer, source and interaction the map owns stays subscribed until the map is
-    // disposed; dropping the reference alone leaks the whole graph for the life of the page.
-    map.current?.dispose();
-    map.current = null;
-    draw.current = null;
-  };
+  // Drawn over the background the administrator chose on the workspace map, else the
+  // installation's default; the hook disposes the map, its layers and interactions when the page
+  // goes away.
+  const { targetRef, map, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 8,
+    layers: () => [new VectorLayer({ source: source.current, style: sketchStyle })],
+    onCreate: () => {
+      draw.current = null;
+    },
+  });
 
-  // Detach when the page navigates away. This is the only teardown site: doing it from the target
-  // ref would run on every re-render, because a callback ref with a fresh identity is detached and
-  // re-attached each time, and the map would be destroyed and rebuilt.
-  useEffect(() => () => teardown(), []);
-
-  const drawValue = (next: TerrainBbox | null | undefined) => {
+  // Stable, because `frame` is: the effects below name it without re-running.
+  const drawValue = useCallback((next: TerrainBbox | null | undefined) => {
     source.current.clear();
     if (!next) {
       return;
@@ -99,37 +94,16 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
         ),
       }),
     );
-    const extent = source.current.getExtent();
-    // An empty source reports an infinite extent, and fitting one throws.
-    if (extent && Number.isFinite(extent[0])) {
-      map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 12 });
-    }
-  };
+    frame(next.join(','), source.current.getExtent(), { padding: [24, 24, 24, 24], maxZoom: 12 });
+  }, [frame]);
 
-  const buildMap = () => {
-    if (map.current || !target.current) {
-      return;
-    }
-    map.current = new Map({
-      target: target.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: sketchStyle }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 8 }),
-    });
-    drawValue(value);
-  };
 
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    target.current = el;
-    buildMap();
-  };
+  // A map once built frames the rectangle the host holds at that moment.
+  useEffect(() => {
+    if (ready) {
+      drawValue(emitted.current ?? current.current);
+    }
+  }, [ready, drawValue]);
 
   // The rectangle the host holds, whenever it is not the one this component just handed it.
   useEffect(() => {
@@ -138,13 +112,13 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
       setBbox(value ?? null);
       drawValue(value);
     }
-  }, [value]);
+  }, [value, drawValue]);
 
   // Arming attaches the draw; disarming, finishing or unmounting removes it, so arming twice can
   // never leave two attached.
   useEffect(() => {
     const instance = map.current;
-    if (!instance || !armed) {
+    if (!instance || !ready || !armed) {
       return;
     }
     // A box is a two-corner drag rather than a vertex-by-vertex polygon, which is why it is drawn
@@ -178,7 +152,8 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
         draw.current = null;
       }
     };
-  }, [armed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the map ref is named by `ready`
+  }, [armed, ready]);
 
   const clear = () => {
     source.current.clear();
@@ -200,7 +175,7 @@ export default function TerrainAreaField({ value, onChange, height = 320 }: Prop
           {t('terrain.area.clear')}
         </Button>
       </Flex>
-      <div ref={onTargetRef} style={{ height, width: '100%' }} data-testid="terrain-area-map" />
+      <div ref={targetRef} style={{ height, width: '100%' }} data-testid="terrain-area-map" />
       <Typography.Text type="secondary" data-testid="terrain-area-extent">
         {bbox
           ? t('terrain.area.chosen', {

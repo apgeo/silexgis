@@ -7,16 +7,15 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import Feature from 'ol/Feature';
 import GeoJSONFormat from 'ol/format/GeoJSON';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client.ts';
 import { useSharedFeature } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import { editorBackgroundLayer } from '../map/editorBackground.ts';
 
 /**
  * Anonymous read-only page for a shared feature. The share token resolves server-side to a
@@ -54,12 +53,11 @@ export default function SharedFeaturePage() {
     const map = new Map({
       target: mapTarget.current,
       layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
+        // The fallback background every small map draws when the installation names none. The
+        // installation's own catalogue is a signed-in read, and the shared envelope carries no
+        // background of its own (unlike a shared map view), so a reader holding only the link
+        // gets the same plain background the public survey page shows.
+        editorBackgroundLayer(null, i18n.language),
         new VectorLayer({
           source: new VectorSource({ features: [new Feature(geom)] }),
           style: new Style({
@@ -77,7 +75,7 @@ export default function SharedFeaturePage() {
     });
     map.getView().fit(geom.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 });
     return () => map.setTarget(undefined);
-  }, [envelope]);
+  }, [envelope, i18n.language]);
 
   if (error) {
     // Only the two answers the server gives about the link itself are said as such. Anything else —
