@@ -6,6 +6,7 @@ import Button from '../../components/Button.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import {
   hasAccessAction,
   queryKeys,
@@ -31,7 +32,7 @@ export default function MessageTemplatesPage() {
   const { t } = useTranslation();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.messageTemplates, 'read');
-  const { data: templates, isLoading } = useMessageTemplates(canRead);
+  const { data: templates, isLoading, isError, error, refetch } = useMessageTemplates(canRead);
 
   // While capabilities load, render nothing rather than flashing a refusal at people
   // who do hold the right; the server enforces regardless.
@@ -50,6 +51,16 @@ export default function MessageTemplatesPage() {
       <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
         {t('admin.templates.intro')}
       </Typography.Paragraph>
+
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={templates !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="message-templates-load-failed"
+        style={{ marginBottom: 0 }}
+      />
 
       {isLoading || !templates ? null : (
         <Collapse

@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Flex, Input, Table, Tag, Typography } from 'antd';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../api/client.ts';
+import { api, ApiError } from '../../api/client.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import type { AuditEntry } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
@@ -21,14 +22,15 @@ export default function AuditPage() {
   const [entityTypeInput, setEntityTypeInput] = useState('');
   const entityType = useDebouncedValue(entityTypeInput);
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError, error: readError, refetch } = useQuery({
     queryKey: ['audit', page, pageSize, entityType],
     queryFn: async () => {
       const { data: result, error, response } = await api.GET('/api/v1/audit', {
         params: { query: { page, pageSize, entityType: entityType || undefined } },
       });
       if (error !== undefined || result === undefined) {
-        throw new Error(`API error ${response.status}`);
+        // The status travels, so a refusal is told from a read that did not land.
+        throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
       }
       return result;
     },
@@ -48,6 +50,14 @@ export default function AuditPage() {
           onChange={(e) => setEntityTypeInput(e.target.value)}
         />
       </Flex>
+      <ReadFailedAlert
+        isError={isError}
+        error={readError}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('audit.loadFailed')}
+        testId="audit-load-failed"
+      />
       <Table<AuditEntry>
         scroll={{ x: 'max-content' }}
         rowKey="id"

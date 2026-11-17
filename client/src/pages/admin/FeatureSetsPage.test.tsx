@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 
 /** The membership editor of a feature set. Every name and identifier below is invented. */
@@ -11,7 +11,9 @@ const MEMBER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TYPED = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
-const { replaceSpy, createSpy, queryCalls, stored } = vi.hoisted(() => ({
+const { replaceSpy, createSpy, queryCalls, stored, failedRead } = vi.hoisted(() => ({
+  // Which read did not land, switched on by the test that needs it.
+  failedRead: { sets: false, members: false, refetch: vi.fn() },
   replaceSpy: vi.fn(),
   createSpy: vi.fn(),
   queryCalls: [] as { body: unknown; enabled: boolean }[],
@@ -32,17 +34,17 @@ const hit = (id: string, title: string, subtitle: string, symbol: string) =>
 vi.mock('../../api/hooks.ts', () => ({
   hasAccessAction: () => true,
   useCapabilities: () => ({ data: { domains: { featureSets: 'read,write' } } }),
-  useFeatureSets: () => ({
-    data: stored.sets,
-    isPending: false,
-  }),
+  useFeatureSets: () =>
+    failedRead.sets
+      ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: failedRead.refetch }
+      : { data: stored.sets, isPending: false },
   useCreateFeatureSet: () => ({ mutateAsync: createSpy, isPending: false }),
   useDeleteFeatureSet: () => ({ mutateAsync: vi.fn() }),
   useUpdateFeatureSet: () => ({ mutateAsync: vi.fn() }),
-  useFeatureSetMembers: () => ({
-    data: stored.members,
-    isPending: false,
-  }),
+  useFeatureSetMembers: () =>
+    failedRead.members
+      ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: failedRead.refetch }
+      : { data: stored.members, isPending: false },
   useReplaceFeatureSetMembers: () => ({ mutateAsync: replaceSpy, isPending: false }),
   useFeatureTypes: () => ({ data: [{ id: 7, code: 'spring', name: 'Izvor test' }] }),
   useFilterVocabulary: () => ({
@@ -92,6 +94,39 @@ beforeEach(() => {
   replaceSpy.mockReset().mockResolvedValue(undefined);
   createSpy.mockReset().mockResolvedValue(undefined);
   queryCalls.length = 0;
+  failedRead.sets = false;
+  failedRead.members = false;
+  failedRead.refetch.mockReset();
+});
+
+describe('failed reads of feature sets', () => {
+  it('says the list of sets could not be read instead of showing none, and offers Retry', () => {
+    failedRead.sets = true;
+    render(
+      <App>
+        <FeatureSetsPage />
+      </App>,
+    );
+    expect(screen.getByTestId('feature-sets-load-failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('will not save a membership it never read, which would replace the real one', async () => {
+    failedRead.members = true;
+    render(
+      <App>
+        <FeatureSetsPage />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit features' }));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByTestId('feature-set-members-load-failed')).toBeTruthy();
+    expect(within(drawer).queryByText(i18n.t('featureSets.noMembers'))).toBeNull();
+    expect(within(drawer).getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(within(drawer).getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('the feature set member picker', () => {

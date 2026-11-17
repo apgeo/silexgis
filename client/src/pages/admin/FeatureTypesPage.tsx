@@ -17,6 +17,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -90,7 +91,7 @@ export default function FeatureTypesPage() {
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
   const canDelete = hasAccessAction(capabilities?.domains.taxonomies, 'delete');
-  const { data: types, isLoading } = useFeatureTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useFeatureTypes();
   const createType = useCreateFeatureType();
   const updateType = useUpdateFeatureType();
   const deleteType = useDeleteFeatureType();
@@ -197,6 +198,14 @@ export default function FeatureTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="feature-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

@@ -14,6 +14,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -56,7 +57,7 @@ export default function RelationTypesPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const canManage = useIsFullAdmin();
-  const { data: relationTypes, isLoading } = useResLinkRelationTypes();
+  const { data: relationTypes, isLoading, isError, error: readError, refetch } = useResLinkRelationTypes();
   const createType = useCreateResLinkRelationType();
   const updateType = useUpdateResLinkRelationType();
   const deleteType = useDeleteResLinkRelationType();
@@ -153,6 +154,14 @@ export default function RelationTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={relationTypes !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="relation-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

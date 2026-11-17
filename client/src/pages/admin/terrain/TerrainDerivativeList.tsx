@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App, Card, Empty, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import ReadFailedAlert from '../../../components/ReadFailedAlert.tsx';
 import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
@@ -44,7 +45,7 @@ interface Props {
 export default function TerrainDerivativeList({ canDelete }: Props) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading } = useTerrainDerivatives();
+  const { data, isLoading, isError, error, refetch } = useTerrainDerivatives();
   // The same page of builds the form above reads, so naming the build a picture came from costs
   // no request of its own.
   const { data: builds } = useTerrainBuilds({ page: 1, pageSize: DERIVATIVE_BUILD_CHOICES });
@@ -69,6 +70,15 @@ export default function TerrainDerivativeList({ canDelete }: Props) {
 
   return (
     <Card size="small" title={t('terrain.derivativeList.title')} styles={{ body: { padding: 0 } }}>
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('terrain.derivativeList.loadFailed')}
+        testId="terrain-derivatives-load-failed"
+        style={{ margin: 12 }}
+      />
       <Table
         rowKey="id"
         size="small"
@@ -78,7 +88,8 @@ export default function TerrainDerivativeList({ canDelete }: Props) {
         pagination={false}
         scroll={{ x: true }}
         locale={{
-          emptyText: isLoading ? (
+          // A failed read says so above; "nothing computed yet" would send somebody to compute again.
+          emptyText: isLoading || (isError && data === undefined) ? (
             <span />
           ) : (
             <Empty

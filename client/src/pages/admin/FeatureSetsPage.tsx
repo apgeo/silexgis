@@ -6,6 +6,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -52,7 +53,7 @@ interface DraftMember {
 function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members, isPending } = useFeatureSetMembers(set.id);
+  const { data: members, isPending, isError, error: readError, refetch } = useFeatureSetMembers(set.id);
   const replaceMembers = useReplaceFeatureSetMembers(set.id);
   const { data: featureTypes } = useFeatureTypes();
   const [drafts, setDrafts] = useState<DraftMember[]>([]);
@@ -112,7 +113,14 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       footer={
         <Flex justify="flex-end" gap={8}>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="primary" onClick={() => void onSave()} loading={replaceMembers.isPending}>
+          {/* Saving replaces the whole membership, so a list that was never read must not be saved:
+              it would drop every member the read did not bring back. */}
+          <Button
+            type="primary"
+            onClick={() => void onSave()}
+            loading={replaceMembers.isPending}
+            disabled={members === undefined}
+          >
             {t('common.save')}
           </Button>
         </Flex>
@@ -120,6 +128,15 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
     >
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title={t('featureSets.membershipMovesAccess')} />
+        <ReadFailedAlert
+          error={readError}
+          isError={isError}
+          held={members !== undefined}
+          onRetry={refetch}
+          title={t('featureSets.membersLoadFailed')}
+          testId="feature-set-members-load-failed"
+          style={{ marginBottom: 0 }}
+        />
         <Flex gap={8} align="flex-start">
           <div style={{ flex: 1, minWidth: 0 }}>
             <ObjectSelector
@@ -143,7 +160,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
           size="small"
           loading={isPending}
           dataSource={drafts}
-          locale={{ emptyText: t('featureSets.noMembers') }}
+          locale={{ emptyText: members === undefined && isError ? ' ' : t('featureSets.noMembers') }}
           renderItem={(draft) => (
             <List.Item
               actions={[
@@ -183,7 +200,7 @@ export default function FeatureSetsPage() {
   const canCreate = hasAccessAction(capabilities?.domains.featureSets, 'create');
   const canWrite = hasAccessAction(capabilities?.domains.featureSets, 'write');
   const canDelete = hasAccessAction(capabilities?.domains.featureSets, 'delete');
-  const { data: sets, isPending } = useFeatureSets(canRead);
+  const { data: sets, isPending, isError, error: readError, refetch } = useFeatureSets(canRead);
   const createSet = useCreateFeatureSet();
   const deleteSet = useDeleteFeatureSet();
   const [creating, setCreating] = useState(false);
@@ -251,6 +268,14 @@ export default function FeatureSetsPage() {
       </Flex>
       <Typography.Paragraph type="secondary">{t('featureSets.intro')}</Typography.Paragraph>
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={sets !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="feature-sets-load-failed"
+      />
       <Table<FeatureSetInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"

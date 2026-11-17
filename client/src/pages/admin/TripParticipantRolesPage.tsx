@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { IdcardOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Popconfirm, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -45,7 +46,7 @@ export default function TripParticipantRolesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: roles, isLoading } = useTripParticipantRoles();
+  const { data: roles, isLoading, isError, error: readError, refetch } = useTripParticipantRoles();
   const createRole = useCreateTripParticipantRole();
   const updateRole = useUpdateTripParticipantRole();
   const deleteRole = useDeleteTripParticipantRole();
@@ -137,6 +138,14 @@ export default function TripParticipantRolesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={roles !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="trip-participant-roles-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}
