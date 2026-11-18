@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { randomUUID } from 'node:crypto';
 import { expect, type Locator, type Page } from '@playwright/test';
-import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { ownContext, test } from './consoleGuard.ts';
+import { confirmOk, gotoRoute, login } from './helpers.ts';
 import { uniquePng } from './png.ts';
+import { apiJson, bearerToken } from './rastermapApi.ts';
 
 /**
  * The gallery, the viewer, crediting a photograph and arranging an album — in a real browser.
@@ -290,6 +291,119 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   await expect(page.getByTestId('photo-tile')).toHaveCount(3, { timeout: 30_000 });
   await expect(page.locator(`[data-testid="photo-tile"][data-document-id="${removed}"]`))
     .toHaveCount(1);
+});
+
+test('an album link opens the album to a visitor with no account, until it is revoked', async ({
+  page,
+  browser,
+  consoleErrors,
+}) => {
+  // After the revoke the visitor's page asks for the album once more and is answered not found,
+  // which is the point of the step. Narrowed to the anonymous album address.
+  consoleErrors.allow(
+    /\/api\/v1\/public\/albums\/[^/\s]+(\?|:|$)/,
+    'the revoked link is opened on purpose and answered not found',
+  );
+  await login(page);
+  const { run, names, files } = photographs(1);
+  await upload(page, files);
+  await openGallery(page, run);
+  await expect(page.getByTestId('photo-tile')).toHaveCount(1, { timeout: 30_000 });
+  const documentId = (await tileOrder(page))[0]!;
+
+  const albumTitle = `E2E shared album ${run}`;
+  await openAlbums(page);
+  await page.getByRole('button', { name: 'New album', exact: true }).click();
+  const editor = page.getByRole('dialog').filter({ hasText: 'New album' });
+  await editor.getByLabel('Title').fill(albumTitle);
+  const created = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/v1/albums' && r.request().method() === 'POST',
+  );
+  await editor.getByRole('button', { name: 'OK' }).click();
+  const createdAnswer = await created;
+  expect(createdAnswer.ok()).toBeTruthy();
+  const albumId = ((await createdAnswer.json()) as { id: string }).id;
+  const token = await bearerToken(page);
+  const visitor = await ownContext(browser);
+  try {
+    // Filling the album is not what this flow is about; the album page has its own flow for it.
+    await apiJson(page, token, 'POST', `/api/v1/albums/${albumId}/items`, [documentId]);
+
+    await openAlbums(page);
+    const card = page.locator('.ant-card').filter({ hasText: albumTitle });
+    await card.getByRole('button', { name: 'Make a share link' }).click();
+    const shown = page.getByRole('dialog').filter({ hasText: 'Share link' });
+    await expect(shown).toBeVisible({ timeout: 15_000 });
+    const address = await shown.locator('input').inputValue();
+    expect(address).toMatch(/\/shared\/albums\/[^/]+$/);
+    await shown.getByRole('button', { name: 'OK' }).click();
+
+    // Opened as somebody with no account: the album, and only its picture.
+    const outsider = await visitor.newPage();
+    await outsider.goto(new URL(address).pathname);
+    await expect(outsider.getByRole('heading', { name: albumTitle })).toBeVisible({ timeout: 45_000 });
+    await expect(outsider.getByTestId('photo-tile')).toHaveCount(1);
+    await expect(outsider.getByRole('img', { name: names[0] })).toBeVisible();
+    await expect(outsider).not.toHaveURL(/\/login/);
+
+    // Revoked on the album list, the same address now opens nothing.
+    await openAlbums(page);
+    await card.getByRole('button', { name: 'Revoke the share link' }).click();
+    await confirmOk(page, { scope: page.locator('.ant-popconfirm') });
+    await expect(page.getByText('Share link revoked.')).toBeVisible({ timeout: 15_000 });
+    await expect(card.getByRole('button', { name: 'Make a share link' })).toBeVisible();
+
+    const reread = outsider.waitForResponse((r) => r.url().includes('/api/v1/public/albums/'));
+    await outsider.reload();
+    expect((await reread).status()).toBe(404);
+    await expect(outsider.getByText('This link does not open anything. It may have been revoked.'))
+      .toBeVisible({ timeout: 30_000 });
+    await expect(outsider.getByRole('heading', { name: albumTitle })).toHaveCount(0);
+  } finally {
+    await visitor.close();
+    await apiJson(page, token, 'DELETE', `/api/v1/albums/${albumId}`);
+  }
+});
+
+test('a photograph published from its credit form is on the public gallery for a visitor', async ({
+  page,
+  browser,
+}) => {
+  await login(page);
+  const { run, names, files } = photographs(1);
+  await upload(page, files);
+  await openGallery(page, run);
+  const tile = page.getByTestId('photo-tile').first();
+  await expect(page.getByTestId('photo-tile')).toHaveCount(1, { timeout: 30_000 });
+  const documentId = (await tileOrder(page))[0]!;
+  const token = await bearerToken(page);
+  const visitor = await ownContext(browser);
+  try {
+    await tile.getByRole('button', { name: names[0] }).click();
+    await page.getByTestId('lightbox').getByRole('button', { name: 'Credit and licence' }).click();
+    const drawer = page.getByRole('dialog').filter({ hasText: 'Credit and licence' });
+    await expect(drawer).toBeVisible({ timeout: 15_000 });
+    const published = page.waitForResponse(
+      (r) => r.url().includes(`/api/v1/photos/${documentId}/public`) && r.request().method() === 'PUT',
+    );
+    await drawer.getByRole('switch', { name: 'Show in the public gallery' }).click();
+    expect((await published).ok()).toBeTruthy();
+    await expect(page.getByText('Published to the public gallery.')).toBeVisible({ timeout: 15_000 });
+
+    // The gallery is listed newest first, so a picture uploaded in this test is on its first page.
+    const outsider = await visitor.newPage();
+    await outsider.goto('/gallery/public');
+    await expect(outsider.getByRole('heading', { name: 'Gallery' })).toBeVisible({ timeout: 45_000 });
+    await expect(outsider.getByRole('img', { name: names[0] })).toBeVisible({ timeout: 30_000 });
+    await expect(outsider).not.toHaveURL(/\/login/);
+    // Only renderings leave by the public door, never the upload itself.
+    const source = await outsider.getByRole('img', { name: names[0] }).getAttribute('src');
+    expect(source ?? '').toContain('/thumbnail?');
+  } finally {
+    await visitor.close();
+    // Taken back out, so the public gallery holds no more than other flows expect of it.
+    await apiJson(page, token, 'PUT', `/api/v1/photos/${documentId}/public?published=false`);
+  }
 });
 
 /**

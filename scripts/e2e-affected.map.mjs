@@ -29,7 +29,7 @@ export const specs = {
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
     'users-admin.spec.ts', 'map-background-kinds.spec.ts', 'sync-settings-admin.spec.ts',
-    'storage-admin.spec.ts',
+    'storage-admin.spec.ts', 'report-layouts.spec.ts',
   ],
   audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -139,7 +139,7 @@ export const specs = {
   basemap: ['map-background-kinds.spec.ts'],
   me: [
     'settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts',
-    'account-pages-phone.spec.ts',
+    'account-pages-phone.spec.ts', 'account-identity.spec.ts', 'two-factor-sign-in.spec.ts',
   ],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
@@ -194,7 +194,7 @@ export const specs = {
   search: ['documents.spec.ts'],
   settings: [
     'settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts', 'coordinate-converter.spec.ts',
-    'accessibility.spec.ts',
+    'accessibility.spec.ts', 'account-identity.spec.ts', 'two-factor-sign-in.spec.ts',
   ],
   sms: ['notifications.spec.ts', 'notification-health.spec.ts'],
   statistics: [
@@ -249,12 +249,15 @@ export const specs = {
     'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
     'tracking-movie-webkit.spec.ts', 'tracking-movie-pictures.spec.ts',
     'tracking-movie-empty-trip.spec.ts',
-    'list-pages-phone.spec.ts',
+    'list-pages-phone.spec.ts', 'report-layouts.spec.ts',
   ],
   // The proximity pool every importer compares against: the import specs that meet it.
   proximity: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],
   uploads: ['uploads.spec.ts'],
-  users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
+  users: [
+    'settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts', 'account-identity.spec.ts',
+    'two-factor-sign-in.spec.ts',
+  ],
   // Which protected rows a window holds, decided on the position each reader is shown — the
   // workspace map's entrance and feature layers, and a shared view's link.
   windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts', 'shared-view.spec.ts'],
