@@ -53,6 +53,29 @@ public sealed record EvidenceGrid(
     public int IndexOf(int column, int row) => (row * Columns) + column;
 
     /// <summary>
+    /// Where the cell holding a position sits in a row-by-row array, or null for a position off
+    /// the grid.
+    /// </summary>
+    /// <remarks>
+    /// A cell owns its western and northern edges and not its eastern and southern ones, so a
+    /// position on a line between two cells is in exactly one of them, and one on the grid's own
+    /// eastern or southern edge is off it.
+    /// </remarks>
+    public int? CellAt(double longitude, double latitude)
+    {
+        if (!double.IsFinite(longitude) || !double.IsFinite(latitude))
+        {
+            return null;
+        }
+
+        var column = Math.Floor((longitude - West) / CellWidthDegrees);
+        var row = Math.Floor((North - latitude) / CellHeightDegrees);
+        return column >= 0 && column < Columns && row >= 0 && row < Rows
+            ? IndexOf((int)column, (int)row)
+            : null;
+    }
+
+    /// <summary>
     /// The grid that covers a box at a cell size, or null when <see cref="EvidenceGridRules.Problem"/>
     /// would refuse it.
     /// </summary>

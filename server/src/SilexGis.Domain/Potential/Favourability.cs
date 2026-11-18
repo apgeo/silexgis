@@ -26,22 +26,37 @@ public static class Favourability
     }
 
     /// <summary>
-    /// The score of the class a value falls in: the first row whose bound lies above it. A value
+    /// Which row of a classes table a value falls in: the first whose bound lies above it. A value
     /// equal to a bound belongs to the class that starts there.
     /// </summary>
-    public static double Reclassify(IReadOnlyList<EvidenceClass> classes, double value)
+    /// <remarks>
+    /// The one statement of where a class ends. A table scored by judgment and a table whose
+    /// weights are counted from known caves must put the same ground in the same class, or the
+    /// same model would draw two different maps of one hillside.
+    /// </remarks>
+    public static int ClassIndex(IReadOnlyList<EvidenceClass> classes, double value)
     {
         ArgumentNullException.ThrowIfNull(classes);
-        foreach (var row in classes)
+        for (var i = 0; i < classes.Count; i++)
         {
-            if (row.UpperBound is not { } bound || value < bound)
+            if (classes[i].UpperBound is not { } bound || value < bound)
             {
-                return row.Score ?? 0;
+                return i;
             }
         }
 
         throw new ArgumentException("A classes table ends with a row that has no upper bound.", nameof(classes));
     }
+
+    /// <summary>The score of the class a value falls in, by <see cref="ClassIndex"/>.</summary>
+    public static double Reclassify(IReadOnlyList<EvidenceClass> classes, double value) =>
+        classes[ClassIndex(classes, value)].Score ?? 0;
+
+    /// <summary>
+    /// A bearing brought into [0, 360): 360 is north again, and belongs with 0 rather than in the
+    /// last class of a table.
+    /// </summary>
+    public static double OnTheCompass(double bearing) => ((bearing % 360) + 360) % 360;
 
     /// <summary>
     /// What a cell of a measured layer scores under a transform, or null where the cell holds no
@@ -58,8 +73,7 @@ public static class Favourability
 
         if (layer.ValueKind == EvidenceValueKind.Circular)
         {
-            // A bearing of 360 is north again, and belongs with 0 rather than in the last class.
-            value = ((value % 360) + 360) % 360;
+            value = OnTheCompass(value);
         }
 
         return transform.Kind switch

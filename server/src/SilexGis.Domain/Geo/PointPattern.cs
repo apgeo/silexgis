@@ -518,27 +518,4 @@ public static class PointPattern
 
         return points;
     }
-
-    /// <summary>
-    /// A small counter-based generator, written out here rather than taken from the framework so a
-    /// stated seed means the same numbers on every machine and every runtime version. An envelope
-    /// whose seed does not reproduce is not a stated seed.
-    /// </summary>
-    private struct DeterministicRandom(int seed)
-    {
-        private ulong state = unchecked((ulong)seed * 0x9E3779B97F4A7C15UL) + 0x9E3779B97F4A7C15UL;
-
-        /// <summary>The next value in [0, 1).</summary>
-        public double NextDouble()
-        {
-            // SplitMix64: one multiply-shift mixing round over an incrementing counter.
-            state = unchecked(state + 0x9E3779B97F4A7C15UL);
-            var z = state;
-            z = unchecked((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL);
-            z = unchecked((z ^ (z >> 27)) * 0x94D049BB133111EBUL);
-            z ^= z >> 31;
-
-            return (z >> 11) * (1.0 / 9007199254740992.0);
-        }
-    }
 }
