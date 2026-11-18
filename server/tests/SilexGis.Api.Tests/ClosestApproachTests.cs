@@ -101,6 +101,41 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// A measurement that runs past its budget is stopped by the database and answered as "too
+    /// costly", not left to the command timeout to end as a bare server error. Driven with a
+    /// statement that sleeps, because two surveys large enough to run past twenty seconds are not
+    /// something a test should build; the same wrapper carries both routes' statements. Beside it,
+    /// a statement inside the budget answers its value.
+    /// </summary>
+    [Fact]
+    public async Task A_measurement_that_outruns_its_budget_is_reported_as_too_costly_and_one_inside_it_answers()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var stopped = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            100,
+            (connection, transaction) => connection.ExecuteScalarAsync<int>(
+                new CommandDefinition("SELECT 1 FROM pg_sleep(2)", transaction: transaction)),
+            CancellationToken.None);
+        stopped.TooCostly.ShouldBeTrue();
+
+        var answered = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            ClosestApproachSql.StatementBudgetMs,
+            (connection, transaction) => connection.ExecuteScalarAsync<int>(
+                new CommandDefinition("SELECT 7", transaction: transaction)),
+            CancellationToken.None);
+        answered.ShouldBe((false, 7));
+
+        // The budget was local to its transaction: the connection the next request borrows has
+        // no timeout left on it.
+        var setting = await db.Database.GetDbConnection().ExecuteScalarAsync<string>("SHOW statement_timeout");
+        setting.ShouldBe("0");
+    }
+
+    /// <summary>
     /// The test this whole feature stands or falls on. Three-dimensional distance is cartesian: it
     /// adds the three ordinates as it finds them, so over stored longitude, latitude and metres of
     /// altitude it returns a number that is mostly the height difference and is not a distance at
@@ -289,6 +324,8 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         // Four caves make six pairs, and the owner may place all of them.
         ownerPairs.GetArrayLength().ShouldBe(6);
         CavesIn(ownerPairs).ShouldContain(guarded);
+        forOwner.GetProperty("cavesConsidered").GetInt32().ShouldBe(4);
+        forOwner.GetProperty("partial").GetBoolean().ShouldBeFalse();
 
         var forViewer = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
         var viewerPairs = forViewer.GetProperty("pairs");
@@ -299,6 +336,11 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         CavesIn(viewerPairs).ShouldNotContain(guarded);
         viewerPairs.GetArrayLength().ShouldBe(3);
         CavesIn(viewerPairs).ShouldContain(north);
+
+        // The count of what was paired is a count of what this caller may place: three for the
+        // viewer where the owner's was four, so it cannot be read as "one more is hidden here".
+        forViewer.GetProperty("cavesConsidered").GetInt32().ShouldBe(3);
+        forViewer.GetProperty("partial").GetBoolean().ShouldBeFalse();
 
         // Nearest first.
         var distances = viewerPairs.EnumerateArray()
@@ -430,6 +472,60 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         // it is the only thing that bounds a request whose box is the whole world.
         plan.ShouldContain("Limit", Case.Sensitive,
             "the candidate ceiling must appear as a limit in the plan");
+    }
+
+    /// <summary>
+    /// Above the ceiling on how many caves one table pairs, the table is built from the first
+    /// caves by id and says it is partial, rather than silently answering for part of the box.
+    /// The ceiling is the production constant on the route; here the same two queries are built
+    /// with a ceiling of two, so three caves are enough to cross it.
+    /// </summary>
+    [Fact]
+    public async Task Over_the_ceiling_the_table_pairs_the_first_caves_by_id_and_the_count_says_there_were_more()
+    {
+        // A band of its own, as the class shares one database.
+        const double band = 46.08;
+        var caves = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            var cave = await CreateCaveAsync();
+            await UploadCenterlineAsync(
+                cave, Passage(band + (i * 0.002), band + (i * 0.002) + 0.0005, NorthAltitude));
+            caves.Add(cave);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().Database.GetDbConnection();
+        const double west = 23.9;
+        const double south = 46.075;
+        const double east = 24.1;
+        const double north = 46.095;
+
+        async Task<(IReadOnlyList<ClosestApproachRow> Rows, int Admitted)> AskAsync(int ceiling)
+        {
+            var (sql, parameters) = ClosestApproachSql.BuildForArea(
+                Admin(), west, south, east, north, 2000, ClosestApproachLimits.MaxRows, ceiling, workingSrid);
+            var rows = (await connection.QueryAsync<ClosestApproachRow>(new CommandDefinition(sql, parameters))).ToList();
+            var (countSql, countParameters) = ClosestApproachSql.BuildAreaCoverage(
+                Admin(), west, south, east, north, ceiling);
+            var admitted = await connection.ExecuteScalarAsync<int>(new CommandDefinition(countSql, countParameters));
+            return (rows, admitted);
+        }
+
+        // Under the ceiling: all three caves, three pairs, and the count stops at the whole pool.
+        var whole = await AskAsync(3);
+        whole.Rows.Count.ShouldBe(3);
+        whole.Admitted.ShouldBe(3);
+
+        // At a ceiling of two: one pair, between the two lowest ids — the same cut on every run —
+        // and a count one past the ceiling, which is what the route turns into "partial".
+        var cut = await AskAsync(2);
+        // The database orders identifiers by their bytes, which is the order of their hex text;
+        // .NET's own Guid ordering is not that one.
+        var firstTwo = caves.OrderBy(c => c.ToString("N"), StringComparer.Ordinal).Take(2).ToList();
+        cut.Rows.Count.ShouldBe(1);
+        new[] { cut.Rows[0].CaveAId, cut.Rows[0].CaveBId }.ShouldBe(firstTwo, ignoreOrder: true);
+        cut.Admitted.ShouldBe(3);
     }
 
     [Fact]

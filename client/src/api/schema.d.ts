@@ -3159,7 +3159,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** How much rock lies over one cave's passages, along their length. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. */
+        /** How much rock lies over one cave's passages, along their length. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. Answers 409 cave.altitudes_relative when the survey's heights have no declared altitude. */
         get: operations["caveOverburdenOverburden"];
         put?: never;
         post?: never;
@@ -9758,7 +9758,10 @@ export interface components {
             /** Format: int32 */
             dolineCount: number;
             /** Format: int32 */
+            unmeasuredDolineCount: number;
+            /** Format: int32 */
             structureFeatureCount: number;
+            structureTruncated: boolean;
             dolines: null | components["schemas"]["OrientationSummary"];
             structure: null | components["schemas"]["OrientationSummary"];
             divergence: null | components["schemas"]["RoseDivergence"];
@@ -10209,6 +10212,7 @@ export interface components {
             hasAltitudes: boolean;
             proposal: null | components["schemas"]["ElevationBandProposal"];
             springAltitudesM: number[];
+            altitudesRelative: boolean;
         };
         CaveIndexSummary: {
             /** Format: int32 */
@@ -10484,9 +10488,12 @@ export interface components {
             /** Format: uuid */
             surveyModelId: null | string;
             /** Format: double */
-            radiusMetres: number;
+            radiusMetres: null | number;
+            /** Format: uuid */
+            areaId: null | string;
             /** Format: int32 */
             structureFeatureCount: number;
+            structureTruncated: boolean;
             passage: null | components["schemas"]["OrientationSummary"];
             structure: null | components["schemas"]["OrientationSummary"];
             divergence: null | components["schemas"]["RoseDivergence"];
@@ -10523,6 +10530,7 @@ export interface components {
             /** Format: double */
             surveyLowestM: null | number;
             potentialDepth: components["schemas"]["MorphometryComparison"];
+            altitudesRelative: boolean;
         };
         CaveSystemFiguresSummary: {
             /** Format: int32 */
@@ -10825,7 +10833,7 @@ export interface components {
             viewport: null | string;
         };
         /** @enum {unknown} */
-        ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
+        ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes" | "altitudesRelative";
         ClosestApproachDto: {
             /** Format: uuid */
             caveAId: string;
@@ -10857,6 +10865,9 @@ export interface components {
             pairs: components["schemas"]["ClosestApproachDto"][];
             /** Format: double */
             maxDistanceM: number;
+            /** Format: int32 */
+            cavesConsidered: number;
+            partial: boolean;
         };
         ConfirmEmailRequest: {
             /** Format: uuid */
@@ -16331,6 +16342,7 @@ export interface components {
             /** Format: int32 */
             anonymousStationCount: null | number;
             readingAgain: boolean;
+            altitudesRelative: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
