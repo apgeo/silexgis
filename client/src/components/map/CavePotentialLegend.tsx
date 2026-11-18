@@ -12,7 +12,18 @@ import { CAVE_POTENTIAL_STOPS } from '../../map/cavePotentialLayers.ts';
  * ground. A map made from recorded positions says so, since it is shown only to readers who may
  * place them and must not be passed on.
  */
-export default function CavePotentialLegend({ usesPositions }: { usesPositions: boolean }) {
+export default function CavePotentialLegend({
+  usesPositions,
+  relative = false,
+}: {
+  usesPositions: boolean;
+  /**
+   * Whether the map's values were stretched between its own least and greatest, as a map learnt
+   * from known entrances is: its colours then rank the ground of this one map and are not a score
+   * that can be set beside another map's.
+   */
+  relative?: boolean;
+}) {
   const { t } = useTranslation();
   const ramp = `linear-gradient(to right, ${CAVE_POTENTIAL_STOPS.map(
     ([at, colour]) => `${colour} ${at * 100}%`,
@@ -30,6 +41,7 @@ export default function CavePotentialLegend({ usesPositions }: { usesPositions: 
       </div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-caveat">
         {t('cavePotential.legend.caveat')}
+        {relative ? ` ${t('cavePotential.legend.relativeCaveat')}` : ''}
         {usesPositions ? ` ${t('cavePotential.legend.positionsCaveat')}` : ''}
       </Typography.Text>
     </div>

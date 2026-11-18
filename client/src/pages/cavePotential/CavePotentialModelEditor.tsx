@@ -17,33 +17,26 @@ import Button from '../../components/Button.tsx';
 import { audienceFields, audienceFromKey, audienceKey } from '../../filters/savedFilterAudience.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import {
+  ENTRANCE_DENSITY_LAYER,
   JUDGMENT_CODES,
+  MAX_HELD_OUT_SHARE,
+  MIN_HELD_OUT_SHARE,
   definitionOf,
   draftOf,
   emptyDraft,
+  isDataDriven,
   isFilledIn,
   judgmentCode,
   judgmentOf,
   judgmentValue,
+  kindIn,
   newLayerDraft,
   withJudgment,
   type JudgmentCode,
   type LayerDraft,
   type ModelDraft,
 } from './cavePotentialModel.ts';
-
-/** What a class of a categorical layer is called, in the words its own legend uses elsewhere. */
-function categoryName(t: TFunction, layer: string, code: string): string {
-  return layer === 'lithology'
-    ? t(`geology.lithology.${code}`, { defaultValue: code })
-    : t(`terrain.landforms.${code}`, { defaultValue: code });
-}
-
-/** An evidence layer's name with the unit its values are in. */
-function evidenceName(t: TFunction, info: Pick<EvidenceLayerInfo, 'code' | 'unit'>): string {
-  const name = t(`cavePotential.evidence.${info.code}`, { defaultValue: info.code });
-  return info.unit ? `${name} (${t(`cavePotential.units.${info.unit}`, { defaultValue: info.unit })})` : name;
-}
+import { categoryName, evidenceName } from './cavePotentialNames.ts';
 
 function judgmentLabel(t: TFunction, code: JudgmentCode): string {
   if (code === '1') {
@@ -58,14 +51,21 @@ interface LayerCardProps {
   info: EvidenceLayerInfo;
   layer: LayerDraft;
   directWeights: boolean;
+  /** Whether the model counts its weights from known entrances, and so asks for no score here. */
+  dataDriven: boolean;
   onChange: (next: LayerDraft) => void;
   onRemove: () => void;
 }
 
-/** One evidence layer of the model: how its values are scored, and its weight when weights are given outright. */
-function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCardProps) {
+/**
+ * One evidence layer of the model: how its values are scored, and its weight when weights are
+ * given outright. In a model that learns from known entrances only where the classes are cut is
+ * asked, since what each class is worth is what the run counts.
+ */
+function LayerCard({ info, layer, directWeights, dataDriven, onChange, onRemove }: LayerCardProps) {
   const { t } = useTranslation();
   const name = evidenceName(t, info);
+  const kind = dataDriven ? kindIn('frequencyRatio', layer) : layer.kind;
   const score = (value: number | null, set: (next: number | null) => void, label: string) => (
     <InputNumber
       aria-label={label}
@@ -100,7 +100,7 @@ function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCard
     >
       <Flex vertical gap={8}>
         <Flex gap={12} wrap align="flex-end">
-          {info.transforms.length > 1 && (
+          {info.transforms.length > 1 && !dataDriven && (
             <label>
               <Typography.Text type="secondary">{t('cavePotential.editor.scoring')}</Typography.Text>
               <Select
@@ -132,7 +132,16 @@ function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCard
           )}
         </Flex>
 
-        {layer.kind === 'fuzzyLinear' && (
+        {dataDriven && layer.layer === ENTRANCE_DENSITY_LAYER && (
+          <Alert
+            type="error"
+            showIcon
+            data-testid="cave-potential-layer-circular"
+            title={t('cavePotential.editor.circularLayer')}
+          />
+        )}
+
+        {kind === 'fuzzyLinear' && (
           <>
             <Flex gap={12} wrap align="flex-end">
               <label>
@@ -162,7 +171,7 @@ function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCard
           </>
         )}
 
-        {layer.kind === 'classes' && (
+        {kind === 'classes' && (
           <Flex vertical gap={4}>
             {layer.classes.map((row, i) => {
               const last = i === layer.classes.length - 1;
@@ -187,8 +196,12 @@ function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCard
                       />
                     </>
                   )}
-                  <Typography.Text type="secondary">{t('cavePotential.editor.score')}</Typography.Text>
-                  {score(row.score, (next) => setRow({ score: next }), t('cavePotential.editor.classScoreOf', { name, row: i + 1 }))}
+                  {!dataDriven && (
+                    <>
+                      <Typography.Text type="secondary">{t('cavePotential.editor.score')}</Typography.Text>
+                      {score(row.score, (next) => setRow({ score: next }), t('cavePotential.editor.classScoreOf', { name, row: i + 1 }))}
+                    </>
+                  )}
                   {layer.classes.length > 2 && (
                     <Button
                       type="text"
@@ -223,7 +236,13 @@ function LayerCard({ info, layer, directWeights, onChange, onRemove }: LayerCard
           </Flex>
         )}
 
-        {layer.kind === 'categories' && (
+        {kind === 'categories' && dataDriven && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('cavePotential.editor.categoriesCounted')}
+          </Typography.Text>
+        )}
+
+        {kind === 'categories' && !dataDriven && (
           <>
             <Flex gap={8} wrap>
               {info.categories.map((code) => {
@@ -283,15 +302,25 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
   const [adding, setAdding] = useState<string | null>(null);
 
   const infoOf = (code: string) => evidenceLayers.find((info) => info.code === code);
-  const unused = evidenceLayers.filter((info) => !draft.layers.some((layer) => layer.layer === info.code));
-  const usesPositions = draft.layers.some((layer) => infoOf(layer.layer)?.usesPositions);
   const pairwise = draft.method === 'pairwiseComparison';
+  const dataDriven = isDataDriven(draft.method);
+  const unused = evidenceLayers.filter(
+    (info) =>
+      !draft.layers.some((layer) => layer.layer === info.code)
+      // Made from the very entrances such a model counts, so it is not offered to one.
+      && !(dataDriven && info.code === ENTRANCE_DENSITY_LAYER),
+  );
+  const usesPositions = draft.layers.some((layer) => infoOf(layer.layer)?.usesPositions);
   const filledIn = isFilledIn(draft);
 
   // Asked once the typing pauses, and only of a form with no blanks left.
   const settled = useDebouncedValue(draft, 400);
   const weightingRequest = useMemo(
-    () => (isFilledIn(settled) ? { method: settled.method, definition: definitionOf(settled) } : null),
+    // A model that learns from known entrances has no weights until it is run, so nothing is asked.
+    () =>
+      isFilledIn(settled) && !isDataDriven(settled.method)
+        ? { method: settled.method, definition: definitionOf(settled) }
+        : null,
     [settled],
   );
   const weighting = useCavePotentialWeighting(weightingRequest);
@@ -392,13 +421,64 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
               data-testid="cave-potential-method"
               value={draft.method}
               onChange={(method) => setDraft({ ...draft, method })}
+              style={{ maxWidth: '100%', overflowX: 'auto' }}
               options={[
                 { value: 'directWeights' as const, label: t('cavePotential.methods.directWeights') },
                 { value: 'pairwiseComparison' as const, label: t('cavePotential.methods.pairwiseComparison') },
+                { value: 'frequencyRatio' as const, label: t('cavePotential.methods.frequencyRatio') },
+                { value: 'weightsOfEvidence' as const, label: t('cavePotential.methods.weightsOfEvidence') },
               ]}
             />
           </div>
         </Flex>
+
+        {dataDriven && (
+          <Flex vertical gap={8} data-testid="cave-potential-training">
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t(
+                draft.method === 'weightsOfEvidence'
+                  ? 'cavePotential.editor.hintWeightsOfEvidence'
+                  : 'cavePotential.editor.hintFrequencyRatio',
+              )}
+            </Typography.Text>
+            <Flex gap={12} wrap align="flex-end">
+              <label>
+                <Typography.Text type="secondary">{t('cavePotential.editor.heldOutShare')}</Typography.Text>
+                <InputNumber
+                  aria-label={t('cavePotential.editor.heldOutShare')}
+                  data-testid="cave-potential-held-out-share"
+                  min={MIN_HELD_OUT_SHARE * 100}
+                  max={MAX_HELD_OUT_SHARE * 100}
+                  step={5}
+                  precision={0}
+                  // Typed as a percentage and held as the fraction the server reads.
+                  value={draft.heldOutShare === null ? null : Math.round(draft.heldOutShare * 100)}
+                  onChange={(percent) =>
+                    setDraft({ ...draft, heldOutShare: percent === null ? null : percent / 100 })
+                  }
+                  style={{ width: 160, display: 'block' }}
+                />
+              </label>
+              <label>
+                <Typography.Text type="secondary">{t('cavePotential.editor.seed')}</Typography.Text>
+                <InputNumber
+                  aria-label={t('cavePotential.editor.seed')}
+                  data-testid="cave-potential-seed"
+                  min={0}
+                  max={2147483647}
+                  step={1}
+                  precision={0}
+                  value={draft.seed}
+                  onChange={(seed) => setDraft({ ...draft, seed })}
+                  style={{ width: 160, display: 'block' }}
+                />
+              </label>
+            </Flex>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('cavePotential.editor.trainingHint')}
+            </Typography.Text>
+          </Flex>
+        )}
 
         <Typography.Text strong>{t('cavePotential.editor.layers')}</Typography.Text>
         {draft.layers.map((layer) => {
@@ -408,7 +488,8 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
               key={layer.layer}
               info={info}
               layer={layer}
-              directWeights={!pairwise}
+              directWeights={draft.method === 'directWeights'}
+              dataDriven={dataDriven}
               onChange={(next) =>
                 setDraft({ ...draft, layers: draft.layers.map((other) => (other.layer === next.layer ? next : other)) })
               }
@@ -447,8 +528,12 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
           </Flex>
         )}
 
-        {usesPositions && (
-          <Alert type="warning" showIcon data-testid="cave-potential-positions-notice" title={t('cavePotential.editor.positionsNotice')} />
+        {dataDriven ? (
+          <Alert type="warning" showIcon data-testid="cave-potential-learning-notice" title={t('cavePotential.editor.learningNotice')} />
+        ) : (
+          usesPositions && (
+            <Alert type="warning" showIcon data-testid="cave-potential-positions-notice" title={t('cavePotential.editor.positionsNotice')} />
+          )
         )}
 
         {pairwise && draft.layers.length > 1 && (
@@ -492,6 +577,11 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
         )}
 
         <Typography.Text strong>{t('cavePotential.editor.weights')}</Typography.Text>
+        {filledIn && dataDriven && (
+          <Typography.Text type="secondary" data-testid="cave-potential-weights-counted">
+            {t('cavePotential.editor.weightsCounted')}
+          </Typography.Text>
+        )}
         {!filledIn && (
           <Typography.Text type="secondary" data-testid="cave-potential-unfinished">
             {t('cavePotential.editor.unfinished')}

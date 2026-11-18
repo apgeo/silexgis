@@ -5,10 +5,12 @@ import {
   definitionOf,
   draftOf,
   emptyDraft,
+  isDataDriven,
   isFilledIn,
   judgmentCode,
   judgmentOf,
   judgmentValue,
+  kindIn,
   mapAddressOf,
   newLayerDraft,
   withJudgment,
@@ -35,6 +37,7 @@ const lithology: EvidenceLayerInfo = {
   transforms: ['categories'],
   categories: ['limestone', 'dolomite', 'granite'],
 };
+const density: EvidenceLayerInfo = { ...slope, code: 'entrance_density', source: 'features', usesPositions: true, unit: 'per_km2' };
 const infos = [slope, aspect, lithology];
 
 function draft(over: Partial<ModelDraft>): ModelDraft {
@@ -142,6 +145,131 @@ describe('the definition a form is written as', () => {
     );
 
     expect(opened.audience).toEqual({ visibility: 'cavingGroup', cavingGroupId: 'g-1' });
+    expect(definitionOf(opened)).toEqual(stored);
+  });
+});
+
+describe('a model that learns from known entrances', () => {
+  const cut = { ...newLayerDraft(slope), classes: [{ upperBound: 10, score: 0.4 }, { upperBound: 25, score: 1 }, { upperBound: 99, score: 0 }] };
+  const rock = { ...newLayerDraft(lithology), categories: { limestone: 1, dolomite: 0.5, granite: null } };
+
+  it('is either of the two methods that count their weights, and neither of the judged ones', () => {
+    expect(isDataDriven('frequencyRatio')).toBe(true);
+    expect(isDataDriven('weightsOfEvidence')).toBe(true);
+    expect(isDataDriven('directWeights')).toBe(false);
+    expect(isDataDriven('pairwiseComparison')).toBe(false);
+  });
+
+  it('writes where the classes are cut and how the entrances are parted, and no weight, score or comparison', () => {
+    const definition = definitionOf(
+      draft({
+        method: 'weightsOfEvidence',
+        layers: [cut, rock],
+        judgments: withJudgment({}, 'slope', 'lithology', 5),
+        heldOutShare: 0.25,
+        seed: 42,
+      }),
+    );
+
+    expect(definition).toEqual({
+      layers: [
+        {
+          layer: 'slope',
+          transform: {
+            kind: 'classes',
+            classes: [{ upperBound: 10, score: null }, { upperBound: 25, score: null }, { upperBound: null, score: null }],
+          },
+        },
+        // Every class of the layer is counted, so the model lists none.
+        { layer: 'lithology', transform: { kind: 'categories' } },
+      ],
+      training: { heldOutShare: 0.25, seed: 42 },
+    });
+  });
+
+  it('reads a layer drawn as a ramp as a table, and brings the ramp back for a judged model', () => {
+    const ramp = { ...cut, kind: 'fuzzyLinear' as const, low: 0, high: 30 };
+    expect(kindIn('frequencyRatio', ramp)).toBe('classes');
+    expect(kindIn('directWeights', ramp)).toBe('fuzzyLinear');
+    expect(definitionOf(draft({ method: 'frequencyRatio', layers: [ramp] })).layers[0].transform.kind).toBe('classes');
+    expect(definitionOf(draft({ method: 'directWeights', layers: [ramp] })).layers[0].transform).toEqual({
+      kind: 'fuzzyLinear',
+      low: 0,
+      high: 30,
+    });
+  });
+
+  it('writes no parting of entrances for a model weighed by judgment', () => {
+    expect('training' in definitionOf(draft({ layers: [cut], heldOutShare: 0.25, seed: 42 }))).toBe(false);
+  });
+
+  it('is filled in by rising bounds alone, with no score and no weight', () => {
+    const bounds = { ...newLayerDraft(slope), weight: null, classes: [{ upperBound: 10, score: null }, { upperBound: null, score: null }] };
+    expect(isFilledIn(draft({ method: 'frequencyRatio', layers: [bounds] }))).toBe(true);
+    // The same form is not a model weighed by judgment: it has no score and no weight.
+    expect(isFilledIn(draft({ method: 'directWeights', layers: [bounds] }))).toBe(false);
+
+    const falling = { ...bounds, classes: [{ upperBound: 10, score: null }, { upperBound: 5, score: null }, { upperBound: null, score: null }] };
+    expect(isFilledIn(draft({ method: 'frequencyRatio', layers: [falling] }))).toBe(false);
+    const unbounded = { ...bounds, classes: [{ upperBound: null, score: null }, { upperBound: null, score: null }] };
+    expect(isFilledIn(draft({ method: 'frequencyRatio', layers: [unbounded] }))).toBe(false);
+    // A layer that is classes already has nothing to fill in.
+    expect(isFilledIn(draft({ method: 'frequencyRatio', layers: [newLayerDraft(lithology)] }))).toBe(true);
+  });
+
+  it('is not filled in while it weighs the density of the entrances it learns from', () => {
+    const dense = { ...newLayerDraft(density), kind: 'classes' as const, classes: [{ upperBound: 1, score: null }, { upperBound: null, score: null }] };
+    expect(isFilledIn(draft({ method: 'weightsOfEvidence', layers: [dense] }))).toBe(false);
+  });
+
+  it('asks for a share kept back inside the bounds and a whole seed of nought or more', () => {
+    const filled = (over: Partial<ModelDraft>) => isFilledIn(draft({ method: 'frequencyRatio', layers: [cut], ...over }));
+    expect(filled({})).toBe(true);
+    expect(filled({ heldOutShare: 0.1 })).toBe(true);
+    expect(filled({ heldOutShare: 0.5 })).toBe(true);
+    expect(filled({ heldOutShare: 0.05 })).toBe(false);
+    expect(filled({ heldOutShare: 0.6 })).toBe(false);
+    expect(filled({ heldOutShare: null })).toBe(false);
+    expect(filled({ seed: null })).toBe(false);
+    expect(filled({ seed: -1 })).toBe(false);
+    expect(filled({ seed: 1.5 })).toBe(false);
+    expect(filled({ seed: 0 })).toBe(true);
+  });
+
+  it('opens a stored one as the form that would write it back unchanged', () => {
+    const stored = {
+      layers: [
+        {
+          layer: 'slope',
+          transform: { kind: 'classes' as const, classes: [{ upperBound: 10, score: null }, { upperBound: null, score: null }] },
+        },
+        { layer: 'lithology', transform: { kind: 'categories' as const } },
+      ],
+      training: { heldOutShare: 0.2, seed: 7 },
+    };
+    const opened = draftOf(
+      {
+        id: 'm-2',
+        name: 'Learnt',
+        description: null,
+        method: 'frequencyRatio',
+        definition: stored,
+        weighting: null,
+        usesPositions: true,
+        cavingGroupId: null,
+        visibility: 'private',
+        mine: true,
+        authorName: null,
+        mayEdit: true,
+        mayDelete: true,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      infos,
+    );
+
+    expect(opened.heldOutShare).toBe(0.2);
+    expect(opened.seed).toBe(7);
     expect(definitionOf(opened)).toEqual(stored);
   });
 });

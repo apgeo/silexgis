@@ -16,6 +16,10 @@ export type CavePotentialMethod = components['schemas']['CavePotentialMethod'];
 export type CavePotentialDefinition = components['schemas']['CavePotentialModelDefinition'];
 export type EvidenceTransform = components['schemas']['EvidenceTransform'];
 export type EvidenceTransformKind = components['schemas']['EvidenceTransformKind'];
+export type CavePotentialTrainingInfo = components['schemas']['CavePotentialTrainingDto'];
+export type CavePotentialWeightTable = components['schemas']['CavePotentialWeightTableDto'];
+export type CavePotentialClassWeights = components['schemas']['CavePotentialClassWeightsDto'];
+export type CavePotentialRateCurve = components['schemas']['CavePotentialRateCurveDto'];
 
 /** How long a result's map address stays usable, less a margin to re-read it in. */
 const CAVE_POTENTIAL_REFRESH_MS = 8 * 60_000;

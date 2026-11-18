@@ -32,6 +32,7 @@ import type {
   TripTrackingState,
   SurveyModelInfo,
   TerrainDerivativeLayerInfo,
+  CavePotentialModelInfo,
   CavePotentialResultInfo,
 } from '../api/hooks.ts';
 import type { components } from '../api/schema';
@@ -385,6 +386,14 @@ const cavePotentialStatuses: Record<CavePotentialResultInfo['status'], true> = {
   failed: true,
 };
 
+/** How a cave-potential model comes by its weights; the method's name is looked up from the value sent. */
+const cavePotentialMethods: Record<CavePotentialModelInfo['method'], true> = {
+  directWeights: true,
+  pairwiseComparison: true,
+  frequencyRatio: true,
+  weightsOfEvidence: true,
+};
+
 /** Why a picture is out of date; the hint under the badge is looked up from the reason sent. */
 const terrainDerivativeStaleReasons: Record<TerrainDerivativeStaleReason, true> = {
   elevationReplaced: true,
@@ -696,6 +705,12 @@ describe('i18n locales', () => {
     const names = Object.keys(cavePotentialStatuses);
     expect(Object.keys(en.cavePotential.statuses).sort()).toEqual([...names].sort());
     expect(Object.keys(ro.cavePotential.statuses).sort()).toEqual([...names].sort());
+  });
+
+  it('every method of a cave-potential model is named in both locales', () => {
+    const names = Object.keys(cavePotentialMethods);
+    expect(Object.keys(en.cavePotential.methods).sort()).toEqual([...names].sort());
+    expect(Object.keys(ro.cavePotential.methods).sort()).toEqual([...names].sort());
   });
 
   it('every kind of derived picture, its states and its choices are named in both locales', () => {

@@ -637,6 +637,49 @@ describe('the cave-potential maps in the layer panel', () => {
     expect(screen.getByTestId('cave-potential-caveat').textContent).toMatch(/recorded positions/i);
   });
 
+  it('says of a map learnt from known entrances that its colours rank that map alone', () => {
+    const curve = { points: [{ areaShare: 0, occurrenceShare: 0 }, { areaShare: 1, occurrenceShare: 1 }], areaUnderCurve: 0.5, cells: 100, occurrences: 10 };
+    const learnt = potentialResult({
+      method: 'frequencyRatio',
+      usesPositions: true,
+      summary: {
+        layers: [],
+        areaCells: 100,
+        scoredCells: 100,
+        minimum: 0,
+        maximum: 1,
+        mean: 0.2,
+        training: {
+          heldOutShare: 0.3,
+          seed: 1,
+          trainingEntrances: 10,
+          heldOutEntrances: 4,
+          trainingCells: 10,
+          heldOutCells: 4,
+          protectedEntrances: 0,
+          cells: 100,
+          priorProbability: 0.1,
+          valueMinimum: 0.2,
+          valueMaximum: 3.1,
+          expectedOccurrences: null,
+          tables: [],
+          successRate: curve,
+          predictionRate: curve,
+        },
+      },
+    });
+    renderPanel({ cavePotentialResults: [learnt], visibleCavePotentialIds: [learnt.id] });
+    expect(screen.getByTestId('cave-potential-caveat').textContent).toMatch(/they rank the ground/);
+    cleanup();
+
+    // A map weighed by judgment is scored on a scale of its own and says no such thing.
+    const judged = potentialResult({
+      summary: { layers: [], areaCells: 100, scoredCells: 100, minimum: 0, maximum: 1, mean: 0.2, training: null },
+    });
+    renderPanel({ cavePotentialResults: [judged], visibleCavePotentialIds: [judged.id] });
+    expect(screen.getByTestId('cave-potential-caveat').textContent).not.toMatch(/they rank the ground/);
+  });
+
   it('cannot switch on a run that has not finished, and says where it has got to', () => {
     const result = potentialResult({ status: 'failed', url: null, message: 'roughness: no_layer' });
     renderPanel({ cavePotentialResults: [result] });

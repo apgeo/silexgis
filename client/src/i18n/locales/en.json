@@ -10503,7 +10503,8 @@
       "low": "Less favourable",
       "high": "More favourable",
       "caveat": "A weighing of evidence as its model describes it, not a finding: nothing here has been checked on the ground. For use inside the group only.",
-      "positionsCaveat": "Made from recorded positions, some of which may be protected; you see it because you may place all of them. Do not pass it on."
+      "positionsCaveat": "Made from recorded positions, some of which may be protected; you see it because you may place all of them. Do not pass it on.",
+      "relativeCaveat": "Its colours run from the least to the most favourable ground of this one map; they rank the ground and cannot be set beside another map's."
     },
     "page": {
       "title": "Cave potential",
@@ -10548,11 +10549,17 @@
       "deleteResultConfirm": "Delete this map?",
       "showOnMap": "Show on the map",
       "unnamedArea": "Unnamed area",
-      "summary": "{{scored}} of {{cells}} cells scored · mean {{mean}}"
+      "summary": "{{scored}} of {{cells}} cells scored · mean {{mean}}",
+      "learnsTag": "Learns from known entrances",
+      "learnsTagHint": "Its weights are counted from the cave entrances you may place exactly, on every run. A map computed from it is shown only to readers who may place every entrance it was counted from.",
+      "trainingSummary": "learnt from {{training}} entrances, tested on {{heldOut}} · AUC {{success}} / {{prediction}}",
+      "weightsAndCurves": "Weights and curves"
     },
     "methods": {
       "directWeights": "Weights given outright",
-      "pairwiseComparison": "Pairwise comparisons"
+      "pairwiseComparison": "Pairwise comparisons",
+      "frequencyRatio": "Frequency ratio",
+      "weightsOfEvidence": "Weights of evidence"
     },
     "audiences": {
       "private": "Only me",
@@ -10626,7 +10633,16 @@
       "consistencyFine": "The comparisons agree with each other well enough (0.1 or less).",
       "consistencyWarning": "Above 0.1 the comparisons contradict each other more than is customary; consider revising them. The model can still be saved and run.",
       "weightsFailed": "The weights could not be worked out.",
-      "positionsNotice": "This model weighs a layer made from recorded positions. A map computed from it shows where those features are, so it is shown only to readers who may place every one of them."
+      "positionsNotice": "This model weighs a layer made from recorded positions. A map computed from it shows where those features are, so it is shown only to readers who may place every one of them.",
+      "hintFrequencyRatio": "Nothing is weighed by judgment. Each class of each layer is given the share of the known entrances it holds over the share of the ground it covers, and a cell's index is the sum of the ratios of the classes it falls in.",
+      "hintWeightsOfEvidence": "Nothing is weighed by judgment. Each class of each layer is given the weights of evidence the known entrances come to, and a cell's figure is the probability those weights give it.",
+      "heldOutShare": "Entrances kept back for testing (%)",
+      "seed": "Seed of the draw",
+      "trainingHint": "The entrances kept back are never shown to the model; how well its map finds them is its prediction rate. The same area, entrances, share and seed keep back the same ones on every run.",
+      "circularLayer": "A model that learns from known entrances cannot also weigh how dense they are: it would be shown the entrances it is tested on. Remove this layer.",
+      "categoriesCounted": "Every class of this layer is counted; there is nothing to fill in.",
+      "learningNotice": "This model learns from known cave entrances. A run counts only the entrances you may place exactly, and its map, weight tables and curves are shown only to readers who may place every one of them.",
+      "weightsCounted": "The weights of this model are counted from known entrances when it is run, and are shown with each map."
     },
     "run": {
       "title": "Run {{name}}",
@@ -10646,7 +10662,46 @@
       "area_unusable": "The area can no longer be covered at that cell size.",
       "evidence_unavailable": "Some of the model's evidence is not available here",
       "nothing_scored": "No part of the area had a value from every layer.",
-      "failed": "The map could not be computed."
+      "failed": "The map could not be computed.",
+      "too_few_entrances": "Too few known entrances in the area, among those the account may place, to keep some back and learn from the rest.",
+      "too_many_entrances": "The area holds more known entrances, among those the account may place, than a run can learn from. Choose a smaller area.",
+      "nothing_to_learn": "The known entrances leave nothing to tell apart in this area."
+    },
+    "training": {
+      "classNumber": "Class {{n}}",
+      "classBelow": "below {{upper}}",
+      "classFrom": "{{lower}} and above",
+      "classBetween": "{{lower}} up to {{upper}}",
+      "successRate": "Success rate",
+      "predictionRate": "Prediction rate",
+      "chance": "Chance",
+      "areaAxis": "Ground, most favourable first (%)",
+      "occurrenceAxis": "Occupied cells found (%)",
+      "counts": "Learnt from {{training}} entrances in {{trainingCells}} cells; {{heldOut}} entrances in {{heldOutCells}} cells kept back.",
+      "split": "{{percent}} % kept back, seed {{seed}} · {{cells}} cells of ground weighed",
+      "protectedEntrances": "Location-protected entrances among those used: {{n}}. You see this because you may place all of them. Do not pass it on.",
+      "scaleFrequencyRatio": "On the map, 0 stands for a summed ratio of {{minimum}} and 1 for {{maximum}}.",
+      "scaleWeightsOfEvidence": "On the map, 0 stands for a probability of {{minimum}} and 1 for {{maximum}}.",
+      "expected": "The probabilities add up to {{expected}} occupied cells against the {{trainingCells}} learnt from. A sum far above means the layers repeat each other and the probabilities are too high; the ranking is still usable.",
+      "aucSuccess": "Success rate: AUC {{auc}} ({{n}} occupied cells learnt from)",
+      "aucPrediction": "Prediction rate: AUC {{auc}} ({{n}} occupied cells kept back)",
+      "curvesLabel": "Success-rate and prediction-rate curves",
+      "curvesHint": "A curve far above the dashed line finds the entrances on little ground; an area under the curve of 0.5 is no better than chance. The prediction rate is the honest one: it is drawn against entrances the model never saw.",
+      "corrected": "adjusted",
+      "correctedHint": "One of the four counts was nought, so a half was added to each before the weights were worked out.",
+      "studentisedHint": "The contrast over its standard deviation. Above about 2 the class tells the entrances apart from the ground with some confidence.",
+      "tablesHint": "A frequency ratio above 1 and a positive W+ mean entrances are commoner in the class than on the ground as a whole. Cells are counted, not entrances: two entrances in one cell count once.",
+      "columns": {
+        "class": "Class",
+        "cells": "Cells",
+        "occurrences": "With an entrance",
+        "frequencyRatio": "Frequency ratio",
+        "positiveWeight": "W+",
+        "negativeWeight": "W−",
+        "contrast": "Contrast",
+        "contrastDeviation": "s(C)",
+        "studentisedContrast": "C / s(C)"
+      }
     },
     "unavailable": {
       "no_terrain": "no elevation built",

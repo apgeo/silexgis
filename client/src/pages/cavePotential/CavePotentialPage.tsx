@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { CopyOutlined, DeleteOutlined, EditOutlined, EnvironmentOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  LineChartOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
 import { Alert, App, Card, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -20,7 +28,10 @@ import Button from '../../components/Button.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import CavePotentialModelEditor from './CavePotentialModelEditor.tsx';
 import CavePotentialRunForm from './CavePotentialRunForm.tsx';
+import CavePotentialTrainingView from './CavePotentialTrainingView.tsx';
+import { formatAuc } from './cavePotentialCurves.ts';
 import { mapAddressOf } from './cavePotentialModel.ts';
+import { isDataDriven } from './cavePotentialNames.ts';
 import { cavePotentialFailureText } from '../../components/map/cavePotentialFailure.ts';
 
 /**
@@ -55,6 +66,17 @@ export default function CavePotentialPage() {
   // `undefined` is closed, `null` a new model, a model the one being changed.
   const [editing, setEditing] = useState<CavePotentialModelInfo | null | undefined>(undefined);
   const [running, setRunning] = useState<CavePotentialModelInfo | null>(null);
+  // The results whose weight tables and curves are open under their row.
+  const [opened, setOpened] = useState<string[]>([]);
+
+  /**
+   * Whether a model can be offered for a run. One weighed by judgment has its weights worked out
+   * by the server exactly when it is valid. One that learns from known entrances has no weights
+   * before it is run, so it is offered whenever its definition can be read, and the server says
+   * what is wrong with it when the run is asked for.
+   */
+  const runnable = (model: CavePotentialModelInfo) =>
+    model.weighting !== null || (isDataDriven(model.method) && model.definition !== null);
 
   const layerName = (code: string) => t(`cavePotential.evidence.${code}`, { defaultValue: code });
   const date = (iso: string) => new Date(iso).toLocaleDateString(i18n.resolvedLanguage);
@@ -165,6 +187,16 @@ export default function CavePotentialPage() {
                     ))}
                     {model.usesPositions && positionsTag}
                   </Flex>
+                ) : isDataDriven(model.method) && model.definition ? (
+                  // No weights to show: they are counted on each run and are on its result.
+                  <Flex gap={4} wrap>
+                    {model.definition.layers.map((setting) => (
+                      <Tag key={setting.layer}>{layerName(setting.layer)}</Tag>
+                    ))}
+                    <Tooltip title={t('cavePotential.page.learnsTagHint')}>
+                      <Tag color="gold" data-testid="cave-potential-learns">{t('cavePotential.page.learnsTag')}</Tag>
+                    </Tooltip>
+                  </Flex>
                 ) : (
                   <Typography.Text type="warning">{t('cavePotential.page.unreadableModel')}</Typography.Text>
                 ),
@@ -195,7 +227,7 @@ export default function CavePotentialPage() {
               key: 'actions',
               render: (_, model) => (
                 <Space size={4}>
-                  {mayReadTerrain && model.weighting && (
+                  {mayReadTerrain && runnable(model) && (
                     <Button
                       size="small"
                       icon={<PlayCircleOutlined />}
@@ -259,6 +291,20 @@ export default function CavePotentialPage() {
             scroll={{ x: 'max-content' }}
             data-testid="cave-potential-results"
             locale={{ emptyText: t('cavePotential.page.noResults') }}
+            expandable={{
+              // Opened by the row's own button, which says what it opens.
+              showExpandColumn: false,
+              expandedRowKeys: opened,
+              rowExpandable: (result) => result.status === 'ready' && Boolean(result.summary?.training),
+              expandedRowRender: (result) =>
+                result.summary?.training ? (
+                  <CavePotentialTrainingView
+                    result={result}
+                    training={result.summary.training}
+                    evidenceLayers={evidenceLayers}
+                  />
+                ) : null,
+            }}
             columns={[
               {
                 title: t('cavePotential.page.columns.model'),
@@ -314,6 +360,16 @@ export default function CavePotentialPage() {
                         })}
                       </Typography.Text>
                     )}
+                    {result.status === 'ready' && result.summary?.training && (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-result-training">
+                        {t('cavePotential.page.trainingSummary', {
+                          training: result.summary.training.trainingEntrances,
+                          heldOut: result.summary.training.heldOutEntrances,
+                          success: formatAuc(result.summary.training.successRate.areaUnderCurve),
+                          prediction: formatAuc(result.summary.training.predictionRate.areaUnderCurve),
+                        })}
+                      </Typography.Text>
+                    )}
                   </Flex>
                 ),
               },
@@ -341,6 +397,21 @@ export default function CavePotentialPage() {
                         onClick={() => showOnMap(result)}
                       >
                         {t('cavePotential.page.showOnMap')}
+                      </Button>
+                    )}
+                    {result.status === 'ready' && result.summary?.training && (
+                      <Button
+                        size="small"
+                        icon={<LineChartOutlined />}
+                        aria-expanded={opened.includes(result.id)}
+                        data-testid="cave-potential-training-toggle"
+                        onClick={() =>
+                          setOpened((ids) =>
+                            ids.includes(result.id) ? ids.filter((id) => id !== result.id) : [...ids, result.id],
+                          )
+                        }
+                      >
+                        {t('cavePotential.page.weightsAndCurves')}
                       </Button>
                     )}
                     {result.mayDelete && (

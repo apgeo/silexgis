@@ -1138,7 +1138,10 @@ export default function LayerPanel({
                   </Tooltip>
                 )}
                 {result.status === 'ready' && visibleCavePotentialIds.includes(result.id) && (
-                  <CavePotentialLegend usesPositions={result.usesPositions} />
+                  <CavePotentialLegend
+                    usesPositions={result.usesPositions}
+                    relative={Boolean(result.summary?.training)}
+                  />
                 )}
               </div>
             ))}

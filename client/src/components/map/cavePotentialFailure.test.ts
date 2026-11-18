@@ -31,4 +31,9 @@ describe('cavePotentialFailureText', () => {
     expect(text).toContain(en.cavePotential.unavailable.no_terrain);
     expect(text).not.toContain('no_layer');
   });
+
+  it('words a run that read too many entrances from the translation files', () => {
+    const text = cavePotentialFailureText(t, { errorCode: 'cave_potential.too_many_entrances', message: 'raw english' });
+    expect(text).toBe(en.cavePotential.failures.too_many_entrances);
+  });
 });

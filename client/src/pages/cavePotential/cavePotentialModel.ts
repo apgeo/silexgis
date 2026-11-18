@@ -8,8 +8,10 @@ import type {
   EvidenceTransformKind,
 } from '../../api/hooks/cavePotential.ts';
 import type { SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
+import { isDataDriven } from './cavePotentialNames.ts';
 
 export type { CavePotentialDefinition, CavePotentialMethod, EvidenceLayerInfo, EvidenceTransformKind };
+export { isDataDriven };
 
 /** One row of a classes table as it is being typed: either number may still be missing. */
 export interface ClassDraft {
@@ -49,7 +51,24 @@ export interface ModelDraft {
    * it was; a pair with no entry is "equally important".
    */
   judgments: Record<string, number>;
+  /**
+   * The share of the known entrances a model that learns from them keeps back to test itself, as
+   * a fraction. Kept while the model is weighed by judgment, and not written then.
+   */
+  heldOutShare: number | null;
+  /** What the draw of the kept-back entrances starts from; kept and written as the share is. */
+  seed: number | null;
 }
+
+/** The shares of known entrances a model may keep back, and the one a new model starts with. */
+export const MIN_HELD_OUT_SHARE = 0.1;
+export const MAX_HELD_OUT_SHARE = 0.5;
+export const DEFAULT_HELD_OUT_SHARE = 0.3;
+/** The seed a new model starts with: any whole number does, and one is as good as another. */
+export const DEFAULT_SEED = 1;
+
+/** The layer made from the very entrances a learning model counts, which such a model may not weigh. */
+export const ENTRANCE_DENSITY_LAYER = 'entrance_density';
 
 /**
  * The scale pairwise judgments are made on: nine down to one ninth. A judgment is chosen from
@@ -119,6 +138,8 @@ export function emptyDraft(): ModelDraft {
     audience: { visibility: 'private' },
     layers: [],
     judgments: {},
+    heldOutShare: DEFAULT_HELD_OUT_SHARE,
+    seed: DEFAULT_SEED,
   };
 }
 
@@ -186,6 +207,32 @@ export function draftOf(model: ModelInfo, infos: readonly EvidenceLayerInfo[]): 
     audience,
     layers,
     judgments,
+    heldOutShare: model.definition?.training?.heldOutShare ?? DEFAULT_HELD_OUT_SHARE,
+    seed: model.definition?.training?.seed ?? DEFAULT_SEED,
+  };
+}
+
+/**
+ * How a layer is scored in a model of a method: a ramp has no classes to count entrances in, so a
+ * learning model reads a layer drawn as a ramp as a table of classes. The draft keeps what was
+ * chosen, so going back to a model weighed by judgment brings the ramp back.
+ */
+export function kindIn(method: CavePotentialMethod, layer: LayerDraft): EvidenceTransformKind {
+  return isDataDriven(method) && layer.kind === 'fuzzyLinear' ? 'classes' : layer.kind;
+}
+
+/** A learning model's layer: where its classes are cut, and nothing of what each is worth. */
+function countedTransformOf(layer: LayerDraft): EvidenceTransform {
+  if (layer.kind === 'categories') {
+    // Every class of the layer is counted, so none is listed.
+    return { kind: 'categories' };
+  }
+  return {
+    kind: 'classes',
+    classes: layer.classes.map((row, i) => ({
+      upperBound: i === layer.classes.length - 1 ? null : row.upperBound,
+      score: null,
+    })),
   };
 }
 
@@ -212,8 +259,21 @@ function transformOf(layer: LayerDraft): EvidenceTransform {
   };
 }
 
-/** The definition a draft is written as: weights for one method, comparisons for the other, never both. */
+/**
+ * The definition a draft is written as: weights for one method, comparisons for another, and for
+ * a model that learns from known entrances neither — only where the classes are cut and how the
+ * entrances are parted.
+ */
 export function definitionOf(draft: ModelDraft): CavePotentialDefinition {
+  if (isDataDriven(draft.method)) {
+    return {
+      layers: draft.layers.map((layer) => ({ layer: layer.layer, transform: countedTransformOf(layer) })),
+      training: {
+        heldOutShare: draft.heldOutShare ?? DEFAULT_HELD_OUT_SHARE,
+        seed: draft.seed ?? DEFAULT_SEED,
+      },
+    };
+  }
   const pairwise = draft.method === 'pairwiseComparison';
   return {
     layers: draft.layers.map((layer) => ({
@@ -233,6 +293,27 @@ export function definitionOf(draft: ModelDraft): CavePotentialDefinition {
 
 const isNumber = (value: number | null): value is number => value !== null && Number.isFinite(value);
 const isScore = (value: number | null) => isNumber(value) && value >= 0 && value <= 1;
+
+/** A learning model's layer: classes cut at rising bounds, and not the layer made from its own entrances. */
+function countedLayerFilledIn(layer: LayerDraft): boolean {
+  if (layer.layer === ENTRANCE_DENSITY_LAYER) {
+    return false;
+  }
+  if (layer.kind === 'categories') {
+    return true;
+  }
+  if (layer.classes.length < 2) {
+    return false;
+  }
+  let previous = -Infinity;
+  return layer.classes.slice(0, -1).every((row) => {
+    if (!isNumber(row.upperBound) || row.upperBound <= previous) {
+      return false;
+    }
+    previous = row.upperBound;
+    return true;
+  });
+}
 
 function layerFilledIn(layer: LayerDraft, directWeights: boolean): boolean {
   if (directWeights && !(isNumber(layer.weight) && layer.weight > 0)) {
@@ -272,6 +353,16 @@ function layerFilledIn(layer: LayerDraft, directWeights: boolean): boolean {
  * what is wrong in its own words. This only keeps a half-typed form from being sent.
  */
 export function isFilledIn(draft: ModelDraft): boolean {
+  if (isDataDriven(draft.method)) {
+    return draft.layers.length > 0
+      && draft.layers.every(countedLayerFilledIn)
+      && isNumber(draft.heldOutShare)
+      && draft.heldOutShare >= MIN_HELD_OUT_SHARE
+      && draft.heldOutShare <= MAX_HELD_OUT_SHARE
+      && isNumber(draft.seed)
+      && Number.isInteger(draft.seed)
+      && draft.seed >= 0;
+  }
   return draft.layers.length > 0
     && draft.layers.every((layer) => layerFilledIn(layer, draft.method === 'directWeights'));
 }

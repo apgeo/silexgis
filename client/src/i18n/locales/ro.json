@@ -10516,7 +10516,8 @@
       "low": "Mai puțin favorabil",
       "high": "Mai favorabil",
       "caveat": "O cântărire a dovezilor, așa cum o descrie modelul, nu o constatare: nimic de aici nu a fost verificat pe teren. Doar pentru uz intern.",
-      "positionsCaveat": "Realizată din poziții înregistrate, dintre care unele pot fi protejate; o vezi pentru că le poți localiza exact pe toate. Nu o transmite mai departe."
+      "positionsCaveat": "Realizată din poziții înregistrate, dintre care unele pot fi protejate; o vezi pentru că le poți localiza exact pe toate. Nu o transmite mai departe.",
+      "relativeCaveat": "Culorile merg de la terenul cel mai puțin favorabil la cel mai favorabil al acestei hărți; ele ordonează terenul și nu pot fi comparate cu cele ale altei hărți."
     },
     "page": {
       "title": "Potențial speologic",
@@ -10561,11 +10562,17 @@
       "deleteResultConfirm": "Ștergi această hartă?",
       "showOnMap": "Arată pe hartă",
       "unnamedArea": "Zonă fără nume",
-      "summary": "{{scored}} din {{cells}} celule evaluate · media {{mean}}"
+      "summary": "{{scored}} din {{cells}} celule evaluate · media {{mean}}",
+      "learnsTag": "Învață din intrări cunoscute",
+      "learnsTagHint": "Ponderile sunt numărate, la fiecare rulare, din intrările de peșteră pe care le poți localiza exact. O hartă calculată din el este arătată doar cititorilor care pot localiza exact fiecare intrare din care a fost numărată.",
+      "trainingSummary": "învățat din {{training}} intrări, testat pe {{heldOut}} · AUC {{success}} / {{prediction}}",
+      "weightsAndCurves": "Ponderi și curbe"
     },
     "methods": {
       "directWeights": "Ponderi date direct",
-      "pairwiseComparison": "Comparații pe perechi"
+      "pairwiseComparison": "Comparații pe perechi",
+      "frequencyRatio": "Raport de frecvență",
+      "weightsOfEvidence": "Ponderile dovezilor"
     },
     "audiences": {
       "private": "Doar eu",
@@ -10639,7 +10646,16 @@
       "consistencyFine": "Comparațiile se potrivesc între ele suficient de bine (cel mult 0,1).",
       "consistencyWarning": "Peste 0,1 comparațiile se contrazic mai mult decât se obișnuiește; ia în calcul revizuirea lor. Modelul poate fi totuși salvat și rulat.",
       "weightsFailed": "Ponderile nu au putut fi calculate.",
-      "positionsNotice": "Acest model cântărește un strat făcut din poziții înregistrate. O hartă calculată din el arată unde se află acele obiecte, așa că este arătată doar cititorilor care le pot localiza exact pe toate."
+      "positionsNotice": "Acest model cântărește un strat făcut din poziții înregistrate. O hartă calculată din el arată unde se află acele obiecte, așa că este arătată doar cititorilor care le pot localiza exact pe toate.",
+      "hintFrequencyRatio": "Nimic nu este cântărit prin judecată. Fiecare clasă a fiecărui strat primește partea din intrările cunoscute pe care o conține, raportată la partea din teren pe care o acoperă, iar indicele unei celule este suma rapoartelor claselor în care se află.",
+      "hintWeightsOfEvidence": "Nimic nu este cântărit prin judecată. Fiecare clasă a fiecărui strat primește ponderile dovezilor la care duc intrările cunoscute, iar valoarea unei celule este probabilitatea pe care i-o dau aceste ponderi.",
+      "heldOutShare": "Intrări păstrate pentru testare (%)",
+      "seed": "Sămânța tragerii",
+      "trainingHint": "Intrările păstrate nu sunt arătate niciodată modelului; cât de bine le găsește harta lui este rata de predicție. Aceeași zonă, aceleași intrări, aceeași parte și aceeași sămânță păstrează aceleași intrări la fiecare rulare.",
+      "circularLayer": "Un model care învață din intrări cunoscute nu poate cântări și densitatea lor: i s-ar arăta intrările pe care este testat. Elimină acest strat.",
+      "categoriesCounted": "Fiecare clasă a acestui strat este numărată; nu este nimic de completat.",
+      "learningNotice": "Acest model învață din intrări de peșteră cunoscute. O rulare numără doar intrările pe care le poți localiza exact, iar harta, tabelele de ponderi și curbele sunt arătate doar cititorilor care le pot localiza exact pe toate.",
+      "weightsCounted": "Ponderile acestui model sunt numărate din intrările cunoscute atunci când este rulat și sunt arătate împreună cu fiecare hartă."
     },
     "run": {
       "title": "Rulează {{name}}",
@@ -10659,7 +10675,46 @@
       "area_unusable": "Zona nu mai poate fi acoperită la această mărime a celulei.",
       "evidence_unavailable": "O parte din dovezile modelului nu este disponibilă aici",
       "nothing_scored": "Nicio parte a zonei nu a avut o valoare din fiecare strat.",
-      "failed": "Harta nu a putut fi calculată."
+      "failed": "Harta nu a putut fi calculată.",
+      "too_few_entrances": "Prea puține intrări cunoscute în zonă, dintre cele pe care contul le poate localiza exact, pentru a păstra o parte și a învăța din rest.",
+      "too_many_entrances": "Zona conține mai multe intrări cunoscute, dintre cele pe care contul le poate localiza exact, decât poate folosi o rulare. Alegeți o zonă mai mică.",
+      "nothing_to_learn": "Intrările cunoscute nu lasă nimic de deosebit în această zonă."
+    },
+    "training": {
+      "classNumber": "Clasa {{n}}",
+      "classBelow": "sub {{upper}}",
+      "classFrom": "{{lower}} și peste",
+      "classBetween": "de la {{lower}} până la {{upper}}",
+      "successRate": "Rata de succes",
+      "predictionRate": "Rata de predicție",
+      "chance": "Întâmplare",
+      "areaAxis": "Teren, de la cel mai favorabil (%)",
+      "occurrenceAxis": "Celule ocupate găsite (%)",
+      "counts": "Învățat din {{training}} intrări în {{trainingCells}} celule; {{heldOut}} intrări în {{heldOutCells}} celule păstrate.",
+      "split": "{{percent}} % păstrate, sămânța {{seed}} · {{cells}} celule de teren cântărite",
+      "protectedEntrances": "Intrări cu localizare protejată printre cele folosite: {{n}}. Vezi acest rezultat pentru că le poți localiza exact pe toate. Nu îl transmite mai departe.",
+      "scaleFrequencyRatio": "Pe hartă, 0 înseamnă o sumă a rapoartelor de {{minimum}}, iar 1 înseamnă {{maximum}}.",
+      "scaleWeightsOfEvidence": "Pe hartă, 0 înseamnă o probabilitate de {{minimum}}, iar 1 înseamnă {{maximum}}.",
+      "expected": "Probabilitățile însumează {{expected}} celule ocupate, față de cele {{trainingCells}} din care s-a învățat. O sumă mult mai mare înseamnă că straturile se repetă între ele și probabilitățile sunt prea mari; ordonarea rămâne utilizabilă.",
+      "aucSuccess": "Rata de succes: AUC {{auc}} ({{n}} celule ocupate din care s-a învățat)",
+      "aucPrediction": "Rata de predicție: AUC {{auc}} ({{n}} celule ocupate păstrate)",
+      "curvesLabel": "Curbele ratei de succes și ratei de predicție",
+      "curvesHint": "O curbă mult deasupra liniei întrerupte găsește intrările pe puțin teren; o arie de sub curbă de 0,5 nu este mai bună decât întâmplarea. Rata de predicție este cea cinstită: este trasată față de intrări pe care modelul nu le-a văzut.",
+      "corrected": "ajustat",
+      "correctedHint": "Una dintre cele patru numărători era zero, așa că fiecăreia i s-a adăugat o jumătate înainte de calculul ponderilor.",
+      "studentisedHint": "Contrastul împărțit la abaterea lui standard. Peste aproximativ 2, clasa deosebește intrările de teren cu oarecare încredere.",
+      "tablesHint": "Un raport de frecvență peste 1 și un W+ pozitiv înseamnă că intrările sunt mai dese în clasă decât pe întregul teren. Se numără celule, nu intrări: două intrări într-o celulă se numără o dată.",
+      "columns": {
+        "class": "Clasă",
+        "cells": "Celule",
+        "occurrences": "Cu intrare",
+        "frequencyRatio": "Raport de frecvență",
+        "positiveWeight": "W+",
+        "negativeWeight": "W−",
+        "contrast": "Contrast",
+        "contrastDeviation": "s(C)",
+        "studentisedContrast": "C / s(C)"
+      }
     },
     "unavailable": {
       "no_terrain": "nicio elevație construită",

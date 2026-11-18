@@ -10695,14 +10695,36 @@ export interface components {
             canManagePermissions: boolean;
             canViewExactLocation: boolean;
         };
+        CavePotentialClassWeightsDto: {
+            /** Format: int32 */
+            class: number;
+            /** Format: int32 */
+            cells: number;
+            /** Format: int32 */
+            occurrences: number;
+            /** Format: double */
+            frequencyRatio: null | number;
+            /** Format: double */
+            positiveWeight: null | number;
+            /** Format: double */
+            negativeWeight: null | number;
+            /** Format: double */
+            contrast: null | number;
+            /** Format: double */
+            contrastDeviation: null | number;
+            /** Format: double */
+            studentisedContrast: null | number;
+            corrected: boolean;
+        };
         /** @enum {unknown} */
-        CavePotentialMethod: "directWeights" | "pairwiseComparison";
+        CavePotentialMethod: "directWeights" | "pairwiseComparison" | "frequencyRatio" | "weightsOfEvidence";
         CavePotentialModelCloneRequest: {
             name: string;
         };
         CavePotentialModelDefinition: {
             layers: components["schemas"]["EvidenceLayerSetting"][];
             pairwise?: null | number[][];
+            training?: null | components["schemas"]["CavePotentialTraining"];
         };
         CavePotentialModelDto: {
             /** Format: uuid */
@@ -10733,6 +10755,21 @@ export interface components {
             /** Format: uuid */
             cavingGroupId: null | string;
             visibility?: components["schemas"]["Visibility"];
+        };
+        CavePotentialRateCurveDto: {
+            points: components["schemas"]["CavePotentialRatePointDto"][];
+            /** Format: double */
+            areaUnderCurve: number;
+            /** Format: int32 */
+            cells: number;
+            /** Format: int32 */
+            occurrences: number;
+        };
+        CavePotentialRatePointDto: {
+            /** Format: double */
+            areaShare: number;
+            /** Format: double */
+            occurrenceShare: number;
         };
         CavePotentialResultDto: {
             /** Format: uuid */
@@ -10812,6 +10849,7 @@ export interface components {
             maximum: null | number;
             /** Format: double */
             mean: null | number;
+            training: null | components["schemas"]["CavePotentialTrainingDto"];
         };
         CavePotentialRunRequest: {
             /** Format: uuid */
@@ -10827,6 +10865,41 @@ export interface components {
             derivativeLayerId: null | string;
             settings: null | string;
         };
+        CavePotentialTraining: {
+            /** Format: double */
+            heldOutShare: number;
+            /** Format: int32 */
+            seed: number;
+        };
+        CavePotentialTrainingDto: {
+            /** Format: double */
+            heldOutShare: number;
+            /** Format: int32 */
+            seed: number;
+            /** Format: int32 */
+            trainingEntrances: number;
+            /** Format: int32 */
+            heldOutEntrances: number;
+            /** Format: int32 */
+            trainingCells: number;
+            /** Format: int32 */
+            heldOutCells: number;
+            /** Format: int32 */
+            protectedEntrances: number;
+            /** Format: int32 */
+            cells: number;
+            /** Format: double */
+            priorProbability: number;
+            /** Format: double */
+            valueMinimum: number;
+            /** Format: double */
+            valueMaximum: number;
+            /** Format: double */
+            expectedOccurrences: null | number;
+            tables: components["schemas"]["CavePotentialWeightTableDto"][];
+            successRate: components["schemas"]["CavePotentialRateCurveDto"];
+            predictionRate: components["schemas"]["CavePotentialRateCurveDto"];
+        };
         CavePotentialWeightingDto: {
             weights: components["schemas"]["EvidenceLayerWeightDto"][];
             consistency: null | components["schemas"]["PairwiseConsistencyDto"];
@@ -10834,6 +10907,10 @@ export interface components {
         CavePotentialWeightingRequest: {
             method: components["schemas"]["CavePotentialMethod"];
             definition: components["schemas"]["CavePotentialModelDefinition"];
+        };
+        CavePotentialWeightTableDto: {
+            layer: string;
+            classes: components["schemas"]["CavePotentialClassWeightsDto"][];
         };
         CaveQrPublicationDto: {
             published: boolean;
