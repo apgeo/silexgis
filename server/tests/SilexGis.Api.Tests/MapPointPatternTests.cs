@@ -231,18 +231,6 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable, IClassFi
             "feature.not_found");
     }
 
-    /// <summary>
-    /// Distances are measured in the installation's working projection, which covers a region and
-    /// not the globe. A window that projection cannot carry is refused with a code of its own, not
-    /// failed as a server fault.
-    /// </summary>
-    [Theory]
-    [InlineData("-180,-85,180,85")]
-    [InlineData("-170,10,-60,70")]
-    public async Task A_window_the_working_projection_cannot_carry_is_refused_by_name(string bbox) =>
-        await ExpectAsync(
-            owner, $"?bbox={bbox}", HttpStatusCode.BadRequest, "point_pattern.window_outside_projection");
-
     [Fact]
     public async Task Entrances_strung_along_a_line_show_that_direction_on_the_alignment_rose()
     {

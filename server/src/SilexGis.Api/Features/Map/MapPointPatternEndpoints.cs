@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
-using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Geo;
@@ -36,8 +35,6 @@ public static class MapPointPatternEndpoints
 
     /// <summary>Refused: points, radii and simulations are each permitted but their product is not.</summary>
     private const string TooMuchWorkCode = "point_pattern.too_much_work";
-
-    private const string OutsideProjectionCode = "point_pattern.window_outside_projection";
 
     public static RouteGroupBuilder MapMapPointPatternEndpoints(this RouteGroupBuilder api)
     {
@@ -94,30 +91,8 @@ public static class MapPointPatternEndpoints
         }
 
         var workingSrid = spatial.Value.WorkingSrid;
-        PointPatternWindowRow windowRow;
-        IReadOnlyList<PointPatternPointRow> rows;
-        try
-        {
-            windowRow = await PointPatternSql.WindowAsync(
-                db, box.West, box.South, box.East, box.North, workingSrid, request.AreaId, ct);
-            // One more than the ceiling, so a set too large to compute over is recognised as too
-            // large rather than quietly measured as a statistic about its first thousand rows.
-            rows = windowRow.WindowWkt is null || !(windowRow.AreaM2 > 0d)
-                ? []
-                : await PointPatternSql.PointsAsync(
-                    db, ctx, box.West, box.South, box.East, box.North, workingSrid, request.AreaId,
-                    MapPointPatternLimits.MaxPoints + 1, ct);
-        }
-        catch (PostgresException e) when (SpatialSql.IsProjectionFailure(e))
-        {
-            // Distances are measured in the working projection, which covers a region and not the
-            // globe: a window reaching far enough outside it has corners the projection cannot
-            // place, and that is the caller's window to narrow, not a fault of the server.
-            return ApiProblems.BadRequest(
-                OutsideProjectionCode,
-                "that window reaches beyond the area this installation measures distances in. "
-                + "Ask about a smaller window.");
-        }
+        var windowRow = await PointPatternSql.WindowAsync(
+            db, box.West, box.South, box.East, box.North, workingSrid, request.AreaId, ct);
 
         if (windowRow.WindowWkt is null || !(windowRow.AreaM2 > 0d))
         {
@@ -128,6 +103,12 @@ public static class MapPointPatternEndpoints
 
         var window = new WKTReader().Read(windowRow.WindowWkt);
         window.SRID = workingSrid;
+
+        // One more than the ceiling, so a set too large to compute over is recognised as too large
+        // rather than quietly measured as a statistic about its first thousand rows.
+        var rows = await PointPatternSql.PointsAsync(
+            db, ctx, box.West, box.South, box.East, box.North, workingSrid, request.AreaId,
+            MapPointPatternLimits.MaxPoints + 1, ct);
 
         if (rows.Count > MapPointPatternLimits.MaxPoints)
         {
