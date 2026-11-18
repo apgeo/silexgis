@@ -768,7 +768,7 @@ export function ProtectionForm({ settings, onSaved, onStale }: SectionProps) {
  * proved: rules are a guess about somebody's naming habits, and the difference between a bad
  * review and a bad auto-import is four hundred objects in the registry.
  */
-function ImportForm({ settings, onSaved, onStale }: SectionProps) {
+export function ImportForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<ImportSettings>();
@@ -781,7 +781,9 @@ function ImportForm({ settings, onSaved, onStale }: SectionProps) {
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/import', {
         headers: sectionIfMatch(settings.versions?.import),
-        body: values,
+        // The form shows only some of the section; the rest goes back as stored, because the
+        // server refuses a section save that leaves a value out.
+        body: { ...settings.import, ...values },
       });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
@@ -816,7 +818,8 @@ function ImportForm({ settings, onSaved, onStale }: SectionProps) {
         label={t('admin.messaging.duplicateRadius')}
         extra={t('admin.messaging.duplicateRadiusHint')}
       >
-        <InputNumber min={0} max={5000} step={5} addonAfter="m" />
+        {/* The unit is in the label: antd deprecated addonAfter here. */}
+        <InputNumber min={0} max={5000} step={5} />
       </Form.Item>
       <Form.Item
         name="duplicateNameSimilarity"

@@ -5340,7 +5340,7 @@
       "importIntro": "Un fișier importat este verificat înainte să se creeze ceva. Aici acest pas poate fi eliminat și tot aici se stabilește cât de departe caută implicit detectarea duplicatelor.",
       "allowWithoutReview": "Permite unui utilizator de încredere să creeze obiecte fără verificare",
       "allowWithoutReviewHint": "Dezactivat implicit. Regulile sunt o presupunere despre obiceiurile de denumire ale cuiva, iar primul import cu un set pe care nimeni nu l-a ajustat este exact momentul în care presupunerea este cea mai slabă. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea obiecte — ci doar elimină pasul intermediar.",
-      "duplicateRadius": "Caută ceva deja existent pe o rază de",
+      "duplicateRadius": "Caută ceva deja existent pe o rază de (metri)",
       "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
       "duplicateSimilarity": "Numele se consideră identice peste",
       "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape.",
