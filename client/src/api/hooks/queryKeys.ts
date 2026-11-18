@@ -71,6 +71,8 @@ export const queryKeys = {
   sharedFeature: (token: string) => ['shared-features', token] as const,
   caveQrPublication: (id: string) => ['caves', id, 'qr-publication'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
+  /** Every drawable vector file, for the layer lists; under the prefix the geofile writes refresh. */
+  geofileLayers: ['geofiles', 'layers'] as const,
   geofile: (id: string) => ['geofiles', 'detail', id] as const,
   geofileColumns: (id: string) => ['geofile-columns', id] as const,
   termRuleSets: ['term-rule-sets', 'list'] as const,
@@ -169,6 +171,8 @@ export const queryKeys = {
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  /** Every map ready to draw, for the layer lists; under the prefix the map writes refresh. */
+  rasterMapLayers: ['raster-maps', 'layers'] as const,
   calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,

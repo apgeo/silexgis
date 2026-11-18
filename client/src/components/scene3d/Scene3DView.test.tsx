@@ -54,16 +54,18 @@ vi.mock('../../scene3d/sceneImage3d.ts', async (importOriginal) => ({
     return Promise.resolve(pictureWithCredits);
   },
 }));
+// The layer lists the scene offers. This installation has no georeferenced maps in these tests,
+// which is the case the scene must handle without asking for one.
+vi.mock('../../api/hooks/mapLayers.ts', () => ({
+  useRasterMapLayers: () => ({ data: undefined }),
+  useGeofileLayers: () => ({ data: geofilePage?.items }),
+}));
 vi.mock('../../api/hooks.ts', () => ({
   useMapLayers: () => ({ data: mapLayers }),
   useMapConfig: () => ({ data: mapConfig }),
   useFeatureTypes: () => ({ data: featureTypes }),
   // Named for the same reason as fetchSurveyModels below: the factory replaces the whole module,
   // so an unnamed export is not an empty answer but a property access that raises during render.
-  // This installation has no georeferenced maps in these tests, which is the case the scene must
-  // handle without asking for one.
-  useRasterMaps: () => ({ data: undefined }),
-  useGeofiles: () => ({ data: geofilePage }),
   fetchGeofileFeatureCollection: (id: string, bbox: string) => {
     geofileRequests.push([id, bbox]);
     const answer = geofileResponses[id] ?? emptyCollection;

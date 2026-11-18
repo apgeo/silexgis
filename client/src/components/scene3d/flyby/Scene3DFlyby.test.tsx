@@ -53,11 +53,8 @@ vi.mock('../../../api/hooks.ts', () => ({
       { id: 2, name: 'Aerial', isBase: true, layerKind: 'xyz', urlTemplate: 'https://aerial.example/{z}/{x}/{y}.png' },
     ],
   }),
-  useRasterMaps: () => ({ data: { items: [] } }),
   // Two kinds of feature from the catalogue, which a flyby's own layer can show.
   useFeatureTypes: () => ({ data: [{ id: 3, name: 'Spring' }, { id: 9, name: 'Sinkhole' }] }),
-  // One imported file, which a flyby along a line can follow.
-  useGeofiles: () => ({ data: { items: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] } }),
   // One saved filter that can be run and one that no longer can; the first keeps caves b and a.
   useSavedFilters: () => ({ data: SAVED_FILTERS }),
   savedFiltersQuery: () => ({ queryKey: ['saved-filters'], queryFn: async () => SAVED_FILTERS }),
@@ -90,6 +87,11 @@ vi.mock('../../../api/hooks.ts', () => ({
       },
     ],
   }),
+}));
+// The layer lists: no maps, and one imported file, which a flyby along a line can follow.
+vi.mock('../../../api/hooks/mapLayers.ts', () => ({
+  useRasterMapLayers: () => ({ data: [] }),
+  useGeofileLayers: () => ({ data: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] }),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,

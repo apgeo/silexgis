@@ -12,7 +12,8 @@ import {
 } from '@ant-design/icons';
 import { Alert, AutoComplete, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useCaveNames, useGeofiles, useSavedFilters, useSearch } from '../../../api/hooks.ts';
+import { useCaveNames, useSavedFilters, useSearch } from '../../../api/hooks.ts';
+import { useGeofileLayers } from '../../../api/hooks/mapLayers.ts';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
 import { saveBlob } from '../../../api/download.ts';
 import {
@@ -127,8 +128,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   ];
   const caveNames = useCaveNames(namedIds);
   // The imported files that hold something to follow: what a flyby along a line can be about.
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
-  const files = (geofilePage?.items ?? []).filter((file) => file.importStatus === 'imported');
+  const { data: geofileLayers } = useGeofileLayers();
+  const files = geofileLayers ?? [];
   const caveLabel = (caveId: string) =>
     caveNames.get(caveId) ?? flyby.caves.find((cave) => cave.caveId === caveId)?.label ?? t('flyby.unnamedCave');
   // The saved filters this account may run: what a flyby about "the caves a filter keeps" picks from.

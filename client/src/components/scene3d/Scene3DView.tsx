@@ -10,11 +10,10 @@ import { Link } from 'react-router-dom';
 import {
   type MapLayerInfo,
   useFeatureTypes,
-  useGeofiles,
   useMapConfig,
   useMapLayers,
-  useRasterMaps,
 } from '../../api/hooks.ts';
+import { useGeofileLayers, useRasterMapLayers } from '../../api/hooks/mapLayers.ts';
 import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
@@ -485,17 +484,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const visibleRasterIds = useWorkspaceStore((s) => s.visibleRasterIds);
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
-  // The same page size the flat map asks for, so the two views offer the same list.
-  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
-  const rasters = useMemo(() => rasterPage?.items ?? [], [rasterPage]);
+  // The same list the flat map offers — every map ready to draw — so the two views agree.
+  const { data: rasterLayers } = useRasterMapLayers();
+  const rasters = useMemo(() => rasterLayers ?? [], [rasterLayers]);
 
   // The installation's imported files, and the flat map's own choice of which are on: a viewer
   // moving between the views finds the same tracks drawn in both, rather than two selections of
-  // one thing. The page size is the one the flat map asks for, so the two offer the same list.
+  // one thing. It reads the flat map's own list, so the two offer the same files.
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
-  const geofiles = useMemo(() => geofilePage?.items ?? [], [geofilePage]);
+  const { data: geofileLayers } = useGeofileLayers();
+  const geofiles = useMemo(() => geofileLayers ?? [], [geofileLayers]);
 
   // After the basemap effect above and never before it, because a globe composites its imagery in
   // the order the layers were added: an overlay created first would be drawn under an opaque

@@ -14,16 +14,15 @@ import { useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useFeatureTypes,
-  useGeofiles,
   useMapConfig,
   useMapLayers,
   useMapViews,
   usePhotoLibraries,
-  useRasterMaps,
   useTerrainDerivatives,
   useSurveyModel,
   type SurveyModelInfo,
 } from '../api/hooks.ts';
+import { useGeofileLayers, useRasterMapLayers } from '../api/hooks/mapLayers.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useEditScope } from '../components/map/useEditScope.ts';
 import { useOverviewMap } from '../components/map/useOverviewMap.ts';
@@ -268,11 +267,9 @@ export default function MapPage() {
   });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
-  const importedGeofiles = useMemo(
-    () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
-    [geofilePage],
-  );
+  // Every imported file, not a first page: the server narrows to them before it counts.
+  const { data: geofileLayers } = useGeofileLayers();
+  const importedGeofiles = useMemo(() => geofileLayers ?? [], [geofileLayers]);
   const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
   const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
   const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
@@ -290,11 +287,8 @@ export default function MapPage() {
   const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
   const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
   const resetBaseOpacity = useWorkspaceStore((s) => s.resetBaseOpacity);
-  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
-  const readyRasters = useMemo(
-    () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
-    [rasterPage],
-  );
+  const { data: rasterLayers } = useRasterMapLayers();
+  const readyRasters = useMemo(() => rasterLayers ?? [], [rasterLayers]);
   // Every computed picture of the ground, finished or not: the panel lists the unfinished ones
   // too, because a picture somebody asked for and cannot see anywhere reads as a lost request.
   //
