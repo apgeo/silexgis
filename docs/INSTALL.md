@@ -2817,6 +2817,7 @@ the reasoning beside each one.
 | `SILEXGIS__Basemap__BuildsUrl` | `https://build-metadata.protomaps.dev/builds.json` | the list of builds the page offers, and where "the latest" is looked up |
 | `SILEXGIS__Basemap__ExtractorPath` | `pmtiles` | the program that cuts the region — the `pmtiles` command-line tool, which the api image carries |
 | `SILEXGIS__Basemap__MaxBytes` | `5000000000` (5 GB) | the largest extract accepted. Romania to zoom 15 is about 1.3 GB, Europe about 49 GB |
+| `SILEXGIS__Basemap__ExtractStallSeconds` | `900` (15 minutes) | how long the extracting program may print nothing before the download is taken as stalled, stopped, and failed as "the source could not be reached". It prints progress continuously while bytes arrive, so silence means the source stopped answering; without this a stalled download holds the one-at-a-time job lane until cancelled by hand |
 | `SILEXGIS__Basemap__InitialRegion` | *(empty)* | a region (`romania`, or `apuseni` for a karst region) downloaded by itself on the first start that finds no basemap and no download ever asked for — for test and showcase installations. Once only |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
@@ -2859,6 +2860,10 @@ the reasoning beside each one.
 | `SILEXGIS__Import__DuplicateNameSimilarity` | `0.8` | how alike two names must be, from 0 to 1, before a nearby object is called the same thing rather than merely close |
 | `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
 | `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
+| `SILEXGIS__UploadedGeodata__MaxZippedShapefileBytes` | `1073741824` (1 GB) | the most a zipped shapefile's entries may state they expand to, all together; a larger one is refused before it is read |
+| `SILEXGIS__UploadedGeodata__MaxKmzDocumentBytes` | `268435456` (256 MB) | the most the KML document inside a KMZ may expand to; counted as it is unpacked, so a document that states less than it holds is refused too. Lower than the shapefile figure because a KML document is read whole into memory |
+| `SILEXGIS__UploadedGeodata__MaxFeatures` | `500000` | the most features one uploaded vector file may hold (each part of a multi-part feature counts); a larger file is refused with a request to split it |
+| `SILEXGIS__UploadedGeodata__MaxRasterPixelValues` | `6000000000` | the most pixel values (width × height × bands, as the file states them) an uploaded raster map may have — two gigapixels in three bands by default; a larger one is refused before it is converted |
 | `SILEXGIS__GeoreferencedMaps__CogCompression` | `webp` | how a map sheet's published GeoTIFF is compressed: `webp` (small; lossy below quality 100) or `deflate` (lossless, several times larger) |
 | `SILEXGIS__GeoreferencedMaps__CogWebpQuality` | `85` | WebP quality, 1–100; read only with `webp` |
 | `SILEXGIS__GeoreferencedMaps__CogDeflateLevel` | `6` | deflate level, 1–9; read only with `deflate` |
@@ -2891,7 +2896,6 @@ the reasoning beside each one.
 | `SILEXGIS__Files__ImportRoots__0`, `__1`, … | *(none: switched off)* | directories **on the server** an administrator may import documents from, and a Full Administrator may name as terrain sources. Under Docker a path is resolved inside the api container, so it must also be mounted into it. A security boundary rather than a convenience: what these name is chosen by whoever deploys the installation, never by whoever is signed in. Mount them read-only where you can |
 | `SILEXGIS__Files__MaxArchiveEntries` | `5000` | how many entries an uploaded archive expanded into filed documents may hold before it is refused |
 | `SILEXGIS__Files__MaxArchiveExpandedBytes` | `21474836480` (20 GB) | how large such an archive may expand to |
-| `SILEXGIS__Files__MaxArchiveCompressionRatio` | `200` | how many times larger than its compressed form one entry may expand — the guard against an archive built to fill the disk |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys and the sign-in token certificates (must persist across restarts, and be shared by every API instance of one installation) |
 | `SILEXGIS__Conversion__Enabled` | `false` | use a document-conversion service so office documents can be read page by page. Needs the converter overlay running; without it those documents are still stored, searched and downloaded |
 | `SILEXGIS__Conversion__Url` | — | where that service is, e.g. `http://convert:3000` |

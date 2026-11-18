@@ -77,7 +77,7 @@ export const groups = {
     'DocumentDeletionWindowTests', 'DocumentFilterWorldTests',
     'DocumentLanguageTests', 'DocumentMetadataTests', 'DocumentModelTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
-    'LegacyOfficeFixtureTests', 'PageTextTests', 'PdfAndOfficeTextExtractorTests',
+    'LegacyOfficeFixtureTests', 'PageTextTests', 'PdfAndOfficeTextExtractorTests', 'CrowdedPackageTests',
     'TextExtractionPipelineTests', 'TextExtractorTests', 'ServerDirectoryContainmentTests',
     // What becomes of a generated write-up when the record it was written for goes is decided
     // beside the documents, for trips and camps alike, and these two are what ask it.
@@ -184,6 +184,8 @@ export const groups = {
     'ErrorHandlerScopeTests',
     'AttachmentReachListingTests', 'FileAccessBatchParityTests', 'FileAttachmentTests',
     'UploadDestinationTests',
+    // A crowded package is judged from its directory by the upload sniffer and the readers alike.
+    'CrowdedPackageTests',
   ],
   uploads: [
     'EnumBindingTests', 'UploadDestinationTests', 'UploadLimitsAndResumeTests',
@@ -191,7 +193,7 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'ImportedCoordinatesTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'UploadedGeodataCeilingTests', 'ImportedCoordinatesTests'],
   georeferencedMaps: [
     'GeoreferencedMapTests', 'GeoreferencedMapSheetTests', 'GeoreferencedMapStationPointTests', 'MapSheetRenderingTests',
     'FilterWorldConformanceTests', 'FilterWorldListParityTests',
@@ -243,7 +245,7 @@ export const groups = {
   // A shared view's page and the data its link draws for nobody in particular.
   mapViews: ['MapViewTests', 'SharedViewDataTests', 'SharedViewRateLimitTests'],
   // The installation's own basemap: its download, and the catalogue entry it publishes.
-  basemap: ['BasemapDownloadTests', 'MapLayerKindTests', 'PmtilesCliExtractorTests'],
+  basemap: ['BasemapDownloadTests', 'MapLayerKindTests', 'PmtilesCliExtractorTests', 'OutboundBodyLimitTests'],
   // The one statement deciding which protected rows a caller's window holds, on the position
   // each caller is shown: every route that reads a window through it, and the plan pins on it.
   windowMembership: [
@@ -549,6 +551,11 @@ export const areas = {
   'server/src/SilexGis.Domain/Calendar/': 'calendar',
   'server/src/SilexGis.Domain/Catalogue/': 'catalogue',
   'server/src/SilexGis.Domain/Documents/': 'documents',
+  // The entry-count pre-check every reader of an uploaded archive runs before opening it:
+  // filed-document expansion, upload sniffing, geodata imports and survey device archives.
+  'server/src/SilexGis.Domain/Documents/ZipEntryCount.cs': [
+    ...groups.documents, ...groups.files, ...groups.geofiles, ...groups.imports, ...groups.jobs, ...groups.surveys,
+  ],
   'server/src/SilexGis.Domain/Events/': 'events',
   'server/src/SilexGis.Domain/Expeditions/': 'expeditions',
   'server/src/SilexGis.Domain/Features/': 'geoFeatures',
@@ -573,6 +580,8 @@ export const areas = {
   // Infrastructure areas
   'server/src/SilexGis.Infrastructure/Catalogue/': 'catalogue',
   'server/src/SilexGis.Infrastructure/Documents/': 'documents',
+  // The package entry ceiling the upload sniffer shares with the document readers.
+  'server/src/SilexGis.Infrastructure/Documents/Extraction/ExtractionStreams.cs': [...groups.documents, ...groups.files],
   'server/src/SilexGis.Infrastructure/Email/': 'notifications',
   'server/src/SilexGis.Infrastructure/Features/': 'geoFeatures',
   'server/src/SilexGis.Infrastructure/Features/CenterlineSql.cs': 'centerlines',
@@ -599,6 +608,8 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Notifications/': 'notifications',
   'server/src/SilexGis.Infrastructure/Grottocenter/': 'exports',
   'server/src/SilexGis.Infrastructure/PhotoLibraries/': 'photoLibraries',
+  // The body time limit and lost-body rule every outbound client reads its answers through.
+  'server/src/SilexGis.Infrastructure/Outbound/': [...groups.basemap, ...groups.photoLibraries, ...groups.catalogue, ...groups.terrain],
   // Where phones' map pins are written and read, as place-pin links.
   'server/src/SilexGis.Infrastructure/RasterMaps/': 'sync',
   // Where phones' places at survey stations are written and read, as place-at-station links.
