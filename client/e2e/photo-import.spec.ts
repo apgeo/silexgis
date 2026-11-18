@@ -54,7 +54,13 @@ test.describe('photo import', () => {
 
     // Nothing has been created yet — the registry is untouched until the button below.
     await page.getByRole('columnheader').first().getByRole('checkbox').check();
+    const committed = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/photo-import/commit',
+    );
     await page.getByTestId('photo-import-commit').click();
+    // This run's batch, by its id: the administrator's Imports list keeps every earlier run's
+    // photograph batch under the same name, so the first such row is whichever sorts first.
+    const batchId = ((await (await committed).json()) as { batch: { id: string } }).batch.id;
     await expect(page.getByText('What the import did')).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'See the imports' }).click();
 
@@ -68,7 +74,7 @@ test.describe('photo import', () => {
     // …and undoing the confirmation takes back everything it created, as one unit.
     await page.goto('/geodata');
     await page.getByRole('tab', { name: 'Imports' }).click();
-    const batch = page.getByRole('row', { name: /Photographs|Fotografii/ }).first();
+    const batch = page.locator(`tr[data-row-key="${batchId}"]`);
     await expect(batch).toBeVisible({ timeout: 20_000 });
     await batch.getByRole('button', { name: 'Undo' }).click();
     await confirmOk(page);

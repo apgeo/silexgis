@@ -417,7 +417,9 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   const tripsTile = totals.locator('.ant-statistic').filter({
     has: page.locator('.ant-statistic-title', { hasText: /^Trips$/ }),
   });
-  await expect(tripsTile).toContainText('1', { timeout: 15_000 });
+  // The tile's value node, read whole: a containment check on '1' would also accept 10, 21 or the
+  // installation's total, which is exactly what a statistic that stopped filtering would show.
+  await expect(tripsTile.locator('.ant-statistic-content-value')).toHaveText('1', { timeout: 15_000 });
   // The sentence that stops two colleagues comparing screens from filing the difference as a
   // bug — and stops the repair being to take the filter off.
   await expect(totals).toContainText('Counted over the trips you may read');

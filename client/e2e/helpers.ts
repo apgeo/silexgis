@@ -818,6 +818,30 @@ export async function openCaveFromRegistry(page: Page, name: string) {
 }
 
 /**
+ * Searches the trip list for `word` and proves the server's answer to that search holds no trip.
+ *
+ * A row count of zero alone is no proof: a freshly opened list has no rows while its first request
+ * is still on its way, so the count is zero before anything has been asked. The answer waited for
+ * is the one asked with this search, and its items must be empty before the rows are counted.
+ */
+export async function searchFindsNoTrip(page: Page, word: string) {
+  const answered = page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      return response.request().method() === 'GET'
+        && url.pathname.replace(/\/$/, '') === '/api/v1/trip-logs'
+        && url.searchParams.get('search') === word;
+    },
+    { timeout: 20_000 },
+  );
+  await page.getByPlaceholder('Search by title…').fill(word);
+  const response = await answered;
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).items).toEqual([]);
+  await expect(page.getByTestId('trip-list-empty')).toBeVisible({ timeout: 15_000 });
+}
+
+/**
  * Searches the feature list for a name and waits for the server's answer to that exact search,
  * then asserts the answer is empty and the table shows no row for it. An empty or still-loading
  * table satisfies "no rows" on its own, so a check written only against the table passes before

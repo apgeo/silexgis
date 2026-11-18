@@ -114,7 +114,12 @@ test('a recording folder is picked on a cave, sent without its camera pictures a
   await expect(page.getByTestId('point-cloud-recording-files')).toContainText('lidar0001.laz');
   await expect(page.getByTestId('point-cloud-recording-files')).not.toContainText('frame0001.jpg');
   // An odometry profile is preselected (the one used last, else the built-in that changes nothing).
-  await expect(page.getByTestId('point-cloud-profile')).toBeVisible();
+  // The select is drawn before the profile list has arrived, and until it has the dialog has
+  // nothing chosen and the upload would declare no profile at all; so this waits for a choice on
+  // screen — the placeholder is drawn only while there is none — not for the control.
+  const profile = page.getByTestId('point-cloud-profile');
+  await expect(profile).toBeVisible();
+  await expect(profile.locator('.ant-select-placeholder')).toHaveCount(0, { timeout: 15_000 });
   // The folder's name is offered as the survey's title.
   await expect(page.getByTestId('point-cloud-title')).toHaveValue('Galeria_e2e');
 
