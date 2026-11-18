@@ -32,6 +32,14 @@ public sealed class EmailConfirmRequestValidator : AbstractValidator<EmailConfir
 /// </summary>
 public static class MeEmailEndpoints
 {
+    /// <summary>
+    /// The response header a development host without mail puts the address-change link in, so a
+    /// browser test can follow it the way an administrator follows an invitation link handed over
+    /// when nothing could be sent. Never set on any other host, and never set when the message
+    /// actually left: it is a stand-in for a mailbox, not a second way to receive the link.
+    /// </summary>
+    public const string DevelopmentLinkHeader = "X-SilexGis-Development-Link";
+
     /// <summary>Gap between messages, so the endpoint cannot be used to mail-bomb an address.</summary>
     private static readonly TimeSpan ResendInterval = TimeSpan.FromSeconds(60);
 
@@ -64,6 +72,8 @@ public static class MeEmailEndpoints
         SilexGisDbContext db,
         IMessageDispatcher dispatcher,
         IConfiguration configuration,
+        IWebHostEnvironment environment,
+        HttpContext http,
         CancellationToken ct)
     {
         var user = await userManager.GetUserAsync(principal);
@@ -111,7 +121,16 @@ public static class MeEmailEndpoints
         await db.SaveChangesAsync(ct);
         if (free)
         {
-            await SendChangeMessageAsync(user, newEmail, userManager, dispatcher, configuration, ct);
+            var (sent, url) = await SendChangeMessageAsync(user, newEmail, userManager, dispatcher, configuration, ct);
+
+            // Only on a development host, and only when no mail server took the message. Whether
+            // the header appears does depend on the address being free, which is exactly what the
+            // empty answer above hides — acceptable on a development host, whose accounts are
+            // invented, and the reason the environment check is not optional.
+            if (environment.IsDevelopment() && !(sent.Sent && sent.ChannelConfigured))
+            {
+                http.Response.Headers[DevelopmentLinkHeader] = url;
+            }
         }
 
         return TypedResults.Accepted((string?)null);
@@ -322,7 +341,7 @@ public static class MeEmailEndpoints
         }
     }
 
-    private static async Task SendChangeMessageAsync(
+    private static async Task<(MessageResult Sent, string Url)> SendChangeMessageAsync(
         SilexGisUser user,
         string newEmail,
         UserManager<SilexGisUser> userManager,
@@ -331,6 +350,7 @@ public static class MeEmailEndpoints
         CancellationToken ct)
     {
         var token = await userManager.GenerateChangeEmailTokenAsync(user, newEmail);
-        await AccountMessages.SendEmailChangeAsync(dispatcher, configuration, user, newEmail, token, ct);
+        var sent = await AccountMessages.SendEmailChangeAsync(dispatcher, configuration, user, newEmail, token, ct);
+        return (sent, AccountMessages.SettingsConfirmUrl(configuration, token));
     }
 }

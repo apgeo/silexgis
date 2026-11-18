@@ -2,10 +2,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Features.Me;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Permissions;
@@ -306,6 +309,68 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await ProblemCodeAsync(response)).ShouldBe("validation.failed");
+    }
+
+    /// <summary>
+    /// A development host with no mail server hands the link back in a header, and that link is the
+    /// real one: following it completes the change. Asserted together with the two hosts that must
+    /// not hand it back — a development host whose mail did leave, and any other host — so the
+    /// absence below is not the absence of a feature that never worked.
+    /// </summary>
+    [Fact]
+    public async Task A_development_host_without_mail_hands_the_link_back_and_no_other_host_does()
+    {
+        factory.Messages.MailConfigured = false;
+        try
+        {
+            // A production host, the mail not configured: no header.
+            using var production = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+            using var asProduction = production.CreateClient();
+            asProduction.DefaultRequestHeaders.Authorization = me.DefaultRequestHeaders.Authorization;
+            var refused = await asProduction.PostAsJsonAsync(
+                "/api/v1/me/email/change", new { newEmail = $"mail-prod-{suffix}@t.local" });
+            refused.StatusCode.ShouldBe(HttpStatusCode.Accepted, await refused.Content.ReadAsStringAsync());
+            refused.Headers.Contains(MeEmailEndpoints.DevelopmentLinkHeader).ShouldBeFalse();
+            (await UserAsync()).PendingEmail.ShouldBe($"mail-prod-{suffix}@t.local");
+
+            // A development host whose mail server took the message: the mailbox has it, the
+            // answer does not.
+            factory.Messages.MailConfigured = true;
+            await ClearRequestTimeAsync();
+            var mailed = await RequestChangeAsync($"mail-sent-{suffix}@t.local");
+            mailed.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+            mailed.Headers.Contains(MeEmailEndpoints.DevelopmentLinkHeader).ShouldBeFalse();
+
+            // A development host with no mail server: the header carries the real link, and
+            // following it completes the change.
+            factory.Messages.MailConfigured = false;
+            await ClearRequestTimeAsync();
+            var handed = await RequestChangeAsync(TargetEmail);
+            handed.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+            handed.Headers.TryGetValues(MeEmailEndpoints.DevelopmentLinkHeader, out var values).ShouldBeTrue();
+            var link = new Uri(values!.Single());
+            link.AbsolutePath.ShouldBe("/settings/emails");
+            var token = QueryHelpers.ParseQuery(link.Query)["confirm"].ToString();
+            token.ShouldNotBeNullOrEmpty();
+
+            var confirmed = await me.PostAsJsonAsync("/api/v1/me/email/confirm", new { token });
+            confirmed.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
+            (await UserAsync()).Email.ShouldBe(TargetEmail);
+        }
+        finally
+        {
+            factory.Messages.MailConfigured = true;
+        }
+    }
+
+    /// <summary>Lets the next request through the one-minute gap between change requests.</summary>
+    private async Task ClearRequestTimeAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var user = await db.Users.SingleAsync(u => u.Id == myId);
+        user.PendingEmailRequestedAt = null;
+        await db.SaveChangesAsync();
     }
 
     private Task<HttpResponseMessage> RequestChangeAsync(string newEmail) =>
