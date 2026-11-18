@@ -75,7 +75,7 @@ public static class PhotoQueries
             // The cave has to be one the caller may read. The pictures are already the ones they
             // may see, but which of those hang on a cave is a fact about the cave: asked about one
             // they cannot read, the answer would say that it exists and what is filed against it.
-            var caveReadable = db.Features.AsNoTracking()
+            var caveReadable = db.Features
                 .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
                 .Where(f => f.Id == caveId)
                 .Select(f => f.Id);
