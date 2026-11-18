@@ -109,6 +109,41 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
         (await FailedAttemptsAsync()).ShouldBe(0);
     }
 
+    /// <summary>
+    /// The count above is only worth keeping if it ends somewhere: past the installation's limit
+    /// of misses even the right code is refused, and another account is not held by it.
+    /// </summary>
+    [Fact]
+    public async Task Enough_wrong_codes_lock_the_account_and_only_that_account()
+    {
+        var number = Number(23);
+        var change = await me.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number });
+        change.StatusCode.ShouldBe(HttpStatusCode.OK, await change.Content.ReadAsStringAsync());
+        var texted = factory.Messages.LastTo(number).Code;
+
+        // Five is the sign-in lockout's limit, which the code checks share.
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            (await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = WrongCode(texted) }))
+                .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        var locked = await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = texted });
+        locked.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await locked.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("auth.locked_out");
+
+        var otherEmail = $"phone-unlocked-{suffix}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, otherEmail);
+        using var other = await AuthHelper.BearerClientAsync(factory, otherEmail);
+        var otherNumber = Number(24);
+        (await other.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = otherNumber }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var confirmed = await other.PostAsJsonAsync(
+            "/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(otherNumber).Code });
+        confirmed.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task A_number_another_account_already_holds_is_refused_once_the_caller_has_proved_it_is_theirs()
     {

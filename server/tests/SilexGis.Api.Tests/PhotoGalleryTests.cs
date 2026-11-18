@@ -200,15 +200,25 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task Naming_a_cave_nobody_may_read_answers_empty_rather_than_forbidden()
     {
-        var caveId = await CreateCaveAsync();
+        // A cave only its owner reads, with a photograph on it: the filter has something to find.
+        var caveId = await CreatePrivateCaveAsync();
+        var photo = await UploadPhotoAsync(owner, "hidden-cave.png");
+        await AttachAsync(photo.FileId, caveId);
+
+        (await GalleryAsync(owner, $"caveId={caveId}"))
+            .Select(p => p.GetProperty("documentId").GetGuid())
+            .ShouldBe([photo.DocumentId]);
 
         // A filter is a term of the same visibility-filtered query, so naming an object the
         // caller cannot read is indistinguishable from naming one that is not there — which is
         // what stops the filters becoming a way to test whether something exists.
         var response = await member.GetAsync($"/api/v1/photos?caveId={caveId}");
+        var nowhere = await member.GetAsync($"/api/v1/photos?caveId={Guid.NewGuid()}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        nowhere.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await ReadJsonAsync(response)).GetProperty("items").GetArrayLength().ShouldBe(0);
+        (await ReadJsonAsync(nowhere)).GetProperty("items").GetArrayLength().ShouldBe(0);
     }
 
     [Fact]

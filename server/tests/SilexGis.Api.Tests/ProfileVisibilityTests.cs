@@ -102,11 +102,24 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
         // Contact data is not content. An admin reads a member's address only if that member
         // published it. Reversing this decision means changing one arm of the rule and this test.
         await PublishAsync(realName: "private", email: "private", phone: "private", address: "private");
+        await AddSubjectAddressAsync();
 
         var asAdmin = await MemberAsync(admin, subjectId);
         asAdmin.GetProperty("firstName").ValueKind.ShouldBe(JsonValueKind.Null);
+        asAdmin.GetProperty("lastName").ValueKind.ShouldBe(JsonValueKind.Null);
         asAdmin.GetProperty("email").ValueKind.ShouldBe(JsonValueKind.Null);
         asAdmin.GetProperty("phoneNumber").ValueKind.ShouldBe(JsonValueKind.Null);
+        asAdmin.GetProperty("addresses").GetArrayLength().ShouldBe(0);
+
+        // The same administrator reads all of it once the member publishes it, so the nulls above
+        // are the rule and not an empty profile.
+        await PublishAsync(realName: "authenticated", email: "authenticated", phone: "authenticated", address: "authenticated");
+        var published = await MemberAsync(admin, subjectId);
+        published.GetProperty("firstName").GetString().ShouldBe("Ana");
+        published.GetProperty("lastName").GetString().ShouldBe("Pop");
+        published.GetProperty("email").GetString().ShouldNotBeNull();
+        published.GetProperty("phoneNumber").GetString().ShouldNotBeNull();
+        published.GetProperty("addresses").GetArrayLength().ShouldBe(1);
     }
 
     [Fact]
@@ -166,6 +179,14 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
         // Asserted by id rather than by count: the database is shared across test classes.
         payload.GetProperty("items").EnumerateArray()
             .Select(i => i.GetProperty("id").GetGuid()).ShouldContain(subjectId);
+
+        // "Pop" is only in the hidden real name, so a search that read the real name would find
+        // the member here and give away what the profile keeps private.
+        var byRealName = await outsider.GetAsync("/api/v1/members?search=Pop&page=1&pageSize=100");
+        byRealName.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonDocument.Parse(await byRealName.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid()).ShouldNotContain(subjectId);
     }
 
     [Fact]
@@ -255,6 +276,19 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
                 addressPoint,
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private async Task AddSubjectAddressAsync()
+    {
+        (await subject.PostAsJsonAsync("/api/v1/me/addresses/", new
+        {
+            label = "Home",
+            country = "Romania",
+            city = "Braşov",
+            addressText = "Str. Lungă 1",
+            geom = new { type = "Point", coordinates = new[] { 25.59, 45.65 } },
+            sortOrder = 0,
+        })).IsSuccessStatusCode.ShouldBeTrue();
     }
 
     private async Task ConfirmSubjectPhoneAsync()

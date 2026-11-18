@@ -228,6 +228,33 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
 
         // An empty question needs no answer and no round trip.
         (await FileAccessRules.ReadableFileIdsAsync(db, ctx, [], default)).ShouldBeEmpty();
+
+        // The commands themselves: asked through a context that counts them, the same question
+        // with twenty more files on it costs exactly as many. Files that do not exist hang on
+        // nothing, so they add no round of the walk; a form that asked per file would pay for
+        // each of them.
+        var counter = new CommandCounter();
+        var countedOptions = new DbContextOptionsBuilder<SilexGisDbContext>(
+                scope.ServiceProvider.GetRequiredService<DbContextOptions<SilexGisDbContext>>())
+            .AddInterceptors(counter)
+            .Options;
+        await using var counted = new SilexGisDbContext(countedOptions);
+        var padded = fileIds.Concat(Enumerable.Range(0, 20).Select(_ => Guid.NewGuid())).ToList();
+
+        _ = await FileAccessRules.ReadableFileIdsAsync(counted, ctx, fileIds, default);
+        counter.Reset();
+        _ = await FileAccessRules.ReadableFileIdsAsync(counted, ctx, fileIds, default);
+        var asked = counter.Count;
+        counter.Reset();
+        (await FileAccessRules.ReadableFileIdsAsync(counted, ctx, padded, default)).SetEquals(all).ShouldBeTrue();
+        var askedPadded = counter.Count;
+        counter.Reset();
+        (await FileAccessRules.ReadableFileIdsAsync(counted, ctx, [], default)).ShouldBeEmpty();
+
+        // Zero on both sides would mean the counter was never attached.
+        asked.ShouldBeGreaterThan(0);
+        askedPadded.ShouldBe(asked);
+        counter.Count.ShouldBe(0, "an empty question makes no round trip");
     }
 
     private string NameOf(Guid fileId) =>

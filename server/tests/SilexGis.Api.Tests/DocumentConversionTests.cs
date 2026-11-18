@@ -98,11 +98,13 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var upload = await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == fileId);
             upload.Conversion.ShouldBe(ConversionState.Pending);
-            (await db.ProcessingJobs.CountAsync(j => j.Kind == ProcessingJobKinds.DocumentConversion))
-                .ShouldBeGreaterThan(0);
         }
 
-        await RunConversionAsync(fileId);
+        // The job the upload queued names this file, and it is that job — not one written here —
+        // that does the conversion. Other tests of this class leave conversion jobs behind, so a
+        // count of the kind would be satisfied by any of them.
+        var queued = await QueuedConversionAsync(fileId);
+        await RunJobAsync(queued);
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -354,6 +356,28 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
     /// Runs the conversion handler directly rather than waiting for the queue, so the test
     /// asserts on what the handler did and not on how quickly a worker got to it.
     /// </summary>
+    private async Task<ProcessingJob> QueuedConversionAsync(Guid fileId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var jobs = await db.ProcessingJobs.AsNoTracking()
+            .Where(j => j.Kind == ProcessingJobKinds.DocumentConversion)
+            .ToListAsync();
+        return jobs
+            .Where(j => JsonSerializer.Deserialize<DocumentConversionPayload>(j.Payload, JsonSerializerOptions.Web)?.FileId
+                == fileId)
+            .ToList()
+            .ShouldHaveSingleItem("the upload queues exactly one conversion naming its own file");
+    }
+
+    private async Task RunJobAsync(ProcessingJob job)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+            .Single(h => h.Kind == job.Kind);
+        await handler.ExecuteAsync(job, CancellationToken.None);
+    }
+
     private async Task RunConversionAsync(Guid fileId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
