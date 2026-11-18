@@ -10677,7 +10677,7 @@
       "nothing_scored": "Nicio parte a zonei nu a avut o valoare din fiecare strat.",
       "failed": "Harta nu a putut fi calculată.",
       "too_few_entrances": "Prea puține intrări cunoscute în zonă, dintre cele pe care contul le poate localiza exact, pentru a păstra o parte și a învăța din rest.",
-      "too_many_entrances": "Zona conține mai multe intrări cunoscute, dintre cele pe care contul le poate localiza exact, decât poate folosi o rulare. Alegeți o zonă mai mică.",
+      "too_many_entrances": "Zona conține mai multe intrări cunoscute, dintre cele pe care contul le poate localiza exact, decât poate folosi o rulare. Alege o zonă mai mică.",
       "nothing_to_learn": "Intrările cunoscute nu lasă nimic de deosebit în această zonă."
     },
     "training": {
