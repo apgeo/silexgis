@@ -20,7 +20,44 @@ public enum CavePotentialMethod : short
     /// measure of how consistent the comparisons are.
     /// </summary>
     PairwiseComparison = 1,
+
+    /// <summary>
+    /// Nothing is weighed by judgment. Each class of each layer is given the share of the known
+    /// entrances it holds over the share of the ground it covers, and a cell's index is the sum
+    /// of the ratios of the classes it falls in.
+    /// </summary>
+    FrequencyRatio = 2,
+
+    /// <summary>
+    /// Nothing is weighed by judgment. Each class of each layer is given the weights of evidence
+    /// the known entrances come to, and a cell's figure is the posterior probability those
+    /// weights give it.
+    /// </summary>
+    WeightsOfEvidence = 3,
 }
+
+/// <summary>What follows from which method a model uses.</summary>
+public static class CavePotentialMethods
+{
+    /// <summary>
+    /// Whether the method counts its weights from known entrances rather than taking them from
+    /// its author. Such a model names no weights, scores or comparisons, says how the known
+    /// entrances are parted for testing, and every map made from it is made from positions.
+    /// </summary>
+    public static bool IsDataDriven(CavePotentialMethod method) =>
+        method is CavePotentialMethod.FrequencyRatio or CavePotentialMethod.WeightsOfEvidence;
+}
+
+/// <summary>How a model that learns from known entrances keeps some of them back to test itself.</summary>
+/// <param name="HeldOutShare">
+/// The share of the cells holding a known entrance that the model is never shown, within
+/// <see cref="TrainingSplits.MinHeldOutShare"/> and <see cref="TrainingSplits.MaxHeldOutShare"/>.
+/// </param>
+/// <param name="Seed">
+/// What the draw of those cells starts from. The same area, entrances, share and seed keep back
+/// the same cells on every run and every machine.
+/// </param>
+public sealed record CavePotentialTraining(double HeldOutShare, int Seed);
 
 /// <summary>How a layer's cell values are turned into favourability scores between nought and one.</summary>
 public enum EvidenceTransformKind
@@ -90,9 +127,14 @@ public sealed record EvidenceLayerSetting(string Layer, EvidenceTransform Transf
 /// row <c>i</c> holds how many times more important layer <c>i</c> is than each later layer, on
 /// the scale of one ninth to nine. One row for every layer but the last. Null otherwise.
 /// </param>
+/// <param name="Training">
+/// For a method that learns from known entrances, how they are parted into those it learns from
+/// and those kept back to test it. Null otherwise.
+/// </param>
 public sealed record CavePotentialModelDefinition(
     IReadOnlyList<EvidenceLayerSetting> Layers,
-    IReadOnlyList<IReadOnlyList<double>>? Pairwise = null)
+    IReadOnlyList<IReadOnlyList<double>>? Pairwise = null,
+    CavePotentialTraining? Training = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = Build();
 

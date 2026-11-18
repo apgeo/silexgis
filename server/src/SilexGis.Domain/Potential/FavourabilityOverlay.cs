@@ -5,7 +5,10 @@ using System.Text.Json.Serialization;
 namespace SilexGis.Domain.Potential;
 
 /// <summary>One layer's part in a run: its share, and what it was made from.</summary>
-/// <param name="Weight">The layer's share of the model, out of one.</param>
+/// <param name="Weight">
+/// The layer's share of the model, out of one. Nought in a model that learns from known entrances,
+/// whose weights are per class and are in the run's training tables.
+/// </param>
 /// <param name="Features">How many recorded features the layer was made from; nought for a terrain layer.</param>
 /// <param name="ProtectedFeatures">How many of those were location-protected.</param>
 /// <param name="Cells">How many cells inside the area the layer had a value for.</param>
@@ -19,6 +22,10 @@ public sealed record CavePotentialLayerSummary(
 /// pictures' settings, so a map can later be told apart from one made from other ground. Null for
 /// a run that read none.
 /// </param>
+/// <param name="Training">
+/// For a model that learns from known entrances: how many it used, how they were parted, the
+/// weight tables and the two rate curves. Null for a model weighed by judgment.
+/// </param>
 /// <param name="ScoredCells">
 /// How many of them were scored. Fewer than <paramref name="AreaCells"/> where some layer had
 /// nothing to say — ground off the edge of the elevation, or outside every mapped rock unit.
@@ -30,7 +37,8 @@ public sealed record CavePotentialRunSummary(
     double? Minimum,
     double? Maximum,
     double? Mean,
-    IReadOnlyList<TerrainInput>? TerrainInputs = null)
+    IReadOnlyList<TerrainInput>? TerrainInputs = null,
+    CavePotentialTrainingSummary? Training = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -212,6 +220,18 @@ public static class CavePotentialRunFailures
 
     /// <summary>No cell inside the area had a value from every layer.</summary>
     public const string NothingScored = "cave_potential.nothing_scored";
+
+    /// <summary>
+    /// A model that learns from known entrances found too few of them in the area — counted in
+    /// cells, and only those the account may place — to keep some back and still learn from the rest.
+    /// </summary>
+    public const string TooFewEntrances = "cave_potential.too_few_entrances";
+
+    /// <summary>The area holds more known entrances, among those the account may place, than a run reads.</summary>
+    public const string TooManyEntrances = "cave_potential.too_many_entrances";
+
+    /// <summary>The known entrances leave nothing to tell apart: no ground without one, or no map to test.</summary>
+    public const string NothingToLearn = "cave_potential.nothing_to_learn";
 
     /// <summary>Anything else: the map could not be computed or written.</summary>
     public const string Failed = "cave_potential.failed";

@@ -499,6 +499,85 @@ public sealed class CavePotentialModelTests : IAsyncLifetime, IDisposable, IClas
 
     // ---------- helpers ----------
 
+    // ---------- models that learn from known entrances ----------
+
+    private static object Learning(string name, string method, object? training, double? weight = null) => new
+    {
+        name,
+        method,
+        visibility = "private",
+        definition = new
+        {
+            layers = new object[]
+            {
+                new
+                {
+                    layer = "slope",
+                    weight,
+                    transform = new { kind = "classes", classes = new object[] { new { upperBound = 10 }, new { } } },
+                },
+                new { layer = "lithology", weight = (double?)null, transform = new { kind = "categories" } },
+            },
+            training,
+        },
+    };
+
+    [Theory]
+    [InlineData("frequencyRatio")]
+    [InlineData("weightsOfEvidence")]
+    public async Task A_model_that_learns_from_entrances_is_saved_with_its_split_and_copied_whole(string method)
+    {
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var created = await CreateAsync(author, Learning($"Learnt {tag}", method, new { heldOutShare = 0.25, seed = 42 }));
+
+        created.GetProperty("method").GetString().ShouldBe(method);
+        // No weights until it is run, and made from positions whatever it weighs.
+        created.GetProperty("weighting").ValueKind.ShouldBe(JsonValueKind.Null);
+        created.GetProperty("usesPositions").GetBoolean().ShouldBeTrue();
+        var training = created.GetProperty("definition").GetProperty("training");
+        training.GetProperty("heldOutShare").GetDouble().ShouldBe(0.25);
+        training.GetProperty("seed").GetInt32().ShouldBe(42);
+
+        // A copy is the same kind of model with the same split: the two would keep back the same cells.
+        var copied = await author.PostAsJsonAsync($"{Url}/{created.GetProperty("id").GetGuid()}/clone", new { name = $"Copy {tag}" });
+        copied.StatusCode.ShouldBe(HttpStatusCode.Created, await copied.Content.ReadAsStringAsync());
+        var copy = await copied.Content.ReadFromJsonAsync<JsonElement>();
+        copy.GetProperty("method").GetString().ShouldBe(method);
+        copy.GetProperty("definition").GetProperty("training").GetProperty("seed").GetInt32().ShouldBe(42);
+        copy.GetProperty("definition").GetProperty("layers").GetArrayLength().ShouldBe(2);
+
+        // Asked for the weights of such a definition, the answer is an empty list and not an error.
+        var weights = await author.PostAsJsonAsync($"{Url}/weighting", Learning("x", method, new { heldOutShare = 0.25, seed = 42 }));
+        weights.StatusCode.ShouldBe(HttpStatusCode.OK, await weights.Content.ReadAsStringAsync());
+        (await weights.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("weights").GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_model_that_learns_from_entrances_is_refused_a_weight_a_missing_split_or_a_share_out_of_bounds()
+    {
+        var before = await CountMineAsync();
+
+        async Task<List<string>> RefusedAsync(object body)
+        {
+            var response = await author.PostAsJsonAsync(Url, body);
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+            return [.. (await response.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("errors").EnumerateObject().Select(e => e.Name)];
+        }
+
+        (await RefusedAsync(Learning("x", "weightsOfEvidence", new { heldOutShare = 0.3, seed = 1 }, weight: 2)))
+            .ShouldContain("definition.layers[0].weight");
+        (await RefusedAsync(Learning("x", "frequencyRatio", training: null)))
+            .ShouldContain("definition.training");
+        (await RefusedAsync(Learning("x", "frequencyRatio", new { heldOutShare = 0.9, seed = 1 })))
+            .ShouldContain("definition.training.heldOutShare");
+        // And a judged model is refused a split it would never use.
+        (await RefusedAsync(Learning("x", "directWeights", new { heldOutShare = 0.3, seed = 1 }, weight: 1)))
+            .ShouldContain("definition.training");
+
+        (await CountMineAsync()).ShouldBe(before);
+    }
+
     private static object TerrainOnly() => new
     {
         layers = new object[]

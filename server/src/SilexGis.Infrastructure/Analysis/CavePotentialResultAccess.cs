@@ -32,6 +32,12 @@ namespace SilexGis.Infrastructure.Analysis;
 /// feature, and rule four is then empty.
 /// </para>
 /// <para>
+/// A model that learns from known entrances counts every entrance it learnt from, and every one
+/// it kept back to test itself on, among the features its run was computed from — whatever its
+/// layers are made of. Its map says where entrances are common, and its weight tables and rate
+/// curves are sums over those same entrances, so all three are read under rule four or not at all.
+/// </para>
+/// <para>
 /// A feature that has since been deleted can be placed by nobody but a full administrator, so a
 /// result made from one is read by nobody else: the stricter answer, kept until the result is
 /// deleted and run again.

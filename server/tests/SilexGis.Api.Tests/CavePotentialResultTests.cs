@@ -50,6 +50,9 @@ public sealed class CavePotentialResultTests : IAsyncLifetime, IDisposable
     private const double HiddenAreaBox = 84.2;
     private const double SharedModelBox = 84.5;
     private const double NoTerrainBox = 84.8;
+    private const double LearntBox = 85.1;
+    private const double ProtectedEntranceBox = 85.4;
+    private const double FewEntrancesBox = 85.7;
 
     private readonly SilexGisApiFactory factory;
     private readonly string buildRoot;
@@ -60,6 +63,8 @@ public sealed class CavePotentialResultTests : IAsyncLifetime, IDisposable
     private Guid buildId;
     private long sinkholeTypeId;
     private long karstAreaTypeId;
+    private long caveTypeId;
+    private long entranceTypeId;
 
     public CavePotentialResultTests(PostgresFixture postgres)
     {
@@ -97,6 +102,8 @@ public sealed class CavePotentialResultTests : IAsyncLifetime, IDisposable
 
             sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
             karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == FeatureTypeSeeds.KarstArea).Select(t => t.Id).SingleAsync();
+            caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).FirstAsync();
+            entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
 
             await db.TerrainBuilds.Where(b => b.IsActive)
                 .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
@@ -459,6 +466,287 @@ public sealed class CavePotentialResultTests : IAsyncLifetime, IDisposable
         owner?.Dispose();
         viewer?.Dispose();
         withoutTerrain?.Dispose();
+    }
+
+    // ---------- models that learn from known entrances ----------
+
+    /// <summary>Steep ground in the six western columns of a box, gentle in the rest.</summary>
+    private static float SteepWest(int column) => column < 6 ? 30f : 2f;
+
+    /// <summary>
+    /// Entrances for a model to learn from, one to a pixel: <paramref name="steep"/> of them on the
+    /// steep western ground and <paramref name="gentle"/> on the gentle ground east of it.
+    /// </summary>
+    private static IEnumerable<(double Longitude, double Latitude)> Scatter(double west, int steep, int gentle)
+    {
+        for (var i = 0; i < steep; i++)
+        {
+            yield return (west + (((i % 5) + 0.5) * Pixel), North - (((i / 5 * 3) + 1.5) * Pixel));
+        }
+
+        for (var i = 0; i < gentle; i++)
+        {
+            yield return (west + (((i * 3) + 7.5) * Pixel), North - (12.5 * Pixel));
+        }
+    }
+
+    [Fact]
+    public async Task A_model_that_learns_from_entrances_writes_its_map_with_tables_and_curves_and_records_only_counts()
+    {
+        await SeedSlopeAsync(LearntBox, SteepWest);
+        var area = await AreaAsync(LearntBox, locationProtected: false);
+        await CaveWithEntrancesAsync(Scatter(LearntBox, steep: 9, gentle: 3), locationProtected: false);
+        // The model is its author's alone: the viewer below may read the map and not the recipe.
+        var model = await LearningModelAsync("weightsOfEvidence", seed: 11, visibility: "private");
+
+        var id = await AskAndRunAsync(owner, model, area);
+
+        var response = await owner.GetAsync($"{Url}/{id}");
+        var body = await response.Content.ReadAsStringAsync();
+        var ready = JsonDocument.Parse(body).RootElement;
+        ready.GetProperty("status").GetString().ShouldBe("ready", body);
+        ready.GetProperty("method").GetString().ShouldBe("weightsOfEvidence");
+        // Made from the ground alone, and still a map made from positions: the twelve entrances.
+        ready.GetProperty("usesPositions").GetBoolean().ShouldBeTrue();
+        ready.GetProperty("evidenceFeatures").GetInt32().ShouldBe(12);
+        ready.GetProperty("protectedFeatures").GetInt32().ShouldBe(0);
+        ready.GetProperty("ranAsFullAdministrator").GetBoolean().ShouldBeFalse();
+        ready.GetProperty("weighting").ValueKind.ShouldBe(JsonValueKind.Null);
+        ready.GetProperty("definition").GetProperty("training").GetProperty("seed").GetInt32().ShouldBe(11);
+
+        var summary = ready.GetProperty("summary");
+        var training = summary.GetProperty("training");
+        training.GetProperty("seed").GetInt32().ShouldBe(11);
+        training.GetProperty("heldOutShare").GetDouble().ShouldBe(0.3);
+        // Twelve occupied cells, three in ten kept back.
+        training.GetProperty("trainingCells").GetInt32().ShouldBe(8);
+        training.GetProperty("heldOutCells").GetInt32().ShouldBe(4);
+        training.GetProperty("trainingEntrances").GetInt32().ShouldBe(8);
+        training.GetProperty("heldOutEntrances").GetInt32().ShouldBe(4);
+        training.GetProperty("protectedEntrances").GetInt32().ShouldBe(0);
+        training.GetProperty("cells").GetInt32().ShouldBe(summary.GetProperty("scoredCells").GetInt32());
+
+        // The readable output: one table, a row per class, adding up to the ground and to the
+        // training part, with the steep class the one the entrances favour.
+        var table = training.GetProperty("tables").EnumerateArray().ShouldHaveSingleItem();
+        table.GetProperty("layer").GetString().ShouldBe("slope");
+        var rows = table.GetProperty("classes").EnumerateArray().ToList();
+        rows.Count.ShouldBe(2);
+        rows.Sum(r => r.GetProperty("cells").GetInt32()).ShouldBe(summary.GetProperty("scoredCells").GetInt32());
+        rows.Sum(r => r.GetProperty("occurrences").GetInt32()).ShouldBe(8);
+        rows[1].GetProperty("frequencyRatio").GetDouble().ShouldBeGreaterThan(1);
+        rows[0].GetProperty("frequencyRatio").GetDouble().ShouldBeLessThan(1);
+        rows[1].GetProperty("positiveWeight").GetDouble().ShouldBeGreaterThan(0);
+        rows[1].GetProperty("contrast").GetDouble().ShouldBeGreaterThan(0);
+        rows[1].GetProperty("studentisedContrast").GetDouble().ShouldBeGreaterThan(0);
+        rows[1].GetProperty("contrastDeviation").GetDouble().ShouldBeGreaterThan(0);
+
+        // Both curves run from nothing to everything; the success rate beats chance.
+        foreach (var name in new[] { "successRate", "predictionRate" })
+        {
+            var points = training.GetProperty(name).GetProperty("points").EnumerateArray().ToList();
+            points[0].GetProperty("areaShare").GetDouble().ShouldBe(0);
+            points[^1].GetProperty("areaShare").GetDouble().ShouldBe(1);
+            points[^1].GetProperty("occurrenceShare").GetDouble().ShouldBe(1);
+            training.GetProperty(name).GetProperty("areaUnderCurve").GetDouble().ShouldBeInRange(0, 1);
+        }
+
+        training.GetProperty("successRate").GetProperty("occurrences").GetInt32().ShouldBe(8);
+        training.GetProperty("predictionRate").GetProperty("occurrences").GetInt32().ShouldBe(4);
+        training.GetProperty("successRate").GetProperty("areaUnderCurve").GetDouble().ShouldBeGreaterThan(0.5);
+
+        // The map is drawn from nought to one: the steep ground at the top, the gentle at the foot.
+        var path = await PathAsync(id);
+        ValueAt(path, LearntBox + 0.0025, Latitude).ShouldBe(1f, 1e-5f);
+        ValueAt(path, LearntBox + 0.0125, Latitude).ShouldBe(0f, 1e-5f);
+        summary.GetProperty("minimum").GetDouble().ShouldBe(0);
+        summary.GetProperty("maximum").GetDouble().ShouldBe(1);
+        training.GetProperty("valueMaximum").GetDouble().ShouldBeGreaterThan(training.GetProperty("valueMinimum").GetDouble());
+        // One layer, so the probabilities add back up to the cells the model learnt from.
+        training.GetProperty("expectedOccurrences").GetDouble().ShouldBeInRange(7, 9);
+
+        // Counts only. The answer names no entrance — not in the result, not in the list — and
+        // what it says of the training is the members above and nothing else.
+        training.EnumerateObject().Select(p => p.Name).ShouldBe(
+        [
+            "heldOutShare", "seed", "trainingEntrances", "heldOutEntrances", "trainingCells", "heldOutCells",
+            "protectedEntrances", "cells", "priorProbability", "valueMinimum", "valueMaximum", "expectedOccurrences",
+            "tables", "successRate", "predictionRate",
+        ]);
+        var listed = await owner.GetStringAsync($"{Url}?areaFeatureId={area}");
+        Guid[] recorded;
+        string stored;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.CavePotentialResults.AsNoTracking().SingleAsync(r => r.Id == id);
+            recorded = row.EvidenceFeatureIds;
+            stored = row.Summary;
+            row.RequestedByUserId.ShouldNotBe(Guid.Empty);
+            row.UsesPositions.ShouldBeTrue();
+            // Which entrances they were is kept on the row, for the rule that decides who reads it.
+            (await db.Features.CountAsync(f => recorded.Contains(f.Id) && f.Kind == FeatureKind.CaveEntrance)).ShouldBe(12);
+        }
+
+        recorded.Length.ShouldBe(12);
+        recorded.Any(entrance => body.Contains(entrance.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ShouldBeFalse("the result names an entrance it was made from");
+        recorded.Any(entrance => listed.Contains(entrance.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ShouldBeFalse("the list of results names an entrance one was made from");
+        recorded.Any(entrance => stored.Contains(entrance.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ShouldBeFalse("the stored summary names an entrance");
+
+        // The same model over the same area keeps back the same cells and comes to the same tables.
+        var again = await AskAndRunAsync(owner, model, area);
+        (await owner.GetFromJsonAsync<JsonElement>($"{Url}/{again}"))
+            .GetProperty("summary").GetProperty("training").GetRawText().ShouldBe(training.GetRawText());
+
+        // The viewer may place every one of those entrances, so the map with its tables and curves
+        // is theirs to read; the recipe is its author's and does not come with it.
+        var viewers = await viewer.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        viewers.GetProperty("summary").GetProperty("training").GetProperty("tables").GetArrayLength().ShouldBe(1);
+        viewers.GetProperty("definition").ValueKind.ShouldBe(JsonValueKind.Null);
+        viewers.GetProperty("modelName").ValueKind.ShouldBe(JsonValueKind.Null);
+        viewers.GetProperty("mine").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_map_learnt_from_a_protected_entrance_does_not_exist_for_a_reader_who_may_not_place_it()
+    {
+        await SeedSlopeAsync(ProtectedEntranceBox, SteepWest);
+        var area = await AreaAsync(ProtectedEntranceBox, locationProtected: false);
+        await CaveWithEntrancesAsync(Scatter(ProtectedEntranceBox, steep: 8, gentle: 3), locationProtected: false);
+        // One more, on the steep ground, in a cave whose position is protected.
+        await CaveWithEntrancesAsync(
+            [(ProtectedEntranceBox + (5.5 * Pixel), North - (9.5 * Pixel))], locationProtected: true);
+        // Shared with everyone signed in, so the viewer may run the very same recipe.
+        var model = await LearningModelAsync("frequencyRatio", seed: 3, visibility: "authenticated");
+
+        var ownersId = await AskAndRunAsync(owner, model, area);
+        var viewersId = await AskAndRunAsync(viewer, model, area);
+
+        // The owner places all twelve; their map learnt from all twelve and says how many were protected.
+        var owners = await owner.GetFromJsonAsync<JsonElement>($"{Url}/{ownersId}");
+        owners.GetProperty("status").GetString().ShouldBe("ready");
+        owners.GetProperty("usesPositions").GetBoolean().ShouldBeTrue();
+        owners.GetProperty("evidenceFeatures").GetInt32().ShouldBe(12);
+        owners.GetProperty("protectedFeatures").GetInt32().ShouldBe(1);
+        var ownersTraining = owners.GetProperty("summary").GetProperty("training");
+        ownersTraining.GetProperty("protectedEntrances").GetInt32().ShouldBe(1);
+        (ownersTraining.GetProperty("trainingEntrances").GetInt32() + ownersTraining.GetProperty("heldOutEntrances").GetInt32())
+            .ShouldBe(12);
+        ownersTraining.GetProperty("expectedOccurrences").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // For the viewer that map is not there — nor its tables, nor its curves: the same answer,
+        // word for word, as for an id that names nothing, by reading, by listing and by deleting.
+        var refused = await viewer.GetAsync($"{Url}/{ownersId}");
+        var missing = await viewer.GetAsync($"{Url}/{Guid.NewGuid()}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        Shape(await refused.Content.ReadAsStringAsync()).ShouldBe(Shape(await missing.Content.ReadAsStringAsync()));
+        (await viewer.DeleteAsync($"{Url}/{ownersId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await viewer.GetFromJsonAsync<JsonElement>($"{Url}?areaFeatureId={area}"))
+            .EnumerateArray().Select(r => r.GetProperty("id").GetGuid()).ShouldBe([viewersId]);
+
+        // What the viewer reads is their own run of the same model, learnt from the eleven
+        // entrances they may place: the protected one was withheld before anything was counted.
+        var viewers = await viewer.GetFromJsonAsync<JsonElement>($"{Url}/{viewersId}");
+        viewers.GetProperty("status").GetString().ShouldBe("ready");
+        viewers.GetProperty("evidenceFeatures").GetInt32().ShouldBe(11);
+        viewers.GetProperty("protectedFeatures").GetInt32().ShouldBe(0);
+        var viewersTraining = viewers.GetProperty("summary").GetProperty("training");
+        viewersTraining.GetProperty("protectedEntrances").GetInt32().ShouldBe(0);
+        (viewersTraining.GetProperty("trainingCells").GetInt32() + viewersTraining.GetProperty("heldOutCells").GetInt32())
+            .ShouldBe(11);
+        viewersTraining.GetProperty("tables")[0].GetProperty("classes").EnumerateArray()
+            .Sum(r => r.GetProperty("occurrences").GetInt32())
+            .ShouldBe(viewersTraining.GetProperty("trainingCells").GetInt32());
+
+        // The owner, who may place everything either map was made from, reads both.
+        (await owner.GetFromJsonAsync<JsonElement>($"{Url}?areaFeatureId={area}"))
+            .EnumerateArray().Select(r => r.GetProperty("id").GetGuid())
+            .ShouldBe([ownersId, viewersId], ignoreOrder: true);
+        (await owner.GetAsync($"{Url}/{viewersId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task A_model_given_too_few_entrances_to_learn_from_fails_by_name_and_is_shown_to_its_asker_alone()
+    {
+        await SeedSlopeAsync(FewEntrancesBox, SteepWest);
+        var area = await AreaAsync(FewEntrancesBox, locationProtected: false);
+        await CaveWithEntrancesAsync(Scatter(FewEntrancesBox, steep: 3, gentle: 1), locationProtected: false);
+        var model = await LearningModelAsync("weightsOfEvidence", seed: 1, visibility: "authenticated");
+
+        var asked = await owner.PostAsJsonAsync(Url, new { modelId = model, areaFeatureId = area, cellMeters = 50 });
+        asked.StatusCode.ShouldBe(HttpStatusCode.Accepted, await asked.Content.ReadAsStringAsync());
+        var id = (await asked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        await Should.ThrowAsync<CavePotentialRunException>(() => RunAsync(id));
+
+        var failed = await owner.GetFromJsonAsync<JsonElement>($"{Url}/{id}");
+        failed.GetProperty("status").GetString().ShouldBe("failed");
+        failed.GetProperty("errorCode").GetString().ShouldBe(CavePotentialRunFailures.TooFewEntrances);
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential", id.ToString("N"))).ShouldBeFalse();
+        failed.GetProperty("summary").ValueKind.ShouldBe(JsonValueKind.Null);
+        failed.GetProperty("evidenceFeatures").GetInt32().ShouldBe(0);
+        failed.GetProperty("url").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await viewer.GetAsync($"{Url}/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private async Task<Guid> LearningModelAsync(string method, int seed, string visibility)
+    {
+        var response = await owner.PostAsJsonAsync(ModelsUrl, new
+        {
+            name = $"PotRes {Guid.NewGuid():N}"[..24],
+            method,
+            definition = new
+            {
+                // Gentle below ten degrees, steep from there up; nothing judged.
+                layers = new object[]
+                {
+                    new
+                    {
+                        layer = "slope",
+                        transform = new { kind = "classes", classes = new object[] { new { upperBound = 10 }, new { } } },
+                    },
+                },
+                training = new { heldOutShare = 0.3, seed },
+            },
+            visibility,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>One cave, readable by everyone signed in, with an entrance at each of these places.</summary>
+    private async Task CaveWithEntrancesAsync(IEnumerable<(double Longitude, double Latitude)> places, bool locationProtected)
+    {
+        var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"PotRes {Guid.NewGuid():N}"[..24],
+            caveTypeId,
+            visibility = "authenticated",
+            locationProtected,
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        var payload = await caveResponse.Content.ReadAsStringAsync();
+        caveResponse.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        var caveId = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+
+        var first = true;
+        foreach (var (longitude, latitude) in places)
+        {
+            var entrance = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+            {
+                entranceTypeId,
+                isMain = first,
+                geom = new { type = "Point", coordinates = new[] { longitude, latitude } },
+                positionQuality = "Gps",
+            });
+            entrance.StatusCode.ShouldBe(HttpStatusCode.Created);
+            first = false;
+        }
     }
 
     private static string Code(string payload) =>

@@ -30,16 +30,102 @@ public sealed record CavePotentialResultLayerDto(
 /// <param name="Settings">That picture's settings as stored (JSON text), or null for elevation itself.</param>
 public sealed record CavePotentialTerrainInputDto(string Layer, Guid? DerivativeLayerId, string? Settings);
 
+/// <summary>What the known entrances say about one class of one layer.</summary>
+/// <param name="Class">
+/// The class's position in the layer's table of the model as run, or for a layer that is classes
+/// already, in that layer's own list of classes.
+/// </param>
+/// <param name="Cells">How many cells of the ground weighed fall in the class.</param>
+/// <param name="Occurrences">How many of those hold an entrance the model learnt from.</param>
+/// <param name="FrequencyRatio">The class's share of the occupied cells over its share of the ground; null for a class no cell falls in.</param>
+/// <param name="PositiveWeight">W+, a natural logarithm; null for a class no cell falls in.</param>
+/// <param name="NegativeWeight">W−; null for a class no cell falls in or none falls outside of.</param>
+/// <param name="Contrast">W+ − W−.</param>
+/// <param name="ContrastDeviation">The standard deviation of the contrast.</param>
+/// <param name="StudentisedContrast">The contrast over its standard deviation.</param>
+/// <param name="Corrected">Whether a half was added to each count because one of them was nought.</param>
+public sealed record CavePotentialClassWeightsDto(
+    int Class,
+    int Cells,
+    int Occurrences,
+    double? FrequencyRatio,
+    double? PositiveWeight,
+    double? NegativeWeight,
+    double? Contrast,
+    double? ContrastDeviation,
+    double? StudentisedContrast,
+    bool Corrected);
+
+/// <summary>One layer's table of weights, a row for every class in the layer's order.</summary>
+public sealed record CavePotentialWeightTableDto(string Layer, IReadOnlyList<CavePotentialClassWeightsDto> Classes);
+
+/// <summary>One point of a rate curve: a share of the ground, most favourable first, and the share of occupied cells on it.</summary>
+public sealed record CavePotentialRatePointDto(double AreaShare, double OccurrenceShare);
+
+/// <summary>How well the map ranks a set of occupied cells.</summary>
+/// <param name="Points">From (0, 0) to (1, 1), at most a hundred and one points.</param>
+/// <param name="AreaUnderCurve">A half is no better than chance.</param>
+/// <param name="Cells">How many cells the map has a value for.</param>
+/// <param name="Occurrences">How many occupied cells the curve was drawn against.</param>
+public sealed record CavePotentialRateCurveDto(
+    IReadOnlyList<CavePotentialRatePointDto> Points, double AreaUnderCurve, int Cells, int Occurrences);
+
+/// <summary>
+/// What a model that learns from known entrances learnt on this run. Counts, tables per class
+/// and curves: never an entrance, a position or a cell.
+/// </summary>
+/// <param name="HeldOutShare">The share of occupied cells kept back to test the map.</param>
+/// <param name="Seed">What the draw of the kept-back cells started from.</param>
+/// <param name="TrainingEntrances">How many entrances the weights were counted from.</param>
+/// <param name="HeldOutEntrances">How many entrances were kept back.</param>
+/// <param name="TrainingCells">How many cells the training entrances occupy.</param>
+/// <param name="HeldOutCells">How many cells the kept-back entrances occupy.</param>
+/// <param name="ProtectedEntrances">How many of the entrances used were location-protected.</param>
+/// <param name="Cells">How many cells of ground were weighed.</param>
+/// <param name="PriorProbability">The share of that ground a training entrance occupies.</param>
+/// <param name="ValueMinimum">The least value the method gave a cell, before the map was stretched onto nought to one.</param>
+/// <param name="ValueMaximum">The greatest; a drawn value <c>v</c> stands for minimum + v × (maximum − minimum).</param>
+/// <param name="ExpectedOccurrences">
+/// For weights of evidence, the occupied cells the posterior probabilities add up to, to set
+/// beside <paramref name="TrainingCells"/>; null for a frequency-ratio model.
+/// </param>
+/// <param name="Tables">The weight tables, in the model's order of layers.</param>
+/// <param name="SuccessRate">The map against the cells it learnt from.</param>
+/// <param name="PredictionRate">The map against the cells kept back.</param>
+public sealed record CavePotentialTrainingDto(
+    double HeldOutShare,
+    int Seed,
+    int TrainingEntrances,
+    int HeldOutEntrances,
+    int TrainingCells,
+    int HeldOutCells,
+    int ProtectedEntrances,
+    int Cells,
+    double PriorProbability,
+    double ValueMinimum,
+    double ValueMaximum,
+    double? ExpectedOccurrences,
+    IReadOnlyList<CavePotentialWeightTableDto> Tables,
+    CavePotentialRateCurveDto SuccessRate,
+    CavePotentialRateCurveDto PredictionRate);
+
 /// <summary>What a finished run found.</summary>
 /// <param name="AreaCells">How many cells lie inside the area.</param>
 /// <param name="ScoredCells">How many of them every layer had a value for, and so were scored.</param>
+/// <param name="Training">
+/// What the run learnt from known entrances and how well its map finds them; null for a model
+/// weighed by judgment. Shown to every reader of the result, who by the rule that admits them may
+/// place every entrance it was counted from. The bounds of the classes are the model's and come
+/// with its definition.
+/// </param>
 public sealed record CavePotentialResultSummaryDto(
     IReadOnlyList<CavePotentialResultLayerDto> Layers,
     int AreaCells,
     int ScoredCells,
     double? Minimum,
     double? Maximum,
-    double? Mean);
+    double? Mean,
+    CavePotentialTrainingDto? Training);
 
 /// <summary>One run of a cave-potential model, as one reader sees it.</summary>
 /// <param name="ModelId">The model it was run from, or null once that model is deleted.</param>
@@ -51,7 +137,10 @@ public sealed record CavePotentialResultSummaryDto(
 /// The model as it was run, whatever has been done to the model since. Null for a reader who may
 /// not read the model; the asker and a full administrator always have it.
 /// </param>
-/// <param name="Weighting">The weights that definition comes to; null whenever the definition is.</param>
+/// <param name="Weighting">
+/// The weights that definition comes to; null whenever the definition is, and for a model that
+/// learnt from known entrances, whose weights are the tables in the summary.
+/// </param>
 /// <param name="TerrainBuildId">The elevation build the run read the ground from, or null when it read none.</param>
 /// <param name="TerrainBuildActive">
 /// Whether that build is still the active one, so a map made from ground that has since been
@@ -59,10 +148,14 @@ public sealed record CavePotentialResultSummaryDto(
 /// </param>
 /// <param name="TerrainInputs">The computed pictures of the ground the run read, with their settings.</param>
 /// <param name="UsesPositions">
-/// Whether the model weighs any layer made from recorded positions. Such a map shows where those
-/// positions are and is listed only for readers who may place every one of them.
+/// Whether the model weighs any layer made from recorded positions, or learnt its weights from
+/// known entrances. Such a map shows where those positions are and is listed only for readers who
+/// may place every one of them.
 /// </param>
-/// <param name="EvidenceFeatures">How many recorded features the run was computed from.</param>
+/// <param name="EvidenceFeatures">
+/// How many recorded features the run was computed from, the entrances a model learnt from or was
+/// tested against among them.
+/// </param>
 /// <param name="ProtectedFeatures">How many of those were location-protected.</param>
 /// <param name="Mine">Whether the reader asked for this run.</param>
 /// <param name="RequestedByName">Who asked for it, as the reader may be shown that member.</param>
@@ -313,7 +406,7 @@ public static class CavePotentialResultEndpoints
             CellMeters = request.CellMeters,
             RequestedByUserId = ctx.UserId,
             RanAsFullAdministrator = ctx.IsFullAdmin,
-            UsesPositions = CavePotentialModelRules.UsesPositions(definition),
+            UsesPositions = CavePotentialModelRules.UsesPositions(model.Method, definition),
             Status = CavePotentialResultStatus.Queued,
         };
         db.CavePotentialResults.Add(row);
@@ -472,7 +565,8 @@ public static class CavePotentialResultEndpoints
                         summary.ScoredCells,
                         summary.Minimum,
                         summary.Maximum,
-                        summary.Mean),
+                        summary.Mean,
+                        summary.Training is { } training ? ToDto(training) : null),
                 row.West,
                 row.South,
                 row.East,
@@ -494,4 +588,43 @@ public static class CavePotentialResultEndpoints
 
         return dtos;
     }
+
+    private static CavePotentialTrainingDto ToDto(CavePotentialTrainingSummary training) => new(
+        training.HeldOutShare,
+        training.Seed,
+        training.TrainingEntrances,
+        training.HeldOutEntrances,
+        training.TrainingCells,
+        training.HeldOutCells,
+        training.ProtectedEntrances,
+        training.Cells,
+        training.PriorProbability,
+        training.ValueMinimum,
+        training.ValueMaximum,
+        training.ExpectedOccurrences,
+        [
+            .. training.Layers.Select(layer => new CavePotentialWeightTableDto(
+                layer.Layer,
+                [
+                    .. layer.Classes.Select(row => new CavePotentialClassWeightsDto(
+                        row.Class,
+                        row.Cells,
+                        row.Occurrences,
+                        row.FrequencyRatio,
+                        row.PositiveWeight,
+                        row.NegativeWeight,
+                        row.Contrast,
+                        row.ContrastDeviation,
+                        row.StudentisedContrast,
+                        row.Corrected)),
+                ])),
+        ],
+        ToDto(training.SuccessRate),
+        ToDto(training.PredictionRate));
+
+    private static CavePotentialRateCurveDto ToDto(RateCurve curve) => new(
+        [.. curve.Points.Select(p => new CavePotentialRatePointDto(p.AreaShare, p.OccurrenceShare))],
+        curve.AreaUnderCurve,
+        curve.Cells,
+        curve.Occurrences);
 }

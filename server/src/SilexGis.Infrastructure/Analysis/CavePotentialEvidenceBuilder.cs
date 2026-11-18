@@ -86,6 +86,50 @@ public sealed class CavePotentialEvidenceBuilder(
         return built;
     }
 
+    /// <summary>
+    /// The known entrances a model may learn from over this grid: those the account may see and
+    /// place exactly, each as the cell it lies in. Null when the grid holds more than a run reads.
+    /// </summary>
+    /// <remarks>
+    /// An entrance whose position the account is only shown approximately is left out, not moved:
+    /// a weight counted from a displaced entrance would be a weight for the wrong ground, and one
+    /// counted from the true position would carry it to whoever reads the map. The positions stop
+    /// here. What is handed on is a cell on the run's grid for the counting and an id for the
+    /// record of who may read the result.
+    /// </remarks>
+    public async Task<IReadOnlyList<PlaceableEntrance>?> TrainingEntrancesAsync(
+        AccessContext ctx, EvidenceGrid grid, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        ArgumentNullException.ThrowIfNull(grid);
+
+        var rows = await CavePotentialEvidenceSql.FeaturesAsync(
+            db,
+            ctx,
+            CavePotentialEvidenceSource.Entrances,
+            [],
+            grid.West,
+            grid.South,
+            grid.East,
+            grid.North,
+            MaxFeaturesPerSource + 1,
+            ct);
+        if (rows.Count > MaxFeaturesPerSource)
+        {
+            return null;
+        }
+
+        var reader = new WKBReader();
+        return
+        [
+            .. rows.Select(r =>
+            {
+                var at = reader.Read(r.Wkb).Coordinate;
+                return new PlaceableEntrance(r.Id, new TrainingEntrance(grid.CellAt(at.X, at.Y), r.IsProtected));
+            }),
+        ];
+    }
+
     private async Task<BuiltEvidence> FeatureLayerAsync(
         AccessContext ctx, EvidenceLayer layer, EvidenceGrid grid, CancellationToken ct)
     {
@@ -346,3 +390,8 @@ public sealed class CavePotentialEvidenceBuilder(
     private sealed record TerrainSurfaces(
         bool HasTerrain, Guid BuildId, TerrainCoverage Coverage, IReadOnlyList<TerrainDerivativeLayerView> Views);
 }
+
+/// <summary>One entrance the running account may place, as a model that learns from entrances is given it.</summary>
+/// <param name="Id">The entrance, kept for the record of which features a result was made from.</param>
+/// <param name="Entrance">Its cell on the run's grid and whether its position is protected.</param>
+public sealed record PlaceableEntrance(Guid Id, TrainingEntrance Entrance);

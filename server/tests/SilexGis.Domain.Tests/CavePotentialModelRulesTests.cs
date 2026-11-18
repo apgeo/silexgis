@@ -48,6 +48,8 @@ public class CavePotentialModelRulesTests
         ]);
         ((short)CavePotentialMethod.DirectWeights).ShouldBe((short)0);
         ((short)CavePotentialMethod.PairwiseComparison).ShouldBe((short)1);
+        ((short)CavePotentialMethod.FrequencyRatio).ShouldBe((short)2);
+        ((short)CavePotentialMethod.WeightsOfEvidence).ShouldBe((short)3);
     }
 
     [Fact]
@@ -56,11 +58,11 @@ public class CavePotentialModelRulesTests
         EvidenceLayers.All.Where(l => l.UsesPositions).Select(l => l.Code).ShouldBe(
             ["fault_distance", "lithology", "sinkhole_distance", "entrance_density"]);
 
-        CavePotentialModelRules.UsesPositions(Direct(
+        CavePotentialModelRules.UsesPositions(CavePotentialMethod.DirectWeights, Direct(
             Layer(EvidenceLayers.Slope, SlopeClasses, 1),
             Layer(EvidenceLayers.Elevation, new(EvidenceTransformKind.FuzzyLinear, Low: 200, High: 1500), 1)))
             .ShouldBeFalse();
-        CavePotentialModelRules.UsesPositions(Direct(
+        CavePotentialModelRules.UsesPositions(CavePotentialMethod.DirectWeights, Direct(
             Layer(EvidenceLayers.Slope, SlopeClasses, 1),
             Layer(EvidenceLayers.SinkholeDistance, NearIsBetter, 1)))
             .ShouldBeTrue();
@@ -87,7 +89,7 @@ public class CavePotentialModelRulesTests
             Layer(EvidenceLayers.FaultDistance, NearIsBetter, 2));
 
         CavePotentialModelRules.Problems(CavePotentialMethod.DirectWeights, definition).ShouldBeEmpty();
-        var weighting = CavePotentialModelRules.Weighting(CavePotentialMethod.DirectWeights, definition);
+        var weighting = CavePotentialModelRules.Weighting(CavePotentialMethod.DirectWeights, definition).ShouldNotBeNull();
 
         weighting.Weights.Select(w => w.Layer).ShouldBe(["lithology", "slope", "fault_distance"]);
         weighting.Weights.Select(w => w.Weight).ShouldBe([0.5, 0.3, 0.2], 1e-12);
@@ -119,7 +121,7 @@ public class CavePotentialModelRulesTests
         var definition = ThreeLayers([[3, 5], [3]]);
 
         CavePotentialModelRules.Problems(CavePotentialMethod.PairwiseComparison, definition).ShouldBeEmpty();
-        var weighting = CavePotentialModelRules.Weighting(CavePotentialMethod.PairwiseComparison, definition);
+        var weighting = CavePotentialModelRules.Weighting(CavePotentialMethod.PairwiseComparison, definition).ShouldNotBeNull();
 
         weighting.Weights.Select(w => w.Layer).ShouldBe(["lithology", "slope", "fault_distance"]);
         weighting.Weights.Select(w => w.Weight).ShouldBe([0.6370, 0.2583, 0.1047], 0.0001);
@@ -135,7 +137,7 @@ public class CavePotentialModelRulesTests
 
         CavePotentialModelRules.Problems(CavePotentialMethod.PairwiseComparison, definition).ShouldBeEmpty();
         var consistency = CavePotentialModelRules
-            .Weighting(CavePotentialMethod.PairwiseComparison, definition).Consistency.ShouldNotBeNull();
+            .Weighting(CavePotentialMethod.PairwiseComparison, definition).ShouldNotBeNull().Consistency.ShouldNotBeNull();
 
         consistency.Ratio.ShouldBeGreaterThan(AnalyticHierarchy.AcceptableRatio);
         consistency.Acceptable.ShouldBeFalse();
@@ -307,5 +309,100 @@ public class CavePotentialModelRulesTests
         CavePotentialModelRules.IsAllowedVisibility(Visibility.Public).ShouldBeFalse();
         CavePotentialModelRules.NamesACavingGroup(Visibility.CavingGroup).ShouldBeTrue();
         CavePotentialModelRules.NamesACavingGroup(Visibility.Private).ShouldBeFalse();
+    }
+
+    // ---------- models that learn from known entrances ----------
+
+    private static readonly EvidenceTransform SlopeBounds = new(
+        EvidenceTransformKind.Classes, Classes: [new(5, null), new(20, null), new(null, null)]);
+
+    private static CavePotentialModelDefinition Learnt(
+        CavePotentialTraining? training, params EvidenceLayerSetting[] layers) => new(layers, Training: training);
+
+    public static TheoryData<CavePotentialMethod> LearningMethods =>
+        [CavePotentialMethod.FrequencyRatio, CavePotentialMethod.WeightsOfEvidence];
+
+    [Theory]
+    [MemberData(nameof(LearningMethods))]
+    public void A_model_that_learns_from_entrances_names_classes_and_a_split_and_nothing_judged(CavePotentialMethod method)
+    {
+        var definition = Learnt(
+            new(0.3, 7),
+            Layer(EvidenceLayers.Slope, SlopeBounds),
+            Layer(EvidenceLayers.Lithology, new(EvidenceTransformKind.Categories)),
+            Layer(EvidenceLayers.Aspect, new(EvidenceTransformKind.Classes, Classes: [new(90, null), new(270, null), new(null, null)])));
+
+        CavePotentialModelRules.Problems(method, definition).ShouldBeEmpty();
+        // Its weights are per class and exist only once it has been run.
+        CavePotentialModelRules.Weighting(method, definition).ShouldBeNull();
+        CavePotentialMethods.IsDataDriven(method).ShouldBeTrue();
+
+        // What is stored is read back as written, the split included.
+        var read = CavePotentialModelDefinition.Deserialize(CavePotentialModelDefinition.Serialize(definition)).ShouldNotBeNull();
+        read.Training.ShouldBe(new CavePotentialTraining(0.3, 7));
+        CavePotentialModelRules.Problems(method, read).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_model_that_learns_from_entrances_is_made_from_positions_whatever_it_weighs()
+    {
+        var terrainOnly = Learnt(new(0.3, 1), Layer(EvidenceLayers.Slope, SlopeBounds));
+
+        CavePotentialModelRules.UsesPositions(CavePotentialMethod.WeightsOfEvidence, terrainOnly).ShouldBeTrue();
+        CavePotentialModelRules.UsesPositions(CavePotentialMethod.FrequencyRatio, terrainOnly).ShouldBeTrue();
+        CavePotentialMethods.IsDataDriven(CavePotentialMethod.DirectWeights).ShouldBeFalse();
+        CavePotentialMethods.IsDataDriven(CavePotentialMethod.PairwiseComparison).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_model_that_learns_from_entrances_is_refused_anything_a_judged_model_carries()
+    {
+        var method = CavePotentialMethod.WeightsOfEvidence;
+
+        // A weight, a score on a class, a score on a rock, a ramp, comparisons.
+        PathsOf(method, Learnt(new(0.3, 1), Layer(EvidenceLayers.Slope, SlopeBounds, 2)))
+            .ShouldBe(["layers[0].weight"]);
+        PathsOf(method, Learnt(new(0.3, 1), Layer(EvidenceLayers.Slope, SlopeClasses)))
+            .ShouldBe(["layers[0].transform.classes[0].score", "layers[0].transform.classes[1].score", "layers[0].transform.classes[2].score"]);
+        PathsOf(method, Learnt(new(0.3, 1), Layer(EvidenceLayers.Lithology, Rock)))
+            .ShouldBe(["layers[0].transform.categories[0].score", "layers[0].transform.categories[1].score"]);
+        PathsOf(method, Learnt(new(0.3, 1), Layer(EvidenceLayers.FaultDistance, NearIsBetter)))
+            .ShouldBe(["layers[0].transform.kind"]);
+        PathsOf(method, new([Layer(EvidenceLayers.Slope, SlopeBounds), Layer(EvidenceLayers.Lithology, new(EvidenceTransformKind.Categories))], [[3]], new(0.3, 1)))
+            .ShouldBe(["pairwise"]);
+
+        // And the bounds of its classes are still checked as any table's are.
+        PathsOf(method, Learnt(new(0.3, 1), Layer(EvidenceLayers.Slope, new(EvidenceTransformKind.Classes, Classes: [new(20, null), new(5, null), new(null, null)]))))
+            .ShouldBe(["layers[0].transform.classes[1].upperBound"]);
+    }
+
+    [Fact]
+    public void A_model_that_learns_from_entrances_cannot_weigh_the_density_of_those_entrances()
+    {
+        // The layer is made from the entrances kept back as well as those learnt from, so a model
+        // given it would be tested on what it had been shown.
+        PathsOf(
+            CavePotentialMethod.FrequencyRatio,
+            Learnt(new(0.3, 1), Layer(EvidenceLayers.EntranceDensity, new(EvidenceTransformKind.Classes, Classes: [new(1, null), new(null, null)]))))
+            .ShouldBe(["layers[0].layer"]);
+    }
+
+    [Fact]
+    public void The_split_is_required_of_a_learning_model_bounded_and_refused_of_a_judged_one()
+    {
+        var layer = Layer(EvidenceLayers.Slope, SlopeBounds);
+
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(null, layer)).ShouldBe(["training"]);
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(new(0.05, 1), layer)).ShouldBe(["training.heldOutShare"]);
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(new(0.6, 1), layer)).ShouldBe(["training.heldOutShare"]);
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(new(double.NaN, -1), layer))
+            .ShouldBe(["training.heldOutShare", "training.seed"]);
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(new(TrainingSplits.MinHeldOutShare, 0), layer)).ShouldBeEmpty();
+        PathsOf(CavePotentialMethod.FrequencyRatio, Learnt(new(TrainingSplits.MaxHeldOutShare, int.MaxValue), layer)).ShouldBeEmpty();
+
+        PathsOf(
+            CavePotentialMethod.DirectWeights,
+            new([Layer(EvidenceLayers.Slope, SlopeClasses, 1)], Training: new(0.3, 1)))
+            .ShouldBe(["training"]);
     }
 }

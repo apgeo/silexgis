@@ -59,11 +59,13 @@ public sealed record CavePotentialWeightingDto(
 /// </param>
 /// <param name="Weighting">
 /// The weights the definition comes to, worked out by the server. Null when the definition cannot
-/// be read or is no longer a valid model.
+/// be read or is no longer a valid model, and for a model that learns from known entrances, whose
+/// weights are counted when it is run and are on each run's result.
 /// </param>
 /// <param name="UsesPositions">
 /// Whether the model weighs any layer made from recorded positions (see
-/// <see cref="EvidenceLayerDto.UsesPositions"/>).
+/// <see cref="EvidenceLayerDto.UsesPositions"/>), or learns its weights from known entrances,
+/// which are positions themselves.
 /// </param>
 /// <param name="Mine">Whether the reader wrote it.</param>
 /// <param name="AuthorName">Who wrote it, as the reader may be shown that member, or null when the account is gone.</param>
@@ -435,7 +437,11 @@ public static class CavePotentialModelEndpoints
             return TypedResults.Unauthorized();
         }
 
-        return TypedResults.Ok(ToDto(CavePotentialModelRules.Weighting(request.Method, request.Definition)));
+        // A model that learns from known entrances has no weights until it is run: an empty list,
+        // not a refusal, so a screen that asks as the model is typed needs no special case.
+        return TypedResults.Ok(
+            ToDto(CavePotentialModelRules.Weighting(request.Method, request.Definition))
+            ?? new CavePotentialWeightingDto([], null));
     }
 
     /// <summary>
@@ -489,7 +495,7 @@ public static class CavePotentialModelEndpoints
                 row.Method,
                 definition,
                 valid ? ToDto(CavePotentialModelRules.Weighting(row.Method, definition!)) : null,
-                definition is not null && CavePotentialModelRules.UsesPositions(definition),
+                definition is not null && CavePotentialModelRules.UsesPositions(row.Method, definition),
                 row.CavingGroupId,
                 row.Visibility,
                 row.OwnerUserId == ctx.UserId,
@@ -503,9 +509,11 @@ public static class CavePotentialModelEndpoints
         return dtos;
     }
 
-    internal static CavePotentialWeightingDto ToDto(CavePotentialWeighting weighting) => new(
-        [.. weighting.Weights.Select(w => new EvidenceLayerWeightDto(w.Layer, w.Weight))],
-        weighting.Consistency is { } c
-            ? new PairwiseConsistencyDto(c.PrincipalEigenvalue, c.Index, c.RandomIndex, c.Ratio, c.Acceptable)
-            : null);
+    internal static CavePotentialWeightingDto? ToDto(CavePotentialWeighting? weighting) => weighting is null
+        ? null
+        : new(
+            [.. weighting.Weights.Select(w => new EvidenceLayerWeightDto(w.Layer, w.Weight))],
+            weighting.Consistency is { } c
+                ? new PairwiseConsistencyDto(c.PrincipalEigenvalue, c.Index, c.RandomIndex, c.Ratio, c.Acceptable)
+                : null);
 }

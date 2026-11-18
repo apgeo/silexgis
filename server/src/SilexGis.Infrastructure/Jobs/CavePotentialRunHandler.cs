@@ -33,7 +33,9 @@ public sealed record CavePotentialRunPayload(Guid CavePotentialResultId);
 /// <para>
 /// <b>What it records.</b> Every recorded feature that went into the evidence is written on the
 /// row in the same save that marks it ready, so there is no moment at which a finished map exists
-/// without the list that decides who may read it.
+/// without the list that decides who may read it. For a model that learns from known entrances
+/// that list also holds every entrance it learnt from or was tested against; the row's summary
+/// keeps only how many there were.
 /// </para>
 /// <para>
 /// Not retried. A run is asked for by somebody watching it and is cheap to ask for again, and its
@@ -138,13 +140,40 @@ public sealed class CavePotentialRunHandler(
                     string.Join(", ", missing.Select(b => $"{b.Layer.Code}: {b.UnavailableReason}")));
             }
 
-            var weighting = CavePotentialModelRules.Weighting(row.Method, definition);
-            var map = FavourabilityOverlay.Compute(
-                definition.Layers,
-                [.. weighting.Weights.Select(w => w.Weight)],
-                built,
-                EvidenceSurfaces.Inside(grid, outline));
-            if (map.Summary.ScoredCells == 0)
+            var inside = EvidenceSurfaces.Inside(grid, outline);
+            float[] values;
+            CavePotentialRunSummary summary;
+            IEnumerable<Guid> featureIds = built.SelectMany(b => b.Provenance.FeatureIds);
+            var protectedFeatures = built.Sum(b => b.Provenance.ProtectedFeatures);
+            if (CavePotentialMethods.IsDataDriven(row.Method))
+            {
+                // Read as the account that asked, like the evidence: only entrances it may see and
+                // place exactly, so nothing it could not have drawn itself reaches the weights.
+                var entrances = await evidence.TrainingEntrancesAsync(ctx, grid, ct)
+                    ?? throw new CavePotentialRunException(
+                        CavePotentialRunFailures.TooManyEntrances,
+                        "The area holds more known entrances than a run can learn from.");
+                var trained = TrainedFavourability.Compute(
+                    row.Method, definition, built, inside, [.. entrances.Select(e => e.Entrance)]);
+
+                // Every entrance that taught the model or tested it joins the features the map was
+                // made from. That list is what decides who may read the result, so a reader who
+                // may not place one of them is not shown the map, its weight tables or its curves.
+                featureIds = featureIds.Concat(trained.UsedEntrances.Select(i => entrances[i].Id));
+                protectedFeatures += trained.Summary.Training!.ProtectedEntrances;
+                values = trained.Values;
+                summary = trained.Summary;
+            }
+            else
+            {
+                var weighting = CavePotentialModelRules.Weighting(row.Method, definition)!;
+                var map = FavourabilityOverlay.Compute(
+                    definition.Layers, [.. weighting.Weights.Select(w => w.Weight)], built, inside);
+                values = map.Values;
+                summary = map.Summary;
+            }
+
+            if (summary.ScoredCells == 0)
             {
                 throw new CavePotentialRunException(
                     CavePotentialRunFailures.NothingScored,
@@ -152,15 +181,16 @@ public sealed class CavePotentialRunHandler(
             }
 
             ct.ThrowIfCancellationRequested();
-            var written = writer.Write(Path.Combine(directory, RasterFileName), grid, map.Values, classes: false);
+            var written = writer.Write(Path.Combine(directory, RasterFileName), grid, values, classes: false);
 
             row.RanAsFullAdministrator = ctx.IsFullAdmin;
-            row.EvidenceFeatureIds = [.. built.SelectMany(b => b.Provenance.FeatureIds).Distinct().Order()];
-            row.ProtectedFeatureCount = built.Sum(b => b.Provenance.ProtectedFeatures);
+            row.UsesPositions = CavePotentialModelRules.UsesPositions(row.Method, definition);
+            row.EvidenceFeatureIds = [.. featureIds.Distinct().Order()];
+            row.ProtectedFeatureCount = protectedFeatures;
             var terrainInputs = built.Where(b => b.Terrain is not null).Select(b => b.Terrain!).ToList();
             row.TerrainBuildId = terrainInputs.Count > 0 ? terrainInputs[0].BuildId : null;
             row.Summary = CavePotentialRunSummary.Serialize(
-                terrainInputs.Count > 0 ? map.Summary with { TerrainInputs = terrainInputs } : map.Summary);
+                terrainInputs.Count > 0 ? summary with { TerrainInputs = terrainInputs } : summary);
             row.Path = written.Path;
             row.West = grid.West;
             row.South = grid.South;

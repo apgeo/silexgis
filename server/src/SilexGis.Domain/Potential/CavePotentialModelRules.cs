@@ -63,10 +63,15 @@ public static class CavePotentialModelRules
     /// Whether anything this model weighs is made from recorded positions. A map computed from
     /// such a model is governed by who may place those features.
     /// </summary>
-    public static bool UsesPositions(CavePotentialModelDefinition definition)
+    /// <remarks>
+    /// A model that learns from known entrances is made from positions whatever it weighs: the
+    /// entrances it counts are positions, and a map of where they are common says where they are.
+    /// </remarks>
+    public static bool UsesPositions(CavePotentialMethod method, CavePotentialModelDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        return definition.Layers.Any(l => EvidenceLayers.Find(l?.Layer) is { UsesPositions: true });
+        return CavePotentialMethods.IsDataDriven(method)
+            || definition.Layers.Any(l => EvidenceLayers.Find(l?.Layer) is { UsesPositions: true });
     }
 
     /// <summary>What stops this definition being stored. Empty means it may be.</summary>
@@ -92,6 +97,7 @@ public static class CavePotentialModelRules
             return problems;
         }
 
+        var dataDriven = CavePotentialMethods.IsDataDriven(method);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < layers.Count; i++)
         {
@@ -108,13 +114,28 @@ public static class CavePotentialModelRules
                 problems.Add(new($"{at}.layer", "A model weighs each evidence layer at most once."));
             }
 
-            TransformProblems(layer, setting.Transform, $"{at}.transform", problems);
+            if (dataDriven && layer.Code == EvidenceLayers.EntranceDensity)
+            {
+                // The layer is made from the very entrances the model counts, the kept-back ones
+                // included: a model given it would be shown what it is then tested on, and its
+                // prediction rate would measure nothing.
+                problems.Add(new($"{at}.layer", "A model that learns from known entrances cannot also weigh how dense they are."));
+            }
+
+            TransformProblems(layer, setting.Transform, $"{at}.transform", dataDriven, problems);
 
             if (method == CavePotentialMethod.DirectWeights)
             {
                 if (setting.Weight is not { } weight || !double.IsFinite(weight) || weight <= 0 || weight > MaxWeight)
                 {
                     problems.Add(new($"{at}.weight", "Each layer needs a weight above nought."));
+                }
+            }
+            else if (dataDriven)
+            {
+                if (setting.Weight is not null)
+                {
+                    problems.Add(new($"{at}.weight", "The weights of this model are counted from known entrances, so a layer names none."));
                 }
             }
             else if (setting.Weight is not null)
@@ -129,7 +150,35 @@ public static class CavePotentialModelRules
         }
         else if (definition.Pairwise is not null)
         {
-            problems.Add(new("pairwise", "A model with weights given outright has no comparisons."));
+            problems.Add(new("pairwise", dataDriven
+                ? "A model that learns from known entrances has no comparisons."
+                : "A model with weights given outright has no comparisons."));
+        }
+
+        if (dataDriven)
+        {
+            if (definition.Training is not { } training)
+            {
+                problems.Add(new("training", "A model that learns from known entrances says what share of them it keeps back, and from what seed."));
+            }
+            else
+            {
+                if (!TrainingSplits.IsAllowedShare(training.HeldOutShare))
+                {
+                    problems.Add(new("training.heldOutShare", string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The share kept back lies between {TrainingSplits.MinHeldOutShare} and {TrainingSplits.MaxHeldOutShare}.")));
+                }
+
+                if (training.Seed < 0)
+                {
+                    problems.Add(new("training.seed", "A seed is a whole number, nought or above."));
+                }
+            }
+        }
+        else if (definition.Training is not null)
+        {
+            problems.Add(new("training", "Only a model that learns from known entrances keeps any back."));
         }
 
         return problems;
@@ -137,14 +186,21 @@ public static class CavePotentialModelRules
 
     /// <summary>
     /// The weights a valid definition comes to, each as a share of one, in the order of its layers.
+    /// Null for a model that learns from known entrances: its weights are per class, not per layer,
+    /// and exist only once it has been run over an area.
     /// </summary>
     /// <exception cref="ArgumentException">The definition has problems; ask <see cref="Problems"/> first.</exception>
-    public static CavePotentialWeighting Weighting(CavePotentialMethod method, CavePotentialModelDefinition definition)
+    public static CavePotentialWeighting? Weighting(CavePotentialMethod method, CavePotentialModelDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(definition);
         if (Problems(method, definition).Count > 0)
         {
             throw new ArgumentException("The definition is not a valid model.", nameof(definition));
+        }
+
+        if (CavePotentialMethods.IsDataDriven(method))
+        {
+            return null;
         }
 
         var layers = definition.Layers;
@@ -162,7 +218,11 @@ public static class CavePotentialModelRules
     }
 
     private static void TransformProblems(
-        EvidenceLayer layer, EvidenceTransform? transform, string at, List<CavePotentialModelProblem> problems)
+        EvidenceLayer layer,
+        EvidenceTransform? transform,
+        string at,
+        bool dataDriven,
+        List<CavePotentialModelProblem> problems)
     {
         if (transform is null || !Enum.IsDefined(transform.Kind))
         {
@@ -181,10 +241,17 @@ public static class CavePotentialModelRules
             return;
         }
 
+        if (dataDriven && transform.Kind == EvidenceTransformKind.FuzzyLinear)
+        {
+            // Entrances are counted per class, and a ramp has none.
+            problems.Add(new($"{at}.kind", "A model that learns from known entrances cuts a measured layer into classes."));
+            return;
+        }
+
         switch (transform.Kind)
         {
             case EvidenceTransformKind.Classes:
-                ClassProblems(layer, transform.Classes, $"{at}.classes", problems);
+                ClassProblems(layer, transform.Classes, $"{at}.classes", dataDriven, problems);
                 break;
             case EvidenceTransformKind.FuzzyLinear:
                 if (transform.Low is not { } low || !double.IsFinite(low))
@@ -203,13 +270,17 @@ public static class CavePotentialModelRules
 
                 break;
             default:
-                CategoryProblems(layer, transform.Categories, $"{at}.categories", problems);
+                CategoryProblems(layer, transform.Categories, $"{at}.categories", dataDriven, problems);
                 break;
         }
     }
 
     private static void ClassProblems(
-        EvidenceLayer layer, IReadOnlyList<EvidenceClass>? classes, string at, List<CavePotentialModelProblem> problems)
+        EvidenceLayer layer,
+        IReadOnlyList<EvidenceClass>? classes,
+        string at,
+        bool dataDriven,
+        List<CavePotentialModelProblem> problems)
     {
         if (classes is not { Count: >= 2 } || classes.Count > MaxClasses)
         {
@@ -256,7 +327,7 @@ public static class CavePotentialModelRules
                 previous = bound;
             }
 
-            ScoreProblems(row.Score, $"{rowAt}.score", problems);
+            ScoreProblems(row.Score, $"{rowAt}.score", dataDriven, problems);
         }
     }
 
@@ -264,8 +335,15 @@ public static class CavePotentialModelRules
         EvidenceLayer layer,
         IReadOnlyList<EvidenceCategoryScore>? categories,
         string at,
+        bool dataDriven,
         List<CavePotentialModelProblem> problems)
     {
+        // Every class of the layer is counted whatever such a model lists, so it may list none.
+        if (dataDriven && categories is null or { Count: 0 })
+        {
+            return;
+        }
+
         if (categories is not { Count: > 0 } || categories.Count > layer.Categories.Count)
         {
             problems.Add(new(at, "A layer of classes scores at least one of its classes, and each at most once."));
@@ -288,12 +366,23 @@ public static class CavePotentialModelRules
                 problems.Add(new($"{rowAt}.code", "A class is scored once."));
             }
 
-            ScoreProblems(row.Score, $"{rowAt}.score", problems);
+            ScoreProblems(row.Score, $"{rowAt}.score", dataDriven, problems);
         }
     }
 
-    private static void ScoreProblems(double? score, string at, List<CavePotentialModelProblem> problems)
+    private static void ScoreProblems(double? score, string at, bool dataDriven, List<CavePotentialModelProblem> problems)
     {
+        if (dataDriven)
+        {
+            // A score left in such a model would read as a judgment the map never used.
+            if (score is not null)
+            {
+                problems.Add(new(at, "The scores of this model are counted from known entrances, so a class names none."));
+            }
+
+            return;
+        }
+
         if (score is not { } value || !double.IsFinite(value) || value < 0 || value > 1)
         {
             problems.Add(new(at, "A score lies between nought and one."));
