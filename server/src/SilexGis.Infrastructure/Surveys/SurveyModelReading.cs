@@ -142,8 +142,13 @@ public static class SurveyModelReading
     /// Who is told how the reading ended; null for a reading nobody asked for by name, because the
     /// queue mails its requester on every outcome.
     /// </param>
+    /// <param name="heightDeclared">
+    /// True when the reading is asked for because the zero point was just given its altitude. The
+    /// reading, not the request, then clears the model's relative-heights flag, together with the
+    /// rows whose heights it changes.
+    /// </param>
     public static async Task<SurveyReadingRequest> QueueAgainAsync(
-        SilexGisDbContext db, SurveyModel model, Guid? requestedBy, CancellationToken ct)
+        SilexGisDbContext db, SurveyModel model, Guid? requestedBy, CancellationToken ct, bool heightDeclared = false)
     {
         if (!HasReading(model.Format))
         {
@@ -184,7 +189,7 @@ public static class SurveyModelReading
             model.ProcessingError = null;
         }
 
-        db.ProcessingJobs.Add(JobFor(model, requestedBy));
+        db.ProcessingJobs.Add(JobFor(model, requestedBy, heightDeclared: heightDeclared));
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return SurveyReadingRequest.Queued;
@@ -204,13 +209,14 @@ public static class SurveyModelReading
     /// upload's run, which queues its own work, so asking for a reading of one is a programming
     /// error and is refused rather than answered with a mesh conversion of a file that is no mesh.
     /// </summary>
-    private static ProcessingJob JobFor(SurveyModel model, Guid? requestedBy, Guid? takesMarkFrom = null) =>
+    private static ProcessingJob JobFor(
+        SurveyModel model, Guid? requestedBy, Guid? takesMarkFrom = null, bool heightDeclared = false) =>
         SurveyModelKinds.Of(model.Format) switch
         {
             SurveyModelKind.LinePlot => new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyGraph,
-                Payload = JsonSerializer.Serialize(new SurveyGraphPayload(model.Id, takesMarkFrom), JsonSerializerOptions.Web),
+                Payload = JsonSerializer.Serialize(new SurveyGraphPayload(model.Id, takesMarkFrom, heightDeclared), JsonSerializerOptions.Web),
                 RequestedBy = requestedBy,
             },
             SurveyModelKind.WallMesh => new ProcessingJob

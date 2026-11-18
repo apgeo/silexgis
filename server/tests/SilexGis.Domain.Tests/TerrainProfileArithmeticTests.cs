@@ -68,6 +68,31 @@ public sealed class TerrainProfileArithmeticTests
     }
 
     [Fact]
+    public void The_deepest_point_of_a_short_leg_between_two_stations_is_still_on_the_profile()
+    {
+        // 1,000 one-metre level legs at 0 m, then a 30 m pitch falling from 0 to -30 m, then 1,000
+        // more level legs back at 0 m: 2,030 m in all. That is spread over the most stations a
+        // profile takes, 400, a step of 2030 / 399 = 5.088 m; station 202 falls at 1027.7 m, 27.7 m
+        // down the pitch (-27.7 m), and station 203 at 1032.8 m is back on level passage. Read off
+        // the stations alone the profile would be 27.7 m deep; the pitch's foot at 1030 m is -30 m.
+        static PassageSegment Level(int path, int i) =>
+            new(path, i, false, 0, 0, 0, 0, 1, 1, 0, 0);
+
+        var legs = new List<PassageSegment>();
+        legs.AddRange(Enumerable.Range(0, 1000).Select(i => Level(0, i)));
+        legs.Add(new PassageSegment(1, 0, false, 0, 0, 0, 0, 0, 30, -30, -15));
+        legs.AddRange(Enumerable.Range(0, 1000).Select(i => Level(2, i)));
+
+        var profile = CaveDepthProfile.Build(legs);
+
+        profile.HighestM.ShouldBe(0d);
+        profile.LowestM!.Value.ShouldBe(-30d, 1e-9);
+        profile.DeepestM!.Value.ShouldBe(30d, 1e-9);
+        profile.Samples.ShouldContain(s => Math.Abs(s.DistanceAlongM - 1030) < 1e-6 && Math.Abs(s.DepthM - 30) < 1e-9);
+        profile.Samples.Select(s => s.DistanceAlongM).ShouldBeInOrder(SortDirection.Ascending);
+    }
+
+    [Fact]
     public void Classes_are_cut_where_the_documentation_says_and_facing_wraps_at_north()
     {
         TerrainClassStatistics.ClassOf(TerrainMeasure.Slope, 4.9).ShouldBe(0);

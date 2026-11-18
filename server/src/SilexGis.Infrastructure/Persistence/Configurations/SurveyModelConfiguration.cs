@@ -26,6 +26,7 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
         builder.Property(x => x.PlacementControlPoints).HasColumnType("jsonb");
         // Defaults in the database too, so the rows already there take them when the columns arrive.
         builder.Property(x => x.EstimatePassages).HasDefaultValue(false);
+        builder.Property(x => x.AltitudesRelative).HasDefaultValue(false);
         builder.Property(x => x.EstimatedPassageDiameterM).HasDefaultValue(SurveyModel.DefaultEstimatedPassageDiameterM);
         builder.Property(x => x.EstimatedPassageColor).HasMaxLength(7).HasDefaultValue(SurveyModel.DefaultEstimatedPassageColor);
 

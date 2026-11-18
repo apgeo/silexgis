@@ -42,12 +42,18 @@ public static class SurveySegmentSource
         var legs = await SurveySegmentSql.ForCaveAsync(db, ctx, caveFeatureId, ct);
         if (legs.Count > 0)
         {
-            return new SurveySegmentSet(SurveySegmentBasis.SurveyFlags, legs);
+            return new SurveySegmentSet(
+                SurveySegmentBasis.SurveyFlags,
+                legs,
+                await SurveySegmentSql.AltitudesRelativeAsync(db, caveFeatureId, legs[0].SurveyModelId, ct));
         }
 
         var pieces = await CenterlineSegmentSql.ForCaveAsync(db, ctx, caveFeatureId, ct);
         return pieces.Count > 0
-            ? new SurveySegmentSet(SurveySegmentBasis.SkeletonHeuristic, pieces)
+            ? new SurveySegmentSet(
+                SurveySegmentBasis.SkeletonHeuristic,
+                pieces,
+                await SurveySegmentSql.AltitudesRelativeAsync(db, caveFeatureId, surveyModelId: null, ct))
             : SurveySegmentSet.Empty;
     }
 
@@ -64,6 +70,11 @@ public static class SurveySegmentSource
         SilexGisDbContext db, Guid surveyModelId, CancellationToken ct)
     {
         var legs = await SurveySegmentSql.ForModelAsync(db, surveyModelId, ct);
-        return legs.Count > 0 ? new SurveySegmentSet(SurveySegmentBasis.SurveyFlags, legs) : SurveySegmentSet.Empty;
+        return legs.Count > 0
+            ? new SurveySegmentSet(
+                SurveySegmentBasis.SurveyFlags,
+                legs,
+                await SurveySegmentSql.AltitudesRelativeAsync(db, caveFeatureId: null, surveyModelId, ct))
+            : SurveySegmentSet.Empty;
     }
 }

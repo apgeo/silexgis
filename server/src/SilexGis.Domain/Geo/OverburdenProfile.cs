@@ -92,11 +92,7 @@ public static class OverburdenProfile
     {
         ArgumentNullException.ThrowIfNull(segments);
 
-        var ordered = segments
-            .Where(s => !s.IsDuplicate && s.MidZM is not null)
-            .OrderBy(s => s.PathIndex ?? int.MinValue)
-            .ThenBy(s => s.SegmentIndex)
-            .ToArray();
+        var ordered = InPassageOrder(segments);
 
         // Real length along the passage where the altitudes allow it to be known, so that a steep
         // shaft is not drawn as the few metres of ground its shadow covers.
@@ -134,6 +130,19 @@ public static class OverburdenProfile
 
         return (stations, total);
     }
+
+    /// <summary>
+    /// The segments a profile is laid along, in the order it lays them: duplicates and segments
+    /// without altitudes left out, then by path and by position within the path. One copy, so a
+    /// distance along computed elsewhere is the same distance the stations were placed at.
+    /// </summary>
+    public static PassageSegment[] InPassageOrder(IReadOnlyList<PassageSegment> segments) =>
+        [
+            .. segments
+                .Where(s => !s.IsDuplicate && s.MidZM is not null)
+                .OrderBy(s => s.PathIndex ?? int.MinValue)
+                .ThenBy(s => s.SegmentIndex),
+        ];
 
     /// <summary>
     /// How many stations to spread over a passage of this length: enough to draw it, never more than

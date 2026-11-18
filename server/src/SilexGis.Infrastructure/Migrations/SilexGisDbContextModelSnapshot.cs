@@ -6327,6 +6327,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AltitudesRelative")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("altitudes_relative");
+
                     b.Property<Point>("Anchor")
                         .HasColumnType("geometry(Point, 4326)")
                         .HasColumnName("anchor");

@@ -45,6 +45,12 @@ public sealed record CaveDepthProfileResult(
 /// and a branch that climbs back shows as a rise rather than being folded away.
 /// </para>
 /// <para>
+/// <b>The survey's highest and lowest points are always on the curve.</b> The stations are evenly
+/// spaced, and a point between two of them is otherwise not drawn; where the extreme of the survey
+/// is such a point it is added as a reading of its own, so the curve may carry one or two readings
+/// more than the overhead profile at the same distances along.
+/// </para>
+/// <para>
 /// <b>No altitudes means no profile</b>, never a profile of zeros: a plan drawing is not a flat
 /// cave, and a curve at sea level would be indistinguishable from a real one.
 /// </para>
@@ -62,21 +68,73 @@ public static class CaveDepthProfile
             return new CaveDepthProfileResult([], 0, null, null);
         }
 
-        // The extremes come from the stations the curve is drawn through, so that the deepest point
-        // of the curve is exactly the figure printed beside it. The survey's own extremes (which
-        // the statistics route reports) can lie between two stations of a long leg.
-        var highest = stations.Max(s => s.PassageAltitudeM);
-        var lowest = stations.Min(s => s.PassageAltitudeM);
+        // The stations are spaced evenly along the passage, and on a long survey the step is tens of
+        // metres: a short terminal leg holding the deepest point can fall between two of them. So
+        // the survey's own extremes are found at the ends of every segment, and each is added to
+        // the curve as a reading of its own where the stations missed it. The deepest point of the
+        // curve is then exactly the figure printed beside it, and that figure is the survey's.
+        var points = stations
+            .Select(s => (s.DistanceAlongM, s.PassageAltitudeM, s.PathIndex, s.SegmentIndex))
+            .ToList();
+        var (top, bottom) = SegmentEndExtremes(OverburdenProfile.InPassageOrder(segments));
+        foreach (var extreme in new[] { top, bottom })
+        {
+            if (!points.Any(p => p.PassageAltitudeM == extreme.PassageAltitudeM))
+            {
+                points.Add(extreme);
+            }
+        }
+
+        points.Sort(static (a, b) => a.DistanceAlongM.CompareTo(b.DistanceAlongM));
+
+        var highest = points.Max(p => p.PassageAltitudeM);
+        var lowest = points.Min(p => p.PassageAltitudeM);
 
         return new CaveDepthProfileResult(
-            [.. stations.Select(s => new CaveDepthProfileSample(
-                s.DistanceAlongM,
-                s.PassageAltitudeM,
-                Math.Max(0, highest - s.PassageAltitudeM),
-                s.PathIndex,
-                s.SegmentIndex))],
+            [.. points.Select(p => new CaveDepthProfileSample(
+                p.DistanceAlongM,
+                p.PassageAltitudeM,
+                Math.Max(0, highest - p.PassageAltitudeM),
+                p.PathIndex,
+                p.SegmentIndex))],
             length,
             highest,
             lowest);
+    }
+
+    /// <summary>
+    /// The highest and the lowest segment end, each with the distance along the passage it sits
+    /// at, measured the way the stations measure it.
+    /// </summary>
+    private static (
+        (double DistanceAlongM, double PassageAltitudeM, int? PathIndex, int SegmentIndex) Highest,
+        (double DistanceAlongM, double PassageAltitudeM, int? PathIndex, int SegmentIndex) Lowest)
+        SegmentEndExtremes(PassageSegment[] ordered)
+    {
+        var along = 0d;
+        (double, double, int?, int) highest = (0, double.NegativeInfinity, null, 0);
+        (double, double, int?, int) lowest = (0, double.PositiveInfinity, null, 0);
+        foreach (var segment in ordered)
+        {
+            var length = segment.SlopeLengthM ?? segment.PlanLengthM;
+            var mid = segment.MidZM ?? 0;
+            var rise = segment.DeltaZM ?? 0;
+            foreach (var (distance, altitude) in new[] { (along, mid - (rise / 2)), (along + length, mid + (rise / 2)) })
+            {
+                if (altitude > highest.Item2)
+                {
+                    highest = (distance, altitude, segment.PathIndex, segment.SegmentIndex);
+                }
+
+                if (altitude < lowest.Item2)
+                {
+                    lowest = (distance, altitude, segment.PathIndex, segment.SegmentIndex);
+                }
+            }
+
+            along += length;
+        }
+
+        return (highest, lowest);
     }
 }

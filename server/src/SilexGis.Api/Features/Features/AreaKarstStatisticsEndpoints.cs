@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -70,7 +71,10 @@ public static class AreaKarstStatisticsEndpoints
         return result.Result switch
         {
             Ok<AreaKarstStatisticsDto> ok when ok.Value is { } dto =>
-                TypedResults.Text(ToCsv(dto), "text/csv"),
+                // A byte-order mark in front, and the charset named: a spreadsheet opening a file
+                // with neither reads it in the machine's legacy code page, and every cave name
+                // with a diacritic comes out garbled.
+                TypedResults.Text("\uFEFF" + ToCsv(dto), "text/csv", System.Text.Encoding.UTF8),
             UnauthorizedHttpResult unauthorized => unauthorized,
             ProblemHttpResult problem => problem,
             _ => ApiProblems.NotFound("feature.not_found"),
@@ -95,8 +99,14 @@ public static class AreaKarstStatisticsEndpoints
         var csv = new System.Text.StringBuilder();
         csv.Append("measure,value\n");
 
+        // Names (cave names, rock type codes) are text somebody typed, so they go through the
+        // spreadsheet-formula guard: a cave named "=1+1" must open as those four characters, not
+        // as a formula. Numbers are written as they are — a guard would turn a negative value
+        // into text.
         void Row(string measure, object? value) =>
-            csv.Append(Escape(measure)).Append(',').Append(Escape(Format(value))).Append('\n');
+            csv.Append(TrackingCsvWriter.TextCell(measure)).Append(',')
+                .Append(value is string text ? TrackingCsvWriter.TextCell(text) : Escape(Format(value)))
+                .Append('\n');
 
         Row("area_id", dto.AreaId);
         Row("membership_basis", dto.Basis);
@@ -225,7 +235,8 @@ public static class AreaKarstStatisticsEndpoints
             areaKm2 is { } e ? totals.EntranceCount / e : null,
             totals.SurveyedLengthM,
             totals.SurveyedCaveCount,
-            areaKm2 is { } s ? (totals.SurveyedLengthM ?? 0d) / s : null,
+            // Unknown, not nought, when no cave in the area records a surveyed length.
+            areaKm2 is { } s && totals.SurveyedLengthM is { } surveyed ? surveyed / s : null,
             totals.DepressionCount,
             totals.DepressionAreaM2 is { } d ? d / 1_000_000d : null,
             depressionRatio,

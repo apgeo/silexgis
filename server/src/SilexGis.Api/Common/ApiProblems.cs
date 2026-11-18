@@ -59,6 +59,15 @@ public static class ApiProblems
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["code"] = code, [member] = value });
 
+    /// <summary>
+    /// The request was understood and is allowed, but answering it would cost more than one
+    /// request may: the caller can ask a smaller question (a smaller box, a nearer pair) and get
+    /// an answer, which is a different sentence from a malformed request.
+    /// </summary>
+    public static ProblemHttpResult UnprocessableContent(string code, string? detail = null) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status422UnprocessableEntity,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
+
     public static ProblemHttpResult PreconditionFailed(string code, string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status412PreconditionFailed,
             extensions: new Dictionary<string, object?> { ["code"] = code });
