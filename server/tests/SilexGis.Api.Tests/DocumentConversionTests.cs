@@ -291,6 +291,24 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task An_answer_that_is_not_a_portable_document_is_not_filed_as_the_converted_copy()
+    {
+        // A proxy in front of a restarting converter answers with a page of its own and a success
+        // status. Filed, that page would be served as the document's pages and, since a copy then
+        // exists, never replaced: it has to stay a converter that did not answer properly.
+        converter.Produce = "<html><body>502 Bad Gateway</body></html>"u8.ToArray();
+        var fileId = await UploadAsync("behind-a-proxy.doc", WordDocument(), WordMediaType);
+
+        await Should.ThrowAsync<InvalidOperationException>(RunConversionAsync(fileId));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.StoredFiles.AsNoTracking().SingleAsync(f => f.Id == fileId))
+            .Conversion.ShouldBe(ConversionState.Deferred);
+        (await db.StoredFiles.CountAsync(f => f.ConvertedFromFileId == fileId)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_converter_that_refuses_the_bytes_is_recorded_as_a_failure_of_this_document()
     {
         // The one case that really is about the document: the service was reached, looked at

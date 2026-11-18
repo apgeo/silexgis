@@ -41,6 +41,16 @@ public sealed class BasemapOptions
     public long MaxBytes { get; set; } = 5_000_000_000;
 
     /// <summary>
+    /// How long, in seconds, the extracting program may go without printing anything before the
+    /// download is taken as stalled: the program is stopped and the download fails as "the source
+    /// could not be reached". The program prints its progress continuously while bytes arrive, so
+    /// silence means the source stopped answering without closing the connection — and a stalled
+    /// download would otherwise hold the one-at-a-time lane, and every terrain build and point-cloud
+    /// job queued behind it, until somebody cancelled it by hand. Default 900 (fifteen minutes).
+    /// </summary>
+    public int ExtractStallSeconds { get; set; } = 900;
+
+    /// <summary>
     /// A region downloaded by itself on the first start that finds no extract and no download ever
     /// asked for: <c>romania</c>, or <c>apuseni</c> for a karst region; empty, the default, for
     /// none. For an installation that should come up with a basemap of its own without anybody
