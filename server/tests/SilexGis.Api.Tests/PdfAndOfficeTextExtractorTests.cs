@@ -311,6 +311,62 @@ public class PdfAndOfficeTextExtractorTests
     }
 
     [Fact]
+    public async Task A_page_whose_stream_is_compressed_twice_is_read()
+    {
+        // The positive case beside the one below: a chain of two decoders is ordinary PDF, and a
+        // chain that stays within the ceiling reads as any other page does.
+        using var content = PdfStream(
+            [DeflateTwice(TextPage("Pestera Sura Mare"))], padding: 0, DoubleFlate);
+
+        var result = await Selector.For("application/pdf")!.ExtractAsync(content, CancellationToken.None);
+
+        result.Pages[0].Text.ShouldNotBeNull().ShouldContain("Pestera Sura Mare");
+    }
+
+    [Fact]
+    public async Task A_page_whose_stream_decodes_past_the_ceiling_is_refused_without_being_decoded()
+    {
+        // Sixty-five megabytes of blank page content, compressed twice: a couple of kilobytes on
+        // disk. Each further compression multiplies what the same upload decodes to by about a
+        // thousand, so what is tested here is the ceiling, not the size of the worst file.
+        var page = new byte[(int)InMemoryBoundBytes + (1024 * 1024)];
+        Array.Fill(page, (byte)' ');
+        TextPage("Pestera Sura Mare").CopyTo(page, 0);
+        var encoded = DeflateTwice(page);
+        encoded.Length.ShouldBeLessThan(64 * 1024);
+
+        using var content = PdfStream([encoded], padding: 0, DoubleFlate);
+
+        await Should.ThrowAsync<ContentTooLargeException>(() => Selector
+            .For("application/pdf")!.ExtractAsync(content, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_document_whose_streams_together_decode_past_its_ceiling_is_refused()
+    {
+        // Each page well inside the stream ceiling, all of them together past the document's.
+        var pages = Enumerable.Range(0, 4).Select(i =>
+        {
+            var page = new byte[400 * 1024];
+            Array.Fill(page, (byte)' ');
+            TextPage($"Pagina {i}").CopyTo(page, 0);
+            return DeflateTwice(page);
+        }).ToList();
+
+        using (var within = PdfStream(pages, padding: 0, DoubleFlate))
+        {
+            var read = await new PdfTextExtractor(maxStreamBytes: 1024 * 1024, maxDocumentBytes: 8L * 1024 * 1024)
+                .ExtractAsync(within, CancellationToken.None);
+            read.Pages.Count.ShouldBe(4);
+        }
+
+        using var past = PdfStream(pages, padding: 0, DoubleFlate);
+        await Should.ThrowAsync<ContentTooLargeException>(() =>
+            new PdfTextExtractor(maxStreamBytes: 1024 * 1024, maxDocumentBytes: 1024 * 1024)
+                .ExtractAsync(past, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task A_package_larger_than_a_reader_may_hold_is_still_read()
     {
         using var content = LargeWordDocument();
@@ -691,7 +747,7 @@ public class PdfAndOfficeTextExtractorTests
     /// The same document as a stream, optionally padded with a comment of the given length
     /// between the last object and the cross-reference table.
     /// </summary>
-    private static MemoryStream PdfStream(IReadOnlyList<byte[]> pageContents, long padding)
+    private static MemoryStream PdfStream(IReadOnlyList<byte[]> pageContents, long padding, string filter = "")
     {
         var kids = string.Join(
             ' ', Enumerable.Range(0, pageContents.Count).Select(i => $"{4 + (2 * i)} 0 R"));
@@ -710,7 +766,7 @@ public class PdfAndOfficeTextExtractorTests
                 + $"/Resources<</Font<</F1 3 0 R>>>>/Contents {5 + (2 * i)} 0 R>>"));
             objects.Add(
             [
-                .. Ascii($"<</Length {pageContents[i].Length}>>\nstream\n"),
+                .. Ascii($"<</Length {pageContents[i].Length}{filter}>>\nstream\n"),
                 .. pageContents[i],
                 .. Ascii("\nendstream"),
             ]);
@@ -754,6 +810,23 @@ public class PdfAndOfficeTextExtractorTests
 
         file.Position = 0;
         return file;
+    }
+
+    private const string DoubleFlate = "/Filter[/FlateDecode/FlateDecode]";
+
+    /// <summary>The bytes compressed in the PDF's deflate wrapping, and that result compressed again.</summary>
+    private static byte[] DeflateTwice(byte[] bytes) => Deflate(Deflate(bytes));
+
+    private static byte[] Deflate(byte[] bytes)
+    {
+        using var output = new MemoryStream();
+        using (var zlib = new System.IO.Compression.ZLibStream(
+            output, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            zlib.Write(bytes);
+        }
+
+        return output.ToArray();
     }
 
     private static void Write(Stream stream, byte[] bytes) => stream.Write(bytes, 0, bytes.Length);
