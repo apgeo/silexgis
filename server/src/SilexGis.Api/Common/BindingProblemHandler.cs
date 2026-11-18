@@ -93,6 +93,21 @@ public sealed partial class BindingProblemHandler(
             return ApiProblems.BadRequest(BodyInvalidCode, "The request body could not be read as JSON.");
         }
 
+        // A record held to every value being present, sent without some: the serializer names
+        // them all in one exception. That is an incomplete request, not an unreadable one, and it
+        // is answered the way a validator would answer a member it requires.
+        if (CompleteBodies.IsComplete(bodyType) && MissingMembers(bodyType!, json.Message) is { Count: > 0 } missing)
+        {
+            return TypedResults.Problem(
+                detail: "Every value of this record has to be sent; a value left out is not read as 0 or no.",
+                statusCode: StatusCodes.Status400BadRequest,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["code"] = ProblemCodeRules.GenericCode,
+                    ["errors"] = missing.ToDictionary(m => m, _ => new[] { "Must be sent." }),
+                });
+        }
+
         var (member, type, own) = Resolve(bodyType, json.Path);
         if (own is { } refusal)
         {
@@ -271,6 +286,40 @@ public sealed partial class BindingProblemHandler(
         return true;
     }
 
+    /// <summary>
+    /// The members the serializer reported missing, spelled as the validators spell them. Only
+    /// names that are required members of the declared type are taken from the message, so text
+    /// that is not that report — any other fault on the same type — answers nothing and keeps its
+    /// own refusal.
+    /// </summary>
+    private List<string> MissingMembers(Type bodyType, string message)
+    {
+        var marker = message.IndexOf("missing required properties", StringComparison.Ordinal);
+        if (marker < 0)
+        {
+            return [];
+        }
+
+        JsonTypeInfo contract;
+        try
+        {
+            contract = jsonOptions.Value.SerializerOptions.GetTypeInfo(bodyType);
+        }
+        catch (NotSupportedException)
+        {
+            return [];
+        }
+
+        var named = QuotedName().Matches(message[marker..]).Select(m => m.Groups["name"].Value).ToHashSet(StringComparer.Ordinal);
+        return contract.Properties
+            .Where(p => p.IsRequired && named.Contains(p.Name))
+            .Select(p => p.AttributeProvider is MemberInfo declared ? declared.Name : p.Name)
+            .ToList();
+    }
+
     [GeneratedRegex("parameter \"(?:[^\"]* )?(?<name>[A-Za-z_][A-Za-z0-9_]*)\"")]
     private static partial Regex ParameterName();
+
+    [GeneratedRegex("'(?<name>[^']+)'")]
+    private static partial Regex QuotedName();
 }

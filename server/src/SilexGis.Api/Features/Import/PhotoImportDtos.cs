@@ -243,7 +243,7 @@ public sealed class PhotoImportOptionsValidator : AbstractValidator<PhotoImportO
         RuleFor(x => x.DefaultCaveTypeCode).MaximumLength(100);
         RuleFor(x => x.DefaultEntranceTypeCode).MaximumLength(100);
         RuleFor(x => x.DefaultFeatureTypeCode).MaximumLength(100);
-        RuleFor(x => x.TagIds).Must(ids => ids.Count <= 50)
+        RuleFor(x => x.TagIds).Cascade(CascadeMode.Stop).NotNull().Must(ids => ids.Count <= 50)
             .WithMessage("At most 50 tags.");
     }
 }

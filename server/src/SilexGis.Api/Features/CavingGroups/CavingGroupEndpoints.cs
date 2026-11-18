@@ -41,7 +41,9 @@ public sealed class CavingGroupWriteRequestValidator : AbstractValidator<CavingG
 {
     public CavingGroupWriteRequestValidator()
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
+        // The width of the name and slug columns; a longer name was a database refusal and a
+        // server fault rather than a validation failure.
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
         RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Description).MaximumLength(2000);
         RuleFor(x => x.Website).MaximumLength(255);
@@ -564,7 +566,18 @@ public static class CavingGroupEndpoints
         // Leaving a group can sever someone's only path into Full Administrators; the
         // installation must never end up without a live one.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The same removal, sent twice at once, landed first: the member is gone, as asked, and
+            // whatever the other request staged with it was its to send.
+            await transaction.RollbackAsync(ct);
+            return TypedResults.NoContent();
+        }
+
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
             await transaction.RollbackAsync(ct);

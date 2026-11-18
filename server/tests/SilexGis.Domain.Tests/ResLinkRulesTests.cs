@@ -223,6 +223,12 @@ public class ResLinkRulesTests
     [InlineData("""{"at": "2026-09-12T14:05:00Z"}""", true)]
     [InlineData("""{"at": "2026-09-12T16:05:00+02:00"}""", true)]
     [InlineData("""{"at": "2026-09-12T14:05:00.1234567Z"}""", true)]
+    [InlineData("""{"at": "2026-09-12T14:05Z"}""", true)]
+    // No offset: read in whatever zone the server runs in. No date: on whatever day it is read.
+    [InlineData("""{"at": "2026-09-12T14:05:00"}""", false)]
+    [InlineData("""{"at": "14:05:00"}""", false)]
+    [InlineData("""{"at": "14:05:00Z"}""", false)]
+    [InlineData("""{"at": "2026-09-12"}""", false)]
     [InlineData("""{"at": 1789012345}""", false)]
     [InlineData("""{"at": "yesterday afternoon"}""", false)]
     [InlineData("""{"at": ""}""", false)]
@@ -777,4 +783,15 @@ public class ResLinkRulesTests
     [InlineData(false, false, false, false)]
     public void A_place_station_is_shown_only_whole(bool place, bool exact, bool survey, bool shown) =>
         PlaceStationShown(place, exact, survey).ShouldBe(shown);
+    /// <summary>
+    /// A number beyond the double range is valid JSON that cannot be read as a double: it is a
+    /// refused payload, not a fault while checking one.
+    /// </summary>
+    [Theory]
+    [InlineData(AnchorKind.TimePoint, """{"t": 1e400}""")]
+    [InlineData(AnchorKind.ModelPoint, """{"x": 1e400, "y": 0, "z": 0}""")]
+    [InlineData(AnchorKind.ImageRegion, """{"shape": "rect", "x": 1e400, "y": 0, "w": 0.1, "h": 0.1}""")]
+    [InlineData(AnchorKind.ImageRegion, """{"shape": "polygon", "points": [[1e400, 0], [0.5, 0.5], [0, 1]]}""")]
+    public void A_number_beyond_the_double_range_is_a_refused_payload(AnchorKind kind, string payload) =>
+        AnchorPayloadProblem(kind, payload).ShouldNotBeNull();
 }

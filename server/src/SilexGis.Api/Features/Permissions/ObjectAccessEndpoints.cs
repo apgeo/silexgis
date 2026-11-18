@@ -47,7 +47,8 @@ public sealed class ObjectAccessReplaceRequestValidator : AbstractValidator<Obje
     public ObjectAccessReplaceRequestValidator()
     {
         RuleFor(x => x.Entries).NotNull();
-        RuleForEach(x => x.Entries).ChildRules(entry =>
+        // A null item binds from `[null]` and the child rules skip it.
+        RuleForEach(x => x.Entries).NotNull().ChildRules(entry =>
         {
             entry.RuleFor(x => x.SubjectId).NotEmpty();
             entry.RuleFor(x => x.SubjectKind).IsInEnum();
@@ -63,7 +64,8 @@ public sealed class ObjectAccessReplaceRequestValidator : AbstractValidator<Obje
         });
         RuleFor(x => x.Entries)
             .Must(e => e.Select(x => (x.SubjectKind, x.SubjectId, x.Effect, x.ScopeKind)).Distinct().Count() == e.Count)
-            .WithMessage("Duplicate rules for the same subject, effect and reach.");
+            .WithMessage("Duplicate rules for the same subject, effect and reach.")
+            .When(x => x.Entries is not null && x.Entries.All(e => e is not null));
     }
 }
 

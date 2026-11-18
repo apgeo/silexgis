@@ -329,6 +329,14 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
     public TripLogWriteRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(255);
+        // An enum binds any number of its underlying type; one outside the defined audiences would
+        // be stored as an audience nobody defined.
+        RuleFor(x => x.Visibility).IsInEnum();
+        // Club visibility says "the club this belongs to may read it", so it needs a club to
+        // name; without one it would be an audience that admits nobody, silently.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
         // A purpose is a row now, so whether it exists is a question for the database and is
         // asked on the write path beside the other reference checks; there is nothing about the
         // shape of the value to check here.
@@ -387,13 +395,40 @@ public sealed class TripLogWriteRequestValidator : AbstractValidator<TripLogWrit
             .WithMessage("A trip with a limit has room for at least one person.");
 
         RuleFor(x => x.Participants).NotNull();
+        // Bounded because each new name on either list becomes a roster entry of its own: an
+        // unbounded list is one request writing an unbounded number of people into the roster.
+        RuleFor(x => x.Participants!)
+            .Must(people => people.Count <= MaxPeople)
+            .When(x => x.Participants is not null)
+            .WithMessage($"A trip names at most {MaxPeople} participants.");
+        RuleFor(x => x.Proposers!)
+            .Must(people => people.Count <= MaxPeople)
+            .When(x => x.Proposers is not null)
+            .WithMessage($"A trip names at most {MaxPeople} proposers.");
+        // A section is a form's worth of answers, stored with the trip and sent with every read of
+        // it; the bound is far past any form and stops one trip from weighing what a registry does.
+        RuleFor(x => x.FieldData).Must(FitsASection).When(x => x.FieldData is not null)
+            .WithMessage($"Field data is limited to {MaxSectionLength} characters.");
+        RuleFor(x => x.Logistics).Must(FitsASection).When(x => x.Logistics is not null)
+            .WithMessage($"Logistics are limited to {MaxSectionLength} characters.");
+        RuleFor(x => x.Safety).Must(FitsASection).When(x => x.Safety is not null)
+            .WithMessage($"Safety is limited to {MaxSectionLength} characters.");
         // Proposers are optional (a trip needn't record who proposed it); a null list is
         // treated as empty. Each supplied entry still follows the shared identity rules.
         RuleForEach(x => x.Participants).SetValidator(new TripParticipantValidator());
         RuleForEach(x => x.Proposers).SetValidator(new TripParticipantValidator());
     }
 
+    /// <summary>The most people either list of a trip may name.</summary>
+    public const int MaxPeople = 500;
+
+    /// <summary>The longest one JSON section of a trip may be, as written.</summary>
+    public const int MaxSectionLength = 65_536;
+
     private static bool BeAnObject(JsonElement? value) => value?.ValueKind == JsonValueKind.Object;
+
+    private static bool FitsASection(JsonElement? value) =>
+        value is not { } section || section.GetRawText().Length <= MaxSectionLength;
 }
 
 /// <summary>Shared identity rules for both attendee and proposer entries.</summary>

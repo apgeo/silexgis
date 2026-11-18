@@ -83,6 +83,24 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         factory.Dispose();
     }
 
+    /// <summary>
+    /// Every registry statistic takes the same scope, so every one bounds the region the same way:
+    /// a name wider than regions are stored at is refused on each, not only on some.
+    /// </summary>
+    [Theory]
+    [InlineData("distribution?measure=surveyedLength")]
+    [InlineData("correlation?x=surveyedLength&y=depth")]
+    [InlineData("clustering?measures=surveyedLength")]
+    [InlineData("categories?measure=surveyedLength&category=caveType")]
+    [InlineData("regions?")]
+    public async Task An_over_long_region_is_refused_by_every_statistic(string query)
+    {
+        var response = await viewer.GetAsync($"/api/v1/stats/registry/{query}&region={new string('r', 201)}");
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, text);
+        System.Text.Json.JsonDocument.Parse(text).RootElement.GetProperty("code").GetString().ShouldBe("validation.failed");
+    }
+
     [Fact]
     public async Task A_thin_sector_is_joined_to_its_neighbour_and_an_empty_one_is_left_standing()
     {

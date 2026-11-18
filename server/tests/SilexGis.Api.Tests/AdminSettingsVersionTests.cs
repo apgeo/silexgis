@@ -90,6 +90,52 @@ public sealed class AdminSettingsVersionTests : IAsyncLifetime, IDisposable, ICl
         unversioned.StatusCode.ShouldBe(HttpStatusCode.OK, await unversioned.Content.ReadAsStringAsync());
     }
 
+    /// <summary>Each section with one yes/no, number or choice it carries.</summary>
+    public static TheoryData<string, string, string> SectionValues => new()
+    {
+        { "mail", "mail", "port" },
+        { "sms", "sms", "timeoutSeconds" },
+        { "security", "security", "twoFactorCodeLifetimeMinutes" },
+        { "protection", "protection", "describeLocationFreeCopies" },
+        { "import", "import", "photoClusterRadiusMeters" },
+        { "notifications", "notifications", "retentionDays" },
+        { "announcements", "announcements", "dailyPaidMessageCap" },
+        { "photoLibraries", "photo-libraries", "immichSuspended" },
+        { "sync", "sync", "stagedUploadRetentionDays" },
+        { "sync", "sync", "peopleDirectoryScope" },
+        { "surveyUploads", "survey-uploads", "firstModelOfCreatedCave" },
+        { "testData", "test-data", "enabled" },
+    };
+
+    /// <summary>
+    /// A section is saved whole, so a save that leaves a value out is refused as a validation
+    /// failure naming it and changes nothing — rather than saving the left-out number as 0 or the
+    /// switch as off. The same body with the value in it lands.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(SectionValues))]
+    public async Task A_section_save_that_leaves_a_value_out_is_refused_and_changes_nothing(
+        string section, string route, string member)
+    {
+        var read = await ReadAsync(admin);
+        var version = read["versions"]![section]!.GetValue<string>();
+        var body = read[section]!.DeepClone().AsObject();
+        body.ContainsKey(member).ShouldBeTrue($"the read of {section} carries {member}");
+        var incomplete = body.DeepClone().AsObject();
+        incomplete.Remove(member);
+
+        using var refused = await admin.PutAsJsonAsync($"/api/v1/admin/settings/{route}", incomplete);
+        var text = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, text);
+        var problem = JsonNode.Parse(text)!;
+        problem["code"]!.GetValue<string>().ShouldBe("validation.failed", text);
+        problem["errors"]!.AsObject().Select(e => e.Key.ToLowerInvariant()).ShouldContain(member.ToLowerInvariant(), text);
+        (await ReadAsync(admin))["versions"]![section]!.GetValue<string>().ShouldBe(version);
+
+        using var whole = await admin.PutAsJsonAsync($"/api/v1/admin/settings/{route}", body);
+        whole.StatusCode.ShouldBe(HttpStatusCode.OK, await whole.Content.ReadAsStringAsync());
+    }
+
     /// <summary>
     /// The lost update the version exists for: two administrators open the same section, the
     /// first saves a change, and the second's save from the page they opened earlier is refused

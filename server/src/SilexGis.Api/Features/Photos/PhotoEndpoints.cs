@@ -58,6 +58,7 @@ public static class PhotoEndpoints
         var photos = api.MapGroup("/photos").WithTags("Photos");
 
         photos.MapGet("/", ListAsync)
+            .WithValidation<PhotoQuery>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(

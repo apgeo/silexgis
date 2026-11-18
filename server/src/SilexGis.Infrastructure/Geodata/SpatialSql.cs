@@ -33,6 +33,18 @@ namespace SilexGis.Infrastructure.Geodata;
 public static class SpatialSql
 {
     /// <summary>
+    /// Whether a database error is the working system refusing to place a position: PostGIS raises
+    /// it, as an internal error whose text starts with "transform", for a point too far outside the
+    /// region a projected system covers. That is a statement about the caller's window, not a fault.
+    /// </summary>
+    public static bool IsProjectionFailure(Npgsql.PostgresException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception.SqlState == Npgsql.PostgresErrorCodes.InternalError
+            && exception.MessageText.StartsWith("transform", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// A geometry expression transformed into the installation's working system.
     ///
     /// <para>

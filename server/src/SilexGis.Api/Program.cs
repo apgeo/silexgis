@@ -140,11 +140,15 @@ try
         // members, as it must be for a document that went through a jsonb column. A polymorphic
         // object that names no shape at all is a malformed body rather than a server fault.
         options.SerializerOptions.AllowOutOfOrderMetadataProperties = true;
+        // A record saved whole (a settings section) is held to every yes/no and number being
+        // sent, so a member left out is refused rather than saved as false or 0.
         options.SerializerOptions.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
             System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
-                options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-                SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
-            SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects);
+                System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
+                    options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+                    SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
+                SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects),
+            SilexGis.Api.Common.CompleteBodies.RequireValueMembers);
     });
 
     // A request the framework cannot bind — a body naming a word an enum does not have, a null

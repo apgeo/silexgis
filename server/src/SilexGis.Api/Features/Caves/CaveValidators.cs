@@ -28,6 +28,20 @@ public sealed class CaveWriteRequestValidator : AbstractValidator<CaveWriteReque
         RuleFor(x => x.Depth).GreaterThanOrEqualTo(0).When(x => x.Depth.HasValue);
         RuleFor(x => x.Volume).GreaterThanOrEqualTo(0).When(x => x.Volume.HasValue);
         RuleFor(x => x.Area).GreaterThanOrEqualTo(0).When(x => x.Area.HasValue);
+        RuleFor(x => x.SurveyedLength).LessThanOrEqualTo(CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.EstimatedLength).LessThanOrEqualTo(CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.Depth).LessThanOrEqualTo(CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.Volume).LessThanOrEqualTo(CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.Area).LessThanOrEqualTo(CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.RealExtension).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.ProjectedExtension).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.PositiveDepth).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.NegativeDepth).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.PotentialDepth).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.ShowCaveLength).InclusiveBetween(-CaveMetricLimits.MaxMeasure, CaveMetricLimits.MaxMeasure);
+        RuleFor(x => x.RamificationIndex)
+            .InclusiveBetween(-CaveMetricLimits.MaxRamificationIndex, CaveMetricLimits.MaxRamificationIndex);
+        RuleFor(x => x.Altitude).InclusiveBetween(CaveMetricLimits.MinAltitude, CaveMetricLimits.MaxAltitude);
         RuleFor(x => x.Visibility).IsInEnum();
         RuleFor(x => x.ExplorationStatus).IsInEnum();
         RuleFor(x => x.Properties)

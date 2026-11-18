@@ -54,6 +54,7 @@ public sealed class EntranceWriteRequestValidator : AbstractValidator<EntranceWr
         RuleFor(x => x.Description).MaximumLength(2000);
         RuleFor(x => x.EntranceTypeId).GreaterThan(0);
         RuleFor(x => x.PositionQuality).IsInEnum();
+        RuleFor(x => x.Altitude).InclusiveBetween(CaveMetricLimits.MinAltitude, CaveMetricLimits.MaxAltitude);
         RuleFor(x => x.Geom).NotNull();
         RuleFor(x => x.Geom.Type).Equal("Point").When(x => x.Geom is not null);
         RuleFor(x => x.Geom.Coordinates).Must(c => c is { Length: 2 or 3 })

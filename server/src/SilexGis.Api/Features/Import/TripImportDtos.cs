@@ -272,6 +272,32 @@ public sealed class TripImportSessionWriteRequestValidator : AbstractValidator<T
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new TripImportOptionsValidator()!);
         RuleFor(x => x.Decisions).NotNull();
+        TripImportReviewRules.Apply(this, x => x.Decisions);
+    }
+}
+
+/// <summary>How much one trip review may carry, and how each decision in it is held.</summary>
+internal static class TripImportReviewRules
+{
+    /// <summary>
+    /// The most decisions, and the most lines chosen, one review may carry: a row each of a sheet
+    /// far longer than any club's trip history. The review is stored and read back whole on every
+    /// save, so an unbounded one would make every later save of it unbounded too.
+    /// </summary>
+    public const int MaxEntries = 200_000;
+
+    public static void Apply<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<KeyValuePair<string, TripImportDecision>>?>> decisions)
+    {
+        validator.RuleFor(decisions)
+            .Must(d => d is null || d.Count() <= MaxEntries)
+            .WithMessage($"A review holds at most {MaxEntries} decisions.");
+        validator.RuleForEach(decisions).ChildRules(entry =>
+        {
+            entry.RuleFor(e => e.Key).MaximumLength(40);
+            entry.RuleFor(e => e.Value.Action).IsInEnum().When(e => e.Value is not null);
+        });
     }
 }
 
@@ -290,5 +316,9 @@ public sealed class TripImportCommitRequestValidator : AbstractValidator<TripImp
         RuleFor(x => x.Options).NotNull().SetValidator(new TripImportOptionsValidator()!);
         RuleFor(x => x.Lines).NotNull().Must(l => l is null || l.Count > 0)
             .WithMessage("Choose at least one row to record.");
+        RuleFor(x => x.Lines)
+            .Must(l => l is null || l.Count <= TripImportReviewRules.MaxEntries)
+            .WithMessage($"A confirmation chooses at most {TripImportReviewRules.MaxEntries} rows.");
+        TripImportReviewRules.Apply(this, x => x.Decisions);
     }
 }
