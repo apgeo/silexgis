@@ -57,7 +57,8 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
 
     /// <summary>
     /// Validators registered for a body or query object that hold no rule at all, by type name:
-    /// a validator with no rules makes a route look covered while passing everything.
+    /// a validator with no rules makes a route look covered while passing everything. A body made
+    /// only of switches (every member a bool) has nothing to refuse and is not counted.
     /// </summary>
     private static readonly HashSet<string> KnownEmptyValidators = new(StringComparer.Ordinal)
     {
@@ -150,7 +151,8 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
         using var scope = factory.Services.CreateScope();
         var types = BodyRoutes().Where(r => r.Validated is not null).Select(r => r.BodyType)
             .Concat(QueryObjectRoutes().Select(r => r.QueryType))
-            .Distinct();
+            .Distinct()
+            .Where(t => !t.GetProperties().All(p => p.PropertyType == typeof(bool)));
         var empty = new HashSet<string>(StringComparer.Ordinal);
         foreach (var type in types)
         {
