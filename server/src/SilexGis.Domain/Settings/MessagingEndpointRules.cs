@@ -79,6 +79,22 @@ public static class MessagingEndpointRules
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
         {
             var b = address.GetAddressBytes();
+
+            // Addresses that carry an IPv4 address inside them reach that IPv4 address: through a
+            // NAT64 gateway (64:ff9b::/96), a 6to4 relay (2002::/16) or the old IPv4-compatible
+            // form (::a.b.c.d). They are judged by the address they carry, or 64:ff9b::a9fe:a9fe
+            // would be a way to the cloud metadata service that the IPv4 check never sees. The
+            // local-use NAT64 prefix (64:ff9b:1::/48) is a network's own translator by definition.
+            if (EmbeddedIPv4(b) is { } embedded)
+            {
+                return IsInternal(embedded);
+            }
+
+            if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b[4] == 0x00 && b[5] == 0x01)
+            {
+                return true;
+            }
+
             return address.Equals(IPAddress.IPv6Any)
                 || address.IsIPv6LinkLocal
                 || address.IsIPv6SiteLocal
@@ -88,5 +104,35 @@ public static class MessagingEndpointRules
 
         // Anything that is neither IPv4 nor IPv6 is not a gateway on the internet.
         return true;
+    }
+
+    /// <summary>
+    /// The IPv4 address an IPv6 address carries under one of the translation prefixes, or null.
+    /// The unspecified and loopback addresses share the IPv4-compatible prefix and are left to
+    /// their own checks.
+    /// </summary>
+    private static IPAddress? EmbeddedIPv4(byte[] b)
+    {
+        // 64:ff9b::/96 — the well-known NAT64 prefix, the IPv4 address in the last four bytes.
+        if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B && b.AsSpan(4, 8).IndexOfAnyExcept((byte)0) < 0)
+        {
+            return new IPAddress(b.AsSpan(12, 4));
+        }
+
+        // 2002::/16 — 6to4, the IPv4 address in the two groups after the prefix.
+        if (b[0] == 0x20 && b[1] == 0x02)
+        {
+            return new IPAddress(b.AsSpan(2, 4));
+        }
+
+        // ::a.b.c.d — IPv4-compatible, deprecated but still parsed and routed by some stacks.
+        if (b.AsSpan(0, 12).IndexOfAnyExcept((byte)0) < 0
+            && b.AsSpan(12, 4).IndexOfAnyExcept((byte)0) >= 0
+            && !(b[12] == 0 && b[13] == 0 && b[14] == 0 && b[15] == 1))
+        {
+            return new IPAddress(b.AsSpan(12, 4));
+        }
+
+        return null;
     }
 }
