@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet publish src/SilexGis.Api -c Release -o /app/publish
@@ -7,7 +7,7 @@ RUN dotnet publish src/SilexGis.Api -c Release -o /app/publish
 # The program that cuts a region out of a planet build when an administrator downloads the
 # installation's own basemap: one static binary, pinned by version and by the checksum its release
 # publishes, so a changed download fails the build instead of running.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS pmtiles
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS pmtiles
 ARG TARGETARCH
 ARG PMTILES_VERSION=1.31.2
 RUN set -eu; \
