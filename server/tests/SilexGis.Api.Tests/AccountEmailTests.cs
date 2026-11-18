@@ -73,6 +73,21 @@ public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await reauthenticated.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    // Confirming rotates the security stamp; the browser that confirmed stays signed in rather
+    // than finding itself on the sign-in page at its next page load.
+    [Fact]
+    public async Task Confirming_a_change_keeps_the_browser_signed_in()
+    {
+        (await RequestChangeAsync(TargetEmail)).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var confirm = await me.PostAsJsonAsync(
+            "/api/v1/me/email/confirm", new { token = await ChangeTokenAsync(TargetEmail) });
+        confirm.StatusCode.ShouldBe(HttpStatusCode.OK, await confirm.Content.ReadAsStringAsync());
+
+        var authorize = await me.GetAsync(AuthHelper.AuthorizeUrl());
+        authorize.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        authorize.Headers.Location!.ToString().ShouldContain("code=");
+    }
+
     [Fact]
     public async Task The_warning_to_the_old_address_carries_the_installation_address()
     {

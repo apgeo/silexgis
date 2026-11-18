@@ -68,6 +68,7 @@ public static class MeCredentialEndpoints
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult, ProblemHttpResult>> ChangeUsernameAsync(
         UsernameChangeRequest request,
         ClaimsPrincipal principal,
+        HttpContext http,
         UserManager<SilexGisUser> userManager,
         SignInManager<SilexGisUser> signInManager,
         SilexGisDbContext db,
@@ -95,6 +96,7 @@ public static class MeCredentialEndpoints
             return ApiProblems.BadRequest("me.username_taken", "That name is already in use.");
         }
 
+        var browser = await BrowserSignIn.ReadAsync(http);
         var result = await userManager.SetUserNameAsync(user, username);
         if (!result.Succeeded)
         {
@@ -103,7 +105,7 @@ public static class MeCredentialEndpoints
                 : IdentityProblems.From(result, "me.username_invalid");
         }
 
-        await signInManager.RefreshSignInAsync(user);
+        await browser.RenewAsync(signInManager, user);
 
         return TypedResults.Ok(MeMapping.ToDto(
             user, await MeEndpoints.AddressesAsync(db, user.Id, ct), tokens,

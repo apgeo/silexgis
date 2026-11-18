@@ -139,6 +139,7 @@ public static class MeEmailEndpoints
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult, ProblemHttpResult>> ConfirmAsync(
         EmailConfirmRequest request,
         ClaimsPrincipal principal,
+        HttpContext http,
         UserManager<SilexGisUser> userManager,
         SignInManager<SilexGisUser> signInManager,
         SilexGisDbContext db,
@@ -166,6 +167,7 @@ public static class MeEmailEndpoints
         // address no longer equals the address, so it would read as a chosen handle and the old
         // address would be shown as the account's name wherever it has no display name.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var browser = await BrowserSignIn.ReadAsync(http);
 
         // One token type per situation: a pending change carries a token bound to the new
         // address, while a never-confirmed account is confirming the address it already has.
@@ -217,9 +219,9 @@ public static class MeEmailEndpoints
         }
 
         // Changing the address rotates the security stamp, which invalidates the sign-in cookie
-        // the authorization endpoint needs to issue every future token. Without this the user is
-        // quietly signed out when the stamp is next revalidated.
-        await signInManager.RefreshSignInAsync(user);
+        // the authorization endpoint needs to issue every future token; the cookie read before
+        // the change is issued again under the new stamp.
+        await browser.RenewAsync(signInManager, user);
 
         return TypedResults.Ok(MeMapping.ToDto(
             user, await MeEndpoints.AddressesAsync(db, user.Id, ct), tokens,
