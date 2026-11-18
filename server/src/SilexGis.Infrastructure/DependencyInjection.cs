@@ -294,10 +294,14 @@ public static class DependencyInjection
         services.AddOptions<Sms.SmsGatewayOptions>().BindConfiguration(Sms.SmsGatewayOptions.SectionName);
         // Redirects are not followed: a gateway that answers "go over there" would otherwise
         // carry the request, its authorisation header included, to an address nobody checked.
+        // No proxy either: the internal-address check runs on the connection the handler opens,
+        // and through a proxy that is the proxy's address rather than the gateway's — so a public
+        // proxy would carry a request to a private address straight past it.
         services.AddHttpClient(Sms.HttpSmsSender.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(sp => new SocketsHttpHandler
             {
                 AllowAutoRedirect = false,
+                UseProxy = false,
                 ConnectCallback = sp.GetRequiredService<IOptions<Sms.SmsGatewayOptions>>().Value.AllowInternalAddresses
                     ? null
                     : Sms.SmsGatewayAddress.ConnectToPublicAddressAsync,
@@ -384,6 +388,8 @@ public static class DependencyInjection
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddScoped<ContentIntake>();
+        services.Configure<UploadedGeodataOptions>(
+            configuration.GetSection(UploadedGeodataOptions.SectionName));
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
         services.AddOptions<GeoreferencedMapOptions>()
