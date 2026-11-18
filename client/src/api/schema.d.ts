@@ -3660,7 +3660,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged geofile list; visibility-filtered. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the geofile world's conditions, applied after visibility and counted over the narrowed set. */
+        /** Paged geofile list; visibility-filtered. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the geofile world's conditions, applied after visibility and counted over the narrowed set. `ready=true` keeps only the imported files — the ones the map can draw — and counts only those. */
         get: operations["geofileList"];
         put?: never;
         /** Uploads a vector file (multipart) and queues the server-side import. */
@@ -5753,7 +5753,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the georeferenced map world's conditions, applied after visibility and counted over the narrowed set. */
+        /** Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. `filter` (a filter document as a link token) or `savedFilterId` narrows it by the georeferenced map world's conditions, applied after visibility and counted over the narrowed set. `ready=true` keeps only the maps that are ready to draw, and counts only those. */
         get: operations["georeferencedMapList"];
         put?: never;
         /** Uploads a georeferenced raster (GeoTIFF) and queues COG normalization, or a map sheet as a portable document (.pdf) and queues drawing it: placed at once when the document carries its own georeferencing, otherwise left `unplaced` for a placement. */
@@ -29131,6 +29131,7 @@ export interface operations {
                 search?: string;
                 filter?: string;
                 savedFilterId?: string;
+                ready?: boolean;
             };
             header?: never;
             path?: never;
@@ -34908,6 +34909,7 @@ export interface operations {
                 caveFeatureId?: string;
                 filter?: string;
                 savedFilterId?: string;
+                ready?: boolean;
             };
             header?: never;
             path?: never;

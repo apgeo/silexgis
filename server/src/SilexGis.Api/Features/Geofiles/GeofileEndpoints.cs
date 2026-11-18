@@ -33,7 +33,8 @@ public static class GeofileEndpoints
             .WithSummary(
                 "Paged geofile list; visibility-filtered. `filter` (a filter document as a link token) or "
                 + "`savedFilterId` narrows it by the geofile world's conditions, applied after visibility "
-                + "and counted over the narrowed set.");
+                + "and counted over the narrowed set. `ready=true` keeps only the imported files — the ones "
+                + "the map can draw — and counts only those.");
         geofiles.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single geofile.");
         geofiles.MapGet("/{id:guid}/status", GetStatusAsync)
@@ -193,7 +194,8 @@ public static class GeofileEndpoints
         string? search,
         CancellationToken ct,
         string? filter = null,
-        Guid? savedFilterId = null)
+        Guid? savedFilterId = null,
+        bool? ready = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -215,6 +217,14 @@ public static class GeofileEndpoints
         {
             var pattern = $"%{search}%";
             query = query.Where(g => EF.Functions.ILike(EF.Functions.Unaccent(g.Name), EF.Functions.Unaccent(pattern)));
+        }
+
+        // The map offers every file it can draw as a layer. Filtering here, before the count and the
+        // page, is what lets it walk the pages and get them all; a page taken first and filtered
+        // afterwards stopped at however many of the newest uploads fitted on it.
+        if (ready == true)
+        {
+            query = query.Where(g => g.ImportStatus == GeofileImportStatus.Imported);
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);
