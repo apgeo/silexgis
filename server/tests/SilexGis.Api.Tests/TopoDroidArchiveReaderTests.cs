@@ -105,6 +105,19 @@ public sealed class TopoDroidArchiveReaderTests
     }
 
     [Fact]
+    public async Task An_archive_stating_millions_of_entries_is_refused_as_too_large_before_it_is_opened()
+    {
+        // Two real entries, and an end record that states five million: the shape a crowded
+        // archive's directory is judged by before the runtime builds an object for each record.
+        // Opening it would only fail as unreadable; the count is what refuses it, and names why.
+        var bytes = StatingEntries(Zip(("manifest", Manifest), ("survey.sql", Dump)), 5_000_000);
+
+        var refusal = await Should.ThrowAsync<SurveyPipelineException>(
+            TopoDroidArchiveReader.ReadAsync(new MemoryStream(bytes), Cap, CancellationToken.None));
+        refusal.Code.ShouldBe(SurveyPipelineFailures.ArchiveTooLarge);
+    }
+
+    [Fact]
     public async Task A_decompression_bomb_is_refused_before_it_is_inflated()
     {
         // Eight megabytes of one repeated byte compress to a few kilobytes: far past any ratio a
@@ -146,6 +159,47 @@ public sealed class TopoDroidArchiveReaderTests
     }
 
     /// <summary>A ZIP archive with these entries, in this order.</summary>
+    /// <summary>
+    /// The archive with its end record replaced by a zip64 one stating <paramref name="entries"/>
+    /// entries over the same central directory.
+    /// </summary>
+    private static byte[] StatingEntries(byte[] zip, long entries)
+    {
+        var end = zip.Length - 22;
+        while (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(zip.AsSpan(end)) != 0x06054b50)
+        {
+            end--;
+        }
+
+        var directorySize = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(zip.AsSpan(end + 12));
+        var directoryOffset = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(zip.AsSpan(end + 16));
+
+        var tail = new byte[56 + 20 + 22];
+        var zip64 = tail.AsSpan(0, 56);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(zip64, 0x06064b50);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(zip64[4..], 44);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(zip64[12..], 45);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(zip64[14..], 45);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(zip64[24..], (ulong)entries);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(zip64[32..], (ulong)entries);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(zip64[40..], directorySize);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(zip64[48..], directoryOffset);
+
+        var locator = tail.AsSpan(56, 20);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(locator, 0x07064b50);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(locator[8..], (ulong)end);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(locator[16..], 1);
+
+        var classic = tail.AsSpan(76, 22);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(classic, 0x06054b50);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(classic[8..], ushort.MaxValue);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(classic[10..], ushort.MaxValue);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(classic[12..], uint.MaxValue);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(classic[16..], uint.MaxValue);
+
+        return [.. zip.AsSpan(0, end), .. tail];
+    }
+
     internal static byte[] Zip(params (string Name, string Text)[] entries)
     {
         using var memory = new MemoryStream();

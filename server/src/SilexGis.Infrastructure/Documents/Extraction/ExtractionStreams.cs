@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Documents;
+
 namespace SilexGis.Infrastructure.Documents.Extraction;
 
 /// <summary>
@@ -105,6 +107,29 @@ internal static class ExtractionStreams
     /// far below what a container could otherwise ask for.
     /// </summary>
     public const int MaxBytes = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// More entries than any office or OpenDocument package plausibly holds: a few dozen parts,
+    /// a few thousand for a large workbook. Shared by the upload's format sniffing and the
+    /// readers, so a package one of them would open is a package the other opens too.
+    /// </summary>
+    public const int MaxPackageEntries = 10_000;
+
+    /// <summary>
+    /// Refuses a package that states more entries than <see cref="MaxPackageEntries"/>, while it
+    /// is still bytes in a stream. Opening it would build an object for every record of its
+    /// central directory — the cost an archive of millions of empty entries is made to impose —
+    /// before any ceiling on its parts could be consulted.
+    /// </summary>
+    /// <exception cref="ContentTooLargeException">The package states too many entries.</exception>
+    public static void RefuseCrowdedPackage(Stream package)
+    {
+        if (ZipEntryCount.Exceeds(package, MaxPackageEntries))
+        {
+            throw new ContentTooLargeException(
+                $"The package holds more than {MaxPackageEntries:N0} parts, more than a document has.");
+        }
+    }
 
     /// <summary>
     /// The stream's contents, up to <see cref="MaxBytes"/>, read from where it stands, together

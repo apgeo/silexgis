@@ -75,8 +75,7 @@ public sealed class ArchiveExpansionHandler(
         var guard = new ExpansionGuard(
             new ArchiveLimits(
                 options.Value.MaxArchiveEntries,
-                options.Value.MaxArchiveExpandedBytes,
-                options.Value.MaxArchiveCompressionRatio),
+                options.Value.MaxArchiveExpandedBytes),
             options.Value.MaxUploadBytes);
 
         try
@@ -119,6 +118,18 @@ public sealed class ArchiveExpansionHandler(
         [EnumeratorCancellation] CancellationToken ct)
     {
         await using var content = await fileStore.OpenReadAsync(storagePath, ct);
+
+        // Refused while the archive is still bytes on disk: opening it builds an object for
+        // every record of its central directory, so a cap consulted afterwards has already paid
+        // for an archive of millions of empty entries. The record count includes the folder
+        // entries the walk below skips, hence the allowance of one folder record per file
+        // before an archive is called implausible here; the walk still holds files to the cap.
+        if (ZipEntryCount.Exceeds(content, 2L * guard.Limits.MaxEntries))
+        {
+            guard.Abandon(ArchiveExpansionRules.TooManyEntriesCode);
+            yield break;
+        }
+
         using var archive = new ZipArchive(content, ZipArchiveMode.Read);
 
         foreach (var entry in archive.Entries)
@@ -150,7 +161,7 @@ public sealed class ArchiveExpansionHandler(
                 _ => Task.FromResult<Stream>(new MeasuringStream(
                     captured.Open(),
                     guard.CapFor(captured.Length),
-                    read => guard.AfterEntry(captured.CompressedLength, read),
+                    guard.AfterEntry,
                     guard.OverflowedCap)));
         }
     }
@@ -203,13 +214,20 @@ public sealed class ArchiveExpansionHandler(
         public void OverflowedCap() => Abandon(TooLargeOrBomb());
 
         /// <summary>Called once an entry's stream has been read and closed.</summary>
-        public void AfterEntry(long compressedBytes, long uncompressedBytes)
+        /// <remarks>
+        /// Only the whole archive's budget is checked here, not how far the entry expanded
+        /// relative to its compressed size. By now the entry is already stored, and an entry
+        /// that lied about its length was cut off by its cap while it was being read, so what a
+        /// ratio test would still catch is an honest entry that compresses unusually well — a
+        /// nearly blank uncompressed scan, a long log of repeated lines. Abandoning the rest of
+        /// a genuine club archive for that would protect nothing.
+        /// </remarks>
+        public void AfterEntry(long uncompressedBytes)
         {
             expandedBytes += uncompressedBytes;
-            if (ArchiveExpansionRules.AbandonReason(
-                    Limits, expandedBytes, compressedBytes, uncompressedBytes) is { } reason)
+            if (ArchiveExpansionRules.TotalExceeded(Limits, expandedBytes))
             {
-                Abandon(reason);
+                Abandon(ArchiveExpansionRules.TooLargeCode);
             }
         }
 
