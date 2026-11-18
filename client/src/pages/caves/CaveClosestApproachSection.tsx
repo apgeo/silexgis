@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Card, Col, Empty, Row, Statistic, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '../../api/client.ts';
 import { useClosestApproach } from '../../api/hooks.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
@@ -59,7 +60,7 @@ const OTHER_CAVE_SCOPES: readonly SelectorScope[] = [
 export default function CaveClosestApproachSection({ caveId }: CaveClosestApproachSectionProps) {
   const { t } = useTranslation();
   const [other, setOther] = useState<string | undefined>();
-  const { data, isLoading, isError } = useClosestApproach(caveId, other);
+  const { data, isLoading, isError, error } = useClosestApproach(caveId, other);
 
   // A cave is not offered as its own other end. Only a courtesy: which pairs are measured at all is
   // the server's decision, made on both caves, whatever this list happened to offer.
@@ -83,7 +84,7 @@ export default function CaveClosestApproachSection({ caveId }: CaveClosestApproa
         />
       </div>
 
-      {other && <Body data={data} isError={isError} isLoading={isLoading} />}
+      {other && <Body data={data} isError={isError} error={error} isLoading={isLoading} />}
       {!other && (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -98,10 +99,18 @@ export default function CaveClosestApproachSection({ caveId }: CaveClosestApproa
 interface BodyProps {
   data: ReturnType<typeof useClosestApproach>['data'];
   isError: boolean;
+  error: unknown;
   isLoading: boolean;
 }
 
-function Body({ data, isError, isLoading }: BodyProps) {
+/**
+ * The refusal for a pair whose surveys are too large to measure against each other in one request.
+ * Only ever sent after both caves passed the server's gate, so saying it reveals nothing the
+ * reader could not already see.
+ */
+const TOO_COSTLY_CODE = 'cave.closest_approach_too_costly';
+
+function Body({ data, isError, error, isLoading }: BodyProps) {
   const { t } = useTranslation();
 
   const unitMetres = t('closestApproach.unitMetres');
@@ -123,6 +132,18 @@ function Body({ data, isError, isLoading }: BodyProps) {
   // A cave this reader may not place, one they may not read, and one that never existed all arrive
   // here identically, and are said in one sentence for the same reason the server answers them in
   // one way: distinguishing them would say which caves are being kept from whom.
+  if (isError && error instanceof ApiError && error.code === TOO_COSTLY_CODE) {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginTop: 16 }}
+        title={t('closestApproach.tooCostly')}
+        data-testid="closest-approach-too-costly"
+      />
+    );
+  }
+
   if (isError) {
     return (
       <Alert

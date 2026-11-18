@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ClosestApproach } from '../../api/hooks.ts';
 import {
   getClosestApproachLine,
@@ -59,11 +60,13 @@ const measured: ClosestApproach = {
 async function showPicked(result: {
   data?: ClosestApproach;
   isError?: boolean;
+  error?: unknown;
   isLoading?: boolean;
 }) {
   approachSpy.mockReturnValue({
     data: result.data,
     isError: result.isError ?? false,
+    error: result.error ?? null,
     isLoading: result.isLoading ?? false,
   });
 
@@ -221,5 +224,12 @@ describe('CaveClosestApproachSection', () => {
     await showPicked({ isError: true });
     expect(screen.queryByTestId('closest-approach')).toBeNull();
     expect(screen.getByText(/may see exactly where both are/)).toBeTruthy();
+    expect(screen.queryByTestId('closest-approach-too-costly')).toBeNull();
+  });
+
+  it('says the surveys are too large to measure when the server stopped the measurement', async () => {
+    await showPicked({ isError: true, error: new ApiError(422, 'cave.closest_approach_too_costly') });
+    expect(screen.getByTestId('closest-approach-too-costly')).toBeTruthy();
+    expect(screen.queryByText(/may see exactly where both are/)).toBeNull();
   });
 });

@@ -4544,6 +4544,7 @@
     }
   },
   "surveyModels": {
+    "heightlessNudge": "If this file is in local coordinates, give the altitude of its zero level. Without it the survey is still drawn, but its heights stay relative to that point: overburden, spring levels and the vertical gap to other caves will not be computed until it is declared.",
     "uploadPointCloud": "Upload point cloud",
     "scanProcessing": "The scan is being tiled for the 3D view. Its progress is on the survey's status page.",
     "scanFailed": "The scan could not be processed.",
@@ -8096,8 +8097,10 @@
     "between": "From {{from}} to {{to}}.",
     "horizontalIsOfTheSameLine": "The horizontal and vertical figures are the two parts of that same shortest line, not the shortest distance across and the shortest distance down, which are different pairs of points.",
     "unavailable": "No distance for this pair",
+    "tooCostly": "These two caves' surveys are too large to measure against each other in one request.",
     "unavailableWhy": "A distance between two caves places each of them from the other, so it is given only to a reader who may see exactly where both are.",
     "absence": {
+      "altitudesRelative": "At least one of these two caves was surveyed without the altitude of its zero point, so its heights are only relative to that point and the vertical gap between them cannot be measured. Declare that altitude on its survey to compare them.",
       "noLineWork": "At least one of these two caves has no line work to measure from.",
       "noAltitudes": "At least one of these two caves was drawn in plan and recorded no depths, so there is no honest distance in three dimensions."
     },
@@ -8602,6 +8605,7 @@
     }
   },
   "hypsometry": {
+    "altitudesRelative": "The survey was uploaded without the altitude of its zero point: these heights are relative to that point, not above sea level, and spring levels are not shown.",
     "caveTitle": "Passage by height",
     "areaTitle": "Entrances by height",
     "loading": "Measuring…",
@@ -8650,9 +8654,15 @@
     "dolineModeElsewhere": "The comparison of depression long axes against fault strikes is asked of an area, on that area's own page.",
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
+    "truncatedNearest": "More fracture traces lie within reach than one comparison takes; the rose is built from the nearest of them.",
+    "truncatedArea": "This area holds more fracture traces than one comparison takes; the rose is built from part of them.",
+    "unmeasuredDolines_one": "{{count}} outline could not be measured (it crosses itself or has no width) and is left out of the rose.",
+    "unmeasuredDolines": "{{count}} outlines could not be measured (they cross themselves or have no width) and are left out of the rose.",
     "dolineRose": "Depression long axes ({{count}} outlines)"
   },
   "overburden": {
+    "altitudesRelativeTitle": "Heights are relative only",
+    "altitudesRelativeReason": "This cave's survey was uploaded without the altitude of its zero point, so its heights cannot be compared with the terrain. Declare that altitude on the survey to measure the overburden.",
     "title": "Rock overhead",
     "loading": "Measuring the rock overhead…",
     "nothingMeasured": "This cave has no line work to measure along, so there is nowhere to ask how much rock is overhead.",
@@ -8738,6 +8748,7 @@
     "disagreesWithRecord": "differs from the computed figure",
     "unitMetres": "{{value}} m",
     "notMeasured": "—",
+    "altitudesRelative": "The survey was uploaded without the altitude of its zero point, so its heights are relative to that point and cannot be set against the entrances' altitudes: total depth and height are not measured. Declare that altitude on the survey to measure them.",
     "noSurveyAltitudes": "The survey carries no altitudes, so depth and height cannot be measured from it. A plan drawing is not a cave of no depth.",
     "explained": "Depth is measured from the highest entrance down to the lowest point the survey reaches, and height from the lowest entrance up to the highest. The resurgence level is the lowest spring cave entrance in the area that contains this cave, among those you may place; potential depth is the highest entrance less that level."
   },

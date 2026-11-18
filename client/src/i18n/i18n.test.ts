@@ -413,6 +413,7 @@ type ClosestApproachAbsent = Exclude<ClosestApproach['absence'], 'none'>;
 const closestApproachAbsences: Record<ClosestApproachAbsent, true> = {
   noLineWork: true,
   noAltitudes: true,
+  altitudesRelative: true,
 };
 
 /**
