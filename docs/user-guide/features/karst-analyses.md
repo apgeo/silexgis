@@ -216,8 +216,9 @@ categories — are described in
 ## Where caves might be
 
 Also under **Statistics**: **Cave potential**, where a model weighs the shape of the ground, the
-rock and what has been recorded into a map of more and less favourable ground over an area. It
-has its own page: [Cave potential](cave-potential.md).
+rock and what has been recorded into a map of more and less favourable ground over an area — by
+its author's judgment, or by counting where the known entrances are. It has its own page:
+[Cave potential](cave-potential.md).
 
 ---
 

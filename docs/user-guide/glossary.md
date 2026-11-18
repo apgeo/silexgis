@@ -32,6 +32,10 @@ a page, a passage of text, a moment in a recording, a survey station, a waypoint
 **Announcement** — One line sent to every member of a caving group who holds an account, each
 in the way they chose. → [People and clubs](features/people-and-clubs.md#announcing-to-a-club)
 
+**AUC** — The area under a *rate curve*, between 0 and 1: about 0.5 is a map that ranks no better
+than chance. It belongs to one area, one cell size, one draw of kept-back entrances and one
+account's rights, and is not an accuracy. → [Cave potential](features/cave-potential.md#what-the-auc-does-not-mean)
+
 **Audit trail** — The installation-wide record of what happened. Distinct from a record's own
 **history**. → [History and audit](features/history-and-audit.md)
 
@@ -51,8 +55,10 @@ across cave types, or across rock types, drawing one box per group. → [Measure
 statistics](features/measurements-and-statistics.md#the-whole-registry-explored)
 
 **Cave-potential model** — A saved judgment of which evidence suggests a cave and how much each
-kind counts: evidence layers, how each is scored, and their weights. It names no place. Run over an
-area, it gives a *favourability map*. → [Cave potential](features/cave-potential.md)
+kind counts: evidence layers, how each is scored, and their weights. A model can instead *learn
+from known entrances* (by *frequency ratio* or *weights of evidence*), and then holds only its
+layers, their class bounds and how the entrances are parted for testing. Either kind names no
+place. Run over an area, it gives a *favourability map*. → [Cave potential](features/cave-potential.md)
 
 **Caver** — An entry in the club's roster. **May or may not have an account.** A caver with no
 account can be named on trips but cannot be granted access or sent anything.
@@ -95,8 +101,14 @@ faults or sinkholes, entrance density). → [Cave potential](features/cave-poten
 
 **Favourability map** — What a cave-potential model gives when run over an area: every cell scored
 from 0 to 1 by the model's weights, on a date. A weighing of evidence, not a probability and not a
-finding. Who may read one is decided by what it was made from, not by its author.
-→ [Cave potential](features/cave-potential.md#the-map)
+finding. Who may read one is decided by what it was made from, not by its author. A map learnt
+from known entrances is stretched between its own least and most favourable cell, so its colours
+rank the ground of that one map. → [Cave potential](features/cave-potential.md#the-map)
+
+**Frequency ratio** — For one class of an evidence layer: its share of the cells holding a known
+entrance over its share of the ground. 1 is in proportion, above 1 more than its share, 0 none
+known. Also the method that draws a map from the sum of those ratios — an index, not a
+probability. → [Cave potential](features/cave-potential.md#frequency-ratio)
 
 **Filter** — A question about your records: which kinds of object, the conditions they must
 meet, and the order of the answer. Always answered with what the person asking may see — it narrows,
@@ -190,6 +202,12 @@ odometry, thinning, tiling); personal, a caving group's or the installation's.
 the feature list. Up to twelve; they follow your account.
 → [Search and filters](features/search-and-filters.md#quick-filters)
 
+**Rate curve** — How well a map learnt from known entrances ranks them: taking the ground from the
+most favourable cell down, the share of entrances found against the share of ground taken. The
+**success rate** is drawn against the entrances the model learnt from and always flatters; the
+**prediction rate** is drawn against entrances kept back and is the one to read. Summed up by the
+*AUC*. → [Cave potential](features/cave-potential.md#the-two-curves-and-the-auc)
+
 **Report layout** — A club-authored template for the Word document a trip generates. Can only
 ask for things the reader was already given.
 
@@ -258,6 +276,12 @@ One of the three things that decide access.
 **Watson's U²** — The test that compares a cave's passage directions with the strikes of the
 structural readings around it, giving a probability that the two come from one distribution.
 → [Geology](features/geology.md)
+
+**Weights of evidence** — A way of counting, from known entrances, what each class of an evidence
+layer says: a positive weight **W+**, a negative weight **W−**, their **contrast** C, and the
+*studentised* contrast C / s(C) that says how far the contrast can be trusted (above about 2, with
+some confidence). The map drawn from them is a probability per cell, too high where layers repeat
+each other. → [Cave potential](features/cave-potential.md#weights-of-evidence)
 
 **Work area** — Ground your club works, drawn as an area and nested, shown with what contains
 it so two passages of the same name are told apart. → [Work areas](features/work-areas.md)

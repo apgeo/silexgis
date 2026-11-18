@@ -35,6 +35,11 @@ pe care l-a ales.
 și ora la care se dă alarma dacă nimeni nu a anunțat.
 → [Liste de verificare și apelul de urgență](features/checklists-and-callout.md#apelul-de-urgență)
 
+**AUC** — Aria de sub o *curbă de rată*, între 0 și 1: în jur de 0,5 este o hartă care nu ordonează
+mai bine decât întâmplarea. Ține de o zonă, de o mărime a celulei, de o tragere a intrărilor
+păstrate și de drepturile unui cont, și nu este o acuratețe.
+→ [Potențial speologic](features/cave-potential.md#ce-nu-înseamnă-auc)
+
 **Carstificabil** — Se spune despre o litologie care se dizolvă destul de ușor ca să găzduiască
 peșteri: carbonatele, evaporitele și conglomeratul calcaros. Fixat de aplicație pentru fiecare
 clasă din lista ei. → [Geologie](features/geology.md#lista-litologiilor)
@@ -67,6 +72,12 @@ un obiect, un punct sau rezultatele unui filtru salvat, ori *în interiorul* une
 unui poligon lipit. Primește răspuns după pozițiile care îți sunt arătate, niciodată după poziții
 reținute de la tine.
 → [Căutare și filtre](features/search-and-filters.md#condiții-de-poziție)
+
+**Curbă de rată** — Cât de bine ordonează intrările cunoscute o hartă învățată din ele: luând
+terenul de la celula cea mai favorabilă în jos, partea din intrări găsită față de partea din teren
+luată. **Rata de succes** este trasată față de intrările din care a învățat modelul și flatează
+întotdeauna; **rata de predicție** este trasată față de intrările păstrate și este cea de citit.
+Rezumată de *AUC*. → [Potențial speologic](features/cave-potential.md#cele-două-curbe-și-auc)
 
 **Drumuire** — Linia topografică a unei peșteri, proiectată pe hartă și desenată la adâncime în
 3D. Fie încărcată, fie extrasă dintr-o topografie compilată.
@@ -144,8 +155,11 @@ le-a scris cineva (lungime, adâncime, volum…). La un **obiect de tip zonă**,
 calculată din contur (suprafață, circularitate, direcția axei lungi…).
 
 **Model de potențial speologic** — O judecată salvată despre ce dovezi sugerează o peșteră și cât
-contează fiecare: straturi de dovezi, felul în care este evaluat fiecare și ponderile lor. Nu
-numește niciun loc. Rulat pe o zonă, dă o *hartă de favorabilitate*.
+contează fiecare: straturi de dovezi, felul în care este evaluat fiecare și ponderile lor. Un model
+poate în schimb să *învețe din intrări cunoscute* (prin *raport de frecvență* sau *ponderile
+dovezilor*), și atunci conține doar straturile, limitele claselor lor și felul în care intrările
+sunt împărțite pentru testare. Niciunul nu numește vreun loc. Rulat pe o zonă, dă o *hartă de
+favorabilitate*.
 → [Potențial speologic](features/cave-potential.md)
 
 **Model de raport** — Un model scris de club pentru documentul Word pe care îl generează o tură.
@@ -164,6 +178,13 @@ un jurnal de suprafață. Apare la turele publicate în locul numelui întreg ș
 dintre *Obiect, Peșteră, Intrare de peșteră, Drumuire*.
 → [Noțiuni de bază](core-concepts.md#1-tot-ce-este-pe-hartă-este-un-obiect)
 
+**Ponderile dovezilor** — Un fel de a număra, din intrările cunoscute, ce spune fiecare clasă a
+unui strat de dovezi: o pondere pozitivă **W+**, una negativă **W−**, **contrastul** lor C și
+contrastul *studentizat* C / s(C), care spune cât de departe se poate avea încredere în contrast
+(peste aproximativ 2, cu oarecare încredere). Harta desenată din ele este o probabilitate pe
+celulă, prea mare acolo unde straturile se repetă între ele.
+→ [Potențial speologic](features/cave-potential.md#ponderile-dovezilor)
+
 **Profil de procesare** — Un set de setări cu nume după care rulează un pas de procesare a
 scanărilor (odometria HDMapping, rărirea, împărțirea în dale); personal, al unui grup de speologie
 sau al instalării. → [Profiluri de procesare](features/point-clouds.md#profiluri-de-procesare)
@@ -175,7 +196,9 @@ sau al instalării. → [Profiluri de procesare](features/point-clouds.md#profil
 **Hartă de favorabilitate** — Ce dă un model de potențial speologic rulat pe o zonă: fiecare
 celulă cu un scor de la 0 la 1 după ponderile modelului, la o dată. O cântărire a dovezilor, nu o
 probabilitate și nu o constatare. Cine o poate citi se hotărăște după ce a intrat în ea, nu de către
-autor. → [Potențial speologic](features/cave-potential.md#harta)
+autor. O hartă învățată din intrări cunoscute este întinsă între celula ei cea mai puțin favorabilă
+și cea mai favorabilă, deci culorile ei ordonează terenul acelei singure hărți.
+→ [Potențial speologic](features/cave-potential.md#harta)
 
 **Hartă de bază proprie** — Harta de bază vectorială a instalării: formele OpenStreetMap ale unei
 regiuni pe care a descărcat-o un administrator, servite numai de instalare.
@@ -191,6 +214,12 @@ hartă, estimată. Diferența dintre „mergi aici" și „caută pe versantul �
 contrazic comparațiile între ele. 0 înseamnă deloc; peste 0,1 se avertizează, nu se refuză
 niciodată. Nu spune nimic despre cât de corecte sunt judecățile.
 → [Potențial speologic](features/cave-potential.md#comparațiile-pe-perechi-și-raportul-de-consistență)
+
+**Raport de frecvență** — Pentru o clasă a unui strat de dovezi: partea ei din celulele care
+conțin o intrare cunoscută, raportată la partea ei din teren. 1 înseamnă proporțional, peste 1 mai
+mult decât partea ei, 0 nicio intrare cunoscută. Tot așa se numește metoda care desenează o hartă
+din suma acestor rapoarte — un indice, nu o probabilitate.
+→ [Potențial speologic](features/cave-potential.md#raportul-de-frecvență)
 
 **Regulă de detectare** — Ce decide că un punct numit `P. Ursilor` este propus ca peșteră numită
 *Ursilor*. → [Vocabulare](admin/vocabularies.md#configurare--reguli-de-detectare)

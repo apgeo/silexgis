@@ -218,8 +218,9 @@ categorii — sunt descrise în
 ## Unde ar putea fi peșteri
 
 Tot la **Statistici**: **Potențial speologic**, unde un model cântărește forma terenului, roca și
-ce a fost înregistrat într-o hartă a terenului mai mult sau mai puțin favorabil dintr-o zonă. Are
-pagina lui: [Potențial speologic](cave-potential.md).
+ce a fost înregistrat într-o hartă a terenului mai mult sau mai puțin favorabil dintr-o zonă — după
+judecata autorului lui, sau numărând unde se află intrările cunoscute. Are pagina lui:
+[Potențial speologic](cave-potential.md).
 
 ---
 

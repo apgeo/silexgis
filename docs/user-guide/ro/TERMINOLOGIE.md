@@ -499,6 +499,18 @@ deosebirea.
 | Asked for by · Written by | Cerut de · Scris de |
 | Show on the map | Arată pe hartă |
 | Less favourable · More favourable | Mai puțin favorabil · Mai favorabil |
+| Frequency ratio · Weights of evidence | Raport de frecvență · Ponderile dovezilor |
+| Learns from known entrances | Învață din intrări cunoscute |
+| A model that learns · weighed by judgment (the guide's words) | Un model care învață · cântărit prin judecată |
+| Entrances kept back for testing (%) · Seed of the draw | Intrări păstrate pentru testare (%) · Sămânța tragerii |
+| Weights and curves | Ponderi și curbe |
+| Class · Cells · With an entrance | Clasă · Celule · Cu intrare |
+| Contrast · studentised contrast (the guide's word) | Contrast · contrast studentizat |
+| adjusted (a row of a weight table) | ajustat |
+| Success rate · Prediction rate · Chance | Rata de succes · Rata de predicție · Întâmplare |
+| Rate curve · area under the curve (the guide's words) | Curbă de rată · aria de sub curbă (AUC) |
+| Occupied cells · kept back (the guide's words) | Celule ocupate · păstrate |
+| Stretched (a map learnt from entrances; the guide's word) | Întinsă |
 
 Un strat este **evaluat** (primește un *scor*), iar straturile sunt **cântărite** (primesc o
 *pondere*): așa le deosebește interfața, iar ghidul păstrează cele două cuvinte separate.

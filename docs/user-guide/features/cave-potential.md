@@ -22,6 +22,12 @@ The page says of itself:
 Everything is under **Statistics → Cave potential**: a list of **Models** and a list of **Maps
 computed**. The maps are then drawn from the [map](map-workspace.md)'s layers panel.
 
+A model can also **learn from known entrances**. Its author then names no scores and no weights:
+each run counts how the cave entrances already recorded are spread over the evidence, and tests
+the map it comes to against entrances it was not shown. That kind is described under
+[Models that learn from known entrances](#models-that-learn-from-known-entrances); the rest of
+this page applies to it except where that section says otherwise.
+
 | You want to | You need |
 |---|---|
 | Write, copy or share a model | An account that may keep saved views and filters |
@@ -138,7 +144,9 @@ layer says sandstone is unfavourable; it does not say *no opinion*.
 
 ### Weighing the layers
 
-Under **How the layers are weighed**, one of two methods.
+Under **How the layers are weighed**, one of four methods. The first two are weighed by judgment
+and are described here. **Frequency ratio** and **Weights of evidence** take no weights from you at
+all — see [Models that learn from known entrances](#models-that-learn-from-known-entrances).
 
 **Weights given outright.** Each layer gets a number above zero. Only the proportions matter:
 2, 1, 1 and 50, 25, 25 are the same model. The list shows each layer's share as a percentage.
@@ -215,6 +223,8 @@ What the ratio does **not** say:
 - A model that weighs any layer [from what has been recorded](#from-what-has-been-recorded) is
   tagged **Uses recorded positions** in the list, and the editor and the run form each say what
   that means for its maps.
+- A model that learns from known entrances is tagged **Learns from known entrances** instead, and
+  the list shows its layers with no weights: it has none until it is run.
 
 ---
 
@@ -264,7 +274,7 @@ What a run does, and what it holds on to:
 | **Model** | The model's name when it was run, with **Uses recorded positions** where that applies |
 | **Area** | The area, linked to its page |
 | **Cell size** | As asked |
-| **State** | And, once ready, a line such as *"8412 of 9105 cells scored · mean 0.47"* |
+| **State** | And, once ready, a line such as *"8412 of 9105 cells scored · mean 0.47"*. A map learnt from known entrances adds *"learnt from 31 entrances, tested on 13 · AUC 0.842 / 0.731"* — see [The two curves and the AUC](#the-two-curves-and-the-auc) |
 | **Date** | When the map was computed |
 | **Asked for by** | *You*, or the member who ran it |
 
@@ -273,7 +283,9 @@ some layer had no value — see [Blank cells](#blank-cells). A map with far fewe
 the area holds is mostly blank, and the mean is then the mean of a small part of it.
 
 **Show on the map** opens the map over the area with that map switched on. The bin deletes the
-map; only whoever asked for it, or a full administrator, can.
+map; only whoever asked for it, or a full administrator, can. On a map learnt from known
+entrances, **Weights and curves** opens [what the run counted](#reading-the-weight-tables) under
+the row.
 
 ### When a run fails
 
@@ -284,6 +296,8 @@ map; only whoever asked for it, or a full administrator, can.
 | *The account that asked for it may no longer read what the run needs.* | Between asking and running, the account lost the terrain permission or sight of the area |
 | *The area can no longer be covered at that cell size.* | The area's outline was changed, or removed, after the run was asked for |
 | *The model as it was run is not one that can be run.* | Open the model, save it again, and run it again |
+| *Too few known entrances in the area, among those the account may place, to keep some back and learn from the rest.* | A model that learns from known entrances found fewer than ten cells holding an entrance you may place. See [Why few entrances make the numbers unreliable](#why-few-entrances-make-the-numbers-unreliable) |
+| *The known entrances leave nothing to tell apart in this area.* | A model that learns from known entrances had no ground without an entrance to compare with, or its map could not be tested. Use a smaller cell or a larger area |
 | *The map could not be computed.* | Anything else, including a run the worker gave up on. Ask again |
 
 The reasons given for evidence that is not available:
@@ -293,7 +307,7 @@ The reasons given for evidence that is not available:
 | `no_terrain` | The installation draws no terrain build | An administrator, on the [Terrain page](../admin/terrain-builds.md) |
 | `no_layer` | That picture of the ground has not been computed for the terrain in use, or is out of date | An administrator, under [Derived pictures](../admin/terrain-builds.md#derived-pictures-of-the-ground) |
 | `slope_unit` | Steepness exists only as a percentage; a model scores it in degrees | An administrator: ask for a Steepness picture in degrees |
-| `too_many_features` | More than 50,000 features of one kind lie in reach of the area | Run over a smaller area |
+| `too_many_features` | More than 50,000 features of one kind lie in reach of the area — or, for a model that learns from known entrances, more than 50,000 entrances lie in the rectangle around it | Run over a smaller area |
 
 A failed run leaves no map. It is not tried again on its own.
 
@@ -331,27 +345,332 @@ model had no answer there.
 
 ### What the map claims
 
-Each cell's value is the model's scores for that cell, combined by the model's weights: a number
-from 0 to 1. That is all. Under every map the key says:
+For a model weighed by judgment, each cell's value is the model's scores for that cell, combined
+by the model's weights: a number from 0 to 1. That is all. (What a map learnt from known entrances
+holds is under [The map of a model that learns](#the-map-of-a-model-that-learns).) Under every map
+the key says:
 
 > A weighing of evidence as its model describes it, not a finding: nothing here has been checked on
 > the ground. For use inside the group only.
 
 ### What the map never claims
 
-- **It is not a probability.** 0.8 does not mean an eight-in-ten chance of a cave. It means the
-  model's author scored that ground highly.
-- **It has not been tested against known caves.** Nothing on this page measures how well a model
-  finds caves that are already known, and no map comes with an accuracy figure.
-- **It does not discover anything.** A model can only return its author's judgment, applied evenly
-  over the area. Its use is in applying that judgment consistently to ground nobody has walked, and
-  in making the judgment explicit enough to argue about.
+- **It is not a probability.** 0.8 does not mean an eight-in-ten chance of a cave. On a map
+  weighed by judgment it means the model's author scored that ground highly; on a map learnt from
+  known entrances it means the ground ranks high *on that map*.
+- **A map weighed by judgment has not been tested against known caves.** It comes with no figure
+  for how well it finds them. A map learnt from known entrances comes with two — and they are
+  narrower than they look: see [What the AUC does not mean](#what-the-auc-does-not-mean).
+- **It does not discover anything.** A model weighed by judgment can only return its author's
+  judgment, applied evenly over the area. Its use is in applying that judgment consistently to
+  ground nobody has walked, and in making the judgment explicit enough to argue about. A model
+  that learns can only return the pattern of the entrances already recorded — which is the pattern
+  of where people have looked as much as of where caves are.
 - **Two maps from two models cannot be compared value for value.** 0.6 under one model and 0.6
   under another are not the same statement.
 - **It is no finer than its coarsest evidence.** A 10 m cell over coarser elevation and a regional
   geology map is still a coarse answer about a regional outline.
 - **It is not a reason to skip the ground.** High-scoring ground with no cave and low-scoring ground
   with one are both ordinary.
+
+---
+
+## Models that learn from known entrances
+
+A model weighed by judgment says what its author believes. A model that **learns** asks the
+registry instead: *over this area, in which kinds of ground are the known cave entrances commoner
+than the ground itself?* It draws the map that follows from the answer, and then checks that map
+against entrances it kept back.
+
+Two methods do this. Both are counting, worked out in one pass: nothing is fitted or tuned, so the
+same area, entrances and settings give the same figures on every run.
+
+| Method | Each class of a layer gets | Each cell gets |
+|---|---|---|
+| **Frequency ratio** | One number: the class's share of the entrances over its share of the ground | The sum of the ratios of the classes it falls in, one per layer — an index |
+| **Weights of evidence** | Two weights, their contrast, and how sure that contrast is | A probability worked out from the weights |
+
+The frequency ratio is the easier to read and to explain. Weights of evidence says more — above all
+how far each figure can be trusted — and is the one to prefer when the tables themselves are what
+you are after. Both sets of columns are shown on every such map; the method decides only how the
+map is drawn.
+
+### Writing one
+
+In the editor, choose **Frequency ratio** or **Weights of evidence** under **How the layers are
+weighed**. The editor then asks for less:
+
+- **A measured layer is cut into classes, and that is all.** Each row is only *Up to* a value.
+  There is no score to fill in, because what each class is worth is what a run counts. There is no
+  ramp either: entrances are counted per class, and a ramp has none. A layer you had scored by a
+  ramp is shown as its table of classes, and going back to a method weighed by judgment brings the
+  ramp back.
+- **Landform and Rock type need nothing**: *"Every class of this layer is counted; there is
+  nothing to fill in."*
+- **No weights and no comparisons**: *"The weights of this model are counted from known entrances
+  when it is run, and are shown with each map."*
+- **Cave-entrance density is not offered**, and a model that already weighs it cannot be saved as
+  one that learns. That layer is made from the very entrances the model counts, the kept-back ones
+  included: the model would be shown the entrances it is then tested on.
+
+Two fields appear:
+
+| Field | |
+|---|---|
+| **Entrances kept back for testing (%)** | Between 10 and 50; 30 unless you change it. This share is never shown to the model |
+| **Seed of the draw** | A whole number, 0 or above; 1 unless you change it. It decides *which* entrances are kept back |
+
+> The entrances kept back are never shown to the model; how well its map finds them is its
+> prediction rate. The same area, entrances, share and seed keep back the same ones on every run.
+
+The seed is there to make the draw repeatable, not to be tuned. Anything that changes which cells
+hold an entrance changes the draw as well: another cell size, a newly recorded entrance, a
+different account's rights.
+
+**Choose the classes with care; they are the model.** A model that learns has no opinion about
+slope, only about the classes you cut slope into. A few wide classes can blur a real difference;
+many narrow ones leave each with a handful of entrances and a figure that means little — see
+[Why few entrances make the numbers unreliable](#why-few-entrances-make-the-numbers-unreliable).
+
+Like every model, one that learns names no place and holds no entrance. Sharing it shares a list of
+layers and class bounds, and nothing about where anything is.
+
+### What a run counts
+
+1. **The ground.** The cells inside the area for which *every* layer of the model has a value. A
+   cell missing one layer is left out of the counting as well as off the map, so every layer's
+   table is a table of the same ground.
+2. **The entrances.** Every cave entrance *you* may read and place exactly that lies on that
+   ground. One you may not place is left out, never moved somewhere approximate. One outside the
+   area, or on a cell some layer has no value for, is not used at all.
+3. **Occupied cells.** What is counted is cells, not entrances. A cell either holds an entrance or
+   does not, and two entrances in one cell are one occupied cell.
+4. **The split.** The seed parts the occupied cells into those the model **learns from** and those
+   **kept back**. The tables are counted from the first part only.
+5. **The tables, the map and the two curves**, described below.
+
+A run needs at least **ten occupied cells**. That is the floor below which nothing can be kept
+back — not a number at which the results become worth reading.
+
+### Frequency ratio
+
+For one class of one layer:
+
+> **frequency ratio** = the class's share of the occupied cells ÷ the class's share of the ground
+
+| Ratio | Reads as |
+|---|---|
+| **1** | The class holds entrances in proportion to its size. It says nothing either way |
+| **Above 1** | It holds more than its share; 2 is twice what its size alone would give |
+| **Below 1** | It holds fewer than its share |
+| **0** | No entrance the model learnt from lies in it. That is *not* "no caves there" |
+
+An invented example: an area of 10,000 cells, 40 of them occupied by entrances the model learns
+from, and a slope layer cut into three classes.
+
+| Class | Cells | With an entrance | Share of the ground | Share of the entrances | Frequency ratio |
+|---|---|---|---|---|---|
+| below 10 | 6,000 | 12 | 60 % | 30 % | 0.50 |
+| 10 up to 25 | 3,000 | 20 | 30 % | 50 % | 1.67 |
+| 25 and above | 1,000 | 8 | 10 % | 20 % | 2.00 |
+
+The steepest class is a tenth of the ground and holds a fifth of the entrances, so its ratio is 2.
+
+A cell's value on the map is the **sum** of the ratios of the classes it falls in, one per layer.
+A cell that is average on each of three layers comes to 3. It is an index: it puts the ground in
+order, and is not a probability, a count or a density.
+
+### Weights of evidence
+
+The same counts, asked a sharper question: *how much likelier is a cell of this class among the
+occupied cells than among the rest?*
+
+| Column | What it is | How to read it |
+|---|---|---|
+| **W+** | The natural logarithm of: the share of occupied cells that are in the class, over the share of unoccupied cells that are | Above 0, entrances are commoner in the class than outside it; below 0, rarer; 0, no difference |
+| **W−** | The same for the ground *outside* the class | Usually of the opposite sign to W+, and smaller |
+| **Contrast** | C = W+ − W− | How strongly the class goes with the entrances, in one number. 0 is not at all; the sign says which way |
+| **s(C)** | The standard deviation of the contrast, from the four counts behind it | It is large whenever one of those counts is small |
+| **C / s(C)** | The contrast in units of its own standard deviation — the *studentised* contrast | *"Above about 2 the class tells the entrances apart from the ground with some confidence."* Near 0 the contrast could well be chance |
+
+The same example:
+
+| Class | Frequency ratio | W+ | W− | Contrast | s(C) | C / s(C) |
+|---|---|---|---|---|---|---|
+| below 10 | 0.50 | −0.695 | 0.563 | −1.258 | 0.346 | −3.64 |
+| 10 up to 25 | 1.67 | 0.514 | −0.338 | 0.851 | 0.317 | 2.69 |
+| 25 and above | 2.00 | 0.697 | −0.118 | 0.815 | 0.397 | 2.06 |
+
+**Read the last column first.** Gentle ground is clearly poorer in entrances (−3.64). The steepest
+class has the highest ratio and the weakest support of the three: it rests on eight cells, and its
+C / s(C) is only just above 2. A large contrast with a small C / s(C) is a pattern in a handful of
+cells.
+
+**A cell's value on the map is a probability.** It starts from the chance that a cell picked blind
+is occupied — the occupied share of the ground — and is moved up or down by the W+ of the cell's
+class on each layer. With a single layer it is exactly the share of the class's cells that are
+occupied: 8 in 1,000 for the steepest class above.
+
+Two cautions about that probability:
+
+- **It is the chance that a cell of this size holds an entrance like the ones the model learnt
+  from.** It is small everywhere, because entrances are rare, and it changes with the cell size. It
+  is not the chance of finding a cave by walking there.
+- **Adding the weights of several layers assumes the layers say independent things.** Layers that
+  repeat each other — slope, ruggedness and roughness — are counted more than once, and the
+  probabilities come out too high. The page measures this for you:
+
+  > The probabilities add up to 71.3 occupied cells against the 40 learnt from. A sum far above
+  > means the layers repeat each other and the probabilities are too high; the ranking is still
+  > usable.
+
+  Layers that are independent give back the number learnt from. When the sum is far above it, read
+  the map as an order of the ground and nothing more, or take out one of the layers that repeat
+  each other.
+
+### Reading the weight tables
+
+**Weights and curves**, on a finished map's row, opens what the run counted. First come a few
+lines:
+
+- *"Learnt from 31 entrances in 29 cells; 13 entrances in 12 cells kept back."*
+- *"30 % kept back, seed 1 · 8412 cells of ground weighed"*
+- how many of the entrances used were location-protected, when any were;
+- what 0 and 1 on the map stand for (see [The map of a model that learns](#the-map-of-a-model-that-learns));
+- for weights of evidence, what the probabilities add up to.
+
+Then the two curves, and one table for each layer with a row for each class.
+
+- **Cells** and **With an entrance** are the two counts every other column follows from. Look at
+  them before anything else on the row.
+- **adjusted**, beside a class's name, means one of the four counts behind its weights was nought —
+  usually a class no entrance lies in. Its weight would be infinite, and a class that holds no
+  known cave is not thereby proven to hold none; so a half is added to each of the four counts, for
+  that class only. The weights on an adjusted row stand for *very few*, and are not a measurement.
+  The frequency ratio needs no such help: it is simply 0.
+- **A dash (–)** means there was nothing to count. A class no cell of the ground falls in has
+  dashes throughout. A class that *every* cell falls in has a ratio of 1, a W+ of 0 and dashes
+  after them: there is no ground outside it to compare with.
+- **Classes of a measured layer are named by their bounds** — *10 up to 25*. The bounds belong to
+  the model, so a reader who may read the map but not its model sees *Class 1*, *Class 2* instead.
+  Landforms and rock types keep their names.
+
+Under the tables the page repeats the rule for reading them:
+
+> A frequency ratio above 1 and a positive W+ mean entrances are commoner in the class than on the
+> ground as a whole. Cells are counted, not entrances: two entrances in one cell count once.
+
+### The map of a model that learns
+
+A probability of a few thousandths and a sum of ratios with no ceiling cannot be drawn on a scale
+from 0 to 1 as they are. So the map is **stretched**: its least favourable cell is drawn as 0, its
+most favourable as 1, and the rest in between, in the same order. **Weights and curves** says what
+the two ends stand for:
+
+> On the map, 0 stands for a probability of 0.000412 and 1 for 0.0187.
+
+Under such a map the key adds:
+
+> Its colours run from the least to the most favourable ground of this one map; they rank the
+> ground and cannot be set beside another map's.
+
+What follows:
+
+- **The darkest ground is the best of this map, not good ground.** On a map where nothing stands
+  out, something is still drawn dark blue.
+- **Two such maps cannot be compared colour for colour** — not two areas, not two models, not the
+  same model with another seed.
+- **The mean on the map's row** is the mean of the stretched values, and says little.
+- A map whose every cell came to the same value ranks nothing, and is drawn as 0 throughout.
+
+[Blank cells](#blank-cells) are as on any other map.
+
+### The two curves and the AUC
+
+How good is the map? Put its cells in order from the most favourable down, and walk down the list.
+At each step note two things: how much of the ground has been taken so far (across), and how many
+of a set of occupied cells have been found on it (up). That is a **rate curve**, and the page draws
+two of them.
+
+| Curve | Drawn against | What it says |
+|---|---|---|
+| **Success rate** | The occupied cells the model learnt from | How well the map fits what it was shown. It always flatters |
+| **Prediction rate** | The occupied cells kept back | How well the map finds entrances it never saw. *"The prediction rate is the honest one."* |
+| **Chance** (dashed) | — | What a map that knew nothing would draw: a fifth of the ground holds a fifth of the entrances |
+
+To read a point: where the prediction-rate curve passes 20 % across and 60 % up, the most
+favourable fifth of the ground holds three fifths of the entrances that were kept back.
+
+The **AUC** — the area under the curve — puts a whole curve into one number between 0 and 1.
+
+| AUC | |
+|---|---|
+| **About 0.5** | No better than chance |
+| **Towards 1** | The entrances sit on the ground the map ranks highest. 1 itself is out of reach |
+| **Below 0.5** | Worse than chance: the map ranks those entrances *low*. With few kept back this happens by accident |
+
+Loosely, it is the chance that an occupied cell picked at random ranks above a cell of ground
+picked at random. The row of a finished map gives both: *"AUC 0.842 / 0.731"* is the success rate,
+then the prediction rate.
+
+- **A gap between the two is expected; a wide one is a warning.** A success rate far above the
+  prediction rate means the model has fitted the particular entrances it was given — narrow classes
+  and few entrances do this — and not something that holds for the next entrance.
+- **The curves are made of straight steps.** A map made from classes has few different values and
+  many cells of each; cells of equal value are taken together, as one step.
+- **No point of a curve stands for an entrance.** Each curve is at most 101 points, every one a sum
+  over a share of the ground.
+
+### What the AUC does not mean
+
+- **It is not the share of caves the map will find, and not an accuracy.** 0.8 does not mean the
+  map is right four times in five.
+- **It is tested on known entrances, and known entrances are where people have looked.** The
+  entrances kept back come from the same register as the ones learnt from: the same valleys, the
+  same paths, the same clubs' ground. A map that has learnt *where cavers go* does well on the
+  prediction rate. A high AUC cannot tell "this finds caves" from "this finds past effort".
+- **Ground without a known entrance is not ground without a cave.** The methods count every
+  unoccupied cell as empty. Nothing here records ground that was searched and found empty, so
+  nothing here can be tested against it.
+- **It is one draw.** Another seed keeps back other entrances and gives another AUC. Copy the
+  model, change the seed and run it again a few times: if the figure moves by a tenth from one seed
+  to the next, that spread is how well you know it.
+- **It belongs to this area, this cell size and these entrances.** It says nothing about the same
+  model somewhere else. An area that takes in a lot of plainly unfavourable ground — the plain
+  beside the karst — raises the AUC without the map being any better where it matters.
+- **It belongs to the account that ran it.** Two members who may place different entrances get
+  different tables and different figures from the same model, and neither is the wrong one.
+- **It ranks; it does not locate.** A good curve says the favourable fifth of an area holds most of
+  the entrances. It does not say where in that fifth.
+
+### Why few entrances make the numbers unreliable
+
+Every figure on these pages is a ratio of counts, and the counts of entrances are small.
+
+- **One entrance moves a class a long way.** Take a class covering a tenth of the ground, in a run
+  that learns from 12 occupied cells. With one of them in the class its frequency ratio is 0.83;
+  with two, 1.67; with three, 2.5. One more survey weekend turns *poorer than average* into *twice
+  the average*. **s(C)** and **C / s(C)** exist to say exactly this — which is the reason to read
+  the weights-of-evidence columns even on a frequency-ratio map.
+- **A class with no entrance is not measured at all.** Its ratio is 0 and its weights are
+  *adjusted*: a stand-in, not a finding.
+- **Every class needs entrances of its own.** Thirty occupied cells over a table of ten classes is
+  three to a class on average, and each further layer divides the same thirty again.
+- **The test is smaller still.** With ten occupied cells and 30 % kept back, three cells test the
+  map. Their curve has at most three steps, and three cells can come to an AUC of 0.85 or of 0.35
+  by chance alone.
+- **Only the entrances you may place are counted.** An account that may place fewer learns from
+  fewer, and gets rougher tables for the same area.
+- **The cell size changes the count.** A larger cell merges neighbouring entrances into one
+  occupied cell.
+
+The floor of ten occupied cells is where the arithmetic becomes possible. There is no number at
+which it becomes safe: read **Cells**, **With an entrance** and **C / s(C)** on every row, and
+treat a row counted from a handful of cells as saying little, whatever its ratio.
+
+With few entrances such a model is still good for two things: seeing which classes plainly hold
+entrances and which plainly do not, and setting what the register says beside what a model weighed
+by judgment assumes. It is not good for telling apart two patches of ground that both rank high.
 
 ---
 
@@ -365,7 +684,10 @@ is.
 
 Running a model does not widen that audience. A reader who may open a map but not its model sees
 the map and its colours, and no model name, layers or weights; the author of the run and full
-administrators always see the recipe the map was made from.
+administrators always see the recipe the map was made from. On a map learnt from known entrances
+the counted tables are part of the result, so such a reader does see them: which layers were
+counted and each class's figures, with the classes numbered — but not the model's name, nor the
+bounds it cut the classes at.
 
 ### Maps
 
@@ -380,8 +702,10 @@ see today. You may read a map when all of these hold:
 | 3 | The run is **finished**. A queued, computing or failed run is shown only to whoever asked for it and to full administrators |
 | 4 | For a map tagged **Uses recorded positions**: you may, today, read and see the exact position of **every** recorded feature the run was computed from |
 
-A map weighed from the shape of the ground alone was computed from no recorded feature, so rule 4
-does not apply to it: everybody who may read terrain and place the area sees it.
+A map weighed by judgment from the shape of the ground alone was computed from no recorded
+feature, so rule 4 does not apply to it: everybody who may read terrain and place the area sees it.
+A map **learnt from known entrances** is always under rule 4, whatever its layers — see
+[Maps learnt from known entrances](#maps-learnt-from-known-entrances).
 
 Why rule 4 is that strict: a map weighed from recorded positions shows where they are. The ground
 nearest a sinkhole scores highest; the ground densest in entrances stands out. Somebody who passes
@@ -412,6 +736,47 @@ Under a map made from recorded positions the key adds:
 **That last sentence is the part the application cannot enforce.** A screenshot of such a map,
 sent to somebody who could not have opened it, hands them the positions it was made from.
 
+### Maps learnt from known entrances
+
+A map from a model that learns is **always** tagged **Uses recorded positions**, even when every
+layer it weighs comes from the shape of the ground. The entrances it counted are positions, and a
+map of where entrances are common says where they are.
+
+So rule 4 always applies to it, and the features it asks about include **every entrance the run
+learnt from and every entrance it kept back**, along with anything recorded that went into its
+layers. Protected or not: the question is whether you may read each one and see its exact position
+today.
+
+| | |
+|---|---|
+| **What a run reads** | Only entrances the account that asked may read and place exactly, with its rights as they are when the run starts. One it may not place is left out before anything is counted |
+| **What a run records** | The account it ran for, whether that account was a full administrator, how many entrances it learnt from and how many it kept back, and how many of them were location-protected. The entrances themselves are kept by the server, only to ask rule 4, and are never shown |
+| **What is governed** | The map, the line of figures on its row, the weight tables and the two curves — together. Nobody sees the curves of a map they may not open |
+| **What never appears** | An entrance's position or cell, a figure for a single entrance, or a list of entrances. Every table row is a class; every point of a curve is a share of the ground |
+
+**Why the tables and curves are held as closely as the map.** They are sums over the same
+entrances. A weight table says which kinds of ground the entrances are on; over a small area, a
+class with one occupied cell among a few cells of ground comes close to pointing at it. Somebody
+who may place every entrance could have counted the same table from what they can already see.
+Somebody who may not would be learning about a protected position from a row of figures.
+
+What follows, beyond what holds for [every map made from positions](#maps):
+
+- **Losing sight of one entrance loses the whole result** — whichever side of the split it was on,
+  and for the member who ran it as for anybody else.
+- **A member who may place fewer entrances gets a model learnt from fewer.** A colleague's richer
+  map does not appear for them, and nothing says it exists. Their own run gives a map they are
+  entitled to, with its own tables and its own AUC.
+- **The figures of two accounts are not two measurements of the same thing.** Before comparing
+  maps or AUCs with a colleague, check you both learnt from the same number of entrances.
+- When any entrance the run used was location-protected, the page says so, as a count:
+
+  > Location-protected entrances among those used: 4. You see this because you may place all of
+  > them. Do not pass it on.
+
+- **A screenshot of a weight table or of the curves is passed on like a screenshot of the map.**
+  It carries the same entrances.
+
 ### What is never done with a map
 
 - It is **not exported**, as a file or in any other form.
@@ -420,6 +785,11 @@ sent to somebody who could not have opened it, hands them the positions it was m
 - It is **not carried in a saved view**.
 
 ---
+
+Further reading on the two methods that learn: G. F. Bonham-Carter, *Geographic Information
+Systems for Geoscientists* (1994), chapter 9, for weights of evidence; C.-J. F. Chung and
+A. G. Fabbri, "Validation of spatial prediction models for landslide hazard mapping", *Natural
+Hazards* 30 (2003), for the success-rate and prediction-rate curves.
 
 Related: [Karst analyses](karst-analyses.md) · [Geology](geology.md) · [Terrain](terrain.md) ·
 [Pictures of the ground, for administrators](../admin/terrain-builds.md#derived-pictures-of-the-ground) ·

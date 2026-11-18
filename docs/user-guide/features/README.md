@@ -34,7 +34,7 @@ detail those walkthroughs link into.
 | [Measurements and statistics](measurements-and-statistics.md) | What the application computes, and what it refuses to compute |
 | [Karst analyses](karst-analyses.md) | Karst-area statistics, density and spacing of entrances, the depth of a system, a cave's passage network and what its shape suggests |
 | [Geology: units, structural readings and the stereonet](geology.md) | Geological units and their lithology, an area's geology split, structural readings, the stereonet, passages against measured strikes |
-| [Cave potential: models, evidence and favourability maps](cave-potential.md) | Writing a model that weighs evidence, pairwise comparisons and the consistency ratio, running it over an area, the map it draws and what that map does not claim, who can see a map |
+| [Cave potential: models, evidence and favourability maps](cave-potential.md) | Writing a model that weighs evidence, pairwise comparisons and the consistency ratio, running it over an area, the map it draws and what that map does not claim, models that learn from known entrances (frequency ratio, weights of evidence, the two rate curves and the AUC), who can see a map |
 | [Geodata files](geodata.md) | Vector import and export, the imports register |
 | [The national cave catalogue](cave-catalogue.md) | Searching speologie.org and importing caves from it |
 | [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays: GeoTIFFs, PDFs and scans, and placing a sheet by its corners or by control points |
