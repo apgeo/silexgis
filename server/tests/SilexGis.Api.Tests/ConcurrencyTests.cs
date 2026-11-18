@@ -702,36 +702,8 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     /// <summary>Waits until the database reports <paramref name="count"/> statements waiting on a lock.</summary>
-    private static async Task LockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending)
-    {
-        for (var attempt = 0; attempt < 300; attempt++)
-        {
-            if (pending.IsCompleted)
-            {
-                var early = await (Task<HttpResponseMessage>)pending;
-                throw new ShouldAssertException(
-                    $"the request answered {(int)early.StatusCode} without waiting: {await early.Content.ReadAsStringAsync()}");
-            }
-
-            var waiting = await db.Database.SqlQueryRaw<long>(
-                "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND state = 'active' AND wait_event_type = 'Lock' "
-                + "AND pid <> pg_backend_pid()").SingleAsync();
-            if (waiting >= count)
-            {
-                return;
-            }
-
-            await Task.Delay(50);
-        }
-
-        var activity = await db.Database.SqlQueryRaw<string>(
-            "SELECT coalesce(state, '') || ' | ' || coalesce(wait_event_type, '') || ':' || coalesce(wait_event, '') "
-            + "|| ' | ' || left(coalesce(query, ''), 120) AS \"Value\" FROM pg_stat_activity "
-            + "WHERE pid <> pg_backend_pid() AND backend_type = 'client backend' AND state <> 'idle'").ToListAsync();
-        throw new ShouldAssertException(
-            $"{count} statements never waited on a lock; the database was doing: " + string.Join(" || ", activity));
-    }
+    private static Task LockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending) =>
+        LockWaits.UntilParkedAsync(db, count, pending);
 
     private static object GenericBody(string name, long featureTypeId) => new
     {

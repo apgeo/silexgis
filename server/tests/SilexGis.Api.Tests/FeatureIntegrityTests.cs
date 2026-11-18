@@ -56,16 +56,22 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
             .Where(c => c.Id == demoted)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, false)));
 
-        var problem = (await VerifyAsync()).ShouldHaveSingleItem();
-        problem.Check.ShouldBe("default_centerline");
-        problem.FeatureId.ShouldBe(caveId);
-        problem.Detail.ShouldBe("2 centerline(s), 0 marked default");
-
-        // The suite shares one database and other classes assert the verifier finds
-        // nothing at all, so every case here puts back what it broke.
-        await ExecuteAsync(db => db.Centerlines
-            .Where(c => c.Id == demoted)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, true)));
+        try
+        {
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("default_centerline");
+            problem.FeatureId.ShouldBe(caveId);
+            problem.Detail.ShouldBe("2 centerline(s), 0 marked default");
+        }
+        finally
+        {
+            // Every test of this class starts by asserting the verifier finds nothing in the
+            // class's database, so a case puts back what it broke even when it fails — or one
+            // real failure would show up as several.
+            await ExecuteAsync(db => db.Centerlines
+                .Where(c => c.Id == demoted)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.IsDefault, true)));
+        }
     }
 
     /// <summary>
@@ -105,7 +111,7 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
         }
         finally
         {
-            // Other classes assert the verifier finds nothing in the shared database.
+            // The other tests of this class start from a database the verifier finds clean.
             await ExecuteAsync(async db =>
             {
                 await db.FeatureHierarchyEdges
@@ -161,11 +167,17 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
             .Where(s => s.Id == good.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.TokenHash, "too-short")));
 
-        var problem = (await VerifyAsync()).ShouldHaveSingleItem();
-        problem.Check.ShouldBe("share_token_hash");
-        problem.FeatureId.ShouldBe(good.Id);
-
-        await ExecuteAsync(db => db.FeatureShares.Where(s => s.Id == good.Id).ExecuteDeleteAsync());
+        try
+        {
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("share_token_hash");
+            problem.FeatureId.ShouldBe(good.Id);
+        }
+        finally
+        {
+            // The other tests of this class start from a database the verifier finds clean.
+            await ExecuteAsync(db => db.FeatureShares.Where(s => s.Id == good.Id).ExecuteDeleteAsync());
+        }
     }
 
     [Theory]
@@ -196,15 +208,20 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
             await db.SaveChangesAsync();
         });
 
-        var problem = (await VerifyAsync()).ShouldHaveSingleItem();
-        problem.Check.ShouldBe("tagging_orphan");
-        problem.Detail.ShouldContain(vanished.ToString());
-        problem.Detail.ShouldContain(type.ToString());
+        try
+        {
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("tagging_orphan");
+            problem.Detail.ShouldContain(vanished.ToString());
+            problem.Detail.ShouldContain(type.ToString());
+        }
+        finally
+        {
+            // The other tests of this class start from a database the verifier finds clean.
+            await ExecuteAsync(db => db.Taggings.Where(t => t.EntityId == vanished).ExecuteDeleteAsync());
+            await ExecuteAsync(db => db.Tags.Where(t => t.Id == tagId).ExecuteDeleteAsync());
+        }
 
-        // The suite shares one database and other classes assert the verifier finds nothing at
-        // all, so this puts back what it broke.
-        await ExecuteAsync(db => db.Taggings.Where(t => t.EntityId == vanished).ExecuteDeleteAsync());
-        await ExecuteAsync(db => db.Tags.Where(t => t.Id == tagId).ExecuteDeleteAsync());
         (await VerifyAsync()).ShouldBeEmpty();
     }
 

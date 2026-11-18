@@ -351,8 +351,8 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
-    /// The settings live in the database, which is shared with every other test class in this
-    /// collection — a policy left switched on here would silently change what they are testing.
+    /// The settings live in this class's database, which its tests share — a policy left switched
+    /// on by one test would silently change what the next one is testing.
     /// </summary>
     public async ValueTask DisposeAsync()
     {

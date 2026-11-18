@@ -329,7 +329,10 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
         await settings.SaveAsync(AppSettingSections.Security, change(await settings.GetSecurityAsync()));
     }
 
-    /// <summary>The settings row is shared with every other class in this collection.</summary>
+    /// <summary>
+    /// The settings row lives in this class's database, which its tests share, so each test starts
+    /// from the installation's default policy rather than whatever the previous one saved.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();

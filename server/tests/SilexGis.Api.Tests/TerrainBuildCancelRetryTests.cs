@@ -617,29 +617,8 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task RunAsync(Guid buildId, int attempts = 1, SilexGisApiFactory? installation = null)
-    {
-        await using var scope = (installation ?? factory).Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = attempts,
-                    Payload = JsonSerializer.Serialize(new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A run that stops throws a bounded stand-in so the queue sees a failed job; the build
-            // row, which is what every test here reads, was written before it was thrown.
-        }
-    }
+    private Task RunAsync(Guid buildId, int attempts = 1, SilexGisApiFactory? installation = null) =>
+        TerrainRuns.RunAsync(installation ?? factory, buildId, attempts);
 
     private static async Task UntilAsync(Func<Task<bool>> check, string what)
     {

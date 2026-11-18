@@ -289,38 +289,8 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
     /// parked on a lock, so each upload is known to be inside the window before the next step.
     /// An upload that answered instead was never held, and nothing was raced.
     /// </summary>
-    private static async Task WaitForLockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending)
-    {
-        var waiting = 0L;
-        for (var attempt = 0; attempt < 400 && waiting < count; attempt++)
-        {
-            pending.IsCompleted.ShouldBeFalse(
-                "the upload answered without waiting on the row another writer holds, so nothing was raced");
-            // The activity view is read once per transaction and then answered from that copy,
-            // and this connection is inside the transaction that holds the stall row: without
-            // dropping the copy every poll after the first would repeat the first.
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()");
-            waiting = await db.Database.SqlQueryRaw<long>(
-                "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
-                + "AND pid <> pg_backend_pid()").SingleAsync();
-            if (waiting < count)
-            {
-                await Task.Delay(50);
-            }
-        }
-
-        if (waiting < count)
-        {
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()");
-            var states = await db.Database.SqlQueryRaw<string>(
-                "SELECT coalesce(wait_event_type, '-') || '/' || coalesce(wait_event, '-') || '/' || coalesce(state, '-') "
-                + "|| ': ' || left(query, 160) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND pid <> pg_backend_pid()").ToListAsync();
-            waiting.ShouldBe(count, "each upload in the race must be parked on a row lock before the next step; "
-                + string.Join(" | ", states));
-        }
-    }
+    private static Task WaitForLockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending) =>
+        LockWaits.UntilParkedAsync(db, count, pending, "an upload in the race");
 
     private static async Task<JsonElement> AnswerOf(HttpResponseMessage response)
     {

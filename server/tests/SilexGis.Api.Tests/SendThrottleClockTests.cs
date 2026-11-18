@@ -145,8 +145,8 @@ public sealed class SendThrottleClockTests : IAsyncLifetime, IClassFixture<Postg
     }
 
     /// <summary>
-    /// A number unique to this class and this test run: the number is unique across accounts and
-    /// every class shares one database.
+    /// A number unique to this test run: the number is unique across accounts, and the tests of
+    /// this class share its database.
     /// </summary>
     private string Number(int index) =>
         "+4" + ((uint)suffix.GetHashCode(StringComparison.Ordinal) % 100000000U)

@@ -16,9 +16,9 @@ namespace SilexGis.Api.Tests;
 /// <summary>
 /// Work areas: the stretches of country a club works, read as one tree.
 ///
-/// The PostGIS container is shared by the whole collection, so every assertion here names its own
-/// rows by a per-run marker and never counts the whole answer — another class's seeded areas would
-/// otherwise race these.
+/// The tests of this class share its database, so every assertion here names its own rows by a
+/// per-run marker and never counts the whole answer — another test's areas would otherwise race
+/// these.
 /// </summary>
 public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {

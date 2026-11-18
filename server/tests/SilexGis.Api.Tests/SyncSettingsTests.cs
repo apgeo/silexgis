@@ -100,23 +100,30 @@ public sealed class SyncSettingsTests : IAsyncLifetime, IDisposable, IClassFixtu
         people[0].GetProperty("code").GetString().ShouldBe("sync.feature_disabled");
         people[1].GetProperty("status").GetString().ShouldBe("created");
 
-        // Switched on with everybody listed: the stranger, in no group with anybody, is offered.
-        var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: true, scope: "everyone"));
-        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
-        (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sync")
-            .GetProperty("peopleDirectoryScope").GetString().ShouldBe("everyone");
+        try
+        {
+            // Switched on with everybody listed: the stranger, in no group with anybody, is offered.
+            var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: true, scope: "everyone"));
+            saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+            (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sync")
+                .GetProperty("peopleDirectoryScope").GetString().ShouldBe("everyone");
 
-        var directory = await editor.GetAsync("/api/v1/sync/people");
-        directory.StatusCode.ShouldBe(HttpStatusCode.OK, await directory.Content.ReadAsStringAsync());
-        (await directory.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("people").EnumerateArray()
-            .Select(p => p.GetProperty("id").GetGuid()).ShouldContain(stranger);
-        (await FeaturesAsync(editor)).ShouldContain("people");
+            var directory = await editor.GetAsync("/api/v1/sync/people");
+            directory.StatusCode.ShouldBe(HttpStatusCode.OK, await directory.Content.ReadAsStringAsync());
+            (await directory.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("people").EnumerateArray()
+                .Select(p => p.GetProperty("id").GetGuid()).ShouldContain(stranger);
+            (await FeaturesAsync(editor)).ShouldContain("people");
 
-        // Back to the clubmates-only default: the same stranger is not listed any more.
-        (await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: true, scope: "myGroups")))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await editor.GetFromJsonAsync<JsonElement>("/api/v1/sync/people")).GetProperty("people").EnumerateArray()
-            .Select(p => p.GetProperty("id").GetGuid()).ShouldNotContain(stranger);
+            // Back to the clubmates-only default: the same stranger is not listed any more.
+            (await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: true, scope: "myGroups")))
+                .StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await editor.GetFromJsonAsync<JsonElement>("/api/v1/sync/people")).GetProperty("people").EnumerateArray()
+                .Select(p => p.GetProperty("id").GetGuid()).ShouldNotContain(stranger);
+        }
+        finally
+        {
+            await PutBackTheDefaultsAsync();
+        }
     }
 
     [Fact]
@@ -136,21 +143,33 @@ public sealed class SyncSettingsTests : IAsyncLifetime, IDisposable, IClassFixtu
             HttpStatusCode.BadRequest,
             "validation.failed");
 
-        var saved = await admin.PutAsJsonAsync(
-            "/api/v1/admin/settings/sync", Settings(enabled: false, scope: "myGroups", staged: 3, rejected: 90));
-        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
-        var sync = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sync");
-        sync.GetProperty("stagedUploadRetentionDays").GetInt32().ShouldBe(3);
-        sync.GetProperty("rejectedHeldBytesRetentionDays").GetInt32().ShouldBe(90);
-
-        // Left as the deployment had it, for whatever runs next against this installation.
-        (await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: false, scope: "myGroups")))
-            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        try
+        {
+            var saved = await admin.PutAsJsonAsync(
+                "/api/v1/admin/settings/sync", Settings(enabled: false, scope: "myGroups", staged: 3, rejected: 90));
+            saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+            var sync = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sync");
+            sync.GetProperty("stagedUploadRetentionDays").GetInt32().ShouldBe(3);
+            sync.GetProperty("rejectedHeldBytesRetentionDays").GetInt32().ShouldBe(90);
+        }
+        finally
+        {
+            await PutBackTheDefaultsAsync();
+        }
 
         using var anonymous = factory.CreateClient();
         (await anonymous.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: true, scope: "myGroups")))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
+
+    /// <summary>
+    /// Saves the installation's defaults again (directory off, clubmates only, 7 and 30 days). The
+    /// tests of this class share one database, and the first asserts those defaults as its opening
+    /// step, so a test that changed them puts them back even when it fails.
+    /// </summary>
+    private async Task PutBackTheDefaultsAsync() =>
+        (await admin.PutAsJsonAsync("/api/v1/admin/settings/sync", Settings(enabled: false, scope: "myGroups")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
 
     private static object Settings(bool enabled, string scope, int staged = 7, int rejected = 30) => new
     {

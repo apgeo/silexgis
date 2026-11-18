@@ -47,10 +47,8 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
     private long participantRoleId;
     private long surveyorRoleId;
 
-    // Nothing here queues work, so this host runs none of the job drains. Every test class shares
-    // one PostGIS container and the queue lives in it, so a drain started here would claim a file
-    // reading or an import queued by another class — and fail it, because the file sits under that
-    // class's own storage root and not under this one's.
+    // Nothing here queues work, so this host runs none of the job drains: a drain would only add
+    // background work, and a failure in it, to tests that do not ask for any.
     public TripStatisticsTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
