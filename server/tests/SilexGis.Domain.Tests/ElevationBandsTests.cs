@@ -13,6 +13,59 @@ namespace SilexGis.Domain.Tests;
 public class ElevationBandsTests
 {
     [Fact]
+    public void A_shaft_between_two_galleries_is_spread_over_the_heights_it_crosses()
+    {
+        // A 100 m gallery level at 1000 m, another at 900 m, and a 100 m vertical shaft joining
+        // them. The range 900..1000 m is 100 m: 100 / 24 = 4.17, so the sector width is the next
+        // ladder step, 5 m, and the sectors run from 900 in twenty steps (the top one closed).
+        // The shaft crosses every sector for 5 m and so adds 5 m to each. The bottom sector also
+        // holds the lower gallery (100 + 5 = 105 m) and the top one the upper gallery
+        // (5 + 100 = 105 m); the eighteen between hold 5 m of shaft each. Binned whole at its
+        // mid-height instead, the shaft would put all 100 m in the 950 m sector.
+        var proposal = ElevationBands.Summarize(ElevationBands.Spread(
+        [
+            new ElevationLeg(1000, 1000, 100),
+            new ElevationLeg(900, 900, 100),
+            new ElevationLeg(1000, 900, 100),
+        ]));
+
+        proposal.BinWidthM.ShouldBe(5d);
+        proposal.Bins.Count.ShouldBe(20);
+        proposal.TotalWeightM.ShouldBe(300d, 1e-9);
+        proposal.Bins[0].WeightM.ShouldBe(105d, 1e-9);
+        proposal.Bins[^1].WeightM.ShouldBe(105d, 1e-9);
+        foreach (var bin in proposal.Bins.Skip(1).Take(18))
+        {
+            bin.WeightM.ShouldBe(5d, 1e-9);
+        }
+    }
+
+    [Fact]
+    public void A_level_leg_stays_one_sample_at_its_height_and_a_sloping_one_keeps_its_whole_weight()
+    {
+        // Level: one sample, 50 m at 300 m. Sloping 300 -> 310 m over 40 m of passage: the range
+        // is 10 m, the sector width 0.5 m (10 / 24 = 0.42 rounds up to 0.5) and the cutting step a
+        // tenth of that, 0.05 m, so the leg becomes 200 pieces of 0.2 m of passage each.
+        var samples = ElevationBands.Spread(
+        [
+            new ElevationLeg(300, 300, 50),
+            new ElevationLeg(300, 310, 40),
+        ]).ToList();
+
+        samples.Count(s => s.ElevationM == 300 && s.WeightM == 50).ShouldBe(1);
+        samples.Sum(s => s.WeightM).ShouldBe(90d, 1e-9);
+        samples.Count.ShouldBe(201);
+        samples.Where(s => s.WeightM < 50).ShouldAllBe(s => Math.Abs(s.WeightM - 0.2) < 1e-9);
+    }
+
+    [Fact]
+    public void No_legs_spread_into_no_samples()
+    {
+        ElevationBands.Spread([]).ShouldBeEmpty();
+        ElevationBands.Summarize(ElevationBands.Spread([])).SampleCount.ShouldBe(0);
+    }
+
+    [Fact]
     public void The_break_lands_where_it_was_worked_out_by_hand()
     {
         // Six heights in two obvious groups, small enough to classify on paper. Minimising the

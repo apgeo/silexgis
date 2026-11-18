@@ -529,6 +529,75 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, ICl
         second.GetProperty("branchCount").GetInt32().ShouldBe(1);
     }
 
+    /// <summary>
+    /// Direction is weighed by how far a leg carries the passage across the map, and dip by how
+    /// long the leg is along the passage. A pitch that falls a hundred metres while drifting ten
+    /// north is ten metres of northward passage on a rose, and a hundred metres of steep passage
+    /// in the dip figures.
+    /// </summary>
+    [Fact]
+    public async Task A_pitch_counts_its_horizontal_length_on_the_rose_and_its_full_length_in_the_dip()
+    {
+        var caveId = await CreateCaveAsync();
+        var modelId = await UploadLocalLoxAsync(caveId, PitchAndGalleryFile());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var orientation = await OrientationAsync(owner, caveId);
+        orientation.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+
+        // By hand: the pitch is 10 m across the map (bearing 45), the gallery 30 m (bearing 135).
+        // Weighed by horizontal length the gallery's sector holds 30 / 40 = 0.75 of the passage
+        // and the pitch's 10 / 40 = 0.25. Weighed along the slope, as before, the pitch's
+        // sqrt(10² + 100²) = 100.5 m would have taken 100.5 / 130.5 = 0.77 of the rose instead.
+        double Fraction(double fromDegrees) => orientation.GetProperty("bins").EnumerateArray()
+            .Single(b => b.GetProperty("fromDegrees").GetDouble() == fromDegrees)
+            .GetProperty("lengthFraction").GetDouble();
+        Fraction(130).ShouldBe(0.75, 0.01);
+        Fraction(40).ShouldBe(0.25, 0.01);
+
+        // Dip keeps the length along the passage: the pitch climbs atan2(100, 10) = 84.29 degrees
+        // over 100.5 m and the gallery is level over 30 m, so the weighted mean is
+        // 84.29 × 100.5 / 130.5 = 64.9 degrees. Weighed by horizontal length it would be
+        // 84.29 × 10 / 40 = 21.1.
+        orientation.GetProperty("dip").GetProperty("meanDipDegrees").GetDouble().ShouldBe(64.9, 0.5);
+    }
+
+    /// <summary>
+    /// Two legs from a station at the zero point: a pitch rising 100 m over 10 m to the north-east,
+    /// then a level gallery running 30 m to the south-east from its top.
+    /// </summary>
+    /// <remarks>
+    /// Both bearings sit in the middle of a rose sector on purpose. A bearing on a sector edge — due
+    /// north, due east — does not survive being placed on the ellipsoid: the azimuth of a leg
+    /// running due east in local metres comes back a hair under 90 degrees, and the whole leg lands
+    /// in the sector before the one a hand calculation names.
+    /// </remarks>
+    private static byte[] PitchAndGalleryFile()
+    {
+        var pitchStep = 10 / Math.Sqrt(2);
+        var galleryStep = 30 / Math.Sqrt(2);
+        return LoxWriter.Write(new CaveModel
+        {
+            SourceFormat = CaveSourceFormat.Lox,
+            Stations =
+            [
+                new CaveStation { Id = 1, Name = "P0", Position = new CaveVector3(0, 0, 0) },
+                new CaveStation { Id = 2, Name = "P1", Position = new CaveVector3(pitchStep, pitchStep, 100) },
+                new CaveStation
+                {
+                    Id = 3,
+                    Name = "P2",
+                    Position = new CaveVector3(pitchStep + galleryStep, pitchStep - galleryStep, 100),
+                },
+            ],
+            Shots =
+            [
+                new CaveShot { FromStationId = 1, ToStationId = 2, RawFlags = 0 },
+                new CaveShot { FromStationId = 2, ToStationId = 3, RawFlags = 0 },
+            ],
+        });
+    }
+
     private async Task<JsonElement> StatisticsAsync(HttpClient client, Guid caveId)
     {
         var response = await client.GetAsync($"/api/v1/caves/{caveId}/statistics");

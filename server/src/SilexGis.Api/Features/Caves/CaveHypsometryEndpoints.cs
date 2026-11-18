@@ -120,11 +120,17 @@ public static class CaveHypsometryEndpoints
         // Refused, not reported as a cave lying flat at height zero. The reduction that produces a
         // drawn centerline's segments writes zero where the drawing recorded no depth, so
         // summarising it would answer "one level, at sea level" for a plan drawing of a shaft.
+        // Each leg is spread over the heights it spans rather than put whole at its mid-height,
+        // so a shaft between two galleries is not read as a third level halfway down it.
         var proposal = set.HasZ
-            ? ElevationBands.Summarize(measurable
-                .Where(s => s.MidZM is not null)
-                .Select(s => new ElevationSample(
-                    s.MidZM!.Value, s.SlopeLengthM ?? s.PlanLengthM)))
+            ? ElevationBands.Summarize(ElevationBands.Spread([
+                .. measurable
+                    .Where(s => s.MidZM is not null)
+                    .Select(s => new ElevationLeg(
+                        s.MidZM!.Value - ((s.DeltaZM ?? 0d) / 2),
+                        s.MidZM!.Value + ((s.DeltaZM ?? 0d) / 2),
+                        s.SlopeLengthM ?? s.PlanLengthM)),
+            ]))
             : null;
 
         return TypedResults.Ok(new CaveHypsometryDto(
@@ -134,7 +140,8 @@ public static class CaveHypsometryEndpoints
             set.SurveyModelId,
             set.HasZ,
             proposal,
-            await SpringReferenceLinesAsync(db, protection, ctx, request.Id, ct)));
+            set.AltitudesRelative ? [] : await SpringReferenceLinesAsync(db, protection, ctx, request.Id, ct),
+            set.AltitudesRelative));
     }
 
     private static async Task<Results<Ok<AreaHypsometryDto>, UnauthorizedHttpResult, ProblemHttpResult>>

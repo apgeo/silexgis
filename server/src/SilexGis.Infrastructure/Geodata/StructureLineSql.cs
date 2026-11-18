@@ -26,7 +26,9 @@ namespace SilexGis.Infrastructure.Geodata;
 /// half-circle is the consumer's job, as it is for passage.
 /// </param>
 /// <param name="LengthM">Ground length of the piece, metres.</param>
-public sealed record StructureLineSegmentRow(Guid FeatureId, double? AzimuthDegrees, double LengthM);
+/// <param name="Truncated">True on every row when more traces qualified than the ceiling admits,
+/// so the answer holds the first ones only — the nearest, for a reach around a cave.</param>
+public sealed record StructureLineSegmentRow(Guid FeatureId, double? AzimuthDegrees, double LengthM, bool Truncated);
 
 /// <summary>
 /// The mapped structural lines near a cave, cut into straight pieces that can be put in a rose.
@@ -150,9 +152,11 @@ public static class StructureLineSql
         parameters.Add("sl_type_id", featureTypeId);
         parameters.Add("sl_max_features", maxFeatures);
 
+        // An area has no point to measure nearness from, so the cut is by id: the same cut on
+        // every run of the same request.
         var sql = $"""
             WITH nearby AS (
-                SELECT f.id, f.geom
+                SELECT f.id, f.geom, row_number() OVER (ORDER BY f.id) AS rank
                 FROM features f
                 WHERE f.deleted_at IS NULL
                   AND f.geom IS NOT NULL
@@ -162,7 +166,7 @@ public static class StructureLineSql
                   AND {visibleSql}
                   AND {exactSql}
                 ORDER BY f.id
-                LIMIT @sl_max_features
+                LIMIT @sl_max_features + 1
             )
             {SegmentTail}
             """;
@@ -211,7 +215,12 @@ public static class StructureLineSql
                 FROM centre
             ),
             nearby AS (
-                SELECT f.id, f.geom
+                -- Nearest first, so a ceiling that cuts the answer cuts the traces furthest from the
+                -- cave rather than whichever ids happen to sort last. Measured on the spheroid
+                -- like the reach, over the rows already inside it.
+                SELECT f.id, f.geom,
+                       row_number() OVER (
+                           ORDER BY ST_Distance(f.geom::geography, centre.g::geography), f.id) AS rank
                 FROM features f, box AS centre
                 WHERE f.deleted_at IS NULL
                   AND f.geom IS NOT NULL
@@ -221,8 +230,8 @@ public static class StructureLineSql
                   AND {withinReach}
                   AND {visibleSql}
                   AND {exactSql}
-                ORDER BY f.id
-                LIMIT @sl_max_features
+                ORDER BY ST_Distance(f.geom::geography, centre.g::geography), f.id
+                LIMIT @sl_max_features + 1
             )
             {SegmentTail}
             """;
@@ -233,7 +242,8 @@ public static class StructureLineSql
     /// <summary>
     /// The part both statements share: each admitted trace cut into its straight pieces, with the
     /// spheroid bearing and ground length of each. Held in one place so the buffer-scoped and the
-    /// area-scoped answers cannot come to mean two different measurements.
+    /// area-scoped answers cannot come to mean two different measurements. The pool above holds
+    /// one trace past the ceiling, which is left out here and only says that the cut was made.
     /// </summary>
     private const string SegmentTail =
         """
@@ -243,9 +253,11 @@ public static class StructureLineSql
                    ST_EndPoint(ds.geom)::geography)) AS "AzimuthDegrees",
                ST_Distance(
                    ST_StartPoint(ds.geom)::geography,
-                   ST_EndPoint(ds.geom)::geography) AS "LengthM"
+                   ST_EndPoint(ds.geom)::geography) AS "LengthM",
+               (SELECT count(*) FROM nearby) > @sl_max_features AS "Truncated"
         FROM nearby n
         CROSS JOIN LATERAL ST_DumpSegments(n.geom) ds
+        WHERE n.rank <= @sl_max_features
         ORDER BY n.id
         """;
 }

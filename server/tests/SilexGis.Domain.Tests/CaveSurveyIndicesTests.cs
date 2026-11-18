@@ -81,6 +81,39 @@ public class CaveSurveyIndicesTests
     }
 
     [Fact]
+    public void A_loop_whose_ends_nearly_meet_does_not_swamp_the_cave_mean()
+    {
+        // Path 0: 1,800 m of passage between ends 1,500 m apart, sinuosity 1.2. Path 1: a 200 m
+        // loop whose ends are 0.5 m apart. Read as a ratio the loop is 400, and the length-weighted
+        // mean (1800 x 1.2 + 200 x 400) / 2000 = 41.08. The loop's gap is below max(1 m, 2% of
+        // 200 m = 4 m), so it is closed: it has no sinuosity and the cave's mean is path 0's, 1.2.
+        var cave = CaveSurveyIndices.Compute(
+        [
+            Piece((0, 0), (0, 1500), planLengthM: 1800, pathIndex: 0),
+            Piece((5000, 0), (5100, 0), planLengthM: 100, pathIndex: 1, segmentIndex: 0),
+            Piece((5100, 0), (5000.5, 0), planLengthM: 100, pathIndex: 1, segmentIndex: 1),
+        ]);
+
+        cave.Sinuosity!.Value.ShouldBe(1.2d, 1e-6);
+
+        var paths = CaveSurveyIndices.PathSinuosities(
+        [
+            Piece((5000, 0), (5100, 0), planLengthM: 100, pathIndex: 1, segmentIndex: 0),
+            Piece((5100, 0), (5000.5, 0), planLengthM: 100, pathIndex: 1, segmentIndex: 1),
+        ]);
+        paths[0].StraightLineM.ShouldBe(0.5d, 1e-3);
+        paths[0].Sinuosity.ShouldBeNull();
+
+        // Just outside the closed limit: ends 5 m apart over 200 m (limit 4 m) answer 200 / 5 = 40.
+        var open = CaveSurveyIndices.PathSinuosities(
+        [
+            Piece((5000, 0), (5100, 0), planLengthM: 100, segmentIndex: 0),
+            Piece((5100, 0), (5005, 0), planLengthM: 100, segmentIndex: 1),
+        ]);
+        open[0].Sinuosity!.Value.ShouldBe(40d, 1e-3);
+    }
+
+    [Fact]
     public void A_path_that_returns_to_where_it_started_has_no_sinuosity_rather_than_an_infinite_one()
     {
         var loop = CaveSurveyIndices.Compute(

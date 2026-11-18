@@ -15,6 +15,17 @@ namespace SilexGis.Domain.Geo;
 public sealed record ElevationSample(double ElevationM, double WeightM);
 
 /// <summary>
+/// One straight piece of passage as the height histogram sees it: the heights of its two ends and
+/// what it weighs. A leg is not a point at its mid-height — a shaft from 1000 m to 900 m holds
+/// passage at every height between — so <see cref="ElevationBands.Spread"/> turns it into samples
+/// along its height range before anything is binned.
+/// </summary>
+/// <param name="FromM">Height of one end, metres.</param>
+/// <param name="ToM">Height of the other end, metres. Either order.</param>
+/// <param name="WeightM">What the whole leg weighs — metres of passage along it.</param>
+public sealed record ElevationLeg(double FromM, double ToM, double WeightM);
+
+/// <summary>
 /// One sector of the elevation histogram.
 /// </summary>
 /// <param name="FromM">Lower edge, metres, inclusive.</param>
@@ -214,6 +225,78 @@ public static class ElevationBands
         }
 
         return 10d * magnitude;
+    }
+
+    /// <summary>
+    /// The finest height step a leg is cut into, as a share of the coarsest sector width the
+    /// whole range could be given. Every width on the 1-2-5 ladder at or below that sector width
+    /// is a whole number of these steps, so a piece cut on this grid never straddles a sector
+    /// edge, whichever width the histogram settles on.
+    /// </summary>
+    private const double SpreadStepsPerBin = 10d;
+
+    /// <summary>
+    /// Samples spread along each leg's height range, each leg's weight shared out in proportion to
+    /// the height each piece covers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A leg binned at its mid-height puts all of its length in one sector. For a level gallery
+    /// that is right; for a shaft it is not: a hundred-metre pitch between a gallery at 1000 m and
+    /// one at 900 m would add a hundred metres to the 950 m sector, which really holds a few
+    /// metres of shaft, and read there as a third level that does not exist. Cut into pieces at
+    /// fixed heights, the same pitch adds its length evenly across every sector it crosses.
+    /// </para>
+    /// <para>
+    /// The pieces are cut at whole multiples of one step, counted from zero rather than from
+    /// each leg's own end, so they line up with the sector edges the histogram later chooses. A
+    /// level leg — or one that rises less than a step — stays one sample at its mid-height.
+    /// </para>
+    /// </remarks>
+    public static IEnumerable<ElevationSample> Spread(IReadOnlyCollection<ElevationLeg> legs)
+    {
+        var finite = legs.Where(l => double.IsFinite(l.FromM) && double.IsFinite(l.ToM)).ToList();
+        if (finite.Count == 0)
+        {
+            yield break;
+        }
+
+        var lowest = finite.Min(l => Math.Min(l.FromM, l.ToM));
+        var highest = finite.Max(l => Math.Max(l.FromM, l.ToM));
+        var step = BinWidthFor(lowest, highest) / SpreadStepsPerBin;
+
+        foreach (var leg in finite)
+        {
+            var bottom = Math.Min(leg.FromM, leg.ToM);
+            var top = Math.Max(leg.FromM, leg.ToM);
+            var rise = top - bottom;
+            if (rise <= step * Epsilon || !(leg.WeightM > 0))
+            {
+                yield return new ElevationSample((bottom + top) / 2, leg.WeightM);
+                continue;
+            }
+
+            // Every comparison allows a hair of floating-point error, so a grid line that lands a
+            // hair away from where it really is never leaves a sliver of a piece behind it.
+            var hair = step * Epsilon;
+            var cut = bottom;
+            while (top - cut > hair)
+            {
+                var next = (Math.Floor(cut / step) + 1) * step;
+                if (next <= cut + hair)
+                {
+                    next += step;
+                }
+
+                if (top - next <= hair)
+                {
+                    next = top;
+                }
+
+                yield return new ElevationSample((cut + next) / 2, leg.WeightM * (next - cut) / rise);
+                cut = next;
+            }
+        }
     }
 
     /// <summary>

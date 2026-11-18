@@ -93,10 +93,7 @@ public static class CaveStructureComparisonEndpoints
 
         // A leg the file marks as already surveyed on another trip is the same passage measured
         // twice, and leaving it in would weight its trend twice over because two teams walked it.
-        var passageSamples = set.Segments
-            .Where(s => !s.IsDuplicate && s.AzimuthDegrees is not null)
-            .Select(s => new OrientationSample(s.AzimuthDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM))
-            .ToList();
+        var passageSamples = SurveySegments.DirectionSamples(set.Segments.Where(s => !s.IsDuplicate)).ToList();
 
         var passage = passageSamples.Count > 0
             ? OrientationStatistics.Summarize(passageSamples)
@@ -148,8 +145,10 @@ public static class CaveStructureComparisonEndpoints
             set.Basis,
             set.Basis == SurveySegmentBasis.SkeletonHeuristic,
             set.SurveyModelId,
-            radius,
+            request.AreaId is null ? radius : null,
+            request.AreaId,
             structureRows.Select(r => r.FeatureId).Distinct().Count(),
+            structureRows.Any(r => r.Truncated),
             passage,
             structure,
             divergence));
@@ -237,7 +236,9 @@ public static class CaveStructureComparisonEndpoints
         return TypedResults.Ok(new AreaStructureComparisonDto(
             request.Id,
             dolineSamples.Count,
+            axisRows.Count(r => r.AxisAzimuthDegrees is null),
             structureRows.Select(r => r.FeatureId).Distinct().Count(),
+            structureRows.Any(r => r.Truncated),
             dolines,
             structure,
             divergence));
