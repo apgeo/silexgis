@@ -26,6 +26,12 @@ interface FeatureType {
 /** Far from the demonstration data and from every other spec's features. */
 const HERE = { lon: 27.31, lat: 46.71 };
 
+/**
+ * Where the model that learns from entrances is run: its own corner, further from the first test's
+ * than any layer reaches, so the entrances invented here are in no other run's evidence.
+ */
+const THERE = { lon: 27.61, lat: 46.71 };
+
 /** An InputNumber by the name it was given; the name is on the field itself. */
 function numberField(scope: Page | Locator, name: string) {
   return scope.getByRole('spinbutton', { name, exact: true });
@@ -195,6 +201,207 @@ test('a model is written with its weights shown, run over an area, and its map s
     }
     if (modelId) {
       await asPerson(page, 'DELETE', `/api/v1/cave-potential/models/${modelId}`).catch(() => undefined);
+    }
+    await asPerson(page, 'DELETE', `/api/v1/features/${hollow.id}`).catch(() => undefined);
+    await asPerson(page, 'DELETE', `/api/v1/features/${area.id}`).catch(() => undefined);
+  }
+});
+
+// A model that learns its weights from known entrances, run for real, and what it learnt read.
+//
+// The server's tests prove the counting — the ratio and the weights of each class, the seeded
+// parting, the two curves — and that nobody reads a result who may not place every entrance in it.
+// What they cannot show is that a person can ask for such a model at all: that choosing the method
+// takes the scores and weights out of the form and puts the parting in, that the run turns up with
+// its figures, and that the tables and the curves open under it.
+//
+// Fourteen invented entrances and one invented sinkhole, read by the account that made them. Ten
+// of the entrances lie within two hundred metres of the sinkhole and four well beyond, so the
+// near class must come out commoner in entrances than the ground as a whole.
+test('a model learns its weights from known entrances, and its tables and curves are read', async ({ page }) => {
+  test.setTimeout(300_000);
+  await login(page);
+
+  const types = await asPerson<FeatureType[]>(page, 'GET', '/api/v1/feature-types');
+  const karstArea = types.find((t) => t.code === 'karst_area');
+  const sinkhole = types.find((t) => t.code === 'sinkhole');
+  expect(karstArea, 'the karst area kind is seeded').toBeTruthy();
+  expect(sinkhole, 'the sinkhole kind is seeded').toBeTruthy();
+  const caveTypes = await asPerson<{ id: number }[]>(page, 'GET', '/api/v1/cave-types');
+  const entranceTypes = await asPerson<{ id: number }[]>(page, 'GET', '/api/v1/entrance-types');
+
+  const stamp = Date.now();
+  const areaName = `E2E learning area ${stamp}`;
+  const modelName = `E2E learning model ${stamp}`;
+  const { lon: w, lat: s } = THERE;
+  const feature = (name: string, featureTypeId: number, geometry: object) =>
+    asPerson<{ id: string }>(page, 'POST', '/api/v1/features', {
+      kind: 'generic',
+      name,
+      featureTypeId,
+      geometry,
+      description: null,
+      properties: null,
+      parents: null,
+      locationProtected: false,
+      cavingGroupId: null,
+      visibility: 'authenticated',
+    });
+  const area = await feature(areaName, karstArea!.id, {
+    type: 'Polygon',
+    coordinates: [[[w, s], [w + 0.01, s], [w + 0.01, s + 0.01], [w, s + 0.01], [w, s]]],
+  });
+  // Low in the area, so that its upper part lies beyond two hundred metres of it.
+  const hollow = await feature(`E2E learning sinkhole ${stamp}`, sinkhole!.id, {
+    type: 'Point',
+    coordinates: [w + 0.005, s + 0.002],
+  });
+
+  // A thousandth of a degree is some seventy-six metres east and a hundred and eleven north here,
+  // so at a fifty-metre cell no two of these share a cell.
+  const near: [number, number][] = [
+    [0.004, 0.001], [0.005, 0.001], [0.006, 0.001],
+    [0.004, 0.002], [0.006, 0.002],
+    [0.004, 0.003], [0.005, 0.003], [0.006, 0.003],
+    [0.003, 0.002], [0.007, 0.002],
+  ];
+  const far: [number, number][] = [[0.002, 0.008], [0.005, 0.009], [0.008, 0.007], [0.001, 0.006]];
+  const entrances = [...near, ...far];
+  const caveIds: string[] = [];
+  let modelId: string | undefined;
+  try {
+    for (const [i, [east, north]] of entrances.entries()) {
+      const cave = await asPerson<{ id: string }>(page, 'POST', '/api/v1/caves', {
+        name: `E2E learning cave ${stamp} ${i}`,
+        caveTypeId: caveTypes[0]!.id,
+        visibility: 'authenticated',
+        locationProtected: false,
+        explorationStatus: 'Unknown',
+        isShowCave: false,
+      });
+      caveIds.push(cave.id);
+      await asPerson(page, 'POST', `/api/v1/caves/${cave.id}/entrances`, {
+        entranceTypeId: entranceTypes[0]!.id,
+        isMain: true,
+        geom: { type: 'Point', coordinates: [w + east, s + north] },
+        positionQuality: 'Gps',
+      });
+    }
+
+    await gotoRoute(page, '/cave-potential');
+    await page.getByTestId('cave-potential-new-model').click();
+    const editor = page.getByTestId('cave-potential-editor');
+    await expect(editor).toBeVisible();
+    await editor.getByTestId('cave-potential-name').fill(modelName);
+
+    // Choosing the method puts the parting of the entrances into the form.
+    await expect(editor.getByTestId('cave-potential-training')).toHaveCount(0);
+    await editor.getByTestId('cave-potential-method').getByText('Weights of evidence').click();
+    await expect(editor.getByTestId('cave-potential-training')).toBeVisible();
+    await expect(numberField(editor, 'Entrances kept back for testing (%)')).toHaveValue('30');
+    await numberField(editor, 'Seed of the draw').fill('7');
+    await expect(editor.getByTestId('cave-potential-learning-notice')).toBeVisible();
+
+    // The layer is cut into classes and asked for no score and no weight: within two hundred
+    // metres of a sinkhole, and beyond.
+    await chooseOption(page, editor.getByTestId('cave-potential-add-layer'), 'Distance to sinkholes (m)');
+    await editor.getByTestId('cave-potential-add-layer-confirm').click();
+    await expect(page.getByTestId('cave-potential-save')).toBeDisabled();
+    await numberField(editor, 'Upper bound of class 1 of Distance to sinkholes (m)').fill('200');
+    await expect(editor.getByRole('spinbutton', { name: /^Score of/ })).toHaveCount(0);
+    await expect(editor.getByTestId('cave-potential-layer-weight')).toHaveCount(0);
+    await expect(editor.getByTestId('cave-potential-weights-counted')).toBeVisible();
+
+    await page.getByTestId('cave-potential-save').click();
+    await expect(editor).toHaveCount(0, { timeout: 30_000 });
+
+    const modelRow = page.getByTestId('cave-potential-models').locator('tr').filter({ hasText: modelName });
+    await expect(modelRow).toBeVisible();
+    await expect(modelRow).toContainText('Weights of evidence');
+    await expect(modelRow.getByTestId('cave-potential-learns')).toBeVisible();
+    const models = await asPerson<{ id: string; name: string }[]>(page, 'GET', '/api/v1/cave-potential/models');
+    modelId = models.find((m) => m.name === modelName)?.id;
+
+    await modelRow.getByTestId('cave-potential-run').click();
+    const runForm = page.getByTestId('cave-potential-run-form');
+    await expect(runForm).toBeVisible();
+    await chooseArea(page, runForm.getByTestId('cave-potential-run-area'), areaName);
+    await numberField(runForm, 'Cell size (m)').fill('50');
+    await page.getByTestId('cave-potential-run-start').click();
+    await expect(runForm).toHaveCount(0, { timeout: 30_000 });
+
+    const resultRow = page
+      .getByTestId('cave-potential-results')
+      .locator('tr.ant-table-row')
+      .filter({ hasText: modelName });
+    await expect(resultRow).toBeVisible({ timeout: 30_000 });
+    await expect(resultRow.getByTestId('cave-potential-result-status')).toHaveText(/^(Ready|Failed)$/, {
+      timeout: 240_000,
+    });
+    expect(await resultRow.innerText(), 'the run came to a map').toContain('Ready');
+
+    // What the run learnt, in a line under its state: every invented entrance is in one part or
+    // the other, and both areas under the curve are figures between nought and one.
+    const line = await resultRow.getByTestId('cave-potential-result-training').innerText();
+    const told = /learnt from (\d+) entrances, tested on (\d+) · AUC (\d\.\d{3}) \/ (\d\.\d{3})/.exec(line);
+    expect(told, `the line says what was learnt: ${line}`).not.toBeNull();
+    expect(Number(told![1]) + Number(told![2])).toBe(entrances.length);
+    expect(Number(told![2])).toBeGreaterThan(0);
+    // Ten of fourteen entrances lie on the small near class, so the map finds the entrances it
+    // learnt from far better than chance.
+    expect(Number(told![3])).toBeGreaterThan(0.5);
+
+    await resultRow.getByTestId('cave-potential-training-toggle').click();
+    const view = page.getByTestId('cave-potential-training-view');
+    await expect(view).toBeVisible();
+    await expect(view.getByTestId('cave-potential-training-split')).toContainText('30 % kept back, seed 7');
+    await expect(view.getByTestId('cave-potential-auc-success')).toContainText(`AUC ${told![3]}`);
+    await expect(view.getByTestId('cave-potential-auc-prediction')).toContainText(`AUC ${told![4]}`);
+    // Nothing invented here is protected, and the view says nothing of protected entrances.
+    await expect(view.getByTestId('cave-potential-training-protected')).toHaveCount(0);
+
+    // The weight table: a row for each class under the bounds the model was run with, and the
+    // near class commoner in entrances than the ground as a whole.
+    const table = view.getByTestId('cave-potential-weights-sinkhole_distance');
+    const nearRow = table.locator('tr').filter({ hasText: 'below 200' });
+    const farRow = table.locator('tr').filter({ hasText: '200 and above' });
+    await expect(nearRow).toBeVisible();
+    await expect(farRow).toBeVisible();
+    const figures = async (row: Locator) => (await row.locator('td').allInnerTexts()).map((text) => text.trim());
+    const nearFigures = await figures(nearRow);
+    const farFigures = await figures(farRow);
+    // Class, cells, cells with an entrance, frequency ratio, W+, W−, contrast, its deviation, studentised.
+    expect(nearFigures).toHaveLength(9);
+    expect(Number(nearFigures[2]) + Number(farFigures[2])).toBe(Number(told![1]));
+    expect(Number(nearFigures[3])).toBeGreaterThan(1);
+    expect(Number(farFigures[3])).toBeLessThan(1);
+    expect(Number(nearFigures[4])).toBeGreaterThan(0);
+    expect(Number(nearFigures[6])).toBeGreaterThan(0);
+
+    // Both curves are drawn, with the line of chance to read them against.
+    const curves = view.getByTestId('cave-potential-rate-curves');
+    await expect(curves.locator('svg')).toBeVisible();
+    await expect(curves).toContainText('Success rate');
+    await expect(curves).toContainText('Prediction rate');
+    await expect(curves).toContainText('Chance');
+
+    // On the map its key says the colours rank this map's ground only, and that it must not be passed on.
+    await resultRow.getByTestId('cave-potential-show').click();
+    await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('cave-potential-legend')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('cave-potential-caveat')).toContainText('they rank the ground');
+    await expect(page.getByTestId('cave-potential-caveat')).toContainText('Do not pass it on');
+  } finally {
+    const results = await asPerson<{ id: string; modelName: string }[]>(page, 'GET', '/api/v1/cave-potential/results')
+      .catch(() => []);
+    for (const result of results.filter((r) => r.modelName === modelName)) {
+      await asPerson(page, 'DELETE', `/api/v1/cave-potential/results/${result.id}`).catch(() => undefined);
+    }
+    if (modelId) {
+      await asPerson(page, 'DELETE', `/api/v1/cave-potential/models/${modelId}`).catch(() => undefined);
+    }
+    for (const id of caveIds) {
+      await asPerson(page, 'DELETE', `/api/v1/caves/${id}`).catch(() => undefined);
     }
     await asPerson(page, 'DELETE', `/api/v1/features/${hollow.id}`).catch(() => undefined);
     await asPerson(page, 'DELETE', `/api/v1/features/${area.id}`).catch(() => undefined);
