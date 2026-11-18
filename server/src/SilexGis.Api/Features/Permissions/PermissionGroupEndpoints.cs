@@ -636,7 +636,18 @@ public static class PermissionGroupEndpoints
         // one that most needs the live-membership guard.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.PermissionGroupMembers.Remove(member);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The same removal, sent twice at once, landed first: the member is gone, as asked, and
+            // whatever the other request staged with it was its to send.
+            await transaction.RollbackAsync(ct);
+            return TypedResults.NoContent();
+        }
+
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
             await transaction.RollbackAsync(ct);

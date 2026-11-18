@@ -347,6 +347,39 @@ public sealed class PlaceStationTests : IAsyncLifetime, IDisposable, IClassFixtu
         Ids(await GetPageAsync(uploader, $"/api/v1/sync/sets/{set}/survey-models"), "placeStationTombstones").ShouldBe([id]);
     }
 
+    /// <summary>
+    /// A phone removes a mapping at the moment somebody removes it in the browser. The browser's
+    /// removal waits on the place's lock while the phone holds it, and then must see the phone's
+    /// removal: read before the lock, it re-stamped the removal with its own later time, and the
+    /// mapping's revision moved for a change nobody made.
+    /// </summary>
+    [Fact]
+    public async Task A_browser_removal_waiting_on_a_phone_that_removed_the_mapping_leaves_the_phones_removal_standing()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var place = await CreatePlaceAsync(cave);
+        var model = await CreateModelAsync(cave, SurveyModelFormat.Lox, "Racing");
+        var set = await CreateSetAsync(uploader, [cave], clubId);
+        var id = Guid.CreateVersion7();
+        Statuses(await UploadAsync(uploader, set, new object[] { new { id, placeId = place, surveyModelId = model, station = "7" } }))
+            .ShouldBe(["created"]);
+
+        var phoneRemovedAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var removed = await AnotherWriterFirst.SendAsync(
+            factory,
+            // The phone's removal as its writer makes it: under the place's row lock, then the link.
+            $"WITH gone AS (UPDATE res_links SET deleted_at = '{phoneRemovedAt:O}', updated_at = '{phoneRemovedAt:O}' "
+            + $"WHERE id = '{id}' RETURNING id) UPDATE features SET updated_at = updated_at WHERE id = '{place}'",
+            () => uploader.DeleteAsync($"/api/v1/reslinks/{id}"));
+
+        removed.StatusCode.ShouldBeOneOf(HttpStatusCode.NoContent, HttpStatusCode.NotFound);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var link = await db.ResLinks.IgnoreQueryFilters().AsNoTracking().SingleAsync(l => l.Id == id);
+        link.DeletedAt.ShouldBe(phoneRemovedAt);
+        link.UpdatedAt.ShouldBe(phoneRemovedAt);
+    }
+
     // ---- reading -------------------------------------------------------------------------------
 
     [Fact]

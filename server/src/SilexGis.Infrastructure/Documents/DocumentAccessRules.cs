@@ -234,6 +234,106 @@ public static class DocumentAccessRules
     }
 
     /// <summary>
+    /// Of a set of documents, the ones this caller may read — the same walk as
+    /// <see cref="CanReadAsync"/>, asked for the whole set at once: the documents' own facts in
+    /// one round, and the reach through an attachment, for those whose own facts left the
+    /// question open, in one more. Asked document by document it cost several queries each, on
+    /// every listing that showed documents.
+    /// </summary>
+    public static async Task<HashSet<Guid>> ReadableAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyCollection<Document> documents,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        var (decided, open) = await DecideOwnFactsAsync(access, ctx, AccessAction.Read, documents, ct);
+        if (open.Count > 0)
+        {
+            var reached = await ReachedByAttachmentAsync(db, ctx, [.. open.Keys], ct);
+            foreach (var (id, facts) in open)
+            {
+                if (reached.Contains(id) && AllowedOnceReached(ctx, AccessAction.Read, facts))
+                {
+                    decided.Add(id);
+                }
+            }
+        }
+
+        return decided;
+    }
+
+    /// <summary>
+    /// Of a set of documents, the ones this caller may write — the walk of
+    /// <see cref="CanWriteAsync"/> with the documents' own facts read for the whole set. The reach
+    /// through the served file's rules has no set-shaped form, so it is still asked one document
+    /// at a time, but only for the documents whose own facts left the question open.
+    /// </summary>
+    /// <param name="currentFiles">The file each document currently serves, by document id.</param>
+    public static async Task<HashSet<Guid>> WritableAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        AccessContext ctx,
+        IReadOnlyCollection<Document> documents,
+        IReadOnlyDictionary<Guid, StoredFile> currentFiles,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(currentFiles);
+        var (decided, open) = await DecideOwnFactsAsync(access, ctx, AccessAction.Write, documents, ct);
+        foreach (var (id, facts) in open)
+        {
+            if (currentFiles.TryGetValue(id, out var content)
+                && await FileAccessRules.CanWriteFileAsync(db, access, ctx, content, ct)
+                && AllowedOnceReached(ctx, AccessAction.Write, facts))
+            {
+                decided.Add(id);
+            }
+        }
+
+        return decided;
+    }
+
+    /// <summary>
+    /// The first pass of the walk over a set: the documents decided on their own facts, and the
+    /// ones whose answer could still turn on reach through an attachment, with their facts.
+    /// </summary>
+    private static async Task<(HashSet<Guid> Decided, Dictionary<Guid, AccessTargetFacts> Open)> DecideOwnFactsAsync(
+        IAccessService access,
+        AccessContext ctx,
+        AccessAction action,
+        IReadOnlyCollection<Document> documents,
+        CancellationToken ct)
+    {
+        var decided = new HashSet<Guid>();
+        var open = new Dictionary<Guid, AccessTargetFacts>();
+        if (documents.Count == 0)
+        {
+            return (decided, open);
+        }
+
+        var facts = await access.FactsOfManyAsync([.. documents], ct);
+        foreach (var (id, fact) in facts)
+        {
+            var decision = AccessEvaluator.Decide(ctx, AccessDomain.Documents, action, fact);
+            if (AccessEvaluator.AttachmentReachCouldDecide(decision))
+            {
+                open[id] = fact;
+            }
+            else if (decision.Allowed)
+            {
+                decided.Add(id);
+            }
+        }
+
+        return (decided, open);
+    }
+
+    private static bool AllowedOnceReached(AccessContext ctx, AccessAction action, AccessTargetFacts facts) =>
+        AccessEvaluator.Decide(ctx, AccessDomain.Documents, action, facts with { ReachedByAttachment = true }).Allowed;
+
+    /// <summary>
     /// Read of a document. <paramref name="content"/> is the file the document currently
     /// serves, or null when it serves none — a document with nothing behind it is
     /// reachable only through its own rules, its owner and its visibility.

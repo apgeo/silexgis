@@ -296,6 +296,12 @@ public static class CaverEndpoints
             return ApiProblems.Forbidden("caver.requires_roster_keeper");
         }
 
+        // Locked before the checks below and held to the removal: somebody put on a trip or a
+        // camp meanwhile either shows up in the checks, or waits and then fails on the removed
+        // entry, instead of turning the removal into a constraint violation nobody explains.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await CaverSql.LockAsync(db, [id], ct);
+
         var caver = await db.Cavers.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (caver is null)
         {
@@ -363,8 +369,7 @@ public static class CaverEndpoints
         }
 
         // Deleting the person cascades their memberships, which can sever an account's
-        // only path into Full Administrators.
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // only path into Full Administrators; checked inside the transaction opened above.
         // Resource-link members naming the person have no FK; they go with the entry.
         await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.Caver && m.EntityId == id)
@@ -645,6 +650,14 @@ public static class CaverEndpoints
             return ApiProblems.BadRequest("caver.merge_self", "A person cannot be merged into themselves.");
         }
 
+        // Both entries are locked before anything about them is read, and stay locked until the
+        // fold commits: a row that comes to name either entry meanwhile either lands before the
+        // reads below see it, or waits and then lands on what the merge left behind. Read after
+        // the lock and left to the removal of the duplicate, such a row would be cascaded away or
+        // emptied while the merge answered that everything moved.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await CaverSql.LockAsync(db, [id, request.SourceCaverId], ct);
+
         var target = await db.Cavers.FirstOrDefaultAsync(c => c.Id == id, ct);
         var source = await db.Cavers.FirstOrDefaultAsync(c => c.Id == request.SourceCaverId, ct);
         if (target is null || source is null)
@@ -901,8 +914,8 @@ public static class CaverEndpoints
             : string.IsNullOrWhiteSpace(target.Notes) ? source.Notes : $"{target.Notes}\n{source.Notes}";
 
         // Merging repoints memberships and can move the account link — both carry
-        // inherited rights, so the whole fold must not orphan Full Administrators.
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        // inherited rights, so the whole fold must not orphan Full Administrators; the
+        // transaction opened with the locks above holds it.
 
         // Cleared first: the account link is unique, and both rows exist until the save.
         // The fold rewrites and removes answers about coming, which carry a last-change token: a
