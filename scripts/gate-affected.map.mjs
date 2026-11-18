@@ -191,7 +191,9 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'ImportedCoordinatesTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'ImportedCoordinatesTests',
+    // The map's layer lists narrowed to what can be drawn, walked past a hundred.
+    'ReadyLayerListTests'],
   georeferencedMaps: [
     'GeoreferencedMapTests', 'GeoreferencedMapSheetTests', 'GeoreferencedMapStationPointTests', 'MapSheetRenderingTests',
     'FilterWorldConformanceTests', 'FilterWorldListParityTests',
@@ -201,6 +203,8 @@ export const groups = {
     'BulkImportTests', 'PhotoImportTests',
     'ServerDirectoryContainmentTests',
     'SpeleolocTripImportTests', 'StagedImportTests', 'TripTrackImportTests',
+    // The bounds a vector or trip review holds its decisions and selections to.
+    'ImportReviewBoundsTests',
     // A phone recording is placed by the archive import's resolver.
     'TripRecordingConversionTests',
     // Every import commit names its batch on the history it writes.
@@ -278,8 +282,12 @@ export const groups = {
     'SignInProtectionTests', 'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     // Walks the endpoint table: every route reading a JSON body runs a registered validator.
     'RequestValidationCoverageTests',
+    // Bodies past a column, an undefined audience, null members, unbounded lists, wildcard search.
+    'RequestValidationGapTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
     'UserDeleteBlockedTests', 'LoggedMessageSecretsTests',
+    // Administrators' writes racing the sign-in machinery's on the account row, and doubled removals.
+    'AccountWriteRaceTests',
     // The account mark that holds an account's uploads and file imports for review.
     'SyncUploadHoldTests', 'FileImportReviewHoldTests', 'TripImportCommitTests', 'SpeleolocTripImportTests',
     'TripRecordingConversionTests',
@@ -295,6 +303,8 @@ export const groups = {
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
     'ResLinkTargetPictureTests',
+    // A link listing decides the documents it shows for the whole set at once.
+    'DocumentLinkQueryCostTests',
     // A place a phone pinned on its map is a link shown whole or not at all, and written only by
     // the phone's sync and the map screen.
     'PlacePointProtectionTests', 'PlacePointWriteTests',
@@ -752,16 +762,17 @@ export const crossCutting = {
     'PublicTripCachingTests', 'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests',
     'PublicTripMomentPicturesTests', 'PublicTripPlannedReturnTests',
     'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests', 'PublishedNamesNowhereTests',
-    'PublishedSurveyBoundsTests', 'RegistryStatisticsTests', 'ResLinkApiTests',
-    'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests', 'SearchEndpointTests',
-    'SharedViewDataTests', 'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests',
-    'SpeologieCatalogueTests', 'StagedImportTests', 'StorageAlertTests', 'StorageReportTests',
-    'StorageRoomTests', 'StructureComparisonTests', 'SurveyCompilationTests',
-    'SurveyGraphTests', 'SurveyModelPlacementTests', 'SurveyModelReadingTests',
-    'SurveyModelTests', 'SurveyModelTileTests', 'SurveyModelTrackedTripCountsTests',
-    'SurveyModelTrackedTripReplayTests', 'SurveyModelTrackedTripsTests',
-    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyUploadExternalStepTests',
-    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
+    'PublishedSurveyBoundsTests', 'RegistryStatisticsTests', 'RequestValidationGapTests',
+    'ResLinkApiTests', 'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests',
+    'SearchEndpointTests', 'SharedViewDataTests', 'SpeleoLocDevSeedTests',
+    'SpeleolocTripImportTests', 'SpeologieCatalogueTests', 'StagedImportTests',
+    'StorageAlertTests', 'StorageReportTests', 'StorageRoomTests', 'StructureComparisonTests',
+    'SurveyCompilationTests', 'SurveyGraphTests', 'SurveyModelPlacementTests',
+    'SurveyModelReadingTests', 'SurveyModelTests', 'SurveyModelTileTests',
+    'SurveyModelTrackedTripCountsTests', 'SurveyModelTrackedTripReplayTests',
+    'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
+    'SurveyUploadExternalStepTests', 'SurveyUploadMandeyeTests',
+    'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests',
     'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests', 'SurveyUploadSchemaTests',
     'SurveyUploadSurfaceTests', 'SurveyUploadViewerTests', 'SurveyWallsTests',
