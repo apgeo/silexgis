@@ -160,10 +160,8 @@ public sealed class UploadedGeodataDriverTests : IDisposable
             Gdal.PopErrorHandler();
         }
 
-        // A connection the library made is accepted by the time it gave up on it; a short grace
-        // covers the accept loop being scheduled after the library's own failure.
-        Thread.Sleep(200);
-        contacted.Count.ShouldBe(0, $"the library connected to the address behind {prefix}");
+        AwaitControlConnection(contacted, port);
+        contacted.Count.ShouldBe(1, $"the library connected to the address behind {prefix}");
     }
 
     /// <summary>
@@ -204,8 +202,8 @@ public sealed class UploadedGeodataDriverTests : IDisposable
         Should.Throw<VectorIOException>(() => new GdalVectorIO().Read(upload, GeofileFormat.GeoJson))
             .Message.ShouldContain("address");
 
-        Thread.Sleep(200);
-        contacted.Count.ShouldBe(0, "reading the upload fetched the address its coordinate system names");
+        AwaitControlConnection(contacted, port);
+        contacted.Count.ShouldBe(1, "reading the upload fetched the address its coordinate system names");
     }
 
     /// <summary>Counts every connection made to the listener until it stops.</summary>
@@ -230,6 +228,34 @@ public sealed class UploadedGeodataDriverTests : IDisposable
         });
 
         return contacted;
+    }
+
+    /// <summary>
+    /// The control for a "no request was made" check: a connection the test makes itself, waited
+    /// for until the listener has counted it.
+    /// </summary>
+    /// <remarks>
+    /// It proves the listener is bound and its accept loop running, so a count with nothing else
+    /// in it is the library's silence and not a listener that could not have heard anything. It
+    /// also replaces a fixed grace period: the library's own attempt, had it made one, finished its
+    /// handshake before the library returned, and connections are accepted in the order they
+    /// arrived — so by the time the control is counted, any earlier one has been counted too.
+    /// </remarks>
+    private static void AwaitControlConnection(ConnectionCount contacted, int port)
+    {
+        var before = contacted.Count;
+        using (var control = new TcpClient())
+        {
+            control.Connect(IPAddress.Loopback, port);
+        }
+
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (contacted.Count == before && waited.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            Thread.Sleep(10);
+        }
+
+        contacted.Count.ShouldBeGreaterThan(before, "the listener never counted the control connection");
     }
 
     private sealed class ConnectionCount

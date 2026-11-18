@@ -280,7 +280,10 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
         // the cave. An ordinary member holds none.
         var refused = await PostUploadAsync(
             member, "entrance.txt", $"?attachEntityType=feature&attachEntityId={caveId}");
-        refused.StatusCode.ShouldBeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.BadRequest);
+        // The cave is public, so the member may read it: the refusal is the write rule's, and an
+        // unreadable target would have answered as one that does not exist instead.
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await refused.Content.ReadAsStringAsync());
+        (await ReadCodeAsync(refused)).ShouldBe("acl.forbidden");
 
         // The owner, who does hold write on it, is allowed — the refusal was the rule.
         (await PostUploadAsync(
@@ -456,13 +459,17 @@ public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClass
     /// Drops opened at the same moment under one new tag name all open, and the tag exists once:
     /// a loser of the race on the unique slug adopts the winner's tag instead of failing.
     /// </summary>
+    /// <remarks>
+    /// A smoke test: nothing forces the requests into each other's window, and handled one after
+    /// another they give the same answer. The adoption itself is proved deterministically by
+    /// <see cref="A_drop_whose_new_tag_is_coined_by_someone_else_mid_request_adopts_that_tag"/>.
+    /// </remarks>
     [Fact]
     public async Task Drops_opened_at_once_under_one_new_tag_name_all_open_and_share_one_tag()
     {
         var tagName = $"race-{Guid.NewGuid():N}"[..14];
 
-        // Fired without awaiting, so the look-ups land inside each other's insert window. A
-        // sequential series would take the found-it branch and prove nothing.
+        // Fired without awaiting, so the look-ups may land inside each other's insert window.
         var responses = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ =>
             owner.PostAsJsonAsync("/api/v1/upload-batches", new { label = "Race", tagName })));
 

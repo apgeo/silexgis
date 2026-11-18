@@ -181,8 +181,8 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
         }
         finally
         {
-            // Put the baseline back as it was. Every other class shares this database, so a right
-            // borrowed here has to be returned whatever the assertions above did.
+            // Put the baseline back as it was. The other tests of this class share its database, so
+            // a right borrowed here has to be returned whatever the assertions above did.
             foreach (var entry in parked)
             {
                 db.AccessEntries.Add(new SilexGis.Domain.Entities.AccessEntry
@@ -1260,9 +1260,9 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
             participants = spec.People.Select(p => new
             {
                 caverId = p.CaverId,
-                // Woven with this instance's own token: the whole suite shares one database, and a
-                // person's name resolves to whoever already holds it — a plain "Ana" would join
-                // another class's Ana and be credited with her trips.
+                // Woven with this instance's own token: the tests of this class share its database,
+                // and a person's name resolves to whoever already holds it — a plain "Ana" would
+                // join another test's Ana and be credited with her trips.
                 newCaverName = p.NewCaverName is null ? null : $"{p.NewCaverName} {tag}",
                 roleId = p.RoleId,
                 entryTime = p.EntryTime,
@@ -1423,7 +1423,7 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IDisposable, IClassFix
 
     /// <summary>
     /// A picture whose bytes are unique, so the store's deduplication does not decide a test: the
-    /// whole suite shares one database and a second upload of identical bytes is refused.
+    /// tests of this class share its database and a second upload of identical bytes is refused.
     /// </summary>
     private async Task<Guid> UploadPhotographAsync(string name)
     {

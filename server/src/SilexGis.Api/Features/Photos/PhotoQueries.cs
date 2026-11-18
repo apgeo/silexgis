@@ -72,8 +72,18 @@ public static class PhotoQueries
         // silently ran in memory instead would fetch the whole archive to filter it.
         if (query.CaveId is { } caveId)
         {
+            // The cave has to be one the caller may read. The pictures are already the ones they
+            // may see, but which of those hang on a cave is a fact about the cave: asked about one
+            // they cannot read, the answer would say that it exists and what is filed against it.
+            var caveReadable = db.Features.AsNoTracking()
+                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+                .Where(f => f.Id == caveId)
+                .Select(f => f.Id);
+
             // The cave and everything below it: a cave's pictures include its entrances'.
-            photographs = photographs.Where(PhotographReads.HangingUnder(db, [caveId]));
+            photographs = photographs
+                .Where(d => caveReadable.Any())
+                .Where(PhotographReads.HangingUnder(db, [caveId]));
         }
 
         if (query.FeatureId is { } featureId)

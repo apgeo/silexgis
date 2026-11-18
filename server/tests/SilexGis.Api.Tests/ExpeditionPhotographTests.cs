@@ -111,6 +111,13 @@ public sealed class ExpeditionPhotographTests : IAsyncLifetime, IDisposable, ICl
         (await anonymous.GetAsync($"/api/v1/photos?expeditionId={Guid.NewGuid()}"))
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
+        // A picture the organiser can see is filed on a real camp, so an unknown camp's empty
+        // answer is the filter at work and not an empty gallery.
+        var camp = await CreateCampAsync("authenticated");
+        var picture = await UploadAndAttachAsync("on-known-camp.png", "expedition", camp);
+        (await GalleryAsync(organiser, string.Empty)).ShouldContain(picture);
+        (await GalleryAsync(organiser, camp)).ShouldContain(picture);
+
         (await GalleryAsync(organiser, Guid.NewGuid())).ShouldBeEmpty();
     }
 
@@ -156,8 +163,8 @@ public sealed class ExpeditionPhotographTests : IAsyncLifetime, IDisposable, ICl
     /// <summary>A picture of the organiser's, private as uploaded, hung on one object.</summary>
     private async Task<Guid> UploadAndAttachAsync(string name, string entityType, Guid entityId)
     {
-        // Unique bytes: the store warns about content it already holds, and these suites share
-        // one database.
+        // Unique bytes: the store warns about content it already holds, and the tests of this
+        // class share its database.
         using var image = new MagickImage(MagickColors.SlateGray, 64, 64);
         image.Comment = $"{name} {Guid.NewGuid()}";
         var content = new ByteArrayContent(image.ToByteArray(MagickFormat.Png));

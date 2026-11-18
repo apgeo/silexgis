@@ -258,8 +258,8 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
-    /// A number unique to this class and this test. Every test class shares one database and the
-    /// number is unique across accounts now, so a hard-coded one would collide with a neighbour.
+    /// A number unique to this test. The tests of this class share its database and a number is
+    /// unique across accounts, so a hard-coded one would collide with another test's.
     /// </summary>
     private string Number(int index) =>
         "+4" + ((uint)suffix.GetHashCode(StringComparison.Ordinal) % 100000000U)

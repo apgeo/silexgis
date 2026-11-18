@@ -134,8 +134,8 @@ public sealed class SendThrottleClockTests : IAsyncLifetime, IClassFixture<Postg
     }
 
     /// <summary>
-    /// Read rather than assumed: the security settings row is shared with every other class, and
-    /// the interval these routes use is the one stored there.
+    /// Read rather than assumed: the security settings row is shared by every test of this class,
+    /// and the interval these routes use is the one stored there.
     /// </summary>
     private async Task<TimeSpan> ResendIntervalAsync()
     {

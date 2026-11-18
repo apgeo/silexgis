@@ -182,18 +182,15 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
 
         applied.GetProperty("replayed").GetBoolean().ShouldBeFalse();
         Row(applied, newId).GetProperty("status").GetString().ShouldBe("created");
-        if (again.StatusCode == HttpStatusCode.OK)
-        {
-            var replay = JsonDocument.Parse(againPayload).RootElement;
-            replay.GetProperty("replayed").GetBoolean().ShouldBeTrue(againPayload);
-            replay.GetProperty("importBatchId").GetGuid().ShouldBe(applied.GetProperty("importBatchId").GetGuid());
-            Row(replay, newId).GetProperty("status").GetString().ShouldBe("created");
-        }
-        else
-        {
-            again.StatusCode.ShouldBe(HttpStatusCode.Conflict, againPayload);
-            JsonDocument.Parse(againPayload).RootElement.GetProperty("code").GetString().ShouldBe("sync.batch_conflict");
-        }
+
+        // The second copy waited on the first copy's claim of the batch, so by the time it meets
+        // the collision the first copy has committed and its answer is there to be read back: the
+        // replay is the one outcome, and a "send it again" here would be the replay path broken.
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, againPayload);
+        var replay = JsonDocument.Parse(againPayload).RootElement;
+        replay.GetProperty("replayed").GetBoolean().ShouldBeTrue(againPayload);
+        replay.GetProperty("importBatchId").GetGuid().ShouldBe(applied.GetProperty("importBatchId").GetGuid());
+        Row(replay, newId).GetProperty("status").GetString().ShouldBe("created");
 
         await using var check = factory.Services.CreateAsyncScope();
         var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();

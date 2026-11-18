@@ -1243,6 +1243,10 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
         catch (IOException)
         {
         }
+
+        // The part before the cut really went out, so what the tests assert about the partial
+        // piece is the server's doing — not a request that failed before it carried anything.
+        content.Delivered.ShouldBe(deliver, "the request failed before it delivered the start of the piece");
     }
 
     private static async Task<long> ReceivedAsync(HttpClient client, Guid session) =>
@@ -1287,10 +1291,14 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
     /// </summary>
     private sealed class CutOffContent(byte[] piece, int deliver, bool fail) : HttpContent
     {
+        /// <summary>How many bytes were handed to the connection before the cut.</summary>
+        public int Delivered { get; private set; }
+
         protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
         {
             await stream.WriteAsync(piece.AsMemory(0, deliver));
             await stream.FlushAsync();
+            Delivered = deliver;
             if (fail)
             {
                 throw new IOException("The connection dropped part way through the piece.");

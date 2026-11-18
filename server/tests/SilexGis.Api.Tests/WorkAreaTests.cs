@@ -64,8 +64,14 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
     {
         // The endpoint resolves the kind by code and answers empty when it finds nothing. That is
         // the right behaviour and an indistinguishable one, so the row's existence is asserted
-        // here rather than left to be inferred from a board that happens to have rows on it.
-        workAreaTypeId.ShouldBeGreaterThan(0);
+        // here rather than left to be inferred from a board that happens to have rows on it — and
+        // asserted as the kind the board needs: an outline of generic features, not merely a row.
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var seeded = await db.FeatureTypes.AsNoTracking().SingleAsync(t => t.Id == workAreaTypeId);
+        seeded.Code.ShouldBe(FeatureTypeSeeds.WorkArea);
+        seeded.BoundKind.ShouldBe(FeatureKind.Generic);
+        seeded.Category.ShouldBe(FeatureCategory.Area);
     }
 
     [Fact]
@@ -206,8 +212,9 @@ public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<P
     [Fact]
     public async Task Past_the_cap_the_answer_says_it_is_cut_and_a_child_whose_parent_was_cut_names_no_parent()
     {
-        // Named to sort ahead of every other area on the shared database, so the first rows of the
-        // answer are this test's: a child, then the fillers, with the parent sorting last of all.
+        // Named to sort ahead of every other area this class's tests leave in its database, so the
+        // first rows of the answer are this test's: a child, then the fillers, with the parent
+        // sorting last of all.
         var marker = Guid.NewGuid().ToString("N")[..8];
         var parent = await CreateAreaAsync($"zzzz {marker} parent", "authenticated");
         var child = await CreateAreaAsync($"0000 {marker} a child", "authenticated", parentId: parent);

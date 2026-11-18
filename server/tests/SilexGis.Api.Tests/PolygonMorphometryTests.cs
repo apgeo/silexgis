@@ -159,8 +159,6 @@ public sealed class PolygonMorphometryTests : IAsyncLifetime, IDisposable, IClas
         degrees.ShouldNotBeNull();
         degrees.AreaM2.ShouldNotBeNull().ShouldBeLessThan(1d);
         degrees.LongAxisM.ShouldNotBeNull().ShouldBeLessThan(1d);
-        Should.Throw<ShouldAssertException>(
-            () => degrees.AreaM2.ShouldNotBeNull().ShouldBe(10_000d, 1d));
     }
 
     [Fact]

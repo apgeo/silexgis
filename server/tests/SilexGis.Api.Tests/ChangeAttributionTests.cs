@@ -200,8 +200,9 @@ public sealed class ChangeAttributionTests : IAsyncLifetime, IDisposable, IClass
             imported = [.. await db.AuditEntries.AsNoTracking().Where(a => a.ImportBatchId == batchId).ToListAsync()];
         }
 
-        // The sheet named a massif, a sub-area and a cave, and the switches were on.
-        created.Count.ShouldBeGreaterThan(0);
+        // The sheet named a massif, a sub-area and a cave, and the switches were on: all three
+        // are created, so the loops below check every one of them.
+        created.Count.ShouldBe(3);
         imported.ShouldAllBe(r => r.Source == ChangeSource.FileImport && r.UserId == ownerId);
         imported.Select(r => r.ChangeSetId).Distinct().Count().ShouldBe(1);
         foreach (var feature in created)

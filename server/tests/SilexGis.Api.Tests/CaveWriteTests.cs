@@ -251,8 +251,57 @@ public sealed class CaveWriteTests : IAsyncLifetime, IDisposable, IClassFixture<
         body[field] = value;
 
         var response = await editor.PostAsJsonAsync("/api/v1/caves", body);
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
-        (await CodeOf(response)).ShouldBe("validation.failed");
+
+        // The refusal names the field the row is about, so a validator that failed some other
+        // member of the body cannot pass for the rule.
+        (await response.RefusedFieldsAsync()).Select(n => n.ToUpperInvariant())
+            .ShouldBe([field.ToUpperInvariant()]);
+    }
+
+    /// <summary>
+    /// Every bound above, met exactly: the longest value each field takes, and nought for each
+    /// measure. Beside the refusals, this shows each limit sits where it says and not lower.
+    /// </summary>
+    public static TheoryData<string, object?> CaveFieldsAtTheirLimit => new()
+    {
+        { "name", new string('n', 255) },
+        { "otherToponyms", new string('o', 250) },
+        { "identificationCode", new string('i', 50) },
+        { "website", new string('w', 255) },
+        { "region", new string('r', 100) },
+        { "hydrographicBasin", new string('h', 100) },
+        { "valley", new string('v', 100) },
+        { "tributaryRiver", new string('t', 100) },
+        { "closestAddress", new string('c', 200) },
+        { "landRegistryNumber", new string('l', 50) },
+        { "rockAge", new string('a', 50) },
+        { "protectionClass", new string('p', 50) },
+        { "discoveryDate", new string('d', 50) },
+        { "discoverer", new string('x', 255) },
+        { "surveyedLength", 0 },
+        { "estimatedLength", 0 },
+        { "depth", 0 },
+        { "volume", 0 },
+        { "area", 0 },
+    };
+
+    [Theory]
+    [MemberData(nameof(CaveFieldsAtTheirLimit))]
+    public async Task A_cave_body_at_the_edge_of_each_rule_is_accepted(string field, object? value)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["name"] = $"Edge {field} {marker}",
+            ["caveTypeId"] = caveTypeId,
+            ["visibility"] = "authenticated",
+            ["locationProtected"] = false,
+            ["explorationStatus"] = "unknown",
+            ["isShowCave"] = false,
+        };
+        body[field] = value;
+
+        var response = await editor.PostAsJsonAsync("/api/v1/caves", body);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
     }
 
     private object Body(string name, long typeId, long? rockTypeId = null, object? properties = null) => new

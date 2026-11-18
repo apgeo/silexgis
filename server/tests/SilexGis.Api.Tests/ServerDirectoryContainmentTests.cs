@@ -39,21 +39,18 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
         new(Options.Create(new FilesOptions { ImportRoots = roots.ToList() }));
 
     /// <summary>
-    /// Makes a directory link, or says the host refuses to (Windows without the privilege), in
-    /// which case the calling test has nothing to prove and returns.
+    /// Makes a directory link, or reports the calling test as skipped when the host refuses to
+    /// (Windows without the privilege): it then has nothing to prove, and a pass would say it had.
     /// </summary>
-    private static bool Link(string path, string target)
+    private static void Link(string path, string target)
     {
         try
         {
             Directory.CreateSymbolicLink(path, target);
-            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Console.WriteLine(
-                $"Link resolution was NOT exercised: this host refuses to create a symbolic link. ({e.GetType().Name})");
-            return false;
+            Assert.Skip($"Link resolution was not exercised: this host refuses to create a symbolic link. ({e.GetType().Name})");
         }
     }
 
@@ -91,10 +88,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     public void A_link_inside_a_root_that_leads_out_is_refused()
     {
         var link = Path.Combine(root, "shortcut");
-        if (!Link(link, outside))
-        {
-            return;
-        }
+        Link(link, outside);
 
 
         Source(root).Resolve(link).Code.ShouldBe(ServerImportPaths.OutsideRootsCode);
@@ -105,10 +99,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     {
         // Only the last component used to be resolved, so root/shortcut/private read the
         // directory outside while being judged by its spelling.
-        if (!Link(Path.Combine(root, "shortcut"), outside))
-        {
-            return;
-        }
+        Link(Path.Combine(root, "shortcut"), outside);
 
 
         Source(root).Resolve(Path.Combine(root, "shortcut", "private")).Code
@@ -119,10 +110,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     public void A_dangling_link_that_points_out_is_refused_as_outside_not_as_missing()
     {
         // Answering "missing" here would say that the target does not exist outside the roots.
-        if (!Link(Path.Combine(root, "dangling"), Path.Combine(outside, "gone")))
-        {
-            return;
-        }
+        Link(Path.Combine(root, "dangling"), Path.Combine(outside, "gone"));
 
 
         Source(root).Resolve(Path.Combine(root, "dangling")).Code
@@ -136,10 +124,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     {
         var real = Directory.CreateDirectory(Path.Combine(root, "scans", "1987")).FullName;
         var link = Path.Combine(root, "latest");
-        if (!Link(link, Path.Combine(root, "scans")))
-        {
-            return;
-        }
+        Link(link, Path.Combine(root, "scans"));
 
 
         var (resolved, code) = Source(root).Resolve(Path.Combine(link, "1987"));
@@ -152,10 +137,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     public void A_root_that_is_itself_a_link_admits_paths_spelled_through_it()
     {
         var linkedRoot = Path.Combine(scratch, "archive-link");
-        if (!Link(linkedRoot, root))
-        {
-            return;
-        }
+        Link(linkedRoot, root);
 
         var year = Directory.CreateDirectory(Path.Combine(root, "1990")).FullName;
 
@@ -169,10 +151,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     public void A_root_under_a_linked_parent_still_contains_what_is_inside_it()
     {
         var linkedParent = Path.Combine(scratch, "mount");
-        if (!Link(linkedParent, scratch))
-        {
-            return;
-        }
+        Link(linkedParent, scratch);
 
         var year = Directory.CreateDirectory(Path.Combine(root, "1991")).FullName;
         var spelledRoot = Path.Combine(linkedParent, "archive");
@@ -188,10 +167,7 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     {
         // Following a link that points above the root is allowed — it is how a root under a
         // linked parent resolves — but what is read is still judged by where it really is.
-        if (!Link(Path.Combine(root, "up"), scratch))
-        {
-            return;
-        }
+        Link(Path.Combine(root, "up"), scratch);
 
         Source(root).Resolve(Path.Combine(root, "up", "elsewhere", "private")).Code
             .ShouldBe(ServerImportPaths.OutsideRootsCode);
@@ -204,15 +180,9 @@ public sealed class ServerDirectoryContainmentTests : IDisposable
     {
         var a = Path.Combine(root, "a");
         var b = Path.Combine(root, "b");
-        if (!Link(a, b))
-        {
-            return;
-        }
+        Link(a, b);
 
-        if (!Link(b, a))
-        {
-            return;
-        }
+        Link(b, a);
 
 
         Source(root).Resolve(Path.Combine(a, "x")).Code.ShouldBe(ServerImportPaths.NotFoundCode);

@@ -17,8 +17,8 @@ namespace SilexGis.Api.Tests;
 /// <summary>
 /// Opt-in, reports only: the feature list and the country-wide cluster map for an ordinary member,
 /// once through a club holding one grant and once through a club holding a thousand separate cave
-/// grants, at a size chosen by the caller. A measurement, not a gate — without its variable it does
-/// nothing and passes, so a green result from it says nothing about speed.
+/// grants, at a size chosen by the caller. A measurement, not a gate — without its variable it is
+/// reported as skipped, and even when it runs a green result from it says nothing about speed.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -74,11 +74,10 @@ public sealed class GrantScaleMeasurementTests : IAsyncLifetime, IDisposable, IC
     [Fact]
     public async Task Opt_in_reports_only_member_reads_through_one_grant_and_through_a_thousand()
     {
-        if (Requested is not { } scale)
-        {
-            output.WriteLine($"Not requested: set {OptInVariable}=5000 or 100000 to measure.");
-            return;
-        }
+        // Reported as skipped rather than passed when not asked for: a green here would say a
+        // measurement was taken.
+        Assert.SkipUnless(Requested is not null, $"Not requested: set {OptInVariable}=5000 or 100000 to measure.");
+        var scale = Requested.GetValueOrDefault();
 
         var (caves, entrancesPerCave) = scale == 5000 ? (2500, 2) : (2000, 50);
         var ownerEmail = $"scale-owner-{Guid.NewGuid():N}@t.local";

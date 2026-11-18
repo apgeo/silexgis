@@ -176,7 +176,7 @@ public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClass
         var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         payload.GetProperty("page").GetInt32().ShouldBe(1);
         payload.GetProperty("pageSize").GetInt32().ShouldBe(10);
-        // Asserted by id rather than by count: the database is shared across test classes.
+        // Asserted by id rather than by count: the tests of this class share its database.
         payload.GetProperty("items").EnumerateArray()
             .Select(i => i.GetProperty("id").GetGuid()).ShouldContain(subjectId);
 

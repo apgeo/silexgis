@@ -68,6 +68,7 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         var c = await UploadAsync("IMG_2045.jpg", At(45.610010, 25.510040, Noon.AddMinutes(2)));
         var far = await UploadAsync("IMG_2100.jpg", At(45.612000, 25.513000, Noon.AddMinutes(20)));
 
+        var featuresBefore = await FeatureCountAsync();
         var preview = await PreviewAsync(editor, [a, b, c, far]);
 
         preview.GetProperty("photoCount").GetInt32().ShouldBe(4);
@@ -84,8 +85,10 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         hole.GetProperty("proposedName").GetString().ShouldBe("Pestera Ursilor");
         hole.GetProperty("positionSource").GetString().ShouldBe("exif");
 
-        // Nothing exists yet: a preview is a reading of the pictures, not a write.
-        (await FeatureNamesAsync()).ShouldBeEmpty();
+        // Nothing exists yet: a preview is a reading of the pictures, not a write. Counted over
+        // every feature row, deleted ones too, because what a preview would create is named from
+        // the file and not from anything this test could search for.
+        (await FeatureCountAsync()).ShouldBe(featuresBefore);
 
         var key = hole.GetProperty("key").GetGuid();
         var commit = await CommitAsync(editor, [a, b, c, far], [key], new Dictionary<string, object>
@@ -135,6 +138,10 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
         commit.GetProperty("batch").GetProperty("createdCount").GetInt32().ShouldBe(1);
         commit.GetProperty("batch").GetProperty("attachedCount").GetInt32().ShouldBe(1);
         (await AttachmentsOfAsync(entranceId)).ShouldContain(second);
+
+        // Found before the undo, so its absence afterwards is the undo's doing and not a search
+        // that could never have found it.
+        (await FeatureNamesAsync()).ShouldContain($"Aven {tag}");
 
         var batchId = commit.GetProperty("batch").GetProperty("id").GetGuid();
         var revert = await editor.PostAsync($"/api/v1/import-batches/{batchId}/revert", null);
@@ -850,6 +857,13 @@ public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixtur
             .OrderBy(a => a.SortOrder)
             .Select(a => a.FileId)
             .ToListAsync();
+    }
+
+    private async Task<int> FeatureCountAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Features.IgnoreQueryFilters().CountAsync();
     }
 
     private async Task<List<string>> FeatureNamesAsync()

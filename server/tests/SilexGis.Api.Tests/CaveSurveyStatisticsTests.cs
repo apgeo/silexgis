@@ -505,6 +505,15 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, ICl
             model.Status = SurveyModelStatus.Pending;
             await db.SaveChangesAsync();
 
+            // The stored figures are made wrong and old, so a re-run that left the row alone could
+            // not be mistaken for one that replaced it.
+            (await db.SurveyTopologies
+                .Where(t => t.SurveyModelId == modelId)
+                .ExecuteUpdateAsync(t => t
+                    .SetProperty(x => x.BranchCount, 99)
+                    .SetProperty(x => x.ComputedAt, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc))))
+                .ShouldBe(1);
+
             graphJobId = (await db.ProcessingJobs
                     .Where(j => j.Kind == ProcessingJobKinds.SurveyGraph)
                     .ToListAsync())
@@ -525,6 +534,7 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, ICl
         }
 
         var second = await TopologyAsync(owner, caveId);
+        // Not before the first reading, where the row was left in 2001: it was written again.
         second.GetProperty("computedAt").GetDateTime().ShouldBeGreaterThanOrEqualTo(first);
         second.GetProperty("branchCount").GetInt32().ShouldBe(1);
     }

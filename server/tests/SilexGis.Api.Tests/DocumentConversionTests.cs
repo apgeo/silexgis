@@ -237,10 +237,9 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
 
         // Everything from here on is inside the try, including creating the account. Touching this
         // factory starts a second, complete application — background job workers and all — against
-        // the database every other class in this assembly is sharing. A setup call that threw
-        // outside the try would leave that application running for the rest of the run, still
-        // claiming rows from the shared job table, and the tests it then broke would be in classes
-        // with nothing to do with this one.
+        // the database this class's other tests use. A setup call that threw outside the try
+        // would leave that application running for the rest of the class, still claiming rows
+        // from the job table, and the tests it then broke would have nothing to do with this one.
         HttpClient? bareOwner = null;
 
         try
@@ -398,10 +397,10 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
     /// then undoes everything it did to files other than <paramref name="keep"/>.
     /// </summary>
     /// <remarks>
-    /// The sweep is archive-wide by design and this database is shared with every other class in
-    /// the collection, so left alone it would queue conversions for their fixtures and convert
-    /// documents belonging to tests that never deployed a converter. The assertion here is about
-    /// one file; the rest is put back exactly as it was.
+    /// The sweep is archive-wide by design and this class's tests share its database, so left
+    /// alone it would queue conversions for their fixtures and convert documents belonging to
+    /// tests that never deployed a converter. The assertion here is about one file; the rest is
+    /// put back exactly as it was.
     /// </remarks>
     private async Task RunBackfillAsync(Guid keep)
     {

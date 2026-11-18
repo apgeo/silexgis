@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Shouldly;
 
 namespace SilexGis.Api.Tests.Support;
 
@@ -43,5 +46,19 @@ public static class TestHttp
         var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
         request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         return client.SendAsync(request);
+    }
+
+    /// <summary>
+    /// The fields a validation refusal names, once it is shown to be one: a 400 with the generic
+    /// validation code. A test that pins a limit compares these to the one field it is about, so a
+    /// request refused for any other reason cannot pass for the rule.
+    /// </summary>
+    public static async Task<string[]> RefusedFieldsAsync(this HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        var problem = JsonDocument.Parse(body).RootElement;
+        problem.GetProperty("code").GetString().ShouldBe("validation.failed", body);
+        return [.. problem.GetProperty("errors").EnumerateObject().Select(e => e.Name)];
     }
 }

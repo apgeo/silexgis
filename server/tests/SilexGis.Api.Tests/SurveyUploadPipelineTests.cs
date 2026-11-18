@@ -441,8 +441,11 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline).ToListAsync())
             .Count(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
             .ShouldBe(1);
+        // The installation and the account both leave result links on, so the completion mints
+        // one: exactly one, however many completions arrived together.
+        (await db.SurveyUploads.AsNoTracking().SingleAsync(u => u.Id == id)).PublicLinkRefusal.ShouldBeNull();
         (await db.SurveyUploadPublicLinks.AsNoTracking().CountAsync(l => l.SurveyUploadId == id && l.RevokedAt == null))
-            .ShouldBeLessThanOrEqualTo(1);
+            .ShouldBe(1);
     }
 
     [Fact]
