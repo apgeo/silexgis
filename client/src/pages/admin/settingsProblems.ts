@@ -25,8 +25,29 @@ export function settingsSaveProblem(error: unknown, t: TFunction): string {
       return t('admin.settingsProblems.invalid');
     case 'access.forbidden':
       return t('admin.settingsProblems.forbidden');
+    case 'settings.sms_gateway_internal':
+      return t('admin.settingsProblems.smsGatewayInternal');
     default:
       return t('common.saveFailed');
+  }
+}
+
+/**
+ * A note the server attached to a save it accepted, in words the administrator can act on — today
+ * only that a stored secret was dropped because the server it belonged to changed, so it has to
+ * be typed again.
+ *
+ * A note this page has no words for is still said, generically, rather than dropped: the server
+ * only attaches one when something about the save needs the administrator's attention.
+ */
+export function settingsNotice(code: string, t: TFunction): string {
+  switch (code) {
+    case 'settings.mail_password_cleared':
+      return t('admin.settingsProblems.mailPasswordCleared');
+    case 'settings.sms_auth_header_cleared':
+      return t('admin.settingsProblems.smsAuthHeaderCleared');
+    default:
+      return t('admin.settingsProblems.noticeUnworded');
   }
 }
 

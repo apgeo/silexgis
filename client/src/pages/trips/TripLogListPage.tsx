@@ -198,11 +198,11 @@ export default function TripLogListPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('trips.title')}
         </Typography.Title>
-        <Flex gap={8} align="center">
+        <Flex gap={8} wrap align="center">
           {/* Offered to everybody, and not gated on anything: the list it opens is worked out
               from whoever is reading it, so it is never a door onto somebody else's trips —
               an account on none of them is shown that, which is a useful answer. */}

@@ -5,7 +5,6 @@ import { Draw, Modify } from 'ol/interaction';
 import { fromLonLat } from 'ol/proj';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import TripGeometryField from './TripGeometryField.tsx';
 import type { TripGeometry } from './tripGeometry.ts';
 
 const point = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripGeometry;
@@ -24,9 +23,48 @@ function attachedDraw(): Draw {
   return draws[draws.length - 1];
 }
 
+const { built } = vi.hoisted(() => ({ built: [] as import('ol/Map').default[] }));
+
+// The installation's catalogue names one background.
+vi.mock('../../api/hooks.ts', () => ({
+  useMapLayers: () => ({
+    isPending: false,
+    data: [
+      {
+        id: 4,
+        name: 'Club tiles',
+        layerKind: 'xyz',
+        urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png',
+        isBase: true,
+        isDefault: true,
+      },
+    ],
+  }),
+}));
+vi.mock('ol/Map', async (original) => {
+  const Actual = (await original<typeof import('ol/Map')>()).default;
+  class Counted extends Actual {
+    constructor(...args: ConstructorParameters<typeof Actual>) {
+      super(...args);
+      built.push(this);
+    }
+  }
+  return { default: Counted };
+});
+
+/** Every tile address a map draws from. */
+function tileUrls(map: Map): string[] {
+  return map
+    .getAllLayers()
+    .flatMap((layer) => (layer.getSource() as { getUrls?: () => string[] | null } | null)?.getUrls?.() ?? []);
+}
+
+const { default: TripGeometryField } = await import('./TripGeometryField.tsx');
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  built.length = 0;
 });
 
 describe('TripGeometryField', () => {
@@ -161,5 +199,12 @@ describe('TripGeometryField', () => {
     expect(screen.getByText(/where the party gathers/)).toBeInTheDocument();
     expect(screen.getByText(/exactly as placed/)).toBeInTheDocument();
     expect(screen.queryByText(/discloses that entrance/)).toBeNull();
+  });
+
+  it("draws over the installation's background, not a tile server of its own choosing", () => {
+    render(<TripGeometryField value={point} onChange={vi.fn()} />);
+
+    expect(built).toHaveLength(1);
+    expect(tileUrls(built[0])).toEqual(['https://tiles.example/{z}/{x}/{y}.png']);
   });
 });

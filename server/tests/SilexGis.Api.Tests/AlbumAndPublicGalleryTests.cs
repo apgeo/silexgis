@@ -422,6 +422,58 @@ public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IC
         (await owner.GetAsync($"/api/v1/albums/{readable}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// One request adds at most as many photographs as the bulk routes take, refused with its own
+    /// code and nothing added; a request within the bound is let through, and only a signed-in
+    /// caller reaches the bound at all.
+    /// </summary>
+    [Fact]
+    public async Task Adding_more_photographs_than_one_request_carries_is_refused_with_its_own_code()
+    {
+        var albumId = await CreateAlbumAsync(Visibility.Authenticated);
+        var photo = await UploadPhotoAsync(owner, "bound.png");
+        var tooMany = Enumerable.Range(0, SilexGis.Api.Features.Photos.AlbumEndpoints.MaxItemsPerRequest)
+            .Select(_ => Guid.NewGuid()).Prepend(photo).ToList();
+
+        using (var refused = await owner.PostAsJsonAsync($"/api/v1/albums/{albumId}/items", tooMany))
+        {
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+            CodeOf(body).ShouldBe("album.too_many_items");
+        }
+
+        (await AlbumOrderAsync(albumId)).ShouldBeEmpty();
+
+        (await anonymous.PostAsJsonAsync($"/api/v1/albums/{albumId}/items", new[] { photo }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        await AddAsync(albumId, photo);
+        (await AlbumOrderAsync(albumId)).ShouldBe([photo]);
+    }
+
+    /// <summary>
+    /// A page number so large that its offset does not fit in a whole number is a page past the
+    /// end: answered empty, never a server fault and never the first page over again.
+    /// </summary>
+    [Theory]
+    [InlineData(int.MaxValue, 500)]
+    [InlineData(4_294_969, 500)]
+    [InlineData(int.MaxValue, 1)]
+    public async Task A_page_of_albums_far_past_the_end_is_empty_and_never_an_error(int page, int pageSize)
+    {
+        await CreateAlbumAsync(Visibility.Authenticated);
+
+        using var response = await owner.GetAsync($"/api/v1/albums?page={page}&pageSize={pageSize}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var root = JsonDocument.Parse(body).RootElement;
+        root.GetProperty("items").GetArrayLength().ShouldBe(0);
+        root.GetProperty("page").GetInt32().ShouldBe(page);
+
+        (await owner.GetFromJsonAsync<JsonElement>("/api/v1/albums?page=1&pageSize=1"))
+            .GetProperty("items").GetArrayLength().ShouldBe(1);
+    }
+
     /// <summary>The writes on one album, in an order the album's owner can carry out one after another.</summary>
     private static IEnumerable<(string Name, Func<HttpClient, Task<HttpResponseMessage>> Write)> AlbumWrites(
         Guid albumId, Guid first, Guid second) =>

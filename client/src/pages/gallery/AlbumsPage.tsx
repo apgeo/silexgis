@@ -24,6 +24,7 @@ import {
   type Visibility,
 } from '../../api/hooks.ts';
 import { visibilityOptions } from '../../components/attachments/visibilityChoices.ts';
+import { albumShareProblem } from './albumProblems.ts';
 
 /**
  * Albums: named, ordered sets of photographs somebody put together.
@@ -39,10 +40,10 @@ export default function AlbumsPage() {
   const { message, modal } = App.useApp();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
+  // Editing and deleting follow the documents domain's write right. The share link is the
+  // album's own business: minting and revoking it take the Share right on that album, which the
+  // server works out per album and sends as `canShare`.
   const canWrite = hasAccessAction(capabilities?.domains.documents, 'write');
-  // Minting a link is allowed on the share right alone, as well as to whoever may write the
-  // album; editing, deleting and revoking need write.
-  const canShare = canWrite || hasAccessAction(capabilities?.domains.documents, 'share');
 
   const albumsQuery = useAlbums({ pageSize: 100 }, canRead);
   const { data, isPending } = albumsQuery;
@@ -95,8 +96,8 @@ export default function AlbumsPage() {
         ),
         width: 560,
       });
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(albumShareProblem(error, t));
     }
   };
 
@@ -104,8 +105,8 @@ export default function AlbumsPage() {
     try {
       await revoke.mutateAsync(album.id);
       message.success(t('gallery.shareRevoked'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(albumShareProblem(error, t));
     }
   };
 
@@ -133,7 +134,7 @@ export default function AlbumsPage() {
         </Tooltip>,
       );
     }
-    if (album.hasActiveShare && canWrite) {
+    if (album.hasActiveShare && album.canShare) {
       actions.push(
         <Popconfirm key="revoke" title={t('gallery.revokeConfirm')} onConfirm={() => revokeLink(album)}>
           <Tooltip title={t('gallery.revokeShare')}>
@@ -149,7 +150,7 @@ export default function AlbumsPage() {
           </Tooltip>
         </Popconfirm>,
       );
-    } else if (!album.hasActiveShare && canShare) {
+    } else if (!album.hasActiveShare && album.canShare) {
       actions.push(
         <Tooltip key="share" title={t('gallery.shareAlbum')}>
           <Button

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
+using SilexGis.Api.Common;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -673,26 +674,83 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
-    public async Task A_store_that_cannot_write_a_piece_is_a_server_fault_rather_than_a_piece_to_resend()
+    public async Task A_piece_the_full_disk_cannot_hold_is_refused_as_insufficient_storage_and_taken_once_there_is_room()
     {
-        using var host = new SilexGisApiFactory(connectionString, Settings(filesRoot), services =>
-        {
-            var real = services.Single(s => s.ServiceType == typeof(IFileStore));
-            services.Remove(real);
-            services.AddSingleton<IFileStore>(provider => new WriteRefusingFileStore(
-                (IFileStore)ActivatorUtilities.CreateInstance(provider, real.ImplementationType!)));
-        });
+        var store = new WriteRefusingFileStore.Switch(DiskFull());
+        using var host = StoreRefusingHost(store);
         var client = await AuthHelper.BearerClientAsync(host, ownerEmail);
 
         var bytes = RandomNumberGenerator.GetBytes(600);
         var session = await OpenSessionAsync(client, "full-disk.bin", bytes.Length);
 
-        // A full disk is not the client's to fix: a 409 naming the same offset would have it send
-        // the same piece for ever, with nothing logged.
+        // Not a 409 naming the same offset, which would have the client send the same piece for
+        // ever, and not a bare server fault either: the device is full, and saying so lets a
+        // screen tell the person to free room or ask an administrator.
+        using (var refused = await SendChunkAsync(client, session, 0, bytes))
+        {
+            refused.StatusCode.ShouldBe(HttpStatusCode.InsufficientStorage, await refused.Content.ReadAsStringAsync());
+            (await ReadCodeAsync(refused)).ShouldBe("storage.insufficient");
+        }
+
+        (await ReceivedAsync(client, session)).ShouldBe(0);
+
+        // Room freed, the same piece is taken from the same offset.
+        store.Failure = null;
+        await AppendAsync(client, session, 0, bytes);
+        (await ReceivedAsync(client, session)).ShouldBe(bytes.Length);
+    }
+
+    [Fact]
+    public async Task A_store_that_cannot_write_a_piece_for_another_reason_is_a_server_fault()
+    {
+        // An input/output error that is not about room: nothing the client or a person can free.
+        var store = new WriteRefusingFileStore.Switch(new IOException("Input/output error.", 5));
+        using var host = StoreRefusingHost(store);
+        var client = await AuthHelper.BearerClientAsync(host, ownerEmail);
+
+        var bytes = RandomNumberGenerator.GetBytes(600);
+        var session = await OpenSessionAsync(client, "broken-disk.bin", bytes.Length);
+
         using var refused = await SendChunkAsync(client, session, 0, bytes);
         refused.StatusCode.ShouldBe(HttpStatusCode.InternalServerError, await refused.Content.ReadAsStringAsync());
         (await ReceivedAsync(client, session)).ShouldBe(0);
     }
+
+    /// <summary>
+    /// The recogniser reads what the runtime really throws: the device that is always full
+    /// refuses a write exactly as a full disk does, while a missing file is no lack of room.
+    /// </summary>
+    [Fact]
+    public void A_full_device_is_recognised_from_what_the_runtime_throws()
+    {
+        StorageProblems.IsOutOfSpace(DiskFull()).ShouldBeTrue();
+        StorageProblems.IsOutOfSpace(new IOException("Input/output error.", 5)).ShouldBeFalse();
+        StorageProblems.IsOutOfSpace(new FileNotFoundException("gone")).ShouldBeFalse();
+
+        if (OperatingSystem.IsLinux())
+        {
+            var thrown = Should.Throw<IOException>(() =>
+            {
+                using var full = new FileStream("/dev/full", FileMode.Open, FileAccess.Write, FileShare.ReadWrite, 1);
+                full.Write(new byte[16]);
+                full.Flush();
+            });
+            StorageProblems.IsOutOfSpace(thrown).ShouldBeTrue($"{thrown.GetType().Name} {thrown.HResult}: {thrown.Message}");
+        }
+    }
+
+    /// <summary>What the runtime throws when a write finds the device full, on the platform the test runs on.</summary>
+    private static IOException DiskFull() =>
+        new("No space left on device.", OperatingSystem.IsWindows() ? unchecked((int)0x80070070) : 28);
+
+    private SilexGisApiFactory StoreRefusingHost(WriteRefusingFileStore.Switch store) =>
+        new(connectionString, Settings(filesRoot), services =>
+        {
+            var real = services.Single(s => s.ServiceType == typeof(IFileStore));
+            services.Remove(real);
+            services.AddSingleton<IFileStore>(provider => new WriteRefusingFileStore(
+                (IFileStore)ActivatorUtilities.CreateInstance(provider, real.ImplementationType!), store));
+        });
 
     private static async Task<Guid> NewClubAsync(SilexGisDbContext db)
     {
@@ -1075,14 +1133,25 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
         }
     }
 
-    /// <summary>The real store, except that no piece can be written: the device is full.</summary>
-    private sealed class WriteRefusingFileStore(IFileStore inner) : IFileStore
+    /// <summary>
+    /// The real store, except that while its switch holds a failure no piece can be written and
+    /// the write throws that failure, as the runtime does when the device is full or broken.
+    /// </summary>
+    private sealed class WriteRefusingFileStore(IFileStore inner, WriteRefusingFileStore.Switch refusing) : IFileStore
     {
+        public sealed class Switch(IOException? failure)
+        {
+            public IOException? Failure { get; set; } = failure;
+        }
+
         public Task<string> SaveAsync(Stream content, string extension, CancellationToken ct = default) =>
             inner.SaveAsync(content, extension, ct);
 
-        public async Task<IExclusiveContentWriter> OpenExclusiveAsync(string storagePath, CancellationToken ct = default) =>
-            new FullWriter(await inner.OpenExclusiveAsync(storagePath, ct));
+        public async Task<IExclusiveContentWriter> OpenExclusiveAsync(string storagePath, CancellationToken ct = default)
+        {
+            var held = await inner.OpenExclusiveAsync(storagePath, ct);
+            return refusing.Failure is { } failure ? new FullWriter(held, failure) : held;
+        }
 
         public Task<Stream> OpenReadAsync(string storagePath, CancellationToken ct = default) =>
             inner.OpenReadAsync(storagePath, ct);
@@ -1092,12 +1161,12 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
 
         public string GetAbsolutePath(string storagePath) => inner.GetAbsolutePath(storagePath);
 
-        private sealed class FullWriter(IExclusiveContentWriter held) : IExclusiveContentWriter
+        private sealed class FullWriter(IExclusiveContentWriter held, IOException failure) : IExclusiveContentWriter
         {
             public long Length => held.Length;
 
             public Task<bool> WriteAtAsync(long offset, Stream content, long length, CancellationToken ct = default) =>
-                throw new IOException("No space left on device.");
+                throw failure;
 
             public ValueTask DisposeAsync() => held.DisposeAsync();
         }

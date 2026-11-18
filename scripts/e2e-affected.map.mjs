@@ -60,6 +60,8 @@ export const specs = {
     'point-clouds.spec.ts',
     // The cave page's point-cloud dialog in its recording-folder form.
     'scan-recordings.spec.ts',
+    // The list pages measured at a phone's width.
+    'list-pages-phone.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -101,11 +103,13 @@ export const specs = {
     'map-filter-editor.spec.ts',
     // The geodata and map-sheet lists' conditions and saved filters.
     'geodata-filters.spec.ts',
+    'list-pages-phone.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
     'feature-sets.spec.ts',
+    'list-pages-phone.spec.ts',
     // An area page's terrain card.
     'area-terrain-statistics.spec.ts',
   ],
@@ -245,7 +249,7 @@ export const specs = {
     'area-terrain-statistics.spec.ts',
   ],
   trips: [
-    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts',
+    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts', 'trip-two-sessions.spec.ts',
     'trip-import.spec.ts', 'trip-restore.spec.ts', 'trip-report-map.spec.ts',
     'trip-tracking-writes.spec.ts', 'trip-tracking-writes-mobile.spec.ts', 'my-trips.spec.ts',
     'plan-trip.spec.ts', 'published-trips-admin.spec.ts', 'public-trip-offline.spec.ts',
@@ -257,6 +261,7 @@ export const specs = {
     'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
     'tracking-movie-webkit.spec.ts', 'tracking-movie-pictures.spec.ts',
     'tracking-movie-empty-trip.spec.ts',
+    'list-pages-phone.spec.ts',
   ],
   // The proximity pool every importer compares against: the import specs that meet it.
   proximity: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],

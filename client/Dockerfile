@@ -6,7 +6,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# The bundle only, not `npm run build`: that script type-checks first, and the type-check alone needs
+# more than Node's default 2 GB heap on a small server, where it ran out of memory while the API
+# images were being built beside it. The image needs the bundle, not the verdict — every change is
+# type-checked before it lands, by the continuous integration run and the local checks.
+RUN npx vite build
 
 FROM nginx:alpine
 

@@ -77,7 +77,7 @@ public static class AccessHistoryEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(e => e.Id)
-            .Skip((p - 1) * size).Take(size)
+            .Skip(Paging.Offset(p, size)).Take(size)
             .ToListAsync(ct);
 
         var titles = await TitlesAsync(db, rows.Select(r => r.DocumentId), ct);
@@ -124,7 +124,7 @@ public static class AccessHistoryEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(e => e.Id)
-            .Skip((p - 1) * size).Take(size)
+            .Skip(Paging.Offset(p, size)).Take(size)
             .ToListAsync(ct);
 
         // Names resolved after the page materialises rather than joined in: the label a

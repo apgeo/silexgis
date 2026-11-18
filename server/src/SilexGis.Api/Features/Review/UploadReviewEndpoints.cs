@@ -136,7 +136,7 @@ public static class UploadReviewEndpoints
                 && db.ImportBatchItems.Any(i => i.ImportBatchId == b.Id && i.ReviewDecision == ImportReviewDecision.Pending))
             .OrderBy(b => b.HeldAt).ThenBy(b => b.Id);
         var total = await query.CountAsync(ct);
-        var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var batches = await query.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
@@ -154,7 +154,7 @@ public static class UploadReviewEndpoints
             .Where(b => b.ConfirmedByUserId == ctx.UserId && b.ReviewState != ImportReviewState.NotHeld)
             .OrderByDescending(b => b.HeldAt).ThenByDescending(b => b.Id);
         var total = await query.CountAsync(ct);
-        var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var batches = await query.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 

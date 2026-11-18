@@ -359,7 +359,7 @@ public static partial class TripLogEndpoints
         // two rows written in the same tick tie again; the identifiers are time-ordered, so
         // ascending by id reads as "the one entered first" among trips that start together.
         var rows = await query.OrderBy(x => x.TripDate).ThenBy(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
         return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));

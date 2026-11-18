@@ -384,6 +384,37 @@ describe('attachGeofileTracks3d', () => {
     handle.detach();
   });
 
+  it('says a file could not be read, and stops saying it once a read of it succeeds', async () => {
+    const engine = new FakeEngine();
+    const handle = attachGeofileTracks3d(engine);
+    handle.setFiles([aFile()], new Set(['file-1']));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    // A read that succeeded is no failure.
+    expect(handle.getState().loadFailed).toBe(false);
+
+    respond = () => Promise.reject(new Error('network'));
+    handle.reload();
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+    expect(handle.getState().loading).toBe(false);
+
+    respond = () => Promise.resolve(aHike());
+    handle.reload();
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(false));
+    handle.detach();
+  });
+
+  it('stops saying a file failed once that file is turned off', async () => {
+    respond = () => Promise.reject(new Error('network'));
+    const engine = new FakeEngine();
+    const handle = attachGeofileTracks3d(engine);
+    handle.setFiles([aFile()], new Set(['file-1']));
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+
+    handle.setFiles([aFile()], new Set());
+    expect(handle.getState().loadFailed).toBe(false);
+    handle.detach();
+  });
+
   it('moves the tracks onto the hillside when the ground gains relief, without fetching again', async () => {
     const engine = new FakeEngine();
     const handle = attachGeofileTracks3d(engine);

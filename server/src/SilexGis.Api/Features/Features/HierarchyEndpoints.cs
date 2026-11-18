@@ -205,7 +205,7 @@ public static class HierarchyEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         var items = rows.Select(x => new FeatureChildDto(x.Id, x.Kind, x.Name, x.IsPrimary)).ToList();
 
         return TypedResults.Ok(new PagedResult<FeatureChildDto>(items, p, size, total));

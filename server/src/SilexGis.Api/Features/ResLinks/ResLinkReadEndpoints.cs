@@ -173,7 +173,7 @@ public static partial class ResLinkEndpoints
             // projected, but who may curate them is only ever asked about the rows actually
             // returned. So this arm's per-row cost is the page's, not the candidate set's,
             // and the honest total stays the count of what survived.
-            var rows = listed.Skip((p - 1) * size).Take(size).ToList();
+            var rows = listed.Skip(Paging.Offset(p, size)).Take(size).ToList();
             var pageIds = rows.Select(l => l.Id).ToHashSet();
             List<ResLinkMember> pageMains = pageIds.Count == 0
                 ? []
@@ -190,7 +190,7 @@ public static partial class ResLinkEndpoints
         }
 
         var total = await linkQuery.CountAsync(ct);
-        var links = await linkQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var links = await linkQuery.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         var dtos = await ProjectAsync(
             db, targets, associations, protection, photoPositions, access, ctx, links, ct);
         return TypedResults.Ok(new PagedResult<ResLinkDto>(dtos, p, size, total));

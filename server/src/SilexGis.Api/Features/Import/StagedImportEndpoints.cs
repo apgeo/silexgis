@@ -200,7 +200,7 @@ public static class StagedImportEndpoints
 
         var filtered = Filter(scanned, request).ToList();
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = filtered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
         var details = await candidateService.HydrateAsync(geofile.Id, pageItems, request.Options, ctx, ct);
         var decisions = ReadDecisions(await SessionDecisionsAsync(db, geofile.Id, ctx.UserId, ct));
 

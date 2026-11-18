@@ -147,7 +147,7 @@ public static class ExpeditionEndpoints
         // that start together, which is the answer somebody paging a list expects.
         var rows = await query
             .OrderByDescending(x => x.StartDate).ThenByDescending(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResult<ExpeditionDto>([.. rows.Select(Map)], p, size, total));
     }

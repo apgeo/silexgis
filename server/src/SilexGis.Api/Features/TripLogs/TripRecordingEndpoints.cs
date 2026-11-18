@@ -86,7 +86,7 @@ public static class TripRecordingEndpoints
             .Where(r => r.CaveFeatureId == caveId)
             .OrderByDescending(r => r.StartedAt).ThenBy(r => r.Id);
         var total = await query.CountAsync(ct);
-        var rows = await query.Skip((pageNo - 1) * size).Take(size).ToListAsync(ct);
+        var rows = await query.Skip(Paging.Offset(pageNo, size)).Take(size).ToListAsync(ct);
 
         var ids = rows.Select(r => r.Id).ToList();
         var pointCounts = await db.TripRecordingPoints.AsNoTracking()

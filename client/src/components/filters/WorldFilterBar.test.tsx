@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 
+const createSpy = vi.hoisted(() => vi.fn());
 const savedId = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
 const otherId = '1f7a3d5b-6c2e-4d4a-8c8f-3a9b2e4d5f60';
 const gpx: FilterNode = { node: 'condition', field: 'format', op: 'equals', values: [{ type: 'id', value: 'gpx' }] };
@@ -20,7 +21,7 @@ vi.mock('../../api/hooks/savedFilters.ts', () => ({
       { id: otherId, name: 'About maps', state: 'ok', document: emptyDocument(['georeferencedMap']) },
     ],
   }),
-  useCreateSavedFilter: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSavedFilter: () => ({ mutateAsync: createSpy, isPending: false }),
   documentOf: (f: { document: unknown }) => f.document ?? null,
   appliesTo: (f: { state: string; document: FilterDocument | null }, world: string) =>
     f.state !== 'unreadable' && f.document !== null && f.document.scope.some((s) => s.world === world),
@@ -111,4 +112,26 @@ it('has nothing to save without conditions, and says when a link or the server c
   expect(screen.getByTestId('geodata-save-filter')).toBeDisabled();
   expect(screen.getByTestId('geodata-unreadable-link')).toBeTruthy();
   expect(screen.getByTestId('geodata-filter-refused')).toBeTruthy();
+});
+
+it('Save with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+  createSpy.mockReset();
+  const unhandled: unknown[] = [];
+  const record = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', record);
+  try {
+    mount({ where: gpx });
+    fireEvent.click(screen.getByTestId('geodata-save-filter'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const name = within(dialog).getByTestId('geodata-saved-filter-name');
+    await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+    // Long enough for a rejection with no handler to be reported.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(createSpy).not.toHaveBeenCalled();
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off('unhandledRejection', record);
+  }
 });

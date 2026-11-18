@@ -345,7 +345,7 @@ public static class PhotoImportEndpoints
 
         var filtered = Filter(candidates, request).ToList();
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = filtered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
 
         return TypedResults.Ok(new PhotoPreviewDto(
             [.. pageItems.Select(c => ToDto(c, decisions, tokens))],

@@ -63,7 +63,11 @@ export default function AnnotatedTextPanel({
   // Every link on the document in one read. The panel has no paging of its own: a passage the
   // page did not fetch would be text with no highlight on it, which reads as "nothing is linked
   // here" — the one answer that is worse than a slow load.
-  const { data: linkPage } = useResLinksForTarget('document', documentId, {
+  const {
+    data: linkPage,
+    isError: linksFailed,
+    refetch: readLinksAgain,
+  } = useResLinksForTarget('document', documentId, {
     pageSize: DOCUMENT_LINK_PAGE_SIZE,
   });
   const deleteLink = useDeleteResLink();
@@ -254,6 +258,30 @@ export default function AnnotatedTextPanel({
         )}
       </Flex>
 
+      {linksFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          data-testid="tl-links-failed"
+          title={t('textLink.linksFailed')}
+          action={
+            <Button size="small" type="link" onClick={() => void readLinksAgain()}>
+              {t('common.retry')}
+            </Button>
+          }
+          style={{ flex: '0 0 auto' }}
+        />
+      )}
+      {linkPage && linkPage.totalItems > linkPage.items.length && (
+        <Typography.Text
+          type="warning"
+          data-testid="tl-links-cut-off"
+          style={{ padding: '0 12px', fontSize: 12, flex: '0 0 auto' }}
+        >
+          {t('textLink.linksCutOff', { shown: linkPage.items.length, total: linkPage.totalItems })}
+        </Typography.Text>
+      )}
       {editing && (
         <Alert
           type="info"

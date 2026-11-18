@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { App } from 'antd';
 import { MemoryRouter, useLocation } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CaveDetail, CaveSummary, Entrance } from '../../api/hooks.ts';
@@ -25,6 +27,9 @@ const setSelection = vi.fn();
 const permissionsModal = vi.fn();
 
 let entrances: Entrance[] = [];
+// The cave's own read, as the page receives it.
+let caveQuery: Record<string, unknown> = {};
+const deleteEntrance = vi.fn();
 // What the domain capability answers, which is what the page falls back on with no summary.
 let can = false;
 // What this cave's own summary answers about the caller, or nothing while it is still on its way.
@@ -47,7 +52,7 @@ vi.mock('../../stores/workspaceStore.ts', () => ({
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
-  useCave: () => ({ data: cave(), isPending: false }),
+  useCave: () => caveQuery,
   useCaveSummary: () => ({ data: summary }),
   // The declared-depths card is drawn on this page; nothing declared, so it says so.
   useCaveDepthPlaces: () => ({ data: [] }),
@@ -64,7 +69,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useRockTypes: () => ({ data: [] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'shaft', name: 'Shaft' }] }),
   useDeleteCave: () => ({ mutateAsync: vi.fn() }),
-  useDeleteEntrance: () => ({ mutateAsync: vi.fn() }),
+  useDeleteEntrance: () => ({ mutateAsync: deleteEntrance }),
   useUpdateCave: () => ({ mutateAsync: vi.fn() }),
   useUpdateEntrance: () => ({ mutateAsync: vi.fn() }),
   useCan: () => can,
@@ -202,6 +207,8 @@ beforeEach(() => {
   permissionsModal.mockClear();
   can = false;
   summary = undefined;
+  caveQuery = { data: cave(), isPending: false };
+  deleteEntrance.mockReset();
 });
 
 afterEach(cleanup);
@@ -424,5 +431,62 @@ describe('CaveDetailPage delete confirmations', () => {
     const dialog = await screen.findByRole('tooltip');
     expect(dialog.textContent).toContain('Delete this entrance?');
     expect(dialog.textContent).toContain('It can be restored from Deleted caves and features.');
+  });
+});
+
+describe('CaveDetailPage when the cave cannot be read', () => {
+  // A deleted cave and one the reader may not see are refused alike, and the refusal is not
+  // retried: a page that only knew "loading" would spin for good on a link to either.
+  it('says there is no such cave for a refusal, instead of loading forever', () => {
+    caveQuery = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'cave.not_found'),
+    };
+    show();
+
+    expect(screen.getByText('No such cave')).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+  });
+
+  it('says the cave could not be read, with a retry, when nothing answered', () => {
+    const refetch = vi.fn();
+    caveQuery = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    };
+    show();
+
+    expect(screen.queryByText('No such cave')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CaveDetailPage deleting an entrance', () => {
+  // A refused delete leaves the row where it was; the reader is told why, in the page's own
+  // words, and the refusal does not escape as an unhandled rejection.
+  it('says why a refused delete did not happen', async () => {
+    can = true;
+    entrances = [entrance('e1', 22.5, 46.5, false)];
+    deleteEntrance.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete the entrance Entrance e1' }));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    expect(deleteEntrance).toHaveBeenCalledWith('e1');
+    expect(await screen.findByText('You are not allowed to make that change.')).toBeInTheDocument();
   });
 });

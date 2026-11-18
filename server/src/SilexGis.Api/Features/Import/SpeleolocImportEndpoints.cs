@@ -396,7 +396,7 @@ public static class SpeleolocImportEndpoints
             scans, options, usable?.Model, tracking, ctx, ct);
 
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = resolution.Points.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = resolution.Points.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
 
         // What "select all" selects, answered here rather than in the browser: a scan set aside on
         // the first page has to stay set aside when the ninth page is the one on screen.

@@ -60,6 +60,41 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
 
     // ---------- the whole path ----------
 
+    /// <summary>
+    /// A page number whose offset does not fit in a whole number is a page past the end of the
+    /// confirmations: answered empty, never a server fault and never the first page again.
+    /// </summary>
+    [Theory]
+    [InlineData(int.MaxValue, 500)]
+    [InlineData(4_294_969, 500)]
+    public async Task A_page_of_confirmations_far_past_the_end_is_empty_and_never_an_error(int page, int pageSize)
+    {
+        using var response = await admin.GetAsync($"/api/v1/import-batches?page={page}&pageSize={pageSize}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var root = JsonDocument.Parse(body).RootElement;
+        root.GetProperty("items").GetArrayLength().ShouldBe(0);
+        root.GetProperty("page").GetInt32().ShouldBe(page);
+
+        // Signed out, the listing is closed whatever the page.
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/import-batches?page={page}&pageSize={pageSize}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public void A_pages_offset_is_exact_up_to_the_largest_whole_number_and_held_there()
+    {
+        SilexGis.Api.Common.Paging.Offset(1, 500).ShouldBe(0);
+        SilexGis.Api.Common.Paging.Offset(3, 25).ShouldBe(50);
+        SilexGis.Api.Common.Paging.Offset(0, 25).ShouldBe(0);
+        // The last page whose offset fits, and the first that does not.
+        SilexGis.Api.Common.Paging.Offset(4_294_968, 500).ShouldBe(2_147_483_500);
+        SilexGis.Api.Common.Paging.Offset(4_294_969, 500).ShouldBe(int.MaxValue);
+        SilexGis.Api.Common.Paging.Offset(int.MaxValue, 1).ShouldBe(int.MaxValue - 1);
+        SilexGis.Api.Common.Paging.Offset(int.MaxValue, 500).ShouldBe(int.MaxValue);
+    }
+
     [Fact]
     public async Task A_gpx_becomes_a_cave_a_spring_and_a_sinkhole_after_review()
     {

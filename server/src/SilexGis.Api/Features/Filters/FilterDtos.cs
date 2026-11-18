@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using FluentValidation;
+using SilexGis.Api.Common;
 using SilexGis.Domain.Filters;
+using SilexGis.Infrastructure.Filters;
 
 namespace SilexGis.Api.Features.Filters;
 
@@ -69,6 +72,26 @@ public sealed record FilterQueryResponse(
 
 /// <summary>Rows named directly, for a control that has to show what somebody already picked.</summary>
 public sealed record FilterResolveRequest(string World, IReadOnlyList<Guid> Ids);
+
+public sealed class FilterResolveRequestValidator : AbstractValidator<FilterResolveRequest>
+{
+    public const string UnknownWorldCode = "filter.unknown_world";
+    public const string TooManyIdsCode = "filter.too_many_ids";
+
+    public FilterResolveRequestValidator(FilterWorldRegistry registry)
+    {
+        RuleFor(x => x.World)
+            .Must(world => registry.Find(world ?? string.Empty) is not null)
+            .WithProblemCode(UnknownWorldCode)
+            .WithMessage("No kind of object goes by that name.");
+
+        // Counted once each, as the walk will see them: naming one id many times is one id.
+        RuleFor(x => x.Ids)
+            .Must(ids => ids is null || ids.Distinct().Count() <= FilterValidation.MaxValuesPerCondition)
+            .WithProblemCode(TooManyIdsCode)
+            .WithMessage($"At most {FilterValidation.MaxValuesPerCondition} at a time.");
+    }
+}
 
 /// <summary>
 /// What the builder can offer, and the limits it should enforce before sending anything.

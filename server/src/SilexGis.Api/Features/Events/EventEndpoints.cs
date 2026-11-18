@@ -174,7 +174,7 @@ public static class EventEndpoints
         // reads as "the one entered later first" among events that start together.
         var rows = await query
             .OrderByDescending(x => x.StartDate).ThenByDescending(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResult<EventDto>([.. rows.Select(Map)], p, size, total));
     }

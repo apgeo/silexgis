@@ -543,6 +543,9 @@
     "retry": "Retry",
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
     "loadFailed": "Could not load this. Please try again.",
+    "readFailedTitle": "This could not be read just now",
+    "readFailedDetail": "The server could not be reached, or did not answer. Nothing here says anything about what was asked for — try again.",
+    "refreshFailed": "This could not be read again; what is shown may be out of date.",
     "close": "Close",
     "reset": "Reset",
     "clearAnswer": "Clear answer",
@@ -719,6 +722,7 @@
     "regionPlaceholder": "Region",
     "lengthPlaceholder": "Length (m): 300, >300, 300..500",
     "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "loadFailed": "The cave list could not be read just now. This says nothing about which caves there are.",
     "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
     "savedNotAboutCaves": "That saved filter is not about caves.",
     "saved": "Saved as “{{name}}”.",
@@ -755,6 +759,7 @@
   "featureList": {
     "unreadableLink": "The filter in this link could not be read, so every feature is shown. Ask whoever sent it for a fresh link.",
     "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "loadFailed": "The feature list could not be read just now. This says nothing about which features there are.",
     "savedNotAboutFeatures": "That saved filter is not about features.",
     "searchLabel": "Search features by name",
     "kindLabel": "Kind of feature",
@@ -838,6 +843,8 @@
     },
     "title": "Caves",
     "newCave": "New cave",
+    "notFound": "No such cave",
+    "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "editCave": "Edit cave",
     "name": "Name",
     "type": "Type",
@@ -1223,6 +1230,7 @@
   },
   "cabinets": {
     "title": "Cabinets",
+    "loadFailed": "The cabinets could not be read just now. Nothing here says whether there are any.",
     "empty": "No cabinets yet.",
     "pickOne": "Choose a cabinet to see what is filed in it.",
     "new": "New",
@@ -1627,6 +1635,7 @@
     "revokeShare": "Revoke the share link",
     "deleteAlbum": "Delete album",
     "shareRevoked": "Share link revoked.",
+    "shareForbidden": "You may not publish this album; sharing it takes the Share right on the album.",
     "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
@@ -3042,6 +3051,11 @@
     "checklistAdvisory": "This is a reading for the party, not a rule. Nothing is refused because a line is unsettled, and how settled a trip is never changes who may read it.",
     "checklistTickedAt": "Confirmed {{when}}",
     "checklistTickFailed": "That confirmation could not be recorded.",
+    "checklistLoadFailed": "This trip's checklist could not be read just now. Nothing here says whether it has one.",
+    "checklistProblems": {
+      "tickForbidden": "You may not confirm lines on this trip's checklist.",
+      "itemGone": "That line is no longer on the checklist; the list is shown as it is now."
+    },
     "empty": "No trips yet.",
     "emptyFiltered": "No trips match this filter.",
     "listFailed": "The trips could not be loaded.",
@@ -3084,7 +3098,16 @@
     }
   },
   "expeditions": {
+    "problems": {
+      "forbidden": "You may not change this camp.",
+      "createForbidden": "You may not record camps.",
+      "cavingGroupForbidden": "You may not file a camp under that caving group.",
+      "gone": "This camp is no longer there, or no longer yours to see.",
+      "geometryInvalid": "The camp's working area is not a shape that can be stored. Draw it again.",
+      "stayGone": "That stay is no longer on the camp's roster."
+    },
     "notFound": "No such camp",
+    "listUnavailable": "The camps could not be read just now. This says nothing about which camps there are.",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "title": "Camps",
     "searchPlaceholder": "Search camps",
@@ -3129,9 +3152,11 @@
       "personGone": "That person is no longer in the list of cavers. Choose them again, or type their name."
     },
     "mapEmpty": "Nothing to draw for this camp: it has no working area, and none of the trips you may read left a sketch or named a cave you may place.",
+    "mapUnavailable": "This camp's map could not be read just now.",
     "mapCaveat": "Drawn over the trips you may read. The working area is the shape somebody drew on the plan; a trip's sketch is shown exactly as drawn, whatever protection the caves it names carry; and a cave entrance appears only where you may see its exact position.",
     "mapTruncated": "This camp names more cave entrances than one map can carry, so not every entrance is drawn.",
     "noTripsVisible": "No trips in this camp that you may read.",
+    "tripsUnavailable": "This camp's trips could not be read just now. This says nothing about which trips it has.",
     "tripsTruncated": "Showing {{shown}} of {{total}} trips.",
     "watch": {
       "intro": "Who is underground on this camp's trips, as each trip's own tracking tells it — counted over the trips you may read. It records what was reported: it watches no clock and raises no alarm.",
@@ -3235,6 +3260,7 @@
     },
     "tabPhotos": "Photographs",
     "noPhotographs": "No photographs are filed against this camp or the trips in it that you may read.",
+    "photosUnavailable": "This camp's photographs could not be read just now. This says nothing about which are filed here.",
     "galleryVisibleToYou": "The photographs you may see, from the camp and the trips in it you may read. Somebody else may see more, or fewer."
   },
   "tags": {
@@ -3781,6 +3807,7 @@
     "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
+    "removalExceedsOwnRights": "You cannot remove a deny that withholds rights you do not hold yourself.",
     "denyFullAdministrators": "Refused: no deny can reach Full Administrators — membership of that group is the grant itself.",
     "subjectUnknown": "The account or caving group chosen no longer exists. Pick it again and save.",
     "anchorNotFound": "The object a rule is tied to no longer exists. Pick another one and save again.",
@@ -4230,9 +4257,8 @@
     "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
     "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
     "dataFailed": "The caves of this view could not be loaded.",
-    "revealGone": "What this link points at no longer exists, so the scene stayed where it was.",
-    "revealForbidden": "You may not see what this link points at, so the scene stayed where it was.",
-    "revealFailed": "Where this link points could not be read, so the scene stayed where it was. Follow it again in a moment.",
+    "tracksFailed": "The lines of an imported file could not be loaded.",
+    "filterLayersFailed": "A layer drawn from a filter could not be loaded.",
     "tryAgain": "Try again"
   },
   "caveview": {
@@ -5292,7 +5318,11 @@
     },
     "settingsProblems": {
       "invalid": "A value on this form was refused. Check what you entered and save again.",
-      "forbidden": "You may not change these settings."
+      "forbidden": "You may not change these settings.",
+      "smsGatewayInternal": "The gateway address is on this server or an internal network. The installation's configuration must allow that.",
+      "mailPasswordCleared": "The mail server changed, so the saved password was removed. Type it again.",
+      "smsAuthHeaderCleared": "The gateway address changed, so the saved authorisation header was removed. Type it again.",
+      "noticeUnworded": "The settings were saved, but the server noted something about this save that this page cannot put into words. Check the section's values."
     },
     "messaging": {
       "title": "Messaging",
@@ -5792,6 +5822,7 @@
     "failed": "That link is no longer valid. You can change your notification settings after signing in.",
     "doneDigest": "The daily summary has stopped, and with it every other notification email.",
     "alertsStillSent": "Alerts about your own account are still sent — they warn you when someone changes it.",
+    "unreachable": "The server could not be reached, so nothing has changed yet. Try again in a moment.",
     "manage": "Manage notification settings",
     "inboxUntouched": "Nothing else changed: these notifications still appear in your inbox inside the application, where you can read them whenever you like."
   },
@@ -7302,6 +7333,7 @@
     "markDone": "It happened",
     "markDoneSuccess": "The event was recorded as having happened.",
     "notFound": "No such event",
+    "listUnavailable": "The events could not be read just now. This says nothing about which events there are.",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "callOff": "Call it off",
     "callOffConfirm": "Call this event off?",
@@ -7354,6 +7386,11 @@
     "seriesPartlyForbidden": "This run holds an occurrence that is not yours to change, so none of it was changed. A half-applied change would leave the calendar disagreeing with itself.",
     "notInSeries": "This event does not come round again, so there is no run to act on.",
     "seriesMoveOutOfRange": "Moving this occurrence that far would carry a later one of the run off the end of the calendar, so none of them were moved. Pick a nearer day.",
+    "recurrenceOverlapping": "Each occurrence would still be running on the day the next one begins. Make the event shorter than the gap between repeats, or repeat it less often. Nothing was written.",
+    "recurrenceFrequencyInvalid": "That is not a repetition the calendar can step by. Choose one of the repetitions offered. Nothing was written.",
+    "seriesFrequencySeriesOnly": "How often an event repeats belongs to the run, not to one occurrence. To change it, edit this one and every later one.",
+    "stateTransitionInvalid": "The event cannot go from the state it is in now to the one chosen. Somebody may have changed it meanwhile — reload it to see where it stands.",
+    "goneOrUnreadable": "This event is no longer there, or you may no longer see it. Nothing was changed.",
     "responses": {
       "title": "Who is coming",
       "invite": "Ask",
@@ -8186,6 +8223,9 @@
     "drawnOnMap": "The shortest line is drawn on the map and in the 3D view. On the map you see its plan only; in 3D it runs through the rock at the depths its two ends were surveyed at."
   },
   "viewLinks": {
+    "revealGone": "What this link points at no longer exists, so the view stayed where it was.",
+    "revealForbidden": "You may not see what this link points at, so the view stayed where it was.",
+    "revealFailed": "Where this link points could not be read, so the view stayed where it was. Follow it again in a moment.",
     "controls": {
       "map2d": "Map",
       "scene3d": "3D scene",
@@ -8195,6 +8235,8 @@
   },
   "textLink": {
     "notAnnotated": "This document is not a link-annotated text.",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are highlighted in this text.",
+    "linksFailed": "The links of this text could not be loaded, so no passage is highlighted.",
     "empty": "This text has nothing in it yet.",
     "popOut": "Open in a window of its own",
     "controls": {
@@ -8354,7 +8396,8 @@
       "caveMissing": "The cave this entry was imported as is no longer a cave here.",
       "positionInvalid": "The position given for this cave is not on the earth.",
       "typeUnknown": "The chosen cave or entrance type does not exist on this installation.",
-      "parentNotFound": "The chosen parent no longer exists, or you may not see it."
+      "parentNotFound": "The chosen parent no longer exists, or you may not see it.",
+      "alreadyImported": "This cave is already in the register. Refresh it instead of creating a second copy."
     },
     "paging": {
       "previous": "Previous",

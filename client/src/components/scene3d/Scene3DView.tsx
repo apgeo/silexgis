@@ -21,7 +21,6 @@ import {
 } from '../../map/featureTypeCatalog.ts';
 import { onEntranceSymbolsChanged, setEntranceSymbols } from '../../map/entranceSymbols.ts';
 import { onMapFilterChange, onMapFilterRefusal } from '../../map/mapFilters.ts';
-import { revealProblemKey } from './revealMessages.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
 import {
   isDrawableIn3d,
@@ -125,7 +124,8 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { exaggerationInForce, formatExaggeration, readExaggeration } from '../../scene3d/exaggeration3d.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
-import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { APPROXIMATE_SPAN_DEGREES, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { followReveal } from '../../viewlinks/reveal.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
@@ -267,7 +267,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const frameReveal = useCallback(
     (ref: ResourceRef) => {
       setRevealProblem(undefined);
-      geometryFor(queryClient, ref).then((target) => {
+      followReveal(queryClient, ref, (target) => {
         const engine = engineRef.current;
         const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
         if (engine !== null && bounds) {
@@ -279,7 +279,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           const pad = target?.approximate ? APPROXIMATE_SPAN_DEGREES / 2 : 0;
           engine.fitBounds([west - pad, south - pad, east + pad, north + pad], { animate: true });
         }
-      }, (error: unknown) => setRevealProblem(revealProblemKey(error)));
+      }, setRevealProblem);
     },
     [queryClient],
   );
@@ -610,6 +610,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [tracksState, setTracksState] = useState<GeofileTracks3DState>(
     EMPTY_GEOFILE_TRACKS_3D_STATE,
   );
+  // Whether the viewer's saved-filter layers, or a flyby's own, failed to load: each loader keeps
+  // what it drew, so a failure is otherwise a layer that looks like it matches nothing here.
+  const [filterLayersFailed, setFilterLayersFailed] = useState({ listed: false, flyby: false });
 
   // The view exchange, held in a ref for the same reason as the handles above: the effect that
   // owns it must not re-run when coupling is switched, so the switch reaches it from outside.
@@ -725,6 +728,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     filterLayersRef.current = filterLayers3d;
     const flybyFeatureLayers3d = attachFilterLayers3d(engine);
     flybyFeatureLayersRef.current = flybyFeatureLayers3d;
+    const unsubscribeFilterLayers = filterLayers3d.subscribe(({ loadFailed }) =>
+      setFilterLayersFailed((held) => ({ ...held, listed: loadFailed })),
+    );
+    const unsubscribeFlybyFeatureLayers = flybyFeatureLayers3d.subscribe(({ loadFailed }) =>
+      setFilterLayersFailed((held) => ({ ...held, flyby: loadFailed })),
+    );
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
     // Each cave's top is read through the loader at the moment its walls are placed, for the
@@ -940,10 +949,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setTracksState(EMPTY_GEOFILE_TRACKS_3D_STATE);
       data.detach();
       dataRef.current = null;
+      unsubscribeFilterLayers();
+      unsubscribeFlybyFeatureLayers();
       filterLayers3d.detach();
       filterLayersRef.current = null;
       flybyFeatureLayers3d.detach();
       flybyFeatureLayersRef.current = null;
+      setFilterLayersFailed({ listed: false, flyby: false });
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
       // would keep tens of megabytes for a view nobody is looking at.
       mesh.detach();
@@ -1894,6 +1906,29 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-data-failed">
             {t('scene3d.dataFailed')}
             <Button size="small" type="link" onClick={() => dataRef.current?.reload()}>
+              {t('scene3d.tryAgain')}
+            </Button>
+          </span>
+        )}
+        {tracksState.loadFailed && !tracksState.loading && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-tracks-failed">
+            {t('scene3d.tracksFailed')}
+            <Button size="small" type="link" onClick={() => tracksRef.current?.reload()}>
+              {t('scene3d.tryAgain')}
+            </Button>
+          </span>
+        )}
+        {(filterLayersFailed.listed || filterLayersFailed.flyby) && (
+          <span className="scene3d-notice scene3d-notice-offer" data-testid="scene3d-filter-layers-failed">
+            {t('scene3d.filterLayersFailed')}
+            <Button
+              size="small"
+              type="link"
+              onClick={() => {
+                filterLayersRef.current?.reload();
+                flybyFeatureLayersRef.current?.reload();
+              }}
+            >
               {t('scene3d.tryAgain')}
             </Button>
           </span>

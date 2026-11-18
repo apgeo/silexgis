@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, confirmOk } from './helpers.ts';
+import { asPerson, tryAsPerson } from './arrange.ts';
+import { gotoRoute, login } from './helpers.ts';
 
 // The terrain builder page, driven the way an operator drives it: a rectangle drawn on a map
 // becomes an area, and a build started against it walks its phases and says where it got to.
@@ -61,51 +62,34 @@ async function settledBox(page: Page) {
 }
 
 /**
- * Removes every build this installation is holding.
- *
- * The tests below describe an installation that has not built terrain yet, and the dev database
- * outlives the run — so without this the second run of the suite would be describing the leftovers
- * of the first, and the assertion that nothing has yet met the missing service would fail against a
- * page that is telling the truth.
+ * Where a build obtains its elevation data: a public bucket on the internet, which is the only
+ * source the application has. Probed from here because the application server runs on this same
+ * machine and reaches the internet the same way.
  */
-async function removeExistingBuilds(page: Page) {
-  const remove = page.locator('[data-testid^="terrain-delete-"]');
-  await expect(page.getByTestId('terrain-builds')).toBeVisible();
+const ELEVATION_SOURCE = 'https://copernicus-dem-30m.s3.amazonaws.com';
 
-  // The delete button is offered on every row on purpose, including rows the server will refuse
-  // to delete, because the state can change in another browser between the list being read and
-  // the button being pressed. That makes pressing it blindly wrong here: two ordinary states are
-  // refused, and each of them would hang this loop on a confirmation that never comes *and* put
-  // an undeclared 409 in the browser's log, failing every test in this file on the console guard
-  // rather than on the thing that actually went wrong.
-  for (let guard = 0; guard < 50 && (await remove.count()) > 0; guard += 1) {
-    const id = (await remove.first().getAttribute('data-testid'))!.slice('terrain-delete-'.length);
-    const row = page.locator('tr').filter({ has: page.getByTestId(`terrain-delete-${id}`) });
-
-    // Refused state one: the build the 3D scene is drawing. Somebody activated it, which is the
-    // feature's happy path and what the activate button is for — so this is the ordinary state of
-    // a development database, not a damaged one. Stop drawing it first, which is the same thing
-    // an operator would do and needs no more right than the delete does.
-    const stop = page.getByTestId(`terrain-stop-${id}`);
-    if ((await stop.count()) > 0) {
-      await stop.click();
-      await expect(stop).toHaveCount(0, { timeout: 30_000 });
-    }
-
-    // Refused state two: a build still queued or running, whose files are being written while the
-    // request is being made. It is waited out rather than skipped, because the tests below assert
-    // against an installation that has built nothing at all and a row left behind would make them
-    // describe something else. Terrain runs one build at a time and this one is already on its
-    // way; the bound is the same generous one the build test itself uses, and for the same reason
-    // — what is slow here is a public elevation service, not this application.
-    await expect(row).not.toContainText(/Queued|Running/, { timeout: 240_000 });
-
-    await page.getByTestId(`terrain-delete-${id}`).click();
-    await confirmOk(page);
-    await expect(page.getByText('Deleted')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Deleted')).toBeHidden({ timeout: 30_000 });
+/** Whether the elevation source answers at all; any HTTP answer, a refusal included, means it is reachable. */
+async function elevationSourceReachable(): Promise<boolean> {
+  try {
+    await fetch(ELEVATION_SOURCE, { method: 'HEAD', signal: AbortSignal.timeout(15_000) });
+    return true;
+  } catch {
+    return false;
   }
-  await expect(remove).toHaveCount(0);
+}
+
+interface BuildRow {
+  id: string;
+  status: string;
+  errorCode?: string | null;
+}
+
+/** Whether a build the page lists first has already met the missing tile-making service. */
+async function anyBuildStoppedAtBake(page: Page): Promise<boolean> {
+  const first = await asPerson<{ items: BuildRow[] }>(page, 'GET', '/api/v1/terrain/builds?page=1&pageSize=10');
+  return first.items.some(
+    (build) => build.status === 'failed' && build.errorCode === 'terrain_build.bake_unavailable',
+  );
 }
 
 /**
@@ -188,28 +172,31 @@ test('a build on an installation with no tile-making service stops there, and th
   // The ordinary bound stays right for everything driven purely by the application itself.
   test.setTimeout(300_000);
 
-  // Emptying the list below removes the build whose detail panel is open, and the request already
-  // on its way for that build answers 404 before the list has been read again. The refusal is
-  // correct — the build really is gone — and nothing on screen misbehaves; it is declared here
-  // rather than left in the log because this test is what causes it, and an undeclared one would
-  // make every future run look as though it had found something.
-  // Matched on the wording rather than on the address: what the browser writes carries the status
-  // in its message and the route only in the location, and a declaration is read against the
-  // message. That makes this one flow's expectation of one refusal, which is why it lives here and
-  // not in the guard's global list.
-  consoleErrors.allow(
-    /status of 404/,
-    'this test deletes the build whose panel is open, and its poll was already in flight',
+  // The application has no local source of elevation data to point a build at, so without the
+  // internet the build would stop at obtaining its data and never reach the step this test is
+  // about. Said as a skip with its reason rather than as a red run that names a timeout.
+  test.skip(
+    !(await elevationSourceReachable()),
+    `the public elevation-data source (${ELEVATION_SOURCE}) cannot be reached, and a build cannot obtain data without it`,
   );
 
   await login(page);
   await gotoRoute(page, '/admin/terrain');
-  await removeExistingBuilds(page);
+  await expect(page.getByTestId('terrain-builds')).toBeVisible();
 
-  // Nothing has met the missing service yet, so nothing is claimed about it. Asserted against a
-  // list this test emptied itself, so the silence means the page has nothing to say rather than
-  // that the answer has not arrived.
-  await expect(page.getByTestId('terrain-worker-missing')).toHaveCount(0);
+  // The installation is shared with every other run and test, so this test removes only the build
+  // it starts and leaves everything else as it found it. That means the page may already know of a
+  // build that met the missing service; only when it does not can the notice's absence be asserted,
+  // and the notice's arrival below is then the same page changing its answer because of this build.
+  const alreadyStopped = await anyBuildStoppedAtBake(page);
+  if (!alreadyStopped) {
+    await expect(page.getByTestId('terrain-worker-missing')).toHaveCount(0);
+  } else {
+    test.info().annotations.push({
+      type: 'precondition-not-asserted',
+      description: 'an earlier build had already met the missing tile-making service, so the notice was there before this one',
+    });
+  }
 
   await drawArea(page);
   await expect(page.getByTestId('terrain-area-extent')).toContainText('West, south, east, north', {
@@ -219,14 +206,39 @@ test('a build on an installation with no tile-making service stops there, and th
   // The depth is left at what the form offers. It decides how much the tile maker would be asked
   // for, and this build never reaches the tile maker — so the realistic case is the default one,
   // and driving that control here would test the control rather than the state under test.
+  const submitted = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().endsWith('/api/v1/terrain/builds'),
+  );
   await page.getByRole('button', { name: 'Start build' }).click();
+  const response = await submitted;
+  expect(response.ok(), `starting the build answered ${response.status()}`).toBeTruthy();
+  const made = ((await response.json()) as BuildRow).id;
 
+  try {
+    await stopsAtTheBake(page, made);
+  } finally {
+    // Only what this test made. A build stopped at the bake is deletable; one that never got there
+    // (the test failed earlier) may still be running and is then refused, and is left behind with
+    // the rest of a failed run's state rather than waited out here.
+    await tryAsPerson(page, 'DELETE', `/api/v1/terrain/builds/${made}`);
+    // The open panel may poll the build once more before the page closes, and that answers 404 now
+    // that the build is gone. Declared by its address, so another refusal in this test still counts.
+    consoleErrors.allow(
+      new RegExp(`/api/v1/terrain/builds/${made}`),
+      'this test deleted the build whose panel was open, and its poll was already in flight',
+    );
+  }
+});
+
+/** What the page says once the build this test started has stopped at the step this installation cannot do. */
+async function stopsAtTheBake(page: Page, made: string) {
   // The build appears in the list, obtains its coverage, prepares it, and stops at the bake. How
   // long that takes is how long a public elevation-data service takes to answer, so the wait is
   // generous: a bound tight enough to fail on a slow morning would say the page is broken when
-  // what is slow is the internet.
-  const failed = page.getByTestId('terrain-builds').getByText('Failed');
-  await expect(failed.first()).toBeVisible({ timeout: 180_000 });
+  // what is slow is the internet. Read on this build's own row: another build in the list that
+  // failed earlier says nothing about this one.
+  const ownRow = page.locator('tr').filter({ has: page.getByTestId(`terrain-delete-${made}`) });
+  await expect(ownRow.getByText('Failed')).toBeVisible({ timeout: 180_000 });
 
   // What the operator is told, and where. The notice is at the top of the page rather than beside
   // the build that met the state: what is missing is a property of the installation, and somebody
@@ -244,7 +256,7 @@ test('a build on an installation with no tile-making service stops there, and th
   // And it is honest about what is left: the work before the stopped step stands, and the stopped
   // build is carried on from there once the service runs — so the control it names is on the build.
   await expect(notice).toContainText('press Run again on the stopped build');
-  await expect(page.locator('[data-testid^="terrain-retry-"]').first()).toBeVisible();
+  await expect(page.getByTestId(`terrain-retry-${made}`)).toBeVisible();
 
   // The build's own panel says the same thing in short, and does not also shout it as a failure —
   // one screen carrying the same alert twice makes neither of them read as the answer.
@@ -254,4 +266,4 @@ test('a build on an installation with no tile-making service stops there, and th
   // The phases it did reach are shown as the fixed pipeline they are.
   await expect(page.getByTestId('terrain-pipeline')).toBeVisible();
   await expect(page.getByTestId('terrain-phase-bake')).toBeVisible();
-});
+}

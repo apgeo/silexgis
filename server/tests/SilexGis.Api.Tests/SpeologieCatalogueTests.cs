@@ -1023,6 +1023,93 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClas
     }
 
     /// <summary>
+    /// An explicit "create" for a catalogue entry this installation already holds would make a
+    /// second cave of the same hole. It is that entry's refusal, with its own code, while a new
+    /// entry created in the same confirmation still lands — and a lone such entry refuses the
+    /// whole confirmation, naming why.
+    /// </summary>
+    [Fact]
+    public async Task An_explicit_create_of_an_entry_already_imported_is_that_entrys_refusal()
+    {
+        var title = $"Peștera Dublată {tag}";
+        var fresh = $"Peștera Proaspătă {tag}";
+
+        CatalogueHolds(Record(70561, title));
+        (await ImportedAsync(ImportBody([70561]))).GetProperty("createdCount").GetInt32().ShouldBe(1);
+
+        CatalogueHolds(Record(70561, title), Record(70562, fresh));
+        var result = await ImportedAsync(ImportBody(
+            [70561, 70562],
+            new Dictionary<string, object?>
+            {
+                ["70561"] = new { action = "create" },
+                ["70562"] = new { action = "create" },
+            }));
+
+        result.GetProperty("createdCount").GetInt32().ShouldBe(1);
+        var failure = result.GetProperty("failures").EnumerateArray().ShouldHaveSingleItem();
+        failure.GetProperty("speologieId").GetInt32().ShouldBe(70561);
+        failure.GetProperty("code").GetString().ShouldBe("speologie.already_imported");
+
+        var alone = await ImportAsync(ImportBody(
+            [70561], new Dictionary<string, object?> { ["70561"] = new { action = "create" } }));
+        var aloneText = await BodyAsync(alone);
+        alone.StatusCode.ShouldBe(HttpStatusCode.BadRequest, aloneText);
+        CodeOf(aloneText).ShouldBe("speologie.nothing_created");
+
+        (await CavesForEntryAsync(70561)).ShouldBe(1);
+        (await CavesForEntryAsync(70562)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Two confirmations of the same new entry arriving together: each looks for an existing cave
+    /// before writing, and without something that makes the second wait for the first, both find
+    /// none and both create one. The feature table is held against writes so that both requests
+    /// are inside that window at once — each must be parked before it is released — and exactly
+    /// one cave may come out of it, the later confirmation refreshing what the earlier created.
+    /// </summary>
+    [Fact]
+    public async Task Two_confirmations_of_one_new_entry_at_once_make_one_cave()
+    {
+        var title = $"Peștera Grăbită {tag}";
+        CatalogueHolds(Record(70571, title));
+
+        HttpResponseMessage[] responses;
+        await using (var stall = await RowStall.HoldFeatureWritesAsync(factory))
+        {
+            var both = Task.WhenAll(ImportAsync(ImportBody([70571])), ImportAsync(ImportBody([70571])));
+            await stall.WaitForWaitersAsync(2, both);
+            await stall.ReleaseAsync();
+            responses = await both;
+        }
+
+        var results = new List<JsonElement>();
+        foreach (var response in responses)
+        {
+            var text = await BodyAsync(response);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, text);
+            results.Add(JsonDocument.Parse(text).RootElement.Clone());
+        }
+
+        (await CavesForEntryAsync(70571)).ShouldBe(1);
+        results.Sum(r => r.GetProperty("createdCount").GetInt32()).ShouldBe(1);
+        results.Sum(r => r.GetProperty("updatedCount").GetInt32()).ShouldBe(1);
+    }
+
+    /// <summary>Live caves carrying the catalogue id, counted without the de-duplication the import's own lookup applies.</summary>
+    private async Task<int> CavesForEntryAsync(int speologieId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Database.SqlQueryRaw<int>(
+                "SELECT count(*)::int AS \"Value\" FROM features WHERE kind = {0} AND deleted_at IS NULL AND "
+                + SpeologieSql.IdExpression + " = {1}",
+                (short)FeatureKind.Cave,
+                speologieId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .SingleAsync();
+    }
+
+    /// <summary>
     /// "1" and "01" name one catalogue cave. Two decisions for it are refused with a code, rather
     /// than reaching a dictionary that throws on the second one.
     /// </summary>

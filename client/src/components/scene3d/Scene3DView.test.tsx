@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Profiler, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -66,7 +66,8 @@ vi.mock('../../api/hooks.ts', () => ({
   useGeofiles: () => ({ data: geofilePage }),
   fetchGeofileFeatureCollection: (id: string, bbox: string) => {
     geofileRequests.push([id, bbox]);
-    return Promise.resolve(geofileResponses[id] ?? emptyCollection);
+    const answer = geofileResponses[id] ?? emptyCollection;
+    return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
   },
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
@@ -1614,7 +1615,7 @@ describe('arriving with a cave to reveal', () => {
       await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
 
       expect(
-        await screen.findByText('What this link points at no longer exists, so the scene stayed where it was.'),
+        await screen.findByText('What this link points at no longer exists, so the view stayed where it was.'),
       ).toBeInTheDocument();
       expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1633,7 +1634,7 @@ describe('arriving with a cave to reveal', () => {
     renderView();
 
     expect(
-      await screen.findByText('You may not see what this link points at, so the scene stayed where it was.'),
+      await screen.findByText('You may not see what this link points at, so the view stayed where it was.'),
     ).toBeInTheDocument();
   });
 
@@ -2365,6 +2366,24 @@ describe('tracks from imported files', () => {
     await waitFor(() => expect(trackLines()).toHaveLength(0));
     // A file that is off is not fetched either; nothing asked about it on the way out.
     expect(geofileRequests).toHaveLength(1);
+  });
+
+  it('says a file could not be loaded rather than showing no track, and tries again', async () => {
+    withWebGl2(true);
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = { 'file-1': Object.assign(new Error('Request failed with status 500'), { status: 500 }) };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1'] });
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-tracks-failed');
+    expect(notice).toHaveTextContent('The lines of an imported file could not be loaded.');
+    expect(screen.queryByTestId('scene3d-data-failed')).toBeNull();
+
+    geofileResponses = { 'file-1': aHike };
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(trackLines()).toHaveLength(1));
+    expect(screen.queryByTestId('scene3d-tracks-failed')).toBeNull();
   });
 
   it('lays a track on the smooth globe, where the entrances it walks past also sit', async () => {

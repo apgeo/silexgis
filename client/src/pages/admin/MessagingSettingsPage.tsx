@@ -59,7 +59,7 @@ import {
   type SmsSettingsWrite,
 } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
+import { settingsNotice, settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
 
 /** Stands in for a secret that is already stored; the real one is never sent to the browser. */
 const SECRET_KEPT = '••••••••';
@@ -251,6 +251,21 @@ export default function MessagingSettingsPage() {
   );
 }
 
+/** The notes a save came back with, each said as a warning the administrator can act on. */
+function SaveNotices({ codes }: { codes: string[] }) {
+  const { t } = useTranslation();
+  if (codes.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      {codes.map((code) => (
+        <Alert key={code} type="warning" showIcon title={settingsNotice(code, t)} />
+      ))}
+    </>
+  );
+}
+
 export function MailForm({
   settings,
   onSaved,
@@ -262,6 +277,10 @@ export function MailForm({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState(defaultTestRecipient);
+  // Notes the last accepted save came back with (a stored secret dropped because its server
+  // moved). Kept on screen until the next save rather than flashed, because each asks the
+  // administrator to do something.
+  const [notices, setNotices] = useState<string[]>([]);
 
   // The password is deliberately left blank: an empty field means "leave the stored one alone".
   useSectionFields(form, settings.mail, 'password');
@@ -283,6 +302,7 @@ export function MailForm({
       }
       onSaved(data);
       form.setFieldValue('password', undefined);
+      setNotices(data.notices ?? []);
       message.success(t('common.saved'));
     } catch {
       // The request never reached the server (a dropped connection): said, not left unhandled.
@@ -317,6 +337,7 @@ export function MailForm({
 
   return (
     <Flex vertical gap={16}>
+      <SaveNotices codes={notices} />
       <StatusBanner
         configured={settings.mailConfigured}
         okText={t('admin.messaging.mailWorking')}
@@ -401,6 +422,10 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
   const { message } = App.useApp();
   const [form] = Form.useForm<SmsSettingsWrite & { authHeader?: string }>();
   const [saving, setSaving] = useState(false);
+  // Notes the last accepted save came back with (a stored secret dropped because its server
+  // moved). Kept on screen until the next save rather than flashed, because each asks the
+  // administrator to do something.
+  const [notices, setNotices] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
   const [testTo, setTestTo] = useState('');
 
@@ -424,6 +449,7 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
       }
       onSaved(data);
       form.setFieldValue('authHeader', undefined);
+      setNotices(data.notices ?? []);
       message.success(t('common.saved'));
     } catch {
       // The request never reached the server (a dropped connection): said, not left unhandled.
@@ -458,6 +484,7 @@ export function SmsForm({ settings, onSaved }: SectionProps) {
 
   return (
     <Flex vertical gap={16}>
+      <SaveNotices codes={notices} />
       <StatusBanner
         configured={settings.smsConfigured}
         okText={t('admin.messaging.smsWorking')}

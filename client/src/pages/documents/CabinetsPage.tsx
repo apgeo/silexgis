@@ -131,7 +131,12 @@ function CabinetEditModal({
   }>();
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     await onSubmit({
       name: values.name,
       description: values.description ?? null,
@@ -262,7 +267,12 @@ export default function CabinetsPage() {
   // page to everyone. Authoring a kind's schema decides what every document of it may say.
   const canWriteTaxonomies = hasAccessAction(capabilities?.domains.taxonomies, 'write');
 
-  const { data: cabinets, isPending } = useCabinets(canRead);
+  const {
+    data: cabinets,
+    isPending,
+    isError: cabinetsFailed,
+    refetch: refetchCabinets,
+  } = useCabinets(canRead);
   const [selected, setSelected] = useState<string>();
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -426,7 +436,23 @@ export default function CabinetsPage() {
           </Button>
         )}
       </Flex>
-      {isPending ? (
+      {cabinetsFailed && (
+        // A tree that could not be read is not an empty one. The inbox below it reads its own
+        // listing, so it stays usable while the shelves are asked for again.
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="cabinets-load-failed"
+          style={{ marginBottom: 12 }}
+          title={cabinets === undefined ? t('cabinets.loadFailed') : t('common.refreshFailed')}
+          action={
+            <Button size="small" onClick={() => void refetchCabinets()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {isPending && !cabinetsFailed ? (
         <Spin />
       ) : (
         <Tree

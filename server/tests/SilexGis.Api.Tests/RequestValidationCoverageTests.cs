@@ -31,12 +31,9 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
     /// </summary>
     private static readonly HashSet<string> KnownUnvalidated = new(StringComparer.Ordinal)
     {
-        // Adding pictures to an album.
-        "POST /api/v1/albums/{id:guid}/items",
-        // Running and resolving a filter document; its binding refuses a malformed shape, but no
-        // validator bounds it.
+        // Running a filter document; its binding refuses a malformed shape, but no validator
+        // bounds it.
         "POST /api/v1/filters/query",
-        "POST /api/v1/filters/resolve",
     };
 
     /// <summary>

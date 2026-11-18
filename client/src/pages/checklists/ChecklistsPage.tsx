@@ -25,9 +25,11 @@ import {
   useChecklists,
   useCreateChecklist,
   useDeleteChecklist,
+  useEffectiveAccess,
   useMe,
   useReadChecklistForChange,
   useUpdateChecklist,
+  parseAccessActions,
   type ChecklistInfo,
   type ChecklistWrite,
 } from '../../api/hooks.ts';
@@ -71,6 +73,8 @@ export default function ChecklistsPage() {
   // server decides for anybody else, and the dialog says so when it is refused.
   const { data: me } = useMe();
   const managesAnyList = useCan('checklists', 'managePermissions');
+  const writesAnyList = useCan('checklists', 'write');
+  const deletesAnyList = useCan('checklists', 'delete');
   const [sharing, setSharing] = useState<ChecklistInfo | null>(null);
   const create = useCreateChecklist();
   const update = useUpdateChecklist();
@@ -224,23 +228,15 @@ export default function ChecklistsPage() {
                       data-testid={`checklist-permissions-${list.id}`}
                     />
                   )}
-                  <Button
-                    icon={<EditOutlined />}
-                    loading={reading === list.id}
-                    onClick={() => void openForEdit(list)}
-                    aria-label={t('common.edit')}
+                  <ChangeActions
+                    list={list}
+                    owned={list.ownerUserId === me?.id}
+                    writesAnyList={writesAnyList}
+                    deletesAnyList={deletesAnyList}
+                    reading={reading === list.id}
+                    onEdit={() => void openForEdit(list)}
+                    onDelete={() => void deleteShown(list)}
                   />
-                  <Popconfirm
-                    title={t('checklists.deleteConfirm')}
-                    onConfirm={() => void deleteShown(list)}
-                  >
-                    <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      disabled={reading === list.id}
-                      aria-label={t('checklists.delete')}
-                    />
-                  </Popconfirm>
                 </Space>
               </Flex>
             </Card>
@@ -339,6 +335,53 @@ export default function ChecklistsPage() {
           </Form.List>
         </Form>
       </Modal>
+    </>
+  );
+}
+
+/**
+ * Edit and Delete for one list, drawn only for somebody who may take them.
+ *
+ * The listing does not say per row what the reader may do, and a list published to everybody is
+ * read by people who may not change it, so offering both to everyone sends them into a refusal the
+ * page could have foreseen. The owner always may, and so may a holder of the right over every list;
+ * for anybody else the server is asked about that one list, which also covers a list handed to a
+ * person by name. While that answer is not in, the buttons are not drawn.
+ */
+function ChangeActions({
+  list,
+  owned,
+  writesAnyList,
+  deletesAnyList,
+  reading,
+  onEdit,
+  onDelete,
+}: {
+  list: ChecklistInfo;
+  owned: boolean;
+  writesAnyList: boolean;
+  deletesAnyList: boolean;
+  reading: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const settled = owned || (writesAnyList && deletesAnyList);
+  const { data: effective } = useEffectiveAccess('checklist', list.id, { enabled: !settled });
+  const held = effective ? parseAccessActions(effective.actions) : null;
+  const mayEdit = owned || writesAnyList || (held?.has('write') ?? false);
+  const mayDelete = owned || deletesAnyList || (held?.has('delete') ?? false);
+
+  return (
+    <>
+      {mayEdit && (
+        <Button icon={<EditOutlined />} loading={reading} onClick={onEdit} aria-label={t('common.edit')} />
+      )}
+      {mayDelete && (
+        <Popconfirm title={t('checklists.deleteConfirm')} onConfirm={onDelete}>
+          <Button danger icon={<DeleteOutlined />} disabled={reading} aria-label={t('checklists.delete')} />
+        </Popconfirm>
+      )}
     </>
   );
 }

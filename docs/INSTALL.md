@@ -2385,8 +2385,8 @@ SILEXGIS__SmsGateway__AllowInternalAddresses=true
 
 Moving the mail settings to another host or port, or the SMS settings to another gateway address,
 drops the stored mail password or the gateway's authorisation header unless the same save types
-it again. The server's answer to that save reports which secret it dropped; type the password or
-header again after such a move.
+it again. After such a save the settings page shows a warning above the section naming the secret
+it dropped, and the warning stays until the next save; type the password or header again.
 
 A configured SMS gateway is also what a charging notification channel needs: with
 `SILEXGIS__Announcements__PaidChannelsEnabled` on, an announcement to a caving group may be

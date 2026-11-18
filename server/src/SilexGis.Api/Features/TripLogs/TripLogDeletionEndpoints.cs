@@ -129,7 +129,7 @@ internal static class TripLogDeletionEndpoints
             .ToListAsync(ct);
 
         var mine = candidates.Where(row => MayRestore(ctx, row)).ToList();
-        var shown = mine.Skip((p - 1) * size).Take(size).ToList();
+        var shown = mine.Skip(Paging.Offset(p, size)).Take(size).ToList();
 
         // Resolved rather than joined: the label an account may be shown under is a rule with
         // one home, and it is never their address.

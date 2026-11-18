@@ -15,7 +15,6 @@ import {
   Descriptions,
   Flex,
   Popconfirm,
-  Result,
   Spin,
   Tabs,
   Tag,
@@ -30,7 +29,6 @@ import {
   parseAccessActions,
   useCan,
   useCavingGroups,
-  useCreateDoor,
   useDeleteTripLog,
   useEffectiveAccess,
   useImportTripTrack,
@@ -66,6 +64,8 @@ import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripTrackingTab from './TripTrackingTab.tsx';
 import TripAttentionNotice from './TripAttentionNotice.tsx';
 import TripStateControl from './TripStateControl.tsx';
+import TripReadFailed from './TripReadFailed.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
 import TripSections from './TripSections.tsx';
@@ -151,7 +151,7 @@ export default function TripLogDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: trip, isPending, isError } = useTripLog(id);
+  const { data: trip, isPending, isError, error, refetch } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
   const { data: participantRoles } = useTripParticipantRoles();
@@ -176,13 +176,6 @@ export default function TripLogDetailPage() {
   // bridges the first render (the server enforces regardless).
   const { data: effective } = useEffectiveAccess('tripLog', id);
   const domainFallback = useCan('tripLogs', 'write');
-  // Whoever could have deleted a trip is who a deleted one might be waiting for: an account
-  // that may delete trips, and one that may create them, since an author may delete their own.
-  // Creating is asked of the door rather than of the domain-level right, as the trip list asks
-  // it: somebody who records trips only for their caving group owns those trips all the same.
-  const { canCreate: mayCreate } = useCreateDoor('tripLogs');
-  const mayDelete = useCan('tripLogs', 'delete');
-  const canRestore = mayCreate || mayDelete;
   // What this installation does with a deleted trip, asked so the confirmation can say it.
   const { data: tripConfig, isLoading: retentionOutstanding } = useTripLogConfig();
   const held = effective ? parseAccessActions(effective.actions) : null;
@@ -197,39 +190,15 @@ export default function TripLogDetailPage() {
   const activeTab: TabKey = isTabKey(requested) ? requested : DEFAULT_TAB;
 
   // The server answers 404 for a trip that does not exist and for one the caller may not read,
-  // by design, and a settled refusal is not retried. Without this branch the page would stay on
-  // its spinner for good, and a permission refusal reads as the application having hung. The
-  // wording names the ambiguity rather than guessing which of the two it is.
-  if (isError) {
-    return (
-      <Result
-        status="404"
-        title={t('trips.notFound')}
-        // A deleted trip answers exactly as one that was never there, so this page cannot know
-        // which it is looking at either. What it can do is say where a deleted one would be,
-        // to somebody who might have deleted it.
-        subTitle={
-          canRestore
-            ? `${t('trips.notFoundDetail')} ${t('trips.deleted.notFoundHint')}`
-            : t('trips.notFoundDetail')
-        }
-        extra={
-          <Flex gap={8} justify="center" wrap>
-            <Button type="primary" onClick={() => void navigate('/trip-logs')}>
-              {t('common.back')}
-            </Button>
-            {canRestore && (
-              <Button
-                data-testid="trip-not-found-deleted"
-                onClick={() => void navigate('/trip-logs/deleted')}
-              >
-                {t('trips.deleted.link')}
-              </Button>
-            )}
-          </Flex>
-        }
-      />
-    );
+  // by design, and a settled refusal is not retried: without a branch for it the page would stay
+  // on its spinner for good. But a failed read is not always that answer. TanStack Query keeps
+  // the trip it holds when a later re-read fails, and a re-read fails for reasons that say nothing
+  // about the trip (the server restarting, a gateway error). Swapping a loaded page — and the
+  // edits open in it — for "no such trip" on such a blip would discard typed work, so a page that
+  // holds the trip keeps it and says it could not refresh. A settled refusal still ends the page,
+  // because then the trip really has gone from this reader.
+  if (readFailureEndsPage(isError, trip, error)) {
+    return <TripReadFailed error={error} onRetry={() => void refetch()} />;
   }
 
   if (isPending || !trip) {
@@ -376,6 +345,23 @@ export default function TripLogDetailPage() {
           )}
         </Flex>
       </Flex>
+
+      {/* The trip on screen is the last one read; a later read did not land. Said, with a way to
+          ask again, rather than left to look current. */}
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          title={t('common.refreshFailed')}
+          style={{ marginBottom: 12 }}
+          data-testid="trip-refresh-failed"
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
 
       {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
           A draft is not hidden from anyone its visibility admits — being unfinished is not a

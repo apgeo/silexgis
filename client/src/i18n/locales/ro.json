@@ -543,6 +543,9 @@
     "retry": "Reîncearcă",
     "conflict": "Altcineva a modificat acest element de când l-ai încărcat. Reîncarcă și reaplică modificările.",
     "loadFailed": "Nu s-a putut încărca. Încearcă din nou.",
+    "readFailedTitle": "Nu a putut fi citit acum",
+    "readFailedDetail": "Serverul nu a putut fi contactat sau nu a răspuns. Nimic de aici nu spune ceva despre ce s-a cerut — încearcă din nou.",
+    "refreshFailed": "Nu a putut fi citit din nou; ce se vede poate fi depășit.",
     "close": "Închide",
     "reset": "Resetează",
     "clearAnswer": "Șterge răspunsul",
@@ -719,6 +722,7 @@
     "regionPlaceholder": "Regiune",
     "lengthPlaceholder": "Lungime (m): 300, >300, 300..500",
     "filterRefused": "Acest filtru nu poate fi rulat cu drepturile tale. Modifică sau golește câmpurile de mai sus.",
+    "loadFailed": "Lista peșterilor nu a putut fi citită acum. Asta nu spune nimic despre ce peșteri există.",
     "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile tale, așa că nu a fost aplicat.",
     "savedNotAboutCaves": "Filtrul salvat nu se referă la peșteri.",
     "saved": "Salvat ca „{{name}}”.",
@@ -755,6 +759,7 @@
   "featureList": {
     "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că sunt afișate toate obiectele. Cere celui care l-a trimis un link nou.",
     "filterRefused": "Acest filtru nu poate fi rulat cu drepturile tale. Modifică sau golește câmpurile de mai sus.",
+    "loadFailed": "Lista obiectelor nu a putut fi citită acum. Asta nu spune nimic despre ce obiecte există.",
     "savedNotAboutFeatures": "Filtrul salvat nu se referă la obiecte.",
     "searchLabel": "Caută obiecte după denumire",
     "kindLabel": "Felul obiectului",
@@ -838,6 +843,8 @@
     },
     "title": "Peșteri",
     "newCave": "Peșteră nouă",
+    "notFound": "Nicio astfel de peșteră",
+    "notFoundDetail": "Fie nu există, fie nu o poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "editCave": "Editare peșteră",
     "name": "Denumire",
     "type": "Tip",
@@ -1223,6 +1230,7 @@
   },
   "cabinets": {
     "title": "Dulapuri",
+    "loadFailed": "Dulapurile nu au putut fi citite acum. Nimic de aici nu spune dacă există vreunul.",
     "empty": "Niciun dulap încă.",
     "pickOne": "Alege un dulap pentru a vedea ce este clasat în el.",
     "new": "Nou",
@@ -1627,6 +1635,7 @@
     "revokeShare": "Revocă linkul de partajare",
     "deleteAlbum": "Șterge albumul",
     "shareRevoked": "Linkul de partajare a fost revocat.",
+    "shareForbidden": "Nu poți publica acest album: partajarea lui cere dreptul de partajare asupra albumului.",
     "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
     "licences": {
@@ -3042,6 +3051,11 @@
     "checklistAdvisory": "Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine poate citi tura.",
     "checklistTickedAt": "Confirmat la {{when}}",
     "checklistTickFailed": "Confirmarea nu a putut fi înregistrată.",
+    "checklistLoadFailed": "Lista de verificare a acestei ture nu a putut fi citită acum. Nimic de aici nu spune dacă are una.",
+    "checklistProblems": {
+      "tickForbidden": "Nu poți confirma linii din lista de verificare a acestei ture.",
+      "itemGone": "Linia nu mai este în listă; lista este afișată așa cum este acum."
+    },
     "empty": "Nicio tură încă.",
     "emptyFiltered": "Nicio tură nu corespunde acestui filtru.",
     "listFailed": "Turele nu au putut fi încărcate.",
@@ -3084,7 +3098,16 @@
     }
   },
   "expeditions": {
+    "problems": {
+      "forbidden": "Nu ai dreptul să modifici această tabără.",
+      "createForbidden": "Nu ai dreptul să înregistrezi tabere.",
+      "cavingGroupForbidden": "Nu ai dreptul să atribui o tabără acestui club.",
+      "gone": "Această tabără nu mai există sau nu mai ai dreptul să o vezi.",
+      "geometryInvalid": "Zona de lucru a taberei nu este o formă care poate fi salvată. Deseneaz-o din nou.",
+      "stayGone": "Acea ședere nu mai este în lista taberei."
+    },
     "notFound": "Nicio astfel de tabără",
+    "listUnavailable": "Taberele nu au putut fi citite acum. Asta nu spune nimic despre ce tabere există.",
     "notFoundDetail": "Fie nu există, fie nu o poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "title": "Tabere",
     "searchPlaceholder": "Caută tabere",
@@ -3129,9 +3152,11 @@
       "personGone": "Această persoană nu mai este în lista de speologi. Alege-o din nou sau scrie-i numele."
     },
     "mapEmpty": "Nu este nimic de desenat pentru această tabără: nu are o zonă de lucru, iar niciuna dintre turele pe care le poți citi nu a lăsat o schiță sau nu a numit o peșteră a cărei poziție o poți vedea.",
+    "mapUnavailable": "Harta acestei tabere nu a putut fi citită acum.",
     "mapCaveat": "Desenat peste turele pe care le poți citi. Zona de lucru este forma trasată pe plan; schița unei ture este arătată exact așa cum a fost trasată, oricare ar fi protecția peșterilor pe care le numește; iar o intrare de peșteră apare doar acolo unde îi poți vedea poziția exactă.",
     "mapTruncated": "Această tabără numește mai multe intrări de peșteră decât poate purta o hartă, așa că nu toate intrările sunt desenate.",
     "noTripsVisible": "Nicio tură din această tabără pe care să o poți citi.",
+    "tripsUnavailable": "Turele acestei tabere nu au putut fi citite acum. Asta nu spune nimic despre ce ture are.",
     "tripsTruncated": "Se afișează {{shown}} din {{total}} ture.",
     "watch": {
       "intro": "Cine este în peșteră în turele acestei tabere, așa cum o spune urmărirea fiecărei ture — numărat peste turele pe care le poți citi. Înregistrează ce s-a raportat: nu urmărește niciun ceas și nu dă nicio alarmă.",
@@ -3235,6 +3260,7 @@
     },
     "tabPhotos": "Fotografii",
     "noPhotographs": "Nicio fotografie nu este atașată acestei tabere sau turelor din ea pe care le poți citi.",
+    "photosUnavailable": "Fotografiile acestei tabere nu au putut fi citite acum. Asta nu spune nimic despre ce fotografii sunt atașate aici.",
     "galleryVisibleToYou": "Fotografiile pe care le poți vedea, din tabără și din turele ei pe care le poți citi. Altcineva poate vedea mai multe sau mai puține."
   },
   "tags": {
@@ -3781,6 +3807,7 @@
     "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
+    "removalExceedsOwnRights": "Nu poți elimina o interdicție care reține drepturi pe care nu le deții tu.",
     "denyFullAdministrators": "Refuzat: nicio interdicție nu îi poate atinge pe Administratorii deplini — apartenența la acel grup este însăși acordarea.",
     "subjectUnknown": "Contul sau grupul speologic ales nu mai există. Alege-l din nou și salvează.",
     "anchorNotFound": "Obiectul de care este legată o regulă nu mai există. Alege altul și salvează din nou.",
@@ -4230,9 +4257,8 @@
     "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
     "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
     "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
-    "revealGone": "Ce indică această legătură nu mai există, așa că scena a rămas unde era.",
-    "revealForbidden": "Nu ai voie să vezi ce indică această legătură, așa că scena a rămas unde era.",
-    "revealFailed": "Locul indicat de această legătură nu a putut fi citit, așa că scena a rămas unde era. Urmează legătura din nou peste puțin timp.",
+    "tracksFailed": "Liniile unui fișier importat nu au putut fi încărcate.",
+    "filterLayersFailed": "Un strat desenat dintr-un filtru nu a putut fi încărcat.",
     "tryAgain": "Încearcă din nou"
   },
   "caveview": {
@@ -5305,7 +5331,11 @@
     },
     "settingsProblems": {
       "invalid": "O valoare din acest formular a fost refuzată. Verifică ce ai introdus și salvează din nou.",
-      "forbidden": "Nu ai dreptul să schimbi aceste setări."
+      "forbidden": "Nu ai dreptul să schimbi aceste setări.",
+      "smsGatewayInternal": "Adresa gateway-ului este pe acest server sau într-o rețea internă. Configurația instalării trebuie să permită acest lucru.",
+      "mailPasswordCleared": "Serverul de e-mail s-a schimbat, așa că parola salvată a fost ștearsă. Introdu-o din nou.",
+      "smsAuthHeaderCleared": "Adresa gateway-ului s-a schimbat, așa că antetul de autorizare salvat a fost șters. Introdu-l din nou.",
+      "noticeUnworded": "Setările au fost salvate, dar serverul a semnalat ceva despre această salvare pe care pagina nu îl poate exprima. Verifică valorile secțiunii."
     },
     "messaging": {
       "title": "Mesagerie",
@@ -5805,6 +5835,7 @@
     "failed": "Linkul nu mai este valid. Poți modifica setările de notificare după autentificare.",
     "doneDigest": "Rezumatul zilnic a fost oprit, iar odată cu el orice alt e-mail de notificare.",
     "alertsStillSent": "Alertele despre propriul cont se trimit în continuare — te avertizează când cineva îl modifică.",
+    "unreachable": "Serverul nu a putut fi contactat, deci nimic nu s-a schimbat încă. Încearcă din nou peste puțin timp.",
     "manage": "Gestionează setările de notificare",
     "inboxUntouched": "Nimic altceva nu s-a schimbat: aceste notificări apar în continuare în inboxul din aplicație, unde le poți citi oricând."
   },
@@ -7315,6 +7346,7 @@
     "markDone": "A avut loc",
     "markDoneSuccess": "Evenimentul a fost înregistrat ca desfășurat.",
     "notFound": "Niciun astfel de eveniment",
+    "listUnavailable": "Evenimentele nu au putut fi citite acum. Asta nu spune nimic despre ce evenimente există.",
     "notFoundDetail": "Fie nu există, fie nu îl poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "callOff": "Anulează",
     "callOffConfirm": "Anulezi acest eveniment?",
@@ -7367,6 +7399,11 @@
     "seriesPartlyForbidden": "Seria conține o apariție care nu e a ta de modificat, deci nimic nu a fost modificat. O schimbare aplicată pe jumătate ar lăsa calendarul în contradicție cu sine.",
     "notInSeries": "Acest eveniment nu se repetă, deci nu există nicio serie asupra căreia să se acționeze.",
     "seriesMoveOutOfRange": "Mutarea acestei apariții atât de departe ar duce o apariție ulterioară dincolo de sfârșitul calendarului, deci niciuna nu a fost mutată. Alege o zi mai apropiată.",
+    "recurrenceOverlapping": "Fiecare apariție ar dura încă în ziua în care începe următoarea. Fă evenimentul mai scurt decât intervalul dintre repetări sau repetă-l mai rar. Nu s-a scris nimic.",
+    "recurrenceFrequencyInvalid": "Aceasta nu este o repetare după care calendarul poate avansa. Alege una dintre repetările oferite. Nu s-a scris nimic.",
+    "seriesFrequencySeriesOnly": "Cât de des se repetă un eveniment ține de serie, nu de o singură apariție. Pentru a schimba asta, editează această apariție și toate cele următoare.",
+    "stateTransitionInvalid": "Evenimentul nu poate trece din starea în care este acum în cea aleasă. Poate că altcineva l-a schimbat între timp — reîncarcă-l pentru a vedea unde se află.",
+    "goneOrUnreadable": "Acest eveniment nu mai există sau poate că nu îl mai poți vedea. Nu s-a schimbat nimic.",
     "responses": {
       "title": "Cine vine",
       "invite": "Invită",
@@ -8199,6 +8236,9 @@
     "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vezi doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
   },
   "viewLinks": {
+    "revealGone": "Ce indică această legătură nu mai există, așa că vederea a rămas unde era.",
+    "revealForbidden": "Nu ai voie să vezi ce indică această legătură, așa că vederea a rămas unde era.",
+    "revealFailed": "Locul indicat de această legătură nu a putut fi citit, așa că vederea a rămas unde era. Urmează legătura din nou peste puțin timp.",
     "controls": {
       "map2d": "Harta",
       "scene3d": "Scena 3D",
@@ -8208,6 +8248,8 @@
   },
   "textLink": {
     "notAnnotated": "Acest document nu este un text cu legături.",
+    "linksCutOff": "În acest text sunt evidențiate doar primele {{shown}} din {{total}} legături.",
+    "linksFailed": "Legăturile acestui text nu au putut fi încărcate, așa că niciun pasaj nu este evidențiat.",
     "empty": "Textul nu conține încă nimic.",
     "popOut": "Deschide într-o fereastră separată",
     "controls": {
@@ -8367,7 +8409,8 @@
       "caveMissing": "Peștera ca care a fost importată această intrare nu mai este o peșteră aici.",
       "positionInvalid": "Poziția dată pentru această peșteră nu este pe pământ.",
       "typeUnknown": "Tipul de peșteră sau de intrare ales nu există în această instalare.",
-      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea."
+      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea.",
+      "alreadyImported": "Această peșteră este deja în registru. Actualizeaz-o în loc să creezi o a doua copie."
     },
     "paging": {
       "previous": "Anterioare",

@@ -53,6 +53,8 @@ const {
   useFeature,
   useDeleteChecklist,
   useEditEventSeriesFollowing,
+  useEvent,
+  useExpedition,
   useReadChecklistForChange,
   useReadTripLogAgain,
   useUpdateChecklist,
@@ -61,6 +63,7 @@ const {
   useUpdateExpedition,
   useUpdateFeature,
   useUpdateTripLog,
+  useTripLog,
 } = await import('./hooks.ts');
 
 const path = '/api/v1/trip-logs/trip-1';
@@ -212,8 +215,26 @@ describe('the version of a cached copy', () => {
   });
 
   it.each([
+    ['a trip', '/api/v1/trip-logs/trip-1', () => useTripLog('trip-1')],
+    ['a camp', '/api/v1/expeditions/x-1', () => useExpedition('x-1')],
+    ['an event', '/api/v1/events/e-1', () => useEvent('e-1')],
+  ] as const)('of %s stays that of the read that supplied it', async (_name, resource, useRead) => {
+    const { result } = renderHook(() => useRead(), { wrapper });
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(versionReadWith(result.current.data)).toBe('"1"');
+
+    version = 2;
+    await api.GET(resource as never, {} as never);
+    expect(lastReadETag(resource)).toBe('"2"');
+    expect(versionReadWith(result.current.data)).toBe('"1"');
+  });
+
+  it.each([
     ['a cave', ['caves', 'detail', 'c-1'], () => useCave('c-1'), () => useUpdateCave('c-1'), { body: {} }],
     ['a feature', ['features', 'detail', 'f-1'], () => useFeature('f-1'), useUpdateFeature, { id: 'f-1', body: {} }],
+    ['a trip', ['trip-logs', 'detail', 'trip-1'], () => useTripLog('trip-1'), useUpdateTripLog, { id: 'trip-1', body: {} }],
+    ['a camp', ['expeditions', 'detail', 'x-1'], () => useExpedition('x-1'), useUpdateExpedition, { id: 'x-1', body: {} }],
+    ['an event', ['events', 'detail', 'e-1'], () => useEvent('e-1'), useUpdateEvent, { id: 'e-1', body: {} }],
   ] as const)(
     'of %s is the saved one by the time its save has finished',
     async (_name, key, useRead, useSave, variables) => {

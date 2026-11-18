@@ -1,14 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Map from 'ol/Map';
+import type TileLayer from 'ol/layer/Tile';
+import type XYZ from 'ol/source/XYZ';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 
-const { mapSpy } = vi.hoisted(() => ({ mapSpy: vi.fn() }));
+const { mapSpy, built } = vi.hoisted(() => ({ mapSpy: vi.fn(), built: [] as import('ol/Map').default[] }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpeditionMap: (...args: unknown[]) => mapSpy(...args),
+  // The installation's catalogue names one background.
+  useMapLayers: () => ({
+    isPending: false,
+    data: [
+      {
+        id: 4,
+        name: 'Club tiles',
+        layerKind: 'xyz',
+        urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png',
+        isBase: true,
+        isDefault: true,
+      },
+    ],
+  }),
 }));
+vi.mock('ol/Map', async (original) => {
+  const Actual = (await original<typeof import('ol/Map')>()).default;
+  class Counted extends Actual {
+    constructor(...args: ConstructorParameters<typeof Actual>) {
+      super(...args);
+      built.push(this);
+    }
+  }
+  return { default: Counted };
+});
+
+/** Every tile address a map draws from. */
+function tileUrls(map: Map): string[] {
+  return map
+    .getAllLayers()
+    .flatMap((layer) => (layer as TileLayer<XYZ>).getSource()?.getUrls?.() ?? []);
+}
 
 const { default: ExpeditionMapTab } = await import('./ExpeditionMapTab.tsx');
 
@@ -35,6 +69,7 @@ const area = {
 
 afterEach(cleanup);
 beforeEach(() => {
+  built.length = 0;
   vi.clearAllMocks();
   mapSpy.mockReturnValue({ data: collection([area]), isPending: false });
 });
@@ -85,10 +120,32 @@ describe("a camp's map", () => {
     expect(measured.mock.calls.length).toBeGreaterThan(onceBuilt);
   });
 
+  it("draws over the installation's background, not a tile server of its own choosing", () => {
+    render(<ExpeditionMapTab expeditionId={CAMP} active />);
+
+    expect(built).toHaveLength(1);
+    expect(tileUrls(built[0])).toEqual(['https://tiles.example/{z}/{x}/{y}.png']);
+  });
+
   it('says so plainly when there is nothing it may draw', () => {
     mapSpy.mockReturnValue({ data: collection([]), isPending: false });
     render(<ExpeditionMapTab expeditionId={CAMP} active />);
 
     expect(screen.getByText(/Nothing to draw for this camp/)).toBeTruthy();
+  });
+});
+
+describe("a camp's map that could not be read", () => {
+  it('says the map could not be read and offers to ask again, rather than leaving a blank map', () => {
+    const refetch = vi.fn();
+    mapSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch });
+    render(<ExpeditionMapTab expeditionId={CAMP} active />);
+
+    expect(screen.getByTestId('expedition-map-unavailable').textContent).toContain(
+      i18n.t('expeditions.mapUnavailable'),
+    );
+    expect(screen.queryByText(i18n.t('expeditions.mapEmpty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

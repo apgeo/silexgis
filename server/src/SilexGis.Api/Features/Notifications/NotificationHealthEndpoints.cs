@@ -282,7 +282,7 @@ public static class NotificationHealthEndpoints
         // The identity column is the arrival order, so the newest failure is at the top and this
         // is also the index's own order.
         var listed = await rows.OrderByDescending(r => r.Delivery.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         // Names are resolved after the page materialises rather than joined in: what a user may be
         // shown as is a rule with one home, and this slice may not read a user row itself.

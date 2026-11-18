@@ -76,11 +76,23 @@ export function isConcurrencyConflict(error: unknown): boolean {
 }
 
 /**
+ * Whether the database broke the request off for colliding with another transaction at the same
+ * moment — a deadlock or a serialization failure. Nothing of it was saved and the identical request
+ * sent again normally succeeds, so although the server answers it as a 409 (with a `Retry-After`),
+ * it is a "later", never a "no".
+ */
+export function isTransientConflict(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409 && error.code === 'concurrency.transaction_conflict';
+}
+
+/**
  * Whether the server has answered this request for good.
  *
  * A 4xx is an answer rather than a mishap: the identical request cannot produce anything else, so
  * nothing at all is gained by asking again. Rate limiting is the one client error that is not
- * settled — 429 clears by itself once the window rolls over. Network faults and 5xx are not
+ * settled — 429 clears by itself once the window rolls over — and a collision with another
+ * transaction ({@link isTransientConflict}) is the other: the request was sound, its moment was
+ * not. Network faults and 5xx are not
  * settled either; they are the ordinary consequence of a dropped connection or a server that is
  * coming back.
  *
@@ -93,7 +105,11 @@ export function isConcurrencyConflict(error: unknown): boolean {
  */
 export function isSettledRefusal(error: unknown): boolean {
   return (
-    error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429 &&
+    !isTransientConflict(error)
   );
 }
 

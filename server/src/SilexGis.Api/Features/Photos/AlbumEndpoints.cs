@@ -53,6 +53,25 @@ public sealed record AlbumWriteRequest(
     string? SubjectEntityType,
     Guid? SubjectEntityId);
 
+/// <summary>
+/// The body of adding photographs to an album: the documents' ids, in the order they are added.
+/// </summary>
+/// <remarks>
+/// The body is a bare list of ids, so this validator is the one any route validating a list of
+/// ids would get; only the album route asks for it.
+/// </remarks>
+public sealed class AlbumItemsRequestValidator : AbstractValidator<List<Guid>>
+{
+    public AlbumItemsRequestValidator()
+    {
+        // Bounded like the bulk route: one statement decides the list, but its size is still the caller's.
+        RuleFor(x => x.Count)
+            .LessThanOrEqualTo(AlbumEndpoints.MaxItemsPerRequest)
+            .WithProblemCode(AlbumEndpoints.TooManyItemsCode)
+            .WithMessage($"At most {AlbumEndpoints.MaxItemsPerRequest} photographs in one request.");
+    }
+}
+
 public sealed class AlbumWriteRequestValidator : AbstractValidator<AlbumWriteRequest>
 {
     public AlbumWriteRequestValidator()
@@ -134,7 +153,7 @@ public static class AlbumEndpoints
         albums.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an album. The photographs in it are untouched.");
 
-        albums.MapPost("/{id:guid}/items", AddItemsAsync)
+        albums.MapPost("/{id:guid}/items", AddItemsAsync).WithValidation<List<Guid>>()
             .WithSummary("Adds photographs to the end of an album.");
         albums.MapDelete("/{id:guid}/items/{documentId:guid}", RemoveItemAsync)
             .WithSummary("Takes a photograph out of an album; clears the cover if it was the cover.");
@@ -392,13 +411,6 @@ public static class AlbumEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        // Bounded like the bulk route: one statement decides the list, but its size is still the caller's.
-        if (documentIds.Count > MaxItemsPerRequest)
-        {
-            return ApiProblems.BadRequest(
-                TooManyItemsCode, $"At most {MaxItemsPerRequest} photographs in one request.");
         }
 
         if (await AlbumAccess.ReadableAsync(db, access, ctx, id, ct) is null)

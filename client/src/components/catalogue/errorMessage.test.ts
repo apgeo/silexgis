@@ -35,6 +35,7 @@ describe('speologieImportErrorMessage', () => {
 describe('speologieFailureReason', () => {
   it('words a known row code and keeps the server sentence for one it does not know', () => {
     expect(speologieFailureReason({ code: 'speologie.parent_not_found', reason: 'x' }, t)).toBe('speologie.errors.parentNotFound');
+    expect(speologieFailureReason({ code: 'speologie.already_imported', reason: 'x' }, t)).toBe('speologie.errors.alreadyImported');
     expect(speologieFailureReason({ code: 'feature.new_rule', reason: 'The server says why.' }, t)).toBe('The server says why.');
   });
 });

@@ -66,7 +66,7 @@ public static partial class TripLogEndpoints
 
         var query = listing.Narrowed();
         var total = await query.CountAsync(ct);
-        var rows = await listing.Ordered(query).Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var rows = await listing.Ordered(query).Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
         return TypedResults.Ok(new PagedResult<TripLogDto>(items, p, size, total));

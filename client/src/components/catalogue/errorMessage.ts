@@ -33,6 +33,7 @@ const IMPORT_KEYS: Readonly<Record<string, string>> = {
   'speologie.position_invalid': 'speologie.errors.positionInvalid',
   'speologie.type_unknown': 'speologie.errors.typeUnknown',
   'speologie.parent_not_found': 'speologie.errors.parentNotFound',
+  'speologie.already_imported': 'speologie.errors.alreadyImported',
 };
 
 const codeOf = (error: unknown) => (error instanceof ApiError ? error.code : undefined);

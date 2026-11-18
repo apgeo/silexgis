@@ -788,7 +788,7 @@ public static class TerrainBuildEndpoints
         // it breaks them in the direction the timestamp was already going.
         var rows = await query
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
-            .Skip((p - 1) * size).Take(size)
+            .Skip(Paging.Offset(p, size)).Take(size)
             .ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResult<TerrainBuildDto>([.. rows.Select(ToDto)], p, size, total));

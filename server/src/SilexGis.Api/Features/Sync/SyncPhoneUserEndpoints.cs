@@ -107,7 +107,7 @@ public static class SyncPhoneUserEndpoints
             .ThenByDescending(x => x.LastSeenAt)
             .ThenBy(x => x.DeviceUserId);
         var total = await query.CountAsync(ct);
-        var rows = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var rows = await query.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         var labels = await LabelsAsync(db, user, rows, ct);
         var senders = await SendersAsync(db, user, rows, ct);
 

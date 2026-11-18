@@ -4,7 +4,8 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Empty, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { expeditionProblemKey } from './expeditionProblems.ts';
 import {
   useDeleteExpeditionRosterEntry,
   useExpeditionRoster,
@@ -117,8 +118,10 @@ export default function ExpeditionRosterTab({ expeditionId, editable }: Expediti
     try {
       await removeStay.mutateAsync(entry.id);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(expeditionProblemKey(error, 'common.deleteFailed')));
+      }
     }
   };
 

@@ -75,7 +75,12 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
       message.warning(t('savedFilters.nothingToSave'));
       return;
     }
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),

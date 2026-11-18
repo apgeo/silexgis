@@ -32,6 +32,43 @@ public static class SpeologieSql
     /// </summary>
     public const string IdExpression = "properties->>'" + SpeologieMapping.Keys.Id + "'";
 
+    /// <summary>The first key of the advisory locks taken per catalogue entry ("SPL1").</summary>
+    private const int CatalogueEntryLockClass = 0x53504C31;
+
+    /// <summary>
+    /// Takes, for the rest of the current transaction, a lock per catalogue entry, so that two
+    /// confirmations naming the same entry cannot both decide it is new.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A confirmation looks for the cave an entry already has before it writes one, and two
+    /// confirmations running together would otherwise both look before either wrote: both find
+    /// nothing, and the entry becomes two caves. Nothing in the schema stops that — the index on the
+    /// catalogue id is not unique, and cannot be made so on an installation that may already hold a
+    /// duplicate — so the confirmation that comes second has to wait here until the first has
+    /// committed, and then look. Each look after this lock is a fresh statement at read committed,
+    /// so it sees what the first one wrote.
+    /// </para>
+    /// <para>
+    /// Taken in ascending order of id, one statement each: two confirmations whose selections
+    /// overlap then queue on their lowest shared entry instead of each holding one the other wants.
+    /// Transaction-scoped, so a confirmation that fails or is rolled back cannot leave the next one
+    /// waiting, and a confirmation replayed inside somebody else's transaction holds them until that
+    /// transaction ends.
+    /// </para>
+    /// </remarks>
+    public static async Task LockEntriesAsync(
+        SilexGisDbContext db, IReadOnlyCollection<int> speologieIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(speologieIds);
+
+        foreach (var id in speologieIds.Distinct().Order())
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "SELECT pg_advisory_xact_lock({0}, {1})", [CatalogueEntryLockClass, id], ct);
+        }
+    }
+
     /// <summary>
     /// Of the given catalogue ids, the ones that already have a cave here, with that cave.
     ///

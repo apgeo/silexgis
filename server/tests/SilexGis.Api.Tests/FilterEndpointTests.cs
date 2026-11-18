@@ -851,8 +851,36 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
             "/api/v1/filters/resolve", new FilterResolveRequest("feature", ids));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await response.Content.ReadAsStringAsync()).ShouldContain("filter.too_many_ids");
+        ResolveCode(await response.Content.ReadAsStringAsync()).ShouldBe("filter.too_many_ids");
+
+        // The same id named many times is one id, and a list at the limit is answered.
+        var repeated = Enumerable.Repeat(Guid.NewGuid(), FilterValidation.MaxValuesPerCondition + 1).ToList();
+        (await client.PostAsJsonAsync("/api/v1/filters/resolve", new FilterResolveRequest("feature", repeated)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.PostAsJsonAsync("/api/v1/filters/resolve",
+            new FilterResolveRequest("feature", ids.Take(FilterValidation.MaxValuesPerCondition).ToList())))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task Resolving_in_a_kind_of_object_that_does_not_exist_is_refused_with_its_own_code()
+    {
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-noworld");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/filters/resolve", new FilterResolveRequest("no-such-world", [Guid.NewGuid()]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        ResolveCode(await response.Content.ReadAsStringAsync()).ShouldBe("filter.unknown_world");
+
+        // Not a refusal of every resolve: the kind the vocabulary offers is answered.
+        (await client.PostAsJsonAsync(
+            "/api/v1/filters/resolve", new FilterResolveRequest("feature", [Guid.NewGuid()])))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static string? ResolveCode(string body) =>
+        System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("code").GetString();
 
     // ---------- the context line under a hit ----------
 
