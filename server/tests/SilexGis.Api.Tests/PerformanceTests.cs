@@ -431,6 +431,27 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var (pairSql, pairParameters) = ClosestApproachSql.BuildForPair(ctx, pairs[0].CaveAId, pairs[0].CaveBId, workingSrid);
         var pairPlan = await ExplainAsync(connection, pairParameters, "closest approach, one pair", pairSql);
         AssertReachesFeaturesByIndex(pairPlan, "closest approach, one pair");
+
+        // Passages beneath one doline: the subject is a primary-key lookup, and the caves are found
+        // from the doline's own window through the line-work indexes, never by reading either
+        // table end to end whatever the number of caves in the installation.
+        var (subjectSql, subjectParameters) = FeaturePassagesSql.BuildSubject(ctx, dolines[0].FeatureId);
+        var subjectPlan = await ExplainAsync(connection, subjectParameters, "passages beneath, subject", subjectSql);
+        AssertReachesFeaturesByIndex(subjectPlan, "passages beneath, subject");
+        (await connection.QuerySingleOrDefaultAsync<FeaturePassagesSubjectRow>(subjectSql, subjectParameters))
+            .ShouldNotBeNull("passages beneath: an outline the reader may see is a subject");
+
+        var (passagesSql, passagesParameters) = FeaturePassagesSql.BuildPassages(
+            ctx, dolines[0].FeatureId, FeaturePassagesLimits.DefaultDistanceM,
+            FeaturePassagesLimits.MaxCaves + 1, FeaturePassagesLimits.MaxCandidates, workingSrid);
+        var passagesPlan = await ExplainAsync(connection, passagesParameters, "passages beneath a doline", passagesSql);
+        AssertReachesLineWorkByIndex(passagesPlan, "passages beneath a doline");
+
+        var beneath = (await connection.QueryAsync<FeaturePassageRow>(passagesSql, passagesParameters)).ToList();
+        beneath.Count.ShouldBeLessThanOrEqualTo(FeaturePassagesLimits.MaxCaves + 1,
+            "passages beneath a doline: the query's own cap is one more than a page, so a cut is known to be a cut");
+        beneath.Select(b => b.CaveId).Distinct().Count().ShouldBe(beneath.Count,
+            "passages beneath a doline: one row per cave, never one per line");
     }
 
     /// <summary>

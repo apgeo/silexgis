@@ -444,6 +444,46 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
         (await ReadAsync(owner, plan)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
+    /// <summary>
+    /// With no terrain built the profile keeps the passage and drops the ground: every station is
+    /// "outside coverage", no thickness is invented, there is no least cover to point at, and the
+    /// answer says there is no terrain so the page can say whom to ask.
+    /// </summary>
+    [Fact]
+    public async Task With_no_terrain_built_the_profile_has_the_passage_but_no_ground_and_no_least_cover()
+    {
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        // The control: the same cave with terrain in place has a thickness and a least cover.
+        var covered = await ReadAsync(owner, cave);
+        covered.GetProperty("hasTerrain").GetBoolean().ShouldBeTrue();
+        covered.GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == buildId)
+                .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
+        }
+
+        var body = await ReadAsync(owner, cave);
+        body.GetProperty("hasTerrain").GetBoolean().ShouldBeFalse();
+        body.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+        body.GetProperty("coveredSampleCount").GetInt32().ShouldBe(0);
+        body.GetProperty("minOverburdenM").ValueKind.ShouldBe(JsonValueKind.Null);
+        body.GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+        samples.Length.ShouldBeGreaterThan(1);
+        foreach (var sample in samples)
+        {
+            sample.GetProperty("outcome").GetString().ShouldBe("outsideCoverage");
+            sample.GetProperty("groundAltitudeM").ValueKind.ShouldBe(JsonValueKind.Null);
+            sample.GetProperty("overburdenM").ValueKind.ShouldBe(JsonValueKind.Null);
+            sample.GetProperty("passageAltitudeM").GetDouble().ShouldBe(PassageAltitudeM, 1e-6);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();

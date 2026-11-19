@@ -11,6 +11,7 @@ using NetTopologySuite.Geometries;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using Shouldly;
+using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -183,6 +184,71 @@ public sealed class FeaturePassagesTests : IAsyncLifetime, IDisposable, IClassFi
         (await ReadAsync(owner, guarded, 0)).GetProperty("featureId").GetGuid().ShouldBe(guarded);
     }
 
+    /// <summary>
+    /// With no terrain built the list is still the list: the caves are found by their lines and not
+    /// by the ground, so the answer must say there is no terrain and leave the heights empty rather
+    /// than report the thickness of rock as nought — and must not drop the cave for it.
+    /// </summary>
+    [Fact]
+    public async Task With_no_terrain_built_the_cave_is_listed_with_no_ground_and_the_answer_says_so()
+    {
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+        var outline = await CreateFeatureAsync(Rectangle(25.0045, 25.0055, 46.0899, 46.0901));
+
+        // The control: with the terrain in place the same request carries a ground height.
+        var withTerrain = await ReadAsync(viewer, outline, 0);
+        withTerrain.GetProperty("hasTerrain").GetBoolean().ShouldBeTrue();
+        Find(withTerrain, cave).GetProperty("groundAltitudeM").GetDouble().ShouldBe(GroundM, 1e-6);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == buildId)
+                .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
+        }
+
+        var body = await ReadAsync(viewer, outline, 0);
+        body.GetProperty("hasTerrain").GetBoolean().ShouldBeFalse();
+        var row = Find(body, cave);
+        row.GetProperty("lateralOffsetM").GetDouble().ShouldBe(0, 1e-6);
+        row.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+        row.GetProperty("passageAltitudeM").GetDouble().ShouldBe(PassageAltitudeM, 1e-6);
+        row.GetProperty("outcome").GetString().ShouldBe("outsideCoverage");
+        row.GetProperty("groundAltitudeM").ValueKind.ShouldBe(JsonValueKind.Null);
+        row.GetProperty("overburdenM").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// A list of twenty-five caves is complete and a twenty-sixth makes it a cut one. The flag is
+    /// asserted on both sides of that edge, in a place of its own (the other tests of this class
+    /// leave caves in the shared database at the passage latitude, some 550 m away).
+    /// </summary>
+    [Fact]
+    public async Task A_list_of_more_caves_than_the_cap_is_cut_and_says_so_and_a_full_one_is_not()
+    {
+        const double isolatedLatitude = 46.095;
+        var outline = await CreateFeatureAsync(Rectangle(25.0045, 25.0055, 46.0949, 46.0951));
+
+        var caves = new List<Guid>();
+        for (var i = 0; i < FeaturePassagesLimits.MaxCaves; i++)
+        {
+            caves.Add(await CaveWithPassageAsync(locationProtected: false, latitude: isolatedLatitude));
+        }
+
+        var full = await ReadAsync(viewer, outline, 0);
+        full.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+        Passages(full).Length.ShouldBe(FeaturePassagesLimits.MaxCaves);
+
+        caves.Add(await CaveWithPassageAsync(locationProtected: false, latitude: isolatedLatitude));
+
+        var cut = await ReadAsync(viewer, outline, 0);
+        cut.GetProperty("truncated").GetBoolean().ShouldBeTrue();
+        var listed = Passages(cut);
+        listed.Length.ShouldBe(FeaturePassagesLimits.MaxCaves);
+        listed.Select(p => p.GetProperty("caveId").GetGuid()).ShouldBeSubsetOf(caves);
+        listed.Select(p => p.GetProperty("caveId").GetGuid()).Distinct().Count().ShouldBe(listed.Length);
+    }
+
     [Fact]
     public async Task A_caller_without_the_terrain_right_is_refused_and_an_anonymous_one_is_unauthorised()
     {
@@ -314,7 +380,8 @@ public sealed class FeaturePassagesTests : IAsyncLifetime, IDisposable, IClassFi
         bool locationProtected,
         string visibility = "authenticated",
         double eastLongitude = CoveredEastLongitude,
-        bool withAltitudes = true)
+        bool withAltitudes = true,
+        double latitude = PassageLatitude)
     {
         var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -333,14 +400,14 @@ public sealed class FeaturePassagesTests : IAsyncLifetime, IDisposable, IClassFi
         {
             entranceTypeId,
             isMain = true,
-            geom = new { type = "Point", coordinates = new[] { CoveredWestLongitude, PassageLatitude } },
+            geom = new { type = "Point", coordinates = new[] { CoveredWestLongitude, latitude } },
             altitude = 950m,
             positionQuality = "Gps",
         });
         entranceResponse.StatusCode.ShouldBe(
             HttpStatusCode.Created, await entranceResponse.Content.ReadAsStringAsync());
 
-        var content = new ByteArrayContent(Passage(eastLongitude, withAltitudes));
+        var content = new ByteArrayContent(Passage(eastLongitude, withAltitudes, latitude));
         content.Headers.ContentType = new("application/geo+json");
         using var form = new MultipartFormDataContent { { content, "file", "Centerline.geojson" } };
         var upload = await owner.PostAsync($"/api/v1/caves/{caveId}/centerlines", form);
@@ -354,7 +421,7 @@ public sealed class FeaturePassagesTests : IAsyncLifetime, IDisposable, IClassFi
     /// Without altitudes it is the same drawing recorded as a plan, which is legal and is what a
     /// survey with no third coordinate looks like on disk.
     /// </summary>
-    private static byte[] Passage(double eastLongitude, bool withAltitudes)
+    private static byte[] Passage(double eastLongitude, bool withAltitudes, double latitude)
     {
         var points = new List<string>();
         for (var i = 0; i <= 20; i++)
@@ -362,8 +429,8 @@ public sealed class FeaturePassagesTests : IAsyncLifetime, IDisposable, IClassFi
             var longitude = CoveredWestLongitude
                 + ((eastLongitude - CoveredWestLongitude) * i / 20d);
             points.Add(withAltitudes
-                ? $"[{F(longitude)},{F(PassageLatitude)},{F(PassageAltitudeM)}]"
-                : $"[{F(longitude)},{F(PassageLatitude)}]");
+                ? $"[{F(longitude)},{F(latitude)},{F(PassageAltitudeM)}]"
+                : $"[{F(longitude)},{F(latitude)}]");
         }
 
         var body = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\","
