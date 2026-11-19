@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
@@ -32,6 +34,7 @@ namespace SilexGis.Api.Tests;
 public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
+    private readonly PauseAfterHeldCheck heldCheck = new();
     private readonly string filesRoot;
     private HttpClient uploader = null!;
     private HttpClient reviewer = null!;
@@ -47,7 +50,8 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
         {
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-        });
+        },
+        services => services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(heldCheck)));
     }
 
     public async ValueTask InitializeAsync()
@@ -288,6 +292,43 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
         (await ExpiryAsync(staged)).ShouldBeNull();
     }
 
+    /// <summary>
+    /// A phone sends a held photo again, unchanged, while a reviewer turns the photo down: the
+    /// resend matched the waiting line before the decision and keeps it only after. Its bytes go
+    /// the way the decision sent them, for the retention, instead of being kept for a line nobody
+    /// will decide again.
+    /// </summary>
+    [Fact]
+    public async Task A_resend_of_a_photo_turned_down_meanwhile_does_not_keep_its_bytes()
+    {
+        await MarkAsync(true);
+        var bytes = Corpus.GeotaggedJpeg(45.32, 25.48);
+        var staged = await StageAsync("IMG_0778.jpg", bytes);
+        var photo = new
+        {
+            id = Guid.CreateVersion7(),
+            title = "Held twice",
+            fileName = "IMG_0778.jpg",
+            sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            sizeBytes = bytes.Length,
+            stagedUploadId = staged,
+        };
+        var held = await UploadDocumentsAsync(photo);
+        var reviewId = held.GetProperty("documents").EnumerateArray().Single().GetProperty("reviewId").GetGuid();
+        (await ExpiryAsync(staged)).ShouldBe(HeldUploadBytes.Parked);
+
+        heldCheck.Arm();
+        var resend = UploadDocumentsAsync(photo);
+        await heldCheck.WaitPausedAsync();
+        var rejected = await reviewer.PostAsJsonAsync($"/api/v1/review/items/{reviewId}/reject", new { });
+        rejected.StatusCode.ShouldBe(HttpStatusCode.OK, await rejected.Content.ReadAsStringAsync());
+        heldCheck.Release();
+        (await resend).GetProperty("documents").EnumerateArray().Single().GetProperty("reviewId").GetGuid().ShouldBe(reviewId);
+
+        (await ExpiryAsync(staged)).ShouldNotBe(HeldUploadBytes.Parked);
+        (await ExpiryAsync(staged))!.Value.ShouldBe(DateTimeOffset.UtcNow.AddDays(30), TimeSpan.FromMinutes(5));
+    }
+
     [Fact]
     public async Task The_people_looking_after_what_phones_send_are_the_holders_of_the_right_to_decide_uploads()
     {
@@ -494,5 +535,40 @@ public sealed class SyncReviewStreamTests : IAsyncLifetime, IClassFixture<Postgr
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Holds an upload once its held check has been rolled back — after it matched what it repeats
+    /// and replaces, before it keeps anything — until <see cref="Release"/>. Bounded, so a test that
+    /// never releases cannot hang the suite.
+    /// </summary>
+    private sealed class PauseAfterHeldCheck : DbTransactionInterceptor
+    {
+        private readonly TaskCompletionSource paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private volatile bool armed;
+
+        public void Arm() => armed = true;
+
+        public void Release() => released.TrySetResult();
+
+        public async Task WaitPausedAsync()
+        {
+            if (await Task.WhenAny(paused.Task, Task.Delay(TimeSpan.FromSeconds(30))) != paused.Task)
+            {
+                throw new TimeoutException("the upload never finished its held check");
+            }
+        }
+
+        public override async Task RolledBackToSavepointAsync(
+            DbTransaction transaction, TransactionEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (armed)
+            {
+                armed = false;
+                paused.TrySetResult();
+                await Task.WhenAny(released.Task, Task.Delay(TimeSpan.FromSeconds(60), CancellationToken.None));
+            }
+        }
     }
 }

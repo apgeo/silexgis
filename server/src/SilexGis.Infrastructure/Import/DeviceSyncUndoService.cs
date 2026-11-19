@@ -110,6 +110,9 @@ public sealed partial class DeviceSyncUndoService(
 {
     public const string ItemsUnknownCode = "import_batch.items_unknown";
 
+    /// <summary>The batch was undone by another request while this one waited.</summary>
+    public const string AlreadyRevertedCode = "import_batch.already_reverted";
+
     private const string LineSavepoint = "sync_undo_line";
     private const string DeviceEditTime = nameof(Feature.ClientUpdatedAt);
     private const string MainRole = nameof(CaveEntrance.IsMain);
@@ -123,6 +126,18 @@ public sealed partial class DeviceSyncUndoService(
         bool force,
         CancellationToken ct = default)
     {
+        // The batch row first, and everything after read under it: a second undo of the same batch
+        // (a retry, the uploader and an administrator at once) waits and then finds it undone,
+        // instead of taking every line back a second time from a read made before the first
+        // committed; and a reviewer's decision on a line of the batch either lands before this
+        // reads the lines, or waits and then finds the batch undone.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await ImportBatchLockSql.LockAsync(db, [batch.Id], ct);
+        if (await db.ImportBatches.AsNoTracking().AnyAsync(b => b.Id == batch.Id && b.RevertedAt != null, ct))
+        {
+            throw new SyncUndoException(AlreadyRevertedCode, "This import has already been undone.");
+        }
+
         // A line of a held upload that was not accepted wrote nothing and points at nothing; only
         // the lines a reviewer accepted, and every line of an upload nobody held, are lines to undo.
         var allItems = await db.ImportBatchItems.AsNoTracking()
@@ -194,7 +209,6 @@ public sealed partial class DeviceSyncUndoService(
             .ToListAsync(ct);
 
         var results = new List<SyncUndoItemResult>(items.Count);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         foreach (var item in items)
         {
             // A line stands or falls whole. Deleting and restoring write straight to the database,
@@ -348,6 +362,9 @@ public sealed partial class DeviceSyncUndoService(
                 : NotUndone(item, rowId, null, SyncUndoReasons.NoHistory);
         }
 
+        // Locked before anything about it is read, so whatever the line compares is what the row
+        // holds once every writer ahead of the undo has committed.
+        await HoldRowAsync(UndoLockedRow.Feature, rowId, ct);
         var state = await db.Features.IgnoreQueryFilters().AsNoTracking()
             .Where(f => f.Id == rowId)
             .Select(f => new { f.DeletedAt })
@@ -528,6 +545,32 @@ public sealed partial class DeviceSyncUndoService(
                 [.. applied.Keys], skipped)
             : new SyncUndoItemResult(item.Id, rowId, SyncUndoChanges.Updated, SyncUndoOutcomes.NotUndone,
                 SyncUndoReasons.FieldsLeft, [], skipped);
+    }
+
+    /// <summary>
+    /// Locks a row the line is about to compare and write back, and reads again whatever this
+    /// context already holds of it — an earlier line may have loaded it before the lock, and a
+    /// tracked copy keeps the values of its first read.
+    /// </summary>
+    private async Task HoldRowAsync(UndoLockedRow row, Guid id, CancellationToken ct)
+    {
+        await UndoRowLockSql.LockAsync(db, row, id, ct);
+        var tracked = db.ChangeTracker.Entries()
+            .Where(entry => entry.State == EntityState.Unchanged
+                && entry.Metadata.FindPrimaryKey() is { Properties.Count: 1 } key
+                && entry.Property(key.Properties[0].Name).CurrentValue is Guid value
+                && value == id)
+            .ToList();
+        await ReloadAsync(tracked, ct);
+    }
+
+    /// <summary>Reads the given tracked rows again, those with no change of this context's pending.</summary>
+    private static async Task ReloadAsync(IEnumerable<Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry> entries, CancellationToken ct)
+    {
+        foreach (var entry in entries.Where(e => e.State == EntityState.Unchanged))
+        {
+            await entry.ReloadAsync(ct);
+        }
     }
 
     // ---------- a cave's main role ----------
@@ -749,6 +792,7 @@ public sealed partial class DeviceSyncUndoService(
             return PersonResult(item, personId, change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.AlreadyUndone, [], []);
         }
 
+        await HoldRowAsync(UndoLockedRow.DevicePerson, personId, ct);
         var person = await db.DevicePersons.FirstOrDefaultAsync(p => p.DeviceUserId == personId, ct);
         if (person is null)
         {
@@ -918,6 +962,7 @@ public sealed partial class DeviceSyncUndoService(
         var now = DateTimeOffset.UtcNow;
         if (!recordingLine)
         {
+            await HoldRowAsync(UndoLockedRow.TripRecordingPoint, item.TripRecordingPointId!.Value, ct);
             var point = await db.TripRecordingPoints.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(p => p.Id == item.TripRecordingPointId, ct);
             if (point is null)
@@ -929,6 +974,11 @@ public sealed partial class DeviceSyncUndoService(
             return Line(SyncUndoOutcomes.Undone, null);
         }
 
+        // Locked before its report is looked for: a conversion that has claimed the recording and
+        // not yet committed is waited for, so the report it makes is seen and taken back with the
+        // recording rather than left standing on a recording the undo has deleted. A conversion
+        // that comes after finds the recording deleted and makes nothing.
+        await HoldRowAsync(UndoLockedRow.TripRecording, item.TripRecordingId!.Value, ct);
         var recording = await db.TripRecordings.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.Id == item.TripRecordingId, ct);
         if (recording is null)
@@ -1095,13 +1145,23 @@ public sealed partial class DeviceSyncUndoService(
 
         TripRecording? recording;
         TripRecordingPoint? point = null;
+        // Each row locked before it is read, as for a line that created the recording: what is
+        // compared below, and the report taken back, are what the row holds once every writer
+        // ahead of the undo has committed.
         if (recordingLine)
         {
+            await HoldRowAsync(UndoLockedRow.TripRecording, rowId, ct);
             recording = await db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == rowId, ct);
         }
         else
         {
+            await HoldRowAsync(UndoLockedRow.TripRecordingPoint, rowId, ct);
             point = await db.TripRecordingPoints.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == rowId, ct);
+            if (point is not null)
+            {
+                await HoldRowAsync(UndoLockedRow.TripRecording, point.RecordingId, ct);
+            }
+
             recording = point is null
                 ? null
                 : await db.TripRecordings.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == point.RecordingId, ct);
