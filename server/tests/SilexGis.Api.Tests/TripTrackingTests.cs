@@ -226,6 +226,11 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// and then fails its precondition against the version the first one moved: a 412 naming the
     /// version, never a duplicate row, a unique-index failure or a 500. Sent together rather than
     /// one after the other, so the lock is what decides it whenever the two do overlap.
+    /// <para>
+    /// A smoke test: nothing forces the two writes into one another, and handled one after another
+    /// they give the same verdict through the ordinary stale-version check. It can only fail when
+    /// the requests happen to overlap.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task Two_first_configurations_of_one_watch_at_once_leave_one_watch_and_refuse_the_second()
@@ -3195,6 +3200,11 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// report — whichever of them got there first, and whether the others found it by looking or
     /// were stopped at the constraint.
     /// </summary>
+    /// <remarks>
+    /// A smoke test: nothing forces the sends into one another, and handled one after another they
+    /// give the same verdict by finding the report already there. It can only fail when the sends
+    /// happen to overlap.
+    /// </remarks>
     [Fact]
     public async Task One_act_sent_many_times_at_once_leaves_one_report_and_every_send_succeeds()
     {
@@ -3238,6 +3248,10 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// these name them backwards. Asked several times over, because the first sends an
     /// application ever takes are slow enough to fall into an order by themselves.
     /// </summary>
+    /// <remarks>
+    /// A smoke test, like the one above: the overlap it is about is likely, not forced, and handled
+    /// one after another the sends give the same verdict.
+    /// </remarks>
     [Fact]
     public async Task One_act_naming_several_people_sent_many_times_at_once_leaves_one_report_each_and_every_send_succeeds()
     {

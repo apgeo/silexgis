@@ -311,14 +311,29 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    [Fact]
-    public async Task A_window_off_the_globe_is_refused()
+    /// <summary>
+    /// A window that is reversed, or that reaches off the globe, is refused on both drawing routes
+    /// of a shared view. The off-globe arm is the one that matters on these anonymous routes: the
+    /// database accepts such an envelope and would answer it.
+    /// </summary>
+    [Theory]
+    [InlineData("cave-entrances", "26,45,25,46", "&zoom=14")]
+    [InlineData("cave-entrances", "170,45,190,46", "&zoom=14")]
+    [InlineData("cave-entrances", "25,-95,26,46", "&zoom=14")]
+    [InlineData("features", "26,45,25,46", "")]
+    [InlineData("features", "170,45,190,46", "")]
+    [InlineData("features", "25,-95,26,46", "")]
+    public async Task A_window_off_the_globe_is_refused(string route, string bbox, string rest)
     {
         var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 25.5, 45.5));
 
-        var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}/cave-entrances?bbox=26,45,25,46&zoom=14");
+        var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}/{route}?bbox={bbox}{rest}");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonNode.Parse(await response.Content.ReadAsStringAsync())!["code"]!.GetValue<string>().ShouldBe("map.invalid_bbox");
+
+        // The same route and view, asked about a window on the globe, answers.
+        (await anonymous.GetAsync($"/api/v1/shared/views/{token}/{route}?bbox=25.4,45.4,25.6,45.6{rest}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     /// <summary>

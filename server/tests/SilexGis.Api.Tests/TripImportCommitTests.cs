@@ -856,8 +856,8 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     /// can fill in, which puts the refusal inside the trip write, after the save.
     /// </para>
     /// <para>
-    /// Every count is scoped to this run's own names and account: one database is shared by the
-    /// whole suite, so a count over the whole table is a failure waiting for a busier run.
+    /// Every count is scoped to this run's own names and account: the tests of this class share
+    /// its database, so a count over the whole table depends on which of them ran first.
     /// </para>
     /// </remarks>
     [Fact]
@@ -982,8 +982,8 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
                 || f.Name == $"Pestera Beta {tag}"))
             .ShouldBe(0);
 
-        // Scoped to this run's own account and suffix: one database is shared by the whole
-        // suite, so a query over every cave in it is a failure waiting for a busier run.
+        // Scoped to this run's own account and suffix: the tests of this class share its database,
+        // so a query over every cave in it depends on which of them ran first.
         var mine = await db.Features.AsNoTracking().IgnoreQueryFilters()
             .Where(f => f.OwnerUserId == editorId && f.Name != null && f.Name.Contains(tag))
             .Select(f => new { f.Id, f.Name, f.Kind })
@@ -1228,9 +1228,8 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         // exists is asking the very tracker under test.
         await using var check = factory.Services.CreateAsyncScope();
         var fresh = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        // Narrowed to the features this run minted. One database is shared by the whole suite,
-        // so reading either of these tables whole is a query that grows with everything else
-        // running beside it.
+        // Narrowed to the features this run minted. The tests of this class share its database,
+        // so reading either of these tables whole is a query that grows with every test before it.
         var stored = (await fresh.Features.AsNoTracking().IgnoreQueryFilters()
             .Where(f => trackedFeatures.Contains(f.Id)).Select(f => f.Id).ToListAsync()).ToHashSet();
         var storedClosure = (await fresh.FeatureAncestors.AsNoTracking()
@@ -1304,13 +1303,28 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     [Fact]
     public async Task A_file_this_account_may_not_read_answers_the_same_as_one_that_is_not_there()
     {
-        var response = await editor.PostAsync(
+        // A sheet that is really there, and usable by this account until a rule on its document
+        // takes the reading away.
+        var fileId = await UploadAsync("withheld.csv", Sheet);
+        var usable = await editor.PutAsync(
+            $"/api/v1/trip-imports/{fileId}/session",
+            Body(new { options = Options(), decisions = new Dictionary<string, object>() }));
+        usable.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(usable));
+        await FileDenial.DenyReadAsync(factory, editorId, fileId);
+
+        var withheld = await editor.PostAsync(
+            $"/api/v1/trip-imports/{fileId}/commit",
+            Body(new { options = Options(), lines = new[] { 2 } }));
+        var missing = await editor.PostAsync(
             $"/api/v1/trip-imports/{Guid.NewGuid()}/commit",
             Body(new { options = Options(), lines = new[] { 2 } }));
-        var body = await BodyAsync(response);
+        var withheldBody = await BodyAsync(withheld);
+        var missingBody = await BodyAsync(missing);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
-        CodeOf(body).ShouldBe("file.not_found");
+        missing.StatusCode.ShouldBe(HttpStatusCode.NotFound, missingBody);
+        CodeOf(missingBody).ShouldBe("file.not_found");
+        withheld.StatusCode.ShouldBe(missing.StatusCode, withheldBody);
+        CodeOf(withheldBody).ShouldBe(CodeOf(missingBody));
     }
 
     // ---------- helpers ----------
@@ -1447,9 +1461,8 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     /// <summary>
     /// Notifications addressed to the three accounts this run created, which are the only
     /// people an import of this run's sheet could reach. Counted that way rather than over
-    /// the whole table because one database is shared by every test in this suite, so a
-    /// notification another test wrote between the two readings would otherwise read as this
-    /// import having spoken.
+    /// the whole table because the tests of this class share its database, so a notification
+    /// another test wrote would otherwise read as this import having spoken.
     /// </summary>
     private async Task<int> NotificationCountAsync()
     {

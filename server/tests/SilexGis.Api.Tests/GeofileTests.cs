@@ -727,8 +727,10 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
                 editor.PostAsJsonAsync(url, new { }),
             };
 
-            // Long enough for both to reach the row and wait on it.
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            // Both must be seen parked on the row before it is let go; a request that arrived after
+            // the commit would be refused by the ordinary "import in progress" check and the test
+            // would pass whether or not the decision is serialised.
+            await LockWaits.UntilParkedAsync(db, 2, Task.WhenAny(sent), "both re-imports");
             await holding.CommitAsync();
             answers = await Task.WhenAll(sent);
         }

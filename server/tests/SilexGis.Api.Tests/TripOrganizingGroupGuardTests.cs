@@ -30,11 +30,6 @@ namespace SilexGis.Api.Tests;
 /// refusal carries the same code and a reader meets one rule about binding a club rather than two
 /// that could drift apart.
 /// </para>
-/// <para>
-/// <b>Not yet run.</b> This class needs a PostGIS database, and the machine-wide gate is held by
-/// another effort. It compiles and follows the shape of its neighbours, but no verdict exists for
-/// it and none should be claimed until one does.
-/// </para>
 /// </remarks>
 public sealed class TripOrganizingGroupGuardTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {

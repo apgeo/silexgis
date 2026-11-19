@@ -240,7 +240,7 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = Array.Empty<object>(),
         });
-        untitled.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await untitled.RefusedFieldsAsync()).ShouldBe(["Title"]);
 
         var blankLine = await owner.PostAsJsonAsync("/api/v1/checklists", new
         {
@@ -248,7 +248,17 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = new[] { new { text = "   " } },
         });
-        blankLine.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await blankLine.RefusedFieldsAsync()).ShouldBe(["Items[0].Text"]);
+
+        // The same body with a title and a line that says something is accepted, so each refusal
+        // above is the one field it names and not the shape of the request.
+        var accepted = await owner.PostAsJsonAsync("/api/v1/checklists", new
+        {
+            title = "A list",
+            visibility = (int)Visibility.Private,
+            items = new[] { new { text = "Rope" } },
+        });
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Created, await accepted.Content.ReadAsStringAsync());
 
         var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/checklists")).StatusCode

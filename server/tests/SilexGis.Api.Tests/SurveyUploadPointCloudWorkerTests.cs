@@ -537,12 +537,32 @@ public sealed class SurveyUploadPointCloudWorkerTests : IAsyncLifetime, IDisposa
         // is queued under.
         var queued = await db.ProcessingJobs.AsNoTracking()
             .Where(j => j.Status == ProcessingJobStatus.Queued)
-            .Select(j => new { j.Kind, j.Payload }).ToListAsync();
-        var kinds = queued
+            .Select(j => new { j.Id, j.Kind, j.Payload }).ToListAsync();
+        var ours = queued
             .Where(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)?.SurveyUploadId == id)
-            .Select(j => j.Kind).ToList();
-        kinds.ShouldBe([ProcessingJobKinds.PointCloudPipeline]);
-        ProcessingJobKinds.TerrainLane.ShouldContain(ProcessingJobKinds.PointCloudPipeline);
+            .ToList();
+        ours.Select(j => j.Kind).ShouldBe([ProcessingJobKinds.PointCloudPipeline]);
+        var jobId = ours[0].Id;
+
+        // Asked of the claim itself, the way each worker asks it, inside a transaction that is
+        // rolled back so nothing is really claimed: the general lane drains everything it would
+        // take and never reaches this job, and the long-work lane does reach it.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var lease = TimeSpan.FromMinutes(5);
+        (await DrainAsync(JobLane.General)).ShouldNotContain(jobId);
+        (await DrainAsync(JobLane.Terrain)).ShouldContain(jobId);
+        await transaction.RollbackAsync();
+
+        async Task<List<long>> DrainAsync(JobLane lane)
+        {
+            var claimed = new List<long>();
+            for (var i = 0; i < 1000 && await JobsSql.ClaimNextAsync(db, lane, lease, default) is { } claim; i++)
+            {
+                claimed.Add(claim);
+            }
+
+            return claimed;
+        }
     }
 
     [Fact]

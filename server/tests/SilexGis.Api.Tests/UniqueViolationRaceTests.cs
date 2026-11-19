@@ -187,34 +187,9 @@ public sealed class UniqueViolationRaceTests : IAsyncLifetime, IDisposable, ICla
         await conflictingWrite(other);
 
         var pending = send();
-        var blocked = false;
-        // Bounded by time, and short of the request's own 30-second command timeout.
-        var deadline = DateTime.UtcNow.AddSeconds(25);
-        while (DateTime.UtcNow < deadline && !pending.IsCompleted)
-        {
-            // pg_stat_activity is read once per transaction and kept until it ends, and this poll
-            // runs inside the transaction holding the row. Without clearing it every poll would see
-            // the first one's picture — taken, on a loaded machine, before the request got to the
-            // insert — and the request would sit on the lock until its command timeout answered 500.
-            await other.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()");
-            var waiting = await other.Database.SqlQueryRaw<long>(
-                "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
-                + "AND pid <> pg_backend_pid()").SingleAsync();
-            if (waiting > 0)
-            {
-                blocked = true;
-                break;
-            }
-
-            await Task.Delay(50);
-        }
-
         // Proof the request got past its own check and was stopped by the index — without it a
         // request that answered from its check (or failed before reaching it) would pass as well.
-        blocked.ShouldBeTrue(pending.IsCompleted
-            ? $"the request answered before reaching the index: {(int)(await pending).StatusCode}"
-            : "the request was never seen waiting on the other transaction's row");
+        await LockWaits.UntilParkedAsync(other, 1, pending);
 
         await transaction.CommitAsync();
         return await pending;

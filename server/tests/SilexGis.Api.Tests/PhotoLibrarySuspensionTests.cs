@@ -238,13 +238,15 @@ public sealed class PhotoLibrarySuspensionTests
     }
 
     /// <summary>
-    /// What a stored decision that cannot be read has to mean. These values are never a deployment
-    /// default — they exist only because somebody opened the settings and stopped something — so an
-    /// unreadable row is a decision that was taken and lost, and the only reading of it that cannot
-    /// do harm is the one that keeps the application quiet.
+    /// The value an unreadable stored decision is read as stops both libraries. These values are
+    /// never a deployment default — they exist only because somebody opened the settings and
+    /// stopped something — so an unreadable row is a decision that was taken and lost, and the only
+    /// reading of it that cannot do harm is the one that keeps the application quiet. That the
+    /// settings service really reads such a row as this value is proved against a database by
+    /// <c>PhotoLibraryBrowseEndpointTests.A_stored_brake_that_cannot_be_read_stops_every_library</c>.
     /// </summary>
     [Fact]
-    public void An_unreadable_stored_decision_means_everything_is_stopped()
+    public void The_reading_given_to_an_unreadable_decision_stops_both_libraries()
     {
         var lost = PhotoLibrarySuspensionSettings.EverythingStopped;
 

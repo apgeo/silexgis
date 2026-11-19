@@ -17,8 +17,8 @@ namespace SilexGis.Api.Tests;
 /// Both surfaces are coordinate-free by construction, and both carry the same visibility walk as
 /// the camp's own page. A camp names a place as surely as a cave does, so a name reaching a
 /// caller who may not read the row would be the disclosure, geometry or no geometry.
-/// The PostGIS container is shared across the collection, so every assertion here is about
-/// specific marked rows rather than totals.
+/// The tests of this class share its database, so every assertion here is about specific marked
+/// rows rather than totals.
 /// </summary>
 public sealed class ExpeditionDiscoveryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {

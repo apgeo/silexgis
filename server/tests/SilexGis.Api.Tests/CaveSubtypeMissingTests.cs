@@ -31,8 +31,8 @@ namespace SilexGis.Api.Tests;
 /// <para>
 /// The state is made here by writing straight to the database, which is the only way to make it:
 /// no write path produces it, so a test that went through the service could not put the read
-/// paths in front of the thing being tested. Both cases restore what they broke — the suite
-/// shares one database and other classes assert the integrity verifier finds nothing at all.
+/// paths in front of the thing being tested. Both cases restore what they broke, because the
+/// tests of this class share its database.
 /// </para>
 /// </remarks>
 public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
@@ -255,8 +255,8 @@ public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClas
     }
 
     /// <summary>
-    /// The caves this run made, and only those: the suite shares one database, so a listing over
-    /// every cave in it is a page whose contents another class decides.
+    /// The caves this run made, and only those: the tests of this class share its database, so a
+    /// listing over every cave in it is a page whose contents another test decides.
     /// </summary>
     private async Task<JsonElement> ListAsync(int pageSize = 50, int page = 1)
     {

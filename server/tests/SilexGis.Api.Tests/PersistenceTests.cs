@@ -477,10 +477,11 @@ public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixtur
             updated.EntityType.ShouldBe(FeatureAudit.TypeName(FeatureKind.Cave));
             var changes = JsonDocument.Parse(updated.Changes!).RootElement;
             changes.GetProperty(nameof(Cave.Region)).GetProperty("new").GetString().ShouldBe("Alba");
-            if (changes.TryGetProperty(nameof(Feature.UpdatedAt), out var touch))
-            {
-                touch.GetProperty("old").GetDateTimeOffset().ShouldBeGreaterThan(DateTimeOffset.UnixEpoch);
-            }
+            // The touch is part of the same audit merge, and its old value is the one stored at
+            // creation rather than year one, which is what an empty stand-in row would record.
+            // Compared to the millisecond: the database keeps microseconds, the clock gave ticks.
+            changes.TryGetProperty(nameof(Feature.UpdatedAt), out var touch).ShouldBeTrue(updated.Changes);
+            touch.GetProperty("old").GetDateTimeOffset().ShouldBe(createdUpdatedAt, TimeSpan.FromMilliseconds(1));
         }
 
         await using (var scope = factory.Services.CreateAsyncScope())

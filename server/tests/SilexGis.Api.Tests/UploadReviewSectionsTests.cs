@@ -277,6 +277,11 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         (await read.Documents.IgnoreQueryFilters().AnyAsync(d => d.Id == lateDocument)).ShouldBeFalse();
     }
 
+    /// <remarks>
+    /// A smoke test: nothing forces the decisions into one another, and taken one after another
+    /// they give the same verdict through the ordinary "already decided" refusal. It can only fail
+    /// when the requests happen to overlap, which is why it is asked three times over.
+    /// </remarks>
     [Fact]
     public async Task Two_decisions_racing_for_one_line_decide_it_once()
     {

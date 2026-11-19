@@ -182,18 +182,15 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
 
         applied.GetProperty("replayed").GetBoolean().ShouldBeFalse();
         Row(applied, newId).GetProperty("status").GetString().ShouldBe("created");
-        if (again.StatusCode == HttpStatusCode.OK)
-        {
-            var replay = JsonDocument.Parse(againPayload).RootElement;
-            replay.GetProperty("replayed").GetBoolean().ShouldBeTrue(againPayload);
-            replay.GetProperty("importBatchId").GetGuid().ShouldBe(applied.GetProperty("importBatchId").GetGuid());
-            Row(replay, newId).GetProperty("status").GetString().ShouldBe("created");
-        }
-        else
-        {
-            again.StatusCode.ShouldBe(HttpStatusCode.Conflict, againPayload);
-            JsonDocument.Parse(againPayload).RootElement.GetProperty("code").GetString().ShouldBe("sync.batch_conflict");
-        }
+
+        // The second copy waited on the first copy's claim of the batch, so by the time it meets
+        // the collision the first copy has committed and its answer is there to be read back: the
+        // replay is the one outcome, and a "send it again" here would be the replay path broken.
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, againPayload);
+        var replay = JsonDocument.Parse(againPayload).RootElement;
+        replay.GetProperty("replayed").GetBoolean().ShouldBeTrue(againPayload);
+        replay.GetProperty("importBatchId").GetGuid().ShouldBe(applied.GetProperty("importBatchId").GetGuid());
+        Row(replay, newId).GetProperty("status").GetString().ShouldBe("created");
 
         await using var check = factory.Services.CreateAsyncScope();
         var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -289,38 +286,8 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
     /// parked on a lock, so each upload is known to be inside the window before the next step.
     /// An upload that answered instead was never held, and nothing was raced.
     /// </summary>
-    private static async Task WaitForLockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending)
-    {
-        var waiting = 0L;
-        for (var attempt = 0; attempt < 400 && waiting < count; attempt++)
-        {
-            pending.IsCompleted.ShouldBeFalse(
-                "the upload answered without waiting on the row another writer holds, so nothing was raced");
-            // The activity view is read once per transaction and then answered from that copy,
-            // and this connection is inside the transaction that holds the stall row: without
-            // dropping the copy every poll after the first would repeat the first.
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()");
-            waiting = await db.Database.SqlQueryRaw<long>(
-                "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
-                + "AND pid <> pg_backend_pid()").SingleAsync();
-            if (waiting < count)
-            {
-                await Task.Delay(50);
-            }
-        }
-
-        if (waiting < count)
-        {
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()");
-            var states = await db.Database.SqlQueryRaw<string>(
-                "SELECT coalesce(wait_event_type, '-') || '/' || coalesce(wait_event, '-') || '/' || coalesce(state, '-') "
-                + "|| ': ' || left(query, 160) AS \"Value\" FROM pg_stat_activity "
-                + "WHERE datname = current_database() AND pid <> pg_backend_pid()").ToListAsync();
-            waiting.ShouldBe(count, "each upload in the race must be parked on a row lock before the next step; "
-                + string.Join(" | ", states));
-        }
-    }
+    private static Task WaitForLockWaitersAsync(SilexGisDbContext db, int count, Task<HttpResponseMessage> pending) =>
+        LockWaits.UntilParkedAsync(db, count, pending, "an upload in the race");
 
     private static async Task<JsonElement> AnswerOf(HttpResponseMessage response)
     {

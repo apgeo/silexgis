@@ -277,8 +277,10 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
         again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
         (await BodyAsync(again)).EnumerateArray().ShouldHaveSingleItem().GetProperty("id").GetGuid().ShouldBe(firstId);
 
-        // All at once, under a second key: every send looks before any has written, so what lets
-        // exactly one in is the table — and a row with no person must count there as a row.
+        // All at once, under a second key: sends that look before any has written are let in by the
+        // table alone — and a row with no person must count there as a row. A smoke test for that
+        // half: nothing forces the overlap, and handled one after another the sends give the same
+        // verdict by finding the note already written.
         var racedKey = Guid.NewGuid();
         var sends = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => PostEventAsync(owner, trip, CaveNote(racedKey))));
         var answered = new HashSet<Guid>();

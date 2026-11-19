@@ -100,7 +100,11 @@ public sealed class TherionServiceTests
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await CodeAsync(response)).ShouldBe("therion_service.project_invalid");
         compiler.Calls.ShouldBe(0);
-        File.Exists(Path.Combine(TestScratch.Root, outside)).ShouldBeFalse();
+
+        // Where each hostile entry would have landed: a "../" entry beside the run's own
+        // directory, in the service's work directory, and a rooted one at the root of the disk.
+        File.Exists(Path.Combine(service.WorkDir, outside)).ShouldBeFalse();
+        File.Exists(Path.Combine(Path.GetPathRoot(service.WorkDir)!, outside)).ShouldBeFalse();
         service.Leftovers().ShouldBeEmpty();
     }
 
