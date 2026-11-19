@@ -5,11 +5,20 @@ import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { useRunCavePotentialModel, type CavePotentialModelInfo } from '../../api/hooks/cavePotential.ts';
 import { useFeatures } from '../../api/hooks/features.ts';
+import { featureListToken } from '../../filters/featureList.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 
 /** The cell sizes the server accepts, in metres. Stated here only to bound the control; the server refuses outside them. */
 const MIN_CELL_METERS = 5;
 const MAX_CELL_METERS = 1000;
+
+/**
+ * Only features of the area category are offered. The name search is the server's and returns one
+ * page of whatever matched, so narrowing by kind of feature here, after the page has come back,
+ * left an area beyond the first matches of all kinds unfindable; the server narrows first and the
+ * page is then a page of areas.
+ */
+const AREA_CATEGORY_FILTER = featureListToken({ controls: { category: 'area' }, extra: [] });
 
 interface Props {
   model: CavePotentialModelInfo;
@@ -35,8 +44,12 @@ export default function CavePotentialRunForm({ model, onClose }: Props) {
   const [refusal, setRefusal] = useState<string | null>(null);
 
   // Asked only once something is typed: an unnarrowed first page of the whole register is mostly
-  // not areas at all.
-  const { data, isFetching } = useFeatures({ search: search.trim(), pageSize: 50 }, search.trim().length > 0);
+  // not areas at all. The search and the category both run on the server, so a name matched by
+  // more than fifty features of other kinds still finds its area.
+  const { data, isFetching } = useFeatures(
+    { search: search.trim(), filter: AREA_CATEGORY_FILTER, pageSize: 50 },
+    search.trim().length > 0,
+  );
   const options = (data?.items ?? [])
     .filter((feature) => feature.geometry?.type === 'Polygon' || feature.geometry?.type === 'MultiPolygon')
     .map((feature) => ({ value: feature.id, label: feature.name ?? feature.id }));
