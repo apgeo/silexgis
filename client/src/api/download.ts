@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { userManager } from '../auth/auth.tsx';
-import i18n from '../i18n';
+import { sendAsTheAccount } from './client.ts';
 import type {
   RegistryCorrelationParams,
   RegistryDistributionParams,
@@ -59,26 +58,18 @@ export class DownloadError extends Error {
 }
 
 async function download(url: string, body?: unknown): Promise<void> {
-  const user = await userManager.getUser();
   const headers: Record<string, string> = {};
-  if (user?.access_token) {
-    headers.Authorization = `Bearer ${user.access_token}`;
-  }
-  // A file can carry words the server writes — a write-up's tracking journal is worded there —
-  // and they are picked by this header, as every other answer's are. A download does not go
-  // through the client those answers come from, so it says the language itself: left unsaid, the
-  // browser would send the language it was installed in, and somebody reading the application in
-  // one language would save a file worded in another.
-  const language = i18n.resolvedLanguage ?? i18n.language;
-  if (language) {
-    headers['Accept-Language'] = language;
-  }
   const form = body instanceof FormData ? body : undefined;
   if (body !== undefined && !form) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
+  // Sent the way the typed client sends: with the account's bearer, renewed once if the sign-in ran
+  // out while the page was open, and with the reading language — a file can carry words the server
+  // writes (a write-up's tracking journal is worded there), and left unsaid the browser would name
+  // the language it was installed in, so somebody reading in one language would save a file worded
+  // in another.
+  const response = await sendAsTheAccount(url, {
     method: body === undefined ? 'GET' : 'POST',
     headers,
     body: body === undefined ? undefined : (form ?? JSON.stringify(body)),

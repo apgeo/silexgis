@@ -21,7 +21,6 @@ import {
   useTerrainDerivatives,
   useCavePotentialResults,
   useSurveyModel,
-  type SurveyModelInfo,
 } from '../api/hooks.ts';
 import { useEveryGeofile, useEveryRasterMap } from '../api/hooks/mapLayers.ts';
 import MapLayerReadsNotice from '../components/map/MapLayerReadsNotice.tsx';
@@ -64,6 +63,7 @@ import {
   updateFilterLayer,
 } from '../map/filterLayerList.ts';
 import { useCompareOffer } from '../caveview/useCompareOffer.ts';
+import { useOpenedSurveyModel } from '../components/caveview/useOpenedSurveyModel.ts';
 import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
 import { applyViewCamera3d, applyViewExaggeration3d } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
@@ -203,7 +203,8 @@ export default function MapPage() {
     [],
   );
   /** The same model over the whole window, escalated from the pane. */
-  const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
+  const { model: caveViewOverlay, open: setCaveViewOverlay, close: closeCaveViewOverlay } =
+    useOpenedSurveyModel();
   const layersRead = useMapLayers();
   const layers = layersRead.data;
   const { data: mapConfig } = useMapConfig();
@@ -857,7 +858,7 @@ export default function MapPage() {
         page, because a reader who arrived at the map from a link has no cave page open. */}
     <ShortcutHelpDialog open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
     <Suspense fallback={null}>
-      <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
+      <SurveyModelViewerModal model={caveViewOverlay} onClose={closeCaveViewOverlay} />
     </Suspense>
     <Suspense fallback={null}>
       <LibraryPhotoFeatureModal

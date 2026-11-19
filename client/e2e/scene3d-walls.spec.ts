@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
-import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login, waitForScene3dReady } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -61,11 +60,39 @@ async function createCave(page: Page, name: string): Promise<string> {
  */
 const madeCaves: string[] = [];
 
+// Every removal is tried, and one that did not happen fails the test that made the cave: a cave
+// left behind here is in the area the count of caves in view is taken over, and would otherwise
+// fail a later, correct run with nothing to say where it came from.
 test.afterEach(async ({ page }) => {
+  const failed: string[] = [];
   for (const caveId of madeCaves.splice(0)) {
-    await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
+    try {
+      const token = await bearerToken(page);
+      const removed = await page.request.delete(`/api/v1/caves/${caveId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!removed.ok() && removed.status() !== 404) failed.push(`${caveId}: ${removed.status()}`);
+    } catch (error) {
+      failed.push(`${caveId}: ${String(error)}`);
+    }
   }
+  expect(failed, 'every cave this test made was removed again').toEqual([]);
 });
+
+/**
+ * How many wall models the scene holds on the graphics card, read off the list the renderer draws
+ * from — not off the panel's words, which a removal that forgot the scene would still change.
+ */
+function modelsInTheScene(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __silexgisPresenter?: { scene3d?: { loadedModelCount(): number } };
+        }
+      ).__silexgisPresenter?.scene3d?.loadedModelCount() ?? -1,
+  );
+}
 
 test('the walls of a cave are uploaded, converted, drawn in the scene from its page, and unloaded on request', async ({
   page,
@@ -129,10 +156,13 @@ test('the walls of a cave are uploaded, converted, drawn in the scene from its p
   await expect(status).toHaveText(/KB|MB/);
   expect(meshRequests.length, 'one fetch of the converted mesh').toBe(1);
   expect(new URL(meshRequests[0]).origin).toBe(new URL(page.url()).origin);
+  await expect.poll(() => modelsInTheScene(page), { message: 'the walls are in the scene' }).toBe(1);
 
-  // Off is a real unload, and the row says so in the words a viewer reads.
+  // Off is a real unload — the model leaves the scene, and its memory with it, which hiding it
+  // would not do — and the row says so in the words a viewer reads.
   await page.getByTestId('scene3d-mesh-toggle').click();
   await expect(status).toHaveText(/not loaded/);
+  await expect.poll(() => modelsInTheScene(page), { message: 'the walls left the scene' }).toBe(0);
   expect(meshRequests.length).toBe(1);
 });
 
@@ -238,6 +268,19 @@ test('the walls of every cave in view are drawn together, counted in words, and 
   // in the database.
   const longitude = 27.9;
   const latitude = 47.6;
+  // Checked, not assumed: anything already there is named here instead of turning up as a count
+  // of three that blames the build.
+  const around = `${longitude - 0.2},${latitude - 0.2},${longitude + 0.2},${latitude + 0.2}`;
+  const already = (await apiJson(
+    page,
+    token,
+    'GET',
+    `/api/v1/caves?bbox=${around}&pageSize=50`,
+  )) as { items: { id: string; name: string }[] };
+  expect(
+    already.items.filter((cave) => cave.id !== firstId && cave.id !== secondId).map((cave) => cave.name),
+    'no other cave is in the area this test counts caves in',
+  ).toEqual([]);
   const firstModel = await uploadWalls(page, token, firstId, longitude, latitude);
   const secondModel = await uploadWalls(page, token, secondId, longitude, latitude - 0.0025);
 
@@ -291,10 +334,13 @@ test('the walls of every cave in view are drawn together, counted in words, and 
     meshRequests.length - fetchedForTheSelectedCave,
     'one fetch per cave in view, and none for a mesh already asked for',
   ).toBe(2);
+  await expect.poll(() => modelsInTheScene(page), { message: 'both caves\' walls are in the scene' }).toBe(2);
 
-  // Off releases all of them, and the row says so in the words a viewer reads.
+  // Off releases all of them, from the scene and not only from the words, and the row says so in
+  // the words a viewer reads.
   await page.getByTestId('scene3d-mesh-toggle').click();
   await expect(status).toHaveText(/not loaded/);
+  await expect.poll(() => modelsInTheScene(page), { message: 'every wall left the scene' }).toBe(0);
   expect(meshRequests.length - fetchedForTheSelectedCave).toBe(2);
 
   // The numbers that view was counted against are a person's to change for their own browser,

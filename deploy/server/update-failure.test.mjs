@@ -37,6 +37,8 @@ const SKIP_ON_WINDOWS =
  * environment by naming the commit at which a step fails:
  *   STANDIN_DB            running | stopped   (whether `compose ps` lists db)
  *   STANDIN_BUILD_FAIL    space-separated commits at which `compose build` fails
+ *   STANDIN_BUILD_KILL    commits at which `compose build` SIGTERMs the updater, as a dropped
+ *                         SSH session or a host shutdown would
  *   STANDIN_UP_FAIL       commits at which `compose up -d` fails after starting the new API
  *                         (a migration that throws leaves the API unhealthy and its dependants
  *                         refuse to start, which is how compose reports it)
@@ -52,6 +54,8 @@ case "$1 $2" in
 	if [ "$STANDIN_DB" = stopped ]; then printf 'api\\nweb\\n'; else printf 'db\\napi\\nweb\\n'; fi
 	exit 0 ;;
 "compose build")
+	# An operator's SSH session dropping mid-build: the updater is signalled and never finishes.
+	if fails_at "$STANDIN_BUILD_KILL"; then kill -TERM "$PPID"; sleep 1; exit 143; fi
 	if fails_at "$STANDIN_BUILD_FAIL"; then echo "stand-in docker: build failed at $head" >&2; exit 17; fi
 	echo "$head" > "$state/built"; exit 0 ;;
 "compose up")
@@ -118,8 +122,8 @@ function sandbox() {
   return { root, app, bin, state, old, next };
 }
 
-function run(box, env = {}) {
-  const result = spawnSync('bash', [join(here, 'update.sh')], {
+function run(box, env = {}, { script = join(here, 'update.sh'), args = [] } = {}) {
+  const result = spawnSync('bash', [script, ...args], {
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -132,6 +136,7 @@ function run(box, env = {}) {
       STANDIN_STATE: box.state,
       STANDIN_DB: 'running',
       STANDIN_BUILD_FAIL: '',
+      STANDIN_BUILD_KILL: '',
       STANDIN_UP_FAIL: '',
       STANDIN_UNHEALTHY: '',
       ...env,
@@ -242,6 +247,65 @@ describe('update.sh', { skip: SKIP_ON_WINDOWS }, () => {
       const backups = join(box.root, 'backups');
       const taken = spawnSync('find', [backups, '-name', 'db.sql.gz'], { encoding: 'utf8' }).stdout.trim();
       assert.ok(taken, 'a backup was taken');
+    });
+  });
+
+  it('finishes an update an interrupted run left half done, rather than calling it up to date', () => {
+    withBox((box) => {
+      const first = run(box, { STANDIN_BUILD_KILL: box.next });
+      assert.notEqual(first.status, 0, first.out);
+      assert.doesNotMatch(first.out, /Updated /);
+      assert.equal(first.running, box.old, 'the interrupted run never started the new version');
+
+      const check = run(box, {}, { args: ['--check'] });
+      assert.equal(check.status, 0, check.out);
+      assert.doesNotMatch(check.stdout, /^up to date$/m, 'the old version is what is running');
+
+      const second = run(box);
+      assert.equal(second.status, 0, second.out);
+      assert.doesNotMatch(second.out, /already up to date/);
+      assert.equal(second.running, box.next);
+      assert.match(second.stdout, new RegExp(`Updated ${box.old.slice(0, 7)}[0-9a-f]* -> ${box.next.slice(0, 7)}`));
+
+      const third = run(box);
+      assert.equal(third.status, 0, third.out);
+      assert.match(third.out, /already up to date/, 'once deployed, it is up to date');
+    });
+  });
+
+  // The update runs from a copy installed outside the checkout, which nothing else refreshes: a fix
+  // to this script would otherwise reach a host only when someone re-ran the installer.
+  const withNewerScript = (fn) =>
+    withBox((box) => {
+      const origin = join(box.root, 'origin');
+      const newer = `${readFileSync(join(here, 'update.sh'), 'utf8')}\n# a newer revision of this script\n`;
+      mkdirSync(join(origin, 'deploy', 'server'), { recursive: true });
+      writeFileSync(join(origin, 'deploy', 'server', 'update.sh'), newer);
+      git(origin, 'add', 'deploy/server/update.sh');
+      git(origin, 'commit', '-q', '-m', 'three');
+      const installed = join(box.root, 'ops', 'update.sh');
+      mkdirSync(dirname(installed));
+      writeFileSync(installed, readFileSync(join(here, 'update.sh')));
+      chmodSync(installed, 0o755);
+      fn({ ...box, next: git(origin, 'rev-parse', 'HEAD') }, installed, newer);
+    });
+
+  it('refreshes its installed copy from the checkout after a successful update', () => {
+    withNewerScript((box, installed, newer) => {
+      const r = run(box, {}, { script: installed });
+      assert.equal(r.status, 0, r.out);
+      assert.equal(readFileSync(installed, 'utf8'), newer);
+      assert.match(r.stdout, /refreshed/);
+    });
+  });
+
+  it('leaves its installed copy alone when the update fails', () => {
+    withNewerScript((box, installed, newer) => {
+      const before = readFileSync(installed, 'utf8');
+      const r = run(box, { STANDIN_BUILD_FAIL: box.next }, { script: installed });
+      assert.notEqual(r.status, 0, r.out);
+      assert.equal(readFileSync(installed, 'utf8'), before);
+      assert.notEqual(before, newer);
     });
   });
 });

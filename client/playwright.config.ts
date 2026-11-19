@@ -74,6 +74,9 @@ const PHONE_ONLY_SPECS = [
   // The control for the size of station names among the viewer's own controls, which are laid
   // out differently at a phone's width and sized differently under a finger.
   /(^|\/)caveview-label-size-mobile\.spec\.ts$/,
+  // The survey viewer tapped, and opened and closed, under a finger: what a stationary tap does
+  // and how many drawing contexts a phone's browser keeps are the phone's questions.
+  /(^|\/)caveview-touch-mobile\.spec\.ts$/,
   // The movie dialog where the browser's video encoder may be missing or may write nothing:
   // Chromium has every encoder, so only the suite's other engine can show how that is said.
   /(^|\/)tracking-movie-webkit\.spec\.ts$/,

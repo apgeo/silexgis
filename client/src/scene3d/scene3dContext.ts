@@ -1135,6 +1135,25 @@ class CesiumScene3D implements Scene3DCore {
     };
   }
 
+  /**
+   * How many models are in the scene's primitives — the list the renderer draws from, and the only
+   * thing holding a model's geometry on the graphics card. Counted there rather than in the map of
+   * ids, so a removal that forgot the scene would still be counted.
+   */
+  loadedModelCount(): number {
+    if (this.widget.isDestroyed()) {
+      return 0;
+    }
+    const primitives = this.widget.scene.primitives;
+    let count = 0;
+    for (let index = 0; index < primitives.length; index += 1) {
+      if (primitives.get(index) instanceof Model) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   /** The colour mixed into every model, held so a model that arrives later is mixed with it too. */
   private modelTint: Scene3DModelTint | undefined;
   /** Colours of their own for the models under some ids, over the one above; held for the same reason. */

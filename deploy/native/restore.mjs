@@ -39,6 +39,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 import {
+  acquireLock,
   adminAccess,
   chownTree,
   emptyDirectory,
@@ -65,10 +66,32 @@ import {
 /** Loads a gzipped dump through psql, carrying on past errors as psql does, and judges them. */
 export async function loadDump(layout, target, database, file) {
   const spec = psqlCommand(layout, target, { database, extraArgs: ['-q', '-v', 'ON_ERROR_STOP=0'] });
+  return feedDump(spec, file);
+}
+
+/**
+ * Pipes a gzipped dump into a running psql and answers how it ended. A psql that stops reading
+ * part way — a role that does not exist, a full disk — breaks the pipe; that is reported with what
+ * psql itself said and with the state it leaves, because by then the schema has been dropped, and
+ * a bare "EPIPE" tells the operator neither why nor that the database is now empty.
+ */
+export async function feedDump(spec, file) {
   const { child, done } = spawnStreaming(spec.command, spec.args, { env: spec.env, cwd: spec.cwd });
-  const fed = pipeline(fs.createReadStream(file), createGunzip(), child.stdin);
+  let pipeError = null;
+  const fed = pipeline(fs.createReadStream(file), createGunzip(), child.stdin).catch((error) => {
+    pipeError = error;
+  });
   const [{ code, stderr }] = await Promise.all([done, fed]);
   if (stderr.trim()) console.error(stderr.trim());
+  if (pipeError) {
+    fail(
+      `psql stopped reading the dump part way (${pipeError.code ?? pipeError.message}; psql exited with ${code})` +
+        `${stderr.trim() ? ` -- psql said: ${stderr.trim().split('\n').slice(-3).join(' / ')}` : ''}. ` +
+        'The database schema had already been dropped, so the database is now empty or partly loaded; ' +
+        'the files directory has NOT been touched, and the API has been left stopped. Fix the cause and run ' +
+        'the restore again.',
+    );
+  }
   const unexpected = unexpectedRestoreErrors(stderr);
   return { code, unexpected };
 }
@@ -211,11 +234,18 @@ export async function main(argv) {
   }
   const installation = loadInstallation(values);
   const source = path.resolve(positionals[0]);
-  note(`restoring ${source} into ${installation.db.database} and ${installation.layout.filesDir}`);
-  await runRestore(installation, source, {
-    adminUrl: values['db-admin-url'] ?? process.env.SILEXGIS_DB_ADMIN_URL,
-    start: !values['no-start'],
-  });
+  // The install lock, as install and update hold it: a restore and an update that starts the new
+  // build would otherwise drop and migrate the same database at once.
+  const release = acquireLock(path.join(installation.layout.dataDir, 'install.lock'));
+  try {
+    note(`restoring ${source} into ${installation.db.database} and ${installation.layout.filesDir}`);
+    await runRestore(installation, source, {
+      adminUrl: values['db-admin-url'] ?? process.env.SILEXGIS_DB_ADMIN_URL,
+      start: !values['no-start'],
+    });
+  } finally {
+    release();
+  }
   return 0;
 }
 

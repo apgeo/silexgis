@@ -174,7 +174,7 @@ export const specs = {
     'place-station.spec.ts',
   ],
   scene: [
-    'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
+    'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-cutaway.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
     // A tiled scan drawn in the scene and opened in the local viewer.
     'point-clouds.spec.ts',
     // A flyby played in the scene: the camera flown, the address left alone, the camera handed back.
@@ -221,7 +221,7 @@ export const specs = {
     'survey-sources.spec.ts', 'cave-statistics.spec.ts', 'cave-topology.spec.ts',
     'cave-morphometry.spec.ts', 'cave-levels.spec.ts', 'scene3d-walls.spec.ts',
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
-    'caveview-label-size-mobile.spec.ts',
+    'caveview-label-size-mobile.spec.ts', 'caveview-touch-mobile.spec.ts',
     // A survey opened and closed many times in its dialog without a page load: one live drawing.
     'caveview-open-close.spec.ts',
   ],

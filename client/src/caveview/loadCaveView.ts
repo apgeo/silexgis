@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { userManager } from '../auth/auth.tsx';
+import { sendAsTheAccount } from '../api/client.ts';
 
 // CaveView.js is not published on npm — it ships as a prebuilt browser bundle that exposes
 // the `CV2` global and fetches its web workers/assets at runtime relative to the `home`
@@ -795,10 +795,7 @@ export function loadCaveView(): Promise<Cv2Namespace> {
 export function makeCrsLookup(): (code: string) => Promise<string | null> {
   return async (code: string) => {
     try {
-      const user = await userManager.getUser();
-      const response = await fetch(`/api/v1/crs/${encodeURIComponent(code)}.proj4`, {
-        headers: user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : undefined,
-      });
+      const response = await sendAsTheAccount(`/api/v1/crs/${encodeURIComponent(code)}.proj4`);
       return response.ok ? await response.text() : null;
     } catch {
       return null;

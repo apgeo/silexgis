@@ -20,6 +20,7 @@ import {
 } from 'antd';
 import { DeleteOutlined, ExperimentOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import Button from '../../components/Button.tsx';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -422,6 +423,23 @@ export default function TestDataPage() {
   );
 }
 
+/** The keys of the notes the server writes as codes (`code` or `code:count`). */
+const NOTE_KEYS: Record<string, string> = {
+  keptInUse: 'testData.noteCodes.keptInUse',
+  keptBeneath: 'testData.noteCodes.keptBeneath',
+  inventedElevations: 'testData.noteCodes.inventedElevations',
+  clubOnlyAsSignedIn: 'testData.noteCodes.clubOnlyAsSignedIn',
+  codesTaken: 'testData.noteCodes.codesTaken',
+};
+
+/** A run's note in the reader's language; one this page does not know is shown as stored. */
+function noteText(note: string, t: TFunction): string {
+  const [code, count] = note.split(':');
+  const key = NOTE_KEYS[code];
+  if (!key) return note;
+  return t(key, { count: count === undefined ? undefined : Number(count) });
+}
+
 /** One run's notes, error and coverage, read when the row is opened. */
 function RunDetails({ run }: { run: TestDataRun }) {
   const { t, i18n } = useTranslation();
@@ -436,7 +454,7 @@ function RunDetails({ run }: { run: TestDataRun }) {
           <Typography.Text strong>{t('testData.notes')}</Typography.Text>
           <ul style={{ margin: 0 }}>
             {run.notes.map((note) => (
-              <li key={note}>{note}</li>
+              <li key={note}>{noteText(note, t)}</li>
             ))}
           </ul>
         </div>

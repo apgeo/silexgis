@@ -2,7 +2,7 @@
 import { userManager } from '../auth/auth.tsx';
 import { recordBreadcrumb } from '../diagnostics/breadcrumbs.ts';
 import i18n from '../i18n';
-import { ApiError, retryAfterOf } from './client.ts';
+import { ApiError, renewingALapsedSignInOnce, retryAfterOf } from './client.ts';
 
 /** How much of a file has gone up so far. */
 export interface UploadProgress {
@@ -15,7 +15,8 @@ export interface UploadProgress {
  * client cannot: `fetch` says nothing about a request body while it is being sent, and a large
  * map sheet takes minutes on a slow line with nothing on screen to say it is moving. So this one
  * request is made the older way, with the same account and language headers the typed client puts
- * on every call.
+ * on every call — and the same renewal: refused because the sign-in ran out while the page was
+ * open, the sign-in is renewed once and the form sent again from the start with the new bearer.
  *
  * Resolves with the answer's body. A refusal is thrown as the same {@link ApiError} the typed
  * client throws, with the problem's code and detail when the server wrote one; a request that
@@ -25,14 +26,50 @@ export interface UploadProgress {
 export async function uploadWithProgress<T>(
   path: string,
   form: FormData,
-  { onProgress, signal }: { onProgress?: (progress: UploadProgress) => void; signal?: AbortSignal } = {},
+  options: { onProgress?: (progress: UploadProgress) => void; signal?: AbortSignal } = {},
 ): Promise<T> {
   const user = await userManager.getUser();
-  return new Promise<T>((resolve, reject) => {
+  const bearer = user?.access_token ? `Bearer ${user.access_token}` : undefined;
+  const answer = bearer
+    ? await renewingALapsedSignInOnce((renewed) => sendOnce(path, form, renewed ?? bearer, options))
+    : await sendOnce(path, form, undefined, options);
+
+  if (answer.status >= 200 && answer.status < 300) {
+    return answer.body as T;
+  }
+  const problem =
+    answer.body && typeof answer.body === 'object' ? (answer.body as Record<string, unknown>) : undefined;
+  throw new ApiError(
+    answer.status,
+    typeof problem?.code === 'string' ? problem.code : undefined,
+    typeof problem?.detail === 'string' ? problem.detail : undefined,
+    problem,
+    answer.retryAfterMs,
+  );
+}
+
+/** What the server answered one send with: its status, its body, and any wait it asked for. */
+interface Answer {
+  status: number;
+  body: unknown;
+  retryAfterMs?: number;
+}
+
+/**
+ * Sends the form once. Resolves with whatever the server answered, refusals included — whether a
+ * refusal is the last word is decided above — and rejects only when there was no answer to have.
+ */
+function sendOnce(
+  path: string,
+  form: FormData,
+  authorization: string | undefined,
+  { onProgress, signal }: { onProgress?: (progress: UploadProgress) => void; signal?: AbortSignal },
+): Promise<Answer> {
+  return new Promise<Answer>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('POST', path);
-    if (user?.access_token) {
-      request.setRequestHeader('Authorization', `Bearer ${user.access_token}`);
+    if (authorization) {
+      request.setRequestHeader('Authorization', authorization);
     }
     const language = i18n.resolvedLanguage ?? i18n.language;
     if (language) {
@@ -47,21 +84,11 @@ export async function uploadWithProgress<T>(
     };
     request.onload = () => {
       recordBreadcrumb('api', `POST ${path} → ${request.status}`);
-      const body = parseJson(request.responseText);
-      if (request.status >= 200 && request.status < 300) {
-        resolve(body as T);
-        return;
-      }
-      const problem = body && typeof body === 'object' ? (body as Record<string, unknown>) : undefined;
-      reject(
-        new ApiError(
-          request.status,
-          typeof problem?.code === 'string' ? problem.code : undefined,
-          typeof problem?.detail === 'string' ? problem.detail : undefined,
-          problem,
-          retryAfterOf({ headers: { get: (name: string) => request.getResponseHeader(name) } }),
-        ),
-      );
+      resolve({
+        status: request.status,
+        body: parseJson(request.responseText),
+        retryAfterMs: retryAfterOf({ headers: { get: (name: string) => request.getResponseHeader(name) } }),
+      });
     };
     request.onerror = () => reject(new ApiError(0));
     request.ontimeout = () => reject(new ApiError(0));

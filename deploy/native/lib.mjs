@@ -333,19 +333,28 @@ export function formatEnvValue(value) {
  * which is how a re-run converges without minting a new password or undoing an operator's edit,
  * while an option given explicitly on this run still wins. Keys not in the file are appended.
  */
-export function mergeEnvFile(text, updates) {
+export function mergeEnvFile(text, updates, { onDuplicate = (key) => warn(`${key} is set more than once in the settings file; the last line is the one in force and the one updated`) } = {}) {
   const lines = text === '' ? [] : text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
-  const seen = new Set();
-  const out = lines.map((line) => {
+  const keyOf = (line) => {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return line;
+    if (!trimmed || trimmed.startsWith('#')) return null;
     const eq = trimmed.indexOf('=');
-    if (eq <= 0) return line;
-    const key = trimmed.slice(0, eq).trim();
+    return eq <= 0 ? null : trimmed.slice(0, eq).trim();
+  };
+  // The last line of a key is the one whatever reads the file keeps, so that is the one updated;
+  // rewriting an earlier one would change a line that has no effect.
+  const last = new Map();
+  lines.forEach((line, index) => {
+    const key = keyOf(line);
+    if (key === null || !updates[key]) return;
+    if (last.has(key)) onDuplicate(key);
+    last.set(key, index);
+  });
+  const seen = new Set(last.keys());
+  const out = lines.map((line, index) => {
+    const key = keyOf(line);
+    if (key === null || last.get(key) !== index) return line;
     const update = updates[key];
-    if (!update) return line;
-    if (seen.has(key)) return line;
-    seen.add(key);
     return update.force ? `${key}=${formatEnvValue(update.value)}` : line;
   });
   const appended = Object.entries(updates).filter(([key]) => !seen.has(key));
@@ -1083,6 +1092,23 @@ export function chownTree(dir, user) {
   run('chown', ['-R', `${user}:${user}`, dir]);
 }
 
+/**
+ * How many timestamped backups the backup folder keeps: the installer's `--backup-keep` when given,
+ * else SILEXGIS_BACKUP_KEEP, else what the installation recorded, else the installer's default.
+ *
+ * The nightly timer and the update prune the same folder, so they must agree on the number. The
+ * update used to prune to a default of its own (10) after every run, deleting backups an operator
+ * had chosen to keep (the timer's default is 14, and an operator may have asked for more).
+ */
+export function backupKeepFor(recorded, env = process.env, option = undefined) {
+  const given = option ?? env.SILEXGIS_BACKUP_KEEP ?? recorded?.backupKeep ?? 14;
+  const keep = Number(given);
+  if (!Number.isInteger(keep) || keep < 1) {
+    fail(`the number of backups to keep must be a whole number, 1 or more (got ${given})`);
+  }
+  return keep;
+}
+
 /** A UTC timestamp for a backup directory, the same shape the Docker path uses. */
 export const backupStamp = (date = new Date()) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 
@@ -1523,7 +1549,7 @@ export function convergeBackupTimer(layout, recorded, keep) {
   run('systemctl', ['daemon-reload']);
   run('systemctl', ['enable', '--now', '--quiet', 'silexgis-backup.timer']);
   note(`nightly backup timer enabled (keeps ${keep}; into ${layout.backupDir})`);
-  return { backupServiceHash: a.hash, backupTimerHash: b.hash };
+  return { backupServiceHash: a.hash, backupTimerHash: b.hash, backupKeep: keep };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1579,19 +1605,22 @@ export function windowsServiceEnvironment(fileValues, layout) {
   return Object.entries(env).map(([key, value]) => `${key}=${value}`);
 }
 
-/** The `reg.exe` arguments that write that environment onto the service's key. */
+/**
+ * The `reg.exe` arguments that write that environment onto the service's key.
+ *
+ * reg.exe splits a multi-string at the two characters `\0` unless told another separator with
+ * `/s`. A value that itself holds those two characters — a Windows path such as `D:\0-data`, a
+ * password — would be cut in two there, so when any entry holds them a single character none of
+ * the entries holds is named instead.
+ */
 export function windowsServiceEnvironmentRegArgs(serviceName, entries) {
-  return [
-    'add',
-    `HKLM\\SYSTEM\\CurrentControlSet\\Services\\${serviceName}`,
-    '/v',
-    'Environment',
-    '/t',
-    'REG_MULTI_SZ',
-    '/d',
-    entries.join('\\0'),
-    '/f',
-  ];
+  const key = `HKLM\\SYSTEM\\CurrentControlSet\\Services\\${serviceName}`;
+  if (!entries.some((entry) => entry.includes('\\0'))) {
+    return ['add', key, '/v', 'Environment', '/t', 'REG_MULTI_SZ', '/d', entries.join('\\0'), '/f'];
+  }
+  const separator = ['|', '~', '`', '^', '#', '!'].find((c) => entries.every((entry) => !entry.includes(c)))
+    ?? fail('the service environment holds every separator reg.exe could be given; it cannot be written as one value');
+  return ['add', key, '/v', 'Environment', '/t', 'REG_MULTI_SZ', '/s', separator, '/d', entries.join(separator), '/f'];
 }
 
 /** The `icacls` arguments that let the service's account change everything under a directory. */

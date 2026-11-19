@@ -82,6 +82,20 @@ public sealed class ChecklistSeedTests : IAsyncLifetime, IDisposable, IClassFixt
             await ChecklistSeeder.SeedAsync(db, adminId);
             var restored = await db.Checklists.Where(c => c.Title == ChecklistSeeds.DefaultTitle).SingleAsync();
             (await db.ChecklistItems.CountAsync(i => i.ChecklistId == restored.Id)).ShouldBe(ChecklistSeeds.DefaultItems.Count);
+
+            // Renamed, it is still the shipped list: the next start writes no second one.
+            await db.Checklists.Where(c => c.Id == restored.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.Title, "Our club's trip list"));
+            await ChecklistSeeder.SeedAsync(db, adminId);
+            (await db.Checklists.CountAsync(c => c.Title == ChecklistSeeds.DefaultTitle)).ShouldBe(0, "a renamed shipped list was seeded again");
+
+            // A list of somebody's own under the shipped title does not stand in for the shipped one.
+            db.Checklists.Add(new Checklist { Title = ChecklistSeeds.DefaultTitle, OwnerUserId = adminId });
+            await db.SaveChangesAsync();
+            await db.Checklists.Where(c => c.Id == restored.Id).ExecuteDeleteAsync();
+            await ChecklistSeeder.SeedAsync(db, adminId);
+            (await db.Checklists.CountAsync(c => c.Title == ChecklistSeeds.DefaultTitle)).ShouldBe(2);
+            (await db.Checklists.CountAsync(c => c.IsSeeded)).ShouldBe(1);
         }
     }
 

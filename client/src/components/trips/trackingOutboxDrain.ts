@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { ApiError, isSettledRefusal } from '../../api/client.ts';
 import type { TrackingReportRequest } from '../../api/hooks.ts';
-import type { SignInRenewal } from '../../auth/renewSignIn.ts';
+import { lastSignInRenewal } from '../../auth/renewSignIn.ts';
 import {
   claimHeldReport,
   dropHeldReport,
@@ -33,14 +33,16 @@ import {
  *   the server is busy or coming back — the report stays held and <em>nothing after it is
  *   tried</em>: whatever stopped this one would stop those, and each attempt would cost a request.
  *
- * <b>A sign-in that ran out is renewed, once, and the same report sent again.</b> An outage longer
- * than a token lasts is the ordinary case underground, and it leaves the tab holding a token the
- * server no longer takes with nothing set to replace it. So a report refused as coming from nobody
- * is not the end of the run: the sign-in is renewed and the very same request repeated under the
- * same key. Once per run — a second such refusal straight after a renewal is not something another
- * renewal would change. Where the sign-in cannot be renewed it is over, and {@link
- * useHeldReportsSignInLapsed} says so for as long as that is true: these reports cannot leave
- * until their author has signed in again, and nothing else on the page would tell them.
+ * <b>A sign-in that ran out is renewed by the transport, not here.</b> An outage longer than a
+ * token lasts is the ordinary case underground, and it leaves the tab holding a token the server no
+ * longer takes. Every report is sent through the application's transport, which renews such a
+ * sign-in once and sends the very same request again by itself — so a refusal as coming from
+ * nobody that still reaches this run is one that renewal could not get past. Renewing again here
+ * would spend a second renewal token on the same refusal and send the report a third time. What the
+ * transport's renewal came to decides what the refusal means: nobody answered it — no answer, tried
+ * again later like any other; otherwise the sign-in is over, and {@link useHeldReportsSignInLapsed}
+ * says so for as long as that is true: these reports cannot leave until their author has signed in
+ * again, and nothing else on the page would tell them.
  *
  * <b>A run that got no answer is tried again later, by itself.</b> The browser's own word that the
  * connection is back cannot be waited for alone: it never calls a weak signal, a network with no
@@ -96,12 +98,6 @@ export function heldReportFailure(error: unknown): 'refused' | Exclude<HeldRepor
   if (error.status === 401) return 'signedOut';
   return isSettledRefusal(error) ? 'refused' : 'serverBusy';
 }
-
-/** Renews the sign-in for a run, or says it cannot be. */
-export type RenewSignIn = () => Promise<SignInRenewal>;
-
-/** For a caller with no way of renewing a sign-in: one that ran out is simply over. */
-const cannotRenew: RenewSignIn = () => Promise.resolve('lapsed');
 
 const useSignInLapsed = create<{ lapsed: boolean }>()(() => ({ lapsed: false }));
 
@@ -232,11 +228,7 @@ function settle(result: HeldReportsRun): void {
   if (heldReportsWaitMs() === 0) retryHeldReportsLater();
 }
 
-async function run(
-  accountId: string,
-  send: SendHeldReport,
-  renew: RenewSignIn,
-): Promise<HeldReportsRun> {
+async function run(accountId: string, send: SendHeldReport): Promise<HeldReportsRun> {
   const done: HeldReportsRun = {
     sent: 0,
     alreadyRemoved: 0,
@@ -245,7 +237,6 @@ async function run(
     joined: false,
   };
   const tried = new Set<string>();
-  let renewed = false;
   for (;;) {
     // Read again before every report: another tab may have sent or discarded what this one was
     // about to send, and a report composed while this run was under way is part of it.
@@ -268,17 +259,9 @@ async function run(
       else done.sent += 1;
     } catch (error) {
       let failure = heldReportFailure(error);
-      if (failure === 'signedOut') {
-        const renewal = renewed ? 'lapsed' : await renew();
-        renewed = true;
-        if (renewal === 'renewed') {
-          // The same report again, under the same key: nothing about it was refused.
-          tried.delete(next.clientKey);
-          continue;
-        }
-        // Nobody answered the renewal either, which says nothing about the sign-in.
-        if (renewal === 'noAnswer') failure = 'noAnswer';
-      }
+      // The transport has already tried to renew past this refusal. Nobody answering that renewal
+      // says nothing about the sign-in.
+      if (failure === 'signedOut' && lastSignInRenewal() === 'noAnswer') failure = 'noAnswer';
       if (failure === 'refused') {
         heldReportRefused(accountId, next.clientKey, (error as ApiError).code ?? null);
         done.refused += 1;
@@ -301,13 +284,9 @@ async function run(
  * Asks for the account like every way into the queue: what another account composed in this
  * browser is neither read nor sent by this call.
  */
-export function drainHeldReports(
-  accountId: string,
-  send: SendHeldReport,
-  renew: RenewSignIn = cannotRenew,
-): Promise<HeldReportsRun> {
+export function drainHeldReports(accountId: string, send: SendHeldReport): Promise<HeldReportsRun> {
   if (running) return running.then((result) => ({ ...result, joined: true }));
-  const started = run(accountId, send, renew)
+  const started = run(accountId, send)
     .then((result) => {
       settle(result);
       return result;

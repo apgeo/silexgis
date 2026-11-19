@@ -254,12 +254,17 @@ public sealed class TripMomentPictures(SilexGisDbContext db)
         }
 
         db.ResLinkMembers.Remove(member);
+        counts.Remove(link.Id);
 
-        // What would be left: the moment, the caver, and nothing that is being documented.
-        var remaining = siblings
-            .Where(m => m.Id != member.Id && m.EntityType == AttachedEntityType.Document)
-            .ToList();
-        if (remaining.Count == 0)
+        // The link goes only when what is left is exactly what the attach wrote around the
+        // pictures — the moment and the caver it is about. A member a curator added by hand
+        // through the general link route (a cave, a place, a note on another trip) is a statement
+        // of theirs, and taking the last photograph off must not take it with it.
+        var remaining = siblings.Where(m => m.Id != member.Id).ToList();
+        var onlyScaffolding = remaining.All(m =>
+            ReferenceEquals(m, moment) || m.EntityType == AttachedEntityType.Caver)
+            && remaining.Count(m => m.EntityType == AttachedEntityType.Caver) <= 1;
+        if (onlyScaffolding)
         {
             foreach (var sibling in siblings.Where(m => m.Id != member.Id))
             {
@@ -302,7 +307,7 @@ public sealed class TripMomentPictures(SilexGisDbContext db)
         var hosts = new List<Guid>();
         foreach (var row in rows)
         {
-            if (TripMomentAnchor.Read(row.Anchor) != at)
+            if (TripMomentAnchor.Read(row.Anchor) != at || IsLinkBeingDeleted(row.Id))
             {
                 continue;
             }
@@ -338,12 +343,15 @@ public sealed class TripMomentPictures(SilexGisDbContext db)
 
     private async Task<bool> HoldsDocumentAsync(Guid linkId, Guid documentId, CancellationToken ct)
     {
-        var stored = await db.ResLinkMembers.AsNoTracking().AnyAsync(
-            m => m.ResLinkId == linkId
+        // A stored membership this unit of work has already taken off does not count: detached
+        // and attached again in one batch, the picture is to be on the moment afterwards.
+        var stored = await db.ResLinkMembers.AsNoTracking()
+            .Where(m => m.ResLinkId == linkId
                 && m.EntityType == AttachedEntityType.Document
-                && m.EntityId == documentId,
-            ct);
-        if (stored)
+                && m.EntityId == documentId)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+        if (stored.Any(id => !IsBeingDeleted(id)))
         {
             return true;
         }
@@ -354,6 +362,12 @@ public sealed class TripMomentPictures(SilexGisDbContext db)
             && e.Entity.EntityType == AttachedEntityType.Document
             && e.Entity.EntityId == documentId);
     }
+
+    private bool IsBeingDeleted(Guid memberId) =>
+        db.ChangeTracker.Entries<ResLinkMember>().Any(e => e.State == EntityState.Deleted && e.Entity.Id == memberId);
+
+    private bool IsLinkBeingDeleted(Guid linkId) =>
+        db.ChangeTracker.Entries<ResLink>().Any(e => e.State == EntityState.Deleted && e.Entity.Id == linkId);
 
     /// <summary>How many members a link will have once this unit of work is saved.</summary>
     private async Task<int> MemberCountAsync(Guid linkId, CancellationToken ct)

@@ -14,7 +14,7 @@ import type { Scene3DCameraState, Scene3DPosition, Scene3DScreenPosition } from 
 // Present only when the browser is driven by automation (`navigator.webdriver`, which every driver
 // sets and no ordinary browser does). It hands out nothing a signed-in person could not already do
 // from the browser's console, and no data: a camera position, the ground's height, where the
-// loaded models are, where a place is drawn on the screen, and a tint and a relief factor that last
+// loaded models are and how many, where a place is drawn on the screen, and a tint and a relief factor that last
 // only as long as the page.
 
 /** The parts of the scene the handle needs; the real scene provides them, a test a plain object. */
@@ -30,6 +30,8 @@ export interface Scene3DPresenterTarget {
   groundHeight(longitude: number, latitude: number): number;
   /** The sphere around every loaded, visible model, or undefined when none is drawn. */
   modelSphere(): Scene3DPresenterSphere | undefined;
+  /** How many models the scene holds on the graphics card, drawn or hidden. */
+  loadedModelCount(): number;
   /** Tints every loaded model; undefined takes the tint off. */
   setModelTint(tint: Scene3DPresenterTint | undefined): void;
   /** The pixel a position, in true metres, is drawn at; undefined behind the camera. */
@@ -59,6 +61,12 @@ export interface Scene3DPresenterBridge {
   getCameraTarget(): Scene3DPosition | undefined;
   groundHeight(longitude: number, latitude: number): number;
   modelSphere(): Scene3DPresenterSphere | undefined;
+  /**
+   * How many models the scene holds, read off what it draws rather than off its own bookkeeping —
+   * so that turning walls off can be checked to have given their memory back, which a model
+   * merely hidden does not.
+   */
+  loadedModelCount(): number;
   /** Recolours the cave's walls for the movie: undefined gives them back their own colours. */
   setModelTint(tint: Scene3DPresenterTint | undefined): void;
   /**
@@ -100,6 +108,7 @@ export function createPresenterBridge(target: Scene3DPresenterTarget): Scene3DPr
     getCameraTarget: () => target.getCameraTarget(),
     groundHeight: (longitude, latitude) => target.groundHeight(longitude, latitude),
     modelSphere: () => target.modelSphere(),
+    loadedModelCount: () => target.loadedModelCount(),
     setModelTint: (tint) => target.setModelTint(tint),
     positionToScreen: (position) => target.positionToScreen(position),
     setVerticalExaggeration: (factor) => target.setVerticalExaggeration(factor),

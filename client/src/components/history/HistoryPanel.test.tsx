@@ -325,4 +325,49 @@ describe('HistoryPanel', () => {
       historyAnswer = () => null;
     }
   });
+
+  it('reads the older changes when asked, instead of only saying they exist', () => {
+    const loadMore = vi.fn();
+    historyAnswer = () => ({ data: { items: events, totalItems: 250 }, isLoading: false, hasMore: true, loadMore });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Show older changes' }));
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
+
+  it('keeps the changes it shows when the older ones fail, says so and offers them again', () => {
+    const loadMore = vi.fn();
+    historyAnswer = () => ({
+      data: { items: events, totalItems: 250 },
+      isLoading: false,
+      isError: false,
+      hasMore: true,
+      moreFailed: true,
+      loadMore,
+    });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('Old note')).toBeInTheDocument();
+      expect(screen.getByText('The older changes could not be loaded.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
 });

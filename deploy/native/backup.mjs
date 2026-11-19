@@ -31,6 +31,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 import {
+  acquireLock,
   backupStamp,
   backupsToPrune,
   fail,
@@ -102,21 +103,38 @@ function archiveTerrainFolder(terrainDir, file, folder) {
   return true;
 }
 
-/** Backs an installation up into `outDir`. */
-export async function runBackup({ layout, db }, outDir) {
-  fs.mkdirSync(outDir, { recursive: true, mode: 0o700 });
-  const dbFile = path.join(outDir, 'db.sql.gz');
-  const filesFile = path.join(outDir, 'files.tar.gz');
-  say(`Database  -> ${dbFile}`);
-  await dumpDatabase(layout, db, dbFile);
-  say(`Files     -> ${filesFile}`);
-  archiveDirectory(layout.filesDir, filesFile);
-  const terrainFile = path.join(outDir, 'terrain-uploads.tar.gz');
-  say(`Terrain   -> ${terrainFile} (browser-uploaded rasters only)`);
-  if (!archiveTerrainUploads(layout.terrainDir, terrainFile)) note('no uploaded rasters -- nothing to archive');
-  const potentialFile = path.join(outDir, 'cave-potential.tar.gz');
-  say(`Potential -> ${potentialFile} (computed cave-potential maps only)`);
-  if (!archiveCavePotential(layout.terrainDir, potentialFile)) note('no cave-potential maps -- nothing to archive');
+/**
+ * Backs an installation up into `outDir`.
+ *
+ * A new directory is written under `<outDir>.incomplete` and given its real name only once every
+ * part is in. A backup that fails half way — a full disk, a dump refused — would otherwise leave a
+ * directory with a timestamp's name, which the rotation counts as a backup: fourteen failed nights
+ * would then push every good backup out. A directory that already exists (one an operator named)
+ * is written in place, as before.
+ */
+export async function runBackup({ layout, db }, outDir, { dump = dumpDatabase } = {}) {
+  const staged = !fs.existsSync(outDir);
+  const workDir = staged ? `${outDir}.incomplete` : outDir;
+  if (staged) fs.rmSync(workDir, { recursive: true, force: true });
+  fs.mkdirSync(workDir, { recursive: true, mode: 0o700 });
+  try {
+    const dbFile = path.join(workDir, 'db.sql.gz');
+    const filesFile = path.join(workDir, 'files.tar.gz');
+    say(`Database  -> ${dbFile}`);
+    await dump(layout, db, dbFile);
+    say(`Files     -> ${filesFile}`);
+    archiveDirectory(layout.filesDir, filesFile);
+    const terrainFile = path.join(workDir, 'terrain-uploads.tar.gz');
+    say(`Terrain   -> ${terrainFile} (browser-uploaded rasters only)`);
+    if (!archiveTerrainUploads(layout.terrainDir, terrainFile)) note('no uploaded rasters -- nothing to archive');
+    const potentialFile = path.join(workDir, 'cave-potential.tar.gz');
+    say(`Potential -> ${potentialFile} (computed cave-potential maps only)`);
+    if (!archiveCavePotential(layout.terrainDir, potentialFile)) note('no cave-potential maps -- nothing to archive');
+  } catch (error) {
+    if (staged) fs.rmSync(workDir, { recursive: true, force: true });
+    throw error;
+  }
+  if (staged) fs.renameSync(workDir, outDir);
   say(`Done: ${outDir}`);
   note('(data-protection keys and token certificates are NOT backed up; losing them only signs');
   note(' everybody out and invalidates outstanding file links, not stored data.)');
@@ -149,14 +167,21 @@ export async function main(argv) {
   }
   if (positionals.length > 1) fail('give at most one output directory');
   const installation = loadInstallation(values);
-  const outDir = positionals[0]
-    ? path.resolve(positionals[0])
-    : path.join(installation.layout.backupDir, backupStamp());
-  await runBackup(installation, outDir);
-  if (values.keep !== undefined) {
-    const keep = Number(values.keep);
-    if (!Number.isInteger(keep) || keep < 1) fail('--keep must be a whole number of backups, 1 or more');
-    pruneBackups(installation.layout.backupDir, keep);
+  // The install lock, as install and update hold it: a nightly backup that fires while an update
+  // is switching releases and migrating would dump a half-migrated schema.
+  const release = acquireLock(path.join(installation.layout.dataDir, 'install.lock'));
+  try {
+    const outDir = positionals[0]
+      ? path.resolve(positionals[0])
+      : path.join(installation.layout.backupDir, backupStamp());
+    await runBackup(installation, outDir);
+    if (values.keep !== undefined) {
+      const keep = Number(values.keep);
+      if (!Number.isInteger(keep) || keep < 1) fail('--keep must be a whole number of backups, 1 or more');
+      pruneBackups(installation.layout.backupDir, keep);
+    }
+  } finally {
+    release();
   }
   return 0;
 }

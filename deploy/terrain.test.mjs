@@ -29,15 +29,19 @@ import {
   describedLayer,
   directoriesOverlap,
   downloadCell,
+  FETCH_CELLS_WITHOUT_YES,
+  fetchRefusal,
   markSourceUnknown,
   missingLevels,
   preparedName,
+  preparedNameCollisions,
   prepareDockerArgs,
   pixelSizeDegrees,
   pyramidVersion,
   rasterFiles,
   readSourceCredit,
   recordSource,
+  tileOrder,
 } from './terrain.mjs';
 
 /** A scratch directory tree, removed when the run ends. */
@@ -182,6 +186,35 @@ describe('preparedName', () => {
     assert.equal(preparedName('grid.asc'), 'grid.tif');
     assert.equal(preparedName('N46E023.HGT'), 'N46E023.tif');
     assert.equal(preparedName('lidar/zona 1 (final).img'), 'lidar_zona_1_final_.tif');
+  });
+});
+
+describe('preparedNameCollisions', () => {
+  it('names every pair of inputs that would be prepared under one name', () => {
+    const collisions = preparedNameCollisions(['a/b.tif', 'a_b.tif', 'x.tif', 'x.hgt', 'Y.tif', 'y.asc', 'kept.tif']);
+    assert.deepEqual(collisions, [
+      ['a_b.tif', ['a/b.tif', 'a_b.tif']],
+      ['x.tif', ['x.tif', 'x.hgt']],
+      // One file on Windows and macOS, so it is a collision everywhere.
+      ['y.tif', ['Y.tif', 'y.asc']],
+    ]);
+  });
+
+  it('finds none in a tile set whose folded names all differ', () => {
+    assert.deepEqual(preparedNameCollisions(['2019/tile_0421.tif', '2021/tile_0421.tif']), []);
+  });
+});
+
+describe('fetchRefusal', () => {
+  it('asks for --yes above the cell limit, and lets the same box through with it', () => {
+    assert.match(fetchRefusal(FETCH_CELLS_WITHOUT_YES + 1, undefined, false).hint, /--yes/);
+    assert.equal(fetchRefusal(FETCH_CELLS_WITHOUT_YES + 1, undefined, true), null);
+    assert.equal(fetchRefusal(FETCH_CELLS_WITHOUT_YES, undefined, false), null);
+  });
+
+  it('refuses a download that would not fit in the free space, --yes or not', () => {
+    assert.match(fetchRefusal(10, 100e6, true).message, /free/);
+    assert.equal(fetchRefusal(10, 10e9, false), null);
   });
 });
 
@@ -805,5 +838,42 @@ describe('downloadCell', () => {
     } finally {
       await site.close();
     }
+  });
+});
+
+describe('a stalled download', () => {
+  it('ends after its timeout instead of holding the fetch for ever', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'silexgis-terrain-'));
+    const server = createServer((_request, response) => {
+      // Headers, a first byte, then nothing.
+      response.writeHead(200, { 'content-length': '4096' });
+      response.write(Buffer.alloc(1));
+    });
+    await new Promise((done) => server.listen(0, '127.0.0.1', done));
+    const { port } = server.address();
+    const target = join(dir, 'N46_00_E022_00.tif');
+    try {
+      await assert.rejects(downloadCell(`http://127.0.0.1:${port}/cell.tif`, target, fetch, 300));
+      assert.equal(existsSync(target), false);
+      assert.equal(existsSync(`${target}.part`), false, 'nothing incomplete is left');
+    } finally {
+      server.closeAllConnections();
+      await new Promise((done) => server.close(done));
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('the pyramid digest', () => {
+  // The version stamped into layer.json is a digest of the tiles in a fixed order, and that order
+  // must not depend on the separator: level 1's and level 10's tiles sort one way under `/` and
+  // the other way under `\`, so the same pyramid stamped on Linux and on Windows got two versions.
+  it('reads the tiles in the same order whichever separator the platform uses', async () => {
+    const path = await import('node:path');
+    const levels = ['10/0/0.terrain', '1/1/0.terrain', '1/0/0.terrain', '2/0/0.terrain'];
+    const posix = tileOrder('/p', levels.map((t) => `/p/${t}`), path.posix).map((t) => t.key);
+    const win32 = tileOrder('C:\\p', levels.map((t) => `C:\\p\\${t.split('/').join('\\')}`), path.win32).map((t) => t.key);
+    assert.deepEqual(win32, posix);
+    assert.deepEqual(posix, ['1/0/0.terrain', '1/1/0.terrain', '10/0/0.terrain', '2/0/0.terrain']);
   });
 });

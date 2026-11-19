@@ -49,7 +49,7 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 ?? throw new InvalidOperationException("A test-data run needs the account it is generated for.");
             var plan = TestDataPlanner.Plan(profile);
             session = new TestDataSession(run.Id, owner, plan);
-            session.Note("Elevations come from an invented surface; real ground heights from a terrain build come in a later part of the generator.");
+            session.Note(TestDataNotes.InventedElevations);
             var total = 2 + plan.Regions.Count + plan.Caves.Count;
             var done = 0;
             await ProgressAsync(session, Phases.Plan, done, total, ct);

@@ -176,6 +176,11 @@ public class TripSoftDeleteGuardTests
     private static readonly IReadOnlyDictionary<string, (int Statements, string Reason)> ReadsPastTheFilter =
         new Dictionary<string, (int, string)>
         {
+            ["server/src/SilexGis.Api/Auth/RealDataGuard.cs"] =
+                (2, "a deleted trip is still somebody's record, so the check for data the demo content did not "
+                    + "create counts it too; hiding it would let the command run over a real instance"),
+            ["server/src/SilexGis.Infrastructure/TestData/TestDataRemoval.cs"] =
+                (1, "a cave a deleted trip's tracking still points at is in use: removing a generated run keeps it"),
             ["server/src/SilexGis.Api/Features/TripLogs/TripLogDeletionEndpoints.cs"] =
                 (2, "the list of deleted trips, and finding the one being put back"),
             ["server/src/SilexGis.Api/Features/Import/ImportBatchEndpoints.cs"] =

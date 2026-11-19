@@ -237,9 +237,26 @@ export async function renewsALapsedSignIn(request: Request): Promise<Response> {
     return fetch(copy);
   };
 
-  const response = await send();
-  if (response.status !== 401) {
-    return response;
+  return renewingALapsedSignInOnce(send);
+}
+
+/**
+ * The rule {@link renewsALapsedSignIn} applies, for any way of sending a request.
+ *
+ * `send` sends the request once — with the bearer it was built with when called with nothing, or
+ * with the one given — and answers with something that has the answer's status. A refusal as coming
+ * from nobody (401) is renewed past once through the single-flight renewal and sent again with the
+ * new bearer; a sign-in that cannot be renewed is announced to the shell; either way the caller gets
+ * the last answer. Exported for the one request that cannot go through `fetch` at all — an upload
+ * that reports its progress — so that it obeys this rule rather than a copy of it. Call it only for
+ * a request that carried a bearer: one that carried none is a visitor, not a lapsed sign-in.
+ */
+export async function renewingALapsedSignInOnce<T extends { status: number }>(
+  send: (authorization?: string) => Promise<T>,
+): Promise<T> {
+  const answer = await send();
+  if (answer.status !== 401) {
+    return answer;
   }
 
   const renewal = await renewSignIn();
@@ -251,7 +268,7 @@ export async function renewsALapsedSignIn(request: Request): Promise<Response> {
   if (renewal === 'lapsed') {
     signInLapsed();
   }
-  return response;
+  return answer;
 }
 
 export const api = createClient<paths>({ baseUrl: '/', fetch: renewsALapsedSignIn });
@@ -489,6 +506,24 @@ if (import.meta.env.DEV) {
 }
 
 /**
+ * Sends a request the typed client cannot make — a file to save, an export with a body of its own, a
+ * coordinate system read by a map library — the way the typed client sends its own.
+ *
+ * Three steps of that client have to be repeated, and each is a defect if skipped: the account's
+ * bearer, or the request is refused; the language the person reads in, or words the server writes
+ * into the answer come back in another; and the renewal of a sign-in that ran out while the tab was
+ * open, or such a request alone is refused as coming from nobody after a laptop slept, while every
+ * screen around it recovers. `input` is resolved against this page's address.
+ */
+export async function sendAsTheAccount(input: Request | string, init?: RequestInit): Promise<Response> {
+  const request =
+    input instanceof Request ? input : new Request(new URL(input, window.location.origin), init);
+  await carriesTheAccountsBearer.onRequest({ request });
+  sendsTheReadingLanguage.onRequest({ request });
+  return renewsALapsedSignIn(request);
+}
+
+/**
  * One GET, made the way the generated client makes one, for a route the contract document does not
  * describe yet.
  *
@@ -515,11 +550,7 @@ export async function readJson<T>(path: string): Promise<T> {
   const request = new Request(new URL(path, window.location.origin), {
     headers: { Accept: 'application/json' },
   });
-
-  await carriesTheAccountsBearer.onRequest({ request });
-  sendsTheReadingLanguage.onRequest({ request });
-
-  const response = await renewsALapsedSignIn(request);
+  const response = await sendAsTheAccount(request);
 
   if (import.meta.env.DEV) {
     recordBreadcrumb(

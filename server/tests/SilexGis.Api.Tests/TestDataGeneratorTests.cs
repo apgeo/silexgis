@@ -238,7 +238,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
         (await admin.PostAsJsonAsync($"{Base}/runs/{runId}/remove", new { confirm = true })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var removed = await RunJobAsync(ProcessingJobKinds.TestDataRemove, runId);
         removed.GetProperty("status").GetString().ShouldBe("removed");
-        removed.GetProperty("notes").EnumerateArray().ShouldContain(n => n.GetString()!.Contains("kept", StringComparison.Ordinal));
+        removed.GetProperty("notes").EnumerateArray().ShouldContain(n => n.GetString()!.StartsWith("keptBeneath:", StringComparison.Ordinal));
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -247,6 +247,180 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             (await db.Features.AnyAsync(f => f.Id == inside)).ShouldBeTrue("a cave added inside a generated area was removed");
             (await db.Features.AnyAsync(f => f.Id == area)).ShouldBeTrue("the area holding somebody's cave was removed from under it");
             (await db.Features.CountAsync(f => f.Kind == FeatureKind.Cave && f.Description!.Contains("testgenerated"))).ShouldBe(0);
+        }
+    }
+
+    [Fact]
+    public async Task Removal_keeps_a_generated_cave_people_have_used_and_says_why()
+    {
+        var own = await CreateCaveAsync($"Peștera legată {suffix}", parentId: null);
+        var runId = await StartAsync(Profile(seed: 505, count: 4));
+        (await RunJobAsync(ProcessingJobKinds.TestDataGenerate, runId)).GetProperty("status").GetString().ShouldBe("succeeded");
+
+        List<Guid> caves;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var listed = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "features").Select(r => r.RowId).ToListAsync())
+                .Select(Guid.Parse).ToList();
+            caves = await db.Features.Where(f => listed.Contains(f.Id) && f.Kind == FeatureKind.Cave)
+                .OrderBy(f => f.Id).Select(f => f.Id).ToListAsync();
+        }
+
+        // Somebody links one generated cave to a cave of their own — the way a trip names a cave.
+        var used = caves[0];
+        var linked = await admin.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)null,
+            description = "A link somebody made by hand",
+            members = new[] { used, own }.Select((id, index) => new
+            {
+                targetType = "feature",
+                targetId = id,
+                isMain = false,
+                sortOrder = index,
+                note = (string?)null,
+                anchorKind = "whole",
+                anchor = (object?)null,
+                anchorFileId = (Guid?)null,
+            }).ToArray(),
+        });
+        linked.StatusCode.ShouldBe(HttpStatusCode.Created, await linked.Content.ReadAsStringAsync());
+        var linkId = (await linked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // And somebody else draws a typed link from a cave of their own to a second generated one.
+        // The link's row cascades with either end, so the generated end has to stay.
+        var drawnTo = caves[1];
+        long featureLinkId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var kindId = await db.LinkKinds.OrderBy(k => k.Id).Select(k => k.Id).FirstAsync();
+            var featureLink = new FeatureLink { FromId = own, ToId = drawnTo, LinkKindId = kindId, Note = "drawn by hand" };
+            db.FeatureLinks.Add(featureLink);
+            await db.SaveChangesAsync();
+            featureLinkId = featureLink.Id;
+        }
+
+        (await admin.PostAsJsonAsync($"{Base}/runs/{runId}/remove", new { confirm = true })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var removed = await RunJobAsync(ProcessingJobKinds.TestDataRemove, runId);
+        removed.GetProperty("status").GetString().ShouldBe("removed");
+        removed.GetProperty("notes").EnumerateArray()
+            .ShouldContain(n => n.GetString()!.StartsWith("keptInUse:", StringComparison.Ordinal), removed.ToString());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AnyAsync(f => f.Id == used)).ShouldBeTrue("a generated cave somebody linked was removed");
+            (await db.ResLinkMembers.CountAsync(m => m.ResLinkId == linkId)).ShouldBe(2, "the link lost a member");
+            (await db.Features.CountAsync(f => f.Kind == FeatureKind.CaveEntrance && f.Entrance!.CaveFeatureId == used))
+                .ShouldBeGreaterThan(0, "the kept cave lost its entrances");
+            (await db.Features.AnyAsync(f => f.Id == drawnTo)).ShouldBeTrue("a generated cave somebody drew a link to was removed");
+            (await db.FeatureLinks.AnyAsync(l => l.Id == featureLinkId)).ShouldBeTrue("the drawn link was removed with its generated end");
+
+            // The positive half: the generated caves nobody touched went.
+            var untouched = caves.Skip(2).ToList();
+            untouched.ShouldNotBeEmpty();
+            (await db.Features.IgnoreQueryFilters().CountAsync(f => untouched.Contains(f.Id))).ShouldBe(0);
+
+            // The kept caves stay in this class's database; their codes are cleared so another
+            // test's run, whose planned codes may be the same, writes its own in full.
+            await db.Caves.Where(c => c.Id == used || c.Id == drawnTo)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.IdentificationCode, (string?)null));
+        }
+    }
+
+    [Fact]
+    public async Task A_planned_code_a_cave_here_already_carries_is_left_off_the_generated_cave()
+    {
+        var profile = Profile(seed: 808, count: 3);
+        var planned = TestDataPlanner.Plan(TestDataProfile.FromJson(JsonSerializer.Serialize(profile))).Caves;
+        var own = await CreateCaveAsync($"Peștera din registru {suffix}", parentId: null);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Caves.Where(c => c.Id == own)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.IdentificationCode, planned[0].IdentificationCode));
+        }
+
+        var runId = await StartAsync(profile);
+        var run = await RunJobAsync(ProcessingJobKinds.TestDataGenerate, runId);
+        run.GetProperty("status").GetString().ShouldBe("succeeded", run.ToString());
+        run.GetProperty("notes").EnumerateArray().Select(n => n.GetString()).ShouldContain("codesTaken:1", run.ToString());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Caves.CountAsync(c => c.IdentificationCode == planned[0].IdentificationCode)).ShouldBe(1, "the code is now ambiguous");
+            var listed = await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "features").Select(r => r.RowId).ToListAsync();
+            var codes = await db.Caves.Where(c => listed.Contains(c.Id.ToString())).Select(c => c.IdentificationCode).ToListAsync();
+            codes.Count.ShouldBe(3);
+            codes.Count(c => c == null).ShouldBe(1);
+            await db.Caves.Where(c => c.Id == own)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.IdentificationCode, (string?)null));
+        }
+
+        await RemoveAsync(runId);
+    }
+
+    [Fact]
+    public async Task A_removal_that_fails_closes_the_run_as_failed_so_it_neither_blocks_new_runs_nor_stays_unremovable()
+    {
+        var runId = await StartAsync(Profile(seed: 606, count: 2));
+        (await RunJobAsync(ProcessingJobKinds.TestDataGenerate, runId)).GetProperty("status").GetString().ShouldBe("succeeded");
+
+        // A registry row of a table the removal does not know makes it throw before it touches anything.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var last = await db.TestDataRows.Where(r => r.RunId == runId).MaxAsync(r => r.Sequence);
+            db.TestDataRows.Add(new TestDataRow { RunId = runId, Sequence = last + 1, TableName = "no_such_table", RowId = "1" });
+            await db.SaveChangesAsync();
+        }
+
+        (await admin.PostAsJsonAsync($"{Base}/runs/{runId}/remove", new { confirm = true })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var removeJob = (await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.TestDataRemove))
+            .First(j => j.Payload.Contains(runId.ToString(), StringComparison.Ordinal));
+        await Should.ThrowAsync<InvalidOperationException>(() => QueuedJob.RunAsync(factory.Services, removeJob.Id));
+        var failed = await admin.GetFromJsonAsync<JsonElement>($"{Base}/runs/{runId}");
+        failed.GetProperty("status").GetString().ShouldBe("failed", failed.ToString());
+        failed.GetProperty("error").GetString()!.ShouldContain("no_such_table");
+
+        // Not the one run in progress any more: another can start, and is cancelled again here.
+        var next = await StartAsync(Profile(seed: 607, count: 2));
+        (await admin.PostAsync($"{Base}/runs/{next}/cancel", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await RemoveAsync(next);
+
+        // And the failed removal can be asked for again; with the stray row gone it now succeeds.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "no_such_table").ExecuteDeleteAsync();
+        }
+
+        await RemoveAsync(runId);
+        var removed = await admin.GetFromJsonAsync<JsonElement>($"{Base}/runs/{runId}");
+        removed.GetProperty("error").ValueKind.ShouldBe(JsonValueKind.Null, removed.ToString());
+    }
+
+    [Fact]
+    public async Task Starts_sent_at_the_same_moment_queue_one_run_and_refuse_the_rest()
+    {
+        var answers = await Task.WhenAll(Enumerable.Range(0, 6).Select(i => admin.PostAsJsonAsync(
+            $"{Base}/runs", new { profile = Profile(seed: 700 + i, count: 2), confirmAlongsideExistingData = true })));
+        try
+        {
+            answers.Count(a => a.StatusCode == HttpStatusCode.Accepted).ShouldBe(1);
+            answers.Count(a => a.StatusCode == HttpStatusCode.Conflict).ShouldBe(5);
+        }
+        finally
+        {
+            foreach (var accepted in answers.Where(a => a.StatusCode == HttpStatusCode.Accepted))
+            {
+                var id = (await accepted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+                (await admin.PostAsync($"{Base}/runs/{id}/cancel", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+                await RemoveAsync(id);
+            }
         }
     }
 

@@ -13,7 +13,7 @@
 import { strict as assert } from 'node:assert';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, describe, it } from 'node:test';
@@ -30,8 +30,11 @@ import {
   testModeOf,
   inMode,
   summarise,
+  withExit,
   cpuSecondsOfTree,
   holderProgress,
+  processStartTime,
+  takeOverStale,
 } from './gate-lock.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'gate-lock.mjs');
@@ -94,6 +97,36 @@ describe('acquire and release', () => {
     assert.equal(tryAcquire(dir, 'successor'), true);
     assert.equal(readOwner(dir).label, 'successor');
     release(dir);
+  });
+
+  it('a pid handed on to another process is no claim: the recorded start time must match too', {
+    skip: processStartTime(process.pid) === null ? 'no /proc start times on this platform' : false,
+  }, () => {
+    const dir = freshDir('recycled');
+    mkdirSync(dir, { recursive: true });
+    // This test's own pid is alive, but not the process that started at tick 1 — as a dead
+    // holder's pid looks once the system has given it to something else.
+    writeFileSync(
+      lockFile(dir),
+      JSON.stringify({ pid: process.pid, start: '1', host: hostname(), label: 'before the reboot', since: '2026-01-01T00:00:00Z' }),
+    );
+    assert.equal(tryAcquire(dir, 'successor'), true);
+    assert.equal(readOwner(dir).label, 'successor');
+    assert.equal(readOwner(dir).start, processStartTime(process.pid), 'the new claim records its own start');
+    release(dir);
+  });
+
+  it('a stale lock is removed only if it is still the one judged stale', () => {
+    const dir = freshDir('takeover-race');
+    mkdirSync(dir, { recursive: true });
+    const fresh = JSON.stringify({ pid: process.pid, label: 'took it over a moment ago' });
+    writeFileSync(lockFile(dir), fresh);
+    // Another waiter judged a different (stale) record, then this fresh one replaced it: the
+    // late remover must not carry the fresh claim off.
+    assert.equal(takeOverStale(lockFile(dir), '{"pid":1,"label":"the corpse"}'), false);
+    assert.equal(readFileSync(lockFile(dir), 'utf8'), fresh, 'the fresh claim was put back as it was');
+    assert.equal(takeOverStale(lockFile(dir), fresh), true);
+    assert.equal(existsSync(lockFile(dir)), false);
   });
 
   it('a release by somebody who does not hold the lock changes nothing', () => {
@@ -562,6 +595,54 @@ describe('a result file says what actually ran', () => {
     assert.equal(r.total, 35);
     assert.equal(r.passed, 33);
     assert.equal(r.skipped, 2);
+  });
+
+  // A sharded run prints the summaries of the shards that finished and exits non-zero for the one
+  // that died without a summary (an out-of-memory kill at the suite's peak, say). The summaries on
+  // their own read green; the exit code is the only witness of the shard that is missing.
+  const runExiting = (name, output, code, extra = []) => {
+    const dir = freshDir(`verdict-${name}`);
+    const result = join(scratch, `result-${name}.json`);
+    spawnSync(
+      process.execPath,
+      [script, 'run', ...extra, '--result', result, '--', process.execPath, '-e',
+        `console.log(${JSON.stringify(output)}); process.exit(${code})`],
+      { env: envFor(dir), encoding: 'utf8' },
+    );
+    return JSON.parse(readFileSync(result, 'utf8'));
+  };
+  const passingLines =
+    'Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, Duration: 1 s - A.dll\n'
+      + 'Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 1 s - B.dll';
+
+  it('a run that exited non-zero is red even when every summary it printed passed', () => {
+    const r = runExiting('green-exit1', passingLines, 1);
+    assert.equal(r.exitCode, 1);
+    assert.equal(r.verdict, 'red');
+    assert.match(r.verdictReason, /exited 1/);
+    assert.equal(r.failed, 0, 'the counts stay the runner\'s own');
+  });
+
+  it('a fast run that exited non-zero is red, not green-fast', () => {
+    const r = runExiting('fast-exit1', passingLines, 1, ['--mode', 'fast']);
+    assert.equal(r.verdict, 'red');
+    assert.match(r.verdictReason, /exited 1/);
+  });
+
+  it('a run that exited non-zero with no summary at all is red', () => {
+    const r = runExiting('nosummary-exit2', 'the test host died', 2);
+    assert.equal(r.verdict, 'red');
+    assert.match(r.verdictReason, /exited 2/);
+    assert.match(r.verdictReason, /no test-runner summary/);
+  });
+
+  it('withExit leaves a zero exit alone and keeps a red reason it already had', () => {
+    const green = summarise(passingLines);
+    assert.equal(withExit(green, 0).verdict, 'green');
+    const failed = summarise('Failed!  - Failed:     2, Passed:    31, Skipped:     0, Total:    33, Duration: 1 s - X.dll');
+    const r = withExit(failed, 1);
+    assert.equal(r.verdict, 'red');
+    assert.match(r.verdictReason, /2 of 33 failed/);
   });
 
   it('several assemblies are summed rather than the last one winning', () => {

@@ -2264,6 +2264,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
 
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_seeded");
+
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_user_id");

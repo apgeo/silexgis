@@ -151,6 +151,20 @@ vi.mock('../../components/caveview/movie/LazyTrackingMovieDialog.tsx', () => ({
   },
 }));
 
+// The survey viewer brings a WebGL engine with it. What this list owes it is the model to show,
+// as the list now has it — so the stand-in records the model it was last handed.
+let viewerModel: SurveyModelInfo | null | undefined;
+/** Read through a call, for the same reason as the movie dialog's. */
+const viewerShows = (): SurveyModelInfo | null | undefined => viewerModel;
+vi.mock('../../components/caveview/SurveyModelViewerModal.tsx', () => ({
+  default: (props: { model: SurveyModelInfo | null; onClose: () => void }) => {
+    viewerModel = props.model;
+    return props.model === null ? null : (
+      <button data-testid="fake-viewer-close" onClick={props.onClose} />
+    );
+  },
+}));
+
 const { default: SurveyModelSection } = await import('./SurveyModelSection.tsx');
 
 /** Where the two new buttons send the reader, recorded rather than followed. */
@@ -189,6 +203,7 @@ beforeEach(() => {
   readAgainMutate.mockReset().mockResolvedValue(model({ status: 'ready', readingAgain: true }));
   placementMutate.mockReset().mockResolvedValue(model({ status: 'pending' }));
   models = [];
+  viewerModel = undefined;
   summary = summaryWith(true);
   navigate.mockClear();
   opened = [];
@@ -440,6 +455,37 @@ describe('the survey model list', () => {
     // timed out under a full-suite run while passing on its own.
     expect(screen.getAllByLabelText('Open beside the map')).toHaveLength(1);
     expect(screen.getAllByLabelText('Open in another window')).toHaveLength(1);
+  });
+
+  it('hands the open viewer the address the list signed last, not the one it was opened with', async () => {
+    // The list asks again every few minutes because the address it carries is signed for ten.
+    // A viewer left open past that, whose second tab reads the file only when it is chosen, must
+    // be holding the newest address — the one it was opened with has lapsed by then.
+    models = [model({ id: 'plot', format: 'lox', name: 'Grind plot', modelUrl: '/f?token=first' })];
+    const view = show();
+    fireEvent.click(await screen.findByRole('button', { name: /View in 3D/ }));
+    expect(viewerShows()?.modelUrl).toBe('/f?token=first');
+
+    models = [model({ id: 'plot', format: 'lox', name: 'Grind plot', modelUrl: '/f?token=second' })];
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SurveyModelSection caveId="c1" canEdit />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(viewerShows()?.modelUrl).toBe('/f?token=second');
+
+    // A model removed while it was open closes the viewer rather than showing what is gone.
+    models = [];
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SurveyModelSection caveId="c1" canEdit />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(viewerShows()).toBeNull();
   });
 
   it('sends the map the model that was asked for, not the cave', async () => {

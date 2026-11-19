@@ -16,9 +16,11 @@ vi.mock('../../api/hooks.ts', () => ({
 // The sign-in, stood in for: it lives in memory behind a redirect to the server. What is under
 // test is what the sender does with a renewal's outcome and with the notice that one happened.
 const renewSignIn = vi.fn<() => Promise<SignInRenewal>>();
+let lastRenewal: SignInRenewal | null = null;
 const whenRenewed = new Set<() => void>();
 vi.mock('../../auth/renewSignIn.ts', () => ({
   renewSignIn: () => renewSignIn(),
+  lastSignInRenewal: () => lastRenewal,
   onSignInRenewed: (listener: () => void) => {
     whenRenewed.add(listener);
     return () => whenRenewed.delete(listener);
@@ -83,6 +85,7 @@ beforeEach(() => {
   resetHeldReportsDrain();
   sendHeld.mockReset().mockResolvedValue([{}]);
   renewSignIn.mockReset().mockResolvedValue('lapsed');
+  lastRenewal = null;
   whenRenewed.clear();
 });
 
@@ -298,24 +301,56 @@ describe('the sender mounted for the whole of a signed-in session', () => {
      * The case the queue exists for: underground longer than a token lasts. The connection is back,
      * the tab still holds the token that ran out, and nobody presses anything.
      */
-    it('renews it and sends the report, by itself', async () => {
-      let signedIn = false;
-      sendHeld.mockImplementation(() =>
-        signedIn ? Promise.resolve([{}]) : Promise.reject(new ApiError(401)),
-      );
-      renewSignIn.mockImplementation(() => {
-        signedIn = true;
-        return Promise.resolve('renewed');
-      });
+    it('sends the report, by itself, with the sign-in the transport renewed on the way', async () => {
+      // The transport's renewal and its resend of the same request are its own, and proved with
+      // it; what reaches the sender is the resend's answer.
+      sendHeld.mockResolvedValue([{}]);
       held();
 
       mount(ANA, true);
 
       await waitFor(() => expect(heldReportsOf(ANA)).toEqual([]));
-      expect(sentKeys()).toEqual(['key-1', 'key-1']);
-      expect(renewSignIn).toHaveBeenCalledTimes(1);
+      expect(sentKeys()).toEqual(['key-1']);
+      expect(renewSignIn).not.toHaveBeenCalled();
       expect(await screen.findByText('Held reports sent: 1.')).toBeInTheDocument();
       expect(screen.queryByText(/Your sign-in has lapsed/)).toBeNull();
+    });
+
+    /**
+     * A held report is sent through the transport, which renews a lapsed sign-in once and sends the
+     * request again by itself. A refusal that still reaches the sender is one that renewal could not
+     * get past: renewing again would spend another renewal token on the same refusal, and sending
+     * again would be one more request for an answer that cannot change.
+     */
+    it('leaves the renewal to the transport: a refusal that reached it is not renewed or sent again', async () => {
+      lastRenewal = 'lapsed';
+      sendHeld.mockRejectedValue(new ApiError(401));
+      renewSignIn.mockResolvedValue('renewed');
+      held();
+
+      mount(ANA, true);
+
+      await waitFor(() => expect(isHeldReportsSignInLapsed()).toBe(true));
+      expect(renewSignIn).not.toHaveBeenCalled();
+      expect(sendHeld).toHaveBeenCalledTimes(1);
+      expect(heldReportsOf(ANA)).toEqual([expect.objectContaining({ state: 'held' })]);
+    });
+
+    it('keeps the report to try again when nobody answered the transport\'s renewal', async () => {
+      lastRenewal = 'noAnswer';
+      sendHeld.mockRejectedValue(new ApiError(401));
+      held();
+
+      const { result } = mount(ANA, false);
+      let run: Awaited<ReturnType<typeof result.current.sendNow>> = null;
+      await act(async () => {
+        run = await result.current.sendNow();
+      });
+
+      expect(run).toMatchObject({ stopped: 'noAnswer' });
+      expect(renewSignIn).not.toHaveBeenCalled();
+      expect(isHeldReportsSignInLapsed()).toBe(false);
+      expect(heldReportsOf(ANA)).toEqual([expect.objectContaining({ state: 'held' })]);
     });
 
     it('says so although nobody pressed anything when it cannot be renewed, and says it once', async () => {

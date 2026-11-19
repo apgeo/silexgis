@@ -127,8 +127,17 @@ default to inherit.
 The update logic is *copied* to `/opt/silexgis-ops/`, outside the deployed checkout, rather
 than being run from inside it. A script that lives in the tree it is about to `git pull` can be
 rewritten underneath the shell executing it, and a copy placed into the checkout by hand
-collides with the pull the moment the same path arrives from upstream. Re-run `install-ops.sh`
-after an update to refresh that copy.
+collides with the pull the moment the same path arrives from upstream. A successful update
+refreshes its own copy of `update.sh` from the checkout once the new version answers healthy, so a
+fix to the update logic takes effect from the next update on. The other scripts in that folder
+(`set-domain.sh`, `install-app.sh`, `reset.sh`) and the wrappers are refreshed only by re-running
+`install-ops.sh`.
+
+"Up to date" means the commit last deployed — recorded in the checkout's git directory only once a
+version has answered healthy — equals the branch. An update cut short after the checkout moved (a
+dropped SSH session during the build, a shutdown, a failed submodule update) leaves the previous
+version recorded as deployed, so the next `silexgis-update` finishes the update instead of reporting
+nothing to do.
 
 ### 5. Create the first content
 

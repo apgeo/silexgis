@@ -8,7 +8,7 @@ import { ApiError, isConcurrencyConflict, isTransientConflict } from '../../api/
 import { useRecordTrackingEvents, type TripPositionEventKind } from '../../api/hooks.ts';
 import { TRACKING_CAVE_NOTE_KIND } from '../../caveview/caveNotes.ts';
 import { signedInAccountId } from '../../auth/accountId.ts';
-import { renewSignIn, type SignInRenewal } from '../../auth/renewSignIn.ts';
+import { lastSignInRenewal } from '../../auth/renewSignIn.ts';
 import {
   claimHeldReport,
   dropHeldReport,
@@ -305,16 +305,10 @@ export function useTrackingReport() {
           attempts: 1,
         });
 
-      // Written from inside the send below, so held in something that outlives it.
-      const renewal: { was: SignInRenewal | null } = { was: null };
-      const post = () => record.mutateAsync({ ...body, clientKey });
       try {
-        const created = await post().catch(async (refused: unknown) => {
-          if (!(refused instanceof ApiError) || refused.status !== 401) throw refused;
-          renewal.was = await renewSignIn();
-          if (renewal.was !== 'renewed') throw refused;
-          return post();
-        });
+        // A sign-in that ran out while the page was open is renewed by the transport, which sends
+        // the report again once with the same body and so under the same key.
+        const created = await record.mutateAsync({ ...body, clientKey });
         if (kept) dropHeldReport(accountId, clientKey);
         unsettled.current = null;
         message.success(
@@ -340,10 +334,10 @@ export function useTrackingReport() {
           return { recorded: false, held: false, code: null };
         }
         if (error.status === 401 && kept) {
-          // Refused as coming from nobody, and the sign-in could not be renewed. Held, like a
-          // report nobody answered — and for the same reason handed to the queue.
+          // Refused as coming from nobody, and the transport could not renew the sign-in. Held,
+          // like a report nobody answered — and for the same reason handed to the queue.
           unsettled.current = null;
-          if (renewal.was === 'noAnswer') retryHeldReportsLater();
+          if (lastSignInRenewal() === 'noAnswer') retryHeldReportsLater();
           else heldReportsSignInLapsed(true);
           message.warning({ content: t('trips.tracking.outbox.heldSignedOut'), duration: 10 });
           return { recorded: false, held: true, code: null };

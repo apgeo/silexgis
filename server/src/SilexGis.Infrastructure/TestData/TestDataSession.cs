@@ -62,6 +62,22 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
             Notes.Add(note);
         }
     }
+
+    /// <summary>Adds to the number a <c>code:count</c> note carries, keeping one note per code.</summary>
+    public void NoteCount(string code, int by = 1)
+    {
+        var at = Notes.FindIndex(n => n.StartsWith(code + ":", StringComparison.Ordinal));
+        var before = at < 0 ? 0 : int.Parse(Notes[at][(code.Length + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+        var note = TestDataNotes.WithCount(code, before + by);
+        if (at < 0)
+        {
+            Notes.Add(note);
+        }
+        else
+        {
+            Notes[at] = note;
+        }
+    }
 }
 
 /// <summary>The shipped vocabulary rows a run writes against, resolved once by code.</summary>

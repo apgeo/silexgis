@@ -71,14 +71,26 @@ public static class IdentitySeeder
             DisplayName = "Administrator",
         };
 
+        // One transaction for the account, its role, its group and its caver entry. The account's
+        // existence is what every later start checks, so an account that reached the database
+        // without the rest — a stop between the saves — would be an administrator who cannot
+        // administer, and no start would ever finish it. Repairing such an account on each start
+        // instead would also re-promote a bootstrap account an administrator had deliberately
+        // demoted, so the half-made state is prevented rather than mended.
+        await using var transaction = await db.Database.BeginTransactionAsync();
         var result = await userManager.CreateAsync(admin, options.Password);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException(
-                $"Bootstrap admin could not be created: {string.Join("; ", result.Errors.Select(e => e.Description))}");
+                $"Bootstrap admin could not be created: {Describe(result)}");
         }
 
-        _ = await userManager.AddToRoleAsync(admin, GlobalRoles.Admin);
+        var role = await userManager.AddToRoleAsync(admin, GlobalRoles.Admin);
+        if (!role.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"Bootstrap admin could not be given the administrator role: {Describe(role)}");
+        }
 
         // The bootstrap account is what keeps the installation administrable: it joins
         // the protected Full Administrators group, whose membership is the grant.
@@ -86,7 +98,11 @@ public static class IdentitySeeder
 
         CaverDirectory.CreateForNewAccount(db, admin.Id, admin.DisplayName, admin.UserName, admin.Email);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
     }
+
+    private static string Describe(IdentityResult result) =>
+        string.Join("; ", result.Errors.Select(e => e.Description));
 
     private static async Task SeedSpaClientAsync(
         IOpenIddictApplicationManager applications, IConfiguration configuration, AuthOptions options)

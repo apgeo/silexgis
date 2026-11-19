@@ -1535,6 +1535,14 @@ class FakePrimitiveCollection {
     return this.items.includes(primitive);
   }
 
+  get length(): number {
+    return this.items.length;
+  }
+
+  get(index: number): unknown {
+    return this.items[index];
+  }
+
   /** Removing a primitive destroys it, the way the real collection does. */
   remove(primitive: unknown): boolean {
     const index = this.items.indexOf(primitive);

@@ -550,6 +550,13 @@ public static class AppSettingSections
     /// <summary>What the installation has decided about the mobile contract.</summary>
     public const string Sync = "sync";
 
+    /// <summary>
+    /// Not a settings form: the slugs of the shipped permission groups this installation has
+    /// already been given, as a JSON array. A group named here is never created again, so one an
+    /// operator deleted stays deleted across restarts and updates.
+    /// </summary>
+    public const string SeededPermissionGroups = "seededPermissionGroups";
+
     /// <summary>What the installation has decided about surveys sent from a field device.</summary>
     public const string SurveyUploads = "surveyUploads";
 

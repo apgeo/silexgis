@@ -61,3 +61,39 @@ export async function settledScreenshot(
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, picture);
 }
+
+/**
+ * How many pixels of two pictures of the same size differ, counted in the page: the browser reads
+ * a picture without anything being added to the project to read one.
+ */
+export async function differingPixels(page: Page, one: Buffer, other: Buffer): Promise<number> {
+  return page.evaluate(
+    async ([a, b]) => {
+      const read = async (base64: string) => {
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext('2d')!;
+        context.drawImage(bitmap, 0, 0);
+        return context.getImageData(0, 0, bitmap.width, bitmap.height);
+      };
+      const [left, right] = [await read(a), await read(b)];
+      if (left.width !== right.width || left.height !== right.height) {
+        throw new Error('the two pictures are not the same size');
+      }
+      let count = 0;
+      for (let i = 0; i < left.data.length; i += 4) {
+        // A channel a few steps off is the same pixel drawn twice, not a different one.
+        if (
+          Math.abs(left.data[i] - right.data[i]) > 24 ||
+          Math.abs(left.data[i + 1] - right.data[i + 1]) > 24 ||
+          Math.abs(left.data[i + 2] - right.data[i + 2]) > 24
+        ) {
+          count++;
+        }
+      }
+      return count;
+    },
+    [one.toString('base64'), other.toString('base64')],
+  );
+}

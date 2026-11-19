@@ -4,7 +4,7 @@ import { tryAsPerson } from './arrange.ts';
 import { caveWithSurvey, chooseSize, coveredControls, markedSize, openModel } from './caveviewLabelSizeFlow.ts';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
-import { settledPicture } from './settled.ts';
+import { differingPixels, settledPicture } from './settled.ts';
 
 // How large a model's station names are written, chosen on the model. What this shows that the
 // unit tests cannot: that the viewer bundle the application ships takes the size it is handed and
@@ -20,42 +20,6 @@ test.afterEach(async ({ page }) => {
     await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
   }
 });
-
-/**
- * How many pixels of two pictures of the same size differ, counted in the page: the browser reads
- * a picture without anything being added to the project to read one.
- */
-async function differing(page: Page, one: Buffer, other: Buffer): Promise<number> {
-  return page.evaluate(
-    async ([a, b]) => {
-      const read = async (base64: string) => {
-        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-        const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
-        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        const context = canvas.getContext('2d')!;
-        context.drawImage(bitmap, 0, 0);
-        return context.getImageData(0, 0, bitmap.width, bitmap.height);
-      };
-      const [left, right] = [await read(a), await read(b)];
-      if (left.width !== right.width || left.height !== right.height) {
-        throw new Error('the two pictures are not the same size');
-      }
-      let count = 0;
-      for (let i = 0; i < left.data.length; i += 4) {
-        // A channel a few steps off is the same pixel drawn twice, not a different one.
-        if (
-          Math.abs(left.data[i] - right.data[i]) > 24 ||
-          Math.abs(left.data[i + 1] - right.data[i + 1]) > 24 ||
-          Math.abs(left.data[i + 2] - right.data[i + 2]) > 24
-        ) {
-          count++;
-        }
-      }
-      return count;
-    },
-    [one.toString('base64'), other.toString('base64')],
-  );
-}
 
 /** Resolves once the page has drawn a frame that began after this call: the event before it has been taken. */
 async function nextFrameDrawn(page: Page) {
@@ -124,9 +88,9 @@ test("the size of a model's station names is chosen on the model, redraws them, 
   // What the names add to the bare drawing is their ink: more of it written large than small. And
   // the same choice made twice is the same drawing, so what moved between the two pictures is the
   // names' size and not a camera still drifting or a frame caught halfway.
-  const ink = { large: await differing(page, bare, large), small: await differing(page, bare, small) };
-  const apart = await differing(page, large, small);
-  const again = await differing(page, large, largeAgain);
+  const ink = { large: await differingPixels(page, bare, large), small: await differingPixels(page, bare, small) };
+  const apart = await differingPixels(page, large, small);
+  const again = await differingPixels(page, large, largeAgain);
   // Measured on this survey from this distance: some four thousand pixels of names at the large
   // size, some four hundred at the small, and eight hundred that are the toolbar's own button
   // showing that names are on, which both counts include.
@@ -147,5 +111,5 @@ test("the size of a model's station names is chosen on the model, redraws them, 
   await expect(names()).toHaveAttribute('aria-pressed', 'true');
   const reopened = await drawn();
   // A viewer that had only been told the size, and not taken it, would mark 40% and draw at 100%.
-  expect(await differing(page, reopened, small)).toBeLessThan(await differing(page, reopened, large));
+  expect(await differingPixels(page, reopened, small)).toBeLessThan(await differingPixels(page, reopened, large));
 });

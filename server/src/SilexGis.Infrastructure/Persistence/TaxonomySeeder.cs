@@ -17,29 +17,9 @@ public static class TaxonomySeeder
 {
     public static async Task SeedAsync(SilexGisDbContext db, CancellationToken ct = default)
     {
-        await SeedSetAsync(db.CaveTypes, static (c, n) => new CaveType { Code = c, Name = n }, ct,
-            ("cave", "Cave"),
-            ("pit", "Pit / Aven"),
-            (CaveTypeSeeds.SpringCave, "Spring cave"),
-            ("mine", "Mine / Artificial cavity"),
-            ("rock_shelter", "Rock shelter"));
-
-        await SeedSetAsync(db.EntranceTypes, static (c, n) => new EntranceType { Code = c, Name = n }, ct,
-            ("natural", "Natural"),
-            ("excavated", "Excavated / Dug open"),
-            ("artificial", "Artificial / Adit"),
-            ("collapsed", "Collapsed"));
-
-        await SeedSetAsync(db.RockTypes, static (c, n) => new RockType { Code = c, Name = n }, ct,
-            ("limestone", "Limestone"),
-            ("dolomite", "Dolomite"),
-            ("marble", "Marble"),
-            ("gypsum", "Gypsum"),
-            ("salt", "Salt"),
-            ("conglomerate", "Conglomerate"),
-            ("sandstone", "Sandstone"),
-            ("volcanic", "Volcanic rock"),
-            ("other", "Other"));
+        await SeedSetAsync(db.CaveTypes, static (c, n) => new CaveType { Code = c, Name = n }, ct, CaveTypes);
+        await SeedSetAsync(db.EntranceTypes, static (c, n) => new EntranceType { Code = c, Name = n }, ct, EntranceTypes);
+        await SeedSetAsync(db.RockTypes, static (c, n) => new RockType { Code = c, Name = n }, ct, RockTypes);
 
         await SeedTripTypesAsync(db, ct);
         await SeedTripParticipantRolesAsync(db, ct);
@@ -52,8 +32,55 @@ public static class TaxonomySeeder
         await db.SaveChangesAsync(ct);
     }
 
+    // The simple shipped lists. A row's display order is its position here, and an existing row is
+    // never re-sorted, so a new code goes at the end of its list.
+    public static IReadOnlyList<(string Code, string Name)> CaveTypes { get; } =
+    [
+        ("cave", "Cave"),
+        ("pit", "Pit / Aven"),
+        (CaveTypeSeeds.SpringCave, "Spring cave"),
+        ("mine", "Mine / Artificial cavity"),
+        ("rock_shelter", "Rock shelter"),
+    ];
+
+    public static IReadOnlyList<(string Code, string Name)> EntranceTypes { get; } =
+    [
+        ("natural", "Natural"),
+        ("excavated", "Excavated / Dug open"),
+        ("artificial", "Artificial / Adit"),
+        ("collapsed", "Collapsed"),
+    ];
+
+    public static IReadOnlyList<(string Code, string Name)> RockTypes { get; } =
+    [
+        ("limestone", "Limestone"),
+        ("dolomite", "Dolomite"),
+        ("marble", "Marble"),
+        ("gypsum", "Gypsum"),
+        ("salt", "Salt"),
+        ("conglomerate", "Conglomerate"),
+        ("sandstone", "Sandstone"),
+        ("volcanic", "Volcanic rock"),
+        ("other", "Other"),
+    ];
+
+    public static IReadOnlyList<(string Code, string Name, bool Locating)> LinkKinds { get; } =
+    [
+        ("associated_cave", "Associated cave", true),
+        ("hydro_connection", "Hydrological connection", true),
+        ("same_system", "Same cave system", true),
+        ("related", "Related feature", true),
+    ];
+
+    /// <summary>
+    /// Every feature kind's code in the order the seeder numbers them, retired codes included —
+    /// a retired code is no longer written but still holds its place in the numbering.
+    /// </summary>
+    public static IReadOnlyList<string> FeatureTypeSeedOrder { get; } =
+        [.. ShippedFeatureTypes().Select(x => x.Code)];
+
     private static async Task SeedSetAsync<T>(
-        DbSet<T> set, Func<string, string, T> create, CancellationToken ct, params (string Code, string Name)[] items)
+        DbSet<T> set, Func<string, string, T> create, CancellationToken ct, IReadOnlyList<(string Code, string Name)> items)
         where T : TaxonomyBase
     {
         var existing = await set.Select(x => x.Code).ToHashSetAsync(ct);
@@ -167,14 +194,7 @@ public static class TaxonomySeeder
     // information may ever be relaxed, by an administrator, audited.
     private static async Task SeedLinkKindsAsync(SilexGisDbContext db, CancellationToken ct)
     {
-        (string Code, string Name, bool Locating)[] items =
-        [
-            ("associated_cave", "Associated cave", true),
-            ("hydro_connection", "Hydrological connection", true),
-            ("same_system", "Same cave system", true),
-            ("related", "Related feature", true),
-        ];
-
+        var items = LinkKinds;
         var existing = await db.LinkKinds.Select(x => x.Code).ToHashSetAsync(ct);
         var sort = 0;
         foreach (var (code, name, locating) in items)

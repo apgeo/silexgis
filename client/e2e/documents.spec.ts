@@ -307,12 +307,16 @@ test('the words of a portable document can be selected on the page', async ({ pa
   await removeReport(page);
 });
 
-test('filing a document in a cabinet says so on both sides', async ({ page, consoleErrors }) => {
+test('filing a document in a nested cabinet picks it by its whole path, and says so on both sides', async ({
+  page,
+  consoleErrors,
+}) => {
   consoleErrors.allow(
     /Failed to load resource.*409/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   const cabinetName = `E2E Cabinet ${Date.now()}`;
+  const nestedName = `E2E Drawer ${Date.now()}`;
   await login(page);
   const documentId = await uploadReport(page);
 
@@ -325,6 +329,15 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   // named rather than the text.
   const cabinetRow = page.getByRole('treeitem').filter({ hasText: cabinetName });
   await expect(cabinetRow).toBeVisible({ timeout: 15_000 });
+  // And one inside it: a new cabinet starts under the one selected in the tree.
+  await cabinetRow.click();
+  await page.getByRole('button', { name: 'New' }).click();
+  await page.getByLabel('Name').fill(nestedName);
+  await confirmOk(page, { exact: true });
+  const nestedRow = page.getByRole('treeitem').filter({ hasText: nestedName });
+  const closed = cabinetRow.locator('.ant-tree-switcher_close');
+  if (await closed.count()) await closed.click();
+  await expect(nestedRow).toBeVisible({ timeout: 15_000 });
 
   // Filing happens on the document, through its properties.
   await page.goto(`/documents/${documentId}`);
@@ -345,8 +358,12 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   // Typed rather than scrolled to. The control only renders the part of the list that is on
   // screen, and an installation's cabinet list grows — as this one does with every run of the
   // suite — until the shelf being looked for is not among the rendered rows.
-  await filing.locator('input').fill(cabinetName);
-  await page.locator('.ant-select-item-option').filter({ hasText: cabinetName }).first().click();
+  await filing.locator('input').fill(nestedName);
+  // Offered under its whole path: away from the tree a bare drawer name could sit in any cabinet.
+  await page
+    .locator('.ant-select-dropdown:visible')
+    .getByTitle(`${cabinetName} / ${nestedName}`, { exact: true })
+    .click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // The document now names where it is filed…
@@ -354,12 +371,19 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   await expect(page.getByRole('heading', { level: 3, name: 'e2e-report.pdf' })).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByText(cabinetName)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(nestedName)).toBeVisible({ timeout: 30_000 });
 
   // …and the cabinet names what is filed in it, which is the half an access rule scoped to a
   // cabinet actually reaches.
   await gotoRoute(page, '/cabinets');
-  await page.getByRole('treeitem').filter({ hasText: cabinetName }).click();
+  const expand = async () => {
+    const parent = page.getByRole('treeitem').filter({ hasText: cabinetName });
+    await expect(parent).toBeVisible({ timeout: 15_000 });
+    const folded = parent.locator('.ant-tree-switcher_close');
+    if (await folded.count()) await folded.click();
+  };
+  await expand();
+  await page.getByRole('treeitem').filter({ hasText: nestedName }).click();
   await expect(page.getByText('e2e-report.pdf')).toBeVisible({ timeout: 15_000 });
 
   // Cleanup. Taking the report out of the cave leaves the document filed, and a cabinet that
@@ -367,13 +391,19 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   // here rather than worked around.
   await removeReport(page);
   await gotoRoute(page, '/cabinets');
-  await page.getByRole('treeitem').filter({ hasText: cabinetName }).click();
+  await expand();
+  await page.getByRole('treeitem').filter({ hasText: nestedName }).click();
   const filed = page.getByRole('row').filter({ hasText: 'e2e-report.pdf' });
   await expect(filed).toHaveCount(1, { timeout: 15_000 });
   await filed.getByRole('button', { name: 'delete' }).click();
   await confirmOk(page, { exact: true });
   await expect(filed).toHaveCount(0, { timeout: 15_000 });
 
+  // The drawer, then the cabinet it sat in.
+  await page.getByRole('button', { name: 'delete' }).first().click();
+  await confirmOk(page, { exact: true });
+  await expect(page.getByRole('treeitem').filter({ hasText: nestedName })).toHaveCount(0, { timeout: 15_000 });
+  await page.getByRole('treeitem').filter({ hasText: cabinetName }).click();
   await page.getByRole('button', { name: 'delete' }).first().click();
   await confirmOk(page, { exact: true });
   await expect(page.getByRole('treeitem').filter({ hasText: cabinetName }))

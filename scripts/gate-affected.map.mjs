@@ -125,6 +125,8 @@ export const groups = {
     // The permission-group surface as a whole, a roster write bounded by the rulesets a caving
     // group is a trustee of, and the duplicate writes answered with a code when they race.
     'PermissionGroupCrudTests', 'RosterTrusteeRightsBoundTests', 'UniqueViolationRaceTests',
+    // The shipped groups are given once: one an operator deleted stays deleted.
+    'PermissionGroupSeedOnceTests',
   ],
   caves: [
     'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveWriteTests',
@@ -281,7 +283,7 @@ export const groups = {
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
     'MfaAndRateLimitTests', 'PerMinuteLimitTests', 'ProfileVisibilityTests', 'ProxyHopsCheckTests',
-    'SignInProtectionTests', 'StartupSettingsTests', 'TestLoginTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
+    'SignInProtectionTests', 'StartupSettingsTests', 'TestLoginTests', 'TestLoginRealDataGuardTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     // Walks the endpoint table: every route reading a JSON body runs a registered validator.
     'RequestValidationCoverageTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
@@ -317,6 +319,8 @@ export const groups = {
   tags: ['TagEndpointTests', 'TripAndTagTests'],
   taxonomies: [
     'ExpeditionRosterRoleVocabularyTests', 'FeatureTypeWriteTests', 'TaxonomyWideningTests',
+    // The installation-side shipped lists keep their order.
+    'ShippedTaxonomyOrderTests',
     'TermRuleSetTests', 'TripParticipantRoleVocabularyTests', 'TripTypeVocabularyTests',
     // A report layout is kept as a vocabulary: read by everyone, written by whoever may edit
     // the installation's vocabularies.
@@ -344,6 +348,8 @@ export const groups = {
   ],
   admin: [
     'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests',
+    // The demo dataset and the test logins refuse a database holding data they did not create.
+    'RealDataGuardTests', 'TestLoginBootstrapContentGuardTests', 'DemoAlongsideRealDataTests',
     // Which map backgrounds a document may copy is an administrator's setting, kept across
     // restarts beside the shipped catalogue's answer.
     'MapBackgroundDocumentChoiceTests',

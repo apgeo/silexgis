@@ -54,7 +54,7 @@ describe('downloadFileForm', () => {
    */
   it('posts the form as it is, leaves its content type to the browser, and saves what comes back', async () => {
     const fetched = vi.fn(
-      async (_url: string, _init: RequestInit) =>
+      async (_request: Request) =>
         new Response(new Blob(['a document']), {
           status: 200,
           headers: { 'content-disposition': 'attachment; filename="trip-report-1a2b3c4d-20261006.docx"' },
@@ -72,11 +72,12 @@ describe('downloadFileForm', () => {
 
     await downloadFileForm('/api/v1/trip-logs/t/report/download?', form);
 
-    const [url, init] = fetched.mock.calls[0];
-    expect(url).toBe('/api/v1/trip-logs/t/report/download?');
-    expect(init.method).toBe('POST');
-    expect(init.body).toBe(form);
-    expect(init.headers).not.toHaveProperty('Content-Type');
+    const [request] = fetched.mock.calls[0];
+    expect(new URL(request.url).pathname).toBe('/api/v1/trip-logs/t/report/download');
+    expect(request.method).toBe('POST');
+    // The browser wrote the type, with the boundary between the parts in it.
+    expect(request.headers.get('Content-Type')).toMatch(/^multipart\/form-data; boundary=/);
+    expect(await request.text()).toContain('name="map"');
     expect(saved).toEqual(['trip-report-1a2b3c4d-20261006.docx']);
   });
 
@@ -108,7 +109,7 @@ describe('the language a download asks in', () => {
    */
   it('is the one the reader chose in the application, on a plain download and on one that sends a form', async () => {
     const fetched = vi.fn(
-      async (_url: string, _init: RequestInit) =>
+      async (_request: Request) =>
         new Response(new Blob(['a document']), {
           status: 200,
           headers: { 'content-disposition': 'attachment; filename="trip-report.docx"' },
@@ -129,9 +130,9 @@ describe('the language a download asks in', () => {
       await i18n.changeLanguage(before);
     }
 
-    const asked = fetched.mock.calls.map(([, init]) => [
-      init.method,
-      (init.headers as Record<string, string>)['Accept-Language'],
+    const asked = fetched.mock.calls.map(([request]) => [
+      request.method,
+      request.headers.get('Accept-Language'),
     ]);
     expect(asked).toEqual([
       ['GET', 'ro'],

@@ -41,10 +41,29 @@ async function renew(): Promise<SignInRenewal> {
  * same moment must share one renewal rather than each spend the token the other needed.
  */
 export function renewSignIn(): Promise<SignInRenewal> {
-  renewing ??= renew().finally(() => {
-    renewing = null;
-  });
+  renewing ??= renew()
+    .then((renewal) => {
+      last = renewal;
+      return renewal;
+    })
+    .finally(() => {
+      renewing = null;
+    });
   return renewing;
+}
+
+let last: SignInRenewal | null = null;
+
+/**
+ * What the latest renewal came to, or null when none has run in this tab.
+ *
+ * For a caller that was handed a request's refusal as coming from nobody after the transport had
+ * already tried to renew past it, and has to tell a sign-in that is over from one nobody could
+ * reach — without renewing a second time to find out, which would spend another renewal on the
+ * same refusal.
+ */
+export function lastSignInRenewal(): SignInRenewal | null {
+  return last;
 }
 
 /**

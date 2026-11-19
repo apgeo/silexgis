@@ -82,6 +82,10 @@ describe('the words the triage is written against', () => {
   });
 });
 
+/** The request the lookup sent, the way the application's own requests are sent: as a whole request. */
+const asked = (index: number) => underlying.mock.calls[index][0] as unknown as Request;
+const askedPath = (index: number) => new URL(asked(index).url).pathname;
+
 describe('what a viewer is built with', () => {
   it('is the versioned home, the language it was given and a lookup against this installation', async () => {
     const options = caveViewerOptions('ro');
@@ -89,7 +93,7 @@ describe('what a viewer is built with', () => {
     expect(options.home).toBe(CAVEVIEW_HOME);
     expect(options.language).toBe('ro');
     await options.crsLookup('31700');
-    expect(underlying.mock.calls[0][0]).toBe('/api/v1/crs/31700.proj4');
+    expect(askedPath(0)).toBe('/api/v1/crs/31700.proj4');
   });
 
   it('names the language by its two letters, which is all the viewer keys a catalogue on', () => {
@@ -117,8 +121,8 @@ describe('CaveView CRS lookup', () => {
     // air-gapped install loses georeferencing without a local registry.
     const definition = await lookup('31700');
 
-    expect(underlying.mock.calls[0][0]).toBe('/api/v1/crs/31700.proj4');
-    expect(underlying.mock.calls[0][1]).toEqual({ headers: { Authorization: 'Bearer token-123' } });
+    expect(askedPath(0)).toBe('/api/v1/crs/31700.proj4');
+    expect(asked(0).headers.get('Authorization')).toBe('Bearer token-123');
     expect(definition).toContain('+proj=');
   });
 
@@ -128,8 +132,8 @@ describe('CaveView CRS lookup', () => {
 
     await lookup('31700');
 
-    expect(underlying.mock.calls[0][0]).toBe('/api/v1/crs/31700.proj4');
-    expect(underlying.mock.calls[0][1]).toEqual({ headers: undefined });
+    expect(askedPath(0)).toBe('/api/v1/crs/31700.proj4');
+    expect(asked(0).headers.has('Authorization')).toBe(false);
   });
 
   it('answers null rather than rejecting for a code the registry does not know', async () => {

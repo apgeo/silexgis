@@ -256,3 +256,80 @@ test('the real-compiler tests are required on Linux unless the environment says 
   assert.equal(therionRequirementOf({}, 'win32'), undefined);
   assert.equal(therionRequirementOf({}, 'darwin'), undefined);
 });
+
+// A runner killed by pid — by the lock's sentry when the assemblies change under it, by a harness
+// timeout, by an operator — used to die alone: its shards and their database containers went on
+// for tens of minutes while the lock was free for the next whole suite. The stand-in `dotnet` here
+// starts a grandchild of its own, as `dotnet test` starts a test host, and both must be gone once
+// the runner has answered the signal; the stand-in `docker` records the container clean-up asked.
+test('a runner stopped by a signal stops its shards, their children and their containers', {
+  skip: process.platform === 'win32' ? 'the stand-in executables are POSIX scripts' : false,
+}, async () => {
+  const { mkdtempSync, writeFileSync, chmodSync, readdirSync, readFileSync: read, existsSync: exists, rmSync: rm } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: at, dirname: dir } = await import('node:path');
+  const { spawn } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const root = mkdtempSync(at(tmpdir(), 'gate-sharded-kill-'));
+  try {
+    const bin = at(root, 'bin');
+    const pids = at(root, 'pids');
+    const tests = at(root, 'tests');
+    const results = at(root, 'results');
+    for (const d of [bin, pids, tests]) (await import('node:fs')).mkdirSync(d, { recursive: true });
+    writeFileSync(at(tests, 'Fake.csproj'), '<Project />');
+    for (const name of ['ATests', 'BTests', 'CTests', 'DTests']) writeFileSync(at(tests, `${name}.cs`), 'class X {}');
+    const node = process.execPath;
+    writeFileSync(at(bin, 'dotnet'), `#!${node}
+const { spawn } = require('node:child_process');
+const { writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+const host = spawn(${JSON.stringify(node)}, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' });
+writeFileSync(join(${JSON.stringify(pids)}, 'runner-' + process.pid), '');
+writeFileSync(join(${JSON.stringify(pids)}, 'host-' + host.pid), '');
+setInterval(() => {}, 1000);
+`);
+    writeFileSync(at(bin, 'docker'), `#!${node}
+const { appendFileSync } = require('node:fs');
+appendFileSync(${JSON.stringify(at(root, 'docker.log'))}, process.argv.slice(2).join(' ') + '\\n');
+if (process.argv[2] === 'ps') console.log('c0ffee');
+`);
+    chmodSync(at(bin, 'dotnet'), 0o755);
+    chmodSync(at(bin, 'docker'), 0o755);
+
+    const script = at(dir(fileURLToPath(import.meta.url)), 'gate-sharded.mjs');
+    const runner = spawn(node, [script, '--project', at(tests, 'Fake.csproj'), '--count', '2', '--results', results], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    runner.stdout.on('data', (c) => { output += c; });
+    runner.stderr.on('data', (c) => { output += c; });
+    const deadline = Date.now() + 30_000;
+    while (readdirSync(pids).length < 4) {
+      assert.ok(Date.now() < deadline, `both shards never started:\n${output}`);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const started = readdirSync(pids).map((f) => Number(f.split('-')[1]));
+
+    runner.kill('SIGTERM');
+    const code = await new Promise((r) => runner.on('exit', (c, s) => r(c ?? s)));
+    assert.notEqual(code, 0, 'a stopped run is not a pass');
+
+    const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    const settle = Date.now() + 10_000;
+    while (started.some(alive) && Date.now() < settle) await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(started.filter(alive), [], `processes outlived the runner:\n${output}`);
+
+    assert.ok(exists(at(root, 'docker.log')), `no container clean-up was asked for:\n${output}`);
+    const calls = read(at(root, 'docker.log'), 'utf8');
+    assert.match(calls, /^ps .*label=silexgis\.test-run=/m);
+    assert.match(calls, /^rm -f c0ffee$/m);
+  } finally {
+    // Whatever the verdict, nothing the case started may outlive it.
+    for (const f of (() => { try { return readdirSync(at(root, 'pids')); } catch { return []; } })()) {
+      try { process.kill(Number(f.split('-')[1]), 'SIGKILL'); } catch { /* already gone */ }
+    }
+    rm(root, { recursive: true, force: true });
+  }
+});
