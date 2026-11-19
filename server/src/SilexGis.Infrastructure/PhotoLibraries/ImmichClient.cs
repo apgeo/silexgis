@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Infrastructure.Outbound;
 
 namespace SilexGis.Infrastructure.PhotoLibraries;
 
@@ -354,7 +355,7 @@ public sealed class ImmichClient(
     {
         try
         {
-            return JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            return JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -571,7 +572,7 @@ public sealed class ImmichClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -699,7 +700,7 @@ public sealed class ImmichClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -955,7 +956,7 @@ public sealed class ImmichClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -1243,12 +1244,17 @@ public sealed class ImmichClient(
         var markers = new List<ImmichMarker>(4096);
         var unreadable = 0;
 
-        await using var body = await response.Content.ReadAsStreamAsync(ct);
+        // Bounded on its own: the client's time limit ended with the headers, and this read runs
+        // in the background holding the one reading permit, so a body that stalls would otherwise
+        // stop every later re-read until the process restarts.
+        using var deadline = OutboundBody.Deadline(BodyLimit, ct);
 
         try
         {
+            await using var body = await response.Content.ReadAsStreamAsync(deadline.Token);
+
             await foreach (var wire in JsonSerializer
-                .DeserializeAsyncEnumerable<ImmichMarkerDto>(body, Json, ct))
+                .DeserializeAsyncEnumerable<ImmichMarkerDto>(body, Json, deadline.Token))
             {
                 if (wire is null)
                 {
@@ -1289,6 +1295,10 @@ public sealed class ImmichClient(
             throw new PhotoLibraryException(
                 PhotoLibraryException.RejectedCode,
                 "The photo library's positions were not readable as JSON.", e);
+        }
+        catch (Exception e) when (OutboundBody.IsLost(e, ct))
+        {
+            throw PhotoLibraryHttp.LostBody(Source, e);
         }
 
         if (unreadable > 0)
@@ -1523,9 +1533,16 @@ public sealed class ImmichClient(
 
         // Ours, not theirs, and clamped so a nonsensical configured value cannot disable it. The
         // far end's own request timeout is a day, which nothing here may inherit.
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 300));
+        client.Timeout = BodyLimit;
         return client;
     }
+
+    /// <summary>
+    /// How long one call may take, clamped so a nonsensical configured value cannot disable it.
+    /// It bounds the wait for the headers through the client and, separately, the reading of the
+    /// body: the client's own limit stops counting once the headers have arrived.
+    /// </summary>
+    private TimeSpan BodyLimit => TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 300));
 
     private void Authorise(HttpRequestMessage request) =>
         request.Headers.TryAddWithoutValidation(ApiKeyHeader, Options.ApiKey);

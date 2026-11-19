@@ -236,6 +236,38 @@ public class SpeleogeneticPatternTests
     }
 
     [Fact]
+    public void A_bearing_spread_and_one_cross_section_median_are_two_figures_and_name_no_pattern()
+    {
+        // Three rules can be assessed here — bearings concentrated, section wide, section tall —
+        // but the last two read the one width-over-height median, so two figures were read in
+        // all, under the minimum of three. Counted as rules, the 0.7 spread (Maze, 1) and the wide
+        // median (WaterTable and Looping, 1 each) would have been weighed as a classification.
+        var suggestion = SpeleogeneticPattern.Classify(new PatternEvidence(
+            SurveySegmentBasis.SurveyFlags, OrientationEntropy: 0.7, MedianWidthHeightRatio: 2.4));
+
+        suggestion.AssessableRuleCount.ShouldBe(3);
+        suggestion.Pattern.ShouldBe(SpeleogeneticPatternKind.Insufficient);
+    }
+
+    [Fact]
+    public void A_short_cave_is_not_concentrated_on_a_few_trends_merely_for_having_few_legs()
+    {
+        // Ten legs pointing evenly in ten directions fill ten of the eighteen sectors equally: the
+        // spread is ln 10 / ln 18 = 2.3026 / 2.8904 = 0.797, under the 0.85 threshold, though the
+        // passage points every way it could. Ten legs can never spread past 0.85 (that needs at
+        // least 18^0.85 = 11.67, so twelve), so the rule is not assessed on them.
+        SpeleogeneticPattern.MinimumBearingSamples.ShouldBe(12);
+
+        var ten = Evidence(orientationEntropy: 0.797) with { OrientationSampleCount = 10 };
+        var shortTrace = TraceOf(ten, PatternRule.BearingsAreConcentrated);
+        shortTrace.Outcome.ShouldBe(PatternRuleOutcome.NotAssessable);
+
+        // The same spread over twelve legs is a real concentration and fires.
+        var twelve = Evidence(orientationEntropy: 0.797) with { OrientationSampleCount = 12 };
+        TraceOf(twelve, PatternRule.BearingsAreConcentrated).Outcome.ShouldBe(PatternRuleOutcome.Fired);
+    }
+
+    [Fact]
     public void Too_few_rules_to_assess_is_answered_as_insufficient_and_not_as_undetermined()
     {
         // "Nothing was measured" and "everything was measured and it did not decide" are different
@@ -243,7 +275,9 @@ public class SpeleogeneticPatternTests
         var suggestion = SpeleogeneticPattern.Classify(new PatternEvidence(
             SurveySegmentBasis.SurveyFlags, MedianWidthHeightRatio: 2.4));
 
-        suggestion.AssessableRuleCount.ShouldBeLessThan(SpeleogeneticPattern.MinimumAssessableRules);
+        // Two rules could be assessed, the wide-section and the tall-section rule, and both read the
+        // same single figure — fewer than the minimum of distinct figures.
+        suggestion.AssessableRuleCount.ShouldBe(2);
         suggestion.Pattern.ShouldBe(SpeleogeneticPatternKind.Insufficient);
 
         // And the same cave with enough of its network measured is given a pattern, so the refusal

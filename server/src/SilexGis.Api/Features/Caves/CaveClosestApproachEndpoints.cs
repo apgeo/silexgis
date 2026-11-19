@@ -39,6 +39,12 @@ namespace SilexGis.Api.Features.Caves;
 /// </summary>
 public static class CaveClosestApproachEndpoints
 {
+    /// <summary>
+    /// The refusal for a measurement the database stopped because it ran past its budget: the
+    /// question was allowed and the answer exists, but a smaller one has to be asked.
+    /// </summary>
+    public const string TooCostlyCode = "cave.closest_approach_too_costly";
+
     public static RouteGroupBuilder MapCaveClosestApproachEndpoints(this RouteGroupBuilder api)
     {
         var caves = api.MapGroup("/caves").WithTags("Caves");
@@ -91,8 +97,18 @@ public static class CaveClosestApproachEndpoints
 
         var (sql, parameters) =
             ClosestApproachSql.BuildForPair(ctx, a.Id, b.Id, spatial.Value.WorkingSrid);
-        var row = await db.Database.GetDbConnection().QuerySingleOrDefaultAsync<ClosestApproachRow>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        var (tooCostly, row) = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            ClosestApproachSql.StatementBudgetMs,
+            (connection, transaction) => connection.QuerySingleOrDefaultAsync<ClosestApproachRow>(
+                new CommandDefinition(sql, parameters, transaction, cancellationToken: ct)),
+            ct);
+        if (tooCostly)
+        {
+            return ApiProblems.UnprocessableContent(
+                TooCostlyCode,
+                "These two caves' surveys are too large to measure against each other in one request.");
+        }
 
         return TypedResults.Ok(row is null
             ? new ClosestApproachDto(
@@ -132,13 +148,46 @@ public static class CaveClosestApproachEndpoints
             ClosestApproachLimits.MaxCavesPaired,
             spatial.Value.WorkingSrid);
 
-        var rows = await db.Database.GetDbConnection().QueryAsync<ClosestApproachRow>(
-            new CommandDefinition(sql, parameters, cancellationToken: ct));
+        // Counted over the same gated pool the pairing drew on, one past the ceiling, so a box
+        // holding more caves than one table pairs says so rather than quietly answering for part
+        // of itself.
+        var (coverageSql, coverageParameters) = ClosestApproachSql.BuildAreaCoverage(
+            ctx,
+            request.West,
+            request.South,
+            request.East,
+            request.North,
+            ClosestApproachLimits.MaxCavesPaired);
 
-        return TypedResults.Ok(new ClosestApproachTableDto([.. rows.Select(ToDto)], maxDistance));
+        var (tooCostly, answer) = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            ClosestApproachSql.StatementBudgetMs,
+            async (connection, transaction) =>
+            {
+                var found = await connection.QueryAsync<ClosestApproachRow>(
+                    new CommandDefinition(sql, parameters, transaction, cancellationToken: ct));
+                var count = await connection.ExecuteScalarAsync<int>(
+                    new CommandDefinition(coverageSql, coverageParameters, transaction, cancellationToken: ct));
+                return (Rows: found.ToList(), Admitted: count);
+            },
+            ct);
+        if (tooCostly)
+        {
+            return ApiProblems.UnprocessableContent(
+                TooCostlyCode,
+                "The caves in this box are too many or too large to pair in one request. Zoom in.");
+        }
+
+        var (rows, admitted) = answer;
+
+        return TypedResults.Ok(new ClosestApproachTableDto(
+            [.. rows.Select(ToDto)],
+            maxDistance,
+            Math.Min(admitted, ClosestApproachLimits.MaxCavesPaired),
+            admitted > ClosestApproachLimits.MaxCavesPaired));
     }
 
-    private static ClosestApproachDto ToDto(ClosestApproachRow row) => row.HasAltitudes
+    private static ClosestApproachDto ToDto(ClosestApproachRow row) => row.HasAltitudes && !row.AltitudesRelative
         ? new ClosestApproachDto(
             row.CaveAId,
             row.CaveAName,
@@ -156,7 +205,8 @@ public static class CaveClosestApproachEndpoints
             row.CaveAName,
             row.CaveBId,
             row.CaveBName,
-            ClosestApproachAbsence.NoAltitudes,
+            // A drawing with no depth at all is the more basic gap, so it is the one named.
+            row.HasAltitudes ? ClosestApproachAbsence.AltitudesRelative : ClosestApproachAbsence.NoAltitudes,
             null, null, null, null, null, null);
 
     private static ClosestApproachPointDto? Point(double? longitude, double? latitude, double? altitude) =>

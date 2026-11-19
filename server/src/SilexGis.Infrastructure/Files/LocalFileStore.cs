@@ -104,9 +104,6 @@ public sealed class FilesOptions
 
     /// <summary>How large an uploaded archive may expand to, in bytes.</summary>
     public long MaxArchiveExpandedBytes { get; set; } = 20L * 1024 * 1024 * 1024;
-
-    /// <summary>How much larger than its compressed form one archive entry may expand.</summary>
-    public int MaxArchiveCompressionRatio { get; set; } = 200;
 }
 
 /// <summary>

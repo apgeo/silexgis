@@ -866,6 +866,22 @@ describe('uploading a survey model', () => {
     expect(uploadMutate).not.toHaveBeenCalled();
   });
 
+  it('nudges for the zero level altitude of a Survex plot given none, without demanding it', async () => {
+    // Accepted without it, but then its heights are relative to its own zero point and the
+    // analyses that compare them with sea level refuse, so the form says so while it is empty.
+    show();
+    await openUpload('cave.3d');
+
+    expect(screen.getByText(/overburden, spring levels and the vertical gap/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Altitude of the file's zero level (m)"), {
+      target: { value: '1200' },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(/overburden, spring levels and the vertical gap/)).toBeNull(),
+    );
+  });
+
   it('offers a Survex plot the same questions and demands none of them', async () => {
     // A .3d states its own coordinate system only when the survey was compiled with one, and which
     // it is cannot be told from out here. So the fields are there for the export that says nothing,

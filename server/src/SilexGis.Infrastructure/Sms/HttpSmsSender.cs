@@ -83,7 +83,8 @@ public sealed partial class HttpSmsSender(
         var client = httpClientFactory.CreateClient(HttpClientName);
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(sms.TimeoutSeconds, 1, 120));
 
-        using var response = await client.SendAsync(request, ct);
+        // Only the status is read, so the body is never waited for or buffered.
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!response.IsSuccessStatusCode)
         {
             // The status alone: the body is whatever the server at that address chose to say,

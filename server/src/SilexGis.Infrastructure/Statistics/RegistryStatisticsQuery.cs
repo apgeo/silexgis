@@ -124,6 +124,14 @@ public static class RegistryStatisticsQuery
         ArgumentNullException.ThrowIfNull(scope);
 
         var basis = MeasurementBasis(scope);
+
+        // The extent, the histogram, the quantiles and the sample are four statements, and a cave
+        // written between two of them would make the sectors add up to a different count from the
+        // one reported beside them. One repeatable-read snapshot holds them to the same caves.
+        // Nothing is written, so the transaction is never committed; disposing it ends it.
+        await using var snapshot = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct)
+            : null;
         var connection = db.Database.GetDbConnection();
 
         var (boundsSql, boundsParameters) = RegistryStatisticsSql.BuildBounds(ctx, scope, measure);

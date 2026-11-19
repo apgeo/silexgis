@@ -14,10 +14,16 @@ namespace SilexGis.Api.Features.Caves;
 /// <param name="HasAltitudes">Whether the line work carried real altitudes. When false every figure
 /// that needs the survey is null: a plan drawing of a cave is not a flat cave.</param>
 /// <param name="Figures">Entrance extremes, total depth, height and potential depth.</param>
-/// <param name="SurveyHighestM">Highest point of the survey, metres.</param>
-/// <param name="SurveyLowestM">Lowest point of the survey, metres.</param>
+/// <param name="SurveyHighestM">Highest point of the survey, metres above sea level; null when
+/// <paramref name="AltitudesRelative"/> is true.</param>
+/// <param name="SurveyLowestM">Lowest point of the survey, metres above sea level; null when
+/// <paramref name="AltitudesRelative"/> is true.</param>
 /// <param name="PotentialDepth">The potential depth computed from the entrances and the area's
 /// resurgence level, set beside the one typed into the record.</param>
+/// <param name="AltitudesRelative">True when the survey's heights are relative to its own zero
+/// point only, because no altitude was declared for it. Total depth, height and the survey's
+/// extremes are then null: they compare the survey with the entrances' altitudes, and the two are
+/// not measured from the same level. The entrance-only figures still answer.</param>
 public sealed record CaveSystemFiguresDto(
     Guid CaveId,
     SurveySegmentBasis Basis,
@@ -27,7 +33,8 @@ public sealed record CaveSystemFiguresDto(
     CaveSystemFiguresSummary Figures,
     double? SurveyHighestM,
     double? SurveyLowestM,
-    MorphometryComparison PotentialDepth);
+    MorphometryComparison PotentialDepth,
+    bool AltitudesRelative);
 
 /// <summary>Which cave. The route takes nothing else.</summary>
 public sealed record CaveSystemFiguresRequest(Guid Id);

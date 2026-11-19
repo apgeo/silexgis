@@ -2,6 +2,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain.Documents;
+using SilexGis.Infrastructure.Outbound;
 
 namespace SilexGis.Infrastructure.Documents.Conversion;
 
@@ -53,27 +54,34 @@ public sealed class HttpDocumentConverter(
 
         // The name travels with the bytes because a converter picks its reader from the
         // extension; a nameless upload would be refused for a reason nobody could act on.
-        var name = string.IsNullOrWhiteSpace(originalName) ? "document" : Path.GetFileName(originalName);
+        var name = MultipartFileName(originalName);
 
         using var content = new MultipartFormDataContent();
         using var fileContent = new StreamContent(source);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         content.Add(fileContent, "files", name);
 
+        var limit = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 600));
         var client = httpClientFactory.CreateClient(HttpClientName);
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 600));
+        client.Timeout = limit;
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress(), ConvertPath))
+        {
+            Content = content,
+        };
 
         HttpResponseMessage response;
         try
         {
-            response = await client.PostAsync(new Uri(BaseAddress(), ConvertPath), content, ct);
+            // Headers only: the converted document is streamed to its destination file rather
+            // than gathered in memory first, which a large document would otherwise cost twice.
+            response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
             // Unreachable or too slow. Not a fact about the document: the installation said it
             // had a converter and the converter did not answer, which is an operator's problem.
-            throw new InvalidOperationException(
-                $"The document conversion service at {options.Url} could not be reached.", e);
+            throw Unreachable(e);
         }
 
         using (response)
@@ -87,9 +95,47 @@ public sealed class HttpDocumentConverter(
                     $"The conversion service returned {(int)response.StatusCode} {response.ReasonPhrase}.");
             }
 
-            await response.Content.CopyToAsync(destination, ct);
+            // The client's own time limit stops counting once the headers are in, so the body
+            // gets the same allowance again on a deadline of its own: a service that sends its
+            // headers and then stalls would otherwise hold the conversion lane indefinitely.
+            using var deadline = OutboundBody.Deadline(limit, ct);
+            try
+            {
+                await response.Content.CopyToAsync(destination, deadline.Token);
+            }
+            catch (Exception e) when (OutboundBody.IsLost(e, ct))
+            {
+                throw Unreachable(e);
+            }
         }
     }
+
+    /// <summary>
+    /// The upload's name as it can travel in a multipart header. The converter only needs the
+    /// extension to pick its reader, and a quotation mark, a backslash or a control character
+    /// in a header parameter is refused by the request builder before anything is sent — a
+    /// document called <c>Raport "Avenul".docx</c> would otherwise never convert at all.
+    /// Letters outside ASCII are left alone: the header encodes them.
+    /// </summary>
+    internal static string MultipartFileName(string? originalName)
+    {
+        var name = string.IsNullOrWhiteSpace(originalName) ? "" : Path.GetFileName(originalName);
+        var safe = string.Create(name.Length, name, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                var c = source[i];
+                span[i] = c is '"' or '\\' || char.IsControl(c) ? '_' : c;
+            }
+        });
+
+        return string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(safe))
+            ? "document" + Path.GetExtension(safe)
+            : safe;
+    }
+
+    private InvalidOperationException Unreachable(Exception cause) =>
+        new($"The document conversion service at {options.Url} could not be reached.", cause);
 
     /// <summary>
     /// The configured address as a base for a relative path — which needs a trailing slash, or

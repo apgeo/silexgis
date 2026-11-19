@@ -101,7 +101,13 @@ public sealed record SurveySegmentRow(
 /// means the cave has no line work to measure, which is not the same as a cave whose passage
 /// happens to be short.
 /// </summary>
-public sealed record SurveySegmentSet(SurveySegmentBasis Basis, IReadOnlyList<SurveySegmentRow> Segments)
+/// <param name="AltitudesRelative">
+/// Whether the survey these segments came from has heights relative to its own zero point only,
+/// because no altitude was declared for that point. The shape is still measured, but nothing here
+/// may be compared with a figure measured from sea level.
+/// </param>
+public sealed record SurveySegmentSet(
+    SurveySegmentBasis Basis, IReadOnlyList<SurveySegmentRow> Segments, bool AltitudesRelative = false)
 {
     /// <summary>The answer for a cave with nothing to measure.</summary>
     public static SurveySegmentSet Empty { get; } = new(SurveySegmentBasis.Unavailable, []);
@@ -110,7 +116,7 @@ public sealed record SurveySegmentSet(SurveySegmentBasis Basis, IReadOnlyList<Su
     /// Whether the line work carried altitudes. False for an empty set, and false when the
     /// source was a plan-only drawing — the vertical statistics are refused in both cases.
     /// </summary>
-    public bool HasZ => Segments.Count > 0 && Segments[0].HasZ;
+    public bool HasZ => Segments.Any(s => s.HasZ);
 
     /// <summary>
     /// Which uploaded survey file answered, when one did; null for the reduction and for an empty
@@ -145,7 +151,27 @@ public static class SurveySegments
         segments.Where(s => !s.IsDuplicate).Sum(s => s.PlanLengthM);
 
     /// <summary>
-    /// Which way and how steeply a set's passage runs, weighted by length. Dip is null — refused,
+    /// Every measured leg's bearing, weighted by how far it carries the passage across the map.
+    /// The one rule for every direction figure — the rose, the trend, the bearing spread a pattern
+    /// suggestion reads — so they cannot weigh the same cave two ways.
+    /// </summary>
+    /// <remarks>
+    /// The horizontal length and not the length along the slope, because a bearing is a direction
+    /// across the map: a pitch dropping a hundred metres while drifting ten north contributes ten
+    /// metres of northward passage, not a hundred. Weighted by the slope it would swamp the rose
+    /// with the bearing of whatever shaft happens to lean that way, and a shaft that falls straight
+    /// down carries no bearing worth the name at all. Dip is the opposite question — how steep the
+    /// passage is along its own length — and keeps the full length as its weight. Duplicate legs
+    /// are not dropped here; each caller drops them where its own total does.
+    /// </remarks>
+    public static IEnumerable<OrientationSample> DirectionSamples(IEnumerable<SurveySegmentRow> segments) =>
+        segments
+            .Where(s => s.AzimuthDegrees is not null)
+            .Select(s => new OrientationSample(s.AzimuthDegrees!.Value, s.PlanLengthM));
+
+    /// <summary>
+    /// Which way and how steeply a set's passage runs: direction weighted by horizontal length, dip
+    /// by length along the passage. Dip is null — refused,
     /// not reported as level — for line work that carries no altitudes.
     /// </summary>
     /// <remarks>
@@ -161,9 +187,7 @@ public static class SurveySegments
     {
         var measurable = set.Segments.Where(s => !s.IsDuplicate).ToList();
 
-        var orientation = OrientationStatistics.Summarize(measurable
-            .Where(s => s.AzimuthDegrees is not null)
-            .Select(s => new OrientationSample(s.AzimuthDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM)));
+        var orientation = OrientationStatistics.Summarize(DirectionSamples(measurable));
 
         var dip = set.HasZ
             ? DipStatistics.Summarize(measurable

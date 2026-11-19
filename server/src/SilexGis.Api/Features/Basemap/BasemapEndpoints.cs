@@ -250,7 +250,7 @@ public static class BasemapEndpoints
             var free = store.FreeBytes();
             var refusalCode = bytes > options.Value.MaxBytes
                 ? SelfHostedBasemap.Codes.TooLarge
-                : free is { } room && room < bytes
+                : !SelfHostedBasemap.FitsOnDisk(bytes, free)
                     ? SelfHostedBasemap.Codes.DiskFull
                     : null;
             return TypedResults.Ok(new BasemapEstimateDto(build, bytes, free, refusalCode));

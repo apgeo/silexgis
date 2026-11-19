@@ -40,12 +40,6 @@ public sealed class BasemapExtractHandler(
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    /// What the disk must have free beyond the extract itself: the archive's directories and the
-    /// tool's own working room, and a margin so that a full disk is not the way a download ends.
-    /// </summary>
-    private const long Headroom = 256L * 1024 * 1024;
-
     public string Kind => ProcessingJobKinds.BasemapExtract;
 
     public async Task ExecuteAsync(ProcessingJob job, CancellationToken ct)
@@ -92,7 +86,7 @@ public sealed class BasemapExtractHandler(
                     $"the extract would be {estimate} bytes and this installation accepts at most {options.Value.MaxBytes}");
             }
 
-            if (store.FreeBytes() is { } free && free < estimate + Headroom)
+            if (store.FreeBytes() is { } free && !SelfHostedBasemap.FitsOnDisk(estimate, free))
             {
                 throw new BasemapException(
                     SelfHostedBasemap.Codes.DiskFull,

@@ -48,7 +48,8 @@ public sealed record PassageSegment(
 /// <param name="StraightLineM">Distance between the path's two ends, metres.</param>
 /// <param name="Sinuosity">Length divided by straight-line distance: 1 is a straight tube, 2 is a
 /// passage twice as long as the ground it covers. Null for a path that returns to where it
-/// started, where the ratio is a division by zero and the concept does not apply.</param>
+/// started, or so nearly that its ends are less than a metre or a fiftieth of its length apart:
+/// there the ratio is a division by (almost) zero and the concept does not apply.</param>
 public sealed record PathSinuosity(int PathIndex, double LengthM, double StraightLineM, double? Sinuosity);
 
 /// <summary>
@@ -277,6 +278,17 @@ public static class CaveSurveyIndices
     }
 
     /// <summary>
+    /// Metres between a path's two ends below which it counts as closed whatever its length.
+    /// </summary>
+    public const double ClosedPathMinimumGapM = 1d;
+
+    /// <summary>
+    /// Share of a path's walked length its two ends must lie apart for its sinuosity to be
+    /// reported; see <see cref="PathSinuosities"/>.
+    /// </summary>
+    public const double ClosedPathGapFraction = 0.02;
+
+    /// <summary>
     /// How much each path wanders, one row per path, ascending by path index. Exposed separately
     /// from <see cref="Compute"/> because a large cave reduces to hundreds of paths and a read
     /// surface that renders one block per cave does not want them all — but a caller that wants
@@ -308,11 +320,17 @@ public static class CaveSurveyIndices
             var straight = Geodesy.DistanceMeters(
                 first.FromLongitude, first.FromLatitude, last.ToLongitude, last.ToLatitude);
 
+            // A path whose ends nearly meet is a loop for this purpose, not an extremely winding
+            // passage: two hundred metres round a loop whose ends are half a metre apart would
+            // score 400 and drag the cave's length-weighted mean to tens. Below the larger of one
+            // metre and a fiftieth of the walked length, the straight line is within survey
+            // error of nothing and the ratio is not reported.
+            var closedBelow = Math.Max(ClosedPathMinimumGapM, walked * ClosedPathGapFraction);
             rows.Add(new PathSinuosity(
                 group.Key,
                 walked,
                 straight,
-                straight > 0d ? walked / straight : null));
+                straight >= closedBelow && straight > 0d ? walked / straight : null));
         }
 
         return rows;

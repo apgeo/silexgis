@@ -118,8 +118,27 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public Point? Anchor { get; set; }
 
-    /// <summary>The altitude the model's zero plane sits at, in metres.</summary>
+    /// <summary>
+    /// The altitude the model's zero plane sits at, in metres. Null for a line plot in local
+    /// coordinates whose uploader gave no height: see <see cref="AltitudesRelative"/>.
+    /// </summary>
     public double? AnchorHeightM { get; set; }
+
+    /// <summary>
+    /// Whether the model's heights are only relative to its own zero point rather than altitudes.
+    ///
+    /// <para>
+    /// A line plot in local metres is written about a station fixed at height zero, and only the
+    /// surveyor knows what altitude that station is at. One uploaded with a position but without
+    /// that height is still read and drawn, measured from a zero plane at 0 m, and the flag says so:
+    /// the shape of the survey — its depth range, its levels, its dips — is right, but a comparison
+    /// with anything measured from sea level (the terrain over it, a spring's altitude, another
+    /// cave) would report the missing height as a real difference. Those analyses refuse with a
+    /// stated reason instead. Set by each reading of the file, so a later declaration of the
+    /// height clears it.
+    /// </para>
+    /// </summary>
+    public bool AltitudesRelative { get; set; }
 
     /// <summary>
     /// The coordinate system the uploaded file's own coordinates were declared to be in, or null

@@ -27,6 +27,14 @@ public enum ClosestApproachAbsence
     /// that may be two hundred metres apart vertically.
     /// </summary>
     NoAltitudes = 2,
+
+    /// <summary>
+    /// Both caves have altitudes, but at least one of them was read from a survey uploaded
+    /// without the altitude of its own zero point, so its heights are relative to that point only.
+    /// The vertical gap to the other cave would be the missing declaration, not rock; the cave's
+    /// survey needs that height declared before the two can be compared.
+    /// </summary>
+    AltitudesRelative = 3,
 }
 
 /// <summary>
@@ -85,9 +93,18 @@ public sealed record ClosestApproachDto(
 /// you may not see" would answer the very question the omission exists to refuse.</param>
 /// <param name="MaxDistanceM">The threshold the table was built with, so a reader knows whether an
 /// empty table means "no caves near each other" or "none within this far".</param>
+/// <param name="CavesConsidered">How many caves with line work the pairs were drawn from — caves
+/// this caller may place, and no others, so the count says nothing about what they may not
+/// see.</param>
+/// <param name="Partial">True when the piece of country held more such caves than one table pairs
+/// at once, so the table was built from a deterministic part of them (the first by id) and a
+/// nearer pair may lie among the rest. The remedy is a smaller piece of country; the table is
+/// never cut down silently.</param>
 public sealed record ClosestApproachTableDto(
     IReadOnlyList<ClosestApproachDto> Pairs,
-    double MaxDistanceM);
+    double MaxDistanceM,
+    int CavesConsidered,
+    bool Partial);
 
 /// <summary>What the per-pair route is asked: two caves.</summary>
 /// <param name="Id">The cave the route is under.</param>

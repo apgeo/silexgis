@@ -28,6 +28,7 @@ const twoStoreys: CaveHypsometry = {
   surveyModelId: 'model-1',
   hasAltitudes: true,
   springAltitudesM: [820],
+  altitudesRelative: false,
   proposal: {
     sampleCount: 20,
     totalWeightM: 400,
@@ -108,6 +109,19 @@ describe('CaveHypsometryPanel', () => {
     // Never a histogram piled at zero: that would say the cave lies on one level at sea level.
     expect(screen.queryByTestId('chart-cave-hypsometry')).toBeNull();
     expect(screen.getByText(/no third coordinate/)).toBeTruthy();
+  });
+
+  it('keeps the shape of a survey with relative heights but says they are not altitudes', () => {
+    show({ ...twoStoreys, altitudesRelative: true, springAltitudesM: [] });
+
+    expect(screen.getByTestId('chart-cave-hypsometry')).toBeTruthy();
+    expect(screen.getByTestId('hypsometry-altitudes-relative').textContent).toMatch(
+      /not above sea level/,
+    );
+    cleanup();
+
+    show(twoStoreys);
+    expect(screen.queryByTestId('hypsometry-altitudes-relative')).toBeNull();
   });
 
   it('offers no way to record a reading to somebody who may not write the cave', () => {

@@ -5,8 +5,10 @@ using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using OSGeo.GDAL;
 using OSGeo.OGR;
+using Microsoft.Extensions.Options;
 using OSGeo.OSR;
 using SilexGis.Domain;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Import;
 using Geometry = NetTopologySuite.Geometries.Geometry;
 
@@ -17,8 +19,13 @@ namespace SilexGis.Infrastructure.Geodata;
 /// NetTopologySuite directly — they are line-oriented text/hex dumps, not OGR datasets.
 /// All geometries are normalized to EPSG:4326 on read.
 /// </summary>
-public sealed class GdalVectorIO : IVectorIO
+public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = null) : IVectorIO
 {
+    private readonly UploadedGeodataOptions limits = options?.Value ?? new UploadedGeodataOptions();
+
+    /// <summary>The same entry ceiling the upload request's format sniffing applies.</summary>
+    private const int MaxArchiveEntries = ArchiveFormatSniffer.MaxArchiveEntries;
+
     static GdalVectorIO()
     {
         GdalRuntime.Configure();
@@ -46,7 +53,7 @@ public sealed class GdalVectorIO : IVectorIO
 
     public VectorDataset Read(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions = null)
     {
-        var dataset = ReadAnyFormat(absolutePath, format, sourceOptions);
+        var dataset = ReadAnyFormat(absolutePath, format, sourceOptions, limits);
         RequireLongitudeLatitude(dataset);
         return dataset;
     }
@@ -78,7 +85,8 @@ public sealed class GdalVectorIO : IVectorIO
         }
     }
 
-    private static VectorDataset ReadAnyFormat(string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions)
+    private static VectorDataset ReadAnyFormat(
+        string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions, UploadedGeodataOptions limits)
     {
         if (format is GeofileFormat.Wkt or GeofileFormat.Wkb)
         {
@@ -90,18 +98,39 @@ public sealed class GdalVectorIO : IVectorIO
             return DelimitedVectorReader.Read(absolutePath, sourceOptions?.Delimited);
         }
 
-        // Zipped shapefiles are read in place through GDAL's zip virtual filesystem; a KMZ is
-        // the same trick pointed at the document inside it. Naming that document explicitly
-        // rather than handing the archive to the driver is deliberate: which KML driver a GDAL
-        // build carries (KML or LIBKML) decides whether an archive opens at all, and this way
-        // the answer does not depend on how the bindings were compiled.
-        var openPath = format switch
+        // Zipped shapefiles are read in place through GDAL's zip virtual filesystem, once their
+        // entries are found to state no more than the ceiling. Shapefile records are read one at
+        // a time and the feature ceiling below bounds what is kept, so an entry that expands past
+        // what it states costs read time, not memory.
+        //
+        // A KMZ's document is copied out first, under a ceiling counted as the bytes come out,
+        // and the copy is what the driver reads. The KML reader builds the whole document in
+        // memory before a single feature exists, so here the feature ceiling would come too late
+        // and the stated length alone could be a lie. Naming that document explicitly rather than
+        // handing the archive to the driver also keeps the answer independent of which KML
+        // driver (KML or LIBKML) a GDAL build carries.
+        if (format == GeofileFormat.Kmz)
         {
-            GeofileFormat.Shapefile => "/vsizip/" + absolutePath.Replace('\\', '/'),
-            GeofileFormat.Kmz => KmzDocumentPath(absolutePath),
-            _ => absolutePath,
-        };
+            var document = ExtractKmzDocument(absolutePath, limits.MaxKmzDocumentBytes);
+            try
+            {
+                return ReadDataSource(document, format, limits);
+            }
+            finally
+            {
+                TryDelete(document);
+            }
+        }
 
+        var openPath = format == GeofileFormat.Shapefile
+            ? ZippedShapefilePath(absolutePath, limits.MaxZippedShapefileBytes)
+            : absolutePath;
+
+        return ReadDataSource(openPath, format, limits);
+    }
+
+    private static VectorDataset ReadDataSource(string openPath, GeofileFormat format, UploadedGeodataOptions limits)
+    {
         using var dataSource = OpenUpload(openPath, format);
 
         var features = new List<VectorFeature>();
@@ -117,7 +146,7 @@ public sealed class GdalVectorIO : IVectorIO
             }
 
             sourceSrid ??= DetectSrid(layer);
-            ReadLayer(layer, wkbReader, features);
+            ReadLayer(layer, wkbReader, features, limits.MaxFeatures);
         }
 
         if (features.Count == 0)
@@ -193,7 +222,7 @@ public sealed class GdalVectorIO : IVectorIO
 
     // ---- reading ----
 
-    private static void ReadLayer(Layer layer, WKBReader wkbReader, List<VectorFeature> features)
+    private static void ReadLayer(Layer layer, WKBReader wkbReader, List<VectorFeature> features, int maxFeatures)
     {
         using var transform = BuildTransformTo4326(layer.GetSpatialRef());
         var definition = layer.GetLayerDefn();
@@ -271,6 +300,16 @@ public sealed class GdalVectorIO : IVectorIO
                         FieldType.OFTReal => feature.GetFieldAsDouble(f),
                         _ => feature.GetFieldAsString(f),
                     };
+                }
+
+                // Every feature read is held until the whole file is in, so a file of hundreds of
+                // millions of identical records — a few megabytes once compressed — would otherwise
+                // grow the server's memory until it gives out.
+                if (features.Count + geometries.Length > maxFeatures)
+                {
+                    throw new VectorIOException(
+                        $"The file holds more than {maxFeatures:N0} features, more than one import can take. "
+                        + "Split it into smaller files.");
                 }
 
                 foreach (var component in geometries)
@@ -614,26 +653,121 @@ public sealed class GdalVectorIO : IVectorIO
     /// exported by something else may hold one under any name, so the convention is preferred
     /// and the first KML found is the fallback.
     /// </summary>
-    private static string KmzDocumentPath(string absolutePath)
+    private static string ExtractKmzDocument(string absolutePath, long maxDocumentBytes)
     {
-        using var archive = OpenKmz(absolutePath);
+        using var archive = OpenArchive(absolutePath, "The file is not a readable KMZ archive.");
         var entry = archive.Entries.FirstOrDefault(e =>
                 string.Equals(e.FullName, "doc.kml", StringComparison.OrdinalIgnoreCase))
             ?? archive.Entries.FirstOrDefault(e => e.FullName.EndsWith(".kml", StringComparison.OrdinalIgnoreCase))
             ?? throw new VectorIOException("The archive holds no KML document.");
 
-        return "/vsizip/" + absolutePath.Replace('\\', '/') + "/" + entry.FullName;
-    }
+        if (entry.Length > maxDocumentBytes)
+        {
+            throw TooLargeOnceExpanded("The KML document inside this KMZ", maxDocumentBytes);
+        }
 
-    private static ZipArchive OpenKmz(string absolutePath)
-    {
+        var target = Path.Combine(Path.GetTempPath(), $"silexgis-kmz-{Guid.NewGuid():N}.kml");
         try
         {
-            return ZipFile.OpenRead(absolutePath);
+            using (var source = entry.Open())
+            using (var copy = File.Create(target))
+            {
+                // Counted as it comes out rather than trusted from the directory: the stated
+                // length is written by whoever made the archive.
+                var buffer = new byte[81920];
+                long written = 0;
+                int read;
+                while ((read = source.Read(buffer)) > 0)
+                {
+                    written += read;
+                    if (written > maxDocumentBytes)
+                    {
+                        throw TooLargeOnceExpanded("The KML document inside this KMZ", maxDocumentBytes);
+                    }
+
+                    copy.Write(buffer, 0, read);
+                }
+            }
+
+            return target;
         }
         catch (Exception e) when (e is InvalidDataException or IOException)
         {
+            TryDelete(target);
             throw new VectorIOException("The file is not a readable KMZ archive.", e);
+        }
+        catch
+        {
+            TryDelete(target);
+            throw;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best-effort temp cleanup; the OS temp dir is periodically purged anyway.
+        }
+    }
+
+    /// <summary>
+    /// A zipped shapefile as a path GDAL's zip filesystem can open, once its entries have been
+    /// found to state no more than the ceiling between them. All entries count, not only the
+    /// shapefile's own parts: the library opens the archive as a folder and may read any of them.
+    /// </summary>
+    private static string ZippedShapefilePath(string absolutePath, long maxExpandedBytes)
+    {
+        using (var archive = OpenArchive(absolutePath, "The file is not a readable zip archive."))
+        {
+            long stated = 0;
+            foreach (var entry in archive.Entries)
+            {
+                stated += entry.Length;
+                if (stated > maxExpandedBytes)
+                {
+                    throw TooLargeOnceExpanded("This zipped shapefile", maxExpandedBytes);
+                }
+            }
+        }
+
+        return "/vsizip/" + absolutePath.Replace('\\', '/');
+    }
+
+    private static VectorIOException TooLargeOnceExpanded(string what, long maxBytes) =>
+        new($"{what} expands to more than this server reads ({maxBytes / (1024 * 1024):N0} MB at most).");
+
+    /// <summary>
+    /// Opens an uploaded archive for its directory, refusing one that states more entries than
+    /// a geodata archive holds before the runtime builds an object for each of them.
+    /// </summary>
+    private static ZipArchive OpenArchive(string absolutePath, string unreadable)
+    {
+        FileStream? stream = null;
+        try
+        {
+            stream = File.OpenRead(absolutePath);
+            if (ZipEntryCount.Exceeds(stream, MaxArchiveEntries))
+            {
+                throw new VectorIOException(
+                    $"The archive holds more than {MaxArchiveEntries:N0} files, more than a geodata archive can.");
+            }
+
+            return new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        }
+        catch (Exception e) when (e is InvalidDataException or IOException)
+        {
+            stream?.Dispose();
+            throw new VectorIOException(unreadable, e);
+        }
+        catch
+        {
+            stream?.Dispose();
+            throw;
         }
     }
 

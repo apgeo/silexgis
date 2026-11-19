@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { CaveOverburden, CaveOverburdenSample } from '../../api/hooks.ts';
 
 const { overburdenSpy } = vi.hoisted(() => ({ overburdenSpy: vi.fn() }));
@@ -45,8 +46,15 @@ const measured: CaveOverburden = {
   samples: [sample(0, 40), sample(150, 55), sample(300, 61)],
 };
 
-function show(data: CaveOverburden | undefined, { isError = false, isLoading = false } = {}) {
-  overburdenSpy.mockReturnValue({ data, isLoading, isError });
+function show(
+  data: CaveOverburden | undefined,
+  {
+    isError = false,
+    isLoading = false,
+    error = null,
+  }: { isError?: boolean; isLoading?: boolean; error?: Error | null } = {},
+) {
+  overburdenSpy.mockReturnValue({ data, isLoading, isError, error });
   return render(
     <App>
       <CaveOverburdenPanel caveId="cave-1" />
@@ -69,6 +77,17 @@ describe('CaveOverburdenPanel', () => {
     expect(container.textContent).toContain('3 of 3');
     // A fully covered profile makes no claim about gaps.
     expect(screen.queryByTestId('overburden-partial')).toBeNull();
+  });
+
+  it('says why when the survey has heights relative to its own zero point only', () => {
+    // A refusal with its own code, about a cave the reader may place: unlike the "no such cave"
+    // answer it announces nothing, and the reader needs to know that declaring the survey's
+    // altitude is what would make the thickness measurable.
+    show(undefined, { isError: true, error: new ApiError(409, 'cave.altitudes_relative') });
+
+    expect(screen.getByTestId('overburden-altitudes-relative')).toBeTruthy();
+    expect(screen.queryByTestId('chart-cave-overburden')).toBeNull();
+    expect(screen.getByText(/cannot be compared with the terrain/)).toBeTruthy();
   });
 
   it('renders nothing at all when the server refuses the profile', () => {

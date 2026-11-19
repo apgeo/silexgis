@@ -216,17 +216,66 @@ public static class SurveySegmentSql
     }
 
     /// <summary>
+    /// Whether the heights of the survey that answered for a cave are relative to its own zero
+    /// point only. Asked of the model the legs came from when there is one; otherwise of the model
+    /// the cave's default centerline was written from, because a reduction of that line carries
+    /// the same heights. A drawn centerline belongs to no model and is answered as it always was.
+    /// </summary>
+    /// <remarks>
+    /// Asked after the segments were read through the access walk, and only ever about the survey
+    /// that walk already admitted, so it says nothing a caller could not already measure.
+    /// </remarks>
+    public static async Task<bool> AltitudesRelativeAsync(
+        SilexGisDbContext db, Guid? caveFeatureId, Guid? surveyModelId, CancellationToken ct)
+    {
+        var parameters = new DynamicParameters();
+        parameters.Add("rel_model_id", surveyModelId, System.Data.DbType.Guid);
+        parameters.Add("rel_cave_id", caveFeatureId, System.Data.DbType.Guid);
+        const string sql = """
+            SELECT EXISTS (
+                SELECT 1
+                FROM survey_models m
+                WHERE m.altitudes_relative
+                  AND m.id = COALESCE(
+                      @rel_model_id,
+                      (SELECT c.survey_model_id
+                       FROM centerlines c
+                       WHERE c.cave_feature_id = @rel_cave_id
+                         AND c.is_default
+                       LIMIT 1)))
+            """;
+
+        var connection = db.Database.GetDbConnection();
+        return await connection.ExecuteScalarAsync<bool>(
+            new CommandDefinition(sql, parameters, cancellationToken: ct));
+    }
+
+    /// <summary>
     /// The measuring both reads share, over a CTE named <c>leg</c>: the true plan distance, bearing
     /// and rise of each leg on the geography type, and the columns a <see cref="SurveySegmentRow"/>
     /// is read from. One copy, because two would be two definitions of a leg's length.
+    ///
+    /// <para>
+    /// Whether there are altitudes is decided once for the whole model, not leg by leg. A leg
+    /// whose two ends both sit at height 0 looks exactly like a leg of a plan drawing, and in a
+    /// survey measured from its own zero point (no height declared for it) the first leg out of
+    /// that point is often level. Judged alone, such a leg would lose its rise and its mid-height
+    /// while its neighbours kept theirs — and a caller reading the first row would switch off every
+    /// vertical figure for the whole cave.
+    /// </para>
     /// </summary>
     private static readonly string MeasuredLegs = $"""
             measured AS (
                 SELECT leg.*,
                        ST_Distance(leg.a::geography, leg.b::geography) AS plan_m,
                        ST_Azimuth(leg.a::geography, leg.b::geography) AS az_rad,
-                       CASE WHEN leg.has_z THEN ST_Z(leg.b) - ST_Z(leg.a) END AS dz
+                       bool_or(leg.has_z) OVER (PARTITION BY leg.survey_model_id) AS model_has_z
                 FROM leg
+            ),
+            vertical AS (
+                SELECT measured.*,
+                       CASE WHEN model_has_z THEN ST_Z(b) - ST_Z(a) END AS dz
+                FROM measured
             )
             SELECT
                 {(short)SurveySegmentBasis.SurveyFlags}::smallint AS "Basis",
@@ -237,7 +286,7 @@ public static class SurveySegmentSql
                 NULL::int AS "PathIndex",
                 (row_number() OVER (ORDER BY id))::int - 1 AS "SegmentIndex",
                 is_duplicate AS "IsDuplicate",
-                has_z AS "HasZ",
+                model_has_z AS "HasZ",
                 ST_X(a) AS "FromLongitude",
                 ST_Y(a) AS "FromLatitude",
                 ST_X(b) AS "ToLongitude",
@@ -249,8 +298,8 @@ public static class SurveySegmentSql
                 sqrt(plan_m * plan_m + dz * dz) AS "SlopeLengthM",
                 CASE WHEN plan_m = 0 AND dz = 0 THEN NULL
                      ELSE degrees(atan2(dz, plan_m)) END AS "DipDegrees",
-                CASE WHEN has_z THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM"
-            FROM measured
+                CASE WHEN model_has_z THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM"
+            FROM vertical
             ORDER BY id
         """;
 }

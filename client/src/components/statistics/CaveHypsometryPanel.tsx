@@ -102,6 +102,14 @@ export default function CaveHypsometryPanel({
           testId="chart-cave-hypsometry"
         />
 
+        {/* The heights are about the survey's own zero point, so the levels describe the cave's
+            shape but are not altitudes, and no spring line is drawn against them. */}
+        {data.altitudesRelative && (
+          <Typography.Text type="warning" data-testid="hypsometry-altitudes-relative">
+            {t('hypsometry.altitudesRelative')}
+          </Typography.Text>
+        )}
+
         <Typography.Text type="secondary">
           {t('hypsometry.proposedCount', { count: proposed.length })}
         </Typography.Text>

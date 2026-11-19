@@ -51,6 +51,7 @@ public static class CaveOverburdenEndpoints
 {
     private const string CaveNotFoundCode = "cave.not_found";
     private const string ForbiddenCode = "access.forbidden";
+    private const string AltitudesRelativeCode = "cave.altitudes_relative";
 
     public static RouteGroupBuilder MapCaveOverburdenEndpoints(this RouteGroupBuilder api)
     {
@@ -61,7 +62,8 @@ public static class CaveOverburdenEndpoints
             .WithSummary(
                 "How much rock lies over one cave's passages, along their length. Requires Read "
                 + "on the Terrain domain, and is withheld from a caller who may not place the cave "
-                + "exactly.");
+                + "exactly. Answers 409 cave.altitudes_relative when the survey's heights have no "
+                + "declared altitude.");
 
         return api;
     }
@@ -102,6 +104,19 @@ public static class CaveOverburdenEndpoints
         }
 
         var set = await SurveySegmentSource.ForCaveAsync(db, ctx, request.Id, ct);
+
+        // Refused before the terrain is read: heights measured from the survey's own zero point
+        // subtracted from a terrain measured from sea level give the missing height of that zero
+        // point, not the rock over the passage, and a thickness that looks plausible is worse than
+        // none.
+        if (set.AltitudesRelative)
+        {
+            return ApiProblems.Conflict(
+                AltitudesRelativeCode,
+                "The survey that measures this cave has no altitude declared for its zero point, so "
+                + "its heights are relative only and cannot be compared with the terrain.");
+        }
+
         var (stations, passageLengthM) = OverburdenProfile.Stations(SurveySegments.AsPassage(set.Segments));
 
         // Resolved even when there is nothing to ask about, because "this installation has built no

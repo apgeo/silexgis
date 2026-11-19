@@ -33,6 +33,14 @@ public sealed class MessagingEndpointRulesTests
     [InlineData("ff02::1")]
     [InlineData("::ffff:127.0.0.1")]
     [InlineData("::ffff:10.1.2.3")]
+    [InlineData("64:ff9b::a00:1")]
+    [InlineData("64:ff9b::a9fe:a9fe")]
+    [InlineData("64:ff9b::7f00:1")]
+    [InlineData("64:ff9b:1::5db8:d70e")]
+    [InlineData("2002:a00:1::1")]
+    [InlineData("2002:a9fe:a9fe::")]
+    [InlineData("::10.0.0.1")]
+    [InlineData("::169.254.169.254")]
     public void Internal_addresses_are_internal(string address) =>
         MessagingEndpointRules.IsInternal(IPAddress.Parse(address)).ShouldBeTrue();
 
@@ -44,6 +52,8 @@ public sealed class MessagingEndpointRulesTests
     [InlineData("192.169.0.1")]
     [InlineData("2606:4700:4700::1111")]
     [InlineData("::ffff:93.184.215.14")]
+    [InlineData("64:ff9b::5db8:d70e")]
+    [InlineData("2002:5db8:d70e::1")]
     public void Public_addresses_are_not(string address) =>
         MessagingEndpointRules.IsInternal(IPAddress.Parse(address)).ShouldBeFalse();
 

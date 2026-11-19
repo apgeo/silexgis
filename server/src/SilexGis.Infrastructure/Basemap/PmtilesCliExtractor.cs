@@ -97,6 +97,25 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
                 SelfHostedBasemap.Codes.ExtractFailed, $"the extractor '{start.FileName}' could not be started: {e.Message}");
         }
 
+        // A watchdog on the tool's silence rather than an overall limit: a country takes minutes
+        // and a continent hours, so no single duration fits every extract, but a tool that is
+        // receiving bytes prints progress continuously. Every chunk read pushes the deadline out.
+        var stallLimit = TimeSpan.FromSeconds(Math.Clamp(options.Value.ExtractStallSeconds, 1, 86_400));
+        using var quiet = new CancellationTokenSource(stallLimit);
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(ct, quiet.Token);
+
+        void HeardFrom()
+        {
+            try
+            {
+                quiet.CancelAfter(stallLimit);
+            }
+            catch (ObjectDisposedException)
+            {
+                // The run is over and the readers are only draining what the tool left behind.
+            }
+        }
+
         var kept = new StringBuilder();
         var lastPercent = -1;
         // Both streams are kept for a failure's report; progress is read from the output stream
@@ -107,6 +126,7 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
             int read;
             while ((read = await reader.ReadAsync(buffer, CancellationToken.None)) > 0)
             {
+                HeardFrom();
                 var chunk = new string(buffer, 0, read);
                 lock (kept)
                 {
@@ -138,7 +158,7 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
         var reading = Task.WhenAll(Read(process.StandardOutput, reportsProgress: true), Read(process.StandardError, reportsProgress: false));
         try
         {
-            await process.WaitForExitAsync(ct);
+            await process.WaitForExitAsync(waiting.Token);
         }
         catch (OperationCanceledException)
         {
@@ -149,6 +169,15 @@ public sealed class PmtilesCliExtractor(IOptions<BasemapOptions> options, ILogge
             catch (InvalidOperationException)
             {
                 // Already gone.
+            }
+
+            if (quiet.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                throw new BasemapException(
+                    SelfHostedBasemap.Codes.SourceUnreachable,
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"the extractor printed nothing for {stallLimit.TotalSeconds:0} seconds; the source stopped answering"));
             }
 
             throw;

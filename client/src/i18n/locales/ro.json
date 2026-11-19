@@ -4676,6 +4676,7 @@
   },
   "surveyModels": {
     "loadFailed": "Modelele 3D ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcat vreunul.",
+    "heightlessNudge": "Dacă acest fișier este în coordonate locale, dă altitudinea nivelului său zero. Fără ea topografia este totuși desenată, dar înălțimile rămân relative la acel punct: grosimea rocii de deasupra, nivelurile izvoarelor și distanța pe verticală față de alte peșteri nu vor fi calculate până când nu este declarată.",
     "uploadPointCloud": "Încarcă nor de puncte",
     "scanProcessing": "Scanarea este împărțită în dale pentru vederea 3D. Progresul ei este pe pagina de stare a topografiei.",
     "scanFailed": "Scanarea nu a putut fi procesată.",
@@ -8285,8 +8286,10 @@
     "between": "De la {{from}} la {{to}}.",
     "horizontalIsOfTheSameLine": "Valorile orizontală și verticală sunt cele două componente ale aceleiași linii minime, nu distanța orizontală minimă și distanța verticală minimă, care sunt alte perechi de puncte.",
     "unavailable": "Nicio distanță pentru această pereche",
+    "tooCostly": "Topografiile acestor două peșteri sunt prea mari pentru a fi măsurate una față de cealaltă într-o singură cerere.",
     "unavailableWhy": "O distanță între două peșteri o localizează pe fiecare pornind de la cealaltă, așa că este dată doar unui cititor care poate vedea exact unde se află amândouă.",
     "absence": {
+      "altitudesRelative": "Cel puțin una dintre aceste două peșteri a fost topografiată fără altitudinea punctului său zero, deci înălțimile ei sunt doar relative la acel punct și distanța pe verticală dintre ele nu poate fi măsurată. Declară acea altitudine pe topografia ei pentru a le compara.",
       "noLineWork": "Cel puțin una dintre aceste două peșteri nu are traseu topografic din care să se măsoare.",
       "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
     },
@@ -8794,6 +8797,7 @@
     }
   },
   "hypsometry": {
+    "altitudesRelative": "Topografia a fost încărcată fără altitudinea punctului său zero: aceste înălțimi sunt relative la acel punct, nu deasupra nivelului mării, iar nivelurile izvoarelor nu sunt afișate.",
     "caveTitle": "Galerii după altitudine",
     "areaTitle": "Intrări după altitudine",
     "loading": "Se măsoară…",
@@ -8842,9 +8846,15 @@
     "dolineModeElsewhere": "Compararea axelor lungi ale depresiunilor cu direcțiile faliilor se face pe o zonă, pe pagina zonei respective.",
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
+    "truncatedNearest": "În rază se află mai multe trasee de fractură decât încap într-o comparație; roza este construită din cele mai apropiate dintre ele.",
+    "truncatedArea": "Această zonă conține mai multe trasee de fractură decât încap într-o comparație; roza este construită dintr-o parte a lor.",
+    "unmeasuredDolines_one": "{{count}} contur nu a putut fi măsurat (se intersectează sau nu are lățime) și este lăsat în afara rozei.",
+    "unmeasuredDolines": "{{count}} contururi nu au putut fi măsurate (se intersectează sau nu au lățime) și sunt lăsate în afara rozei.",
     "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
   },
   "overburden": {
+    "altitudesRelativeTitle": "Înălțimile sunt doar relative",
+    "altitudesRelativeReason": "Topografia acestei peșteri a fost încărcată fără altitudinea punctului său zero, deci înălțimile ei nu pot fi comparate cu terenul. Declară acea altitudine pe topografie pentru a măsura grosimea rocii de deasupra.",
     "title": "Roca de deasupra",
     "loading": "Se măsoară roca de deasupra…",
     "nothingMeasured": "Această peșteră nu are traseu de-a lungul căruia să se măsoare, deci nu există unde să se întrebe câtă rocă se află deasupra.",
@@ -8935,6 +8945,7 @@
     "disagreesWithRecord": "diferă de cifra calculată",
     "unitMetres": "{{value}} m",
     "notMeasured": "—",
+    "altitudesRelative": "Topografia a fost încărcată fără altitudinea punctului zero, deci înălțimile ei sunt relative la acel punct și nu pot fi comparate cu altitudinile intrărilor: adâncimea totală și înălțimea nu sunt măsurate. Declarați acea altitudine pe topografie pentru a le măsura.",
     "noSurveyAltitudes": "Traseul nu conține altitudini, deci adâncimea și înălțimea nu pot fi măsurate din el. Un desen în plan nu este o peșteră fără adâncime.",
     "explained": "Adâncimea se măsoară de la cea mai înaltă intrare până la cel mai de jos punct atins de ridicare, iar înălțimea de la cea mai joasă intrare până la cel mai înalt punct. Nivelul exurgenței este cea mai joasă intrare a unei peșteri-izvor din zona care conține această peșteră, dintre cele pe care le poți localiza; adâncimea potențială este cea mai înaltă intrare minus acest nivel."
   },

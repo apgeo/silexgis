@@ -127,6 +127,22 @@ public static partial class SelfHostedBasemap
         return null;
     }
 
+    /// <summary>
+    /// What the disk must have free beyond the extract itself: the archive's directories and the
+    /// cutting tool's own working room, and a margin so that a full disk is not the way a
+    /// download ends.
+    /// </summary>
+    public const long DiskHeadroomBytes = 256L * 1024 * 1024;
+
+    /// <summary>
+    /// Whether an extract of <paramref name="estimatedBytes"/> fits on a disk with
+    /// <paramref name="freeBytes"/> free, headroom included. A disk whose free space cannot be
+    /// told is not refused. The one statement of the rule, so the size estimate an administrator
+    /// is shown and the download that follows it never disagree about the same disk.
+    /// </summary>
+    public static bool FitsOnDisk(long estimatedBytes, long? freeBytes) =>
+        freeBytes is not { } free || free >= estimatedBytes + DiskHeadroomBytes;
+
     /// <summary>Whether a zoom is one an extract can be cut to.</summary>
     public static bool IsZoom(int zoom) => zoom is >= 0 and <= MaxZoom;
 

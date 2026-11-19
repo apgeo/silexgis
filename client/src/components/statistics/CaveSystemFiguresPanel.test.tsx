@@ -32,6 +32,7 @@ const measured: CaveSystemFigures = {
     potentialDepthM: 400,
   },
   potentialDepth: { computedM: 400, declaredM: null, differenceM: null, relativeDifference: null, agreement: 'notDeclared' },
+  altitudesRelative: false,
 };
 
 function show(data: CaveSystemFigures | undefined, isError = false) {
@@ -47,6 +48,24 @@ describe('CaveSystemFiguresPanel', () => {
     const text = screen.getByTestId('cave-system-figures').textContent ?? '';
     expect(text).toContain('300.0 m');
     expect(text).toContain('400.0 m');
+  });
+
+  it('says why depth and height are not measured when the survey heights are relative only', () => {
+    show({
+      ...measured,
+      altitudesRelative: true,
+      surveyHighestM: null,
+      surveyLowestM: null,
+      figures: { ...measured.figures, totalDepthM: null, heightAboveLowestEntranceM: null },
+    });
+    expect(screen.getByTestId('system-figures-altitudes-relative')).toBeTruthy();
+    // The entrance-only figures still answer.
+    expect(screen.getByTestId('cave-system-figures').textContent).toContain('400.0 m');
+  });
+
+  it('adds no relative-heights note to a survey placed at a declared altitude', () => {
+    show(measured);
+    expect(screen.queryByTestId('system-figures-altitudes-relative')).toBeNull();
   });
 
   it('shows a dash and an explanation, never a nought, when the survey has no altitudes', () => {

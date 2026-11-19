@@ -113,6 +113,7 @@ public sealed class LegacyOfficeTextExtractor : ITextExtractor
         if (entries.Contains(WordStream))
         {
             RefuseUnreadableWordDocument(compound);
+            RefuseOversizedWordText(compound);
             ct.ThrowIfCancellationRequested();
             return await this.ReadConvertedAsync(source.Stream, ConvertWord, ct);
         }
@@ -164,7 +165,10 @@ public sealed class LegacyOfficeTextExtractor : ITextExtractor
         // part-consumed stream finds nothing at all.
         var view = new SharedReadStream(source) { Position = 0 };
 
-        using var converted = new MemoryStream();
+        // The converted package is held to the same ceiling the packaged reader holds a package's
+        // markup to, while it is being written: the converter builds it from whatever the old
+        // file's own tables declare, and those are written by whoever made the file.
+        using var converted = new CappedMemoryStream(OfficeOpenXmlTextExtractor.MaxMarkupPackageBytes);
         using (var reader = new StorageReader(view))
         {
             convert(reader, converted, ct);
@@ -284,6 +288,196 @@ public sealed class LegacyOfficeTextExtractor : ITextExtractor
     }
 
     /// <summary>
+    /// The most characters a word-processor document's text tables may declare, all of its
+    /// parts together — the body, notes, headers, comments and text boxes. Some four million
+    /// characters is well over a thousand dense pages.
+    /// </summary>
+    /// <remarks>
+    /// The converter builds a per-character index of the whole text before it writes anything:
+    /// two dictionary entries and a list slot per character, some fifty bytes each. Its count
+    /// comes from the piece table, which says which runs of the file make up the text and may
+    /// point any number of runs at the same few bytes, so a file of a megabyte can declare
+    /// billions of characters. The declaration is therefore checked before the converter is
+    /// handed the file.
+    /// </remarks>
+    internal const int MaxWordCharacters = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Refuses a word-processor document whose tables declare more text than
+    /// <see cref="MaxWordCharacters"/>, from two figures the file states about itself: the
+    /// character counts in its header, and the total length of the runs its piece table lists.
+    /// <para>
+    /// The header's layout is fixed from Word 97, which is all the converter reads: a 32-byte
+    /// base, then three arrays each preceded by its own length — sixteen-bit values, thirty-two
+    /// bit values (the character counts start twelve bytes in), and offset/length pairs, of which
+    /// the thirty-fourth locates the piece table in the table stream. A header or table too short
+    /// to hold what is looked for is left to the converter, which reports such a file as damaged.
+    /// </para>
+    /// </summary>
+    /// <exception cref="ContentTooLargeException">The document declares too much text.</exception>
+    private static void RefuseOversizedWordText(POIFSFileSystem compound)
+    {
+        const int baseLength = 32;
+        const int flagsOffset = 10;
+        const ushort secondTableFlag = 0x0200;
+        const int characterCountsOffset = 12;
+        const int characterCounts = 8;
+        const int clxPair = 33;
+
+        var header = ReadPrefix(compound, WordStream, 1024);
+        if (header.Length < baseLength + 2)
+        {
+            return;
+        }
+
+        var position = baseLength;
+        var shorts = BitConverter.ToUInt16(header, position);
+        position += 2 + (shorts * 2);
+        if (position + 2 > header.Length)
+        {
+            return;
+        }
+
+        var longs = BitConverter.ToUInt16(header, position);
+        var longsStart = position + 2;
+        position = longsStart + (longs * 4);
+        if (longs >= (characterCountsOffset / 4) + characterCounts
+            && longsStart + characterCountsOffset + (characterCounts * 4) <= header.Length)
+        {
+            long declared = 0;
+            for (var i = 0; i < characterCounts; i++)
+            {
+                declared += Math.Max(0, BitConverter.ToInt32(header, longsStart + characterCountsOffset + (i * 4)));
+            }
+
+            RefuseIfPast(declared);
+        }
+
+        if (position + 2 > header.Length)
+        {
+            return;
+        }
+
+        var pairs = BitConverter.ToUInt16(header, position);
+        var pairsStart = position + 2;
+        var clxAt = pairsStart + (clxPair * 8);
+        if (pairs <= clxPair || clxAt + 8 > header.Length)
+        {
+            return;
+        }
+
+        var clxOffset = BitConverter.ToUInt32(header, clxAt);
+        var clxLength = BitConverter.ToUInt32(header, clxAt + 4);
+        if (clxLength == 0)
+        {
+            return;
+        }
+
+        if (clxLength > ExtractionStreams.MaxBytes)
+        {
+            throw new ContentTooLargeException("The document's piece table is larger than a document's can be.");
+        }
+
+        var tableStream = (BitConverter.ToUInt16(header, flagsOffset) & secondTableFlag) != 0 ? "1Table" : "0Table";
+        if (!compound.Root.HasEntry(tableStream))
+        {
+            return;
+        }
+
+        var clx = ReadRange(compound, tableStream, clxOffset, (int)clxLength);
+        RefuseIfPast(PieceCharacters(clx));
+
+        static void RefuseIfPast(long characters)
+        {
+            if (characters > MaxWordCharacters)
+            {
+                throw new ContentTooLargeException(
+                    $"The document declares more than {MaxWordCharacters:N0} characters of text, more than a reader may take.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The total length of every run the piece table lists, counted as the converter counts them:
+    /// each run's own span, however many runs share the same bytes. Formatting records ahead of
+    /// the table are stepped over; anything unrecognised ends the count with what it has.
+    /// </summary>
+    internal static long PieceCharacters(ReadOnlySpan<byte> clx)
+    {
+        const byte formatting = 0x01;
+        const byte pieceTable = 0x02;
+
+        var i = 0;
+        while (i < clx.Length)
+        {
+            if (clx[i] == formatting && i + 3 <= clx.Length)
+            {
+                i += 3 + Math.Max(0, (int)BitConverter.ToInt16(clx[(i + 1)..]));
+                continue;
+            }
+
+            if (clx[i] != pieceTable || i + 5 > clx.Length)
+            {
+                return 0;
+            }
+
+            var length = BitConverter.ToInt32(clx[(i + 1)..]);
+            var plc = clx[(i + 5)..];
+            if (length < 4 || length > plc.Length)
+            {
+                return 0;
+            }
+
+            var pieces = (length - 4) / 12;
+            long total = 0;
+            for (var k = 0; k < pieces; k++)
+            {
+                var start = BitConverter.ToInt32(plc[(k * 4)..]);
+                var end = BitConverter.ToInt32(plc[((k + 1) * 4)..]);
+                total += Math.Max(0L, (long)end - start);
+            }
+
+            return total;
+        }
+
+        return 0;
+    }
+
+    /// <summary>Up to <paramref name="count"/> bytes from the start of a stream at the compound file's root.</summary>
+    private static byte[] ReadPrefix(POIFSFileSystem compound, string name, int count)
+    {
+        using var stream = compound.Root.CreateDocumentInputStream(name);
+        var bytes = new byte[count];
+        var read = stream.ReadAtLeast(bytes, count, throwOnEndOfStream: false);
+        return bytes[..read];
+    }
+
+    /// <summary>
+    /// <paramref name="count"/> bytes from <paramref name="offset"/> in a stream at the compound
+    /// file's root, or fewer when the stream ends first. Read forward rather than sought, so only
+    /// the stretch asked for is ever held.
+    /// </summary>
+    private static byte[] ReadRange(POIFSFileSystem compound, string name, long offset, int count)
+    {
+        using var stream = compound.Root.CreateDocumentInputStream(name);
+        var skip = new byte[81920];
+        while (offset > 0)
+        {
+            var read = stream.Read(skip, 0, (int)Math.Min(skip.Length, offset));
+            if (read <= 0)
+            {
+                return [];
+            }
+
+            offset -= read;
+        }
+
+        var bytes = new byte[count];
+        var got = stream.ReadAtLeast(bytes, count, throwOnEndOfStream: false);
+        return bytes[..got];
+    }
+
+    /// <summary>
     /// Refuses a password-protected presentation, for the same reason and on the same evidence:
     /// the record naming the current revision carries one of two documented values, and one of
     /// them means the rest of the file is encrypted. A presentation with no such record at all is
@@ -311,5 +505,48 @@ public sealed class LegacyOfficeTextExtractor : ITextExtractor
         {
             throw new ProtectedContentException("The presentation is password-protected.");
         }
+    }
+
+    /// <summary>An in-memory stream that refuses to grow past a ceiling.</summary>
+    private sealed class CappedMemoryStream(long capacityLimit) : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Admit(count);
+            base.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            Admit(buffer.Length);
+            base.Write(buffer);
+        }
+
+        public override void WriteByte(byte value)
+        {
+            Admit(1);
+            base.WriteByte(value);
+        }
+
+        public override void SetLength(long value)
+        {
+            if (value > capacityLimit)
+            {
+                throw TooLarge();
+            }
+
+            base.SetLength(value);
+        }
+
+        private void Admit(int count)
+        {
+            if (Math.Max(Position, 0) + count > capacityLimit)
+            {
+                throw TooLarge();
+            }
+        }
+
+        private ContentTooLargeException TooLarge() =>
+            new($"The converted document grew past the {capacityLimit / (1024 * 1024)} MB a reader may take.");
     }
 }

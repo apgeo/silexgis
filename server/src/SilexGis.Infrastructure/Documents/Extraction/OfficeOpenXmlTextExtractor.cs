@@ -70,6 +70,7 @@ public sealed class OfficeOpenXmlTextExtractor : ITextExtractor
     private static IReadOnlyList<ExtractedPage> ReadPackage(Stream buffer, CancellationToken ct)
     {
         string? mainPart;
+        ExtractionStreams.RefuseCrowdedPackage(buffer);
         using (var archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true))
         {
             RefuseOversizedMarkup(archive);

@@ -3,12 +3,16 @@ import { Card, Descriptions, Empty, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '../../api/client.ts';
 import { useCaveOverburden, type CaveOverburdenSample } from '../../api/hooks.ts';
 import Button from '../Button.tsx';
 import { setOverburdenHighlight } from '../../workspace/overburdenHighlight.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
 import { overburdenGapReason, overburdenSeries } from './overburdenSeries.ts';
+
+/** The refusal for a survey whose heights are relative to its own zero point only. */
+const ALTITUDES_RELATIVE_CODE = 'cave.altitudes_relative';
 
 /**
  * How much rock is over your head along one cave's passages.
@@ -45,7 +49,8 @@ import { overburdenGapReason, overburdenSeries } from './overburdenSeries.ts';
  */
 export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCaveOverburden(caveId);
+  const { data, isLoading, isError, error } = useCaveOverburden(caveId);
+  const altitudesRelative = error instanceof ApiError && error.code === ALTITUDES_RELATIVE_CODE;
   /** Which reading is being pointed at, by index into the profile's own list. */
   const [picked, setPicked] = useState<number | null>(null);
 
@@ -142,9 +147,23 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
     setOverburdenHighlight(null);
   }, [caveId, data]);
 
-  if (isError) return null;
+  if (isError && !altitudesRelative) return null;
 
   const body = () => {
+    // Refused by the server, with its reason: the survey's heights are about its own zero point,
+    // and the terrain's are about sea level, so their difference would be the missing altitude of
+    // that point rather than rock. Said here so the reader knows what would make it measurable.
+    if (altitudesRelative) {
+      return (
+        <div data-testid="overburden-altitudes-relative">
+          <Empty description={t('overburden.altitudesRelativeTitle')} />
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {t('overburden.altitudesRelativeReason')}
+          </Typography.Paragraph>
+        </div>
+      );
+    }
+
     if (isLoading || !data) return <Empty description={t('overburden.loading')} />;
 
     // No line work at all is a different statement from line work that carries no heights.

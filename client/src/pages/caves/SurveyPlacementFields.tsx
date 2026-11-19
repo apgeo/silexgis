@@ -26,6 +26,11 @@ export function SurveyPlacementFields({
 }) {
   const { t } = useTranslation();
   const coordinates = Form.useWatch('coordinates', form) ?? 'local';
+  const originHeightM = Form.useWatch('originHeightM', form);
+  // A local file read without the altitude of its zero point is still drawn, but its heights stay
+  // relative to that point and the analyses that compare them with sea level refuse. Only a nudge,
+  // because the server accepts the file; where the height is demanded the rule above says so.
+  const heightless = !demanded && coordinates === 'local' && originHeightM == null;
 
   return (
     <>
@@ -99,6 +104,14 @@ export function SurveyPlacementFields({
       >
         <InputNumber min={LOWEST_HEIGHT_M} max={HIGHEST_HEIGHT_M} step={1} style={{ width: 200 }} />
       </Form.Item>
+      {heightless && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('surveyModels.heightlessNudge')}
+        />
+      )}
     </>
   );
 }

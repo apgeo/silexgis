@@ -183,6 +183,13 @@ public sealed record SurveyModelDto(
     /// ready: one that holds nothing says it is waiting through <see cref="Status"/> instead.
     /// </summary>
     bool ReadingAgain,
+    /// <summary>
+    /// The model's heights are relative to its own zero point only, because it was uploaded in
+    /// local coordinates without the altitude of that point. Its shape is measured as usual; the
+    /// analyses that compare it with anything measured from sea level refuse until a height is
+    /// declared through the placement route.
+    /// </summary>
+    bool AltitudesRelative,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -1102,8 +1109,12 @@ public static class SurveyModelEndpoints
         model.AnchorHeightM = declaration.OriginHeightM;
         SurveyModelPlacement.Record(model, advice: null);
 
-        // Saved by the queueing, in its transaction: a refusal leaves the row as it was.
-        if (await SurveyModelReading.QueueAgainAsync(db, model, ctx.UserId, ct)
+        // Saved by the queueing, in its transaction: a refusal leaves the row as it was. The
+        // relative-heights flag is not touched here: the stored legs are still measured from the
+        // old zero plane until the reading replaces them, so it is the reading that clears it, in
+        // the same transaction as the rows it describes.
+        if (await SurveyModelReading.QueueAgainAsync(
+                db, model, ctx.UserId, ct, heightDeclared: declaration.OriginHeightM is not null)
             == SurveyReadingRequest.AlreadyInProgress)
         {
             return ApiProblems.Conflict(
@@ -1391,6 +1402,7 @@ public static class SurveyModelEndpoints
         m.MergedStationCount,
         m.AnonymousStationCount,
         m.Status == SurveyModelStatus.Ready && readingOutstanding is not null && readingOutstanding.Contains(m.Id),
+        m.AltitudesRelative,
         m.CreatedAt,
         m.UpdatedAt);
 

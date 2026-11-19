@@ -41,10 +41,14 @@ export default function CaveStructurePanel({ caveId }: { caveId: string }) {
       <StructureComparisonView
         testId="cave-structure-comparison"
         leftTitle={t('structureComparison.passageRose')}
-        rightTitle={t('structureComparison.structureRose', {
-          count: data.structureFeatureCount,
-          radius: Math.round(data.radiusMetres),
-        })}
+        rightTitle={
+          data.radiusMetres === null
+            ? t('structureComparison.areaStructureRose', { count: data.structureFeatureCount })
+            : t('structureComparison.structureRose', {
+                count: data.structureFeatureCount,
+                radius: Math.round(data.radiusMetres),
+              })
+        }
         left={
           data.passage
             ? { bins: data.passage.bins, meanAxisDegrees: data.passage.byLength.meanAxisDegrees }
@@ -65,6 +69,11 @@ export default function CaveStructurePanel({ caveId }: { caveId: string }) {
   return (
     <Card title={t('structureComparison.caveTitle')} style={{ marginBottom: 16 }}>
       {body()}
+      {data?.structureTruncated && (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }} data-testid="cave-structure-truncated">
+          {t('structureComparison.truncatedNearest')}
+        </Typography.Paragraph>
+      )}
       <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
         {t('structureComparison.dolineModeElsewhere')}
       </Typography.Paragraph>

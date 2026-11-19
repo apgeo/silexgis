@@ -45,6 +45,10 @@ public class ArchiveAndServerImportRulesTests
         ArchiveExpansionRules.AbandonReason(limits, 1000, 100, 100).ShouldBeNull();
         ArchiveExpansionRules.AbandonReason(limits, 1001, 100, 100)
             .ShouldBe(ArchiveExpansionRules.TooLargeCode);
+
+        // The budget alone, as the filed-document expansion reads it, draws the same line.
+        ArchiveExpansionRules.TotalExceeded(limits, 1000).ShouldBeFalse();
+        ArchiveExpansionRules.TotalExceeded(limits, 1001).ShouldBeTrue();
     }
 
     [Fact]

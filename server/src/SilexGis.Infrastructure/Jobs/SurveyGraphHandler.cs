@@ -24,7 +24,12 @@ namespace SilexGis.Infrastructure.Jobs;
 /// The model that held the cave's current mark when the uploader asked for this one to take it
 /// once read; null when nobody asked. See <see cref="SurveyReadingMark"/>.
 /// </param>
-public sealed record SurveyGraphPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null);
+/// <param name="HeightDeclared">
+/// True when this reading was asked for by a declaration that gave the zero point its altitude.
+/// The row already holds that height when the job runs, but so does a model whose reading stored
+/// the 0 it placed a height-less file at, and only the request can tell the two apart.
+/// </param>
+public sealed record SurveyGraphPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null, bool HeightDeclared = false);
 
 /// <summary>
 /// Reads an uploaded line-plot survey into station and shot rows carrying the file's own flags.
@@ -134,6 +139,21 @@ public sealed class SurveyGraphHandler(
                 model.AnchorHeightM ?? 0,
                 await SurveyModelPlacement.CavePositionAsync(db, model.CaveFeatureId, ct));
 
+            // A file in local metres is written about a station fixed at height zero, so with no
+            // height declared for that station its heights are measured from a zero plane at 0 m
+            // and are not altitudes. It is still read and drawn there — the shape is right — but
+            // the model says so, and the analyses that compare it with anything measured from sea
+            // level refuse instead of reporting the missing height as a real difference. The
+            // reading stores the 0 it placed the file at, so on a second reading of the same file
+            // the flag itself is what remembers that no height was ever given. A reading asked for
+            // by a declaration that gives the height clears it — here, in the transaction that
+            // rewrites the heights, and not earlier: until these rows are replaced they are still
+            // measured from 0 m, and the flag has to keep saying so. A file on a projected grid
+            // carries its own heights and is left as it was.
+            var altitudesRelative = declaration.SourceEpsg is null
+                && !payload.HeightDeclared
+                && (model.AnchorHeightM is null || model.AltitudesRelative);
+
             // Which legs are shots at the passage wall, settled once for everything below. The
             // extraction works this out for itself as well — it has to, or a caller that is not
             // this job gets a different answer — but the graph the cave's morphometrics are
@@ -211,6 +231,7 @@ public sealed class SurveyGraphHandler(
 
                 model.Anchor = new Point(extraction.AnchorLongitude, extraction.AnchorLatitude) { SRID = 4326 };
                 model.AnchorHeightM = extraction.AnchorHeightM;
+                model.AltitudesRelative = altitudesRelative;
                 model.AppliedRotationDeg = extraction.AppliedRotationDeg;
                 model.DroppedShotCount = extraction.DroppedShotCount;
                 model.MergedStationCount = extraction.MergedStationCount;

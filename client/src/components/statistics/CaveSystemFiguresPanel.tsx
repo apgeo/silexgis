@@ -73,6 +73,15 @@ export default function CaveSystemFiguresPanel({ caveId }: { caveId: string }) {
             {t('systemFigures.noSurveyAltitudes')}
           </Typography.Paragraph>
         )}
+        {data.hasAltitudes && data.altitudesRelative && (
+          <Typography.Paragraph
+            type="secondary"
+            style={{ marginTop: 12, marginBottom: 0 }}
+            data-testid="system-figures-altitudes-relative"
+          >
+            {t('systemFigures.altitudesRelative')}
+          </Typography.Paragraph>
+        )}
         <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
           {t('systemFigures.explained')}
         </Typography.Paragraph>

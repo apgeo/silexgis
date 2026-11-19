@@ -183,9 +183,11 @@ public static class AreaTerrainStatisticsEndpoints
 
     private static DemSamplePoint Centre(Row row)
     {
-        // A sinkhole may be drawn as an outline, so the place read is the middle of what was drawn;
-        // for an entrance, which is a point, it is the point itself.
-        var centre = row.Geom.Centroid;
+        // A sinkhole may be drawn as an outline, so the place read is a point inside what was
+        // drawn; for an entrance, which is a point, it is the point itself. Not the centroid: a
+        // crescent- or U-shaped outline has its centroid outside itself, on ground that is not
+        // the sinkhole.
+        var centre = row.Geom.InteriorPoint;
         return new DemSamplePoint(centre.X, centre.Y);
     }
 

@@ -30,7 +30,12 @@ namespace SilexGis.Api.Features.Caves;
 /// <param name="Basis">Which body of line work the passage rose came from.</param>
 /// <param name="IsApproximation">True when the passage rose came from the shape-based reduction.</param>
 /// <param name="SurveyModelId">Which uploaded survey file was measured, when one was.</param>
-/// <param name="RadiusMetres">How far around the cave structure was gathered from.</param>
+/// <param name="RadiusMetres">How far around the cave structure was gathered from; null when an
+/// area was named, because then the area was the reach and no radius was used.</param>
+/// <param name="AreaId">The area the structure was gathered under, when one was named.</param>
+/// <param name="StructureTruncated">True when more traces qualified than one answer takes: the
+/// rose is built from the nearest ones to the cave (by id under a named area), and
+/// <paramref name="StructureFeatureCount"/> is a count of those, not of everything in reach.</param>
 /// <param name="StructureFeatureCount">
 /// How many mapped traces contributed — which is how many the caller may both read and place. A
 /// trace whose position is closed to them is in no rose and in no count here.
@@ -51,8 +56,10 @@ public sealed record CaveStructureComparisonDto(
     SurveySegmentBasis Basis,
     bool IsApproximation,
     Guid? SurveyModelId,
-    double RadiusMetres,
+    double? RadiusMetres,
+    Guid? AreaId,
     int StructureFeatureCount,
+    bool StructureTruncated,
     OrientationSummary? Passage,
     OrientationSummary? Structure,
     RoseDivergence? Divergence,
@@ -139,7 +146,13 @@ public sealed record CaveStructureComparisonRequest(
 /// <param name="AreaId">The area both roses were gathered under.</param>
 /// <param name="DolineCount">How many outlines contributed — which is how many the caller may both
 /// read and place, and which is deliberately not a count of the outlines in the area.</param>
+/// <param name="UnmeasuredDolineCount">How many outlines, on the same footing, could not be
+/// measured at all — an invalid ring, or one whose points are collinear and so have no rectangle
+/// round them. Reported so an area whose depressions could not be read is not mistaken for an area
+/// with none.</param>
 /// <param name="StructureFeatureCount">How many mapped traces contributed, on the same footing.</param>
+/// <param name="StructureTruncated">True when the area holds more traces than one answer takes,
+/// so the rose was built from the first of them by id.</param>
 /// <param name="Dolines">The doline rose, or null when no outline in the area has a usable
 /// alignment.</param>
 /// <param name="Structure">The length-weighted structure rose, or null when the area holds no
@@ -149,7 +162,9 @@ public sealed record CaveStructureComparisonRequest(
 public sealed record AreaStructureComparisonDto(
     Guid AreaId,
     int DolineCount,
+    int UnmeasuredDolineCount,
     int StructureFeatureCount,
+    bool StructureTruncated,
     OrientationSummary? Dolines,
     OrientationSummary? Structure,
     RoseDivergence? Divergence);

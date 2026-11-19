@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Card, Empty } from 'antd';
+import { Card, Empty, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import { useAreaStructureComparison } from '../../api/hooks.ts';
@@ -60,6 +60,16 @@ export default function AreaStructureCard({
           leftEmpty={t('structureComparison.noDolines')}
           rightEmpty={t('structureComparison.noStructureInArea')}
         />
+      )}
+      {data && data.unmeasuredDolineCount > 0 && (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }} data-testid="area-structure-unmeasured">
+          {t('structureComparison.unmeasuredDolines', { count: data.unmeasuredDolineCount })}
+        </Typography.Paragraph>
+      )}
+      {data?.structureTruncated && (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }} data-testid="area-structure-truncated">
+          {t('structureComparison.truncatedArea')}
+        </Typography.Paragraph>
       )}
     </Card>
   );

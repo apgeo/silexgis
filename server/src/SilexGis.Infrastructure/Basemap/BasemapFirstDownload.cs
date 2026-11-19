@@ -47,8 +47,18 @@ public sealed class BasemapFirstDownload(
         using var scope = scopes.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<BasemapStore>();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        if (store.Current() is not null
-            || await db.ProcessingJobs.AnyAsync(j => j.Kind == ProcessingJobKinds.BasemapExtract, cancellationToken))
+        if (store.Current() is not null)
+        {
+            return;
+        }
+
+        // Checked and queued under the lock an administrator's download takes, in one
+        // transaction: two replicas starting together, or a start racing a download asked for on
+        // the administration page, would otherwise each find nothing queued and each queue one,
+        // and the same region would be fetched twice.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await BasemapSql.TakeSubmissionLockAsync(db, cancellationToken);
+        if (await db.ProcessingJobs.AnyAsync(j => j.Kind == ProcessingJobKinds.BasemapExtract, cancellationToken))
         {
             return;
         }
@@ -61,6 +71,7 @@ public sealed class BasemapFirstDownload(
                 Json),
         });
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         logger.LogInformation("The first basemap download, region {Region}, is queued", key);
     }
 
