@@ -8137,6 +8137,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("terrain_build_id");
 
+                    b.Property<string>("ToolVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("tool_version");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");

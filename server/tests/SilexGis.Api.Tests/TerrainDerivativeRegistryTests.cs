@@ -128,6 +128,9 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
 
         // And which arithmetic drew it, which is what a later correction is compared against.
         layer.MethodRevision.ShouldBe(TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Hillshade));
+
+        // Drawn in process, so no analysis program's version is recorded against it.
+        layer.ToolVersion.ShouldBeNull();
         layer.ComputedAt.ShouldNotBeNull();
         layer.SizeBytes.ShouldBeGreaterThan(0);
 

@@ -126,6 +126,18 @@ public class TerrainDerivativeLayer : ITimestamped, IAuditable
     /// </remarks>
     public int MethodRevision { get; set; }
 
+    /// <summary>
+    /// The analysis program and its version that wrote the rasters currently stored, such as
+    /// <c>WhiteboxTools 2.4.0</c>; null for a picture drawn in process, and for one drawn before
+    /// this was recorded or while the program could not say.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <see cref="MethodRevision"/> for the pictures an external program draws:
+    /// the revision moves when this application's arithmetic is corrected, this when the program's
+    /// is. Written in the same commit as the files, compared when the row is read.
+    /// </remarks>
+    public string? ToolVersion { get; set; }
+
     /// <summary>Everything this picture takes on disk, in bytes.</summary>
     /// <remarks>
     /// Summed and stored rather than counted on demand, because it is the number that has to be

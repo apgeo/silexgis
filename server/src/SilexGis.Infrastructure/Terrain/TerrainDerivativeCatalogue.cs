@@ -45,7 +45,7 @@ public sealed record TerrainDerivativeLayerView(
 /// to know it was missing the rest. There is nothing to stop such a query returning perfectly
 /// correct-looking rows that quietly claim every picture is current.
 /// </remarks>
-public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
+public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db, TerrainLandforms landforms)
 {
     /// <summary>Every computed picture of one build.</summary>
     public async Task<IReadOnlyList<TerrainDerivativeLayerView>> ForBuildAsync(
@@ -94,7 +94,12 @@ public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
         return active;
     }
 
-    private static TerrainDerivativeLayerView View(TerrainDerivativeLayer row, Guid? activeBuildId) =>
+    // Asked only for the kinds the program draws: a program that is probed for its version costs a
+    // process start the first time, and nothing else on a listing needs it.
+    private string? CurrentToolVersion(TerrainDerivative derivative) =>
+        TerrainDerivativeRegistry.NeedsAnalysisTool(derivative) ? landforms.ToolVersion : null;
+
+    private TerrainDerivativeLayerView View(TerrainDerivativeLayer row, Guid? activeBuildId) =>
         new(
             row.Id,
             row.TerrainBuildId,
@@ -108,7 +113,8 @@ public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
             row.SizeBytes,
             TerrainDerivativeRegistry.SlopeUnitOf(row.Derivative, row.Settings),
             TerrainDerivativeRegistry.Staleness(
-                row.TerrainBuildId, activeBuildId, row.Derivative, row.Version, row.MethodRevision),
+                row.TerrainBuildId, activeBuildId, row.Derivative, row.Version, row.MethodRevision,
+                row.ToolVersion, CurrentToolVersion(row.Derivative)),
             row.ComputedAt,
             row.CreatedAt);
 }

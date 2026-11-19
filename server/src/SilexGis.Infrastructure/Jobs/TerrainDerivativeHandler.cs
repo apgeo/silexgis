@@ -169,6 +169,9 @@ public sealed class TerrainDerivativeHandler(
             // Which arithmetic wrote these files, recorded in the commit that records the files:
             // it is what lets a picture drawn before a correction be told from one drawn after.
             layer.MethodRevision = TerrainDerivativeRegistry.MethodRevision(layer.Derivative);
+            layer.ToolVersion = TerrainDerivativeRegistry.NeedsAnalysisTool(layer.Derivative)
+                ? landforms.ToolVersion
+                : null;
             layer.SizeBytes = computed.Sum(c => c.SizeBytes);
             layer.ComputedAt = finished;
             layer.Status = TerrainDerivativeStatus.Ready;

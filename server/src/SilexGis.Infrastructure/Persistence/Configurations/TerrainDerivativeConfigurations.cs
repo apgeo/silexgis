@@ -24,6 +24,7 @@ public sealed class TerrainDerivativeLayerConfiguration
         builder.Property(x => x.Name).HasMaxLength(200);
         builder.Property(x => x.ErrorCode).HasMaxLength(100);
         builder.Property(x => x.Message).HasMaxLength(500);
+        builder.Property(x => x.ToolVersion).HasMaxLength(200);
 
         // Deleting a build takes its pictures with it. They are computed from its rasters and mean
         // nothing without them, and the build's whole folder — the pictures included — is swept off

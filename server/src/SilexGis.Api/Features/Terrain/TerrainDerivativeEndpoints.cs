@@ -383,7 +383,8 @@ public static class TerrainDerivativeEndpoints
         }
         else if (existing.Status == TerrainDerivativeStatus.Ready
             && TerrainDerivativeRegistry.IsMethodRevised(
-                existing.Derivative, existing.Version, existing.MethodRevision))
+                existing.Derivative, existing.Version, existing.MethodRevision,
+                existing.ToolVersion, landforms.ToolVersion))
         {
             // Finished, by arithmetic that has since been corrected. The rasters it has stay on
             // disk until the run this queues has written the next version whole.

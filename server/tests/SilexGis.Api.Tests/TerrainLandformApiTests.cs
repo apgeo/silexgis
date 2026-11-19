@@ -11,6 +11,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Analysis;
 using SilexGis.Infrastructure.Persistence;
 
@@ -182,6 +183,93 @@ public sealed class TerrainLandformApiTests : IAsyncLifetime, IClassFixture<Post
         queued.Count(p => p.Contains(layerId.ToString(), StringComparison.Ordinal)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// A landform picture drawn by one version of the analysis program reads as out of date once the
+    /// program reports another, and asking for it again queues it afresh. Left alone where the
+    /// versions agree, where the picture never recorded one, and where the program says nothing now.
+    /// </summary>
+    [Fact]
+    public async Task A_landform_picture_drawn_by_another_version_of_the_program_reads_as_out_of_date()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+        var older = await SeedLandformsAsync(buildId, 300, "WhiteboxTools 0.0-older");
+        var same = await SeedLandformsAsync(buildId, 400, FakeWhiteboxTools.FakeVersion);
+        var unrecorded = await SeedLandformsAsync(buildId, 600, toolVersion: null);
+
+        // Where the program is the stand-in, which reports its own version.
+        var listed = await ListAsync(holderWith, buildId);
+        listed[older].ShouldBe("methodRevised");
+        listed[same].ShouldBeNull();
+        listed[unrecorded].ShouldBeNull();
+
+        // Where the installation left the program off it cannot say what version it is, and says
+        // nothing about the pictures it drew earlier: the mark needs two known versions.
+        var silent = await ListAsync(holderWithout, buildId);
+        silent[older].ShouldBeNull();
+
+        var again = await holderWith.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "geomorphons",
+            name = "landforms",
+            geomorphonSearchMetres = 300,
+        });
+        again.StatusCode.ShouldBe(HttpStatusCode.OK, await again.Content.ReadAsStringAsync());
+        var picture = await again.Content.ReadFromJsonAsync<JsonElement>();
+        picture.GetProperty("id").GetGuid().ShouldBe(older);
+        picture.GetProperty("status").GetString().ShouldBe("queued");
+
+        // The one that was current is not re-queued by asking for it again.
+        var current = await holderWith.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "geomorphons",
+            name = "landforms",
+            geomorphonSearchMetres = 400,
+        });
+        (await current.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString()
+            .ShouldBe("ready");
+    }
+
+    private static async Task<Dictionary<Guid, string?>> ListAsync(HttpClient client, Guid buildId)
+    {
+        var response = await client.GetAsync($"/api/v1/terrain/derivatives?buildId={buildId}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().ToDictionary(
+            e => e.GetProperty("id").GetGuid(),
+            e => e.GetProperty("staleReason").ValueKind == JsonValueKind.Null
+                ? null
+                : e.GetProperty("staleReason").GetString());
+    }
+
+    /// <summary>A finished landform picture over <paramref name="buildId"/>, as a run would have left it.</summary>
+    private async Task<Guid> SeedLandformsAsync(Guid buildId, int searchMetres, string? toolVersion)
+    {
+        await using var scope = without.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var settings = new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Geomorphons,
+            GeomorphonSearchMetres = searchMetres,
+        };
+        var layer = new TerrainDerivativeLayer
+        {
+            TerrainBuildId = buildId,
+            Derivative = TerrainDerivative.Geomorphons,
+            Settings = TerrainDerivativeRegistry.Describe(TerrainDerivativeRegistry.Normalise(settings)),
+            SettingsHash = TerrainDerivativeRegistry.Fingerprint(settings),
+            Name = $"landforms {searchMetres}",
+            Status = TerrainDerivativeStatus.Ready,
+            Version = 1,
+            MethodRevision = TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Geomorphons),
+            ToolVersion = toolVersion,
+            ComputedAt = DateTimeOffset.UtcNow,
+        };
+        db.TerrainDerivativeLayers.Add(layer);
+        await db.SaveChangesAsync();
+        return layer.Id;
+    }
+
     private static async Task<List<JsonElement>> KindsAsync(HttpClient client)
     {
         var response = await client.GetAsync("/api/v1/terrain/derivatives/kinds");
@@ -206,10 +294,17 @@ public sealed class TerrainLandformApiTests : IAsyncLifetime, IClassFixture<Post
     }
 
     /// <summary>A finished build, not made the active one: these requests need it finished, not served.</summary>
-    private async Task<Guid> SeedBuildAsync()
+    private async Task<Guid> SeedBuildAsync(bool active = false)
     {
         await using var scope = without.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        // At most one build is the active one, held by a unique index, and the container is shared.
+        if (active)
+        {
+            await db.TerrainBuilds.Where(b => b.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
+        }
         var factory = new GeometryFactory(new PrecisionModel(), 4326);
         var build = new TerrainBuild
         {
@@ -221,6 +316,7 @@ public sealed class TerrainLandformApiTests : IAsyncLifetime, IClassFixture<Post
             RequestedMaxDepth = 13,
             Status = TerrainBuildStatus.Succeeded,
             Phase = TerrainBuildPhase.Publish,
+            IsActive = active,
         };
         db.TerrainBuilds.Add(build);
         await db.SaveChangesAsync();

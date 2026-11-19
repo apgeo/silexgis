@@ -184,8 +184,46 @@ public static class TerrainDerivativeRegistry
     /// no rasters to be wrong, whatever revision its row carries.
     /// </param>
     /// <param name="methodRevision">The revision recorded when its rasters were written.</param>
-    public static bool IsMethodRevised(TerrainDerivative derivative, int version, int methodRevision) =>
-        version > 0 && methodRevision != MethodRevision(derivative);
+    /// <param name="recordedToolVersion">
+    /// The version of the analysis program that wrote its rasters, as it said so then; null for a
+    /// picture the program did not draw, and for one drawn before the version was recorded or while
+    /// it could not be read.
+    /// </param>
+    /// <param name="currentToolVersion">
+    /// The version the installation's analysis program reports now; null when it is not installed
+    /// or cannot say.
+    /// </param>
+    /// <remarks>
+    /// A picture drawn by an external program is also drawn by that program's arithmetic, which
+    /// moves when the program is upgraded without any revision here changing. So for the kinds
+    /// that program draws, a recorded version that differs from the current one marks the picture
+    /// out of date. Only a difference between two known versions counts: a program that is absent
+    /// or silent at this moment says nothing about the pictures it drew earlier, and a picture
+    /// whose version was never recorded would otherwise read as out of date forever, since drawing
+    /// it again under a program that cannot say records nothing either.
+    /// </remarks>
+    public static bool IsMethodRevised(
+        TerrainDerivative derivative,
+        int version,
+        int methodRevision,
+        string? recordedToolVersion = null,
+        string? currentToolVersion = null)
+    {
+        if (version <= 0)
+        {
+            return false;
+        }
+
+        if (methodRevision != MethodRevision(derivative))
+        {
+            return true;
+        }
+
+        return NeedsAnalysisTool(derivative)
+            && !string.IsNullOrWhiteSpace(recordedToolVersion)
+            && !string.IsNullOrWhiteSpace(currentToolVersion)
+            && !string.Equals(recordedToolVersion, currentToolVersion, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Why a picture computed from <paramref name="sourceBuildId"/> is out of date, or null while
@@ -215,14 +253,16 @@ public static class TerrainDerivativeRegistry
         Guid? activeBuildId,
         TerrainDerivative derivative,
         int version,
-        int methodRevision)
+        int methodRevision,
+        string? recordedToolVersion = null,
+        string? currentToolVersion = null)
     {
         if (activeBuildId is null || activeBuildId.Value != sourceBuildId)
         {
             return TerrainDerivativeStaleness.ElevationReplaced;
         }
 
-        return IsMethodRevised(derivative, version, methodRevision)
+        return IsMethodRevised(derivative, version, methodRevision, recordedToolVersion, currentToolVersion)
             ? TerrainDerivativeStaleness.MethodRevised
             : null;
     }

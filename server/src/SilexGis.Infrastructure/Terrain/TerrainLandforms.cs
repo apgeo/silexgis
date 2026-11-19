@@ -64,6 +64,13 @@ public sealed class TerrainLandforms(IWhiteboxTools tools, IOptions<WhiteboxOpti
     /// <summary>Whether this installation can compute these pictures at all.</summary>
     public bool IsAvailable => tools.IsAvailable;
 
+    /// <summary>
+    /// The program and its version as it reports them now, such as <c>WhiteboxTools 2.4.0</c>, or
+    /// null when it is not available or cannot say. Recorded beside each picture it draws, and
+    /// compared when the picture is read.
+    /// </summary>
+    public string? ToolVersion => tools.IsAvailable ? tools.Version : null;
+
     /// <summary>Why it cannot, as a stable code, or null when it can.</summary>
     public string? UnavailableReason => tools.IsAvailable ? null : tools.UnavailableReason;
 

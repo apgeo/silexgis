@@ -249,7 +249,7 @@
       "stale": "Depășită",
       "staleHints": {
         "elevationReplaced": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
-        "methodRevised": "Calculată înainte ca modul în care se obține acest tip de imagine să fie corectat. Este în continuare desenată, dar nu este ceea ce ar da terenul astăzi. Cere din nou aceeași imagine și este calculată de la capăt."
+        "methodRevised": "Calculată înainte ca modul în care se obține acest tip de imagine să fie corectat, sau de o versiune mai veche a programului care o calculează. Este în continuare desenată, dar nu este ceea ce ar da terenul astăzi. Cere din nou aceeași imagine și este calculată de la capăt."
       },
       "totalSize": "{{size}} pe disc",
       "statuses": {
