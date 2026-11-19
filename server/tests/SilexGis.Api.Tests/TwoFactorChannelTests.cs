@@ -86,18 +86,32 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     public async Task A_delivered_code_cannot_be_used_twice()
     {
         var client = await AuthHelper.BearerClientAsync(factory, email);
-        await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null);
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null));
         var code = factory.Messages.LastTo(email).Code;
 
         (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Replaying it must fail — the whole reason these codes are stored rather than derived
-        // from a rolling time window.
-        await client.DeleteAsync("/api/v1/me/mfa/methods/email");
-        (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // from a rolling time window. The method is switched off first and seen off, so the
+        // refusal below is about the code and not about a method that was still on.
+        await ShouldSucceedAsync(await client.DeleteAsync("/api/v1/me/mfa/methods/email"));
+        (await MethodEnabledAsync(client, "email")).ShouldBeFalse();
+        var replayed = await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code });
+        replayed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        JsonDocument.Parse(await replayed.Content.ReadAsStringAsync()).RootElement
+            .GetProperty("code").GetString().ShouldBe("auth.mfa_invalid");
     }
+
+    private static async Task ShouldSucceedAsync(HttpResponseMessage response) =>
+        response.IsSuccessStatusCode.ShouldBeTrue(
+            $"{response.RequestMessage?.Method} {response.RequestMessage?.RequestUri}: "
+            + await response.Content.ReadAsStringAsync());
+
+    private static async Task<bool> MethodEnabledAsync(HttpClient client, string method) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/v1/me/mfa/")).GetProperty("methods").EnumerateArray()
+            .First(m => m.GetProperty("method").GetString() == method)
+            .GetProperty("enabled").GetBoolean();
 
     [Fact]
     public async Task Email_two_factor_is_refused_while_the_address_is_unconfirmed()
@@ -173,10 +187,15 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     {
         var client = await AuthHelper.BearerClientAsync(factory, email);
         var number = "+40722222222";
-        await client.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number });
-        await client.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(number).Code });
-        await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null);
-        await client.PostAsJsonAsync("/api/v1/me/mfa/methods/sms", new { code = factory.Messages.LastTo(number).Code });
+        await ShouldSucceedAsync(await client.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number }));
+        await ShouldSucceedAsync(await client.PostAsJsonAsync(
+            "/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(number).Code }));
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null));
+        await ShouldSucceedAsync(await client.PostAsJsonAsync(
+            "/api/v1/me/mfa/methods/sms", new { code = factory.Messages.LastTo(number).Code }));
+
+        // On before the removal, so "off" afterwards is the removal's doing.
+        (await MethodEnabledAsync(client, "sms")).ShouldBeTrue();
 
         (await client.DeleteAsync("/api/v1/me/phone")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
@@ -310,7 +329,10 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
         await settings.SaveAsync(AppSettingSections.Security, change(await settings.GetSecurityAsync()));
     }
 
-    /// <summary>The settings row is shared with every other class in this collection.</summary>
+    /// <summary>
+    /// The settings row lives in this class's database, which its tests share, so each test starts
+    /// from the installation's default policy rather than whatever the previous one saved.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         using var scope = factory.Services.CreateScope();

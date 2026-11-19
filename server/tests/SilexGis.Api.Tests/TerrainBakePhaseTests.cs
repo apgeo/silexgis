@@ -454,31 +454,8 @@ public sealed class TerrainBakePhaseTests : IAsyncLifetime, IDisposable, IClassF
     /// Runs the handler directly rather than waiting for a worker, so what is asserted is what the
     /// handler did and not how quickly something got to it.
     /// </summary>
-    private async Task RunAsync(Guid buildId, SilexGisApiFactory? installation = null)
-    {
-        await using var scope = (installation ?? factory).Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = 1,
-                    Payload = JsonSerializer.Serialize(
-                        new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A step that stops throws a bounded stand-in, so that the queue sees a failed job. The
-            // reason is recorded on the build row before it is thrown, and the row is what every
-            // test in this class reads.
-        }
-    }
+    private Task RunAsync(Guid buildId, SilexGisApiFactory? installation = null) =>
+        TerrainRuns.RunAsync(installation ?? factory, buildId);
 
     /// <summary>Puts a build back the way a process that died after it would leave it.</summary>
     /// <remarks>

@@ -661,32 +661,7 @@ public sealed class TerrainBuildExtendTests : IAsyncLifetime, IDisposable, IClas
     /// Runs the handler directly rather than waiting for a worker, so what is asserted is what the
     /// handler did and not how quickly something got to it.
     /// </summary>
-    private async Task RunAsync(Guid buildId)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = 1,
-                    RequestedBy = operatorId,
-                    Payload = JsonSerializer.Serialize(
-                        new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A step that stops throws a bounded stand-in, so that the queue sees a failed job. The
-            // reason is recorded on the build row before it is thrown, and the row is what every
-            // test in this class reads.
-        }
-    }
+    private Task RunAsync(Guid buildId) => TerrainRuns.RunAsync(factory, buildId, requestedBy: operatorId);
 
     /// <summary>Puts a build back the way a run that is about to be repeated finds it.</summary>
     private async Task RewindAsync(Guid buildId)

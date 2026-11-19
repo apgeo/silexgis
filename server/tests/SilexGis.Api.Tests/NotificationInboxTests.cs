@@ -359,10 +359,34 @@ public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClass
         // choice is applied when the row is read and never when it is written.
         categories.ShouldContain("securityAlerts");
 
+        // The muted row is not there by its id either, answered exactly as somebody else's is.
+        long mutedId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            mutedId = await db.Notifications.AsNoTracking()
+                .Where(n => n.RecipientUserId == readerId && n.Category == NotificationCategory.PermissionGranted)
+                .Select(n => n.Id)
+                .SingleAsync();
+        }
+
+        var muted = await reader.GetAsync($"/api/v1/notifications/{mutedId}");
+        muted.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await muted.Content.ReadAsStringAsync()).ShouldContain("notification.not_found");
+
+        // Clearing the inbox clears what it shows and leaves the muted row unread, so switching
+        // the category back on brings it back as news rather than as something already seen.
+        (await reader.PostAsync("/api/v1/notifications/read-all", null))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await UnreadAsync(reader)).ShouldBe(0);
+
         await SetInboxAsync("permissionGranted", "immediate");
 
-        (await InboxAsync(reader)).GetProperty("totalItems").GetInt32().ShouldBe(2);
-        (await UnreadAsync(reader)).ShouldBe(2);
+        var back = await InboxAsync(reader);
+        back.GetProperty("totalItems").GetInt32().ShouldBe(2);
+        (await UnreadAsync(reader)).ShouldBe(1);
+        var returned = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/notifications/{mutedId}");
+        returned.GetProperty("readAt").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     private async Task SetInboxAsync(string category, string choice)

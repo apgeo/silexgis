@@ -76,6 +76,15 @@ public sealed class SurveyUploadPreferenceTests(PostgresFixture postgres) : IDis
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await owner.GetFromJsonAsync<JsonElement>(Route)).GetProperty("defaultLinkAudience").GetString().ShouldBe("public");
 
+        // The owner ends on choices that differ from the defaults in every field, so the other
+        // account's reading below can tell its own defaults from the owner's choices.
+        (await owner.PutAsJsonAsync(Route, new { alwaysOutputs = new[] { "dxf" }, publicLinks = false, defaultLinkAudience = "organization" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var last = await owner.GetFromJsonAsync<JsonElement>(Route);
+        Outputs(last).ShouldBe(["dxf"]);
+        last.GetProperty("publicLinks").GetBoolean().ShouldBeFalse();
+        last.GetProperty("defaultLinkAudience").GetString().ShouldBe("organization");
+
         // Another account still has the defaults: each account reads only its own choices.
         var others = await other.GetFromJsonAsync<JsonElement>(Route);
         others.GetProperty("alwaysOutputs").GetArrayLength().ShouldBe(0);

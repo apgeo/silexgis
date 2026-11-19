@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -361,7 +362,7 @@ public sealed class JobLeaseTests : IAsyncLifetime, IDisposable, IClassFixture<P
     {
         var id = await QueueAsync(Lingers);
 
-        (await Worker().TurnAsync(CancellationToken.None)).ShouldBeTrue();
+        (await RenewingWorker().TurnAsync(CancellationToken.None)).ShouldBeTrue();
 
         // The handler outlived its first lease, swept the queue itself and read its own row back.
         var seen = factory.Services.GetRequiredService<Seen>();
@@ -377,9 +378,26 @@ public sealed class JobLeaseTests : IAsyncLifetime, IDisposable, IClassFixture<P
 
     private static readonly TimeSpan LeaseLength = TimeSpan.FromSeconds(3);
 
+    /// <summary>
+    /// The lease of the renewal test: ten heartbeats long, so the lease lapses only if renewal is
+    /// missing, not because a heartbeat ran a few seconds late on a loaded machine.
+    /// </summary>
+    private static readonly TimeSpan RenewalLeaseLength = TimeSpan.FromSeconds(10);
+
     private TestLaneWorker Worker() => new(
         factory.Services.GetRequiredService<IServiceScopeFactory>(),
         factory.Services.GetRequiredService<IConfiguration>());
+
+    /// <summary>A worker taking the renewal test's long lease, renewed every second.</summary>
+    private TestLaneWorker RenewingWorker() => new(
+        factory.Services.GetRequiredService<IServiceScopeFactory>(),
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jobs:LeaseSeconds"] = ((int)RenewalLeaseLength.TotalSeconds).ToString(CultureInfo.InvariantCulture),
+                ["Jobs:HeartbeatSeconds"] = "1",
+            })
+            .Build());
 
     /// <summary>The worker as a host runs it, on a poll and a sweep of one second each.</summary>
     private TestLaneWorker LoopingWorker() => new(
@@ -651,7 +669,7 @@ public sealed class JobLeaseTests : IAsyncLifetime, IDisposable, IClassFixture<P
                 firstLease = (await db.ProcessingJobs.AsNoTracking().SingleAsync(j => j.Id == job.Id, ct)).LeaseExpiresAt;
             }
 
-            await Task.Delay(LeaseLength + TimeSpan.FromSeconds(1.5), ct);
+            await Task.Delay(RenewalLeaseLength + TimeSpan.FromSeconds(1.5), ct);
             await new TestLaneWorker(scopes, configuration).SweepAsync(ct);
 
             await using (var scope = scopes.CreateAsyncScope())

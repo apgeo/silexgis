@@ -66,21 +66,27 @@ public sealed class DocumentDeletionWindowTests : IAsyncLifetime, IDisposable, I
 
         var fresh = await UploadAsync("fresh");
         var stale = await UploadAsync("stale");
+        // A day inside the window, so a window shorter than the configured thirty days shows.
+        var late = await UploadAsync("late");
         (await owner.DeleteAsync($"/api/v1/documents/{fresh}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await owner.DeleteAsync($"/api/v1/documents/{stale}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.DeleteAsync($"/api/v1/documents/{late}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var document = await db.Documents.IgnoreQueryFilters().FirstAsync(d => d.Id == stale);
             document.DeletedAt = DateTimeOffset.UtcNow - TimeSpan.FromDays(31);
+            var lateDocument = await db.Documents.IgnoreQueryFilters().FirstAsync(d => d.Id == late);
+            lateDocument.DeletedAt = DateTimeOffset.UtcNow - TimeSpan.FromDays(29);
             await db.SaveChangesAsync();
         }
 
         var page = await owner.GetFromJsonAsync<JsonElement>("/api/v1/documents/deleted?pageSize=100");
         var rows = page.GetProperty("items").EnumerateArray().ToList();
         var row = rows.Single(i => i.GetProperty("id").GetGuid() == fresh);
-        row.GetProperty("restorableUntil").GetDateTimeOffset()
-            .ShouldBeGreaterThan(row.GetProperty("deletedAt").GetDateTimeOffset());
+        (row.GetProperty("restorableUntil").GetDateTimeOffset() - row.GetProperty("deletedAt").GetDateTimeOffset())
+            .ShouldBe(TimeSpan.FromDays(30), "the window is the configured thirty days, not merely some time after deletion");
+        rows.ShouldContain(i => i.GetProperty("id").GetGuid() == late);
         rows.ShouldNotContain(i => i.GetProperty("id").GetGuid() == stale);
 
         var refused = await owner.PostAsync($"/api/v1/documents/{stale}/restore", null);
@@ -88,6 +94,7 @@ public sealed class DocumentDeletionWindowTests : IAsyncLifetime, IDisposable, I
         JsonDocument.Parse(await refused.Content.ReadAsStringAsync()).RootElement.GetProperty("code").GetString()
             .ShouldBe("document.restore_window_passed");
         (await owner.PostAsync($"/api/v1/documents/{fresh}/restore", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await owner.PostAsync($"/api/v1/documents/{late}/restore", null)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
     private async Task<Guid> UploadAsync(string text)

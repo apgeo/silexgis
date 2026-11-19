@@ -437,14 +437,18 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
     public async Task The_caller_chooses_the_order_and_the_default_is_still_most_recent_first()
     {
         var marker = Guid.NewGuid().ToString("N")[..8];
-        await CreateTripAsync($"Bravo {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-02");
-        await CreateTripAsync($"Alpha {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-01");
-        await CreateTripAsync($"Charlie {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-03");
+        // Dates that disagree with the titles and with the order of creation, so each order asked
+        // for gives a different answer and none of them can stand in for another.
+        await CreateTripAsync($"Bravo {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-01");
+        await CreateTripAsync($"Alpha {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-03");
+        await CreateTripAsync($"Charlie {marker}", surveyTypeId, "authenticated", tripDate: "2026-03-02");
 
         (await TitlesAsync(reader, $"search={marker}"))
-            .ShouldBe([$"Charlie {marker}", $"Bravo {marker}", $"Alpha {marker}"]);
+            .ShouldBe([$"Alpha {marker}", $"Charlie {marker}", $"Bravo {marker}"]);
         (await TitlesAsync(reader, $"search={marker}&sort=date"))
-            .ShouldBe([$"Alpha {marker}", $"Bravo {marker}", $"Charlie {marker}"]);
+            .ShouldBe([$"Bravo {marker}", $"Charlie {marker}", $"Alpha {marker}"]);
+        (await TitlesAsync(reader, $"search={marker}&sort=-date"))
+            .ShouldBe([$"Alpha {marker}", $"Charlie {marker}", $"Bravo {marker}"]);
         (await TitlesAsync(reader, $"search={marker}&sort=title"))
             .ShouldBe([$"Alpha {marker}", $"Bravo {marker}", $"Charlie {marker}"]);
         (await TitlesAsync(reader, $"search={marker}&sort=-title"))

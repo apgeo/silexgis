@@ -238,7 +238,8 @@ public sealed class CaveFeatureTypeTests : IAsyncLifetime, IDisposable, IClassFi
             },
         };
         var refused = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", Rule(caveKindTypeId));
-        refused.IsSuccessStatusCode.ShouldBeFalse(await refused.Content.ReadAsStringAsync());
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await CodeOf(refused)).ShouldBe("access_entry.anchor_not_found");
 
         // The same rule over a generic kind is accepted, so the refusal is about the cave type.
         var accepted = await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", Rule(surfaceAreaTypeId));

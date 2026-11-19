@@ -19,9 +19,9 @@ namespace SilexGis.Api.Tests;
 ///
 /// <para>
 /// Every request here names a region minted for this class alone. The registry statistics count
-/// every cave in the installation that the caller may read, and this assembly runs its classes
-/// against one shared database — so an unscoped assertion would be a claim about every other
-/// class's fixtures as well, and would pass or fail depending on which of them ran first.
+/// every cave in the installation that the caller may read, and the tests of this class share its
+/// database — so an unscoped assertion would be a claim about every other test's fixtures as well,
+/// and would pass or fail depending on which of them ran first.
 /// </para>
 /// <para>
 /// The withheld caller is always a genuine <c>Viewer</c>, or a caller carrying an explicit deny.
@@ -810,13 +810,14 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Theory]
-    [InlineData("measures=altitude")]
-    [InlineData("measures=2")]
-    [InlineData("measures=surveyedLength,surveyedLength")]
-    [InlineData("measures=")]
-    [InlineData("measures=surveyedLength&clusters=1")]
-    [InlineData("measures=surveyedLength&clusters=99")]
-    public async Task A_grouping_asked_for_in_terms_the_registry_does_not_offer_is_refused(string query)
+    [InlineData("measures=altitude", "Measures")]
+    [InlineData("measures=2", "Measures")]
+    [InlineData("measures=surveyedLength,surveyedLength", "Measures")]
+    [InlineData("measures=", "Measures")]
+    [InlineData("measures=surveyedLength&clusters=1", "Clusters")]
+    [InlineData("measures=surveyedLength&clusters=7", "Clusters")]
+    [InlineData("measures=surveyedLength&clusters=99", "Clusters")]
+    public async Task A_grouping_asked_for_in_terms_the_registry_does_not_offer_is_refused(string query, string field)
     {
         // Altitude is not a measure here at all — a height above sea level is a coordinate — and a
         // measure named by its underlying number is not a name. A measure named twice would be
@@ -825,7 +826,21 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         // caves.
         var response = await viewer.GetAsync($"/api/v1/stats/registry/clustering?{query}");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The refusal names the one field it is about, so a request refused for some other reason
+        // cannot stand in for the rule each row pins.
+        (await response.RefusedFieldsAsync()).ShouldBe([field]);
+    }
+
+    /// <summary>The edges of the accepted group counts are answered, beside the refusals above.</summary>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(6)]
+    public async Task A_grouping_at_either_end_of_the_offered_counts_is_answered(int clusters)
+    {
+        var response = await viewer.GetAsync(
+            $"/api/v1/stats/registry/clustering?measures=surveyedLength&clusters={clusters}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

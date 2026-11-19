@@ -148,18 +148,25 @@ public sealed class TerrainProfileTests : IAsyncLifetime, IDisposable, IClassFix
     [Fact]
     public async Task A_line_the_reader_should_not_be_asked_about_is_refused_before_anything_is_read()
     {
-        (await reader.PostAsJsonAsync("/api/v1/terrain/profile", new { points = Array.Empty<object>() }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await reader.PostAsJsonAsync("/api/v1/terrain/profile",
+        // Each refusal names the one field it is about, so a request refused for some other reason
+        // cannot pass for the rule.
+        (await (await reader.PostAsJsonAsync("/api/v1/terrain/profile", new { points = Array.Empty<object>() }))
+            .RefusedFieldsAsync()).ShouldBe(["Points"]);
+        (await (await reader.PostAsJsonAsync("/api/v1/terrain/profile",
                 new { points = new[] { new { longitude = 25.0, latitude = 46.0 } } }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await reader.PostAsJsonAsync("/api/v1/terrain/profile",
+            .RefusedFieldsAsync()).ShouldBe(["Points"]);
+        (await (await reader.PostAsJsonAsync("/api/v1/terrain/profile",
                 new { points = new[] { new { longitude = 25.0, latitude = 46.0 }, new { longitude = 200.0, latitude = 46.0 } } }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            .RefusedFieldsAsync()).ShouldBe(["Points[1].Longitude"]);
 
-        var tooMany = Enumerable.Range(0, 201).Select(i => new { longitude = 25.0 + (i * 1e-5), latitude = 46.0 });
-        (await reader.PostAsJsonAsync("/api/v1/terrain/profile", new { points = tooMany }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The vertex bound, from both sides: the most a line may have is answered, one more is not.
+        (await reader.PostAsJsonAsync("/api/v1/terrain/profile", new { points = Line(200) }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await (await reader.PostAsJsonAsync("/api/v1/terrain/profile", new { points = Line(201) }))
+            .RefusedFieldsAsync()).ShouldBe(["Points"]);
+
+        static object[] Line(int count) =>
+            [.. Enumerable.Range(0, count).Select(i => new { longitude = 25.0 + (i * 1e-5), latitude = 46.0 })];
     }
 
     public async ValueTask DisposeAsync()

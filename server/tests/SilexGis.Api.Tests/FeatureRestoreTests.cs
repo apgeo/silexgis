@@ -574,19 +574,7 @@ public sealed class FeatureRestoreTests : IAsyncLifetime, IDisposable, IClassFix
                 $"SELECT id AS \"Value\" FROM features WHERE id = {cave} FOR UPDATE").ToListAsync();
 
             var restoring = RestoreAsync(owner, cave);
-            var waiting = 0L;
-            for (var attempt = 0; attempt < 300 && waiting == 0 && !restoring.IsCompleted; attempt++)
-            {
-                waiting = await watcher.Database.SqlQueryRaw<long>(
-                    "SELECT count(*) AS \"Value\" FROM pg_stat_activity WHERE datname = current_database() "
-                    + "AND state = 'active' AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()").SingleAsync();
-                if (waiting == 0)
-                {
-                    await Task.Delay(50);
-                }
-            }
-
-            restoring.IsCompleted.ShouldBeFalse("the restore must be waiting to write while the area is deleted");
+            await LockWaits.UntilParkedAsync(watcher, 1, restoring, "the restore");
             await transaction.CommitAsync();
             raced = await restoring;
         }

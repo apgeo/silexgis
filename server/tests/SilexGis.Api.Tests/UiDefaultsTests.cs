@@ -45,6 +45,12 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
     [Fact]
     public async Task An_administrator_publishes_a_starting_arrangement_and_everybody_reads_it()
     {
+        // Read first, so the section is in the settings cache when it is saved: the save has to
+        // drop the cached copy, and a reader straight after it must see the new value at once
+        // rather than whenever the cache happens to expire.
+        var before = await editor.GetAsync("/api/v1/ui-defaults");
+        before.StatusCode.ShouldBe(HttpStatusCode.OK, await before.Content.ReadAsStringAsync());
+
         var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/interface", new
         {
             panelDefaults = """{"main":{"order":["history","details"],"width":30}}""",
@@ -53,8 +59,7 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
 
         // Read by an ordinary account: a default nobody but an administrator can see would be a
         // default that never applies.
-        var read = await Eventually(() => editor.GetAsync("/api/v1/ui-defaults"), body =>
-            body.GetProperty("panel").TryGetProperty("main", out _));
+        var read = await editor.GetFromJsonAsync<JsonElement>("/api/v1/ui-defaults");
 
         read.GetProperty("panel").GetProperty("main").GetProperty("width").GetInt32().ShouldBe(30);
     }
@@ -88,12 +93,18 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
         // The two documents are separate on purpose: the caller's is opaque and replaced
         // wholesale by whoever writes it, so an installation value living inside it would be
         // deleted by the first client that saved its own subtree.
-        await admin.PutAsJsonAsync("/api/v1/admin/settings/interface", new
+        var saved = await admin.PutAsJsonAsync("/api/v1/admin/settings/interface", new
         {
             panelDefaults = """{"main":{"width":30}}""",
         });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        // Published — so the absence below is about where it is kept, not about it missing.
+        (await editor.GetFromJsonAsync<JsonElement>("/api/v1/ui-defaults"))
+            .GetProperty("panel").GetProperty("main").GetProperty("width").GetInt32().ShouldBe(30);
 
         var mine = await editor.GetAsync("/api/v1/me/preferences");
+        mine.StatusCode.ShouldBe(HttpStatusCode.OK, await mine.Content.ReadAsStringAsync());
         var body = JsonDocument.Parse(await mine.Content.ReadAsStringAsync()).RootElement;
 
         body.GetProperty("preferences").TryGetProperty("panel", out _).ShouldBeFalse();
@@ -106,28 +117,6 @@ public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture
 
         (await anonymous.GetAsync("/api/v1/ui-defaults")).StatusCode
             .ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Retries while the settings cache still holds the previous value. Sections are cached per
-    /// process for a short window, so a test that saves one and immediately depends on it is
-    /// racing the cache rather than the application.
-    /// </summary>
-    private static async Task<JsonElement> Eventually(
-        Func<Task<HttpResponseMessage>> send, Func<JsonElement, bool> settled)
-    {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(45);
-        while (true)
-        {
-            var response = await send();
-            var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
-            if (settled(body) || DateTimeOffset.UtcNow > deadline)
-            {
-                return body;
-            }
-
-            await Task.Delay(1000);
-        }
     }
 
     public ValueTask DisposeAsync()

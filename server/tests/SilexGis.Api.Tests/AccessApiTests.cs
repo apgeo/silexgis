@@ -1300,11 +1300,11 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         var write = mine.GetProperty("explain").EnumerateArray()
             .First(e => e.GetProperty("action").GetString() == "write");
         write.GetProperty("allowed").GetBoolean().ShouldBeTrue();
-        if (write.GetProperty("source").GetString() == "entries")
-        {
-            write.GetProperty("ruleName").ValueKind.ShouldBe(JsonValueKind.Null);
-            write.GetProperty("redacted").GetBoolean().ShouldBeTrue();
-        }
+        // A rule decides before ownership does, so the write is the ruleset's — which is what
+        // gives this test a rule name to withhold at all.
+        write.GetProperty("source").GetString().ShouldBe("entries");
+        write.GetProperty("ruleName").ValueKind.ShouldBe(JsonValueKind.Null);
+        write.GetProperty("redacted").GetBoolean().ShouldBeTrue();
 
         // Somebody who may read the permission model gets the name instead.
         var asAdmin = await admin.GetFromJsonAsync<JsonElement>(

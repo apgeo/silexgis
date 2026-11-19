@@ -349,7 +349,12 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
             var body = await ReadAsync(owner, cave);
             var expected = GroundM - UndulationM - PassageAltitudeM;
 
-            foreach (var sample in body.GetProperty("samples").EnumerateArray())
+            // Every sample is read, so a datum that made the answer empty cannot pass for one that
+            // corrected it.
+            var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+            samples.Length.ShouldBeGreaterThan(1);
+            body.GetProperty("coveredSampleCount").GetInt32().ShouldBe(samples.Length);
+            foreach (var sample in samples)
             {
                 sample.GetProperty("overburdenM").GetDouble().ShouldBe(expected, 1e-6);
             }

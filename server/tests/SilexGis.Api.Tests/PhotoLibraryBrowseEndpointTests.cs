@@ -4,11 +4,15 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.PhotoLibraries;
 
 namespace SilexGis.Api.Tests;
@@ -87,6 +91,49 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
         anonymous?.Dispose();
         factory.Dispose();
         library.Dispose();
+    }
+
+    // ------------------------------------------------------------------------------- the brake
+
+    /// <summary>
+    /// A stored stop that cannot be read is read back, through the settings service every library
+    /// asks, as every library stopped — and not as the configured default of carrying on.
+    /// </summary>
+    [Fact]
+    public async Task A_stored_brake_that_cannot_be_read_stops_every_library()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var settings = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        // A readable row first, read back as nothing stopped: the positive that makes the answer
+        // below the unreadable row's doing.
+        await settings.SaveAsync(AppSettingSections.PhotoLibrarySuspension, new PhotoLibrarySuspensionSettings());
+        (await settings.GetPhotoLibrarySuspensionAsync()).IsSuspended(PhotoLibrarySource.Immich).ShouldBeFalse();
+
+        try
+        {
+            // Saved again because a save is what empties the cached reading; then the row is made
+            // into one that is valid JSON and no longer this section's shape.
+            await settings.SaveAsync(AppSettingSections.PhotoLibrarySuspension, new PhotoLibrarySuspensionSettings());
+            (await db.AppSettings
+                .Where(s => s.Key == AppSettingSections.PhotoLibrarySuspension)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Value, """{"immichSuspended":"maybe"}""")))
+                .ShouldBe(1);
+
+            var lost = await settings.GetPhotoLibrarySuspensionAsync();
+            lost.IsSuspended(PhotoLibrarySource.Immich).ShouldBeTrue();
+            lost.IsSuspended(PhotoLibrarySource.PhotoPrism).ShouldBeTrue();
+        }
+        finally
+        {
+            // The settings service shares this scope's context, which still tracks the row with the
+            // value it saved: saving that value again would find nothing changed and write nothing,
+            // leaving the unreadable row behind and every later case in this class stopped.
+            db.ChangeTracker.Clear();
+            await settings.SaveAsync(AppSettingSections.PhotoLibrarySuspension, new PhotoLibrarySuspensionSettings());
+            (await settings.GetPhotoLibrarySuspensionAsync()).IsSuspended(PhotoLibrarySource.Immich).ShouldBeFalse();
+        }
     }
 
     // ------------------------------------------------------------------------------- who may look

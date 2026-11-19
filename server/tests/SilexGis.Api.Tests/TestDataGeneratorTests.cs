@@ -121,7 +121,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
         await ShouldBeProblemAsync(zero, HttpStatusCode.BadRequest, "testdata.profile_invalid");
 
         var unknown = await admin.PostAsJsonAsync($"{Base}/runs", new { profileName = "enormous" });
-        unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await unknown.RefusedFieldsAsync()).ShouldBe(["ProfileName"]);
         (await RunCountAsync()).ShouldBe(before, "a refused profile must not leave a run behind");
     }
 

@@ -711,31 +711,8 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
     /// Runs the handler directly rather than waiting for a worker, so the assertions are about what
     /// the handler did and not about how quickly something got to it.
     /// </summary>
-    private async Task RunAsync(Guid buildId, Guid? requestedBy = null, bool withoutRequester = false)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = 1,
-                    RequestedBy = withoutRequester ? null : requestedBy ?? starterId,
-                    Payload = JsonSerializer.Serialize(
-                        new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A build that stops throws so the queue row goes red; what is asserted here is the
-            // record it left on the build's own row, which is where somebody diagnosing it looks.
-        }
-    }
+    private Task RunAsync(Guid buildId, Guid? requestedBy = null, bool withoutRequester = false) =>
+        TerrainRuns.RunAsync(factory, buildId, requestedBy: withoutRequester ? null : requestedBy ?? starterId);
 
     /// <summary>Puts a build back the way a process that died halfway through would leave it.</summary>
     private async Task InterruptAsync(Guid buildId)

@@ -421,30 +421,7 @@ public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable, ICl
             .SetProperty(b => b.FinishedAt, (DateTimeOffset?)null));
     }
 
-    private async Task RunAsync(Guid buildId)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = 1,
-                    Payload = JsonSerializer.Serialize(
-                        new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A step that stops throws a bounded stand-in so the queue sees a failed job. The reason
-            // is recorded on the build row first, and the row is what every test here reads.
-        }
-    }
+    private Task RunAsync(Guid buildId) => TerrainRuns.RunAsync(factory, buildId);
 
     /// <summary>
     /// An installation whose earlier steps are stood in for and whose checking step is the real one.

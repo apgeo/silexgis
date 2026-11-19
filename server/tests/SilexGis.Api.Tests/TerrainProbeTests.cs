@@ -290,28 +290,30 @@ public sealed class TerrainProbeTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task A_request_naming_nothing_or_far_too_much_is_refused_before_any_file_is_opened()
     {
+        // Each refusal names the one field it is about, so a request refused for some other reason
+        // cannot pass for the rule.
         var empty = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe", new { points = Array.Empty<object>() });
-        empty.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await empty.RefusedFieldsAsync()).ShouldBe(["Points"]);
 
-        var toomany = await terrainReader.PostAsJsonAsync(
-            "/api/v1/terrain/probe",
-            new
-            {
-                points = Enumerable.Range(0, 501)
-                    .Select(_ => new { longitude = KnownLongitude, latitude = KnownLatitude })
-                    .ToArray(),
-            });
-        toomany.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The bound from both sides: the most one request may name is answered, one more is not.
+        var atTheBound = await terrainReader.PostAsJsonAsync("/api/v1/terrain/probe", new { points = Points(500) });
+        atTheBound.StatusCode.ShouldBe(HttpStatusCode.OK, await atTheBound.Content.ReadAsStringAsync());
+
+        var toomany = await terrainReader.PostAsJsonAsync("/api/v1/terrain/probe", new { points = Points(501) });
+        (await toomany.RefusedFieldsAsync()).ShouldBe(["Points"]);
 
         var offEarth = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe",
             new { points = new[] { new { longitude = 400d, latitude = 12d } } });
-        offEarth.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await offEarth.RefusedFieldsAsync()).ShouldBe(["Points[0].Longitude"]);
 
         var noFeatures = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe/features", new { featureIds = Array.Empty<Guid>() });
-        noFeatures.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await noFeatures.RefusedFieldsAsync()).ShouldBe(["FeatureIds"]);
+
+        static object[] Points(int count) =>
+            [.. Enumerable.Range(0, count).Select(_ => new { longitude = KnownLongitude, latitude = KnownLatitude })];
     }
 
     public async ValueTask DisposeAsync()

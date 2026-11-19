@@ -130,11 +130,15 @@ public sealed class TagEndpointTests : IAsyncLifetime, IDisposable, IClassFixtur
         // A deleted target is no target.
         var applied = await TagAsync(editor, $"deleted-{marker}", cave);
         applied.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var taggingId = (await applied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         (await editor.DeleteAsync($"/api/v1/caves/{cave}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         var deletedTarget = await TagAsync(editor, $"deleted-{marker}", cave);
         deletedTarget.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await CodeOf(deletedTarget)).ShouldBe("tagging.entity_not_found");
+
+        // Nor are its tags read: the tagging it carried answers as the target does, not as a list.
+        var deletedRead = await editor.GetAsync($"/api/v1/taggings/?entityType=feature&entityId={cave}");
+        deletedRead.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await CodeOf(deletedRead)).ShouldBe("tagging.entity_not_found");
 
         // A tagging id that names nothing, beside one that does.
         var missing = await editor.DeleteAsync($"/api/v1/taggings/{long.MaxValue}");
@@ -144,7 +148,6 @@ public sealed class TagEndpointTests : IAsyncLifetime, IDisposable, IClassFixtur
         var kept = await TagAsync(editor, $"removed-{marker}", live);
         var keptId = (await kept.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();
         (await editor.DeleteAsync($"/api/v1/taggings/{keptId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        taggingId.ShouldNotBe(keptId);
     }
 
     /// <summary>
