@@ -12,19 +12,21 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
-ThIDE — Therion.Blender, Therion.Build, Therion.Core,
+ThIDE — Therion.Blender, Therion.Build, Therion.Core, Therion.Orientation,
         Therion.Processing.Abstractions, Therion.Semantics, Therion.Syntax,
         Therion.Workspace
 --------------------------------------------------------------------------------
 Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d),
 the reader for what a Therion compilation printed while it ran, the runner that
 starts a Therion compilation, and the builder of a compilable Therion project
-around a survey uploaded from a field device. Not vendored:
+around a survey uploaded from a field device, and the orientation statistics of
+structural readings (poles, the equal-area net, Kamb density contours and
+Watson's U-squared test). Not vendored:
 the source is a Git submodule at server/external/ThIDE, pinned to the commit
 below, and the built assemblies are redistributed inside the server image.
 
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    798482bde2b479dd237be8261a96da327f7cb0bd
+  Commit:    a6e88fa276ea2701c4910a822fc402ef84a9a176
   License:   MPL-2.0 — see the LICENSE file beside each module under
              server/external/ThIDE/src/
 
