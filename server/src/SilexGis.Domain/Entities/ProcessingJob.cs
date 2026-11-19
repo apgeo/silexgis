@@ -211,8 +211,9 @@ public static class ProcessingJobKinds
 
     /// <summary>
     /// Delete rasters sent for a terrain build that no build names and that have waited longer than
-    /// the installation keeps them. Scheduled. On the general lane: it is a directory listing and a
-    /// handful of deletions, and it never touches a raster any build — running or not — names.
+    /// the installation keeps them, and the folders of cave-potential runs whose row no longer
+    /// exists. Scheduled. On the general lane: it is a directory listing and a handful of deletions,
+    /// and it never touches a raster any build — running or not — names, or a run that has a row.
     /// </summary>
     public const string TerrainUploadSweep = "terrain-upload-sweep";
 

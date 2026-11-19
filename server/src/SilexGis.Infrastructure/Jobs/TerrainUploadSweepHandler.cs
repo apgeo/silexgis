@@ -11,9 +11,17 @@ using SilexGis.Infrastructure.Terrain;
 namespace SilexGis.Infrastructure.Jobs;
 
 /// <summary>
-/// Deletes rasters sent for a terrain build that no build names and that nobody came back for.
+/// Deletes rasters sent for a terrain build that no build names and that nobody came back for, and
+/// the folders of cave-potential runs whose row is gone.
 /// </summary>
 /// <remarks>
+/// <para>
+/// The second duty rides on the same schedule because it is the same kind of work: a listing and a
+/// handful of deletions, with the database as the only authority on what is still wanted. A run is
+/// removed from the disk when somebody deletes it, but a run also goes when the area it covers is
+/// purged or the account that asked for it is deleted, and those deletions are cascades in the
+/// database that never see the disk.
+/// </para>
 /// <para>
 /// The build form sends a raster the moment it is chosen, so somebody who picks a few files and
 /// then leaves the page has put them on the server without submitting anything. They sit beside
@@ -36,10 +44,17 @@ namespace SilexGis.Infrastructure.Jobs;
 public sealed class TerrainUploadSweepHandler(
     SilexGisDbContext db,
     TerrainUploads uploads,
+    TerrainWorkspace workspace,
     IOptions<TerrainBuildOptions> options,
     ILogger<TerrainUploadSweepHandler> logger) : IProcessingJobHandler
 {
     public string Kind => ProcessingJobKinds.TerrainUploadSweep;
+
+    /// <summary>
+    /// How long a run's folder must have sat untouched before it can be taken. The row is always
+    /// saved first, so this is a second line of defence rather than the one that matters.
+    /// </summary>
+    internal static readonly TimeSpan CavePotentialGrace = TimeSpan.FromHours(1);
 
     /// <summary>Safe to run again from the start: it removes only files no build names, under a lock.</summary>
     public bool RetriesPassingFailures => true;
@@ -64,6 +79,35 @@ public sealed class TerrainUploadSweepHandler(
         {
             logger.LogInformation(
                 "Removed {Count} terrain upload(s) no build names, sent before {Cutoff}", removed, cutoff);
+        }
+
+        await SweepCavePotentialAsync(ct);
+    }
+
+    /// <summary>Takes the folder of every cave-potential run that no longer has a row.</summary>
+    private async Task SweepCavePotentialAsync(CancellationToken ct)
+    {
+        // Listed first and checked against the database second: see the workspace method.
+        var onDisk = workspace.CavePotentialFoldersOlderThan(DateTimeOffset.UtcNow - CavePotentialGrace);
+        if (onDisk.Count == 0)
+        {
+            return;
+        }
+
+        var kept = await db.CavePotentialResults.AsNoTracking()
+            .Where(r => onDisk.Contains(r.Id))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+
+        var orphans = onDisk.Except(kept).ToList();
+        foreach (var id in orphans)
+        {
+            workspace.RemoveCavePotentialResult(id);
+        }
+
+        if (orphans.Count > 0)
+        {
+            logger.LogInformation("Removed {Count} cave-potential map(s) whose run no longer exists", orphans.Count);
         }
     }
 

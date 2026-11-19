@@ -337,6 +337,37 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// <summary>Takes one run's map away.</summary>
     public void RemoveCavePotentialResult(Guid resultId) => Discard(CavePotentialResultFor(resultId));
 
+    /// <summary>
+    /// The runs that have a folder on disk and were last written before <paramref name="cutoff"/>.
+    /// </summary>
+    /// <remarks>
+    /// Anything in that directory whose name is not a run's identifier is ignored, so a stray file
+    /// somebody leaves there is never mistaken for a run and removed. The caller reads which runs
+    /// still have a row <em>after</em> this listing, never before: a run's row is saved before its
+    /// folder is made, so a folder seen here always belongs to a row that was already committed,
+    /// and a run started in between simply is not listed.
+    /// </remarks>
+    public IReadOnlyList<Guid> CavePotentialFoldersOlderThan(DateTimeOffset cutoff)
+    {
+        var directory = new DirectoryInfo(Path.Combine(root, CavePotentialDirectoryName));
+        if (!directory.Exists)
+        {
+            return [];
+        }
+
+        var found = new List<Guid>();
+        foreach (var entry in directory.EnumerateDirectories())
+        {
+            if (entry.LastWriteTimeUtc < cutoff.UtcDateTime
+                && Guid.TryParseExact(entry.Name, "N", out var id))
+            {
+                found.Add(id);
+            }
+        }
+
+        return found;
+    }
+
     /// <summary>Whether this build's pyramid is where terrain is served from, asked of the disk.</summary>
     /// <remarks>
     /// The manifest rather than the directory, and this is the one place that question is answered:
