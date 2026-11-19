@@ -255,3 +255,26 @@ describe('the way to the phone users', () => {
     expect(link.closest('a')).toHaveAttribute('href', '/cavers/phone-users');
   });
 });
+
+describe('a save with the name emptied', () => {
+  it('marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]);
+      const name = await screen.findByLabelText('Name');
+      await waitFor(() => expect(name).toHaveValue('Ana Invented'));
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(put).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+});

@@ -36,7 +36,7 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
-const { MailForm } = await import('./MessagingSettingsPage.tsx');
+const { default: MailForm } = await import('./MailForm.tsx');
 
 const onSaved = vi.fn();
 

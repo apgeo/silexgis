@@ -75,7 +75,12 @@ export default function TripParticipantRolesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body: TripParticipantRoleWrite = {
       code: values.code.trim(),
       name: values.name.trim(),

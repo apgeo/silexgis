@@ -36,7 +36,7 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
-const { SmsForm } = await import('./MessagingSettingsPage.tsx');
+const { default: SmsForm } = await import('./SmsForm.tsx');
 
 const t = i18n.getFixedT('en');
 const onSaved = vi.fn();

@@ -303,7 +303,12 @@ export default function CavingGroupsPage() {
   const canCreate = useCan('cavingGroups', 'create');
 
   const onCreate = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       await createCavingGroup.mutateAsync({
         name: values.name,

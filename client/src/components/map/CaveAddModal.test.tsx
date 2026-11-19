@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 
 /**
  * The map's "new entrance here" tool: a cave is picked first, then the entrance editor opens for
@@ -11,15 +11,16 @@ import '../../i18n';
 
 const CAVE = '55555555-5555-4555-8555-555555555555';
 
-const { queryCalls } = vi.hoisted(() => ({
+const { queryCalls, createCaveSpy } = vi.hoisted(() => ({
   queryCalls: [] as { body: unknown; enabled: boolean }[],
+  createCaveSpy: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
   createEntranceFor: vi.fn(),
   useCaveTypes: () => ({ data: [] }),
   useEntranceTypes: () => ({ data: [] }),
-  useCreateCave: () => ({ mutateAsync: vi.fn() }),
+  useCreateCave: () => ({ mutateAsync: createCaveSpy }),
   useFilterVocabulary: () => ({
     data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
   }),
@@ -71,9 +72,18 @@ async function search() {
   return screen.findByRole('button', { name: /Avenul Nou/ }, { timeout: 3000 });
 }
 
-afterEach(cleanup);
+const unhandled: unknown[] = [];
+const record = (reason: unknown) => unhandled.push(reason);
+
+afterEach(() => {
+  cleanup();
+  process.off('unhandledRejection', record);
+});
 beforeEach(() => {
   queryCalls.length = 0;
+  createCaveSpy.mockReset();
+  unhandled.length = 0;
+  process.on('unhandledRejection', record);
 });
 
 describe('the new-entrance cave picker', () => {
@@ -124,5 +134,24 @@ describe('the new-entrance cave picker', () => {
 
     expect(screen.queryByTestId('entrance-editor')).toBeNull();
     expect(screen.getByTestId('new-entrance-cave-picker-input')).toHaveValue('');
+  });
+});
+
+describe('the new-cave dialog', () => {
+  it('keeps a dialog with no name open, marks the field and sends nothing', async () => {
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={() => {}} />
+      </App>,
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /OK/i }));
+
+    const name = within(dialog).getByLabelText(i18n.t('caves.name'));
+    await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+    // Long enough for a rejection with no handler to be reported.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(createCaveSpy).not.toHaveBeenCalled();
+    expect(unhandled).toEqual([]);
   });
 });

@@ -35,7 +35,7 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
-const { ProtectionForm } = await import('./MessagingSettingsPage.tsx');
+const { default: ProtectionForm } = await import('./ProtectionForm.tsx');
 
 const onSaved = vi.fn();
 

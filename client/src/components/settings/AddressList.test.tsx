@@ -96,4 +96,23 @@ describe('AddressList', () => {
     show(Array.from({ length: 10 }, (_, i) => address(`a-${i}`, `Place ${i}`, i)));
     expect(screen.getByRole('button', { name: t('settings.profile.addAddress') })).toBeDisabled();
   });
+
+  it('Save with no label marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click(screen.getByRole('button', { name: t('settings.profile.addAddress') }));
+      const name = await screen.findByLabelText(t('settings.profile.addressLabel'));
+      fireEvent.click(screen.getByRole('button', { name: t('common.save') }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      // Long enough for a rejection with no handler to be reported.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(create).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
 });
