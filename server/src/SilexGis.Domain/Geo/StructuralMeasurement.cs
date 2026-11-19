@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Orientation = Therion.Orientation;
 
 namespace SilexGis.Domain.Geo;
 
@@ -63,46 +64,23 @@ public static class StructuralMeasurement
     /// An azimuth folded into [0, 360). A value that rounds to a full turn comes back as 0, so
     /// "360" and "0" name one direction.
     /// </summary>
-    public static double NormalizeAzimuth(double degrees)
-    {
-        if (!double.IsFinite(degrees))
-        {
-            throw new ArgumentOutOfRangeException(nameof(degrees), "an azimuth must be finite.");
-        }
-
-        var folded = degrees % FullTurn;
-        if (folded < 0)
-        {
-            folded += FullTurn;
-        }
-
-        return folded >= FullTurn - 1e-9 ? 0d : folded;
-    }
+    public static double NormalizeAzimuth(double degrees) => Orientation.Azimuth.Normalize(degrees);
 
     /// <summary>The dip direction of a plane given by its strike under the right-hand rule.</summary>
     public static double DipDirectionFromStrike(double strikeDegrees) =>
-        NormalizeAzimuth(strikeDegrees + QuarterTurn);
+        Orientation.Planes.DipDirectionFromStrike(strikeDegrees);
 
     /// <summary>The right-hand-rule strike of a plane given by its dip direction.</summary>
     public static double StrikeFromDipDirection(double dipDirectionDegrees) =>
-        NormalizeAzimuth(dipDirectionDegrees - QuarterTurn);
+        Orientation.Planes.StrikeFromDipDirection(dipDirectionDegrees);
 
     /// <summary>
     /// The pole of a plane — the line normal to it, taken pointing down — which is what a
     /// lower-hemisphere stereonet plots: it trends opposite the dip direction and plunges at the
     /// complement of the dip.
     /// </summary>
-    public static LineOrientation Pole(PlaneOrientation plane)
-    {
-        if (!double.IsFinite(plane.DipDegrees) || plane.DipDegrees < 0 || plane.DipDegrees > QuarterTurn)
-        {
-            throw new ArgumentOutOfRangeException(nameof(plane), "a dip must lie between 0 and 90 degrees.");
-        }
-
-        return new LineOrientation(
-            NormalizeAzimuth(plane.DipDirectionDegrees + 180d),
-            QuarterTurn - plane.DipDegrees);
-    }
+    public static LineOrientation Pole(PlaneOrientation plane) =>
+        Orientation.Planes.Pole(plane.ToLibrary()).FromLibrary();
 
     /// <summary>
     /// The typed-properties schema the structural-measurement kind is seeded with. The type, dip
@@ -245,4 +223,22 @@ public static class StructuralMeasurement
 
     // Floating error from the addition must not turn a typed "120" into 119.99999999999999.
     private static double Round(double degrees) => NormalizeAzimuth(Math.Round(degrees, 9));
+}
+
+/// <summary>
+/// The crossing between this application's orientation records and the orientation-statistics
+/// module's records of the same shape. The application keeps records of its own because they are
+/// named in API responses and handlers, and the API layer may not name the survey-format library
+/// or any of its modules; the conversion is a field-for-field copy.
+/// </summary>
+internal static class OrientationLibraryConversions
+{
+    public static Orientation.LineOrientation ToLibrary(this LineOrientation line) =>
+        new(line.TrendDegrees, line.PlungeDegrees);
+
+    public static LineOrientation FromLibrary(this Orientation.LineOrientation line) =>
+        new(line.TrendDegrees, line.PlungeDegrees);
+
+    public static Orientation.PlaneOrientation ToLibrary(this PlaneOrientation plane) =>
+        new(plane.DipDirectionDegrees, plane.DipDegrees);
 }

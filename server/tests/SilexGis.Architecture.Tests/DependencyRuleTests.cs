@@ -113,12 +113,90 @@ public class DependencyRuleTests
         // straight from a parser must be translated into this project's own types before any
         // rule sees it — otherwise the shape of somebody else's file format becomes the shape of
         // the domain.
-        var result = Types.InAssembly(typeof(Visibility).Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("Therion")
-            .GetResult();
+        //
+        // One module of that library is let in, by name, and no other: the orientation
+        // statistics (azimuth folding, poles, the equal-area net, Kamb density, Watson's U²). It
+        // knows no file format and references nothing but the base class library — the rule after
+        // this one holds it to that — so the domain taking it takes arithmetic, not a format.
+        // Written as an allow-list of one assembly, not as a list of the modules that are
+        // forbidden: a module the library adds next year is forbidden here without anybody having
+        // to remember to name it.
+        var domain = typeof(Visibility).Assembly;
 
-        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+        var therionAssemblies = domain.GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .Where(IsTherionName)
+            .Where(name => !string.Equals(name, OrientationModule, StringComparison.Ordinal))
+            .ToArray();
+        therionAssemblies.ShouldBeEmpty(
+            "Domain references survey-library assemblies other than the orientation statistics: "
+            + string.Join(", ", therionAssemblies));
+
+        // The positive half, so the check above cannot pass by reading nothing: the domain does
+        // name the module's types today. When it stops, the exception has no reason left to exist
+        // and this rule should go back to forbidding the whole library.
+        var reached = TherionTypesReferencedBy(domain);
+        reached.ShouldContain(full => full.StartsWith(OrientationModule + ".", StringComparison.Ordinal));
+
+        var therionTypes = reached
+            .Where(full => !full.StartsWith(OrientationModule + ".", StringComparison.Ordinal))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        therionTypes.ShouldBeEmpty(
+            "Domain names survey-library types outside the orientation statistics: "
+            + string.Join(", ", therionTypes));
+    }
+
+    [Fact]
+    public void The_orientation_statistics_module_references_only_the_base_class_library()
+    {
+        // The domain may reach the orientation statistics only because that module brings nothing
+        // with it. If it ever gained a reference — another module of the survey library, a
+        // package — the domain would inherit it through the one door the rule above leaves open,
+        // with every other test still green. So the module's own references are closed too: the
+        // runtime's assemblies, and those only as the runtime ships them (Microsoft's signing keys),
+        // so a package that merely calls itself "System.Something" does not pass.
+        var module = typeof(Therion.Orientation.Azimuth).Assembly;
+        module.GetName().Name.ShouldBe(OrientationModule);
+
+        var references = module.GetReferencedAssemblies();
+        references.ShouldNotBeEmpty();
+
+        var foreign = references
+            .Where(a => !IsRuntimeAssembly(a))
+            .Select(a => a.FullName)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        foreign.ShouldBeEmpty(
+            $"{OrientationModule} references assemblies outside the base class library: "
+            + string.Join(", ", foreign)
+            + ". The domain is allowed to depend on this module only while it depends on nothing.");
+    }
+
+    /// <summary>The one survey-library module the domain may reach.</summary>
+    private const string OrientationModule = "Therion.Orientation";
+
+    /// <summary>The public-key tokens the .NET runtime's own assemblies are signed with.</summary>
+    private static readonly HashSet<string> RuntimePublicKeyTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "b03f5f7f11d50a3a",
+        "b77a5c561934e089",
+        "cc7b13ffcd2ddd51",
+        "7cec85d7bea7798e",
+    };
+
+    private static bool IsTherionName(string name) =>
+        name is "Therion" || name.StartsWith("Therion.", StringComparison.Ordinal);
+
+    private static bool IsRuntimeAssembly(AssemblyName assembly)
+    {
+        var name = assembly.Name ?? string.Empty;
+        var named = name is "System" or "mscorlib" or "netstandard"
+            || name.StartsWith("System.", StringComparison.Ordinal);
+        var token = assembly.GetPublicKeyToken();
+        var signed = token is { Length: > 0 } && RuntimePublicKeyTokens.Contains(Convert.ToHexString(token));
+        return named && signed;
     }
 
     [Fact]
@@ -256,6 +334,24 @@ public class DependencyRuleTests
         // Writing an invented survey in the compiled Therion format for the development data: a
         // model in, bytes in memory out. It reads nothing, locates nothing and starts nothing.
         "Therion.Blender.Parsing.LoxWriter",
+
+        // The orientation statistics, which the domain reaches (and only the domain should need):
+        // azimuth folding, the plane and line records with the pole of a plane, the equal-area
+        // net's projection and its point, Kamb's density and its grid, and Watson's U² with its
+        // result. Pure arithmetic over numbers in a module that references nothing but the base
+        // class library — it reads no file, locates nothing and starts nothing.
+        "Therion.Orientation.AxialMean",
+        "Therion.Orientation.AxialStatistics",
+        "Therion.Orientation.Azimuth",
+        "Therion.Orientation.EqualAreaNet",
+        "Therion.Orientation.KambDensity",
+        "Therion.Orientation.KambDensityGrid",
+        "Therion.Orientation.LineOrientation",
+        "Therion.Orientation.NetPoint",
+        "Therion.Orientation.PlaneOrientation",
+        "Therion.Orientation.Planes",
+        "Therion.Orientation.WatsonU2",
+        "Therion.Orientation.WatsonU2Result",
 
         // Reading what a compilation printed. Text in, records out — this starts no compiler.
         "Therion.Build.TherionLogDeclination",

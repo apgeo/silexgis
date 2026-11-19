@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Orientation = Therion.Orientation;
+
 namespace SilexGis.Domain.Geo;
 
 /// <summary>
@@ -135,41 +137,11 @@ public static class OrientationStatistics
     public const int BinCount = 18;
 
     /// <summary>
-    /// Below this resultant the mean trend is not reported. A vector sum this close to the origin
-    /// still has a direction, but it is the direction of the rounding error rather than of the
-    /// cave.
-    /// </summary>
-    private const double ResultantEpsilon = 1e-12;
-
-    /// <summary>
     /// Folds a bearing into the 0–180 half-circle, so that a leg and the same leg surveyed
     /// backwards land on the same trend. Accepts any value, including negative ones and ones past
     /// a full turn.
     /// </summary>
-    public static double Fold(double azimuthDegrees)
-    {
-        if (!double.IsFinite(azimuthDegrees))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(azimuthDegrees), azimuthDegrees, "A bearing must be a finite number.");
-        }
-
-        var folded = azimuthDegrees % 180d;
-        if (folded < 0d)
-        {
-            folded += 180d;
-
-            // A bearing a hair below zero rounds to exactly 180 once 180 is added to it, and 180
-            // is the one value the half-circle must not contain — it is the same axis as zero, and
-            // a consumer that trusts the stated range would put it off the end of the histogram.
-            if (folded >= 180d)
-            {
-                folded = 0d;
-            }
-        }
-
-        return folded;
-    }
+    public static double Fold(double azimuthDegrees) => Orientation.Azimuth.FoldAxial(azimuthDegrees);
 
     /// <summary>
     /// The index of the sector a bearing falls in, 0 to <see cref="BinCount"/> − 1. The upper edge
@@ -264,42 +236,12 @@ public static class OrientationStatistics
             return new OrientationMeasure(null, 0d, 0d, null, null, null, null);
         }
 
-        // Doubled angles: the trend axis is mapped onto a full circle, where a vector mean is
-        // meaningful, and halved again at the end.
-        var cos = 0d;
-        var sin = 0d;
-        for (var i = 0; i < folded.Length; i++)
-        {
-            var doubled = 2d * folded[i] * Math.PI / 180d;
-            cos += weights[i] * Math.Cos(doubled);
-            sin += weights[i] * Math.Sin(doubled);
-        }
-
-        cos /= total;
-        sin /= total;
-        var resultant = Math.Sqrt((cos * cos) + (sin * sin));
-
-        double? meanAxis = null;
-        if (resultant >= ResultantEpsilon)
-        {
-            meanAxis = Fold(Math.Atan2(sin, cos) * 180d / Math.PI / 2d);
-        }
-
-        // Kish's effective sample size. With every weight equal this is exactly the observation
-        // count, so the count-weighted Rayleigh test below is the textbook one; with uneven
-        // weights it is smaller, which is the honest reading — a rose dominated by three long
-        // galleries is three observations' worth of evidence about the cave's trend, whatever the
-        // metre total is.
-        var effective = total * total / weights.Sum(w => w * w);
-
-        double? rayleighZ = null;
-        double? rayleighP = null;
-        if (effective >= 2d)
-        {
-            var z = effective * resultant * resultant;
-            rayleighZ = z;
-            rayleighP = RayleighProbability(z, effective);
-        }
+        var axial = Orientation.AxialStatistics.Compute(folded, weights);
+        var meanAxis = axial.MeanAxisDegrees;
+        var resultant = axial.ResultantLength;
+        var effective = axial.EffectiveSampleSize;
+        var rayleighZ = axial.RayleighZ;
+        var rayleighP = axial.RayleighP;
 
         var mass = binMass.Sum();
         double? entropy = null;
@@ -325,30 +267,5 @@ public static class OrientationStatistics
         }
 
         return new OrientationMeasure(meanAxis, resultant, effective, rayleighZ, rayleighP, entropy, normalized);
-    }
-
-    /// <summary>
-    /// Probability of a resultant at least this concentrated arising from passage with no
-    /// preferred trend.
-    /// </summary>
-    /// <remarks>
-    /// The leading term is exp(−Z); the two corrections that follow it are the standard
-    /// small-sample series, and they matter — at ten observations the correction moves the
-    /// probability by roughly seven per cent of itself, which is the difference between reporting
-    /// a trend as significant and not. The series is an approximation and can stray a shade
-    /// outside 0–1 at tiny samples, so the result is clamped: a probability greater than one is
-    /// arithmetic, not a finding.
-    /// </remarks>
-    private static double RayleighProbability(double z, double n)
-    {
-        var z2 = z * z;
-        var z3 = z2 * z;
-        var z4 = z3 * z;
-
-        var first = ((2d * z) - z2) / (4d * n);
-        var second = ((24d * z) - (132d * z2) + (76d * z3) - (9d * z4)) / (288d * n * n);
-
-        var p = Math.Exp(-z) * (1d + first - second);
-        return Math.Clamp(p, 0d, 1d);
     }
 }
