@@ -65,21 +65,51 @@ public sealed record DerivedStateRepairResult(
 /// </summary>
 public sealed class FeatureDerivedStateRepair(SilexGisDbContext db)
 {
-    /// <summary>Counts the features whose stored hierarchy state is wrong. Reads only.</summary>
-    public async Task<DerivedStateCount> CountAsync(CancellationToken ct = default) =>
-        (await ScanAsync(ct)).Count;
+    /// <summary>
+    /// Counts the features whose stored hierarchy state is wrong. Reads only, in one snapshot: the
+    /// edges, the features and the closure read as separate statements would compare one moment's
+    /// edges with a later moment's rows, and a move committed between them would be counted as a
+    /// divergence that does not exist.
+    /// </summary>
+    public async Task<DerivedStateCount> CountAsync(CancellationToken ct = default)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
+        var count = (await ScanAsync(ct)).Count;
+        await transaction.RollbackAsync(ct);
+        return count;
+    }
 
     /// <summary>
     /// Counts, then — only when <paramref name="apply"/> is set — rewrites exactly the rows the
-    /// count names, all in one serialisable transaction, and counts again inside it. A dry run
-    /// rolls back, so it reports what would change without changing anything. If the second count
-    /// is not zero the transaction is rolled back rather than committed half right.
+    /// count names, all in one transaction, and counts again inside it. A dry run rolls back, so it
+    /// reports what would change without changing anything. If the second count is not zero the
+    /// transaction is rolled back rather than committed half right.
+    ///
+    /// <para>
+    /// A rewritten feature row has its <c>updated_at</c> moved, as the write service's own
+    /// recompute moves it: devices download features in the order that column gives, so a row
+    /// corrected without it would sit behind every device's cursor and keep its wrong flag there
+    /// until some unrelated edit touched it. Closure rows are server-side only and carry no time.
+    /// </para>
     /// </summary>
     public async Task<DerivedStateRepairResult> RepairAsync(bool apply, CancellationToken ct = default)
     {
-        // Serialisable so that a feature moved or protected by somebody else while this runs makes
-        // the commit fail instead of being overwritten with a state computed before their change.
-        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Every write path that derives this state takes the same lock before it reads the edges
+        // and flags, so while this holds it nobody can move or protect a feature between the scan
+        // and the commit. Isolation alone would not do: the other writers run at READ COMMITTED,
+        // where a serialisable transaction's conflict detection does not see them, and closure rows
+        // inserted from a stale scan would commit beside their move unnoticed.
+        await HierarchyLockSql.TakeAsync(db, ct);
+
+        // The stamp moved onto corrected rows is what makes phones download them again, so it is
+        // taken only once this transaction holds an id: from then on every download stops short
+        // of the transaction's start, and no position past the stamp can be handed out before the
+        // corrections commit. The scan below reads for a while before the first write would give
+        // the transaction its id.
+        await HierarchyLockSql.ClaimTransactionIdAsync(db, ct);
+        var now = DateTimeOffset.UtcNow;
 
         var scan = await ScanAsync(ct);
         var updated = 0;
@@ -95,7 +125,8 @@ public sealed class FeatureDerivedStateRepair(SilexGisDbContext db)
                     .Where(f => f.Id == wrong.FeatureId)
                     .ExecuteUpdateAsync(
                         s => s.SetProperty(f => f.AncestorIds, ancestors)
-                            .SetProperty(f => f.IsProtectedEffective, expectedProtected),
+                            .SetProperty(f => f.IsProtectedEffective, expectedProtected)
+                            .SetProperty(f => f.UpdatedAt, now),
                         ct);
             }
 

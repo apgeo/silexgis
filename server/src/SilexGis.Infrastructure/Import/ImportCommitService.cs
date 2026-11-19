@@ -175,6 +175,13 @@ public sealed class ImportCommitService(
         // selection — and only the final pass could be right in any case.
         writer.BeginDeferredDerivedState();
 
+        // The deferred recompute takes the hierarchy lock only at the end, when the walk already
+        // holds the rows of every cave it touched; a protection switched on above one of them by
+        // somebody holding the lock would then wait for that cave while this waits for the lock,
+        // and the database would roll the whole import back. Taken now, before any row, the other
+        // writer waits for the import instead.
+        await writer.HoldHierarchyAsync(ct);
+
         // How far the walk has got, told as each row is reached so a confirmation of thousands
         // of rows is more than "running" on the page waiting for it.
         var reached = 0;

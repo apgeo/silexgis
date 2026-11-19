@@ -79,7 +79,8 @@ public static class HierarchyEndpoints
                 : ApiProblems.NotFound("feature.not_found");
         }
 
-        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct);
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, feature.Id, ct, hierarchy: true);
         if (hold.Refusal is { } stale)
         {
             return stale;

@@ -209,6 +209,9 @@ public static class EntranceEndpoints
             SurveyedAt = request.SurveyedAt,
         };
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         try
         {
             // Owner and caving-group binding default from the cave in the write service, and
@@ -226,6 +229,7 @@ public static class EntranceEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
 
         // Adding a further entrance is unrestricted even for callers without exact-location
         // access: the coordinates are theirs, so echoing them back discloses nothing. The main

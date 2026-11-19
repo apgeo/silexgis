@@ -251,6 +251,9 @@ public static class CenterlineEndpoints
             LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, CenterlineSkeleton.Build3D(geom), ct),
         };
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writes.BeginHierarchyWriteAsync(ct);
         try
         {
             await writes.CreateCenterlineAsync(feature, centerline, ct: ct);
@@ -261,6 +264,7 @@ public static class CenterlineEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
         return TypedResults.Created($"/api/v1/caves/{caveId}/centerlines", ToDto(feature, centerline));
     }
 

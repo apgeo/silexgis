@@ -328,6 +328,9 @@ public static class FeatureEndpoints
             Visibility = request.Visibility,
         };
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writeService.BeginHierarchyWriteAsync(ct);
         try
         {
             await writeService.CreateGenericAsync(feature, parentSpecs, ct);
@@ -338,6 +341,7 @@ public static class FeatureEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
 
         var featureType = await db.FeatureTypes.AsNoTracking().FirstAsync(t => t.Id == request.FeatureTypeId, ct);
         var parents = await PrimaryChainAsync(db, ctx, feature, ct);
@@ -382,7 +386,9 @@ public static class FeatureEndpoints
                 "Caves, entrances and centerlines are edited through their typed endpoints.");
         }
 
-        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true);
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, feature.Id, ct, required: true,
+            hierarchy: request.LocationProtected != feature.LocationProtected);
         if (hold.Refusal is { } stale)
         {
             return stale;
