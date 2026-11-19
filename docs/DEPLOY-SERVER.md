@@ -228,7 +228,8 @@ describes.
 `silexgis-backup.timer` runs nightly at 03:20 UTC and keeps the last 14, plus one before every
 update. Each backup is a directory containing `db.sql.gz` (a `pg_dump`), `files.tar.gz` (the
 uploads volume) and, when anybody has uploaded a terrain raster through the browser,
-`terrain-uploads.tar.gz` (those rasters only).
+`terrain-uploads.tar.gz` (those rasters only) and, when any cave-potential map has been computed,
+`cave-potential.tar.gz` (those maps only).
 
 ```bash
 systemctl list-timers silexgis-\*        # when it last ran and next runs
@@ -243,7 +244,9 @@ Four things are deliberately *not* in a backup: three are recoverable without on
   stored data.
 - **Baked terrain.** Derived data whose recipe is in the database. Rebuild it. The exception, a
   raster **uploaded through the browser**, has exactly one copy under the build root, so it is the
-  one part of the terrain volume that *is* in the backup (`terrain-uploads.tar.gz`).
+  one part of the terrain volume that *is* in the backup (`terrain-uploads.tar.gz`), together with
+  the computed cave-potential maps (`cave-potential.tar.gz`), which are dated and cannot be recomputed
+  into the same answer.
 - **Photo libraries** (Immich, PhotoPrism) keep their own databases and settings, which are the
   club's to back up with each product's own tool; see INSTALL.md, "Photo libraries".
 - **`.env`.** It holds the database password. Keep a copy somewhere off the machine, or a

@@ -15,7 +15,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { archiveTerrainUploads } from './native/backup.mjs';
+import { archiveCavePotential, archiveTerrainUploads } from './native/backup.mjs';
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...parts) => fs.readFileSync(path.join(repoRoot, ...parts), 'utf8');
@@ -53,7 +53,8 @@ describe('uploaded terrain rasters are in the backup', () => {
 
   it('is written and restored by the native path under the same name and member path', () => {
     assert.match(read('deploy', 'native', 'backup.mjs'), /'terrain-uploads\.tar\.gz'/);
-    assert.match(read('deploy', 'native', 'backup.mjs'), /'builds\/uploads'/);
+    // The member path itself is proved by the archive round trip below.
+    assert.match(read('deploy', 'native', 'backup.mjs'), /archiveTerrainFolder\(terrainDir, file, 'uploads'\)/);
     const restore = read('deploy', 'native', 'restore.mjs');
     assert.match(restore, /'terrain-uploads\.tar\.gz'/);
     assert.ok(!/missing[^\n]*terrain/.test(restore), 'a backup without terrain still restores');
@@ -94,6 +95,81 @@ describe('uploaded terrain rasters are in the backup', () => {
     assert.ok(!/Terrain is deliberately not backed up/.test(install));
     assert.match(install, /terrain-uploads\.tar\.gz/);
     assert.match(install, /photo librar/i);
+  });
+});
+
+describe('computed cave-potential maps are in the backup', () => {
+  it('never goes into an exported bundle, and the manifest says so', () => {
+    const exportSh = read('deploy', 'scripts', 'export-bundle.sh');
+    assert.match(exportSh, /rm -f "\$OUT_ABS\/cave-potential\.tar\.gz"/);
+    assert.match(exportSh, /echo "cave_potential=excluded"/);
+    assert.ok(!/SHA256SUMS[^\n]*cave-potential/.test(exportSh));
+  });
+
+  it('is written by the Docker backup from its own folder alone, under one name', () => {
+    assert.match(backupSh, /cave-potential\.tar\.gz -C \/data builds\/cave-potential/);
+    assert.match(backupSh, /for name in files\.tar\.gz terrain-uploads\.tar\.gz cave-potential\.tar\.gz db\.sql\.gz/);
+  });
+
+  it('is restored when present, replacing that folder alone, and is not required when absent', () => {
+    assert.ok(!/missing[^\n]*cave-potential/.test(restoreSh));
+    assert.match(restoreSh, /if \[ -f "\$SRC_ABS\/cave-potential\.tar\.gz" \]/);
+    assert.match(restoreSh, /rm -rf \/data\/builds\/cave-potential/);
+    // It is read back with the other archives before anything is dropped.
+    assert.match(restoreSh, /tar -tzf "\$SRC_ABS\/cave-potential\.tar\.gz"/);
+  });
+
+  it('is compared by the restore rehearsal, whose verdict depends on it', () => {
+    assert.match(drillSh, /cave-potential\.tar\.gz/);
+    assert.match(drillSh, /\[ "\$c_a_files" = "\$c_r_files" \] \|\| verdict=FAIL/);
+    assert.ok(!/missing[^\n]*cave-potential/.test(drillSh));
+  });
+
+  it('is written and restored by the native path under the same name and member path', () => {
+    const backup = read('deploy', 'native', 'backup.mjs');
+    assert.match(backup, /'cave-potential\.tar\.gz'/);
+    assert.match(backup, /builds\/\$\{folder\}/);
+    const restore = read('deploy', 'native', 'restore.mjs');
+    assert.match(restore, /'cave-potential\.tar\.gz'/);
+    assert.ok(!/missing[^\n]*cave-potential/.test(restore), 'a backup without maps still restores');
+  });
+
+  it('archives a native cave-potential folder with the path a restore expects, and only that folder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sx-potential-'));
+    try {
+      const terrain = path.join(dir, 'terrain');
+      const archive = path.join(dir, 'cave-potential.tar.gz');
+      // Nothing computed yet: no file, rather than an empty archive that looks like a failure.
+      assert.equal(archiveCavePotential(terrain, archive), false);
+      fs.mkdirSync(path.join(terrain, 'builds', 'cave-potential'), { recursive: true });
+      assert.equal(archiveCavePotential(terrain, archive), false);
+      assert.equal(fs.existsSync(archive), false);
+
+      const run = path.join(terrain, 'builds', 'cave-potential', '0123456789abcdef0123456789abcdef');
+      fs.mkdirSync(run);
+      fs.writeFileSync(path.join(run, 'favourability.tif'), 'generated map');
+      fs.mkdirSync(path.join(terrain, 'builds', 'uploads'), { recursive: true });
+      fs.writeFileSync(path.join(terrain, 'builds', 'uploads', 'r1.tif'), 'generated raster');
+      assert.equal(archiveCavePotential(terrain, archive), true);
+
+      const listing = spawnSync('tar', ['-tzf', archive], { encoding: 'utf8' });
+      assert.equal(listing.status, 0);
+      const members = listing.stdout
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((name) => name.replaceAll('\\', '/').replace(/^\.\//, ''));
+      assert.ok(
+        members.includes('builds/cave-potential/0123456789abcdef0123456789abcdef/favourability.tif'),
+        `members listed: ${JSON.stringify(members)}`,
+      );
+      assert.ok(members.every((name) => name.startsWith('builds/cave-potential')), `only maps: ${members}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is named in the install guide among what is backed up', () => {
+    assert.match(install, /cave-potential\.tar\.gz/);
   });
 });
 

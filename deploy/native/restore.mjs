@@ -4,8 +4,9 @@
 //
 //   node deploy/native/restore.mjs <backup-dir> --yes [--db-admin-url <url>] [--no-start]
 //
-// Takes a directory holding db.sql.gz and files.tar.gz (and terrain-uploads.tar.gz, when the backup
-// has browser-uploaded terrain rasters) — written by backup.mjs, or by the Docker
+// Takes a directory holding db.sql.gz and files.tar.gz (and terrain-uploads.tar.gz and
+// cave-potential.tar.gz, when the backup has browser-uploaded terrain rasters or computed
+// cave-potential maps) — written by backup.mjs, or by the Docker
 // path's deploy/scripts/backup.sh — and:
 //   0. reads every archive back in full, and refuses with nothing changed a backup that does not:
 //      a copy cut short in transfer, or a dump that stopped before pg_dump finished;
@@ -16,7 +17,8 @@
 //      `tiger`, `tiger_data` and `topology` schemas already existing);
 //   4. empties the uploads directory and unpacks the archive into it, handing it to the service
 //      account; and, when the backup has one, replaces the terrain directory's `builds/uploads`
-//      from terrain-uploads.tar.gz (a backup without it leaves terrain exactly as it is);
+//      from terrain-uploads.tar.gz and `builds/cave-potential` from cave-potential.tar.gz (a backup
+//      without one leaves that folder exactly as it is);
 //   5. starts the API again and waits for it to be ready (unless --no-start).
 //
 // It replaces everything stored since the backup was taken, so it asks for --yes rather than
@@ -98,7 +100,7 @@ export async function checkBackup(sourceDir, tar) {
   } catch (error) {
     problems.push(`db.sql.gz does not decompress whole (${error.message})`);
   }
-  const archives = ['files.tar.gz', 'terrain-uploads.tar.gz'].filter(
+  const archives = ['files.tar.gz', 'terrain-uploads.tar.gz', 'cave-potential.tar.gz'].filter(
     (name) => name === 'files.tar.gz' || fs.existsSync(path.join(sourceDir, name)),
   );
   for (const name of archives) {
@@ -153,20 +155,26 @@ export async function runRestore({ layout, db }, sourceDir, { adminUrl, start = 
   run(tar, ['-xzf', filesFile, '-C', layout.filesDir, '--no-same-owner'], { label: 'tar' });
   chownTree(layout.filesDir, layout.serviceUser);
 
-  const terrainFile = path.join(sourceDir, 'terrain-uploads.tar.gz');
-  if (fs.existsSync(terrainFile)) {
-    say(`Restoring the uploaded terrain rasters from ${terrainFile}`);
-    const builds = path.join(layout.terrainDir, 'builds');
-    // A `builds` folder the archive has to create is made by whoever runs the restore, so it is
-    // handed over whole (it then holds only the uploads); an existing one keeps its owner and only
-    // what was unpacked into it changes hands, rather than walking tens of gigabytes of builds.
-    const buildsExisted = fs.existsSync(builds);
-    fs.rmSync(path.join(builds, 'uploads'), { recursive: true, force: true });
-    fs.mkdirSync(layout.terrainDir, { recursive: true });
-    run(tar, ['-xzf', terrainFile, '-C', layout.terrainDir, '--no-same-owner'], { label: 'tar' });
-    chownTree(buildsExisted ? path.join(builds, 'uploads') : builds, layout.serviceUser);
-  } else {
-    note('no terrain-uploads.tar.gz in this backup -- the terrain directory is left as it is');
+  for (const [archive, folder, what] of [
+    ['terrain-uploads.tar.gz', 'uploads', 'uploaded terrain rasters'],
+    ['cave-potential.tar.gz', 'cave-potential', 'cave-potential maps'],
+  ]) {
+    const terrainFile = path.join(sourceDir, archive);
+    if (fs.existsSync(terrainFile)) {
+      say(`Restoring the ${what} from ${terrainFile}`);
+      const builds = path.join(layout.terrainDir, 'builds');
+      // A `builds` folder the archive has to create is made by whoever runs the restore, so it is
+      // handed over whole (it then holds only what was unpacked); an existing one keeps its owner
+      // and only what was unpacked into it changes hands, rather than walking tens of gigabytes
+      // of builds.
+      const buildsExisted = fs.existsSync(builds);
+      fs.rmSync(path.join(builds, folder), { recursive: true, force: true });
+      fs.mkdirSync(layout.terrainDir, { recursive: true });
+      run(tar, ['-xzf', terrainFile, '-C', layout.terrainDir, '--no-same-owner'], { label: 'tar' });
+      chownTree(buildsExisted ? path.join(builds, folder) : builds, layout.serviceUser);
+    } else {
+      note(`no ${archive} in this backup -- that part of the terrain directory is left as it is`);
+    }
   }
 
   if (!start) {

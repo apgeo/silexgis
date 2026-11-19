@@ -6,7 +6,8 @@
 #   sh scripts/backup.sh /path/out  # → /path/out/
 #
 # Produces db.sql.gz (pg_dump), files.tar.gz (the uploads volume) and, when anybody has uploaded
-# terrain rasters through the browser, terrain-uploads.tar.gz (those rasters only). Restore with
+# terrain rasters through the browser, terrain-uploads.tar.gz (those rasters only) and, when any
+# cave-potential map has been computed, cave-potential.tar.gz (those maps only). Restore with
 # restore.sh.
 #
 # Either every archive is written and checked, or none is: the archives are written into a hidden
@@ -98,9 +99,25 @@ if [ -f "$STAGE/terrain-uploads.tar.gz" ]; then
 	gzip -t "$STAGE/terrain-uploads.tar.gz" || fail "the terrain archive does not read back"
 fi
 
+# A cave-potential map is dated and kept on purpose: it records what the evidence came to on the day
+# it was computed, and cannot be recomputed from today's elevation and today's features to give the
+# same answer. Its row lives in the database, which this backup restores, so without the file a
+# restored installation would list maps nobody can open. Only that folder is archived, for the same
+# reason as above: the rest of the terrain volume is derived. An installation that never ran a model
+# has nothing to archive, and gets no file.
+echo "==> Potential -> $OUT/cave-potential.tar.gz (computed cave-potential maps only)"
+docker run --rm \
+	-v "${PROJECT}_silexgis-terrain":/data:ro \
+	-v "$STAGE":/backup \
+	alpine sh -c 'if [ -d /data/builds/cave-potential ] && [ -n "$(ls -A /data/builds/cave-potential)" ]; then tar czf /backup/cave-potential.tar.gz -C /data builds/cave-potential; else echo "    no cave-potential maps -- nothing to archive"; fi' \
+	|| fail "could not archive the cave-potential maps"
+if [ -f "$STAGE/cave-potential.tar.gz" ]; then
+	gzip -t "$STAGE/cave-potential.tar.gz" || fail "the cave-potential archive does not read back"
+fi
+
 # Everything is complete: move it into place. The database dump goes last, so that an output
 # folder holding a db.sql.gz from this run also holds the rest of it.
-for name in files.tar.gz terrain-uploads.tar.gz db.sql.gz; do
+for name in files.tar.gz terrain-uploads.tar.gz cave-potential.tar.gz db.sql.gz; do
 	if [ -f "$STAGE/$name" ]; then
 		mv -f "$STAGE/$name" "$OUT_ABS/$name" || fail "could not move $name into $OUT_ABS"
 	fi
@@ -111,7 +128,8 @@ complete=1
 echo "==> Done: $OUT_ABS"
 echo "    (data-protection keys and token certificates are NOT backed up; losing them only invalidates"
 echo "     outstanding file links and sessions, not stored data.)"
-echo "    (baked terrain is NOT backed up beyond the rasters uploaded through the browser: the"
+echo "    (baked terrain is NOT backed up beyond the rasters uploaded through the browser and the"
+echo "     computed cave-potential maps: the"
 echo "     rest is derived data whose recipe is in the database, it is the largest and least"
 echo "     valuable thing on disk, and losing it costs the 3D view its ground until a build is"
 echo "     run again. See 'Backups' in docs/INSTALL.md. Photo libraries have their own state"

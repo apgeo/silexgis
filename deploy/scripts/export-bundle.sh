@@ -9,7 +9,7 @@
 # A bundle is a backup.sh backup (db.sql.gz, files.tar.gz) plus SHA256SUMS and MANIFEST.txt, so
 # that a copy cut short or damaged on the way is refused by import-bundle.sh instead of loaded.
 # Browser-uploaded terrain rasters are left out unless asked for: they are elevation data that can
-# be downloaded again, and they are the bulk of a bundle. Baked terrain is never included.
+# be downloaded again, and they are the bulk of a bundle. Baked terrain and computed cave-potential maps are never included.
 #
 # Serve the folder over plain HTTPS (any static file host) and give the other side the base URL:
 #   sh scripts/import-bundle.sh https://host/some-random-path/ --yes
@@ -37,10 +37,17 @@ if [ -z "$WITH_TERRAIN" ]; then
 	rm -f "$OUT_ABS/terrain-uploads.tar.gz"
 fi
 
+# Computed cave-potential maps are analysis output that backup.sh keeps for a restore on the same
+# installation; a bundle is meant to be served over plain HTTPS, so they are never put in one.
+# Without them the imported result rows list maps that are simply absent, and a result can be
+# computed again.
+rm -f "$OUT_ABS/cave-potential.tar.gz"
+
 {
 	echo "exported_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 	echo "source_commit=$(git -C "$HERE" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 	echo "migrations=$(docker compose exec -T db psql -U silexgis -d silexgis -tAc 'select count(*) from "__EFMigrationsHistory"' 2>/dev/null | tr -d '\r' || echo unknown)"
+	echo "cave_potential=excluded"
 	echo "terrain_uploads=$([ -f "$OUT_ABS/terrain-uploads.tar.gz" ] && echo included || echo excluded)"
 } > "$OUT_ABS/MANIFEST.txt"
 

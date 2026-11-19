@@ -400,7 +400,7 @@ the database, the uploads and the keys in one step:
   needs covering separately.
 
 **2. Encrypt the backups.** `deploy/scripts/backup.sh` writes plain `db.sql.gz`, `files.tar.gz` and,
-when browser-uploaded terrain rasters exist, `terrain-uploads.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
+when browser-uploaded terrain rasters exist, `terrain-uploads.tar.gz`, and when any cave-potential map has been computed, `cave-potential.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
 encrypt it before it leaves the host and keep the passphrase somewhere other than the backup
 medium:
 
@@ -409,9 +409,10 @@ cd deploy
 sh scripts/backup.sh
 age -r age1yourrecipientkey... -o backups/<timestamp>/db.sql.gz.age    backups/<timestamp>/db.sql.gz
 age -r age1yourrecipientkey... -o backups/<timestamp>/files.tar.gz.age backups/<timestamp>/files.tar.gz
-# only when the backup has one:
+# only when the backup has them:
 age -r age1yourrecipientkey... -o backups/<timestamp>/terrain-uploads.tar.gz.age backups/<timestamp>/terrain-uploads.tar.gz
-shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz backups/<timestamp>/terrain-uploads.tar.gz
+age -r age1yourrecipientkey... -o backups/<timestamp>/cave-potential.tar.gz.age backups/<timestamp>/cave-potential.tar.gz
+shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz backups/<timestamp>/terrain-uploads.tar.gz backups/<timestamp>/cave-potential.tar.gz
 ```
 
 `gpg --encrypt --recipient …` works the same way. To restore, decrypt back to the original
@@ -1769,7 +1770,7 @@ through the terrain page:
 
 ```bash
 cd deploy
-sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz]}
+sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz][,cave-potential.tar.gz]}
 ```
 
 A backup is all of those files or none of them. Each archive is written into a hidden `.incomplete`
@@ -1789,8 +1790,9 @@ sh scripts/restore.sh ./backups/<timestamp>
 docker compose up -d
 ```
 
-A backup without `terrain-uploads.tar.gz` — one made before it existed, or by an installation that
-never uploaded a raster — restores as before and leaves the terrain volume as it is.
+A backup without `terrain-uploads.tar.gz` or without `cave-potential.tar.gz` — one made before it
+existed, or by an installation that never uploaded a raster or computed a cave-potential map —
+restores as before and leaves that folder of the terrain volume as it is.
 
 ### Copying an installation's data to another installation
 
@@ -1845,12 +1847,19 @@ files — see [Backups and restoring](#backups-and-restoring) under Non-Docker i
 Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
 encrypt it first; see [Encryption at rest](#encryption-at-rest).
 
-**Terrain: only the rasters uploaded through the browser are backed up.** A raster somebody
+**Terrain: only the rasters uploaded through the browser and the computed cave-potential maps are
+backed up.** A raster somebody
 uploaded on the terrain page has exactly one copy — in the `builds/uploads` folder of the terrain
 volume, with no copy in the file store — and a build keeps the ones it names there until somebody
 deletes the build (one no build names is removed after a day; see
 `SILEXGIS__Terrain__UploadRetentionHours`). So `backup.sh` archives that folder, and only that, as
-`terrain-uploads.tar.gz`; an installation that never uploaded one gets no such file. Everything else
+`terrain-uploads.tar.gz`; an installation that never uploaded one gets no such file. A computed
+cave-potential map is dated on purpose, and elevation and features move on, so it cannot be recomputed
+into the same answer; its row is in the database, so a restored installation without the file would
+list maps nobody can open. `backup.sh` therefore also archives the volume's `builds/cave-potential`
+folder, and only that, as `cave-potential.tar.gz` (no file when no map has been computed). A map whose
+run was deleted, or whose area or account was purged, is removed from that folder by the hourly
+housekeeping pass, so the archive does not grow with maps nobody can reach. Everything else
 on the volume is left out on purpose, and this is the reasoning so that you can disagree with it
 knowingly:
 
@@ -1876,7 +1885,8 @@ docker run --rm -v silexgis_silexgis-terrain:/data:ro -v "$PWD/backups":/backup 
 ```
 
 (`restore.sh` does not read that file; unpack it into the volume by hand.) The restore replaces only
-the volume's `builds/uploads` folder, so builds and pyramids beside it are not touched by it.
+the volume's `builds/uploads` and `builds/cave-potential` folders, so builds and pyramids beside them
+are not touched by it.
 
 ### Restoring a backup from before the migration baseline
 
@@ -1906,7 +1916,7 @@ chain, let that build bring the database forward, and then update:
 4. **Return to the current revision** (`git checkout <your branch>`), rebuild and start; the
    current build then moves the history onto the baseline by itself.
 
-The files archive and `terrain-uploads.tar.gz` do not depend on the schema and restore the same way
+The files archive, `terrain-uploads.tar.gz` and `cave-potential.tar.gz` do not depend on the schema and restore the same way
 whichever build is running. The restore rehearsal (`restore-drill.sh`) loads a dump into a throwaway
 database that has no application on it, so it works on a pre-baseline dump too — it compares
 tables with the running installation, which has since moved on, and says so.
@@ -2683,7 +2693,8 @@ It writes **the same files the Docker path's `backup.sh` writes**: `db.sql.gz` (
 `pg_dump`, made with this machine's `pg_dump` as the application's role), `files.tar.gz` (the
 uploads directory) and, when rasters were uploaded through the terrain page,
 `terrain-uploads.tar.gz` (the terrain directory's `builds/uploads` folder, the same member path as on
-the Docker path, so either path restores the other's). The keys and the rest of the terrain are left
+the Docker path, so either path restores the other's) and, when any cave-potential map was computed,
+`cave-potential.tar.gz` (`builds/cave-potential`, likewise). The keys and the rest of the terrain are left
 out for the reasons given under [Backups](#backups). The installer's nightly timer runs this command; see it with
 `systemctl list-timers silexgis-backup.timer`.
 
@@ -2693,7 +2704,7 @@ sudo node deploy/native/restore.mjs /var/backups/silexgis/<timestamp> --yes
 
 It first reads every archive of the backup back in full, and refuses with nothing changed a backup
 that does not: a `db.sql.gz` cut short or without `pg_dump`'s closing line, or a `files.tar.gz` or
-`terrain-uploads.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
+`terrain-uploads.tar.gz` or `cave-potential.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
 database's `public` schema, loads the dump, unpacks the files, hands them to the service account and starts the API again. **It fails on any error in the
 load** except the three the Docker restore also lets through (the PostGIS image's `tiger`,
 `tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
