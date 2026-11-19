@@ -17,7 +17,8 @@ import Button from '../../components/Button.tsx';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../api/client.ts';
+import { api, ApiError } from '../../api/client.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import {
   hasAccessAction,
   useCapabilities,
@@ -80,7 +81,7 @@ export default function NotificationHealthPage() {
     queryFn: async () => {
       const { data, error, response } = await api.GET('/api/v1/admin/notifications/health');
       if (error !== undefined || data === undefined) {
-        throw new Error(`API error ${response.status}`);
+        throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
       }
       return data as NotificationHealth;
     },
@@ -93,7 +94,7 @@ export default function NotificationHealthPage() {
         params: { query: { page, pageSize, status, attentionOnly } },
       });
       if (error !== undefined || data === undefined) {
-        throw new Error(`API error ${response.status}`);
+        throw new ApiError(response.status, (error as { code?: string } | undefined)?.code);
       }
       return data;
     },
@@ -117,6 +118,9 @@ export default function NotificationHealthPage() {
       onOk: async () => {
         setRetrying(row.id);
         try {
+          // A request that never answered rejects rather than returning an error; it is the same
+          // failed retry to the operator, and must not escape as an uncaught error with the
+          // confirmation left spinning.
           const { data, error } = await api.POST(
             '/api/v1/admin/notifications/deliveries/{id}/retry',
             { params: { path: { id: row.id } } },
@@ -133,6 +137,8 @@ export default function NotificationHealthPage() {
             message.info(text);
           }
           await refresh();
+        } catch {
+          message.error(t('notificationHealth.retryFailed'));
         } finally {
           setRetrying(null);
         }
@@ -140,6 +146,10 @@ export default function NotificationHealthPage() {
     });
   };
 
+  // Until the health read has answered there are no figures: zeros and "nothing waiting" after a
+  // failed read would tell the operator that mail is flowing when nobody knows.
+  const known = health.data !== undefined;
+  const unknown = '-';
   const counts = health.data?.counts ?? [];
   const totalIn = (wanted: NotificationDeliveryStatus) =>
     counts.filter((c) => c.status === wanted).reduce((sum, c) => sum + c.count, 0);
@@ -155,6 +165,15 @@ export default function NotificationHealthPage() {
         {t('notificationHealth.intro')}
       </Typography.Paragraph>
 
+      <ReadFailedAlert
+        isError={health.isError}
+        error={health.error}
+        held={known}
+        onRetry={health.refetch}
+        title={t('notificationHealth.healthLoadFailed')}
+        testId="notification-health-load-failed"
+      />
+
       {stalled && (
         <Alert
           type="warning"
@@ -168,12 +187,18 @@ export default function NotificationHealthPage() {
       )}
 
       <Flex gap={32} wrap style={{ marginBottom: 24 }}>
-        <Statistic title={t('notificationHealth.statuses.pending')} value={totalIn('pending')} />
-        <Statistic title={t('notificationHealth.statuses.deferred')} value={totalIn('deferred')} />
-        <Statistic title={t('notificationHealth.statuses.dead')} value={totalIn('dead')} />
+        <Statistic title={t('notificationHealth.statuses.pending')} value={known ? totalIn('pending') : unknown} />
+        <Statistic title={t('notificationHealth.statuses.deferred')} value={known ? totalIn('deferred') : unknown} />
+        <Statistic title={t('notificationHealth.statuses.dead')} value={known ? totalIn('dead') : unknown} />
         <Statistic
           title={t('notificationHealth.oldestPending')}
-          value={oldestSeconds === null ? t('notificationHealth.nothingWaiting') : ageLabel(oldestSeconds, t)}
+          value={
+            !known
+              ? unknown
+              : oldestSeconds === null
+                ? t('notificationHealth.nothingWaiting')
+                : ageLabel(oldestSeconds, t)
+          }
         />
         {/* What today has cost, beside the day's ceiling, because an amount with no ceiling next
             to it cannot say whether the next announcement will go out. It sits here rather than on
@@ -189,10 +214,14 @@ export default function NotificationHealthPage() {
             an installation's spending by exactly the factor this number exists to show. */}
         <Statistic
           title={t('notificationHealth.paidToday')}
-          value={t('notificationHealth.paidTodayValue', {
-            spent: health.data?.paidMessagesToday ?? 0,
-            cap: health.data?.dailyPaidMessageCap ?? 0,
-          })}
+          value={
+            known
+              ? t('notificationHealth.paidTodayValue', {
+                  spent: health.data?.paidMessagesToday ?? 0,
+                  cap: health.data?.dailyPaidMessageCap ?? 0,
+                })
+              : unknown
+          }
         />
       </Flex>
 
@@ -204,8 +233,9 @@ export default function NotificationHealthPage() {
           {
             key: 'channels',
             label: t('notificationHealth.byChannel'),
-            children:
-              counts.length === 0 ? (
+            children: !known ? (
+              unknown
+            ) : counts.length === 0 ? (
                 <Typography.Text type="secondary">{t('notificationHealth.noDeliveries')}</Typography.Text>
               ) : (
                 <Space wrap>
@@ -251,6 +281,14 @@ export default function NotificationHealthPage() {
         <Button onClick={refresh}>{t('notificationHealth.refresh')}</Button>
       </Flex>
 
+      <ReadFailedAlert
+        isError={deliveries.isError}
+        error={deliveries.error}
+        held={deliveries.data !== undefined}
+        onRetry={deliveries.refetch}
+        title={t('notificationHealth.deliveriesLoadFailed')}
+        testId="notification-deliveries-load-failed"
+      />
       <Table<NotificationDeliveryRow>
         scroll={{ x: 'max-content' }}
         rowKey="id"

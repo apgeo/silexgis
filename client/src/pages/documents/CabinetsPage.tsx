@@ -9,6 +9,7 @@ import {
   Select, Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -286,7 +287,13 @@ export default function CabinetsPage() {
   // The inbox is a reserved key rather than a cabinet, so nothing is asked about it here —
   // the inbox reads its own listing. Passing it through would ask the cabinet route about an
   // id that is not one, which answers 404 on every visit.
-  const { data: documents, isFetching } = useCabinetDocuments(showingUnfiled ? undefined : selected, {
+  const {
+    data: documents,
+    isFetching,
+    isError: documentsFailed,
+    error: documentsError,
+    refetch: refetchDocuments,
+  } = useCabinetDocuments(showingUnfiled ? undefined : selected, {
     includeSubtree,
     page,
     pageSize,
@@ -603,13 +610,21 @@ export default function CabinetsPage() {
             />
           )}
 
+          <ReadFailedAlert
+            isError={documentsFailed}
+            error={documentsError}
+            held={documents !== undefined}
+            onRetry={refetchDocuments}
+            title={t('cabinets.listLoadFailed')}
+            testId="cabinet-documents-load-failed"
+          />
           <Table<CabinetDocument>
             scroll={{ x: 'max-content' }}
             rowKey="id"
             size="middle"
             loading={isFetching && !documents}
             dataSource={documents?.items}
-            locale={{ emptyText: t('cabinets.noDocuments') }}
+            locale={{ emptyText: documentsFailed && !documents ? <span /> : t('cabinets.noDocuments') }}
             rowSelection={
               canWrite
                 ? {

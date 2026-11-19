@@ -18,6 +18,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,
@@ -63,7 +64,7 @@ type FormValues = {
 export default function ChecklistsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading, isError, refetch } = useChecklists();
+  const { data, isLoading, isError, error, refetch } = useChecklists();
   const { data: cavingGroups } = useCavingGroups();
 
   // Handing one list to one person by name is narrower than any audience the visibility control
@@ -193,9 +194,11 @@ export default function ChecklistsPage() {
         </Button>
       </Flex>
 
+      {/* A list already on screen stays through a failed re-read, under a notice. */}
+      <ReadFailedAlert isError={isError && data !== undefined} error={error} held onRetry={refetch} testId="checklists-refresh-failed" />
       {isLoading ? (
         <Skeleton active />
-      ) : isError ? (
+      ) : isError && data === undefined ? (
         <Result
           status="warning"
           title={t('checklists.loadFailed')}

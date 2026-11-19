@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
@@ -184,5 +184,79 @@ describe('DocumentComments', () => {
     fireEvent.click(ok);
     fireEvent.click(ok);
     expect(deleteSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('what a write sends, and what is kept when it is refused', () => {
+  const FAILED = 'The operation failed. Please try again.';
+  const composer = () => screen.getByRole('textbox', { name: 'Write a remark about this document' });
+
+  async function press(button: HTMLElement) {
+    await act(async () => {
+      fireEvent.click(button);
+    });
+  }
+
+  it('posts a new remark trimmed, at the top level, and clears the box once it is taken', async () => {
+    createSpy.mockResolvedValueOnce(undefined);
+    draw();
+    fireEvent.change(composer(), { target: { value: '  A new remark.  ' } });
+    await press(screen.getAllByRole('button', { name: 'Post' }).at(-1)!);
+
+    expect(createSpy).toHaveBeenCalledWith({ documentId: 'doc-1', parentId: null, body: 'A new remark.' });
+    expect(composer()).toHaveValue('');
+  });
+
+  it('keeps a refused remark in the box and says it was not posted', async () => {
+    createSpy.mockRejectedValueOnce(new Error('comment.invalid'));
+    draw();
+    fireEvent.change(composer(), { target: { value: 'A remark worth keeping.' } });
+    await press(screen.getAllByRole('button', { name: 'Post' }).at(-1)!);
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(composer()).toHaveValue('A remark worth keeping.');
+  });
+
+  it('posts a reply under the remark it answers, and keeps it when it is refused', async () => {
+    createSpy.mockRejectedValueOnce(new Error('comment.invalid'));
+    draw();
+    fireEvent.click(screen.getByText('Reply'));
+    fireEvent.change(screen.getByLabelText('Write a reply'), { target: { value: 'Agreed.' } });
+    await press(screen.getAllByRole('button', { name: 'Post' })[0]);
+
+    expect(createSpy).toHaveBeenCalledWith({ documentId: 'doc-1', parentId: 'c-1', body: 'Agreed.' });
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(screen.getByLabelText('Write a reply')).toHaveValue('Agreed.');
+  });
+
+  it('saves an edit of this remark, and keeps the editor open when the save is refused', async () => {
+    items = [comment({ mayEdit: true })];
+    updateSpy.mockRejectedValueOnce(new Error('comment.forbidden'));
+    draw();
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.change(screen.getByLabelText('Remark'), { target: { value: ' The fourth sketch. ' } });
+    await press(screen.getByRole('button', { name: 'Save' }));
+
+    expect(updateSpy).toHaveBeenCalledWith({ documentId: 'doc-1', id: 'c-1', body: 'The fourth sketch.' });
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(screen.getByLabelText('Remark')).toHaveValue(' The fourth sketch. ');
+  });
+
+  it('deletes this remark and says so, or says the delete failed', async () => {
+    items = [comment({ mayDelete: true })];
+    deleteSpy.mockResolvedValueOnce(undefined);
+    draw();
+    fireEvent.click(screen.getByText('Delete'));
+    await press(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(deleteSpy).toHaveBeenCalledWith({ documentId: 'doc-1', id: 'c-1' });
+    expect(await screen.findByText('Deleted.')).toBeInTheDocument();
+    cleanup();
+
+    deleteSpy.mockRejectedValueOnce(new Error('comment.forbidden'));
+    draw();
+    fireEvent.click(screen.getByText('Delete'));
+    await press(await screen.findByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
   });
 });

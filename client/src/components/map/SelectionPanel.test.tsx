@@ -87,13 +87,24 @@ let caveSummary: { headlinePicture: { thumbnailUrl: string; caption: string | nu
   headlinePicture: null,
 };
 
+/** What a card's own read answered, when a test stands it in for a failure; undefined reads fine. */
+let failedRead: { kind: 'cave' | 'cluster' | 'feature' | 'trip'; error: unknown } | undefined;
+const refetchFailed = vi.fn();
+function readOf<T>(kind: 'cave' | 'cluster' | 'feature' | 'trip', data: T) {
+  return failedRead?.kind === kind
+    ? { data: undefined, isPending: false, isError: true, error: failedRead.error, refetch: refetchFailed }
+    : { data, isPending: false, isError: false, error: null, refetch: refetchFailed };
+}
+
 vi.mock('../../api/hooks.ts', () => ({
-  useCave: () => ({ data: cave, isPending: false }),
+  useCave: () => readOf('cave', cave),
+  useTripLog: () => readOf('trip', undefined),
+  useTripTypes: () => ({ data: [] }),
   useCaveSummary: () => ({ data: caveSummary }),
   useCaveTypes: () => ({ data: [] }),
-  useClusterEntrances: () => ({ data: clusterEntrances, isPending: false }),
+  useClusterEntrances: () => readOf('cluster', clusterEntrances),
   useEntrances: () => ({ data: entrances }),
-  useFeature: () => ({ data: featureEnvelope, isPending: false }),
+  useFeature: () => readOf('feature', featureEnvelope),
   useFeatureTypes: () => ({
     data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
   }),
@@ -209,6 +220,8 @@ beforeEach(() => {
   installationWide = true;
   objectActions = 'read, write, delete, share';
   objectError = undefined;
+  failedRead = undefined;
+  refetchFailed.mockReset();
 });
 
 afterEach(() => {
@@ -279,6 +292,25 @@ describe('the shared detail panel', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Zoom to/ }));
 
     expect(camera.flyTo).toHaveBeenCalledWith(25.11, 45.21, 16);
+  });
+
+  it.each([
+    ['refused for want of the right', new ApiError(403, 'forbidden'), 'You are not allowed to make that change.'],
+    ['cut off by a lost connection', new TypeError('Failed to fetch'), 'The deletion failed. Please try again.'],
+  ])('names a delete %s and keeps the feature selected and drawn', async (_label, failure, words) => {
+    deleteFeature.mockRejectedValueOnce(failure);
+    const heard = vi.fn();
+    const stopListening = onSurfaceFeaturesChanged(heard);
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(heard).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().selection).toEqual({ kind: 'feature', featureId: 'feature-1' });
+    expect(screen.queryByText('Deleted.')).toBeNull();
+    stopListening();
   });
 
   it('frames a feature geometry in it rather than in a map that may not be showing', () => {
@@ -454,10 +486,50 @@ describe('editing a feature from a dialog opened before it was read again', () =
     fireEvent.click(await screen.findByTestId('feature-edit-submit'));
 
     await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // A second press refused for another reason draws its own sentence. Messages are drawn in the
+    // order they were asked for, so once that one is on screen anything the stale refusal had asked
+    // for would be too — no wait on the clock is needed to see that it asked for nothing.
+    updateFeature.mockRejectedValue(new ApiError(403, 'forbidden'));
+    fireEvent.click(screen.getByTestId('feature-edit-submit'));
+    expect(await screen.findByText('You are not allowed to make that change.')).toBeTruthy();
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(screen.queryByText(/Someone else changed this since you loaded it/)).toBeNull();
     // Still open, holding what was typed.
     expect(screen.getByTestId('feature-edit-submit')).toBeTruthy();
+  });
+});
+
+describe('a card whose own read failed', () => {
+  const cluster = { kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8, cell: [24.9, 45.3, 25.6, 45.7] } as const;
+
+  it('says the cluster could not be read, rather than calling it a cluster of nobody', () => {
+    failedRead = { kind: 'cluster', error: new TypeError('Failed to fetch') };
+    renderPanel(cluster);
+
+    expect(screen.queryByText('0 entrances in this area')).toBeNull();
+    expect(screen.getByText('The entrances in this area could not be read.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetchFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['cave', { kind: 'cave', caveId: 'cave-1' }, 'cave-selection-load-failed'],
+    ['trip', { kind: 'trip', tripId: 'trip-1' }, 'trip-selection-load-failed'],
+    ['feature', { kind: 'feature', featureId: 'feature-1' }, 'feature-selection-load-failed'],
+  ] as const)('stops spinning when the %s read fails, and offers to read it again', (kind, selection, testId) => {
+    failedRead = { kind, error: new ApiError(503) };
+    renderPanel(selection as WorkspaceSelection);
+
+    expect(screen.getByTestId(testId)).toBeTruthy();
+    expect(screen.getByText('What was picked on the map could not be read.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('words a refusal as gone or not yours, with no Retry to be refused again', () => {
+    failedRead = { kind: 'cave', error: new ApiError(404, 'not_found') };
+    renderPanel({ kind: 'cave', caveId: 'cave-1' });
+
+    expect(screen.getByText('This is no longer there, or is not yours to read.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 });

@@ -14,9 +14,14 @@ interface PanelPage {
 }
 
 let panel: PanelPage = { items: [], page: 1, pageSize: 50, totalItems: 0 };
+/** What the read of the links failed with, when a test makes it fail. */
+let linksFailure: unknown;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useResLinksForTarget: () => ({ data: panel }),
+  useResLinksForTarget: () =>
+    linksFailure === undefined
+      ? { data: panel, isError: false, error: null, refetch: vi.fn() }
+      : { data: undefined, isError: true, error: linksFailure, refetch: vi.fn() },
   useMe: () => ({ data: { id: 'me' } }),
   useMyPermissionGroups: () => ({ data: [] }),
   useDeleteResLink: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -110,10 +115,24 @@ function roleLink(id: string, code: string, title: string): ResLink {
 describe('LinksSection', () => {
   beforeEach(() => {
     panel = { items: [], page: 1, pageSize: 50, totalItems: 0 };
+    linksFailure = undefined;
   });
 
   // Renders are not torn down between cases here, and several of these assert on absence.
   afterEach(cleanup);
+
+  it('says the links could not be read, instead of leaving the section out as if none were recorded', () => {
+    linksFailure = new TypeError('Failed to fetch');
+    render(
+      <MemoryRouter>
+        <App>
+          <LinksSection entityType="feature" entityId="self" entityTitle="This cave" />
+        </App>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('links-load-failed')).toBeTruthy();
+  });
 
   it('renders a counted section with the relation phrase and the sibling members', () => {
     show(1, [

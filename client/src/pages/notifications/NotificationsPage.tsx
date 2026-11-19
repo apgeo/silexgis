@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { CheckOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +56,7 @@ export default function NotificationsPage() {
   const [category, setCategory] = useState<NotificationCategoryName | undefined>(undefined);
   const [scope, setScope] = useState<Scope>('all');
 
-  const { data, isFetching } = useNotifications({
+  const { data, isFetching, isError, error: readError, refetch } = useNotifications({
     page,
     pageSize,
     category,
@@ -139,13 +140,21 @@ export default function NotificationsPage() {
           }))}
         />
       </Flex>
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('notifications.loadFailed')}
+        testId="notifications-load-failed"
+      />
       <Table<NotificationItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         loading={isFetching && !data}
         dataSource={data?.items}
-        locale={{ emptyText: t('notifications.empty') }}
+        locale={{ emptyText: isError ? ' ' : t('notifications.empty') }}
         onRow={(record) => ({ onClick: () => open(record) })}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);

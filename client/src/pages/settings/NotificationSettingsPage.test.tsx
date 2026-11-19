@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type {
   NotificationCategory,
   NotificationChannelCell,
@@ -24,12 +24,17 @@ function cell(
 }
 
 let prefs: NotificationPreferences = { configuredChannels: [], categories: [] };
+let readFailed = false;
+const refetch = vi.fn();
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     ...actual,
-    useNotificationPreferences: () => ({ data: prefs, isPending: false }),
+    useNotificationPreferences: () =>
+      readFailed
+        ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch }
+        : { data: prefs, isPending: false, isError: false, refetch },
     useUpdateNotificationPreferences: () => ({ mutateAsync: vi.fn(), isPending: false }),
   };
 });
@@ -47,6 +52,21 @@ beforeEach(() => {
   prefs = { configuredChannels: ['inApp', 'email', 'sms'], categories: [] };
 });
 afterEach(cleanup);
+
+describe('a failed read of the preferences', () => {
+  it('says so and offers Retry instead of spinning for ever', () => {
+    readFailed = true;
+    try {
+      render(<NotificationSettingsPage />);
+      expect(screen.getByTestId('notification-settings-load-failed')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      readFailed = false;
+      refetch.mockReset();
+    }
+  });
+});
 
 describe('the sentence that explains a switch somebody cannot move', () => {
   it('is shown while every channel of the row is held on', () => {

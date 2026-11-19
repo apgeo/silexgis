@@ -10,9 +10,12 @@ import { ApiError } from '../../api/client.ts';
 const t = i18n.getFixedT('en');
 const rename = vi.fn();
 const refreshSession = vi.fn();
+const refetchMe = vi.fn();
+// The account's own read; replaced by a failed one where a test needs it.
+let meRead: Record<string, unknown> = { data: { userName: 'ana.invented' }, isPending: false };
 
 vi.mock('../../api/hooks.ts', () => ({
-  useMe: () => ({ data: { userName: 'ana.invented' }, isPending: false }),
+  useMe: () => meRead,
   useChangeUsername: () => ({ mutateAsync: rename, isPending: false }),
   useRequestDataExport: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDataExport: () => ({ data: undefined }),
@@ -40,6 +43,22 @@ beforeEach(() => {
   rename.mockReset();
   refreshSession.mockReset();
   refreshSession.mockResolvedValue(undefined);
+  refetchMe.mockReset();
+  meRead = { data: { userName: 'ana.invented' }, isPending: false };
+});
+
+describe('a failed read of the account', () => {
+  it('says so and offers Retry instead of spinning for ever', () => {
+    meRead = { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: refetchMe };
+    render(
+      <App>
+        <AccountSettingsPage />
+      </App>,
+    );
+    expect(screen.getByTestId('account-load-failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: t('common.retry') }));
+    expect(refetchMe).toHaveBeenCalledTimes(1);
+  });
 });
 
 afterEach(cleanup);

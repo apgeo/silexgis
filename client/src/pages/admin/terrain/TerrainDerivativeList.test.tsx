@@ -59,6 +59,9 @@ const builds: TerrainBuild[] = [
 ];
 
 let pictures: TerrainDerivativeLayerInfo[] = [];
+/** What the list's read failed with, when a test makes it fail. */
+let readFailure: unknown;
+const refetch = vi.fn();
 
 vi.mock('../../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../../api/hooks.ts')>(
@@ -68,7 +71,10 @@ vi.mock('../../../api/hooks.ts', async () => {
     // The polling rule itself is the real one: it is what the assertion below is about.
     terrainDerivativePollInterval: actual.terrainDerivativePollInterval,
     terrainDerivativeUnsettled: actual.terrainDerivativeUnsettled,
-    useTerrainDerivatives: () => ({ data: pictures, isLoading: false }),
+    useTerrainDerivatives: () =>
+      readFailure === undefined
+        ? { data: pictures, isLoading: false, isError: false, error: null, refetch }
+        : { data: undefined, isLoading: false, isError: true, error: readFailure, refetch },
     useTerrainBuilds: () => ({
       data: { items: builds, page: 1, pageSize: 100, totalItems: builds.length },
       isLoading: false,
@@ -90,6 +96,8 @@ function show(canDelete = true) {
 beforeEach(() => {
   deleteMutate.mockReset().mockResolvedValue(undefined);
   pictures = [picture({})];
+  readFailure = undefined;
+  refetch.mockReset();
 });
 
 afterEach(cleanup);
@@ -169,6 +177,16 @@ describe('TerrainDerivativeList', () => {
   it('offers no delete to somebody who may not', () => {
     show(false);
     expect(screen.queryByTestId('terrain-derivative-delete-p1')).not.toBeInTheDocument();
+  });
+
+  it('says a failed read failed, instead of "nothing computed yet", and offers Retry', () => {
+    readFailure = new TypeError('Failed to fetch');
+    show();
+
+    expect(screen.queryByTestId('terrain-no-derivatives')).toBeNull();
+    expect(screen.getByTestId('terrain-derivatives-load-failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('answers an installation that has computed nothing with what to do next', () => {

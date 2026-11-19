@@ -342,6 +342,26 @@ describe('TripReportPage', () => {
     expect(screen.getByTestId('trip-report-plates').textContent).toContain('Ana Pop');
   });
 
+  it('prints that the pictures could not be read, never that there are none, when their read failed', () => {
+    const refetch = vi.fn();
+    tripSpy.mockReturnValue({ data: trip(), isPending: false });
+    photosSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    renderAlone();
+
+    expect(screen.queryByText('No photographs are filed against this trip yet.')).toBeNull();
+    expect(screen.getByTestId('trip-report-photographs-unread').textContent).toContain(
+      'The photographs could not be read when this was printed.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   /**
    * The download is handed the trip exactly as this page read it. The map that goes into the
    * document is drawn from that object, so anything else passed here — a trip re-read some other

@@ -8,9 +8,13 @@ import { describe, expect, it, vi } from 'vitest';
 // successful write empties, and standing a server up to prove that would test the server.
 // What was PUT is kept, because the section that offers one of these writes mocks the hook away
 // and this is the only place the route it reaches is ever read.
-const transport = vi.hoisted(() => ({ puts: [] as [string, unknown][] }));
+const transport = vi.hoisted(() => ({ puts: [] as [string, unknown][], gets: [] as string[] }));
 vi.mock('./client.ts', () => ({
   api: {
+    GET: (path: string) => {
+      transport.gets.push(path);
+      return Promise.resolve({ data: {}, response: new Response(null, { status: 200 }) });
+    },
     POST: () => Promise.resolve({ data: { id: 'c1' }, response: new Response(null, { status: 200 }) }),
     DELETE: () => Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) }),
     PUT: (path: string, init: { params?: { path?: unknown } }) => {
@@ -22,8 +26,15 @@ vi.mock('./client.ts', () => ({
   lastReadETag: () => undefined,
 }));
 
-const { queryKeys, useUploadCenterline, useDeleteSurveyModel, useMakeSurveyModelCurrent } =
-  await import('./hooks.ts');
+const {
+  queryKeys,
+  useUploadCenterline,
+  useDeleteSurveyModel,
+  useMakeSurveyModelCurrent,
+  useCaveSurveyStatistics,
+  useCaveOrientation,
+  useCaveTopology,
+} = await import('./hooks.ts');
 
 /**
  * A cave's survey figures are worked out from its line work every time they are asked for, but
@@ -104,5 +115,49 @@ describe("the figures computed from a cave's line work", () => {
     // The card of declared places marks the ones the current survey has no station for, and tells
     // its reader to check which survey is current. Doing so, one card up, has to move the marks.
     expect(asked).toContain(JSON.stringify(queryKeys.caveDepthPlaces('cave-3')));
+  });
+});
+
+// The keys above are the ones the writes name. Whether those are the keys the panels read under is
+// a separate fact, and a spy on the invalidation cannot see it: a reader filed under any other key
+// would be left alone while every assertion above still held. So the panels' own readers are
+// mounted here, and what is counted is the requests that leave again after the write.
+describe('the panels reading those figures', () => {
+  it('ask the server again once a centerline is uploaded', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    transport.gets.length = 0;
+    const asked = (path: string) => transport.gets.filter((p) => p === path).length;
+    const STATISTICS = '/api/v1/caves/{id}/statistics';
+    const ORIENTATION = '/api/v1/caves/{id}/orientation';
+    const TOPOLOGY = '/api/v1/caves/{id}/topology';
+
+    renderHook(
+      () => {
+        useCaveSurveyStatistics('cave-9');
+        useCaveOrientation('cave-9');
+        useCaveTopology('cave-9');
+      },
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(asked(STATISTICS)).toBe(1);
+      expect(asked(ORIENTATION)).toBe(1);
+      expect(asked(TOPOLOGY)).toBe(1);
+    });
+
+    const { result } = renderHook(() => useUploadCenterline(), { wrapper });
+    await result.current.mutateAsync({
+      caveId: 'cave-9',
+      file: new File(['{}'], 'plot.geojson', { type: 'application/geo+json' }),
+    });
+
+    await waitFor(() => {
+      expect(asked(STATISTICS)).toBe(2);
+      expect(asked(ORIENTATION)).toBe(2);
+      expect(asked(TOPOLOGY)).toBe(2);
+    });
   });
 });

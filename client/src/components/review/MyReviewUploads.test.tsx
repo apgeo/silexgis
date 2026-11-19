@@ -51,6 +51,15 @@ beforeEach(async () => {
 });
 
 describe('the uploader\'s own held uploads', () => {
+  it('does not hide held uploads behind a failed read: it says the read failed and offers Retry', () => {
+    const refetch = vi.fn();
+    mineSpy.mockReturnValue({ data: undefined, isError: true, error: new TypeError('offline'), refetch });
+    show();
+    expect(screen.getByTestId('review-mine-load-failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('takes no room for an account that has nothing held', () => {
     mineSpy.mockReturnValue({ data: { items: [], page: 1, pageSize: 10, totalItems: 0 } });
     const { container } = show();

@@ -90,10 +90,19 @@ const basins = [
   },
 ];
 
+/** Whether the status read itself fails. */
+let statusFails = false;
+
 vi.mock('../../api/hooks.ts', () => ({
-  useSpeologieStatus: () => ({
-    data: { configured, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
-  }),
+  useSpeologieStatus: () =>
+    statusFails
+      ? { data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: vi.fn() }
+      : {
+          data: { configured, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
+          isError: false,
+          error: null,
+          refetch: vi.fn(),
+        },
   useSpeologieSearch: (params: unknown) => {
     searchCalls.push(params);
     return searchResult;
@@ -124,6 +133,7 @@ afterEach(cleanup);
 describe('SpeologieSearchPage', () => {
   beforeEach(() => {
     configured = true;
+    statusFails = false;
     searchCalls.length = 0;
     navigate.mockReset();
     searchResult = {
@@ -145,6 +155,15 @@ describe('SpeologieSearchPage', () => {
     show();
 
     expect(screen.getByTestId('speologie-not-configured')).toBeTruthy();
+    expect(screen.getByTestId('speologie-search').closest('button')?.disabled).toBe(true);
+  });
+
+  it('says why Search is off when the status could not be read', () => {
+    statusFails = true;
+    searchResult = { isFetching: false };
+    show();
+
+    expect(screen.getByTestId('speologie-status-failed')).toBeTruthy();
     expect(screen.getByTestId('speologie-search').closest('button')?.disabled).toBe(true);
   });
 

@@ -2,6 +2,7 @@
 import { Alert, Descriptions, Drawer, Skeleton, Space, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSpeologieCave, type SpeologieCave } from '../../api/hooks.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 
 interface Props {
   cave: SpeologieCave | null;
@@ -39,7 +40,16 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
       }
       data-testid="speologie-cave-drawer"
     >
-      {detail.isPending && cave !== null ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
+      {detail.isPending && cave !== null && !detail.isError ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
+      {/* What the list already said is still shown below; the failure is that of the full record. */}
+      <ReadFailedAlert
+        isError={detail.isError && detail.data === undefined}
+        error={detail.error}
+        held={false}
+        onRetry={detail.refetch}
+        title={t('speologie.caveLoadFailed')}
+        testId="speologie-cave-load-failed"
+      />
 
       {full ? (
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -127,7 +137,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                   {detail.data.description}
                 </Typography.Paragraph>
               </>
-            ) : detail.isPending ? null : (
+            ) : detail.isPending || detail.isError ? null : (
               <Typography.Text type="secondary">{t('speologie.detail.noDescription')}</Typography.Text>
             )}
           </div>

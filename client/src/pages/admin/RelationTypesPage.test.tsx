@@ -2,7 +2,17 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+
+// A read of the list that did not land, switched on by the test that needs it.
+const listRead = vi.hoisted(() => {
+  const refetch = vi.fn();
+  return {
+    failed: false,
+    refetch,
+    answer: () => ({ data: undefined, isLoading: false, isError: true, error: new TypeError('offline'), refetch }),
+  };
+});
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { ResLinkRelationType } from '../../api/hooks.ts';
 
@@ -43,7 +53,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCapabilities: () => ({
     data: { domains: {}, isFullAdmin: groups.some((group) => group.slug === 'full-administrators') },
   }),
-  useResLinkRelationTypes: () => ({ data: relationTypes, isLoading: false }),
+  useResLinkRelationTypes: () => (listRead.failed ? listRead.answer() : { data: relationTypes, isLoading: false }),
   useCreateResLinkRelationType: () => ({ mutateAsync: createMutate, isPending: false }),
   useUpdateResLinkRelationType: () => ({ mutateAsync: updateMutate, isPending: false }),
   useDeleteResLinkRelationType: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -198,6 +208,21 @@ describe('RelationTypesPage', () => {
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', record);
+    }
+  });
+});
+
+describe('a failed read of the list', () => {
+  it('says the read failed instead of showing an empty list, and offers Retry', () => {
+    listRead.failed = true;
+    try {
+      show();
+      expect(screen.getByTestId('relation-types-load-failed')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(listRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      listRead.failed = false;
+      listRead.refetch.mockReset();
     }
   });
 });

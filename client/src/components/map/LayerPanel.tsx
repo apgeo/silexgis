@@ -194,6 +194,8 @@ interface LayerPanelProps {
   centerlineMaxPaths?: number;
   onCenterlineLimitsChange: (limits: { detailZoom?: number; maxPaths?: number }) => void;
   footer?: ReactNode;
+  /** Said above everything else, such as that some of what is listed could not be read. */
+  notice?: ReactNode;
 }
 
 export default function LayerPanel({
@@ -250,6 +252,7 @@ export default function LayerPanel({
   centerlineMaxPaths,
   onCenterlineLimitsChange,
   footer,
+  notice,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
@@ -490,6 +493,7 @@ export default function LayerPanel({
 
   return (
     <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
+      {notice}
       <Typography.Text strong>{t('map.baseLayers')}</Typography.Text>
       {/* Each base keeps its own opacity slider (like overlays); only the active base
           is visible, so switching to a dimmed base restores its opacity. */}

@@ -42,6 +42,8 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const answered: EventDefaults = { visibility: 'cavingGroup', cavingGroupId: 'club-1' };
 
+const SAVE_FAILED = 'The operation failed. Please try again.';
+
 function show(event?: EventInfo) {
   return render(
     <App>
@@ -287,15 +289,33 @@ describe('a save from a dialog opened before the event was read again', () => {
   });
 
   it('leaves a stale-version refusal to the one conflict warning', async () => {
-    updateSpy.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    updateSpy.mockRejectedValueOnce(new ApiError(412, 'concurrency.version_mismatch'));
+    show(anOccurrence());
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+
+    // A second press refused for a reason of its own draws its own sentence. Messages are drawn
+    // in the order they are asked for, so once it is on screen anything the stale refusal had
+    // asked for would be too: only then does the absence of "save failed" prove anything.
+    updateSpy.mockRejectedValueOnce(new ApiError(409, 'event.recurrence_overlapping'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/Each occurrence would still be running/)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+  });
+
+  it.each([
+    ['a refusal it has words for', new ApiError(409, 'event.recurrence_overlapping'), /Each occurrence would still be running/],
+    ['a failed server', new ApiError(500, undefined), SAVE_FAILED],
+  ])('says why a save was refused for %s, and stays open', async (_, error, sentence) => {
+    updateSpy.mockRejectedValueOnce(error);
     show(anOccurrence());
     await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
-    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    expect(screen.getByTestId('event-title')).toHaveValue('Committee night');
   });
 });

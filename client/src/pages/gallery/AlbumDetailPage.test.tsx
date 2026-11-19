@@ -4,9 +4,17 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
-const state = vi.hoisted(() => ({ setCover: vi.fn() }));
+const state = vi.hoisted(() => ({
+  setCover: vi.fn(),
+  /** What the album's own read failed with, when a test makes it fail. */
+  albumError: null as unknown,
+  photosFailed: false,
+  refetchAlbum: vi.fn(),
+  refetchPhotos: vi.fn(),
+}));
 
 /** An invented picture, flattened by the page to what the grid draws. */
 function photo(documentId: string) {
@@ -31,15 +39,24 @@ vi.mock('../../api/hooks.ts', async (importActual) => {
   return {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: { domains: { documents: 'read,write' } } }),
-    useAlbum: () => ({
-      data: { id: 'album-1', title: 'Sample album', description: null, coverDocumentId: null },
-      isPending: false,
-    }),
-    usePhotos: () => ({
-      data: { items: [photo('p1')], page: 1, pageSize: 500, totalItems: 1 },
-      isPending: false,
-      refetch: vi.fn(),
-    }),
+    useAlbum: () =>
+      state.albumError
+        ? { data: undefined, isPending: false, isError: true, error: state.albumError, refetch: state.refetchAlbum }
+        : {
+            data: { id: 'album-1', title: 'Sample album', description: null, coverDocumentId: null },
+            isPending: false,
+            isError: false,
+            refetch: state.refetchAlbum,
+          },
+    usePhotos: () =>
+      state.photosFailed
+        ? { data: undefined, isPending: false, isError: true, refetch: state.refetchPhotos }
+        : {
+            data: { items: [photo('p1')], page: 1, pageSize: 500, totalItems: 1 },
+            isPending: false,
+            isError: false,
+            refetch: state.refetchPhotos,
+          },
     useReorderAlbum: () => ({ mutateAsync: vi.fn() }),
     useSetAlbumCover: () => ({ mutateAsync: state.setCover }),
     useRemoveAlbumItem: () => ({ mutateAsync: vi.fn() }),
@@ -60,6 +77,10 @@ const { default: AlbumDetailPage } = await import('./AlbumDetailPage.tsx');
 const unhandled = vi.fn();
 beforeEach(() => {
   state.setCover.mockReset();
+  state.albumError = null;
+  state.photosFailed = false;
+  state.refetchAlbum.mockReset();
+  state.refetchPhotos.mockReset();
   unhandled.mockReset();
   process.on('unhandledRejection', unhandled);
 });
@@ -96,5 +117,31 @@ describe('AlbumDetailPage', () => {
     expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(unhandled).not.toHaveBeenCalled();
+  });
+});
+
+describe('reads of the album that did not land', () => {
+  it('says a failed read of the album failed, with Retry, rather than that it is forbidden', () => {
+    state.albumError = new TypeError('offline');
+    draw();
+    expect(screen.getByTestId('read-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('admin.forbidden'))).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(state.refetchAlbum).toHaveBeenCalledTimes(1);
+  });
+
+  it('says an album that is not there is not there, rather than that it is forbidden', () => {
+    state.albumError = new ApiError(404, 'album.not_found');
+    draw();
+    expect(screen.getByText(i18n.t('gallery.albumNotFound'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('admin.forbidden'))).toBeNull();
+  });
+
+  it('says a failed read of the pictures failed, rather than drawing an empty album', () => {
+    state.photosFailed = true;
+    draw();
+    expect(screen.getByTestId('album-photos-load-failed')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(state.refetchPhotos).toHaveBeenCalledTimes(1);
   });
 });

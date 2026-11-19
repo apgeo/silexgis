@@ -15,13 +15,17 @@ import { ApiError } from '../../api/client.ts';
 
 const createSpy = vi.fn();
 let canCreate = true;
+/** What the read of the groups failed with, when a test makes it fail. */
+let groupsFailure: unknown;
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     ...actual,
     useCan: (domain: string, action: string) => domain === 'cavingGroups' && action === 'create' && canCreate,
-    useCavingGroups: () => ({
+    useCavingGroups: () => groupsFailure !== undefined
+      ? { data: undefined, isFetching: false, isError: true, error: groupsFailure, refetch: vi.fn() }
+      : ({
       data: [
         { id: 'g-1', name: 'Club A', type: 'cavingClub', description: null, memberCount: 3, canAnnounce: false },
         { id: 'g-2', name: 'Group B', type: 'group', description: 'Sample', memberCount: 1, canAnnounce: false },
@@ -69,6 +73,16 @@ function nameField(dialog: HTMLElement) {
 }
 
 describe('CavingGroupsPage', () => {
+  it('says the groups could not be read, rather than drawing an empty directory', () => {
+    groupsFailure = new TypeError('Failed to fetch');
+    try {
+      show();
+      expect(screen.getByTestId('caving-groups-load-failed')).toBeTruthy();
+    } finally {
+      groupsFailure = undefined;
+    }
+  });
+
   it('lists the groups and offers create only to whoever may create one', () => {
     const createButton = () => screen.queryByRole('button', { name: new RegExp(i18n.t('cavingGroups.new')) });
     // The same query finds the button when the right is there, so its absence below is the gating.

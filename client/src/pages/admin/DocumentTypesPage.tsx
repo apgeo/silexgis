@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { PlusOutlined, ProfileOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -46,7 +47,7 @@ export default function DocumentTypesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: types, isLoading } = useDocumentTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useDocumentTypes();
   const createType = useCreateDocumentType();
   const updateType = useUpdateDocumentType();
 
@@ -130,6 +131,14 @@ export default function DocumentTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="document-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

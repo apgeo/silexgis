@@ -43,6 +43,7 @@ import { featureProblemMessage } from '../features/featureProblems.ts';
 import TripStateTag from '../trips/TripStateTag.tsx';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import PanelDock from './PanelDock.tsx';
 import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
@@ -108,12 +109,44 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
   );
 }
 
+/**
+ * What a card draws when its own read failed and it holds nothing. Only the pending read spins: a
+ * read that failed would otherwise leave the dock spinning for good. A settled refusal is the
+ * server saying the thing is gone or not this reader's, which is worded as such and not retried.
+ */
+function SelectionReadFailed({
+  error,
+  onRetry,
+  title,
+  testId,
+}: {
+  error: unknown;
+  onRetry: () => unknown;
+  title: string;
+  testId: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div style={{ padding: 12 }}>
+      <ReadFailedAlert
+        isError
+        error={error}
+        held={false}
+        onRetry={onRetry}
+        title={title}
+        refusedTitle={t('map.selectionRefused')}
+        testId={testId}
+      />
+    </div>
+  );
+}
+
 /** A clicked low-zoom cluster: list its member entrances without moving the camera. */
 function ClusterCard({ selection }: { selection: ClusterSelection }) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   // A filter layer's cluster lists that filter's members; the main layer's, the map filter's.
-  const { data, isPending } = useClusterEntrances(
+  const { data, isPending, isError, error, refetch } = useClusterEntrances(
     selection.cell,
     selection.savedFilterId ? { savedFilterId: selection.savedFilterId } : mapFilterParams(),
   );
@@ -141,6 +174,19 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
       <Flex align="center" justify="center" style={{ height: '100%' }}>
         <Spin />
       </Flex>
+    );
+  }
+
+  // A failed read is not a cluster of nobody: "0 entrances in this area" would be a claim about
+  // the ground the server never made.
+  if (isError && !data) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.clusterLoadFailed')}
+        testId="cluster-load-failed"
+      />
     );
   }
 
@@ -193,8 +239,19 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
 function TripCard({ selection }: { selection: TripSelection }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: trip, isPending } = useTripLog(selection.tripId);
+  const { data: trip, isPending, isError, error, refetch } = useTripLog(selection.tripId);
   const { data: tripTypes } = useTripTypes();
+
+  if (isError && !trip) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="trip-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !trip) {
     return (
@@ -246,11 +303,22 @@ function CaveCard({
   const { t } = useTranslation();
   const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
-  const { data: cave, isPending } = useCave(selection.caveId);
+  const { data: cave, isPending, isError, error, refetch } = useCave(selection.caveId);
   const { data: entrances } = useEntrances(selection.caveId);
   const { data: caveTypes } = useCaveTypes();
   // Shares its cache entry with the cave page, so moving between the two costs nothing.
   const { data: summary } = useCaveSummary(selection.caveId);
+
+  if (isError && !cave) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="cave-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !cave) {
     return (
@@ -358,7 +426,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   const { t } = useTranslation();
   const { message } = App.useApp();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data: envelope, isPending } = useFeature(selection.featureId);
+  const { data: envelope, isPending, isError, error, refetch } = useFeature(selection.featureId);
   const { data: featureTypes } = useFeatureTypes();
   // The rights held on this feature, not installation-wide: a member may write the one feature
   // they were given and nothing else, or everything but a feature held back from them.
@@ -406,6 +474,17 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       value: typedValueText(t, typeCode, key, value),
     }));
   }, [feature, featureType, t]);
+
+  if (isError && !envelope) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="feature-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !envelope || !feature) {
     return (

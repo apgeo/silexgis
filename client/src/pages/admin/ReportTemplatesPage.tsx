@@ -16,6 +16,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -73,7 +74,7 @@ export default function ReportTemplatesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: templates, isLoading } = useReportTemplates();
+  const { data: templates, isLoading, isError, error: readError, refetch } = useReportTemplates();
   const { data: tripTypes } = useTripTypes();
   const createTemplate = useCreateReportTemplate();
   const updateTemplate = useUpdateReportTemplate();
@@ -216,6 +217,14 @@ export default function ReportTemplatesPage() {
         )}
       </Flex>
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={templates !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="report-templates-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

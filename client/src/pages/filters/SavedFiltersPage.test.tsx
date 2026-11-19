@@ -9,7 +9,8 @@ import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/cav
 import { galleryDocument, galleryWhere, readGalleryFilter } from '../../filters/gallery.ts';
 import type { SavedFilter } from '../../api/hooks/savedFilters.ts';
 
-const { filters, updateSpy, deleteSpy } = vi.hoisted(() => ({
+const { filters, updateSpy, deleteSpy, filtersFailure } = vi.hoisted(() => ({
+  filtersFailure: { current: undefined as unknown },
   filters: { current: [] as unknown[] },
   updateSpy: vi.fn(),
   deleteSpy: vi.fn(),
@@ -37,7 +38,10 @@ vi.mock('../../api/hooks/savedFilters.ts', async () => {
   );
   return {
     documentOf: actual.documentOf,
-    useSavedFilters: () => ({ data: filters.current, isLoading: false }),
+    useSavedFilters: () =>
+      filtersFailure.current === undefined
+        ? { data: filters.current, isLoading: false, isError: false, error: null, refetch: vi.fn() }
+        : { data: undefined, isLoading: false, isError: true, error: filtersFailure.current, refetch: vi.fn() },
     useUpdateSavedFilter: () => ({ mutateAsync: updateSpy, isPending: false }),
     useDeleteSavedFilter: () => ({ mutateAsync: deleteSpy, isPending: false }),
   };
@@ -88,6 +92,17 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe('the saved filters screen', () => {
+  it('says the saved filters could not be read, rather than that there are none', () => {
+    filtersFailure.current = new TypeError('Failed to fetch');
+    try {
+      show();
+      expect(screen.getByTestId('saved-filters-load-failed')).toBeTruthy();
+      expect(screen.queryByText('No saved filters. Save one from the cave registry.')).toBeNull();
+    } finally {
+      filtersFailure.current = undefined;
+    }
+  });
+
   it('says what each filter asks, naming values only through lists the reader may read', () => {
     filters.current = [
       filter({}),

@@ -22,6 +22,7 @@ import {
   Typography,
 } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import MapBackgroundsForm from './MapBackgroundsForm.tsx';
 import WorkspaceDefaultForm from './WorkspaceDefaultForm.tsx';
 import SurveyUploadsSettingsForm from './SurveyUploadsSettingsForm.tsx';
@@ -60,7 +61,7 @@ export default function MessagingSettingsPage() {
   const { data: me } = useMe();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.settings, 'read');
-  const { data: settings, isLoading } = useAdminSettings(canRead);
+  const { data: settings, isLoading, isError, error, refetch } = useAdminSettings(canRead);
 
   const onSaved = (next: AdminSettings) => queryClient.setQueryData(queryKeys.adminSettings, next);
 
@@ -81,6 +82,16 @@ export default function MessagingSettingsPage() {
       <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
         {t('admin.messaging.intro')}
       </Typography.Paragraph>
+
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={settings !== undefined}
+        onRetry={refetch}
+        title={t('admin.settingsLoadFailed')}
+        testId="messaging-settings-load-failed"
+        style={{ marginBottom: 0 }}
+      />
 
       {isLoading || !settings ? null : (
         <Tabs

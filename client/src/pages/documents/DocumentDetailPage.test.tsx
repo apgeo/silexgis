@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const documentTypes = [
   { id: 1, code: 'survey_report', name: 'Survey report', description: null, sortOrder: 10,
@@ -68,6 +69,10 @@ let fileInfo = {
   pageCount: 42 as number | null,
   conversion: 'converted',
 };
+
+// Tests reassign the fixtures above to describe their case; each starts again from these.
+const firstDoc = doc;
+const firstFileInfo = fileInfo;
 
 let rights = 'read, write';
 let documentFailed = false;
@@ -184,6 +189,10 @@ const textSentences = [
  * entries at the bottom the width of all three. How many short facts precede them varies — the
  * author line is only drawn when the file names one — so those long entries can begin partway
  * along a row, and are then silently squeezed into what is left of it instead of taking a line.
+ *
+ * The watch calls through to the console rather than replacing it: a watch that swallowed every
+ * other line would also hide React's warnings and the page's own logged failures from the setup
+ * file's console-error record, so this file would read as clean whatever it provoked.
  */
 let antdComplaints: string[] = [];
 
@@ -192,15 +201,20 @@ beforeEach(() => {
   documentFailed = false;
   retentionDays = 30;
   deleteSpy.mockReset().mockResolvedValue(undefined);
-  vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+  doc = firstDoc;
+  fileInfo = firstFileInfo;
+  rights = 'read, write';
+  mobile = false;
+  vi.spyOn(console, 'error');
+});
+
+afterEach(() => {
+  for (const args of vi.mocked(console.error).mock.calls) {
     const first = String(args[0] ?? '');
     if (first.includes('[antd:')) {
       antdComplaints.push(first);
     }
-  });
-});
-
-afterEach(() => {
+  }
   const complaints = antdComplaints;
   vi.mocked(console.error).mockRestore();
   expect(complaints).toEqual([]);
@@ -221,6 +235,30 @@ describe('DocumentDetailPage', () => {
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('doc-1'));
     expect(await screen.findByTestId('cabinets-page')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a reader who may not delete it', new ApiError(403, undefined), 'You may not delete that document.'],
+    ['a document something is built on', new ApiError(409, 'document.in_use'), /is built on this document\. Remove that first\./],
+    ['a failed server', new ApiError(500, undefined), 'The operation failed. Please try again.'],
+    ['no answer at all', new TypeError('Failed to fetch'), 'The operation failed. Please try again.'],
+  ])('says why a delete was refused for %s, and stays on the document', async (_, error, sentence) => {
+    deleteSpy.mockReset().mockRejectedValue(error);
+    renderPage();
+
+    fireEvent.click(screen.getByTestId('document-delete'));
+    const dialog = await screen.findByRole('tooltip');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    expect(deleteSpy).toHaveBeenCalledWith('doc-1');
+    // The router commits a move as a transition, on the scheduler's next task rather than with
+    // the render that drew the message; let that task run before saying no move happened.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByTestId('cabinets-page')).toBeNull();
+    expect(screen.getByTestId('document-delete')).toBeInTheDocument();
   });
 
   it('says a deleted document is kept where the installation sets no window', async () => {

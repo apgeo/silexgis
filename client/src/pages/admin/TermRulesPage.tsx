@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { App, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateTermRuleSet,
@@ -125,6 +126,14 @@ export default function TermRulesPage() {
         }}
       />
 
+      <ReadFailedAlert
+        isError={sets.isError}
+        error={sets.error}
+        held={sets.data !== undefined}
+        onRetry={sets.refetch}
+        title={t('admin.listLoadFailed')}
+        testId="term-rule-sets-load-failed"
+      />
       <Table<TermRuleSetInfo>
         rowKey="id"
         size="middle"

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, App, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import Button from '../../components/Button.tsx';
 import {
   useAnswerEventInvitation,
   useEventInvitations,
@@ -119,13 +121,22 @@ export default function EventResponsesTab({
     }
   };
 
-  if (error) {
+  // A read that did not land is offered again (a refusal is not: it would only be refused again),
+  // and a list already on screen stays through a failed re-read rather than being swapped out.
+  if (error && !data) {
     return (
       <Alert
         type="warning"
         showIcon
         data-testid="event-invitations-unavailable"
         title={t('events.responses.unavailable')}
+        action={
+          isSettledRefusal(error) ? undefined : (
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          )
+        }
       />
     );
   }
@@ -135,18 +146,21 @@ export default function EventResponsesTab({
   }
 
   return (
-    <InvitationsPanel
-      data={data}
-      canEdit={canEdit}
-      keys="events.responses"
-      idPrefix="event"
-      inviting={invite.isPending}
-      self={me?.caverId ? { caverId: me.caverId } : null}
-      onInvite={onInvite}
-      onAnswer={onAnswer}
-      onSelect={onSelect}
-      onRemove={onRemove}
-      onUnknownInvitee={() => message.error(t('events.responses.pickFromDirectory'))}
-    />
+    <>
+      <ReadFailedAlert isError={!!error} error={error} held onRetry={refetch} testId="event-invitations-refresh-failed" />
+      <InvitationsPanel
+        data={data}
+        canEdit={canEdit}
+        keys="events.responses"
+        idPrefix="event"
+        inviting={invite.isPending}
+        self={me?.caverId ? { caverId: me.caverId } : null}
+        onInvite={onInvite}
+        onAnswer={onAnswer}
+        onSelect={onSelect}
+        onRemove={onRemove}
+        onUnknownInvitee={() => message.error(t('events.responses.pickFromDirectory'))}
+      />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
@@ -13,6 +13,16 @@ vi.mock('../auth/auth.tsx', () => ({
   // A shared link is opened cold, by somebody with no session in that tab.
   userManager: { getUser: async () => null },
   useAuth: () => ({ signIn: async () => {} }),
+}));
+
+// The data layers are the loader's own business, tested beside it; what the page owes them is to
+// say when a read of theirs failed, so the callback it hands over is kept to be called by hand.
+const layerLoader = { onReadFailed: undefined as ((failed: boolean) => void) | undefined, reload: vi.fn() };
+vi.mock('../map/sharedViewLayers.ts', () => ({
+  createSharedViewLayers: (_token: string, _overlays: unknown, onReadFailed: (failed: boolean) => void) => {
+    layerLoader.onReadFailed = onReadFailed;
+    return { layers: [], attach: () => () => undefined, reload: layerLoader.reload };
+  },
 }));
 
 const { api } = await import('../api/client.ts');
@@ -83,5 +93,29 @@ describe('the page a shared map-view link opens', () => {
     network.answer = async () => problem(404, 'map_view.share_not_found');
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
     expect(await screen.findByTestId('shared-view-not-found')).toBeTruthy();
+  });
+});
+
+describe('the data of a shared view read after it opened', () => {
+  it('says a failed read of its caves, keeps the map, and asks again on Retry', async () => {
+    network.answer = async () =>
+      new Response(
+        JSON.stringify({ name: 'Valea', camera: null, reach: null, background: null, overlays: { entrances: true, features: true } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    show();
+    expect(await screen.findByText('Valea')).toBeTruthy();
+    expect(screen.queryByTestId('shared-view-data-failed')).toBeNull();
+
+    act(() => layerLoader.onReadFailed?.(true));
+    const notice = await screen.findByTestId('shared-view-data-failed');
+    expect(notice.textContent).toContain(i18n.t('views.sharedDataFailed'));
+    expect(screen.getByTestId('shared-view-map')).toBeTruthy();
+
+    fireEvent.click(within(notice).getByRole('button', { name: i18n.t('common.retry') }));
+    expect(layerLoader.reload).toHaveBeenCalledTimes(1);
+
+    act(() => layerLoader.onReadFailed?.(false));
+    expect(screen.queryByTestId('shared-view-data-failed')).toBeNull();
   });
 });

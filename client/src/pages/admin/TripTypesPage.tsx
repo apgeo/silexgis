@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { CompassOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -59,7 +60,7 @@ export default function TripTypesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: types, isLoading } = useTripTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useTripTypes();
   const { data: checklists } = useChecklists();
   const createType = useCreateTripType();
   const updateType = useUpdateTripType();
@@ -143,6 +144,14 @@ export default function TripTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="trip-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

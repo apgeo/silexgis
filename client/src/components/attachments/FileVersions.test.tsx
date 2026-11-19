@@ -12,9 +12,14 @@ const versions: FileVersionInfo[] = [
 ];
 
 const uploadVersion = vi.fn((_: unknown) => Promise.resolve());
+/** What the read of the versions failed with, when a test makes it fail. */
+let versionsFailure: unknown;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useFileVersions: () => ({ data: versions, isLoading: false }),
+  useFileVersions: () =>
+    versionsFailure === undefined
+      ? { data: versions, isLoading: false, isError: false, error: null, refetch: vi.fn() }
+      : { data: undefined, isLoading: false, isError: true, error: versionsFailure, refetch: vi.fn() },
   useUploadFileVersion: () => ({ mutateAsync: uploadVersion, isPending: false }),
   useDeleteFileVersion: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
   useFileConfig: () => ({ data: { maxUploadBytes: 1000 } }),
@@ -24,6 +29,22 @@ vi.mock('../../api/hooks.ts', () => ({
 const { default: FileVersions } = await import('./FileVersions.tsx');
 
 describe('FileVersions', () => {
+  it('says the versions could not be read, rather than that there are none', async () => {
+    versionsFailure = new TypeError('Failed to fetch');
+    try {
+      render(
+        <App>
+          <FileVersions fileId="f" versionNumber={2} canEdit />
+        </App>,
+      );
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(await screen.findByTestId('file-versions-load-failed')).toBeInTheDocument();
+    } finally {
+      versionsFailure = undefined;
+    }
+  });
+
   it('shows a plain version badge for read-only viewers and no interactive trigger', () => {
     const { container } = render(
       <App>

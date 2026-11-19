@@ -61,7 +61,7 @@ vi.mock('../client.ts', async () => {
   };
 });
 
-const { flushAccountPreferences, useAccountPrefsSync } = await import('./accountPrefs.ts');
+const { SAVE_DELAY_MS, flushAccountPreferences, useAccountPrefsSync } = await import('./accountPrefs.ts');
 
 function sync(accountId: string | null, { strict = false, token }: { strict?: boolean; token?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -97,6 +97,7 @@ describe('account preferences between this browser and the account', () => {
   });
 
   it('writes a change back, merged into the document, keeping what it does not own', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     stored = { appearance: { theme: 'dark', density: 'comfortable', reduceMotion: false }, other: { kept: true } };
     sync('account-a');
     await waitFor(() => expect(useUiPrefsStore.getState().appearance.theme).toBe('dark'));
@@ -104,7 +105,12 @@ describe('account preferences between this browser and the account', () => {
     act(() => useUiPrefsStore.getState().setCoordinateFormat('dms'));
     expect(unsaved()).toBe(true);
 
-    await waitFor(() => expect(put).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    // The write waits for a burst of changes to settle; the clock is moved past that pause rather
+    // than waited out, so a longer pause cannot turn this into a race with the test's timeout.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS);
+    });
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
     // Only what changed is sent; the server keeps the rest.
     expect(put).toHaveBeenCalledWith({ coordinateFormat: 'dms' });
     expect(stored).toEqual({

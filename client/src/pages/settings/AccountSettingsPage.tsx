@@ -2,6 +2,7 @@
 import { DownloadOutlined } from '@ant-design/icons';
 import { App, Alert, Card, Flex, Form, Input, Popconfirm, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import { downloadFile } from '../../api/download.ts';
@@ -25,12 +26,24 @@ export default function AccountSettingsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<{ username: string }>();
-  const { data: me, isPending } = useMe();
+  const { data: me, isPending, isError, error: readError, refetch } = useMe();
   const { refreshSession } = useAuth();
   const changeUsername = useChangeUsername();
   const requestExport = useRequestDataExport();
   const { data: dataExport } = useDataExport();
 
+  if (isError && !me) {
+    return (
+      <ReadFailedAlert
+        error={readError}
+        isError
+        held={false}
+        onRetry={refetch}
+        title={t('settings.meLoadFailed')}
+        testId="account-load-failed"
+      />
+    );
+  }
   if (isPending || !me) {
     return <Spin />;
   }

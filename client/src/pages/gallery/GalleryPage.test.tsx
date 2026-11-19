@@ -10,7 +10,8 @@ import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { encodeFilter } from '../../filters/url.ts';
 
-const { photosSpy, editorSpy, savedFilters, extentCutShort } = vi.hoisted(() => ({
+const { photosSpy, editorSpy, savedFilters, extentCutShort, photosFailure } = vi.hoisted(() => ({
+  photosFailure: { current: undefined as unknown },
   photosSpy: vi.fn(),
   editorSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
@@ -30,6 +31,9 @@ vi.mock('../../api/hooks.ts', () => ({
   usePhotoBulk: () => ({ mutateAsync: vi.fn() }),
   usePhotos: (params: unknown) => {
     photosSpy(params);
+    if (photosFailure.current !== undefined) {
+      return { data: undefined, isFetching: false, isError: true, error: photosFailure.current, refetch: vi.fn() };
+    }
     return {
       data: { items: [], page: 1, pageSize: 60, totalItems: 0, extentCutShort: extentCutShort.current },
       isFetching: false,
@@ -123,6 +127,27 @@ beforeEach(async () => {
   editorSpy.mockReset();
   savedFilters.current = [];
   extentCutShort.current = false;
+  photosFailure.current = undefined;
+});
+
+describe('a failed read of the photographs', () => {
+  it('says the read failed, not that the conditions could not be applied, nor that nothing matches', () => {
+    photosFailure.current = new TypeError('Failed to fetch');
+    show();
+
+    expect(screen.queryByTestId('gallery-filter-refused')).toBeNull();
+    expect(screen.queryByText('No photographs match.')).toBeNull();
+    expect(screen.getByTestId('gallery-load-failed')).toBeTruthy();
+  });
+
+  it('keeps the conditions sentence for a refusal of the question itself', async () => {
+    const { ApiError } = await import('../../api/client.ts');
+    photosFailure.current = new ApiError(400, 'filter.invalid');
+    show();
+
+    expect(screen.getByTestId('gallery-filter-refused')).toBeTruthy();
+    expect(screen.queryByTestId('gallery-load-failed')).toBeNull();
+  });
 });
 
 /**

@@ -114,6 +114,9 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
   } as unknown as TripLogInfo;
 }
 
+const SAVE_FAILED = 'The operation failed. Please try again.';
+const INVALID_FIELD_DATA = "The Field data section does not fit what this trip's purpose asks for.";
+
 function show(subject: TripLogInfo, canEdit: boolean) {
   return render(
     <App>
@@ -524,9 +527,6 @@ describe('a section saved after the trip was read again under it', () => {
     updateTrip.mockRejectedValueOnce(new ApiError(412, 'concurrency.version_mismatch'));
     fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
 
     // Another re-read must not take the text, and a second press is still refused rather than
     // carrying the newer version over somebody else's change.
@@ -536,8 +536,32 @@ describe('a section saved after the trip was read again under it', () => {
       </App>,
     );
     expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('half a sentence');
+    // The second press is refused for another reason, which draws its own sentence. Messages are
+    // drawn in the order they are asked for, so once that one is on screen anything the stale
+    // refusal had asked for would be too: only now does the absence of "save failed" mean something.
+    updateTrip.mockRejectedValueOnce(new ApiError(400, 'trip_log.field_data_invalid'));
     fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(2));
     expect((updateTrip.mock.calls[1][0] as { ifMatch?: string }).ifMatch).toBe('"1"');
+    expect(await screen.findByText(INVALID_FIELD_DATA)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+  });
+
+  it.each([
+    ['the section does not fit the purpose', new ApiError(400, 'trip_log.field_data_invalid'), INVALID_FIELD_DATA],
+    ['the server failed', new ApiError(500, undefined), SAVE_FAILED],
+    ['nothing answered', new TypeError('Failed to fetch'), SAVE_FAILED],
+  ])('says why a save was refused when %s, and keeps what was typed', async (_, error, sentence) => {
+    onFile('"1"');
+    show(trip(), true);
+    openSection('Field data');
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'half a sentence' },
+    });
+    updateTrip.mockRejectedValueOnce(error);
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('half a sentence');
   });
 });

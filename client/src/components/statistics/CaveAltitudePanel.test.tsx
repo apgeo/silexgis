@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { AltitudeDisagreement } from '../../api/hooks/entranceAltitudes.ts';
 
-const { reportSpy } = vi.hoisted(() => ({ reportSpy: vi.fn() }));
+const { reportSpy, fillSpy } = vi.hoisted(() => ({ reportSpy: vi.fn(), fillSpy: vi.fn() }));
 
 vi.mock('../../api/hooks/entranceAltitudes.ts', () => ({
   useCaveAltitudeDisagreement: (...args: unknown[]) => reportSpy(...args),
-  useFillEntranceAltitude: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useFillEntranceAltitude: () => ({ mutateAsync: fillSpy, isPending: false }),
 }));
 
 const { default: CaveAltitudePanel } = await import('./CaveAltitudePanel.tsx');
@@ -62,7 +62,10 @@ function show(data: AltitudeDisagreement | undefined, canEdit: boolean, isError 
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  fillSpy.mockReset();
+});
 
 describe('CaveAltitudePanel', () => {
   it('renders nothing when the server refuses', () => {
@@ -83,7 +86,27 @@ describe('CaveAltitudePanel', () => {
 
   it('says so when no elevation data has been prepared, instead of showing a table', () => {
     show({ ...report, hasTerrain: false }, true);
+    expect(screen.getByText(/No elevation data has been prepared on this installation/)).toBeInTheDocument();
     expect(screen.queryByTestId('altitude-fill')).toBeNull();
-    expect(screen.getByTestId('cave-altitude-panel')).toBeTruthy();
+    expect(screen.queryByTestId('altitude-disagreement-note')).toBeNull();
+  });
+
+  it('fills the entrance it was pressed on and says it did', async () => {
+    fillSpy.mockResolvedValue(undefined);
+    show(report, true);
+    fireEvent.click(screen.getByTestId('altitude-fill'));
+
+    expect(await screen.findByText('Altitude filled from the elevation model.')).toBeInTheDocument();
+    expect(fillSpy).toHaveBeenCalledTimes(1);
+    expect(fillSpy).toHaveBeenCalledWith('e2');
+  });
+
+  it('says the fill failed when the server refuses it', async () => {
+    fillSpy.mockRejectedValue(new Error('refused'));
+    show(report, true);
+    fireEvent.click(screen.getByTestId('altitude-fill'));
+
+    expect(await screen.findByText(/The altitude could not be filled/)).toBeInTheDocument();
+    expect(screen.queryByText('Altitude filled from the elevation model.')).toBeNull();
   });
 });

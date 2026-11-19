@@ -181,6 +181,14 @@ describe('PublicSurveyResultPage', () => {
     expect(signIn).toHaveBeenCalledWith('/p/survey/abc');
   });
 
+  it('says the sign-in server cannot be reached, rather than leaving the button doing nothing', async () => {
+    failure = new ApiError(401, 'survey_upload.public_link_sign_in_required');
+    signIn.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    show();
+    fireEvent.click(screen.getByTestId('public-survey-sign-in-button'));
+    expect(await screen.findByText('Cannot reach the server')).toBeTruthy();
+  });
+
   it('does not take any other 401 for the organization prompt', () => {
     failure = new ApiError(401, 'auth.something_else');
     show();

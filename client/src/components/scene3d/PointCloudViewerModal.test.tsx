@@ -157,8 +157,13 @@ describe('the scan viewer', () => {
     cleanup();
     render(<PointCloudViewerModal open tilesetUrl={URL} name="Hall" hasRgb hasIntensity onClose={() => {}} />);
     await waitFor(() => expect(built).toHaveLength(2));
+    // The same three labels the first scan was missing two of are all there for one that has them.
+    expect(screen.getByText('Recorded colour')).toBeInTheDocument();
+    expect(screen.getByText('Intensity')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Height'));
     expect(built[1].styles).toEqual([{ colorBy: 'height' }]);
+    fireEvent.click(screen.getByText('Recorded colour'));
+    expect(built[1].styles).toEqual([{ colorBy: 'height' }, { colorBy: 'rgb' }]);
     fireEvent.click(screen.getByTestId('point-cloud-view-all'));
     expect(built[1].viewedAll).toBe(1);
   });

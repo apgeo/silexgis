@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,6 +83,20 @@ function show() {
     </QueryClientProvider>,
   );
 }
+
+describe('a failed read of the roster', () => {
+  it('says the people could not be read, rather than drawing an empty roster', async () => {
+    const roster = get.getMockImplementation()!;
+    get.mockImplementation((path: string, init?: unknown) =>
+      path === '/api/v1/cavers'
+        ? Promise.resolve({ data: undefined, error: { status: 500 }, response: new Response(null, { status: 500 }) })
+        : roster(path, init),
+    );
+    show();
+
+    expect(await screen.findByTestId('cavers-load-failed')).toBeTruthy();
+  });
+});
 
 describe('who is offered the delete button', () => {
   it('offers it to an account that may delete people', async () => {
@@ -276,5 +290,148 @@ describe('a save with the name emptied', () => {
     } finally {
       process.off('unhandledRejection', record);
     }
+  });
+});
+
+/** A refusal as the generated client hands it back: the problem body and the response it came in. */
+const refusal = (status: number, code?: string, extra: Record<string, unknown> = {}) => ({
+  error: { status, ...(code ? { code } : {}), ...extra },
+  response: new Response(null, { status }),
+});
+
+async function confirmIn(popoverTitle: string) {
+  const title = await screen.findByText(popoverTitle);
+  const popover = title.closest('.ant-popover') as HTMLElement;
+  await act(async () => {
+    fireEvent.click(within(popover).getByRole('button', { name: /OK|Yes/ }));
+  });
+}
+
+describe('removing somebody', () => {
+  it('removes the person whose row it was', async () => {
+    del.mockResolvedValue({ response: new Response(null, { status: 204 }) });
+    show();
+
+    fireEvent.click(await screen.findByTestId('caver-delete-caver-bogdan'));
+    await confirmIn(t('cavers.deleteConfirm'));
+
+    await waitFor(() =>
+      expect(del).toHaveBeenCalledWith('/api/v1/cavers/{id}', { params: { path: { id: 'caver-bogdan' } } }),
+    );
+    expect(screen.queryByText(t('cavers.deleteRefused'))).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a camp roster holds them', refusal(409, 'caver.referenced_by_expeditions'), 'cavers.deleteRefusedCamp'],
+    ['it would take away full rights from the caller', refusal(403, 'caver.revokes_full_admin'), 'cavers.rosterProblems.revokesFullAdmin'],
+    ['it would leave no full administrator', refusal(409, 'permission_group.last_full_admin'), 'cavers.rosterProblems.lastFullAdmin'],
+    ['the server failed', refusal(500), 'cavers.deleteRefused'],
+  ])('says why when %s', async (_label, answered, key) => {
+    del.mockResolvedValue(answered);
+    show();
+
+    fireEvent.click(await screen.findByTestId('caver-delete-caver-ana'));
+    await confirmIn(t('cavers.deleteConfirm'));
+
+    expect(await screen.findByText(t(key))).toBeInTheDocument();
+  });
+
+  it('lists the trips that still hold the person instead of a bare refusal', async () => {
+    del.mockResolvedValue(
+      refusal(409, 'caver.referenced_by_trips', {
+        trips: [{ id: 'trip-1', title: 'An invented descent', tripDate: '2026-05-01', onRoster: true }],
+      }),
+    );
+    show();
+
+    fireEvent.click(await screen.findByTestId('caver-delete-caver-ana'));
+    await confirmIn(t('cavers.deleteConfirm'));
+
+    expect(await screen.findByText(t('cavers.heldByTrips.title', { name: 'Ana Invented' }))).toBeInTheDocument();
+    expect(screen.getByText('An invented descent')).toBeInTheDocument();
+    expect(screen.queryByText(t('cavers.deleteRefused'))).not.toBeInTheDocument();
+  });
+});
+
+describe('merging a duplicate', () => {
+  async function chooseDuplicateOf(rowIndex: number, duplicate: string) {
+    fireEvent.click((await screen.findAllByRole('button', { name: t('cavers.merge') }))[rowIndex]);
+    const dialog = (await screen.findByText(t('cavers.mergeHint'))).closest('.ant-modal') as HTMLElement;
+    fireEvent.mouseDown(within(dialog).getByRole('combobox'));
+    const option = await waitFor(() => {
+      const found = document.querySelector(`.ant-select-dropdown [title="${duplicate}"]`);
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    fireEvent.click(option);
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+    });
+    return dialog;
+  }
+
+  it('folds the chosen duplicate into the person whose row it was', async () => {
+    post.mockResolvedValue({ data: ANA, response: new Response(null, { status: 200 }) });
+    show();
+
+    await chooseDuplicateOf(0, 'Bogdan Invented');
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v1/cavers/{id}/merge', {
+        params: { path: { id: 'caver-ana' } },
+        body: { sourceCaverId: 'caver-bogdan' },
+      }),
+    );
+    expect(await screen.findByText(t('common.saved'))).toBeInTheDocument();
+  });
+
+  it.each([
+    ['would hand out full rights', refusal(403, 'caver.grants_full_admin'), 'cavers.rosterProblems.grantsFullAdmin'],
+    ['failed on the server', refusal(500), 'common.saveFailed'],
+  ])('says so when the merge %s, and keeps the dialog open', async (_label, answered, key) => {
+    post.mockResolvedValue(answered);
+    show();
+
+    const dialog = await chooseDuplicateOf(0, 'Bogdan Invented');
+
+    expect(await screen.findByText(t(key))).toBeInTheDocument();
+    expect(screen.queryByText(t('common.saved'))).not.toBeInTheDocument();
+    // The page closes the dialog by unmounting it, so still being in the document is still open.
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(t('cavers.mergeHint'))).toBeInTheDocument();
+  });
+});
+
+describe('adding somebody', () => {
+  async function addNamed(name: string) {
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('cavers.new')) }));
+    fireEvent.change(await screen.findByLabelText(t('cavers.name')), { target: { value: name } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    });
+  }
+
+  it('sends the person as typed, with the fields left empty sent as nothing', async () => {
+    post.mockResolvedValue({ data: { ...ANA, id: 'caver-cora', name: 'Cora Invented' }, response: new Response(null, { status: 201 }) });
+    show();
+
+    await addNamed('Cora Invented');
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v1/cavers', {
+        body: { fullName: 'Cora Invented', shortName: null, email: null, phone: null, notes: null },
+      }),
+    );
+    expect(await screen.findByText(t('common.saved'))).toBeInTheDocument();
+  });
+
+  it('words a refused addition and keeps what was typed', async () => {
+    post.mockResolvedValue(refusal(403, 'access_entry.exceeds_own_rights'));
+    show();
+
+    await addNamed('Cora Invented');
+
+    expect(await screen.findByText(t('cavers.rosterProblems.exceedsOwnRights'))).toBeInTheDocument();
+    expect(screen.getByLabelText(t('cavers.name'))).toHaveValue('Cora Invented');
   });
 });

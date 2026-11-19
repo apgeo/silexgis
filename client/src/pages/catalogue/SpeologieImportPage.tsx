@@ -39,6 +39,7 @@ import {
   speologieFailureReason,
   speologieImportErrorMessage,
 } from '../../components/catalogue/errorMessage.ts';
+import SpeologieStatusNotice from '../../components/catalogue/SpeologieStatusNotice.tsx';
 
 /** What one row of the review has been decided to be. */
 interface RowDecision {
@@ -93,7 +94,9 @@ export default function SpeologieImportPage() {
 
   const caves = useSpeologieCaves(ids, status.data?.configured === true);
   const loaded = caves.map((q) => q.data).filter((x): x is SpeologieCave => Boolean(x));
-  const loading = caves.some((q) => q.isPending);
+  // isLoading, not isPending: a read that is never sent — no key configured, or a status that could
+  // not be read — stays pending for good, and would hold the table in its spinner for ever.
+  const loading = caves.some((q) => q.isLoading);
   const failed = caves.find((q) => q.error)?.error;
 
   // A row nobody has touched proposes refreshing a cave that is already here and creating one
@@ -292,6 +295,7 @@ export default function SpeologieImportPage() {
         </Space>
       </Flex>
 
+      <SpeologieStatusNotice status={status} />
       {failed ? <Alert type="error" showIcon title={speologieErrorMessage(failed, t)} /> : null}
 
       <Alert

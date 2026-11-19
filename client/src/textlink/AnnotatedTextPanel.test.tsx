@@ -63,13 +63,18 @@ const link = {
 // How the document's link read answers: how many links the document has in all, and whether the
 // read failed.
 const linkRead = { totalItems: 1, isError: false };
+/** What the read of the text itself failed with, when a test makes it fail. */
+const textRead: { failure: unknown; refetch: ReturnType<typeof vi.fn> } = { failure: undefined, refetch: vi.fn() };
 const refetchLinks = vi.fn();
 
 vi.mock('../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../api/hooks.ts')>('../api/hooks.ts');
   return {
     ...actual,
-    useAnnotatedText: () => ({ data: annotatedText, isPending: false, isError: false, error: null }),
+    useAnnotatedText: () =>
+      textRead.failure === undefined
+        ? { data: annotatedText, isPending: false, isError: false, error: null, refetch: textRead.refetch }
+        : { data: undefined, isPending: false, isError: true, error: textRead.failure, refetch: textRead.refetch },
     useResLinksForTarget: () =>
       linkRead.isError
         ? { data: undefined, isError: true, refetch: refetchLinks }
@@ -99,12 +104,34 @@ function renderPanel() {
 beforeEach(() => {
   linkRead.totalItems = 1;
   linkRead.isError = false;
+  textRead.failure = undefined;
+  textRead.refetch.mockReset();
   refetchLinks.mockReset();
   resetViewControlsForTests();
   useWorkspaceStore.setState({ selection: null });
 });
 
 afterEach(cleanup);
+
+describe('a text whose own read failed', () => {
+  it('says the text could not be read, not that the document is not an annotated text, and asks again', async () => {
+    textRead.failure = new TypeError('Failed to fetch');
+    renderPanel();
+
+    expect(await screen.findByTestId('tl-text-load-failed')).toBeTruthy();
+    expect(screen.queryByText('This document is not a link-annotated text.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(textRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the server's answer that a document is not an annotated text", async () => {
+    const { ApiError } = await import('../api/client.ts');
+    textRead.failure = new ApiError(404, 'document.not_annotated');
+    renderPanel();
+
+    expect(await screen.findByText('This document is not a link-annotated text.')).toBeTruthy();
+  });
+});
 
 describe('following a passage', () => {
   it('sends the target to the views that are listening', async () => {

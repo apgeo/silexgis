@@ -20,6 +20,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { ReadFailedLine } from '../../components/ReadFailedAlert.tsx';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
@@ -343,7 +344,14 @@ export default function ExpeditionReportPage() {
 
         {mayReadPhotos && (
           <Part title={t('trips.gallery')}>
-            {photosQuery.isPending ? (
+            {photosQuery.isError && photosQuery.data === undefined ? (
+              <ReadFailedLine
+                error={photosQuery.error}
+                onRetry={photosQuery.refetch}
+                text={t('trips.photographsUnread')}
+                testId="expedition-report-photographs-unread"
+              />
+            ) : photosQuery.isPending ? (
               <Spin />
             ) : photos.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noPhotographs')} />

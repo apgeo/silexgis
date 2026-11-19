@@ -349,6 +349,7 @@
     },
     "derivativeList": {
       "title": "Register of derived pictures",
+      "loadFailed": "The computed pictures could not be read just now. This says nothing about which exist, so compute nothing again until they have been read.",
       "empty": "No picture of the ground has been computed yet.",
       "emptyHint": "Ask for one above, from a finished build.",
       "picture": "Picture",
@@ -467,6 +468,7 @@
     "signInWith": "Sign in with {{provider}}",
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
     "serverUnreachable": "Cannot reach the server",
+    "configFailed": "The ways to sign in could not be read just now; the password form below may not be the one this installation uses.",
     "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
     "unreachable": "The server could not be reached. Check the connection, then try again.",
     "serverFailed": "The server could not complete this right now. Try again in a moment.",
@@ -546,6 +548,8 @@
     "readFailedTitle": "This could not be read just now",
     "readFailedDetail": "The server could not be reached, or did not answer. Nothing here says anything about what was asked for — try again.",
     "refreshFailed": "This could not be read again; what is shown may be out of date.",
+    "readRefused": "The server refused to show this to you.",
+    "readRefusedHeld": "This can no longer be read by you; what is shown is from an earlier read.",
     "close": "Close",
     "reset": "Reset",
     "clearAnswer": "Clear answer",
@@ -596,6 +600,10 @@
     "geolocationFailed": "Could not determine your location.",
     "clusterTitle": "{{count}} entrances in this area",
     "zoomHere": "Zoom here",
+    "clusterLoadFailed": "The entrances in this area could not be read.",
+    "selectionLoadFailed": "What was picked on the map could not be read.",
+    "selectionRefused": "This is no longer there, or is not yours to read.",
+    "layerReadsFailed": "Some of the map's layers could not be read; the list may be incomplete.",
     "approximateShort": "approx.",
     "swipeCompare": "Compare raster with the map beneath (swipe)",
     "hideChrome": "Hide map toolbars",
@@ -791,6 +799,7 @@
     "intro": "A saved filter is a question you keep. Sharing one with a caving group, or with everyone signed in, lets them ask it; each of them is answered with what they themselves may see.",
     "toRegistry": "Cave registry",
     "empty": "No saved filters. Save one from the cave registry.",
+    "loadFailed": "The saved filters could not be read just now.",
     "name": "Name",
     "description": "Description",
     "nothingToSave": "There are no conditions to save — set at least one first.",
@@ -930,8 +939,10 @@
       "tripLogs": "{{count}} trip logs"
     },
     "tripLogsEmpty": "No trip logs name this cave.",
+    "tripLogsLoadFailed": "The trips that name this cave could not be read just now. This says nothing about whether there are any.",
     "depthPlaces": {
       "title": "This cave's named places",
+      "loadFailed": "This cave's named places could not be read just now. This says nothing about whether any are declared, so none can be declared until they have been read.",
       "help": "A depth on its own is not a place: turning one into a position means looking for the nearest station, and that cannot tell which of several stations near each other is the place people mean. Declare it once here and every report of that depth lands where you say — typed, corrected or imported — and the name becomes something a caver can report by instead of a number. A place can also be named without a depth — a hall or a junction the club's list of the cave names — with a few words beside the name if one depth does not say enough; such a place is listed and published with the cave's places, and no reported depth is ever placed by it.",
       "declare": "Declare a place",
       "depth": "Depth",
@@ -960,6 +971,7 @@
     }
   },
   "entrances": {
+    "loadFailed": "This cave's entrances could not be read just now. This says nothing about whether it has any.",
     "add": "Add entrance",
     "edit": "Edit entrance",
     "deleteConfirm": "Delete this entrance?",
@@ -1106,10 +1118,12 @@
     "uploadPrompt": "Click or drag photos and documents here to attach them",
     "deleteConfirm": "Remove this attachment? The file stays available to its uploader.",
     "empty": "No photos or documents yet.",
+    "loadFailed": "The attachments could not be read just now. This says nothing about what is attached.",
     "versions": "Versions",
     "uploadVersion": "Upload new version",
     "currentVersion": "current",
     "noVersions": "No versions yet.",
+    "versionsLoadFailed": "The versions could not be read just now.",
     "deleteVersionConfirm": "Delete this version? Its content is removed permanently.",
     "details": "Details",
     "caption": "Caption",
@@ -1265,6 +1279,8 @@
     "unfiled": "Not filed",
     "unfiledHint": "Everything you have added that is not in a cabinet yet. Filing it is a later decision — select what belongs together and file it in one go.",
     "unfiledEmpty": "Nothing waiting to be filed.",
+    "unfiledLoadFailed": "What is waiting to be filed could not be read just now.",
+    "listLoadFailed": "The documents here could not be read just now. This says nothing about what is filed.",
     "defaults": "What lands here",
     "defaultsHint": "Applied to whatever is uploaded into this cabinet. Left empty, the answer comes from the cabinet above.",
     "defaultType": "Document kind",
@@ -1290,6 +1306,7 @@
     "queueExplain": "Uploads from accounts that are under review wait here. Nothing in them has been written yet: what you accept is written then, and what you turn down never is.",
     "wholeView": "Waiting changes are shown here in full, including the exact positions of protected caves and pictures of caves you could not otherwise open.",
     "queueEmpty": "Nothing is waiting for review.",
+    "queueLoadFailed": "The review queue could not be read just now. This says nothing about whether anything is waiting.",
     "forbidden": "You may not review uploads.",
     "uploader": "Sent by",
     "unknownUploader": "Unknown account",
@@ -1306,6 +1323,7 @@
     "readOnly": "You may read this upload but not decide it.",
     "mine": {
       "title": "Your uploads under review",
+      "loadFailed": "Your uploads under review could not be read just now. This says nothing about whether any are held.",
       "explain": "Your account is held for review: what you send in waits for a reviewer, and is written only when they accept it. Here is where each upload stands.",
       "sentAt": "Sent",
       "decidedAt": "Decided",
@@ -1528,6 +1546,8 @@
     "keepGoing": "Keep uploading",
     "batches": "Uploads",
     "batchesEmpty": "Nothing has been uploaded in a batch yet.",
+    "batchesLoadFailed": "The uploads could not be read just now.",
+    "importRootsLoadFailed": "The import directories could not be read just now. This says nothing about whether any are configured.",
     "batchSource": "From",
     "batchSourceValues": {
       "interactive": "Browser",
@@ -1607,6 +1627,7 @@
     "noAlbums": "No albums yet.",
     "albumCount": "{{count}} photographs",
     "empty": "No photographs match.",
+    "loadFailed": "The photographs could not be read just now. This says nothing about which there are.",
     "publicEmpty": "Nothing has been published yet.",
     "search": "Search captions and places",
     "photographer": "Photographer",
@@ -1673,6 +1694,9 @@
     "openInGallery": "Open in the gallery",
     "arrangeHint": "Drag a photograph onto the place you want it, or move it with the arrows.",
     "albumEmpty": "Nothing in this album yet. Add photographs from the gallery.",
+    "albumNotFound": "No such album",
+    "albumNotFoundDetail": "This album does not exist, or it has been deleted.",
+    "albumPhotosLoadFailed": "The pictures in this album could not be read just now. This says nothing about whether it holds any.",
     "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
   },
   "geodata": {
@@ -1896,6 +1920,7 @@
       "published": "The map is placed and published.",
       "publishing": "Placing the map…",
       "publishFailed": "The map could not be published with this placement.",
+      "publishWatchFailed": "Whether the map has been placed could not be read just now. The placement was saved; read again to see where it stands.",
       "importNotJson": "The file is not a placement file (JSON)."
     },
     "redraw": {
@@ -2233,6 +2258,11 @@
     "organizingCavingGroup": "Organizing caving group",
     "gallery": "Photographs",
     "noPhotographs": "No photographs are filed against this trip yet.",
+    "photographsLoadFailed": "The photographs of this trip could not be read just now.",
+    "albumsLoadFailed": "The albums of this trip could not be read just now.",
+    "photographsUnread": "The photographs could not be read when this was printed.",
+    "accountsUnread": "The trip accounts could not be read when this was printed.",
+    "rolesLoadFailed": "The roles could not be read just now.",
     "galleryVisibleToYou": "The photographs you may see. Somebody else may see more, or fewer.",
     "report": {
       "open": "Report view",
@@ -3178,6 +3208,7 @@
     },
     "albums": "Albums about this camp",
     "noAlbums": "No albums about this camp yet.",
+    "albumsLoadFailed": "The albums about this camp could not be read just now.",
     "rosterRoleValues": {
       "member": "Member",
       "organiser": "Organiser",
@@ -3276,6 +3307,7 @@
   },
   "audit": {
     "title": "Audit trail",
+    "loadFailed": "The audit trail could not be read just now. This says nothing about what it holds.",
     "at": "When",
     "user": "User",
     "action": "Action",
@@ -3863,6 +3895,7 @@
     "searchFeature": "Search features…",
     "addFeature": "Add",
     "noMembers": "No features in this set.",
+    "membersLoadFailed": "The features in this set could not be read just now, so the set cannot be saved until they have been.",
     "deleteConfirm": "Delete this feature set?",
     "inUse": "Rules still point at this feature set; remove them first.",
     "nameInvalid": "A feature set name needs at least one letter or digit.",
@@ -3921,6 +3954,7 @@
     "unlinkConfirm": "Remove this linked account?",
     "unlinked": "Account unlinked.",
     "unlinkFailed": "The account could not be unlinked.",
+    "unlinkLastLogin": "Set a password before removing your only sign-in method.",
     "method_authenticator": "Authenticator app",
     "method_email": "Emailed code",
     "method_sms": "Texted code",
@@ -4032,6 +4066,8 @@
     "sharedNotFound": "This shared view does not exist or was revoked.",
     "sharedClusterHint": "{{count}} entrances here — zoom in to see them one by one.",
     "sharedNoBackground": "No background map is available for shared views on this installation.",
+    "loadFailed": "The saved views could not be read just now.",
+    "sharedDataFailed": "The caves or features of this view could not be read; what is drawn may be incomplete.",
     "sharedUnnamed": "Unnamed",
     "sharedClose": "Close",
     "sharedProtectedNote": "Protected caves are never shown on a shared map.",
@@ -4099,6 +4135,7 @@
     "multiMixed": "Mixed",
     "multiHint": "Hold Ctrl or Shift while clicking the map to add to the selection.",
     "multiNothingReadable": "None of the selected objects can be read here.",
+    "multiLoadFailed": "What the picked objects have in common could not be read.",
     "clearSelection": "Clear the selection",
     "zoomToAll": "Zoom to all",
     "bulkTag": "Tag all",
@@ -4264,6 +4301,7 @@
     "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
     "dataFailed": "The caves of this view could not be loaded.",
     "tracksFailed": "The lines of an imported file could not be loaded.",
+    "layersFailed": "Some of the layers this view offers could not be read.",
     "filterLayersFailed": "A layer drawn from a filter could not be loaded.",
     "tryAgain": "Try again"
   },
@@ -4622,6 +4660,7 @@
     }
   },
   "surveyModels": {
+    "loadFailed": "This cave's 3D survey models could not be read just now. This says nothing about whether any have been uploaded.",
     "uploadPointCloud": "Upload point cloud",
     "scanProcessing": "The scan is being tiled for the 3D view. Its progress is on the survey's status page.",
     "scanFailed": "The scan could not be processed.",
@@ -4802,6 +4841,7 @@
     }
   },
   "centerlines": {
+    "loadFailed": "This cave's centerlines could not be read just now. This says nothing about whether any have been uploaded.",
     "title": "Centerlines",
     "upload": "Upload centerline",
     "uploaded": "Centerline uploaded",
@@ -4820,6 +4860,7 @@
     "paths": "Paths"
   },
   "settings": {
+    "meLoadFailed": "Your account's details could not be read just now. Nothing has been changed.",
     "problems": {
       "cavingClubUnknown": "That caving club no longer exists. Choose another one and save again.",
       "emailNotUsable": "That address cannot be used to sign in here. Choose another one.",
@@ -5066,6 +5107,7 @@
     },
     "notifications": {
       "categories": "What to notify me about, and where",
+      "loadFailed": "Your notification choices could not be read just now. Nothing has been changed.",
       "category": "Notify me about",
       "channels": {
         "inApp": "In the app",
@@ -5228,6 +5270,8 @@
     }
   },
   "admin": {
+    "listLoadFailed": "This list could not be read just now. This says nothing about what it holds, so add nothing again until it has been read.",
+    "settingsLoadFailed": "These settings could not be read just now. Change nothing until they have been read.",
     "forbidden": "You need administrator rights to see this page.",
     "users": {
       "title": "Accounts",
@@ -5816,6 +5860,7 @@
     "about": "About",
     "when": "When",
     "empty": "Nothing to read.",
+    "loadFailed": "Your notifications could not be read just now. This says nothing about whether there are any.",
     "withheld": "The thing this is about is no longer available to you.",
     "unrenderable": "This notification can no longer be shown."
   },
@@ -6084,6 +6129,7 @@
     "incomplete": "Incomplete",
     "incompleteHint": "Only one item of this link is visible to you. A link says something once it connects two or more — add another item if there is one to add.",
     "addAction": "Link…",
+    "loadFailed": "The links could not be read just now. This says nothing about which are recorded.",
     "moreMembers": "+{{count}}",
     "rowActions": "Link actions",
     "openPage": "Open link page",
@@ -7188,6 +7234,8 @@
   },
   "notificationHealth": {
     "title": "Message delivery",
+    "healthLoadFailed": "The delivery figures could not be read just now; nothing here says whether messages are going out.",
+    "deliveriesLoadFailed": "The deliveries could not be read just now. This says nothing about what is waiting.",
     "intro": "Whether messages are getting out of this installation. Every row here is one somebody was meant to receive: a channel a person has switched off produces no row at all, so a backlog is always a backlog.",
     "stalled": "Nothing has been sent for {{age}}.",
     "stalledHint": "The oldest message still waiting was queued that long ago. Check the mail server settings and the test send on the messaging page.",
@@ -7870,6 +7918,7 @@
     }
   },
   "surveySources": {
+    "loadFailed": "This cave's survey sources could not be read just now. This says nothing about whether any have been archived.",
     "title": "Survey sources",
     "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
@@ -8241,6 +8290,7 @@
   },
   "textLink": {
     "notAnnotated": "This document is not a link-annotated text.",
+    "textLoadFailed": "The text could not be read just now.",
     "linksCutOff": "Only the first {{shown}} of {{total}} links are highlighted in this text.",
     "linksFailed": "The links of this text could not be loaded, so no passage is highlighted.",
     "empty": "This text has nothing in it yet.",
@@ -8281,6 +8331,8 @@
     "title": "Cave catalogue",
     "subtitle": "Search the Romanian community cave catalogue at speologie.org, and bring caves from it into this installation.",
     "portalLink": "Open speologie.org",
+    "statusLoadFailed": "Whether this installation can ask the catalogue could not be read just now, so nothing can be searched or imported yet.",
+    "caveLoadFailed": "This cave could not be read from the catalogue just now.",
     "openInPortal": "Open on speologie.org",
     "notConfigured": {
       "title": "This installation has no key for the catalogue",

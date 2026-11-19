@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { App, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -65,7 +66,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const { data: models } = useSurveyModels(caveId);
+  const { data: models, isError: modelsFailed, error: modelsError, refetch: refetchModels } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
   const makeCurrent = useMakeSurveyModelCurrent();
   const readAgain = useReadSurveyModelAgain();
@@ -259,7 +260,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       title={t('surveyModels.title')}
       style={{ marginTop: 16 }}
       extra={
-        canEdit && (
+        // Offered once the list has been read: adding under a list that was never read invites
+        // a second copy of something already there.
+        canEdit && models !== undefined && (
           <Flex gap={8} wrap>
             <Button size="small" icon={<UploadOutlined />} onClick={() => setUploading(true)}>
               {t('surveyModels.upload')}
@@ -278,13 +281,22 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         )
       }
     >
+      <ReadFailedAlert
+        error={modelsError}
+        isError={modelsFailed}
+        held={models !== undefined}
+        onRetry={refetchModels}
+        title={t('surveyModels.loadFailed')}
+        testId="survey-models-load-failed"
+      />
       <Table<SurveyModelInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={models}
         pagination={false}
-        locale={{ emptyText: t('surveyModels.empty') }}
+        // Said only after a read that landed: a failed one is named above, and is not an empty list.
+        locale={{ emptyText: modelsFailed ? <span /> : t('surveyModels.empty') }}
         columns={[
           {
             title: t('caves.name'),

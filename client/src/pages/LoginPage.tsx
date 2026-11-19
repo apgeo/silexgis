@@ -130,6 +130,10 @@ export default function LoginPage() {
   const [useRecovery, setUseRecovery] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
   const [config, setConfig] = useState<AuthConfig | null>(null);
+  // A failed read of the sign-in options is said, not passed off as an installation that offers
+  // only the password: on one that signs in elsewhere, the form shown would be a dead end.
+  const [configFailed, setConfigFailed] = useState(false);
+  const [configAttempt, setConfigAttempt] = useState(0);
 
   const returnUrl = params.get('returnUrl');
   // An external provider vouched for the account and the server is holding the sign-in at its
@@ -144,11 +148,18 @@ export default function LoginPage() {
       // to a password sign-in that the same lock refuses.
       setError(bounced === 'auth.locked_out' ? t('auth.lockedOut') : t('auth.externalFailed'));
     }
-    void fetch('/api/v1/auth/config')
-      .then((r) => (r.ok ? (r.json() as Promise<AuthConfig>) : null))
-      .then((c) => setConfig(c))
-      .catch(() => setConfig(null));
   }, [params, t]);
+
+  useEffect(() => {
+    setConfigFailed(false);
+    void fetch('/api/v1/auth/config')
+      .then((r) => (r.ok ? (r.json() as Promise<AuthConfig>) : Promise.reject(new Error(String(r.status)))))
+      .then((c) => setConfig(c))
+      .catch(() => {
+        setConfig(null);
+        setConfigFailed(true);
+      });
+  }, [configAttempt]);
 
   // Asked once, not on every render: with an emailed or texted code as the preferred method the
   // answer triggers a send, and a second send moments later would only be refused as too soon.
@@ -420,6 +431,20 @@ export default function LoginPage() {
           {t('app.name')}
         </Typography.Title>
         {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
+        {configFailed && (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="login-config-failed"
+            title={t('auth.configFailed')}
+            style={{ marginBottom: 16 }}
+            action={
+              <Button size="small" onClick={() => setConfigAttempt((n) => n + 1)}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        )}
         {notice && <Alert type="success" title={notice} style={{ marginBottom: 16 }} />}
         {unconfirmedEmail && (
           <Button

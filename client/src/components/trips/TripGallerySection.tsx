@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Card, Empty, Flex, Spin, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -114,6 +115,14 @@ export default function TripGallerySection({
         </Flex>
       }
     >
+      <ReadFailedAlert
+        isError={albumsQuery.isError}
+        error={albumsQuery.error}
+        held={albumsQuery.data !== undefined}
+        onRetry={albumsQuery.refetch}
+        title={t('trips.albumsLoadFailed')}
+        testId="trip-albums-load-failed"
+      />
       {albums.length > 0 && (
         <Flex wrap gap={12} style={{ marginBottom: 12 }} data-testid="trip-albums">
           {albums.map((album) => (
@@ -153,7 +162,16 @@ export default function TripGallerySection({
         </Flex>
       )}
 
-      {photosQuery.isPending ? (
+      <ReadFailedAlert
+        isError={photosQuery.isError}
+        error={photosQuery.error}
+        held={photosQuery.data !== undefined}
+        onRetry={photosQuery.refetch}
+        title={t('trips.photographsLoadFailed')}
+        testId="trip-photographs-load-failed"
+      />
+      {/* "No photographs" only after a read that answered: a failed one says so above. */}
+      {photosQuery.isError && photosQuery.data === undefined ? null : photosQuery.isPending ? (
         <Spin />
       ) : photos.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('trips.noPhotographs')} />

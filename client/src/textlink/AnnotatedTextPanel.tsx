@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EditOutlined, ExportOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, App, Empty, Flex, Popover, Skeleton, Switch, Tooltip, Typography } from 'antd';
 import Button from '../components/Button.tsx';
+import ReadFailedAlert from '../components/ReadFailedAlert.tsx';
+import { isSettledRefusal } from '../api/client.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAnnotatedText, useResLinksForTarget, type ResLink } from '../api/hooks.ts';
@@ -59,7 +61,7 @@ export default function AnnotatedTextPanel({
   const dark = useUiPrefsStore((s) => resolveDark(s.appearance.theme));
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
-  const { data: text, isPending, isError, error } = useAnnotatedText(documentId);
+  const { data: text, isPending, isError, error, refetch: readTextAgain } = useAnnotatedText(documentId);
   // Every link on the document in one read. The panel has no paging of its own: a passage the
   // page did not fetch would be text with no highlight on it, which reads as "nothing is linked
   // here" — the one answer that is worse than a slow load.
@@ -180,7 +182,23 @@ export default function AnnotatedTextPanel({
     return <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />;
   }
 
-  if (isError || text === undefined) {
+  // Only the server's answer says a document is not an annotated text. A read that did not land
+  // says nothing about the document; and a text already on screen stays through a failed re-read.
+  if (isError && text === undefined && !isSettledRefusal(error)) {
+    return (
+      <ReadFailedAlert
+        isError
+        error={error}
+        held={false}
+        onRetry={readTextAgain}
+        title={t('textLink.textLoadFailed')}
+        testId="tl-text-load-failed"
+        style={{ margin: 16 }}
+      />
+    );
+  }
+
+  if (text === undefined) {
     return (
       <Alert
         type="info"

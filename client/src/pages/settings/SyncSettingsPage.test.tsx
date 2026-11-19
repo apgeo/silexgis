@@ -2,7 +2,10 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+
+// A read of the sync sets that did not land, switched on by the test that needs it.
+const setsRead = vi.hoisted(() => ({ failed: false, refetch: vi.fn() }));
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { SyncSet } from '../../api/hooks.ts';
 
@@ -25,7 +28,10 @@ vi.mock('../../api/hooks.ts', async () => {
   return {
     ...actual,
     useSyncCapabilities: () => ({ data: undefined }),
-    useSyncSets: () => ({ data: sets, isPending: false }),
+    useSyncSets: () =>
+      setsRead.failed
+        ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: setsRead.refetch }
+        : { data: sets, isPending: false },
     useCavingGroups: () => ({ data: [] }),
     useFilterVocabulary: () => ({
       data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
@@ -161,5 +167,21 @@ describe('the caves a phone carries', () => {
         'You are not a member of that caving group, so a device cannot create records for it.',
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('a failed read of the sync sets', () => {
+  it('says the read failed instead of saying there are no sets, and offers Retry', () => {
+    setsRead.failed = true;
+    try {
+      renderPage();
+      expect(screen.getByTestId('sync-sets-load-failed')).toBeTruthy();
+      expect(screen.queryByText(i18n.t('settings.sync.noSets'))).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(setsRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      setsRead.failed = false;
+      setsRead.refetch.mockReset();
+    }
   });
 });

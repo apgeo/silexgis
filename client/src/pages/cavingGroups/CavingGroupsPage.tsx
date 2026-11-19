@@ -23,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
@@ -287,7 +288,7 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
 export default function CavingGroupsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: cavingGroups, isFetching } = useCavingGroups();
+  const { data: cavingGroups, isFetching, isError, error, refetch } = useCavingGroups();
   const createCavingGroup = useCreateCavingGroup();
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
@@ -337,11 +338,20 @@ export default function CavingGroupsPage() {
         )}
       </Flex>
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={cavingGroups !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="caving-groups-load-failed"
+      />
       <Table<CavingGroupInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !cavingGroups}
+        locale={isError && !cavingGroups ? { emptyText: <span /> } : undefined}
         dataSource={cavingGroups}
         pagination={false}
         columns={[

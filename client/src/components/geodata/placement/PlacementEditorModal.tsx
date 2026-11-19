@@ -69,6 +69,7 @@ import { chooseBackground, workspaceBackgroundId } from '../../../map/editorBack
 import { fitGeoJsonGeometry } from '../../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
+import ReadFailedAlert from '../../ReadFailedAlert.tsx';
 import CaveLinkWarning from '../CaveLinkWarning.tsx';
 import ControlPointTable from './ControlPointTable.tsx';
 import { CORNER_LABEL_KEYS } from './cornerLabels.ts';
@@ -166,7 +167,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
   const { data: listedSystems } = usePlacementSystems();
   // Set once a write has been accepted: the dialog then watches the map until it is published.
   const [publishing, setPublishing] = useState(false);
-  const { data: watched } = useRasterMap(raster.id, publishing);
+  const { data: watched, isError: watchFailed, error: watchError, refetch: refetchWatched } = useRasterMap(raster.id, publishing);
 
   const existing = raster.placement ?? null;
   const embedded = raster.placementSource === 'embedded';
@@ -532,7 +533,17 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
       />
     ) : (
       <Flex vertical align="center" gap={12} style={{ padding: 48 }} data-testid="placement-publishing">
-        <Spin size="large" />
+        {/* The dialog learns the map was published only by reading it again; a read that did not
+            land is said, rather than left behind a spinner that claims to know what is going on. */}
+        <ReadFailedAlert
+          error={watchError}
+          isError={watchFailed}
+          held={false}
+          onRetry={refetchWatched}
+          title={t('geodata.placement.publishWatchFailed')}
+          testId="placement-watch-failed"
+        />
+        {!watchFailed && <Spin size="large" />}
         <Typography.Text>{t('geodata.placement.publishing')}</Typography.Text>
         <Button onClick={onClose}>{t('common.close')}</Button>
       </Flex>

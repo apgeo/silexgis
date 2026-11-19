@@ -4,6 +4,7 @@ import { Alert, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMyReviewBatches, type HeldBatch } from '../../api/hooks.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { SectionTags } from './ReviewParts.tsx';
 import { sourceLabel } from './reviewModel.ts';
 
@@ -37,6 +38,21 @@ export default function MyReviewUploads() {
   const locale = i18n.resolvedLanguage ?? 'en';
   const when = (value: string | null) => (value ? new Date(value).toLocaleString(locale) : '-');
 
+  if (mine.isError && !mine.data) {
+    // An account with held uploads must not lose sight of them because one read failed, so the
+    // failure takes room here even though "nothing held" takes none.
+    return (
+      <ReadFailedAlert
+        error={mine.error}
+        isError
+        held={false}
+        onRetry={mine.refetch}
+        title={t('review.mine.loadFailed')}
+        testId="review-mine-load-failed"
+        style={{ marginBottom: 24 }}
+      />
+    );
+  }
   if (!mine.data || mine.data.totalItems === 0) {
     return null;
   }
@@ -47,6 +63,7 @@ export default function MyReviewUploads() {
         {t('review.mine.title')}
       </Typography.Title>
       <Alert type="info" showIcon style={{ marginBottom: 12 }} title={t('review.mine.explain')} />
+      <ReadFailedAlert error={mine.error} isError={mine.isError} held onRetry={mine.refetch} testId="review-mine-load-failed" />
       <Table<HeldBatch>
         size="small"
         rowKey="id"

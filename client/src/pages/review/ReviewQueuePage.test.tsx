@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { HeldBatch } from '../../api/hooks.ts';
 
@@ -54,6 +54,29 @@ beforeEach(() => {
 });
 
 describe('the queue of uploads awaiting review', () => {
+  it('says a failed read failed instead of calling the queue empty, and asks again on Retry', () => {
+    const refetch = vi.fn();
+    queueSpy.mockReturnValue({ data: undefined, isFetching: false, isError: true, error: new TypeError('offline'), refetch });
+    show();
+    expect(screen.getByTestId('review-queue-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('review.queueEmpty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the batches it holds when a later read fails', () => {
+    queueSpy.mockReturnValue({
+      data: { items: [batch('b1')], page: 1, pageSize: 25, totalItems: 1 },
+      isFetching: false,
+      isError: true,
+      error: new TypeError('offline'),
+      refetch: vi.fn(),
+    });
+    show();
+    expect(screen.getAllByTestId('review-queue-row')).toHaveLength(1);
+    expect(screen.getByText(i18n.t('common.refreshFailed'))).toBeTruthy();
+  });
+
   it('lists who sent each batch, from where, what it holds and how much, in the order the server gave', () => {
     queueSpy.mockReturnValue({
       data: {

@@ -47,6 +47,10 @@ export default function SharedViewPage() {
   const [noBackground, setNoBackground] = useState(false);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [cluster, setCluster] = useState<number | null>(null);
+  // A read of the link's caves or features that failed after the page was up. What was drawn
+  // stays, and so must a word that it may be incomplete — a pale map reads as "no caves here".
+  const [dataReadFailed, setDataReadFailed] = useState(false);
+  const reloadData = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
     let disposed = false;
@@ -72,7 +76,12 @@ export default function SharedViewPage() {
         const reach = shared.reach;
         // Before the layers exist, so their first frame already draws the installation's symbol.
         setEntranceSymbols(shared.overlays);
-        const data = createSharedViewLayers(token!, shared.overlays);
+        const data = createSharedViewLayers(token!, shared.overlays, (failed) => {
+          if (!disposed) {
+            setDataReadFailed(failed);
+          }
+        });
+        reloadData.current = data.reload;
         const dataLayers = new Set<unknown>(data.layers);
         const base = shared.background
           ? backgroundLayerFor({ ...shared.background, isBase: true }, 0, language)
@@ -191,6 +200,21 @@ export default function SharedViewPage() {
         {t('views.sharedProtectedNote')}
       </Typography.Text>
       {noBackground && <Alert type="info" showIcon banner title={t('views.sharedNoBackground')} />}
+      {dataReadFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          closable={{ onClose: () => setDataReadFailed(false) }}
+          data-testid="shared-view-data-failed"
+          title={t('views.sharedDataFailed')}
+          action={
+            <Button size="small" onClick={() => reloadData.current?.()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <div style={{ flex: 1, position: 'relative' }}>
         <div ref={mapTarget} style={{ position: 'absolute', inset: 0 }} data-testid="shared-view-map" />
         {(picked || cluster !== null) && (

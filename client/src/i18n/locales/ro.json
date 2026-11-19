@@ -349,6 +349,7 @@
     },
     "derivativeList": {
       "title": "Registrul imaginilor derivate",
+      "loadFailed": "Imaginile calculate nu au putut fi citite acum. Asta nu spune nimic despre care există, deci nu calcula nimic din nou până nu au fost citite.",
       "empty": "Nicio imagine a terenului nu a fost calculată încă.",
       "emptyHint": "Cere una mai sus, dintr-o generare încheiată.",
       "picture": "Imagine",
@@ -467,6 +468,7 @@
     "signInWith": "Autentificare cu {{provider}}",
     "externalFailed": "Autentificarea externă nu a fost finalizată. Încearcă din nou sau folosește parola.",
     "serverUnreachable": "Serverul nu poate fi contactat",
+    "configFailed": "Modurile de autentificare nu au putut fi citite acum; formularul cu parolă de mai jos s-ar putea să nu fie cel folosit de această instalare.",
     "serverUnreachableHint": "Autentificarea nu a putut fi inițiată. Verifică dacă serverul funcționează, apoi încearcă din nou.",
     "unreachable": "Serverul nu a putut fi contactat. Verifică conexiunea, apoi încearcă din nou.",
     "serverFailed": "Serverul nu a putut finaliza acum această operație. Încearcă din nou peste câteva momente.",
@@ -546,6 +548,8 @@
     "readFailedTitle": "Nu a putut fi citit acum",
     "readFailedDetail": "Serverul nu a putut fi contactat sau nu a răspuns. Nimic de aici nu spune ceva despre ce s-a cerut — încearcă din nou.",
     "refreshFailed": "Nu a putut fi citit din nou; ce se vede poate fi depășit.",
+    "readRefused": "Serverul a refuzat să-ți arate aceste date.",
+    "readRefusedHeld": "Nu mai poți citi aceste date; ce se vede provine dintr-o citire anterioară.",
     "close": "Închide",
     "reset": "Resetează",
     "clearAnswer": "Șterge răspunsul",
@@ -596,6 +600,10 @@
     "geolocationFailed": "Locația nu a putut fi determinată.",
     "clusterTitle": "{{count}} intrări în această zonă",
     "zoomHere": "Apropie aici",
+    "clusterLoadFailed": "Intrările din această zonă nu au putut fi citite.",
+    "selectionLoadFailed": "Ce a fost ales pe hartă nu a putut fi citit.",
+    "selectionRefused": "Nu mai există sau nu ai dreptul să îl citești.",
+    "layerReadsFailed": "Unele straturi ale hărții nu au putut fi citite; lista poate fi incompletă.",
     "approximateShort": "aprox.",
     "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
     "hideChrome": "Ascunde barele de instrumente ale hărții",
@@ -791,6 +799,7 @@
     "intro": "Un filtru salvat este o întrebare pe care o păstrezi. Dacă îl partajezi cu un grup de speologie sau cu toți cei autentificați, aceștia o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
     "toRegistry": "Registrul peșterilor",
     "empty": "Niciun filtru salvat. Salvează unul din registrul peșterilor.",
+    "loadFailed": "Filtrele salvate nu au putut fi citite acum.",
     "name": "Nume",
     "description": "Descriere",
     "nothingToSave": "Nu există nicio condiție de salvat — stabilește mai întâi cel puțin una.",
@@ -930,8 +939,10 @@
       "tripLogs": "{{count}} jurnale de tură"
     },
     "tripLogsEmpty": "Nicio tură nu numește această peșteră.",
+    "tripLogsLoadFailed": "Turele care numesc această peșteră nu au putut fi citite acum. Asta nu spune nimic despre dacă există vreuna.",
     "depthPlaces": {
       "title": "Locurile numite ale acestei peșteri",
+      "loadFailed": "Locurile numite ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă există vreunul declarat, așa că nu se poate declara niciunul până nu sunt citite.",
       "help": "O adâncime singură nu este un loc: transformarea ei în poziție înseamnă căutarea celei mai apropiate stații, iar asta nu poate spune care dintre mai multe stații apropiate este locul la care se referă oamenii. Declară o dată aici și fiecare raport la acea adâncime ajunge unde spui — introdus, corectat sau importat — iar numele devine ceva prin care un speolog poate raporta, în loc de un număr. Un loc poate fi numit și fără adâncime — o sală sau o joncțiune pe care o numește lista clubului — cu câteva cuvinte lângă nume, dacă o singură adâncime nu spune destul; un astfel de loc apare și este publicat împreună cu locurile peșterii, iar nicio adâncime raportată nu este plasată după el.",
       "declare": "Declară un loc",
       "depth": "Adâncime",
@@ -960,6 +971,7 @@
     }
   },
   "entrances": {
+    "loadFailed": "Intrările acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
     "add": "Adaugă intrare",
     "edit": "Editare intrare",
     "deleteConfirm": "Ștergi această intrare?",
@@ -1106,10 +1118,12 @@
     "uploadPrompt": "Apasă sau trage fotografii și documente aici pentru a le atașa",
     "deleteConfirm": "Elimini acest atașament? Fișierul rămâne disponibil celui care l-a încărcat.",
     "empty": "Încă nu există fotografii sau documente.",
+    "loadFailed": "Atașamentele nu au putut fi citite acum. Asta nu spune nimic despre ce este atașat.",
     "versions": "Versiuni",
     "uploadVersion": "Încarcă o versiune nouă",
     "currentVersion": "curentă",
     "noVersions": "Încă nu există versiuni.",
+    "versionsLoadFailed": "Versiunile nu au putut fi citite acum.",
     "deleteVersionConfirm": "Ștergi această versiune? Conținutul ei este eliminat definitiv.",
     "details": "Detalii",
     "caption": "Legendă",
@@ -1265,6 +1279,8 @@
     "unfiled": "Nedepuse",
     "unfiledHint": "Tot ce ai adăugat și nu se află încă într-un dulap. Depunerea este o decizie de mai târziu — alege ce ține împreună și depune dintr-o dată.",
     "unfiledEmpty": "Nu așteaptă nimic să fie depus.",
+    "unfiledLoadFailed": "Ce așteaptă să fie arhivat nu a putut fi citit acum.",
+    "listLoadFailed": "Documentele de aici nu au putut fi citite acum. Asta nu spune nimic despre ce este arhivat.",
     "defaults": "Ce ajunge aici",
     "defaultsHint": "Se aplică la tot ce se încarcă în acest dulap. Lăsat gol, răspunsul vine de la dulapul de deasupra.",
     "defaultType": "Tipul documentului",
@@ -1290,6 +1306,7 @@
     "queueExplain": "Aici așteaptă încărcările conturilor aflate sub verificare. Nimic din ele nu a fost scris încă: ce accepți se scrie atunci, iar ce respingi nu se scrie niciodată.",
     "wholeView": "Aici schimbările care așteaptă sunt arătate în întregime, inclusiv pozițiile exacte ale peșterilor protejate și fotografiile peșterilor pe care altfel nu le-ai putea deschide.",
     "queueEmpty": "Nimic nu așteaptă verificarea.",
+    "queueLoadFailed": "Coada de verificare nu a putut fi citită acum. Asta nu spune nimic despre dacă așteaptă ceva.",
     "forbidden": "Nu ai voie să verifici încărcări.",
     "uploader": "Trimis de",
     "unknownUploader": "Cont necunoscut",
@@ -1306,6 +1323,7 @@
     "readOnly": "Poți citi această încărcare, dar nu o poți decide.",
     "mine": {
       "title": "Încărcările tale în verificare",
+      "loadFailed": "Încărcările tale în verificare nu au putut fi citite acum. Asta nu spune nimic despre dacă sunt reținute.",
       "explain": "Contul tău este ținut pentru verificare: ce trimiți așteaptă un verificator și se scrie doar când îl acceptă. Aici vezi unde se află fiecare încărcare.",
       "sentAt": "Trimisă",
       "decidedAt": "Decisă",
@@ -1528,6 +1546,8 @@
     "keepGoing": "Continuă încărcarea",
     "batches": "Încărcări",
     "batchesEmpty": "Nu s-a încărcat încă nimic în loturi.",
+    "batchesLoadFailed": "Încărcările nu au putut fi citite acum.",
+    "importRootsLoadFailed": "Directoarele de import nu au putut fi citite acum. Asta nu spune nimic despre dacă sunt configurate.",
     "batchSource": "Sursă",
     "batchSourceValues": {
       "interactive": "Browser",
@@ -1607,6 +1627,7 @@
     "noAlbums": "Niciun album încă.",
     "albumCount": "{{count}} fotografii",
     "empty": "Nicio fotografie nu corespunde.",
+    "loadFailed": "Fotografiile nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "publicEmpty": "Nu s-a publicat încă nimic.",
     "search": "Caută în descrieri și locuri",
     "photographer": "Fotograf",
@@ -1673,6 +1694,9 @@
     "openInGallery": "Deschide în galerie",
     "arrangeHint": "Trage o fotografie peste locul unde o vrei, sau mut-o cu săgețile.",
     "albumEmpty": "Încă nimic în acest album. Adaugă fotografii din galerie.",
+    "albumNotFound": "Albumul nu există",
+    "albumNotFoundDetail": "Acest album nu există sau a fost șters.",
+    "albumPhotosLoadFailed": "Fotografiile din acest album nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
     "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora."
   },
   "geodata": {
@@ -1896,6 +1920,7 @@
       "published": "Harta a fost poziționată și publicată.",
       "publishing": "Se poziționează harta…",
       "publishFailed": "Harta nu a putut fi publicată cu această poziție.",
+      "publishWatchFailed": "Nu s-a putut citi acum dacă harta a fost poziționată. Poziționarea a fost salvată; citește din nou pentru a vedea unde a ajuns.",
       "importNotJson": "Fișierul nu este un fișier de poziționare (JSON)."
     },
     "redraw": {
@@ -2233,6 +2258,11 @@
     "organizingCavingGroup": "Grupul organizator",
     "gallery": "Fotografii",
     "noPhotographs": "Nicio fotografie nu este atașată încă acestei ture.",
+    "photographsLoadFailed": "Fotografiile acestei ture nu au putut fi citite acum.",
+    "albumsLoadFailed": "Albumele acestei ture nu au putut fi citite acum.",
+    "photographsUnread": "Fotografiile nu au putut fi citite când a fost tipărit acest document.",
+    "accountsUnread": "Relatările turelor nu au putut fi citite când a fost tipărit acest document.",
+    "rolesLoadFailed": "Rolurile nu au putut fi citite acum.",
     "galleryVisibleToYou": "Fotografiile pe care le poți vedea. Altcineva poate vedea mai multe sau mai puține.",
     "report": {
       "open": "Vezi raportul",
@@ -3178,6 +3208,7 @@
     },
     "albums": "Albume despre această tabără",
     "noAlbums": "Încă niciun album despre această tabără.",
+    "albumsLoadFailed": "Albumele despre această tabără nu au putut fi citite acum.",
     "rosterRoleValues": {
       "member": "Membru",
       "organiser": "Organizator",
@@ -3276,6 +3307,7 @@
   },
   "audit": {
     "title": "Istoric modificări",
+    "loadFailed": "Jurnalul de audit nu a putut fi citit acum. Asta nu spune nimic despre ce conține.",
     "at": "Când",
     "user": "Utilizator",
     "action": "Acțiune",
@@ -3863,6 +3895,7 @@
     "searchFeature": "Caută obiecte…",
     "addFeature": "Adaugă",
     "noMembers": "Niciun obiect în acest set.",
+    "membersLoadFailed": "Obiectele din acest set nu au putut fi citite acum, așa că setul nu poate fi salvat până nu sunt citite.",
     "deleteConfirm": "Ștergi acest set de obiecte?",
     "inUse": "Există reguli care se referă la acest set; elimină-le mai întâi.",
     "nameInvalid": "Denumirea unui set de obiecte trebuie să conțină cel puțin o literă sau o cifră.",
@@ -3921,6 +3954,7 @@
     "unlinkConfirm": "Elimini acest cont asociat?",
     "unlinked": "Cont dezasociat.",
     "unlinkFailed": "Contul nu a putut fi dezasociat.",
+    "unlinkLastLogin": "Setează o parolă înainte de a elimina singura metodă de autentificare.",
     "method_authenticator": "Aplicație de autentificare",
     "method_email": "Cod prin e-mail",
     "method_sms": "Cod prin SMS",
@@ -4032,6 +4066,8 @@
     "sharedNotFound": "Această vedere partajată nu există sau a fost revocată.",
     "sharedClusterHint": "{{count}} intrări aici — apropie harta pentru a le vedea pe rând.",
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
+    "loadFailed": "Vederile salvate nu au putut fi citite acum.",
+    "sharedDataFailed": "Peșterile sau obiectivele acestei vederi nu au putut fi citite; ce se vede poate fi incomplet.",
     "sharedUnnamed": "Fără nume",
     "sharedClose": "Închide",
     "sharedProtectedNote": "Peșterile protejate nu sunt afișate niciodată pe o hartă partajată.",
@@ -4099,6 +4135,7 @@
     "multiMixed": "Amestecate",
     "multiHint": "Ține Ctrl sau Shift în timp ce dai clic pe hartă pentru a adăuga la selecție.",
     "multiNothingReadable": "Niciunul dintre obiectele selectate nu poate fi citit aici.",
+    "multiLoadFailed": "Ce au în comun obiectele alese nu a putut fi citit.",
     "clearSelection": "Golește selecția",
     "zoomToAll": "Încadrează-le pe toate",
     "bulkTag": "Etichetează-le pe toate",
@@ -4264,6 +4301,7 @@
     "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
     "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
     "tracksFailed": "Liniile unui fișier importat nu au putut fi încărcate.",
+    "layersFailed": "Unele straturi oferite de această vedere nu au putut fi citite.",
     "filterLayersFailed": "Un strat desenat dintr-un filtru nu a putut fi încărcat.",
     "tryAgain": "Încearcă din nou"
   },
@@ -4635,6 +4673,7 @@
     }
   },
   "surveyModels": {
+    "loadFailed": "Modelele 3D ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcat vreunul.",
     "uploadPointCloud": "Încarcă nor de puncte",
     "scanProcessing": "Scanarea este împărțită în dale pentru vederea 3D. Progresul ei este pe pagina de stare a topografiei.",
     "scanFailed": "Scanarea nu a putut fi procesată.",
@@ -4815,6 +4854,7 @@
     }
   },
   "centerlines": {
+    "loadFailed": "Drumuirile acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcată vreuna.",
     "title": "Drumuiri",
     "upload": "Încarcă drumuire",
     "uploaded": "Drumuire încărcată",
@@ -4833,6 +4873,7 @@
     "paths": "Trasee"
   },
   "settings": {
+    "meLoadFailed": "Detaliile contului tău nu au putut fi citite acum. Nu s-a schimbat nimic.",
     "problems": {
       "cavingClubUnknown": "Acel club de speologie nu mai există. Alege altul și salvează din nou.",
       "emailNotUsable": "Această adresă nu poate fi folosită pentru autentificare aici. Alege alta.",
@@ -5079,6 +5120,7 @@
     },
     "notifications": {
       "categories": "Despre ce să fiu anunțat și unde",
+      "loadFailed": "Alegerile tale pentru notificări nu au putut fi citite acum. Nu s-a schimbat nimic.",
       "category": "Anunță-mă despre",
       "channels": {
         "inApp": "În aplicație",
@@ -5241,6 +5283,8 @@
     }
   },
   "admin": {
+    "listLoadFailed": "Această listă nu a putut fi citită acum. Asta nu spune nimic despre ce conține, așa că nu adăuga nimic din nou până nu a fost citită.",
+    "settingsLoadFailed": "Aceste setări nu au putut fi citite acum. Nu schimba nimic până nu au fost citite.",
     "forbidden": "Ai nevoie de drepturi de administrator pentru această pagină.",
     "users": {
       "title": "Conturi",
@@ -5829,6 +5873,7 @@
     "about": "Despre",
     "when": "Când",
     "empty": "Nu ai nimic de citit.",
+    "loadFailed": "Notificările tale nu au putut fi citite acum. Asta nu spune nimic despre dacă există.",
     "withheld": "Lucrul la care se referă aceasta nu îți mai este disponibil.",
     "unrenderable": "Această notificare nu mai poate fi afișată."
   },
@@ -6097,6 +6142,7 @@
     "incomplete": "Incompletă",
     "incompleteHint": "Doar un element al acestei legături îți este vizibil. O legătură spune ceva abia când unește două sau mai multe — adaugă încă un element, dacă există unul de adăugat.",
     "addAction": "Leagă…",
+    "loadFailed": "Legăturile nu au putut fi citite acum. Asta nu spune nimic despre care sunt înregistrate.",
     "moreMembers": "+{{count}}",
     "rowActions": "Acțiuni pentru legătură",
     "openPage": "Deschide pagina legăturii",
@@ -7201,6 +7247,8 @@
   },
   "notificationHealth": {
     "title": "Trimiterea mesajelor",
+    "healthLoadFailed": "Cifrele livrărilor nu au putut fi citite acum; nimic de aici nu spune dacă mesajele pleacă.",
+    "deliveriesLoadFailed": "Livrările nu au putut fi citite acum. Asta nu spune nimic despre ce așteaptă.",
     "intro": "Dacă mesajele ies din această instalare. Fiecare rând de aici este unul pe care cineva trebuia să îl primească: un canal pe care o persoană l-a oprit nu produce niciun rând, deci o coadă rămasă în urmă este întotdeauna o problemă.",
     "stalled": "Nu s-a mai trimis nimic de {{age}}.",
     "stalledHint": "Cel mai vechi mesaj care încă așteaptă a fost pus la coadă atunci. Verifică setările serverului de e-mail și trimiterea de probă din pagina de mesagerie.",
@@ -7883,6 +7931,7 @@
     }
   },
   "surveySources": {
+    "loadFailed": "Sursele arhivate ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost arhivată vreuna.",
     "title": "Surse topografice",
     "explanation": "Materialul din care au fost făcute modelele compilate de mai sus. Păstrat pentru ca topografia să poată fi compilată din nou atunci când uneltele care au produs exportul nu mai există în forma de azi. Un jurnal de compilare este deschis, pentru cifrele de închidere pe care le raportează; nimic altceva de aici nu este citit sau interpretat.",
     "upload": "Arhivează o sursă",
@@ -8254,6 +8303,7 @@
   },
   "textLink": {
     "notAnnotated": "Acest document nu este un text cu legături.",
+    "textLoadFailed": "Textul nu a putut fi citit acum.",
     "linksCutOff": "În acest text sunt evidențiate doar primele {{shown}} din {{total}} legături.",
     "linksFailed": "Legăturile acestui text nu au putut fi încărcate, așa că niciun pasaj nu este evidențiat.",
     "empty": "Textul nu conține încă nimic.",
@@ -8294,6 +8344,8 @@
     "title": "Catalogul peșterilor",
     "subtitle": "Caută în catalogul comunitar al peșterilor din România de pe speologie.org și adu peșteri de acolo în această instalare.",
     "portalLink": "Deschide speologie.org",
+    "statusLoadFailed": "Nu s-a putut citi acum dacă această instalare poate interoga catalogul, așa că deocamdată nu se poate căuta sau importa nimic.",
+    "caveLoadFailed": "Această peșteră nu a putut fi citită acum din catalog.",
     "openInPortal": "Deschide pe speologie.org",
     "notConfigured": {
       "title": "Această instalare nu are cheie pentru catalog",

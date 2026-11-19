@@ -10,7 +10,7 @@ const deleteMutate = vi.fn();
 const readForChange = vi.fn();
 const refetchLists = vi.fn();
 // What the page's list read answers: the lists, or a failure to read them.
-let listRead: { data?: unknown; isLoading: boolean; isError?: boolean } = { isLoading: false };
+let listRead: { data?: unknown; isLoading: boolean; isError?: boolean; error?: unknown } = { isLoading: false };
 // What the permissions dialog was last handed; the dialog itself is somebody else's to test.
 const permissionsModal = vi.fn();
 
@@ -401,5 +401,14 @@ describe('ChecklistsPage', () => {
     expect(screen.getByText('The checklists could not be loaded.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(refetchLists).toHaveBeenCalled();
+  });
+
+  it('keeps the lists on screen when a later read fails, under a may-be-out-of-date notice', () => {
+    listRead = { data: checklists, isLoading: false, isError: true, error: new TypeError('Failed to fetch') };
+    show();
+
+    expect(screen.queryByText('The checklists could not be loaded.')).toBeNull();
+    expect(screen.getByText('Before we set off')).toBeTruthy();
+    expect(screen.getByTestId('checklists-refresh-failed')).toBeTruthy();
   });
 });

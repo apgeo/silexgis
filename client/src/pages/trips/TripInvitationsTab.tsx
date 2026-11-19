@@ -2,7 +2,8 @@
 import { Alert, App, Flex, Popconfirm, Spin } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import {
   useAnswerTripInvitation,
   useInviteToTrip,
@@ -149,13 +150,22 @@ export default function TripInvitationsTab({
     }
   };
 
-  if (error) {
+  // A read that did not land is offered again (a refusal is not: it would only be refused again),
+  // and a list already on screen stays through a failed re-read rather than being swapped out.
+  if (error && !data) {
     return (
       <Alert
         type="warning"
         showIcon
         data-testid="trip-invitations-unavailable"
         title={t('trips.invitations.unavailable')}
+        action={
+          isSettledRefusal(error) ? undefined : (
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          )
+        }
       />
     );
   }
@@ -165,35 +175,38 @@ export default function TripInvitationsTab({
   }
 
   return (
-    <InvitationsPanel
-      data={data}
-      canEdit={canEdit}
-      keys="trips.invitations"
-      idPrefix="trip"
-      inviting={invite.isPending}
-      self={me?.caverId ? { caverId: me.caverId } : null}
-      onInvite={onInvite}
-      onAnswer={onAnswer}
-      onSelect={onSelect}
-      onRemove={onRemove}
-      onUnknownInvitee={() => message.error(t('trips.invitations.pickFromDirectory'))}
-      footer={
-        // Turning what people said into who was on the trip is its own act, offered only once
-        // the trip has happened. Nobody is told by it: everybody written in was told when they
-        // were asked. An event has no such act — it keeps no list of who turned up at all.
-        canEdit && PROMOTABLE.includes(trip.state) ? (
-          <Flex justify="flex-end" style={{ marginTop: 12 }}>
-            <Popconfirm
-              title={t('trips.invitations.promoteConfirm')}
-              onConfirm={() => void onPromote()}
-            >
-              <Button loading={promote.isPending} data-testid="trip-invitations-promote">
-                {t('trips.invitations.promote')}
-              </Button>
-            </Popconfirm>
-          </Flex>
-        ) : null
-      }
-    />
+    <>
+      <ReadFailedAlert isError={!!error} error={error} held onRetry={refetch} testId="trip-invitations-refresh-failed" />
+      <InvitationsPanel
+        data={data}
+        canEdit={canEdit}
+        keys="trips.invitations"
+        idPrefix="trip"
+        inviting={invite.isPending}
+        self={me?.caverId ? { caverId: me.caverId } : null}
+        onInvite={onInvite}
+        onAnswer={onAnswer}
+        onSelect={onSelect}
+        onRemove={onRemove}
+        onUnknownInvitee={() => message.error(t('trips.invitations.pickFromDirectory'))}
+        footer={
+          // Turning what people said into who was on the trip is its own act, offered only once
+          // the trip has happened. Nobody is told by it: everybody written in was told when they
+          // were asked. An event has no such act — it keeps no list of who turned up at all.
+          canEdit && PROMOTABLE.includes(trip.state) ? (
+            <Flex justify="flex-end" style={{ marginTop: 12 }}>
+              <Popconfirm
+                title={t('trips.invitations.promoteConfirm')}
+                onConfirm={() => void onPromote()}
+              >
+                <Button loading={promote.isPending} data-testid="trip-invitations-promote">
+                  {t('trips.invitations.promote')}
+                </Button>
+              </Popconfirm>
+            </Flex>
+          ) : null
+        }
+      />
+    </>
   );
 }
