@@ -1411,6 +1411,7 @@
     "problem": {
       "generic": "The decision could not be made.",
       "review_not_pending": "Something this decision reaches was decided already, or can no longer be changed. The page is showing the latest.",
+      "review_batch_reverted": "This upload has been undone, so a line of it that was turned down can no longer be accepted. Ask the phone's owner to send it again if it is still wanted.",
       "review_own_batch": "Uploads are decided by somebody other than the account that sent them.",
       "review_batch_not_found": "This upload is not waiting for review, or you may not see it.",
       "review_item_not_found": "This line is not there any more.",
