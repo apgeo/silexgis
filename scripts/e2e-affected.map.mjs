@@ -24,7 +24,7 @@ export const always = ['smoke.spec.ts'];
 export const specs = {
   about: [],
   // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
-  analysis: ['terrain-derivatives.spec.ts'],
+  analysis: ['terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts'],
   // Cave-potential models: written, run over an area and drawn on the map.
   cavePotential: ['cave-potential.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
@@ -46,7 +46,7 @@ export const specs = {
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
     'cave-statistics.spec.ts', 'cave-system-figures.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
-    'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
+    'overburden-profile.spec.ts', 'feature-passages-least-cover.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
     'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
     // A cave's declared places are written through the cave's own door and published on a trip's
     // page, so a change here is answered by the walk that reads one as a visitor.
@@ -125,11 +125,11 @@ export const specs = {
     'georeferenced-sheet.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
-  imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
+  imports: ['vector-import.spec.ts', 'geology.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
-    'karst-layers.spec.ts', 'passage-depth-layer.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
+    'karst-layers.spec.ts', 'geology.spec.ts', 'passage-depth-layer.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
     'coordinate-converter.spec.ts', 'terrain-profile-tool.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
@@ -206,7 +206,7 @@ export const specs = {
   statistics: [
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
-    'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
+    'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'geology.spec.ts', 'trip-stats.spec.ts',
     // The terrain class charts on an area page.
     'area-terrain-statistics.spec.ts',
     // Structural readings on a stereonet and the passage tested against their strikes.
@@ -243,7 +243,7 @@ export const specs = {
   tags: ['trips.spec.ts'],
   taxonomies: [],
   terrain: [
-    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts', 'terrain-profile-tool.spec.ts',
+    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts', 'overburden-profile.spec.ts', 'feature-passages-least-cover.spec.ts', 'terrain-profile-tool.spec.ts',
     'scene3d.spec.ts',
     // An area's entrances and sinkholes against slope, facing, position and landform classes.
     'area-terrain-statistics.spec.ts',
