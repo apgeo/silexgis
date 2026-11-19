@@ -91,6 +91,45 @@ public sealed class StructuralMeasurementTests : IAsyncLifetime, IDisposable, IC
         updated.GetProperty("measurement_type").GetString().ShouldBe("joint");
     }
 
+    /// <summary>
+    /// What a reading's history holds is the document as it was stored, not as it was typed. A
+    /// strike entered by hand is converted before the row is written, so the timeline — which
+    /// reads the values the change tracker saved — must show the dip direction and never the
+    /// strike; otherwise "restore this field" would put back a document the schema refuses, and a
+    /// reader of the timeline would see a plane the stored row does not describe.
+    /// </summary>
+    [Fact]
+    public async Task A_strike_entered_on_create_and_on_update_is_recorded_in_history_as_its_dip_direction()
+    {
+        var id = await ReadingAsync(
+            BaseLon + 0.07, BaseLat, new { measurement_type = "bedding", strike = 30, dip = 40 });
+        var update = await owner.PutWithIfMatchAsync($"/api/v1/features/{id}", new
+        {
+            name = "Smt history",
+            featureTypeId = readingTypeId,
+            geometry = new { type = "Point", coordinates = new[] { BaseLon + 0.07, BaseLat } },
+            properties = new { measurement_type = "joint", strike = 350, dip = 75 },
+            locationProtected = false,
+            visibility = "authenticated",
+        });
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+
+        var response = await owner.GetAsync($"/api/v1/history?entityType=feature&entityId={id}&pageSize=100");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+
+        // Both writes are on the timeline, so "no strike anywhere" is not true of an empty one.
+        var actions = JsonDocument.Parse(body).RootElement.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetProperty("action").GetString()).ToList();
+        actions.ShouldContain("created");
+        actions.ShouldContain("updated");
+
+        // The converted forms are there (120 from strike 30; 80 from strike 350) ...
+        body.ShouldContain("dip_direction");
+        // ... and the typed key is in no event, neither the creation's snapshot nor the update's diff.
+        body.ShouldNotContain("strike");
+    }
+
     [Theory]
     [InlineData("""{"measurement_type":"bedding","dip_direction":120}""")]
     [InlineData("""{"measurement_type":"bedding","dip_direction":120,"dip":95}""")]

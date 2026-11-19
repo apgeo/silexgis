@@ -77,6 +77,13 @@ public static class DemoSeeder
         await SeedKarstShapesAsync(db, writer, ownerUserId, ct);
         await db.SaveChangesAsync(ct);
 
+        // Two mapped rock classes over the demonstration area and a bedding reading on the
+        // limestone, so the area's lithology split, the lithology map style and the stereonet
+        // have something to show. After the area and the caves they are laid over, and appended
+        // here rather than placed among the sections above so nothing already seeded moves.
+        await SeedGeologyAsync(db, writer, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
         await SeedTripLogsAsync(db, ownerUserId, ct);
         await SeedExpeditionsAsync(db, ownerUserId, ct);
         await SeedMapViewsAsync(db, ownerUserId, ct);
@@ -857,6 +864,83 @@ public static class DemoSeeder
                         db, CenterlineSkeleton.Build3D(geometry), ct),
                 },
                 ct: ct);
+        }
+    }
+
+    /// <summary>
+    /// One karstifiable and one non-karstifiable geological unit laid over the demonstration area,
+    /// and a bedding reading on the karstifiable one.
+    /// </summary>
+    /// <remarks>
+    /// Every outline and angle is invented. The limestone covers the western and central part of
+    /// the area, including the first demo cave's entrance, and the sandstone takes the strip along
+    /// its eastern side, so the area's split has two classes, a karstifiable share, and an
+    /// unmapped remainder. The names are chosen so that none is a prefix of another seeded name
+    /// and none has one as a prefix: lists and loose selectors match by the start of a name, and
+    /// a name that begins another would match both.
+    /// </remarks>
+    private static async Task SeedGeologyAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        var unitTypeId = await db.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.GeologicalUnit).Select(t => t.Id).SingleAsync(ct);
+        var readingTypeId = await db.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.StructuralMeasurement).Select(t => t.Id).SingleAsync(ct);
+
+        (string Name, string Description, string Properties, double West, double East)[] units =
+        [
+            ("Calcar Demo",
+                "Demo limestone outcrop, the karstifiable ground of the demonstration area.",
+                """{"lithology": "limestone", "formation": "Demo limestone", "age": "Jurassic", "source": "invented demo data"}""",
+                25.425, 25.452),
+            ("Gresie Demo",
+                "Demo sandstone strip along the eastern side of the demonstration area.",
+                """{"lithology": "sandstone", "formation": "Demo sandstone", "age": "Cretaceous", "source": "invented demo data"}""",
+                25.452, 25.458),
+        ];
+
+        foreach (var (name, description, properties, west, east) in units)
+        {
+            if (await db.Features.AnyAsync(f => f.Name == name, ct))
+            {
+                continue;
+            }
+
+            var ring = new[]
+            {
+                new Coordinate(west, 45.515), new Coordinate(east, 45.515),
+                new Coordinate(east, 45.536), new Coordinate(west, 45.536),
+                new Coordinate(west, 45.515),
+            };
+
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = name,
+                    FeatureTypeId = unitTypeId,
+                    Geom = new Polygon(new LinearRing(ring)) { SRID = 4326 },
+                    Description = description,
+                    Properties = properties,
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
+        }
+
+        if (!await db.Features.AnyAsync(f => f.Name == "Stratificatie Demo", ct))
+        {
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = "Stratificatie Demo",
+                    FeatureTypeId = readingTypeId,
+                    Geom = new Point(25.4440, 45.5285) { SRID = 4326 },
+                    Description = "Demo bedding reading on the limestone, dipping south-east.",
+                    Properties = """{"measurement_type": "bedding", "dip_direction": 135, "dip": 32, "note": "invented demo reading"}""",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
         }
     }
 
