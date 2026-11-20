@@ -329,15 +329,22 @@ test('filing a document in a nested cabinet picks it by its whole path, and says
   // named rather than the text.
   const cabinetRow = page.getByRole('treeitem').filter({ hasText: cabinetName });
   await expect(cabinetRow).toBeVisible({ timeout: 15_000 });
-  // And one inside it: a new cabinet starts under the one selected in the tree.
-  await cabinetRow.click();
+  // And one inside it: a new cabinet starts under the one selected in the tree. Creating the
+  // cabinet has selected it already, and a click on a selected tree node would deselect it —
+  // so it is not clicked; the editor is checked to have taken it as the parent instead.
   await page.getByRole('button', { name: 'New' }).click();
+  await expect(page.getByRole('dialog').getByTitle(cabinetName, { exact: true })).toBeVisible();
   await page.getByLabel('Name').fill(nestedName);
   await confirmOk(page, { exact: true });
+  // It lands folded inside its parent, which only grows the control that unfolds it once the
+  // list has been read again with the new cabinet in it — so the unfolding is retried until the
+  // drawer shows rather than tried once, possibly before there is anything to unfold.
   const nestedRow = page.getByRole('treeitem').filter({ hasText: nestedName });
-  const closed = cabinetRow.locator('.ant-tree-switcher_close');
-  if (await closed.count()) await closed.click();
-  await expect(nestedRow).toBeVisible({ timeout: 15_000 });
+  await expect(async () => {
+    const closed = cabinetRow.locator('.ant-tree-switcher_close');
+    if (await closed.count()) await closed.click();
+    await expect(nestedRow).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 
   // Filing happens on the document, through its properties.
   await page.goto(`/documents/${documentId}`);
