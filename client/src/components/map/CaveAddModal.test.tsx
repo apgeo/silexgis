@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * The map's "new entrance here" tool: a cave is picked first, then the entrance editor opens for
@@ -261,6 +262,27 @@ describe('the new-entrance cave picker', () => {
     expect(screen.queryByTestId('entrance-editor')).toBeNull();
     expect(screen.getByTestId('new-entrance-cave-picker-input')).toHaveValue('');
   });
+
+  it('touches no new-cave form that was never drawn when the tool is put down', async () => {
+    // The form library says, from a timer of its own, when a form that was never drawn is asked
+    // to do something. Only the entrance tool was used here, so the new-cave form never was.
+    const consoleError = vi.spyOn(console, 'error');
+    try {
+      const { rerender } = show();
+      rerender(
+        <App>
+          <CaveAddModal mode={null} lonLat={null} onClose={() => {}} />
+        </App>,
+      );
+      // A timer queued after the library's own, with the same zero delay, runs after it.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+      const unconnected = consoleError.mock.calls.filter(([first]) => String(first).includes('not connected to any Form'));
+      expect(unconnected).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
 });
 
 describe('the new-cave dialog', () => {
@@ -275,8 +297,7 @@ describe('the new-cave dialog', () => {
 
     const name = within(dialog).getByLabelText(i18n.t('caves.name'));
     await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-    // Long enough for a rejection with no handler to be reported.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await afterRejectionsAreReported();
     expect(createCave).not.toHaveBeenCalled();
     expect(unhandled).toEqual([]);
   });
