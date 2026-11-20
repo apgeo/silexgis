@@ -152,6 +152,67 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// transform deliberately made a no-op — and the second must fail every assertion the first
     /// passes, or nothing here would notice degrees being used as metres.
     /// </summary>
+    /// <summary>
+    /// Two neighbouring surveys of thirty thousand legs each — nine hundred million leg pairs,
+    /// which compared whole run past the budget (about forty seconds on the machine this was
+    /// written on) — are measured inside it, to the same distance the whole comparison gives.
+    /// </summary>
+    [Fact]
+    public async Task Two_surveys_of_thirty_thousand_legs_each_are_measured_inside_the_budget()
+    {
+        var (south, north) = await CreatePairAsync();
+        await ReplaceLineWorkAsync(south, eastM: 0, altitudeM: 500);
+        await ReplaceLineWorkAsync(north, eastM: 650, altitudeM: 460);
+
+        var response = await owner.GetAsync($"/api/v1/caves/{south}/closest-approach/{north}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var answer = JsonDocument.Parse(payload).RootElement;
+
+        // The distance the whole comparison of the two generated surveys gives.
+        answer.GetProperty("distanceM").GetDouble().ShouldBe(57.6078, 0.01);
+        answer.GetProperty("from").ValueKind.ShouldBe(JsonValueKind.Object);
+        answer.GetProperty("to").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    /// <summary>
+    /// Replaces a cave's default line work with a generated survey of thirty thousand legs: a snake
+    /// of rows 600 m long, 4 m legs, rows 3 m apart, its height rising and falling 10 m, laid out
+    /// in the working system <paramref name="eastM"/> metres east of a fixed origin — outside the
+    /// window the table tests ask about, as the class shares one database.
+    /// </summary>
+    private async Task ReplaceLineWorkAsync(Guid caveId, double eastM, double altitudeM)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var updated = await connection.ExecuteAsync(
+            """
+            WITH origin AS (
+                SELECT ST_X(o) AS x, ST_Y(o) AS y
+                FROM ST_Transform(ST_SetSRID(ST_MakePoint(24.5, 45.5), 4326), @srid) AS o
+            ),
+            walk AS (
+                SELECT ST_Transform(ST_SetSRID(ST_Collect(ST_MakeLine(
+                    ST_MakePoint(
+                        origin.x + @east + CASE WHEN (i / 150) % 2 = 0 THEN (i % 150) * 4 ELSE (149 - i % 150) * 4 END,
+                        origin.y + (i / 150) * 3,
+                        @altitude + 10 * sin(i / 50.0)),
+                    ST_MakePoint(
+                        origin.x + @east + CASE WHEN ((i + 1) / 150) % 2 = 0 THEN ((i + 1) % 150) * 4 ELSE (149 - (i + 1) % 150) * 4 END,
+                        origin.y + ((i + 1) / 150) * 3,
+                        @altitude + 10 * sin((i + 1) / 50.0))) ORDER BY i), @srid), 4326) AS g
+                FROM origin, generate_series(0, 29999) AS i
+                GROUP BY origin.x, origin.y
+            )
+            UPDATE features f SET geom = walk.g
+            FROM walk, centerlines c
+            WHERE c.id = f.id AND c.cave_feature_id = @cave AND c.is_default
+            """,
+            new { srid = workingSrid, east = eastM, altitude = altitudeM, cave = caveId });
+        updated.ShouldBe(1);
+    }
+
     [Fact]
     public async Task The_distance_is_measured_in_metres_and_a_variant_measured_in_degrees_fails_it()
     {

@@ -124,8 +124,11 @@ public sealed record ClosestApproachRow(
 /// costs a detoast and a full traversal each, and the pairing evaluates its predicate once per
 /// pair with no index able to help it. So the pre-filter is a bounding-box overlap between the
 /// two projected geometries, expanded by the threshold — a header read, no traversal — and the
-/// metre-accurate test that follows it runs in the working system on the rows that survived.
-/// A plan test can only over-include, the shortest plan distance between two bodies of line work
+/// metre-accurate test that follows it runs in the working system, leg against leg, inside the
+/// pruning of each surviving pair (see <see cref="ShortestLine"/>), with the threshold as its
+/// bound: a plan distance between two whole surveys is itself a comparison of every leg with
+/// every other, and took over a minute for two of thirty thousand legs. A plan test can only
+/// over-include, the shortest plan distance between two bodies of line work
 /// never being larger than the shortest distance in three dimensions, so nothing inside the
 /// threshold is lost by pre-filtering in two.
 /// </para>
@@ -290,6 +293,95 @@ public static class ClosestApproachSql
                         AND {exactSql})
         """;
 
+    /// <summary>How many consecutive legs of a survey share one box in the pruning below.</summary>
+    private const int LegsPerChunk = 64;
+
+    /// <summary>
+    /// The shortest line in three dimensions between the line work of two placed rows, or no row
+    /// when either lacks real or absolute altitudes — the same line a whole-survey comparison
+    /// gives, found without comparing every leg of one survey with every leg of the other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Compared whole, two neighbouring systems of tens of thousands of legs each are hundreds of
+    /// millions of leg pairs, and the statement runs out of its budget on a question that has an
+    /// answer. Almost all of those pairs cannot be the nearest, and the pruning proves which:
+    /// </para>
+    /// <list type="number">
+    /// <item>An upper bound. From a few legs of each survey nearest the other's box, walk to the
+    /// nearest point of the other survey and back again; each walk ends at a real pair of points,
+    /// so the shortest of them is a distance the answer can be no longer than.</item>
+    /// <item>Boxes. The legs are taken in their stored order, which follows the survey, in runs of
+    /// a few dozen, and each run is boxed. Plan distance never exceeds distance in three
+    /// dimensions, so two runs whose boxes lie further apart in plan than the bound hold no pair
+    /// that could be nearer than it, and are never compared.</item>
+    /// <item>The exact distance in three dimensions, over the legs of the runs that are left,
+    /// and the shortest line of the nearest pair.</item>
+    /// </list>
+    /// <para>
+    /// Every step can only keep a pair the answer might come from, so the line is the one the
+    /// whole comparison would give — only its tie between two equally near pairs may fall the
+    /// other way, at the same distance. The envelopes are taken once: read per leg, the whole
+    /// survey would be read again for every leg.
+    /// </para>
+    /// </remarks>
+    /// <param name="a">The alias of the first placed row.</param>
+    /// <param name="b">The alias of the second placed row.</param>
+    /// <param name="threshold">
+    /// For the table, the furthest a reported pair may be apart: a bound known before anything is
+    /// measured, so legs further apart in plan than it are never compared, and a pair with none
+    /// nearer gives no line at all.
+    /// </param>
+    private static string ShortestLine(string a, string b, string? threshold) => $"""
+                    WITH env AS MATERIALIZED (
+                        SELECT ST_Envelope({a}.g) AS ea, ST_Envelope({b}.g) AS eb
+                    ),
+                    la AS MATERIALIZED (
+                        SELECT d.geom AS g, d.n, (d.n - 1) / {LegsPerChunk} AS chunk
+                        FROM ST_DumpSegments({a}.g) WITH ORDINALITY AS d(path, geom, n)
+                    ),
+                    lb AS MATERIALIZED (
+                        SELECT d.geom AS g, d.n, (d.n - 1) / {LegsPerChunk} AS chunk
+                        FROM ST_DumpSegments({b}.g) WITH ORDINALITY AS d(path, geom, n)
+                    ),
+                    seed AS MATERIALIZED (
+                        SELECT ST_StartPoint(s.g) AS p
+                        FROM ((SELECT lb.g FROM lb, env ORDER BY lb.g <#> env.ea, lb.n LIMIT 4)
+                              UNION ALL
+                              (SELECT la.g FROM la, env ORDER BY la.g <#> env.eb, la.n LIMIT 4)) s
+                    ),
+                    bound AS MATERIALIZED (
+                        SELECT {(threshold is null ? "" : "LEAST(" + threshold + ", ")}min(ST_3DDistance(ST_3DClosestPoint({a}.g, w.pb), w.pb)){(threshold is null ? "" : ")")} AS u
+                        FROM (SELECT ST_3DClosestPoint({b}.g, ST_3DClosestPoint({a}.g, seed.p)) AS pb
+                              FROM seed) w
+                    ),
+                    ka AS MATERIALIZED (
+                        SELECT chunk, ST_Extent(g)::geometry AS box FROM la GROUP BY chunk
+                    ),
+                    kb AS MATERIALIZED (
+                        SELECT chunk, ST_Extent(g)::geometry AS box FROM lb GROUP BY chunk
+                    ),
+                    near AS MATERIALIZED (
+                        SELECT ka.chunk AS a_chunk, kb.chunk AS b_chunk
+                        FROM ka CROSS JOIN kb CROSS JOIN bound
+                        WHERE ka.box <#> kb.box <= bound.u
+                    ),
+                    leg AS (
+                        SELECT la.g AS ga, lb.g AS gb, la.n AS na, lb.n AS nb,
+                               ST_3DDistance(la.g, lb.g) AS d
+                        FROM near
+                        JOIN la ON la.chunk = near.a_chunk
+                        JOIN lb ON lb.chunk = near.b_chunk
+                        CROSS JOIN bound
+                        WHERE ST_DWithin(la.g, lb.g, bound.u)
+                    )
+                    SELECT ST_3DShortestLine(leg.ga, leg.gb) AS ln
+                    FROM leg
+                    WHERE {a}.has_z AND {b}.has_z AND NOT ({a}.relative OR {b}.relative)
+                    ORDER BY leg.d, leg.na, leg.nb
+                    LIMIT 1
+        """;
+
     private static string Build(bool forArea, string shapeNarrowing, string visibleSql, string exactSql)
     {
         // Materialised on purpose: inlined — which is the planner's default for a CTE read once —
@@ -308,8 +400,7 @@ public static class ClosestApproachSql
         // The bounding boxes first, then the metric test on what survives — the class note says
         // why neither of them is a spheroid cast of a whole survey.
         var pairNarrowing = forArea
-            ? "AND ST_Expand(a.g, @ca_max_metres) && b.g\n"
-                + "                       AND ST_DWithin(a.g, b.g, @ca_max_metres)"
+            ? "AND ST_Expand(a.g, @ca_max_metres) && b.g"
             : string.Empty;
 
         // A table of nearest pairs carries no room to say why a row is missing, so a pair
@@ -367,12 +458,14 @@ public static class ClosestApproachSql
                 SELECT a.cave_id AS a_id, a.name AS a_name, b.cave_id AS b_id, b.name AS b_name,
                        a.has_z AND b.has_z AS has_z,
                        a.relative OR b.relative AS relative,
-                       CASE WHEN a.has_z AND b.has_z AND NOT (a.relative OR b.relative)
-                            THEN ST_3DShortestLine(a.g, b.g) END AS ln
+                       sl.ln
                 FROM placed a
                 JOIN placed b ON a.cave_id < b.cave_id
                        {pairNarrowing}
                        {altitudeFilter}
+                LEFT JOIN LATERAL (
+            {ShortestLine("a", "b", forArea ? "@ca_max_metres" : null)}
+                ) sl ON true
             ),
             ends AS (
                 -- The shortest line is two points; everything reported is read off them. It is
