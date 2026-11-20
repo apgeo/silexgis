@@ -223,6 +223,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
 
         // Somebody puts a cave of their own inside a generated karst area.
         Guid area;
+        List<Guid> generatedCaves;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -231,7 +232,11 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             area = await db.Features
                 .Where(f => listed.Contains(f.Id.ToString()) && f.FeatureTypeId == karstArea)
                 .Select(f => f.Id).FirstAsync();
+            generatedCaves = await db.Features
+                .Where(f => listed.Contains(f.Id.ToString()) && f.Kind == FeatureKind.Cave)
+                .Select(f => f.Id).ToListAsync();
         }
+        generatedCaves.ShouldNotBeEmpty();
 
         var inside = await CreateCaveAsync($"Peștera adăugată {suffix}", area);
 
@@ -246,7 +251,9 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             (await db.Features.AnyAsync(f => f.Id == own)).ShouldBeTrue("a cave nobody generated was removed");
             (await db.Features.AnyAsync(f => f.Id == inside)).ShouldBeTrue("a cave added inside a generated area was removed");
             (await db.Features.AnyAsync(f => f.Id == area)).ShouldBeTrue("the area holding somebody's cave was removed from under it");
-            (await db.Features.CountAsync(f => f.Kind == FeatureKind.Cave && f.Description!.Contains("testgenerated"))).ShouldBe(0);
+            // This run's own caves only: the class shares one database, and another test keeps
+            // generated caves people have used on purpose.
+            (await db.Features.IgnoreQueryFilters().CountAsync(f => generatedCaves.Contains(f.Id))).ShouldBe(0);
         }
     }
 

@@ -336,7 +336,9 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         // Four caves make six pairs, and the owner may place all of them.
         ownerPairs.Count.ShouldBe(6);
         CavesIn(ownerPairs).ShouldContain(guarded);
-        forOwner.GetProperty("cavesConsidered").GetInt32().ShouldBe(4);
+        // The window also holds caves other tests in this class made, so the count is a floor here.
+        var ownerConsidered = forOwner.GetProperty("cavesConsidered").GetInt32();
+        ownerConsidered.ShouldBeGreaterThanOrEqualTo(4);
         forOwner.GetProperty("partial").GetBoolean().ShouldBeFalse();
 
         var forViewer = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
@@ -349,9 +351,12 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         viewerPairs.Count.ShouldBe(3);
         CavesIn(viewerPairs).ShouldContain(north);
 
-        // The count of what was paired is a count of what this caller may place: three for the
-        // viewer where the owner's was four, so it cannot be read as "one more is hidden here".
-        forViewer.GetProperty("cavesConsidered").GetInt32().ShouldBe(3);
+        // The count of what was paired is a count of what this caller may place, so the guarded
+        // cave is missing from it. Tests in one class run one at a time, so nothing was added
+        // between the two reads and the viewer's count is below the owner's.
+        var viewerConsidered = forViewer.GetProperty("cavesConsidered").GetInt32();
+        viewerConsidered.ShouldBeGreaterThanOrEqualTo(3);
+        viewerConsidered.ShouldBeLessThan(ownerConsidered);
         forViewer.GetProperty("partial").GetBoolean().ShouldBeFalse();
 
         // Nearest first.
