@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page, type Route } from '@playwright/test';
 import { asPerson, surveyRead, tripBody, tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 import { bearerToken } from './rastermapApi.ts';
 
 /**
@@ -124,8 +124,7 @@ test('a published trip stays on screen, and says it is not being refreshed, whil
   // ---- A cave, its survey, and a party underground with a link published ----
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(`E2E Outage Cave ${stamp}`);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: `E2E Outage Cave ${stamp}` })).toBeVisible({
     timeout: 15_000,

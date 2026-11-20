@@ -1087,7 +1087,7 @@ test.describe('a cave’s past trips on a phone', () => {
     // answer a published link is ever refused with, so the page has no reason to read — only
     // which of its two lists answered.
     consoleErrors.allow(
-      /Failed to load resource.*404/,
+      /\/api\/v1\/public\/trips\/[^/?:\s]+\/live(\?|:|$)/,
       'the refusal of the list of parties, which this test serves on purpose',
     );
     const served = await serveCave(page, { over: true, liveRefused: true });
@@ -1132,7 +1132,7 @@ test.describe('a cave’s past trips on a phone', () => {
     consoleErrors,
   }) => {
     consoleErrors.allow(
-      /Failed to load resource.*404/,
+      /\/api\/v1\/public\/trips\/[^/?:\s]+\/live(\?|:|$)/,
       'the refusal of the list of parties, which this test serves on purpose',
     );
     const served = await serveCave(page, { over: true, liveRefused: true });

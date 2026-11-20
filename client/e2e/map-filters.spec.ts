@@ -218,7 +218,7 @@ test('a link whose saved filter the recipient cannot run opens the map unfiltere
   // The refusal this test drives on purpose: the map first asks under the link's filter and is
   // answered 404, which the browser reports to its console as a failed resource.
   consoleErrors.allow(
-    /Failed to load resource: .*404/,
+    /\/api\/v1\/map\/(cave-entrances|features)(\?|:|$)/,
     'the saved filter named by the link does not exist for this reader, which the route answers 404',
   );
   await login(page);

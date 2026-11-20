@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test';
 import { asPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { chooseOption, gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, pickCaveType } from './helpers.ts';
 
 /** A spot no other flow draws at, so the readings within reach of this cave are this flow's alone. */
 const START = { lon: 23.95, lat: 47.8 };
@@ -29,8 +29,7 @@ function straightCentreline(): Buffer {
 async function createCave(page: Page, name: string): Promise<string> {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
   return new URL(page.url()).pathname.split('/').pop()!;

@@ -32,10 +32,10 @@ test('a shared record opens from its link, and one that needs an account comes b
 }) => {
   test.setTimeout(180_000);
   consoleErrors.allow(
-    /Failed to load resource.*401/,
+    /\/api\/v1\/shared\/features\/[^/?:\s]+(\?|:|$)/,
     'the link that needs an account, opened before signing in on purpose',
   );
-  consoleErrors.allow(/Failed to load resource.*404/, 'the withdrawn link this test opens on purpose');
+  consoleErrors.allow(/\/api\/v1\/shared\/features\/[^/?:\s]+(\?|:|$)/, 'the withdrawn link this test opens on purpose');
   await login(page);
 
   const stamp = Date.now();

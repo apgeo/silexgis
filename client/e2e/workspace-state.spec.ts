@@ -61,9 +61,10 @@ test('workspace preferences follow the account, and stay with it', async ({ page
  */
 test('the selection travels in the address', async ({ page, consoleErrors }) => {
   // The id at the end is looked up like any other and answered 404 — the browser reports that to
-  // its console as a failed resource, naming no address; nothing else in this flow is answered 404.
+  // its console as a failed resource, with the address only in where it reports it from — so that
+  // address is what the declaration names.
   consoleErrors.allow(
-    /Failed to load resource: .*404/,
+    /\/api\/v1\/(caves|features)\/00000000-0000-4000-8000-00000000dead(\/[^?:\s]+)?(\?|:|$)/,
     'an address naming an object that does not exist is answered 404, and selects nothing',
   );
   await login(page);

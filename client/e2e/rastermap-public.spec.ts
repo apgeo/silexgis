@@ -2,7 +2,7 @@
 import { expect } from '@playwright/test';
 import { surveyRead } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 import { settledScreenshot } from './settled.ts';
 
@@ -59,7 +59,7 @@ test('a follower sees the party on the sheet, and a revoked link closes it', asy
   // The follower's browser is watched like the signed-in one, and this flow ends by revoking the
   // link under it: the read that finds the link gone is answered 404, which the browser logs.
   guard.allow(
-    /the server responded with a status of 404/,
+    /\/api\/v1\/public\/trips\/[^/?:\s]+(\/live)?(\?|:|$)/,
     'this flow revokes the link its follower holds, and the read that finds it gone is answered 404',
   );
   const caveName = `E2E Public Sheet Cave ${Date.now()}`;
@@ -69,8 +69,7 @@ test('a follower sees the party on the sheet, and a revoked link closes it', asy
   // ---- The fixture, through the signed-in context: a cave, its survey, a mapped sheet ----
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

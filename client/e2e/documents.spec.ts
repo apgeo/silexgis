@@ -106,7 +106,7 @@ test('an upload becomes a readable document, and its text is read and discussed'
   // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
   // run, detaching a file does not delete it, and the flow answers the warning on purpose.
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\?|:|$)/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   await login(page);
@@ -162,7 +162,7 @@ test('a text document is read on the page, and a recording is playable there', a
   // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
   // run, detaching a file does not delete it, and the flow answers the warning on purpose.
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\?|:|$)/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   await login(page);
@@ -199,7 +199,7 @@ test('a content search finds the document by a word inside it and opens it there
   // Declared rather than left to look like a defect: these fixtures are re-uploaded on every
   // run, detaching a file does not delete it, and the flow answers the warning on purpose.
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\?|:|$)/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   await login(page);
@@ -251,7 +251,7 @@ test('a content search finds the document by a word inside it and opens it there
  */
 test('the words of a portable document can be selected on the page', async ({ page, consoleErrors }) => {
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\?|:|$)/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   await login(page);
@@ -312,7 +312,7 @@ test('filing a document in a nested cabinet picks it by its whole path, and says
   consoleErrors,
 }) => {
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\?|:|$)/,
     'the duplicate refusal these fixtures provoke on a second run',
   );
   const cabinetName = `E2E Cabinet ${Date.now()}`;

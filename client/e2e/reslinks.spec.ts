@@ -629,7 +629,7 @@ test('an administrator adds a relation, a link records it, and it will not go wh
   // test exists to prove arrives as one. Declared rather than left to the console sweep, which
   // would otherwise report the application behaving exactly as this test requires.
   consoleErrors.allow(
-    /status of 409/,
+    /\/api\/v1\/reslinks\/relation-types\/[^/?:\s]+(\?|:|$)/,
     'this flow asserts that a relation in use cannot be deleted; the refusal is the point',
   );
   await login(page);

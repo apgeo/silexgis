@@ -2,7 +2,7 @@
 import { expect } from '@playwright/test';
 import { surveyRead, tripBody } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 /**
@@ -35,7 +35,7 @@ test('roster times are taken from the log after a look, and a person held by a t
 }) => {
   test.setTimeout(180_000);
   consoleErrors.allow(
-    /Failed to load resource.*400/,
+    /\/api\/v1\/cavers\/[^/?:\s]+(\?|:|$)/,
     'the refused delete of a person a trip still holds, which this walk asks for on purpose',
   );
 
@@ -48,8 +48,7 @@ test('roster times are taken from the log after a look, and a person held by a t
   // A cave of this run's own with the committed survey fixture on it: a watch is armed on a survey.
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

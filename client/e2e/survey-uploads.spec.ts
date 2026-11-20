@@ -106,7 +106,7 @@ test.describe('survey uploads', () => {
 
   test('an address that names no upload says so', async ({ page, consoleErrors }) => {
     consoleErrors.allow(
-      /Failed to load resource: .*404/,
+      /\/api\/v1\/survey-uploads\/0{8}-0{4}-0{4}-0{4}-0{12}(\/[a-z-]+)?(\?|:|$)/,
       'an upload that does not exist is answered 404, which the page turns into its own sentence',
     );
     await login(page);

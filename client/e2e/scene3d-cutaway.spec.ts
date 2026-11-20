@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { login, scene3dSurface, waitForScene3dReady } from './helpers.ts';
+import { login, scene3dSurface, waitForScene3dReady, pickCaveType } from './helpers.ts';
 import { tintedPng } from './png.ts';
 
 // The ground cut away above a cave, in the real engine. The unit tests build the opening — its
@@ -90,8 +90,7 @@ test('the ground above a surveyed cave is cut away in the real engine, and put b
   const caveName = `E2E Cutaway ${Date.now()}`;
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   madeCaves.push(/\/caves\/([0-9a-f-]+)/.exec(page.url())![1]!);

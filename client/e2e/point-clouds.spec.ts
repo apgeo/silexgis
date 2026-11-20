@@ -307,8 +307,10 @@ test('a reader without the exact position is told neither where the scan is nor 
     // and which the client says so about rather than showing an empty card.
     // The cave page's figure panels ask for statistics a reader without the exact position is
     // refused; the browser logs each refusal as a failed resource, however the page handles it.
+    // Every figure the cave page asks for is one of the cave's own sub-addresses, so that is what is
+    // declared, rather than any 403 or 404 from anywhere.
     consoleErrors.allow(
-      /status of 40[34]/,
+      /\/api\/v1\/(caves\/[^/?:\s]+\/[a-z-]+|survey-uploads\/[^/?:\s]+)(\?|:|$)/,
       "the cave page's figure panels request statistics the server withholds from a reader without the exact position",
     );
     await gotoRoute(theirs.page, `/caves/${caveId}`);

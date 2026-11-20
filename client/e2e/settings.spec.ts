@@ -325,7 +325,7 @@ test.describe('settings, on an account of its own', () => {
 
     // The old password is refused...
     consoleErrors.allow(
-      /status of 401 \(Unauthorized\)/,
+      /\/api\/v1\/auth\/login(\?|:|$)/,
       'the old password is tried on purpose after the change, and the sign-in is refused',
     );
     await page.getByLabel('Email').fill(account.email);

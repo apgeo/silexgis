@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { confirmOk, gotoRoute, login } from './helpers.ts';
+import { confirmOk, gotoRoute, login, pickCaveType } from './helpers.ts';
 import { surveyRead, tryAsPerson } from './arrange.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
@@ -65,7 +65,7 @@ test('an administrator replaces a published link and then unpublishes the trip, 
   // The visitor opens an address that has been replaced and one that has been taken back; each is
   // answered 404 on purpose, and the browser logs the refusal.
   guard.allow(
-    /the server responded with a status of 404/,
+    /\/api\/v1\/public\/trips\/[^?:\s]+(\?|:|$)/,
     'this flow opens a replaced address and then an unpublished one, and each read that finds them gone is answered 404',
   );
 
@@ -82,8 +82,7 @@ test('an administrator replaces a published link and then unpublishes the trip, 
     // ---- A cave of this run's own, with the committed survey fixture on it ----
     await page.goto('/caves/new');
     await page.getByLabel('Name', { exact: true }).fill(caveName);
-    await page.getByLabel('Type', { exact: true }).click();
-    await page.locator('.ant-select-item-option').first().click();
+    await pickCaveType(page);
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
     caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

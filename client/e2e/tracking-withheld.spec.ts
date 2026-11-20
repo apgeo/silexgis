@@ -408,7 +408,7 @@ test('somebody who may read a trip but not where its cave is is told who is unde
     // an empty one. The refusal is the server keeping the rule; that it was this request and no
     // other is checked below, against everything the browser received.
     consoleErrors.allow(
-      /Failed to load resource.*409/,
+      /\/api\/v1\/trip-logs\/[^/?:\s]+\/tracking\/places(\?|:|$)/,
       'the list of declared places is refused to a coordinator who may not place the cave',
     );
     // Opening the page afresh discards whatever is still arriving, so what has been answered so far

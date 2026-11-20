@@ -436,7 +436,7 @@ test('an event somebody may not read is no such event to them, and one they may 
   // The page asks for the event it was sent to, is answered 404, and says so — and the browser
   // writes a console error for every request that answered 404, however well the page handled it.
   consoleErrors.allow(
-    /status of 404/,
+    /\/api\/v1\/(events|objects\/event)\/[^/?:\s]+(\/effective-access)?(\?|:|$)/,
     'this flow opens an event its reader may not read, which the server answers as not found',
   );
   const reader = await registerAccount(request, 'eventreader');

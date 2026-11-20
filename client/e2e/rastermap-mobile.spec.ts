@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 import {
   apiJson,
   bearerToken,
@@ -36,8 +36,7 @@ test('a pin is authored by finger at 360px, with finger-sized controls', async (
   // Seed at the device's own width: the cave through its form, the rest through the API.
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

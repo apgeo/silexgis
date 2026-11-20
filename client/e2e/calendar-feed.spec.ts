@@ -40,7 +40,7 @@ test.describe('the calendar feed', () => {
     // text names no address, so the match is on the status; nothing else this flow does in the
     // browser is answered 404 (the feed is polled through the request context, not the page).
     consoleErrors.allow(
-      /Failed to load resource: .*404/,
+      /\/api\/v1\/me\/data-export(\?|:|$)/,
       "a missing data export is the account page's normal empty state, answered 404 and read as none",
     );
     await login(page);

@@ -725,6 +725,25 @@ async function surveyDrawnNear(page: Page, [lon, lat]: number[]): Promise<boolea
 }
 
 /**
+ * Chooses the cave form's type by its name, in the type list's own open dropdown, and reads the
+ * choice back off the field.
+ *
+ * Named rather than "the first option on the page": another select's list left open, or a type
+ * list whose order changes, would otherwise hand the cave whichever option happened to come
+ * first. The default is the seeded "Cave", whose name is the same in every interface language.
+ */
+export async function pickCaveType(page: Page, name = 'Cave') {
+  const field = page.getByLabel('Type', { exact: true });
+  await field.click();
+  const literal = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: new RegExp(`^${literal}$`) })
+    .click();
+  await expect(page.locator('.ant-form-item').filter({ has: field }).locator('.ant-select-content')).toHaveText(name);
+}
+
+/**
  * Chooses an option of a select by walking the keyboard highlight to it and taking it with Enter.
  *
  * The option lists commit on mousedown, so a click that straddles a re-render selects nothing and

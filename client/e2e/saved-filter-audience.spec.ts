@@ -146,7 +146,7 @@ test('a club the author may not share with is offered, and refusing it is said i
   consoleErrors,
 }) => {
   consoleErrors.allow(
-    /Failed to load resource: .*403/,
+    /\/api\/v1\/saved-filters(\?|:|$)/,
     'the server refusing a club the author is not in is what this test provokes',
   );
   const stamp = `${Date.now()}`;
