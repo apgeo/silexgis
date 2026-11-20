@@ -542,7 +542,7 @@ export default function TrackingCsvImportDialog({
           of what a reviewer is checking: "Ion" matching one person is right until the day two
           people on a trip answer to it. */}
       {row.caverWritten !== row.caverMatched && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('trips.tracking.csvImport.writtenAs', { written: row.caverWritten })}
         </Typography.Text>
       )}

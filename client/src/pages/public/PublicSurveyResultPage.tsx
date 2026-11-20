@@ -18,7 +18,7 @@ import {
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
 import { useSendersLanguage } from '../../i18n/languageChoice.ts';
-import { DOWNLOAD_BUTTON } from '../../theme.ts';
+import { DOWNLOAD_BUTTON, FONT_SIZE } from '../../theme.ts';
 
 /**
  * The page behind a survey upload's public link: how far the run has got and what it produced,
@@ -160,7 +160,7 @@ function LogCard({ view }: { view: PublicResultView }) {
         {view.logTail && (
           <pre
             data-testid="public-survey-log-tail"
-            style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
+            style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
           >
             {view.logTail}
           </pre>

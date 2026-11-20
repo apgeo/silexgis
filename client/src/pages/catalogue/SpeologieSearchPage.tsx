@@ -305,7 +305,7 @@ export default function SpeologieSearchPage() {
             emptyText: results.data ? (
               <Space orientation="vertical" size={4}>
                 <span>{t('speologie.search.noResults')}</span>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t('speologie.search.noResultsHint')}
                 </Typography.Text>
               </Space>

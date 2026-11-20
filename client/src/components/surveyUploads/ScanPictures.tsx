@@ -35,7 +35,7 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
             style={{ maxHeight: 320, objectFit: 'contain', background: token.colorFillQuaternary }}
             data-testid="scan-picture-plan"
           />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="scan-picture-plan-caption">
+          <Typography.Text type="secondary" className="hint-text" data-testid="scan-picture-plan-caption">
             {t('surveyUploads.pictures.planCaption', {
               pixelCm: centimetres(pictures.pixelM),
               width: planWidth ?? 0,
@@ -51,7 +51,7 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
               style={{ maxHeight: 320, objectFit: 'contain', background: token.colorFillQuaternary }}
               data-testid="scan-picture-profile"
             />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="scan-picture-profile-caption">
+            <Typography.Text type="secondary" className="hint-text" data-testid="scan-picture-profile-caption">
               {t('surveyUploads.pictures.profileCaption', {
                 pixelCm: centimetres(pictures.profilePixelM ?? pictures.pixelM),
                 lengthM: number(pictures.profileLengthM ?? 0),
@@ -66,10 +66,10 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
         </Typography.Text>
       )}
       <Flex gap={8} align="center" wrap data-testid="scan-pictures-legend">
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t(byHeight ? 'surveyUploads.pictures.byHeight' : 'surveyUploads.pictures.byIntensity')}
         </Typography.Text>
-        <Typography.Text style={{ fontSize: 12 }}>
+        <Typography.Text className="hint-text">
           {byHeight ? t('surveyUploads.pictures.metres', { value: number(pictures.valueLow) }) : number(pictures.valueLow, 0)}
         </Typography.Text>
         <span
@@ -82,7 +82,7 @@ export default function ScanPictures({ pictures }: { pictures: SurveyUploadPoint
             background: `linear-gradient(to right, ${SCAN_PICTURE_RAMP.join(', ')})`,
           }}
         />
-        <Typography.Text style={{ fontSize: 12 }}>
+        <Typography.Text className="hint-text">
           {byHeight ? t('surveyUploads.pictures.metres', { value: number(pictures.valueHigh) }) : number(pictures.valueHigh, 0)}
         </Typography.Text>
       </Flex>

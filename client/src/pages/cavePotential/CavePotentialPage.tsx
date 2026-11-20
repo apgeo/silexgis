@@ -161,7 +161,7 @@ export default function CavePotentialPage() {
                 <Flex vertical>
                   <Typography.Text strong>{model.name}</Typography.Text>
                   {model.description && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{model.description}</Typography.Text>
+                    <Typography.Text type="secondary" className="hint-text">{model.description}</Typography.Text>
                   )}
                 </Flex>
               ),
@@ -347,12 +347,12 @@ export default function CavePotentialPage() {
                       </Tag>
                     </span>
                     {result.status === 'failed' && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-result-failure">
+                      <Typography.Text type="secondary" className="hint-text" data-testid="cave-potential-result-failure">
                         {cavePotentialFailureText(t, result)}
                       </Typography.Text>
                     )}
                     {result.status === 'ready' && result.summary && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      <Typography.Text type="secondary" className="hint-text">
                         {t('cavePotential.page.summary', {
                           scored: result.summary.scoredCells,
                           cells: result.summary.areaCells,
@@ -361,7 +361,7 @@ export default function CavePotentialPage() {
                       </Typography.Text>
                     )}
                     {result.status === 'ready' && result.summary?.training && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-result-training">
+                      <Typography.Text type="secondary" className="hint-text" data-testid="cave-potential-result-training">
                         {t('cavePotential.page.trainingSummary', {
                           training: result.summary.training.trainingEntrances,
                           heldOut: result.summary.training.heldOutEntrances,

@@ -9,6 +9,7 @@ import { featureDetailPath } from '../features/featureNavigation.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { flyTo } from '../../map/mapContext.ts';
 import SearchDocumentHit from './SearchDocumentHit.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 interface MapSearchProps {
   /** Fill the container rather than the fixed desktop width — the mobile search strip. */
@@ -72,7 +73,7 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       value: 'documents:no-text',
       disabled: true,
       label: (
-        <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'normal' }}>
+        <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, whiteSpace: 'normal' }}>
           {t('search.noTextLayerHint')}
         </Typography.Text>
       ),
@@ -82,7 +83,7 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       value: 'documents:more',
       disabled: true,
       label: (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('search.moreDocuments', {
             shown: documents.items.length,
             total: documents.totalItems,

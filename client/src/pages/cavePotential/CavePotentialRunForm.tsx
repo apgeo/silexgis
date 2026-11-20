@@ -114,7 +114,7 @@ export default function CavePotentialRunForm({ model, onClose }: Props) {
             style={{ width: 160, display: 'block' }}
           />
         </label>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('cavePotential.run.cellHint', { min: MIN_CELL_METERS, max: MAX_CELL_METERS })}
         </Typography.Text>
         {model.usesPositions && (

@@ -257,7 +257,7 @@ export default function AttachmentSection({
                     alt={attachment.caption ?? attachment.file.originalName}
                   />
                   <Flex justify="space-between" align="center">
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+                    <Typography.Text type="secondary" className="hint-text" ellipsis>
                       {attachment.caption ?? attachment.file.originalName}
                     </Typography.Text>
                     <LocationRemovedTag file={attachment.file} />

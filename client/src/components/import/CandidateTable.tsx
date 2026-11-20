@@ -166,7 +166,7 @@ export default function CandidateTable({
             <Flex vertical>
               <Typography.Text strong>{row.proposedName ?? row.sourceName ?? '—'}</Typography.Text>
               {row.sourceName && row.sourceName !== row.proposedName && (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {row.sourceName}
                 </Typography.Text>
               )}
@@ -241,7 +241,7 @@ export default function CandidateTable({
             const keeps = decision?.keepElevation ?? elevationPolicy === 'keep';
             return (
               <Flex vertical gap={2} align="start">
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {formatPosition((row.geom.coordinates as number[])[0], (row.geom.coordinates as number[])[1])}
                 </Typography.Text>
                 {/* The altitude the file carries, and whether this row keeps it. The file is
@@ -255,7 +255,7 @@ export default function CandidateTable({
                       onDecision(row.sourceId, { ...(decision ?? {}), keepElevation: e.target.checked })
                     }
                   >
-                    <Typography.Text style={{ fontSize: 12 }}>
+                    <Typography.Text className="hint-text">
                       {t('vectorImport.keepAltitude', { altitude: Math.round(row.sourceElevation) })}
                     </Typography.Text>
                   </Checkbox>
@@ -274,7 +274,7 @@ export default function CandidateTable({
             const decision = decisionOf(row);
             return (
               <Flex vertical gap={4} align="start">
-                <Typography.Text style={{ fontSize: 12 }}>
+                <Typography.Text className="hint-text">
                   {row.duplicate.name ?? t('vectorImport.unnamed')} ·{' '}
                   {t('vectorImport.metresAway', { distance: Math.round(row.duplicate.distanceMeters) })}
                 </Typography.Text>

@@ -33,14 +33,14 @@ export default function KarstIndexControls() {
       ) : load.status === 'ok' ? (
         <>
           {load.areaCount > 0 && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-karst-index-shown">
+            <Typography.Text type="secondary" className="hint-text" data-testid="map-karst-index-shown">
               {t('map.karstIndex.shown', { count: load.areaCount })}
             </Typography.Text>
           )}
           <KarstIndexLegend state={load} />
         </>
       ) : (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('map.karstIndex.loading')}
         </Typography.Text>
       )}

@@ -38,7 +38,7 @@ export default function PdfDocumentView({
     <Flex vertical gap={8} align="center" style={{ width: '100%', minWidth: 0 }}>
       <PdfView url={opened.current.url} initialPage={initialPage} />
       <Flex gap={12} align="center" wrap justify="center">
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('documents.viewer.pdfSelectHint')}
         </Typography.Text>
         <DownloadDocument file={file} />

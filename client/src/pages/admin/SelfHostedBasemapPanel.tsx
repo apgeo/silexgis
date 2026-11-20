@@ -315,7 +315,7 @@ export default function SelfHostedBasemapPanel() {
                 </Typography.Text>
               )}
             </Flex>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('admin.basemap.source', { source: status.source, limit: formatBytes(status.maxBytes) })}
             </Typography.Text>
           </Flex>

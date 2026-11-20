@@ -35,7 +35,7 @@ const languages = ['ro', 'en'] as const;
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {label}
       </Typography.Text>
       {children}

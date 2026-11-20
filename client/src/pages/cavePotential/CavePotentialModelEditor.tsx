@@ -37,6 +37,7 @@ import {
   type ModelDraft,
 } from './cavePotentialModel.ts';
 import { categoryName, evidenceName } from './cavePotentialNames.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 function judgmentLabel(t: TFunction, code: JudgmentCode): string {
   if (code === '1') {
@@ -165,7 +166,7 @@ function LayerCard({ info, layer, directWeights, dataDriven, onChange, onRemove 
                 />
               </label>
             </Flex>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('cavePotential.editor.rampHint')}
             </Typography.Text>
           </>
@@ -237,7 +238,7 @@ function LayerCard({ info, layer, directWeights, dataDriven, onChange, onRemove 
         )}
 
         {kind === 'categories' && dataDriven && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('cavePotential.editor.categoriesCounted')}
           </Typography.Text>
         )}
@@ -249,7 +250,7 @@ function LayerCard({ info, layer, directWeights, dataDriven, onChange, onRemove 
                 const category = categoryName(t, layer.layer, code);
                 return (
                   <label key={code} style={{ width: 170 }}>
-                    <Typography.Text style={{ display: 'block', fontSize: 12 }}>{category}</Typography.Text>
+                    <Typography.Text style={{ display: 'block', fontSize: FONT_SIZE.sm }}>{category}</Typography.Text>
                     {score(
                       layer.categories[code] ?? null,
                       (next) => onChange({ ...layer, categories: { ...layer.categories, [code]: next } }),
@@ -259,7 +260,7 @@ function LayerCard({ info, layer, directWeights, dataDriven, onChange, onRemove 
                 );
               })}
             </Flex>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('cavePotential.editor.categoriesHint')}
             </Typography.Text>
           </>
@@ -434,7 +435,7 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
 
         {dataDriven && (
           <Flex vertical gap={8} data-testid="cave-potential-training">
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t(
                 draft.method === 'weightsOfEvidence'
                   ? 'cavePotential.editor.hintWeightsOfEvidence'
@@ -474,7 +475,7 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
                 />
               </label>
             </Flex>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('cavePotential.editor.trainingHint')}
             </Typography.Text>
           </Flex>
@@ -539,7 +540,7 @@ export default function CavePotentialModelEditor({ model, evidenceLayers, onClos
         {pairwise && draft.layers.length > 1 && (
           <>
             <Typography.Text strong>{t('cavePotential.editor.comparisons')}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('cavePotential.editor.comparisonsHint')}
             </Typography.Text>
             <Flex vertical gap={4} data-testid="cave-potential-comparisons">

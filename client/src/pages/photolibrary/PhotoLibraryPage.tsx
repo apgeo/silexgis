@@ -327,7 +327,7 @@ export default function PhotoLibraryPage() {
                 never happened is a false statement on the one line a reader would use to decide
                 whether the far side was reached at all. */}
             {data.readAt !== null && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" className="hint-text">
                 {t('libraryPhotos.browse.readAt', {
                   when: new Date(data.readAt).toLocaleTimeString(i18n.resolvedLanguage),
                 })}

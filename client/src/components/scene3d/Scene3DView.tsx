@@ -1729,7 +1729,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
             <>
               <Typography.Paragraph style={{ marginBottom: 4 }}>{t('scene3d.startFailedHint')}</Typography.Paragraph>
               {errorDetail && (
-                <Typography.Text type="secondary" code style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" code className="hint-text">
                   {errorDetail}
                 </Typography.Text>
               )}
@@ -1764,7 +1764,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           description={
             <>
               <Typography.Paragraph style={{ marginBottom: 4 }}>{t('scene3d.downloadFailedHint')}</Typography.Paragraph>
-              <Typography.Text type="secondary" code style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" code className="hint-text">
                 {errorDetail}
               </Typography.Text>
             </>

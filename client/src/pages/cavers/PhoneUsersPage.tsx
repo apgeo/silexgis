@@ -265,12 +265,12 @@ export default function PhoneUsersPage() {
                     {t('phoneUsers.notDescribed')}
                   </Typography.Text>
                 )}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {user.username ? `${user.username} · ` : ''}
                   {t('phoneUsers.deviceAccount', { id: shortAccount(user.deviceUserId) })}
                 </Typography.Text>
                 {(user.sentByName || !described(user)) && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {[
                       user.sentByName ? t('phoneUsers.sentBy', { name: user.sentByName }) : null,
                       described(user) ? null : t('phoneUsers.firstSeen', { when: when(user.firstSeenAt) }),

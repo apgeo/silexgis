@@ -304,7 +304,7 @@ export function SurveyTopologyView({
                 <span data-testid={`topology-${row.key}`}>
                   <Typography.Text strong>{row.value}</Typography.Text>
                   <br />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {row.gloss}
                   </Typography.Text>
                 </span>

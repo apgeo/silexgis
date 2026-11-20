@@ -106,7 +106,7 @@ export default function ImageRegionAnchorEditor({
           label: t(`resLinks.anchorEditors.regionShapes.${option}`),
         }))}
       />
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t(`resLinks.anchorEditors.regionHelp.${shape}`)}
       </Typography.Text>
       <ImageRegionCanvas

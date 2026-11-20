@@ -115,7 +115,7 @@ export default function DeletedFeaturesPage() {
                 <Typography.Text>{feature.name ?? t('features.unnamed')}</Typography.Text>
                 {feature.parents.length > 0 && (
                   // Where it sat, so that two entrances of one name are told apart by their caves.
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {feature.parents.map((parent) => parent.name ?? t('features.unnamed')).join(' › ')}
                   </Typography.Text>
                 )}

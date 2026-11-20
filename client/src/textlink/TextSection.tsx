@@ -142,7 +142,7 @@ export default function TextSection({
         />
       )}
       {texts.length === 1 && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {active.title}
         </Typography.Text>
       )}

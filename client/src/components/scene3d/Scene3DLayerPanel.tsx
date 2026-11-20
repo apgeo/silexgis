@@ -38,6 +38,7 @@ import type { ScansInView3DState } from '../../scene3d/scansInView3d.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
+import { FONT_SIZE } from '../../theme.ts';
 
 // What a viewer can turn on, fade and cut into, in the same order and with the same words the
 // flat map uses for the same things: basemap first, then the layers drawn on it. The third
@@ -509,7 +510,7 @@ export default function Scene3DLayerPanel({
               views and a viewer comparing them WILL notice: on the globe each sheet is flattened
               to a single picture, so it softens under close zoom where the flat map keeps reading
               the file's own pyramid. */}
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.rasterOverlayHint')}
           </Typography.Paragraph>
           <div className="scene3d-layer-rows">
@@ -740,7 +741,7 @@ export default function Scene3DLayerPanel({
               What differs is said once underneath: on the globe a file is its lines, and a track
               that recorded no altitude lies on the ground rather than at sea level. */}
           <Typography.Text strong>{t('map.geofiles')}</Typography.Text>
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.geofileTracksHint')}
           </Typography.Paragraph>
           <div className="scene3d-layer-rows" data-testid="scene3d-geofile-rows">
@@ -779,7 +780,7 @@ export default function Scene3DLayerPanel({
               address, and neither is a choice. A switch is a real reload of the ground, so the
               hint says so: the viewer should expect the surveys to move with it. */}
           <Typography.Text strong>{t('scene3d.terrainTitle')}</Typography.Text>
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.terrainBuildsHint')}
           </Typography.Paragraph>
           <Radio.Group

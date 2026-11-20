@@ -8,6 +8,7 @@ import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import type { AuditEntry } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { AUDIT_ACTION_KEYS } from './auditActions.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 const actionColor: Record<string, string> = {
   created: 'green',
@@ -78,7 +79,7 @@ export default function AuditPage() {
         expandable={{
           rowExpandable: (record) => record.changes != null,
           expandedRowRender: (record) => (
-            <pre style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap' }}>
+            <pre style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap' }}>
               {JSON.stringify(record.changes, null, 2)}
             </pre>
           ),

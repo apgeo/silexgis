@@ -206,7 +206,7 @@ export default function SpeologieImportPage() {
             ]}
           />
           {cave.alreadyImported ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('speologie.wizard.actionUpdateHint')}
             </Typography.Text>
           ) : null}

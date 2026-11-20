@@ -39,6 +39,7 @@ import SurveyModelPlacementModal, { type PlacementChange } from './SurveyModelPl
 import SurveyModelEstimatedPassagesModal from './SurveyModelEstimatedPassagesModal.tsx';
 import { formatKm, formatPassageLength, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What each format is called in the list. The two line-plot names are product names and read the
@@ -101,7 +102,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
     return (
       <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-estimated-note-${model.id}`}>
         {drawn > 0 ? (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          <Typography.Text type="warning" className="hint-text">
             <span
               aria-hidden
               style={{
@@ -120,7 +121,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             })}
           </Typography.Text>
         ) : (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('surveyModels.estimated.unsized', { length, count: unsizedLegs })}
           </Typography.Text>
         )}
@@ -155,11 +156,11 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
     return (
       <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-placement-note-${model.id}`}>
         {typeof model.placementOffByKm === 'number' && (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          <Typography.Text type="warning" className="hint-text">
             {t('surveyModels.placement.far', { km: formatKm(model.placementOffByKm) })}
           </Typography.Text>
         )}
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {epsg === null
             ? t('surveyModels.placement.suggestLocal')
             : typeof model.suggestedOffByKm !== 'number'
@@ -196,7 +197,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           <Tag color="error">{t('surveyModels.statusValues.failed')}</Tag>
           {/* The server's own words: it knows why this file could not be read, and no phrase
               written here in advance could say it as precisely. */}
-          <Typography.Text type="danger" style={{ fontSize: 12 }}>
+          <Typography.Text type="danger" className="hint-text">
             {model.processingError ??
               t(scan ? 'surveyModels.scanFailed' : walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
           </Typography.Text>
@@ -208,7 +209,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       return (
         <Flex vertical gap={2}>
           <Tag color="processing">{t(`surveyModels.statusValues.${model.status}`)}</Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t(scan ? 'surveyModels.scanProcessing' : walls ? 'surveyModels.converting' : 'surveyModels.reading')}
           </Typography.Text>
         </Flex>
@@ -226,13 +227,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         )}
         {model.triangleCount !== null && (
           <Flex gap={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('surveyModels.triangles', { count: model.triangleCount })}
             </Typography.Text>
             {/* The bytes the scene will download, which is what a viewer on a slow link wants
                 to know; the triangle count alone says nothing about that. */}
             {model.meshSizeBytes !== null && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" className="hint-text">
                 {formatSize(model.meshSizeBytes)}
               </Typography.Text>
             )}
@@ -243,13 +244,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             what it was made from decides how far it can be trusted — only what the survey
             itself measured or drew is in it. */}
         {!walls && model.triangleCount !== null && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('surveyModels.wallsBuilt')}
           </Typography.Text>
         )}
         {model.sourcePrecisionLost && (
           <Tooltip title={t('surveyModels.precisionLostHint')}>
-            <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            <Typography.Text type="warning" className="hint-text">
               {t('surveyModels.precisionLost')}
             </Typography.Text>
           </Tooltip>
@@ -481,7 +482,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       {(models?.length ?? 0) > 0 && (
         <Typography.Paragraph
           type="secondary"
-          style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}
+          style={{ fontSize: FONT_SIZE.sm, marginTop: 8, marginBottom: 0 }}
         >
           {t('surveyModels.currentHint')}
         </Typography.Paragraph>

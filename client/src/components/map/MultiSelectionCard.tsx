@@ -12,6 +12,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
 import { savedFilterSaveFailedKey } from '../filters/useSavedFilterAudienceChoice.ts';
 import ReadFailedAlert from '../ReadFailedAlert.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What several selected objects have in common, and what can be done to all of them.
@@ -193,7 +194,7 @@ export default function MultiSelectionCard() {
         </Form>
       </Modal>
 
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+      <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, display: 'block', marginTop: 12 }}>
         {t('panel.multiHint')}
       </Typography.Text>
 

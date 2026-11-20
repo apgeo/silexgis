@@ -160,12 +160,12 @@ export default function AnnotatedImageView({
         {canvas}
       </Popover>
       {highlights.length > 0 && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('imageLink.regionCount', { count: highlights.length })}
         </Typography.Text>
       )}
       {data && data.totalItems > data.items.length && (
-        <Typography.Text type="warning" style={{ fontSize: 12 }}>
+        <Typography.Text type="warning" className="hint-text">
           {t('imageLink.linksCutOff', { shown: data.items.length, total: data.totalItems })}
         </Typography.Text>
       )}

@@ -27,6 +27,7 @@ import {
   type NotificationHealth,
   type NotificationRetryOutcome,
 } from '../../api/hooks.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 const statusColor: Record<NotificationDeliveryStatus, string> = {
   pending: 'blue',
@@ -308,7 +309,7 @@ export default function NotificationHealthPage() {
         expandable={{
           rowExpandable: (record) => record.error != null,
           expandedRowRender: (record) => (
-            <pre style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap' }}>{record.error}</pre>
+            <pre style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap' }}>{record.error}</pre>
           ),
         }}
         columns={[

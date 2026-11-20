@@ -244,7 +244,7 @@ function RosterField({
                   <Form.Item name={[field.name, 'note']} noStyle>
                     <Input size="small" placeholder={t('trips.participantNote')} maxLength={500} />
                   </Form.Item>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {t('trips.participantTimesHint')}
                   </Typography.Text>
                 </Flex>

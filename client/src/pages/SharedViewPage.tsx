@@ -14,6 +14,7 @@ import { fetchSharedView } from '../api/hooks.ts';
 import { backgroundLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
 import { setEntranceSymbols } from '../map/entranceSymbols.ts';
+import { FONT_SIZE } from '../theme.ts';
 
 /** What a click on the shared map shows: a public name. */
 interface Picked {
@@ -195,7 +196,7 @@ export default function SharedViewPage() {
           would itself tell the reader that something protected lies in view. */}
       <Typography.Text
         type="secondary"
-        style={{ padding: '4px 16px', fontSize: 12, borderBottom: `1px solid ${colors.colorBorderSecondary}` }}
+        style={{ padding: '4px 16px', fontSize: FONT_SIZE.sm, borderBottom: `1px solid ${colors.colorBorderSecondary}` }}
         data-testid="shared-view-protection-note"
       >
         {t('views.sharedProtectedNote')}
