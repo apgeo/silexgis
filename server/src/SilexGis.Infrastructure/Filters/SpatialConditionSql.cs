@@ -61,11 +61,23 @@ public static class SpatialReach
     public static Envelope Around(Envelope envelope, double meters)
     {
         var latitudeMargin = meters / ShortestDegreeMeters;
-        var poleward = Math.Min(89.5, Math.Max(Math.Abs(envelope.MinY), Math.Abs(envelope.MaxY)) + latitudeMargin);
+        var reachedLatitude = Math.Max(Math.Abs(envelope.MinY), Math.Abs(envelope.MaxY)) + latitudeMargin;
+        var poleward = Math.Min(89.5, reachedLatitude);
         var longitudeMargin = latitudeMargin / Math.Max(0.01, Math.Cos(poleward * Math.PI / 180));
 
         var grown = envelope.Copy();
         grown.ExpandBy(longitudeMargin, latitudeMargin);
+
+        // Stored longitudes never leave [-180, 180], so a box grown past the antimeridian would miss
+        // every row just across it — a point eleven kilometres away answering "not within twenty".
+        // Near a pole every longitude is in reach. Either way the box takes the whole longitude
+        // range: wider than it need be, never narrower, which is the one direction this bound may
+        // err in.
+        if (grown.MinX < -180 || grown.MaxX > 180 || reachedLatitude >= 89.5)
+        {
+            return new Envelope(-180, 180, Math.Max(-90, grown.MinY), Math.Min(90, grown.MaxY));
+        }
+
         return grown;
     }
 }
