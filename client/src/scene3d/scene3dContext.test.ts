@@ -533,7 +533,7 @@ describe('tiles the application draws itself', () => {
 
   it('keeps quiet in the console about a source that cannot open, which has said why itself', async () => {
     const session = acquire();
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleError = vi.spyOn(console, 'error');
     const drawn = tileSource(Promise.reject(new Error('cog.unreadable')));
     session.engine.addImageryLayer('overlay:3', { kind: 'rendered', source: drawn.source });
 

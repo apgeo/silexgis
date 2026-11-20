@@ -133,6 +133,27 @@ if (!window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// A text box that grows with its text sizes itself from its own computed padding and border
+// widths. jsdom answers a computed border width with its initial keyword, "medium", and a padding
+// declared through a style variable with the variable, so the sum the box makes of them is NaN and
+// React says on the console that NaN is no height — once in every file that renders such a box,
+// whatever the test is about. A browser always answers those four in pixels; for a text box, a
+// width jsdom cannot give as a number is answered as zero instead. Nothing else is changed.
+{
+  const computeStyle = window.getComputedStyle.bind(window);
+  const SIZED_BY = /^(padding-(top|bottom)|border-(top|bottom)-width)$/;
+  window.getComputedStyle = (element: Element, pseudo?: string | null) => {
+    const style = computeStyle(element, pseudo);
+    if (!(element instanceof HTMLTextAreaElement)) return style;
+    const read = style.getPropertyValue.bind(style);
+    style.getPropertyValue = (name: string) => {
+      const value = read(name);
+      return SIZED_BY.test(name) && Number.isNaN(Number.parseFloat(value)) ? '0px' : value;
+    };
+    return style;
+  };
+}
+
 // jsdom lays nothing out, so nothing in it scrolls: an element can be asked where it is scrolled
 // to and has no way to be told to move. The table component moves its own body through this
 // call, and without it a list that opens on a particular row throws the moment it is mounted.

@@ -8,7 +8,7 @@ import { labelledPaginationItems } from './paginationLabels.ts';
 afterEach(cleanup);
 
 it("names the pagination's arrows in the reader's language rather than by their glyphs", () => {
-  render(<Pagination total={500} current={10} itemRender={labelledPaginationItems(i18n.getFixedT('ro'))} />);
+  render(<Pagination total={500} defaultCurrent={10} itemRender={labelledPaginationItems(i18n.getFixedT('ro'))} />);
 
   expect(screen.getByRole('button', { name: 'Pagina anterioară' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Pagina următoare' })).toBeTruthy();

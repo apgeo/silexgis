@@ -110,7 +110,7 @@ describe('the registry regions page', () => {
    * installation whose data happens to hold one.
    */
   it('gives the unrecorded region and an empty one keys the list can tell apart', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error');
     regionsSpy.mockReturnValue({
       data: breakdown({
         caveCount: 30,
