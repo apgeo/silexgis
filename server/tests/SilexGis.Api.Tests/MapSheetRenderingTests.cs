@@ -80,7 +80,7 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
         var placement = new MapPlacement(1, MapTransformations.Affine, "EPSG:4326",
             [new(0, 0, 24, 45.5), new(1, 0, 24.01, 45.5), new(0, 1, 24, 45.49)],
             [[0.0, 0.0], [0.5, 0.0], [0.5, 1.0], [0.0, 1.0]]);
-        var preview = new MapWarpService(Crs).Preview(drawn.PreviewPath, placement, Dir("preview"), 512);
+        var preview = new MapWarpService(Crs).Preview(drawn.PreviewPath, placement, Dir("preview"), 512, TestContext.Current.CancellationToken);
         preview.Png.Length.ShouldBeGreaterThan(0);
 
         // Half the picture kept, so roughly half the published pixels are see-through.
@@ -106,11 +106,36 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
             [new(0, 0, 24, 45.502), new(1, 0, 24.004, 45.502), new(1, 1, 24.004, 45.5), new(0, 1, 23.856, 44.99)], null);
 
         var clock = Stopwatch.StartNew();
-        var preview = new MapWarpService(Crs).Preview(drawn.PreviewPath, placement, Dir("preview"), 512);
+        var preview = new MapWarpService(Crs).Preview(drawn.PreviewPath, placement, Dir("preview"), 512, TestContext.Current.CancellationToken);
         output.WriteLine($"previewed {preview.Width}x{preview.Height} in {clock.ElapsedMilliseconds} ms");
 
         Math.Max(preview.Width, preview.Height).ShouldBe(512);
         preview.Png.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void A_preview_whose_caller_has_gone_stops_drawing_and_leaves_no_picture()
+    {
+        // The editor aborts the request a newer arrangement of the points supersedes; the server
+        // must stop working on it rather than finish a picture nobody will look at, because the
+        // drawing holds one of the few preview slots until it ends. The service looks at the token
+        // only through the library's progress report, so a drawing that answered a picture here
+        // would be one whose steps no longer report to it.
+        var pdf = Write("abandoned.pdf", PdfSheetFixtures.PlainPdf());
+        var options = new GeoreferencedMapOptions { DefaultDpiUnplaced = 72 };
+        var drawn = new PdfSheetRenderService().Render(new SheetRenderRequest(pdf, 1, null, null, Dir("render")), options, default);
+        var placement = new MapPlacement(1, MapTransformations.Affine, "EPSG:4326",
+            [new(0, 0, 24, 45.5), new(1, 0, 24.01, 45.5), new(0, 1, 24, 45.49)], null);
+        var warper = new MapWarpService(Crs);
+
+        // The same placement answers a picture while somebody waits for it.
+        warper.Preview(drawn.PreviewPath, placement, Dir("kept"), 512, CancellationToken.None).Png.Length.ShouldBeGreaterThan(0);
+
+        using var gone = new CancellationTokenSource();
+        gone.Cancel();
+        var abandoned = Dir("abandoned");
+        Should.Throw<OperationCanceledException>(() => warper.Preview(drawn.PreviewPath, placement, abandoned, 512, gone.Token));
+        File.Exists(Path.Combine(abandoned, "preview.png")).ShouldBeFalse();
     }
 
     [Fact]

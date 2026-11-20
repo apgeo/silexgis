@@ -40,7 +40,7 @@ public sealed record PreviewOutcome(
 /// national grid is warped once, here, rather than reprojected by every browser that draws it.
 /// </para>
 /// </remarks>
-public sealed class MapWarpService(ICrsRegistry crsRegistry)
+public class MapWarpService(ICrsRegistry crsRegistry)
 {
     static MapWarpService() => GdalRuntime.Configure();
 
@@ -99,9 +99,44 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
     /// Tries a placement on the stored small picture and answers a picture of the result in
     /// web-mercator, its extent, and how well the points fit.
     /// </summary>
-    public PreviewOutcome Preview(string previewPath, MapPlacement placement, string workDirectory, int maxPixels)
+    /// <remarks>
+    /// The editor asks for a new preview at every change of the points and aborts the request the
+    /// change supersedes. <paramref name="ct"/> is that request's own token: the library is told to
+    /// stop at its next progress report once it fires, so a preview nobody waits for any more gives
+    /// back its preview slot — and the processors a real placement needs — within moments instead
+    /// of drawing on to the end. Stopped, it throws <see cref="OperationCanceledException"/>, never
+    /// the failure a broken placement answers.
+    /// <para>
+    /// The token is required rather than defaulted, so that a caller cannot leave it out by
+    /// accident and bring back previews that outlive their request. Virtual only so that a test
+    /// can stand a drawing in for it that waits for its caller to go.
+    /// </para>
+    /// </remarks>
+    public virtual PreviewOutcome Preview(
+        string previewPath, MapPlacement placement, string workDirectory, int maxPixels, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(placement);
+        try
+        {
+            return PreviewCore(previewPath, placement, workDirectory, maxPixels, StopWhenCancelled(ct));
+        }
+        catch (VectorIOException) when (ct.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("The preview was abandoned by its caller.", ct);
+        }
+    }
+
+    private PreviewOutcome PreviewCore(
+        string previewPath,
+        MapPlacement placement,
+        string workDirectory,
+        int maxPixels,
+        Gdal.GDALProgressFuncDelegate? stop)
+    {
+        // The library's progress report is the one place the token is looked at: every step that
+        // takes time — shrinking, warping, writing the picture — reports progress, and the steps
+        // between them are moments. A check of the token of our own here would also hide a step
+        // that had lost its report, because it would stop the preview just the same.
         var srsWkt = WktOf(placement.Crs);
         Directory.CreateDirectory(workDirectory);
         using var scratch = GdalScratchDirectory.At(workDirectory);
@@ -121,7 +156,7 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
             Math.Max(1, (int)Math.Round(stored.RasterYSize * scale)).ToString(CultureInfo.InvariantCulture),
             "-r", "average", "-co", "ALPHA=YES",
             .. RasterBands.WithAlpha(stored),
-        ]), null, null), "The sheet's picture could not be read"))
+        ]), stop, null), "The sheet's picture could not be read"))
         {
         }
 
@@ -138,7 +173,7 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
         double[] extent3857;
         double[] extent4326;
         int width, height;
-        using (var warped = Run(() => Gdal.Warp(warpedPath, [placed], new GDALWarpAppOptions([.. args]), null, null), "The placement could not be tried"))
+        using (var warped = Run(() => Gdal.Warp(warpedPath, [placed], new GDALWarpAppOptions([.. args]), stop, null), "The placement could not be tried"))
         {
             width = warped.RasterXSize;
             height = warped.RasterYSize;
@@ -149,7 +184,7 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
             extent4326 = [footprint.MinX, footprint.MinY, footprint.MaxX, footprint.MaxY];
 
             var pngPath = Path.Combine(workDirectory, "preview.png");
-            using (Run(() => Gdal.GetDriverByName("PNG").CreateCopy(pngPath, warped, 0, null, null, null), "The preview could not be written"))
+            using (Run(() => Gdal.GetDriverByName("PNG").CreateCopy(pngPath, warped, 0, null, stop, null), "The preview could not be written"))
             {
             }
 
@@ -157,6 +192,13 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
             return new PreviewOutcome(File.ReadAllBytes(pngPath), extent3857, extent4326, width, height, rms, residuals);
         }
     }
+
+    /// <summary>
+    /// A progress report that answers "stop" (zero) once <paramref name="ct"/> fires, which makes
+    /// the library abandon the step and fail it; none at all for a token that can never fire.
+    /// </summary>
+    private static Gdal.GDALProgressFuncDelegate? StopWhenCancelled(CancellationToken ct) =>
+        ct.CanBeCanceled ? (_, _, _) => ct.IsCancellationRequested ? 0 : 1 : null;
 
     /// <summary>A system's own name and whether it is longitude and latitude; null when it cannot be defined.</summary>
     public (string Name, bool Geographic)? Describe(int epsgCode)
