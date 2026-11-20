@@ -26,7 +26,9 @@ public sealed class PermissionGroupCrudTests : IAsyncLifetime, IDisposable, ICla
     private Guid viewerId;
 
     public PermissionGroupCrudTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?> { ["Auth:DefaultPermissionGroups"] = $"joined-{suffix}" });
 
     public async ValueTask InitializeAsync()
     {
@@ -78,6 +80,22 @@ public sealed class PermissionGroupCrudTests : IAsyncLifetime, IDisposable, ICla
         deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
         await ShouldAnswerAsync(await admin.GetAsync($"/api/v1/permission-groups/{id}"),
             HttpStatusCode.NotFound, PermissionGroupEndpoints.NotFoundCode);
+    }
+
+    [Fact]
+    public async Task A_group_new_accounts_join_is_not_deleted_while_the_setting_names_it()
+    {
+        // Deleted, the group's short name would be free again, and the next group anyone created
+        // under the same name would silently become the one every new account joins.
+        var joined = await CreateAsync($"Joined {suffix}");
+        var ordinary = await CreateAsync($"Ordinary {suffix}");
+
+        await ShouldAnswerAsync(await admin.DeleteAsync($"/api/v1/permission-groups/{joined}"),
+            HttpStatusCode.Conflict, PermissionGroupEndpoints.DefaultMembershipCode);
+        (await admin.GetAsync($"/api/v1/permission-groups/{joined}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var deleted = await admin.DeleteAsync($"/api/v1/permission-groups/{ordinary}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
     }
 
     [Fact]

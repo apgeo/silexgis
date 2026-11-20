@@ -3906,6 +3906,7 @@
     "nameTaken": "Există deja un grup de permisiuni cu această denumire.",
     "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
+    "defaultMembership": "Conturile noi intră în acest grup. Scoate-l din setarea de apartenență implicită (SILEXGIS__Auth__DefaultPermissionGroups) înainte de a-l șterge.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
     "removalExceedsOwnRights": "Nu poți elimina o interdicție care reține drepturi pe care nu le deții tu.",
     "denyFullAdministrators": "Refuzat: nicio interdicție nu îi poate atinge pe Administratorii deplini — apartenența la acel grup este însăși acordarea.",

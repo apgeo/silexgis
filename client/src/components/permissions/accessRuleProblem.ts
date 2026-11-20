@@ -35,6 +35,8 @@ export function accessRuleProblem(error: unknown, t: TFunction): string {
       return t('permissionGroups.anchorNotFound');
     case 'access_entry.scope_invalid':
       return t('permissionGroups.scopeInvalid');
+    case 'permission_group.default_membership':
+      return t('permissionGroups.defaultMembership');
     case 'access.forbidden':
     case 'acl.forbidden':
       return t('permissionGroups.forbidden');
