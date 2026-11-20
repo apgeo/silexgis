@@ -16,6 +16,7 @@ import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const { canSpy, doorSpy, cavesSpy, caveItems, cavesError, cavesRefetch, downloadSpy, savedFilters, createSpy, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
   caveItems: { current: [] as unknown[] },
@@ -424,8 +425,7 @@ describe('the registry read from its address', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(createSpy).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

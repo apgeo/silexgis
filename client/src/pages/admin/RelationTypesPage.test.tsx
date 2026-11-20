@@ -15,6 +15,7 @@ const listRead = vi.hoisted(() => {
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { ResLinkRelationType } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
@@ -202,8 +203,7 @@ describe('RelationTypesPage', () => {
       const name = await screen.findByLabelText('Reads as');
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(createMutate).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

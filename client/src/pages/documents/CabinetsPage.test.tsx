@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../i18n';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * What a shelf says about whatever lands on it. Every cabinet carries this — the server
@@ -287,8 +288,7 @@ describe('CabinetsPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
       await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(createMutate).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

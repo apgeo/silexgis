@@ -362,8 +362,14 @@ describe('a camp delete that was not carried out', () => {
     deleteCamp.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
     await deleteTheCamp();
 
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too — whatever words it would have used. No waiting on the clock.
+    deleteCamp.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    fireEvent.click(screen.getByTestId('expedition-delete'));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'OK' })).at(-1)!);
+    await screen.findByText(i18n.t('expeditions.problems.forbidden'));
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
     expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
   });

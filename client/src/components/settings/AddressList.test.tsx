@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import type { UserAddress } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * The account's addresses: what a new, an edited and a removed one send, and what is said when a
@@ -107,8 +108,7 @@ describe('AddressList', () => {
       const name = await screen.findByLabelText(t('settings.profile.addressLabel'));
       fireEvent.click(screen.getByRole('button', { name: t('common.save') }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(create).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {
