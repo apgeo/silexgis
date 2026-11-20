@@ -160,6 +160,14 @@ public sealed class SpeologieImportService(
 
         await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
+        // The hierarchy lock before the entries' locks and before any row: the caves and
+        // entrances created below derive their protection under it, so it is held from here to
+        // the commit — a protection switched on above them waits, or commits first and is seen —
+        // and taken first, so this transaction never holds a lock another hierarchy writer is
+        // waiting on while it waits for this one. A held confirmation joins a decision that has
+        // already taken it; taking it again in the same transaction costs nothing.
+        await writer.HoldHierarchyAsync(ct);
+
         // Which entries already have a cave is asked only once this confirmation holds every entry
         // it names, and inside the transaction that writes: asked earlier, a confirmation of the
         // same entry running alongside could commit a cave in between, and this one would create

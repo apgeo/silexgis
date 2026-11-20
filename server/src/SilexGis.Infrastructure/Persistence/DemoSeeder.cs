@@ -61,28 +61,39 @@ public static class DemoSeeder
         // versions and puts back a row that was lost. A block that stops at the first sign of
         // itself never repairs a partial loss, and on a page the loss reads as the feature being
         // empty rather than as the seed being stale.
-        var demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
+        Guid demoCaveId;
 
-        await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId, ct);
-        await db.SaveChangesAsync(ct);
+        // The sections that create features save in transactions that take the hierarchy lock
+        // first and hold it to the commit, so a protection somebody switches on above a seeded
+        // row while the seed runs waits for it, or commits first and is seen. Held only for the
+        // statement that took it, the lock would let a row be stored unprotected under a
+        // protected area.
+        await using (var hierarchy = await writer.BeginHierarchyWriteAsync(ct))
+        {
+            demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
 
-        // Every kind of thing the selector offers needs something to find, or its button looks
-        // broken rather than empty. Trips and saved views had nothing at all until now.
-        await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+            await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId, ct);
+            await db.SaveChangesAsync(ct);
 
-        // The shapes the measuring features need before they can show anything: an outlined
-        // doline for the morphometry, and drawn passages for two caves that come near each other
-        // for the closest-approach table. After the caves, because the passages belong to them.
-        await SeedKarstShapesAsync(db, writer, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+            // Every kind of thing the selector offers needs something to find, or its button looks
+            // broken rather than empty. Trips and saved views had nothing at all until now.
+            await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
 
-        // Two mapped rock classes over the demonstration area and a bedding reading on the
-        // limestone, so the area's lithology split, the lithology map style and the stereonet
-        // have something to show. After the area and the caves they are laid over, and appended
-        // here rather than placed among the sections above so nothing already seeded moves.
-        await SeedGeologyAsync(db, writer, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+            // The shapes the measuring features need before they can show anything: an outlined
+            // doline for the morphometry, and drawn passages for two caves that come near each other
+            // for the closest-approach table. After the caves, because the passages belong to them.
+            await SeedKarstShapesAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+
+            // Two mapped rock classes over the demonstration area and a bedding reading on the
+            // limestone, so the area's lithology split, the lithology map style and the stereonet
+            // have something to show. After the area and the caves they are laid over, and appended
+            // here rather than placed among the sections above so nothing already seeded moves.
+            await SeedGeologyAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+            await hierarchy.CommitAsync(ct);
+        }
 
         await SeedTripLogsAsync(db, ownerUserId, ct);
         await SeedExpeditionsAsync(db, ownerUserId, ct);
@@ -99,9 +110,13 @@ public static class DemoSeeder
         await db.SaveChangesAsync(ct);
 
         // After the camp's trips are joined, because a lead reaches the camp's board through them.
-        await SeedContinuationsAsync(db, writer, ownerUserId, ct);
-        await SeedEventsAsync(db, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+        await using (var hierarchy = await writer.BeginHierarchyWriteAsync(ct))
+        {
+            await SeedContinuationsAsync(db, writer, ownerUserId, ct);
+            await SeedEventsAsync(db, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+            await hierarchy.CommitAsync(ct);
+        }
 
         if (documents is not null && fileStore is not null)
         {

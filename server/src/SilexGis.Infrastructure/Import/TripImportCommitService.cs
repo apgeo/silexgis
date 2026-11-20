@@ -223,6 +223,14 @@ public sealed class TripImportCommitService(
         var transaction = owned ?? db.Database.CurrentTransaction
             ?? throw new InvalidOperationException("A held confirmation is written inside the decision's transaction.");
 
+        // The hierarchy lock first, before any row: the caves and areas a row creates derive their
+        // protection under it, so it is held from here to the commit — a protection switched on
+        // above them waits, or commits first and is seen — and taken before anything else, so
+        // this transaction never holds a row another hierarchy writer is waiting on while it waits
+        // for the lock. A held confirmation joins a decision that has already taken it; taking it
+        // again in the same transaction costs nothing.
+        await features.HoldHierarchyAsync(ct);
+
         // The vocabulary grows once for the whole confirmation rather than once per row: a type
         // written on forty rows is one new term, and creating it per row would depend on the
         // order the rows happen to be in.

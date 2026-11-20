@@ -164,11 +164,20 @@ public static partial class SpeleoLocDevSeeder
                 db, documents, fileStore, adminUserId, SharedPhotoTitle, 45.5313, 25.4473, [open, guarded], ct);
             await db.SaveChangesAsync(ct);
 
-            var openPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, OpenPlaceName, false, ct);
-            var protectedPlace = await EnsurePlaceAsync(
-                db, writer, adminUserId, open, ProtectedPlaceName, true, ct);
-            var stationPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, StationPlaceName, false, ct);
-            await db.SaveChangesAsync(ct);
+            // The places are features under the cave, saved in a transaction that takes the
+            // hierarchy lock first and holds it to the commit: a protection switched on above the
+            // cave meanwhile waits for them, or commits first and is seen. Held only for the
+            // statement that took it, the lock would let a place be stored unprotected.
+            Guid openPlace, protectedPlace, stationPlace;
+            await using (var hierarchy = await writer.BeginHierarchyWriteAsync(ct))
+            {
+                openPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, OpenPlaceName, false, ct);
+                protectedPlace = await EnsurePlaceAsync(
+                    db, writer, adminUserId, open, ProtectedPlaceName, true, ct);
+                stationPlace = await EnsurePlaceAsync(db, writer, adminUserId, open, StationPlaceName, false, ct);
+                await db.SaveChangesAsync(ct);
+                await hierarchy.CommitAsync(ct);
+            }
 
             await EnsureRasterAsync(db, documents, fileStore, adminUserId, open, openPlace, protectedPlace, ct);
             await EnsureRecordingAsync(db, adminUserId, groupId, open, openPlace, ct);

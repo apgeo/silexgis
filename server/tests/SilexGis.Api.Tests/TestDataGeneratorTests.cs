@@ -9,6 +9,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -23,6 +24,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
 
     private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;
+    private readonly PauseAtCommit commits = new();
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
 
     private HttpClient admin = null!;
@@ -31,7 +33,11 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
     public TestDataGeneratorTests(PostgresFixture postgres)
     {
         this.postgres = postgres;
-        factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
+        factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(commits));
+        });
     }
 
     public async ValueTask InitializeAsync()
@@ -205,6 +211,73 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
         await ShouldBeProblemAsync(
             await admin.PostAsJsonAsync($"{Base}/runs/{runId}/remove", new { confirm = true }),
             HttpStatusCode.Conflict, "testdata.run_not_removable");
+    }
+
+    /// <summary>
+    /// A run writes its regions first and its caves afterwards, in chunks of their own, so a
+    /// protection somebody switches on over a region already written can land while a chunk of
+    /// caves under it is being saved. The protection waits for the chunk and then reaches its caves
+    /// and their entrances, instead of reading the region's children before they are there and
+    /// leaving them stored unprotected.
+    /// </summary>
+    [Fact]
+    public async Task Caves_written_while_their_region_is_being_protected_are_stored_protected()
+    {
+        var runId = await StartAsync(Profile(seed: 303, count: 4));
+        var job = (await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.TestDataGenerate))
+            .First(j => j.Payload.Contains(runId.ToString(), StringComparison.Ordinal));
+
+        commits.Arm(sql => sql.Contains("INSERT INTO caves (", StringComparison.OrdinalIgnoreCase));
+        var running = Task.Run(() => QueuedJob.RunAsync(factory.Services, job.Id), TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+
+        // What the run has committed so far is its regions; the chunk of caves is held at its commit.
+        List<Guid> regions;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            regions = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "features")
+                    .Select(r => r.RowId).ToListAsync(TestContext.Current.CancellationToken))
+                .Select(Guid.Parse).ToList();
+        }
+
+        regions.ShouldNotBeEmpty();
+        var protect = Task.Run(async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            foreach (var region in regions)
+            {
+                await writer.SetLocationProtectedAsync(region, true);
+            }
+
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, protect);
+        commits.Release();
+
+        await running;
+        await protect;
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var listed = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "features")
+                    .Select(r => r.RowId).ToListAsync(TestContext.Current.CancellationToken))
+                .Select(Guid.Parse).ToList();
+            var underground = await db.Features.IgnoreQueryFilters().AsNoTracking()
+                .Where(f => listed.Contains(f.Id) && (f.Kind == FeatureKind.Cave || f.Kind == FeatureKind.CaveEntrance))
+                .Select(f => new { f.Kind, f.IsProtectedEffective })
+                .ToListAsync(TestContext.Current.CancellationToken);
+            underground.Count(f => f.Kind == FeatureKind.Cave).ShouldBe(4);
+            underground.ShouldAllBe(f => f.IsProtectedEffective,
+                "every cave and entrance written under a region protected meanwhile must be stored protected");
+        }
+
+        await RemoveAsync(runId);
     }
 
     [Fact]

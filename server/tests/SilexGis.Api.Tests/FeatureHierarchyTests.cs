@@ -9,8 +9,10 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Tests;
 
@@ -685,6 +687,68 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
         var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await read.Features.AsNoTracking().SingleAsync(f => f.Name == name)).IsProtectedEffective
             .ShouldBeTrue("a row created under a protected area must be stored protected");
+        var problems = await check.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync();
+        problems.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The entrance a survey upload places at its fixed station, written while its cave is being
+    /// protected: the protection waits for the entrance to commit and then reaches it — instead of
+    /// reading the cave's children before the new entrance is there and leaving it unprotected.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_placed_from_a_survey_fix_while_its_cave_is_protected_is_stored_protected()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var caveResponse = await owner.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Fix cave {marker}",
+            caveTypeId,
+            visibility = "authenticated",
+            locationProtected = false,
+            explorationStatus = "unknown",
+            isShowCave = false,
+        }, TestContext.Current.CancellationToken);
+        caveResponse.StatusCode.ShouldBe(HttpStatusCode.Created, await caveResponse.Content.ReadAsStringAsync());
+        var caveId = (await caveResponse.Content.ReadFromJsonAsync<JsonObject>())!["id"]!.GetValue<Guid>();
+
+        // Read only for what it says about the cave; nothing of it is stored.
+        var upload = new SurveyUpload { SurveyTitle = $"Fix {marker}", CreatedCave = true, CaveFeatureId = caveId };
+        var facts = new TopoDroidSurveyFacts(
+            null, null, null, null, null, [new TopoDroidFixedPoint("0", 25.55, 45.65, 900, 880)], 1);
+
+        commits.Arm(sql => sql.Contains("INSERT INTO features", StringComparison.OrdinalIgnoreCase));
+        var place = Task.Run(async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            return await SurveyUploadEntrance.WriteFromFixAsync(db, writer, upload, facts, CancellationToken.None);
+        }, TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+
+        var protect = Task.Run(async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await writer.SetLocationProtectedAsync(caveId, true);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, protect);
+        commits.Release();
+
+        (await place).ShouldBeTrue("the fix places the cave's first entrance");
+        await protect;
+
+        using var check = factory.Services.CreateScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var entranceId = await read.CaveEntrances.AsNoTracking()
+            .Where(e => e.CaveFeatureId == caveId).Select(e => e.Id).SingleAsync();
+        (await read.Features.AsNoTracking().SingleAsync(f => f.Id == entranceId)).IsProtectedEffective
+            .ShouldBeTrue("an entrance written beside its cave's protection must be stored protected");
         var problems = await check.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync();
         problems.ShouldBeEmpty();
     }

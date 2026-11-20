@@ -198,6 +198,23 @@ public sealed class SurveyGraphHandler(
                 // the same moment waits here and then sees whether this one made the cave's shape.
                 await SurveyGraphSql.TakeCaveCenterlineLockAsync(db, model.CaveFeatureId, ct);
 
+                // Then the hierarchy lock, before any row is touched — but only by a reading that
+                // creates the cave's centerline, the one write here whose protection is derived
+                // under that lock. Held to the commit, a protection switched on above the cave
+                // waits for the new centerline, or commits first and is seen; taken ahead of the
+                // rows deleted below, this transaction never holds a row a hierarchy writer waits
+                // on while it waits for the lock. A reading again rewrites a centerline that
+                // already exists, which nothing in the hierarchy depends on, and must not take a
+                // lock every feature creation and protection change in the installation queues
+                // behind for the whole of a large survey's delete and insert. Asked under the
+                // cave's centerline lock, so a reading of the same cave cannot change the answer
+                // before the write; and nothing that holds the hierarchy lock takes that lock, so
+                // the two are always taken in this order.
+                if (shape is not null && !await HasExtractedCenterlineAsync(model.Id, ct))
+                {
+                    await writes.HoldHierarchyAsync(ct);
+                }
+
                 // Whatever a previous read of this file left behind. Issued as statements of their
                 // own rather than as tracked deletes, because loading tens of thousands of rows in
                 // order to mark them deleted costs more than the read that produced them.
@@ -615,6 +632,13 @@ public sealed class SurveyGraphHandler(
     /// the same survey, and the one that is the cave's shape on the map decided by which ran last.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Whether the model already has the centerline a reading extracts — the row
+    /// <see cref="WriteCenterlineAsync"/> rewrites rather than creates.
+    /// </summary>
+    private Task<bool> HasExtractedCenterlineAsync(Guid modelId, CancellationToken ct) =>
+        db.Centerlines.AnyAsync(c => c.SurveyModelId == modelId && c.Source == CenterlineSource.Extracted, ct);
+
     private async Task WriteCenterlineAsync(SurveyModel model, CenterlineShape? shape, CancellationToken ct)
     {
         if (shape is null)

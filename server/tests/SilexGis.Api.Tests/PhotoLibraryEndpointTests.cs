@@ -14,6 +14,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.PhotoLibraries;
 using SilexGis.Infrastructure.Persistence;
 
@@ -92,6 +93,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     private readonly string connectionString;
     private readonly LibraryStub library = new();
     private readonly LogCapture logs = new();
+    private readonly PauseAtCommit commits = new();
     private readonly SilexGisApiFactory factory;
 
     private string tag = string.Empty;
@@ -1002,6 +1004,52 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// An entrance made from a photograph while its cave is being protected: the protection waits
+    /// for the entrance to commit and then reaches it, instead of reading the cave's children
+    /// before the new entrance is there and leaving the entrance's position unprotected.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_made_from_a_photograph_while_its_cave_is_protected_is_stored_protected()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var cave = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = $"Cave being protected {tag}" });
+        cave.Status.ShouldBe(HttpStatusCode.Created, cave.Body);
+        var caveId = Guid.Parse(cave.Json.GetProperty("featureId").GetString()!);
+
+        commits.Arm(sql => sql.Contains("INSERT INTO features", StringComparison.OrdinalIgnoreCase));
+        var entrance = PostAsync(admin, FeatureUrl, new
+        {
+            kind = "caveEntrance",
+            name = $"Entrance beside the protection {tag}",
+            caveFeatureId = caveId,
+        });
+        await commits.WaitPausedAsync();
+
+        var protect = Task.Run(async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await writer.SetLocationProtectedAsync(caveId, true);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, protect);
+        commits.Release();
+
+        var created = await entrance;
+        created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
+        await protect;
+
+        var entranceId = Guid.Parse(created.Json.GetProperty("featureId").GetString()!);
+        using var check = factory.Services.CreateScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await read.Features.IgnoreQueryFilters().AsNoTracking().SingleAsync(f => f.Id == entranceId)).IsProtectedEffective
+            .ShouldBeTrue("an entrance written beside its cave's protection must be stored protected");
+    }
+
+    /// <summary>
     /// The two shapes the body has to refuse. A centerline is a line and a photograph is one point;
     /// a feature of "another kind" is defined by the installation's own taxonomy, and one that names
     /// none is not a request anybody can answer.
@@ -1393,6 +1441,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
             services =>
             {
                 services.AddSingleton<Serilog.Core.ILogEventSink>(logs);
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(commits));
                 services.AddHttpClient(PhotoPrismClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => stub);
 

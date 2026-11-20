@@ -70,6 +70,12 @@ public static class TestDataGeographyWriter
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(session);
 
+        // The hierarchy lock first, held to the commit, so a protection somebody switches on above
+        // these rows while the run writes them waits for them, or commits first and is seen. The
+        // run already gives each step a transaction of its own, which this joins; what taking the
+        // lock here adds is the order — before any row is read or written, as every hierarchy
+        // writer takes it — instead of at the end, when the derived state is worked out.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         foreach (var planned in session.Plan.Regions)
         {
             var region = planned.Region;
@@ -112,6 +118,7 @@ public static class TestDataGeographyWriter
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
     }
 
     /// <summary>Writes the caves of <paramref name="caves"/> with their entrances, in one save.</summary>
@@ -128,6 +135,13 @@ public static class TestDataGeographyWriter
         ArgumentNullException.ThrowIfNull(caves);
         var vocabulary = session.Vocabulary;
         var protectedCaves = new List<Guid>();
+
+        // The hierarchy lock first, held to the commit, so a protection somebody switches on above
+        // these rows while the run writes them waits for them, or commits first and is seen. The
+        // run already gives each step a transaction of its own, which this joins; what taking the
+        // lock here adds is the order — before any row is read or written, as every hierarchy
+        // writer takes it — instead of at the end, when the derived state is worked out.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
 
         // A generated code is shaped like a register code on purpose, and so can be one an
         // installation's own cave already carries. Written again, it would make a lookup or an
@@ -248,6 +262,7 @@ public static class TestDataGeographyWriter
 
         await writer.FlushDerivedStateAsync(ct);
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
     }
 
     /// <summary>Lists a generated feature against the run and gives it the marking tag.</summary>

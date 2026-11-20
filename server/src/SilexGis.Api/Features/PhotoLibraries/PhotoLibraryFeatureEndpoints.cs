@@ -282,6 +282,10 @@ public static class PhotoLibraryFeatureEndpoints
 
         var name = request.Name.Trim();
         Guid createdId;
+
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         try
         {
             createdId = request.Kind switch
@@ -307,6 +311,7 @@ public static class PhotoLibraryFeatureEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
 
         return TypedResults.Created(
             $"/api/v1/features/{createdId}",
