@@ -186,13 +186,34 @@ test('a flyby is kept under a name, changed section by section, and played on a 
 
   // The clean screen: nothing over the scene but the scene's own credits, a countdown, the flight.
   const home = await camera(page);
+  // The countdown lasts three seconds. Under software GL the assertions about the clean screen
+  // below can take longer than that, so a poll started after them finds the countdown already
+  // over. The page itself records every number it shows on screen, from before the press.
+  await page.evaluate(() => {
+    const shown: string[] = [];
+    (window as unknown as { flybyCountdownShown: string[] }).flybyCountdownShown = shown;
+    new MutationObserver(() => {
+      const element = document.querySelector('[data-testid="flyby-countdown"]');
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+      const box = element.getBoundingClientRect();
+      const text = element.textContent ?? '';
+      if (box.width > 0 && box.height > 0 && getComputedStyle(element).visibility !== 'hidden' && shown.at(-1) !== text) {
+        shown.push(text);
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  const countdownShown = () =>
+    page.evaluate(() => (window as unknown as { flybyCountdownShown: string[] }).flybyCountdownShown);
   await page.getByTestId('flyby-clean').click();
   await expect(page.getByTestId('flyby-clean-hint')).toBeAttached({ timeout: 120_000 });
   await expect(page.getByTestId('flyby-panel')).toHaveCount(0);
   await expect(page.getByTestId('flyby-transport')).toHaveCount(0);
   await expect(page.getByTestId('scene3d-layers-trigger')).toBeHidden();
   await expect(page.locator('.cesium-widget-credits')).toBeVisible();
-  await expect(page.getByTestId('flyby-countdown')).toBeVisible({ timeout: 120_000 });
+  await expect.poll(async () => (await countdownShown()).includes('1'), { timeout: 120_000 }).toBe(true);
+  expect(await countdownShown()).toEqual(['3', '2', '1']);
   await expect(page.getByTestId('flyby-countdown')).toHaveCount(0, { timeout: 30_000 });
   const flying = await camera(page);
   await expect.poll(async () => sameCamera(await camera(page), flying), { timeout: 30_000 }).toBe(false);
