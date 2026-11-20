@@ -9,6 +9,14 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaveStructureComparison: (...args: unknown[]) => comparisonSpy(...args),
 }));
 
+// The stereonet and the point-reading comparison read their own answers; this pins the wording
+// around the roses, so they are given nothing to show.
+vi.mock('../../api/hooks/structural.ts', () => ({
+  useCaveStereonet: () => ({ data: undefined, isLoading: false, isError: false }),
+}));
+vi.mock('../geology/MeasurementTypeSelect.tsx', () => ({ default: () => null }));
+vi.mock('../geology/StrikeComparisonSection.tsx', () => ({ default: () => null }));
+
 // The roses themselves are drawn elsewhere and tested there; this pins the wording around them.
 vi.mock('./StructureComparisonView.tsx', () => ({
   default: ({ rightTitle }: { rightTitle: string }) => <div data-testid="right-title">{rightTitle}</div>,
