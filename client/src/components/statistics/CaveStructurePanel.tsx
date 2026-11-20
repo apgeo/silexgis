@@ -10,6 +10,7 @@ import StereonetDiagram from '../geology/StereonetDiagram.tsx';
 import StrikeComparisonSection from '../geology/StrikeComparisonSection.tsx';
 import StructureComparisonView from './StructureComparisonView.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * Whether a cave's passages follow the structure mapped around it.
@@ -29,10 +30,14 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
 export default function CaveStructurePanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
   const [measurementType, setMeasurementType] = useState('');
-  const { data, isLoading, isError } = useCaveStructureComparison(caveId, undefined, measurementType || undefined);
+  const { data, isLoading, isError, error, refetch } = useCaveStructureComparison(caveId, undefined, measurementType || undefined);
   const stereonet = useCaveStereonet(caveId, measurementType || undefined);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('structureComparison.caveTitle')} error={error} onRetry={refetch} testId="cave-structure-read-failed" />
+    );
+  }
 
   const body = () => {
     if (isLoading || !data) return <Empty description={t('structureComparison.loading')} />;

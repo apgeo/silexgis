@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * The caving-group directory: the list everybody reads, and the create dialog offered to whoever
@@ -17,6 +18,11 @@ const createSpy = vi.fn();
 let canCreate = true;
 /** What the read of the groups failed with, when a test makes it fail. */
 let groupsFailure: unknown;
+/** What the read of a roster, or of an announcement's audience, failed with, when a test makes it fail. */
+let membersFailure: unknown;
+let audienceFailure: unknown;
+const sideRefetch = vi.fn();
+const upsertSpy = vi.fn();
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -27,12 +33,22 @@ vi.mock('../../api/hooks.ts', async () => {
       ? { data: undefined, isFetching: false, isError: true, error: groupsFailure, refetch: vi.fn() }
       : ({
       data: [
-        { id: 'g-1', name: 'Club A', type: 'cavingClub', description: null, memberCount: 3, canAnnounce: false },
+        { id: 'g-1', name: 'Club A', type: 'cavingClub', description: null, memberCount: 3, canAnnounce: true },
         { id: 'g-2', name: 'Group B', type: 'group', description: 'Sample', memberCount: 1, canAnnounce: false },
       ],
       isFetching: false,
     }),
     useCreateCavingGroup: () => ({ mutateAsync: createSpy, isPending: false }),
+    useCavingGroupMembers: () => membersFailure !== undefined
+      ? { data: undefined, isError: true, error: membersFailure, refetch: sideRefetch }
+      : { data: [], isError: false, refetch: sideRefetch },
+    useCavers: () => ({ data: [{ id: 'cv-1', name: 'Ion A.' }] }),
+    useUpsertCavingGroupMember: () => ({ mutateAsync: upsertSpy, isPending: false }),
+    useRemoveCavingGroupMember: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useCavingGroupAnnouncementAudience: () => audienceFailure !== undefined
+      ? { data: undefined, isPending: false, isError: true, error: audienceFailure, refetch: sideRefetch }
+      : { data: { recipients: 2 }, isPending: false, isError: false, refetch: sideRefetch },
+    useAnnounceToCavingGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
   };
 });
 vi.mock('../../components/statistics/TripStatisticsPanel.tsx', () => ({ default: () => null }));
@@ -45,6 +61,10 @@ const record = (reason: unknown) => unhandled.push(reason);
 beforeEach(() => {
   canCreate = true;
   createSpy.mockReset();
+  membersFailure = undefined;
+  audienceFailure = undefined;
+  sideRefetch.mockReset();
+  upsertSpy.mockReset();
   unhandled.length = 0;
   process.on('unhandledRejection', record);
 });
@@ -103,8 +123,7 @@ describe('CavingGroupsPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: i18n.t('common.ok') }));
 
     await waitFor(() => expect(nameField(dialog).getAttribute('aria-invalid')).toBe('true'));
-    // Long enough for a rejection with no handler to be reported.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await afterRejectionsAreReported();
     expect(createSpy).not.toHaveBeenCalled();
     expect(unhandled).toEqual([]);
   });
@@ -135,5 +154,40 @@ describe('CavingGroupsPage', () => {
 
     expect(await screen.findByText(i18n.t('cavingGroupPicker.nameTaken'))).toBeTruthy();
     expect((nameField(dialog) as HTMLInputElement).value).toBe('Club A');
+  });
+
+  /**
+   * A roster that could not be read is not an empty roster: the drawer would say nobody is a
+   * member, and adding somebody "as a member" could quietly change the role of a person already
+   * on it. The failure is named, with a way to ask again, and nobody is added until it is read.
+   */
+  it('says a roster could not be read, offers to read it again and adds nobody meanwhile', async () => {
+    membersFailure = new TypeError('Failed to fetch');
+    show();
+    fireEvent.click(within(screen.getByRole('row', { name: /Club A/ })).getByRole('button', { name: i18n.t('cavingGroups.manage') }));
+
+    const alert = await screen.findByTestId('caving-group-members-load-failed');
+    expect(alert.textContent).toContain(i18n.t('cavingGroups.membersLoadFailed'));
+    expect(within(screen.getByRole('dialog')).queryByText(/No data/)).toBeNull();
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: new RegExp(i18n.t('cavingGroups.addMember')) })).toBeDisabled();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(sideRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * "Nobody on this roster holds an account" is a claim about the roster; a count that never
+   * arrived has not made it. The failure is named and the announcement cannot go on unseen.
+   */
+  it('says an announcement\'s audience could not be counted instead of saying there is nobody to tell', async () => {
+    audienceFailure = new TypeError('Failed to fetch');
+    show();
+    fireEvent.click(within(screen.getByRole('row', { name: /Club A/ })).getByRole('button', { name: new RegExp(i18n.t('cavingGroups.announce.open')) }));
+
+    const alert = await screen.findByTestId('announcement-audience-failed');
+    expect(alert.textContent).toContain(i18n.t('cavingGroups.announce.audienceFailed'));
+    expect(screen.queryByText(i18n.t('cavingGroups.announce.nobody'))).toBeNull();
+    expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeDisabled();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(sideRefetch).toHaveBeenCalledTimes(1);
   });
 });

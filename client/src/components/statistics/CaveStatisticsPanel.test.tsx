@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { CaveSurveyStatistics } from '../../api/hooks.ts';
 
 const { statisticsSpy, modelsSpy } = vi.hoisted(() => ({ statisticsSpy: vi.fn(), modelsSpy: vi.fn() }));
@@ -51,8 +52,20 @@ const surveyed: CaveSurveyStatistics = {
   declaredDisagrees: true,
 };
 
+/**
+ * What the read failed with, when a test makes it fail. A refusal unless the test says otherwise:
+ * that is what the server answers a reader who may not read the subject, and the one failure the
+ * card must answer with nothing at all.
+ */
+let readError: unknown;
+const readRefetch = vi.fn();
+beforeEach(() => {
+  readError = new ApiError(404, 'cave.not_found');
+  readRefetch.mockReset();
+});
+
 function show(data: CaveSurveyStatistics | undefined, { isError = false, isLoading = false } = {}) {
-  statisticsSpy.mockReturnValue({ data, isLoading, isError });
+  statisticsSpy.mockReturnValue({ data, isLoading, isError, error: isError ? readError : null, refetch: readRefetch });
   modelsSpy.mockReturnValue({
     data: [{ id: 'model-1', name: 'Corrected re-export, March' }],
   });
@@ -197,5 +210,24 @@ describe('CaveStatisticsPanel', () => {
   it('shows nothing at all when the cave may not be read', () => {
     const { container } = show(undefined, { isError: true });
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('CaveStatisticsPanel when its read fails for a reason other than a refusal', () => {
+  it('names the failed read with a way to ask again instead of vanishing from the page', () => {
+    // A dropped connection or a server error says nothing about the subject, so the card does not
+    // get to disappear: a page missing a card reads as complete.
+    readError = new TypeError('Failed to fetch');
+    show(undefined, { isError: true });
+
+    const failed = screen.getByTestId('cave-survey-statistics-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still draws nothing when the server refuses', () => {
+    show(undefined, { isError: true });
+    expect(screen.queryByTestId('cave-survey-statistics-read-failed')).toBeNull();
   });
 });

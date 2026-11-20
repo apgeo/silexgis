@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { downloadFile, tripStatisticsExportUrl } from '../../api/download.ts';
 import { useTripStatistics, type StatisticsSubject, type TripStatistics } from '../../api/hooks.ts';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 interface TripStatisticsPanelProps {
   subject: StatisticsSubject;
@@ -37,12 +38,15 @@ export default function TripStatisticsPanel({ subject, id }: TripStatisticsPanel
   // Through the app's own message holder rather than the static one: a static call sits outside
   // the theme and locale context and antd says so on the console every time it is made.
   const { message } = App.useApp();
-  const { data, isLoading, isError } = useTripStatistics(subject, id);
+  const { data, isLoading, isError, error, refetch } = useTripStatistics(subject, id);
 
   // A caller who may not read the subject is refused by the server, and then there is nothing
-  // honest to show — an empty set of figures would read as "this person has done nothing".
+  // honest to show — an empty set of figures would read as "this person has done nothing". Any
+  // other failure is named as one, for the same reason.
   if (isError) {
-    return null;
+    return (
+      <StatisticsCardReadFailed title={t('statistics.title')} error={error} onRetry={refetch} testId="trip-statistics-read-failed" />
+    );
   }
 
   const onExport = () => {

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { StatisticsSubject, TripStatistics } from '../../api/hooks.ts';
 
 const { statisticsSpy } = vi.hoisted(() => ({
@@ -13,8 +14,10 @@ vi.mock('../../api/hooks.ts', () => ({
   useTripStatistics: (...args: unknown[]) => statisticsSpy(...args),
 }));
 
+const { downloadSpy } = vi.hoisted(() => ({ downloadSpy: vi.fn(() => Promise.resolve()) }));
+
 vi.mock('../../api/download.ts', () => ({
-  downloadFile: vi.fn(() => Promise.resolve()),
+  downloadFile: downloadSpy,
   tripStatisticsExportUrl: (subject: string, id: string) => `/api/v1/stats/${subject}/${id}/export`,
 }));
 
@@ -40,8 +43,20 @@ const totals: TripStatistics = {
   watchTimedPersonTrips: 6,
 };
 
+/**
+ * What the read failed with, when a test makes it fail. A refusal unless the test says otherwise:
+ * that is what the server answers a reader who may not read the subject, and the one failure the
+ * card must answer with nothing at all.
+ */
+let readError: unknown;
+const readRefetch = vi.fn();
+beforeEach(() => {
+  readError = new ApiError(404, 'cave.not_found');
+  readRefetch.mockReset();
+});
+
 function show(subject: StatisticsSubject, data: TripStatistics | undefined, isError = false) {
-  statisticsSpy.mockReturnValue({ data, isLoading: false, isError });
+  statisticsSpy.mockReturnValue({ data, isLoading: false, isError, error: isError ? readError : null, refetch: readRefetch });
   return render(
     <App>
       <TripStatisticsPanel subject={subject} id="subject-1" />
@@ -154,5 +169,45 @@ describe('TripStatisticsPanel', () => {
   it('shows nothing at all when the subject may not be read', () => {
     const { container } = show('caver', undefined, true);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('TripStatisticsPanel when its read fails for a reason other than a refusal', () => {
+  it('names the failed read with a way to ask again instead of vanishing from the page', () => {
+    // A dropped connection or a server error says nothing about the subject, so the card does not
+    // get to disappear: a page missing a card reads as complete.
+    readError = new TypeError('Failed to fetch');
+    show('caver', undefined, true);
+
+    const failed = screen.getByTestId('trip-statistics-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still draws nothing when the server refuses', () => {
+    show('caver', undefined, true);
+    expect(screen.queryByTestId('trip-statistics-read-failed')).toBeNull();
+  });
+});
+
+describe('TripStatisticsPanel export', () => {
+  it('downloads the figures of this subject', async () => {
+    downloadSpy.mockReset().mockResolvedValue(undefined);
+    show('caver', totals);
+
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+
+    await vi.waitFor(() => expect(downloadSpy).toHaveBeenCalledWith('/api/v1/stats/caver/subject-1/export'));
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+  });
+
+  it('says the export failed rather than leaving the press unanswered', async () => {
+    downloadSpy.mockReset().mockRejectedValue(new TypeError('Failed to fetch'));
+    show('caver', totals);
+
+    fireEvent.click(screen.getByRole('button', { name: /Export/ }));
+
+    expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
   });
 });

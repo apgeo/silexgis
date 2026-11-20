@@ -47,7 +47,11 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members } = useCavingGroupMembers(group.id);
+  const membersRead = useCavingGroupMembers(group.id);
+  const { data: members } = membersRead;
+  // Until the roster has been read, adding somebody "as a member" could quietly change the role of
+  // a person already on it, so nobody is added while it is unknown.
+  const rosterUnknown = members === undefined;
   const upsert = useUpsertCavingGroupMember(group.id);
   const remove = useRemoveCavingGroupMember(group.id);
   const [caverQuery, setCaverQuery] = useState('');
@@ -92,13 +96,23 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
           }))}
           notFoundContent={null}
         />
-        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedCaver}>
+        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedCaver || rosterUnknown}>
           {t('cavingGroups.addMember')}
         </Button>
       </Flex>
+      <ReadFailedAlert
+        isError={membersRead.isError}
+        error={membersRead.error}
+        held={members !== undefined}
+        onRetry={membersRead.refetch}
+        title={t('cavingGroups.membersLoadFailed')}
+        testId="caving-group-members-load-failed"
+      />
       <List
         size="small"
         dataSource={members}
+        // A roster that could not be read says so above; "no data" here would be a false answer.
+        locale={membersRead.isError && !members ? { emptyText: <span /> } : undefined}
         renderItem={(member) => (
           <List.Item
             actions={[
@@ -159,7 +173,8 @@ const MAX_ANNOUNCEMENT_LENGTH = 200;
  */
 function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
-  const { data: audience, isPending: counting } = useCavingGroupAnnouncementAudience(group.id);
+  const audienceRead = useCavingGroupAnnouncementAudience(group.id);
+  const { data: audience, isPending: counting } = audienceRead;
   const announce = useAnnounceToCavingGroup(group.id);
   const [message, setMessage] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -232,7 +247,18 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
           {/* The count first, and before anything is typed: it is the fact that decides whether
               this should be written at all, and putting it under the box would show it after the
               decision had already been made. */}
-          {counting ? (
+          {audienceRead.isError && !audience ? (
+            // A count that never arrived is not "nobody to tell"; with it unknown the
+            // announcement cannot go on, because the count is what it is weighed by.
+            <ReadFailedAlert
+              isError
+              error={audienceRead.error}
+              held={false}
+              onRetry={audienceRead.refetch}
+              title={t('cavingGroups.announce.audienceFailed')}
+              testId="announcement-audience-failed"
+            />
+          ) : counting ? (
             <Skeleton.Input active size="small" style={{ marginBottom: 12 }} />
           ) : (
             <Alert

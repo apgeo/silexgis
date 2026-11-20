@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -46,6 +46,8 @@ const measured: CaveOverburden = {
   samples: [sample(0, 40), sample(150, 55), sample(300, 61)],
 };
 
+const readRefetch = vi.fn();
+
 function show(
   data: CaveOverburden | undefined,
   {
@@ -54,7 +56,7 @@ function show(
     error = null,
   }: { isError?: boolean; isLoading?: boolean; error?: Error | null } = {},
 ) {
-  overburdenSpy.mockReturnValue({ data, isLoading, isError, error });
+  overburdenSpy.mockReturnValue({ data, isLoading, isError, error, refetch: readRefetch });
   return render(
     <App>
       <CaveOverburdenPanel caveId="cave-1" />
@@ -94,7 +96,7 @@ describe('CaveOverburdenPanel', () => {
     // The refusal a reader gets for a cave they may see but may not place is the same "no such
     // cave" a never-created cave gets. A card of blanks would announce that a guarded cave is
     // here, which is precisely the fact being protected.
-    const { container } = show(undefined, { isError: true });
+    const { container } = show(undefined, { isError: true, error: new ApiError(404, 'cave.not_found') });
 
     // The assertion is on the whole rendering rather than on one figure being blank: no card, no
     // heading, no sentence about there being nothing to show.
@@ -156,5 +158,17 @@ describe('CaveOverburdenPanel', () => {
     const { container } = show({ ...measured, basis: 'skeletonHeuristic', isApproximation: true });
 
     expect(container.textContent).toMatch(/centerline/i);
+  });
+});
+
+describe('CaveOverburdenPanel when its read fails for a reason other than a refusal', () => {
+  it('names the failed read with a way to ask again instead of vanishing from the page', () => {
+    readRefetch.mockReset();
+    show(undefined, { isError: true, error: new TypeError('Failed to fetch') });
+
+    const failed = screen.getByTestId('cave-overburden-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
   });
 });

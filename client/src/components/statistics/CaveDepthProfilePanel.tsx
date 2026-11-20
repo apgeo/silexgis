@@ -7,6 +7,7 @@ import type { SurveyUploadDepthProfile } from '../../api/hooks/surveyUploads.ts'
 import { useCaveDepthProfile } from '../../api/hooks/karstProfiles.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * How deep a cave's passages lie, along their length: the standard descent figure of a survey
@@ -20,8 +21,13 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveDepthProfilePanel({ caveId }: { caveId: string }) {
-  const { data, isLoading, isError } = useCaveDepthProfile(caveId);
-  if (isError) return null;
+  const { t } = useTranslation();
+  const { data, isLoading, isError, error, refetch } = useCaveDepthProfile(caveId);
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('depthProfile.title')} error={error} onRetry={refetch} testId="cave-depth-profile-read-failed" />
+    );
+  }
   return <SurveyDepthProfileView data={data} isLoading={isLoading} />;
 }
 
