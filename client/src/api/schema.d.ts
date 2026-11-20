@@ -42836,6 +42836,15 @@ export interface operations {
                     "application/json": components["schemas"]["CaverDto"][];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {

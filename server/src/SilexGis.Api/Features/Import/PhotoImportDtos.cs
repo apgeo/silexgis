@@ -161,6 +161,40 @@ public sealed record PhotoPositionRequest(
 /// <summary>Moves an object to the position one of its pictures records.</summary>
 public sealed record FeaturePositionFromPhotoRequest(Guid FileId);
 
+/// <summary>
+/// Every place of a photograph review comes from at least one of its pictures, so a confirmation
+/// never chooses more places than the review has pictures. Decisions get more room: a decision is
+/// kept when a change of grouping retires the place it was about (a stale one is ignored rather
+/// than refused), so a long review can carry some for places that no longer exist. The review is
+/// stored and read back whole on every save, which is why both are bounded on the way in.
+/// </summary>
+internal static class PhotoReviewRules
+{
+    /// <summary>The most decisions one photograph review carries: ten for every picture it may hold.</summary>
+    public const int MaxDecisions = 10 * PhotoImportOptions.MaxFiles;
+
+    public static void Apply<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<KeyValuePair<string, PhotoDecision>>?>> decisions)
+    {
+        validator.RuleFor(decisions)
+            .Must(d => d is null || d.Count() <= MaxDecisions)
+            .WithMessage($"A review holds at most {MaxDecisions} decisions.");
+        // An enum binds any number of its underlying type; one outside the defined actions would be
+        // stored in the review and read differently by the preview and by the confirmation.
+        validator.RuleForEach(decisions).ChildRules(entry =>
+        {
+            entry.RuleFor(e => e.Key).MaximumLength(40);
+            entry.RuleFor(e => e.Value.Action).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Kind).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Name).MaximumLength(255).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.FeatureTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.CaveTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.EntranceTypeCode).MaximumLength(100).When(e => e.Value is not null);
+        });
+    }
+}
+
 public sealed class PhotoPreviewRequestValidator : AbstractValidator<PhotoPreviewRequest>
 {
     public PhotoPreviewRequestValidator()
@@ -169,6 +203,8 @@ public sealed class PhotoPreviewRequestValidator : AbstractValidator<PhotoPrevie
             .Must(ids => ids is null || ids.Count <= PhotoImportOptions.MaxFiles)
             .WithMessage($"A review holds at most {PhotoImportOptions.MaxFiles} pictures.");
         RuleFor(x => x.Options).NotNull().SetValidator(new PhotoImportOptionsValidator()!);
+        PhotoReviewRules.Apply(this, x => x.Decisions);
+        RuleFor(x => x.Search).MaximumLength(200);
     }
 }
 
@@ -180,6 +216,7 @@ public sealed class PhotoSessionWriteRequestValidator : AbstractValidator<PhotoS
             .Must(ids => ids is null || ids.Count <= PhotoImportOptions.MaxFiles)
             .WithMessage($"A review holds at most {PhotoImportOptions.MaxFiles} pictures.");
         RuleFor(x => x.Options).NotNull().SetValidator(new PhotoImportOptionsValidator()!);
+        PhotoReviewRules.Apply(this, x => x.Decisions);
     }
 }
 
@@ -192,7 +229,11 @@ public sealed class PhotoCommitRequestValidator : AbstractValidator<PhotoCommitR
             .WithMessage($"A review holds at most {PhotoImportOptions.MaxFiles} pictures.");
         RuleFor(x => x.Selection).NotNull().NotEmpty()
             .WithMessage("Nothing was selected.");
+        RuleFor(x => x.Selection)
+            .Must(s => s is null || s.Count <= PhotoImportOptions.MaxFiles)
+            .WithMessage($"A confirmation selects at most {PhotoImportOptions.MaxFiles} places.");
         RuleFor(x => x.Options).NotNull().SetValidator(new PhotoImportOptionsValidator()!);
+        PhotoReviewRules.Apply(this, x => x.Decisions);
     }
 }
 

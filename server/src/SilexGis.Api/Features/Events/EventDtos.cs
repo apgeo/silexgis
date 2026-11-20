@@ -259,6 +259,10 @@ public sealed class EventWriteRequestValidator : AbstractValidator<EventWriteReq
             .WithMessage("The end date must not precede the start date.");
 
         RuleFor(x => x.Visibility).IsInEnum().When(x => x.Visibility is not null);
+        // An event shown to a caving group that names none would be shown to nobody but its author.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
 
         // Room for nobody is not a limit anybody means to state; absent is how "no limit" is said.
         RuleFor(x => x.MaxParticipants).GreaterThan(0).When(x => x.MaxParticipants is not null);

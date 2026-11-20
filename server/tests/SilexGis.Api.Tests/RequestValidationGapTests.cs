@@ -373,7 +373,7 @@ public sealed class RequestValidationGapTests : IAsyncLifetime, IDisposable, ICl
     /// saved map view and a trip each refuse it naming the missing club.
     /// </summary>
     [Fact]
-    public async Task Club_visibility_without_a_club_is_refused_on_features_map_views_and_trips()
+    public async Task Club_visibility_without_a_club_is_refused_on_features_map_views_trips_and_events()
     {
         long sinkholeTypeId;
         using (var scope = factory.Services.CreateScope())
@@ -414,6 +414,24 @@ public sealed class RequestValidationGapTests : IAsyncLifetime, IDisposable, ICl
             visibility = "cavingGroup",
         });
         await ShouldBeRefusedNamingAsync(trip, "cavingGroupId");
+
+        object EventBody(string visibility) => new
+        {
+            title = "Clubless meeting",
+            kind = "clubMeeting",
+            startDate = "2054-10-05",
+            endDate = (string?)null,
+            place = (string?)null,
+            visibility,
+            cavingGroupId = (Guid?)null,
+            recurrence = (object?)null,
+        };
+
+        using var meeting = await admin.PostAsJsonAsync("/api/v1/events", EventBody("cavingGroup"));
+        await ShouldBeRefusedNamingAsync(meeting, "cavingGroupId");
+
+        using var open = await admin.PostAsJsonAsync("/api/v1/events", EventBody("authenticated"));
+        open.StatusCode.ShouldBe(HttpStatusCode.Created, await open.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -424,6 +442,30 @@ public sealed class RequestValidationGapTests : IAsyncLifetime, IDisposable, ICl
 
         using var taken = await admin.GetAsync($"/api/v1/photos/?search={new string('s', 200)}");
         taken.StatusCode.ShouldBe(HttpStatusCode.OK, await taken.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task The_roster_refuses_an_over_long_search_and_an_over_long_note_and_takes_both_at_the_bound()
+    {
+        using var refusedSearch = await admin.GetAsync($"/api/v1/cavers/?search={new string('s', 201)}");
+        await ShouldBeRefusedNamingAsync(refusedSearch, "search");
+
+        using var takenSearch = await admin.GetAsync($"/api/v1/cavers/?search={new string('s', 200)}");
+        takenSearch.StatusCode.ShouldBe(HttpStatusCode.OK, await takenSearch.Content.ReadAsStringAsync());
+
+        var name = $"Bound caver {Guid.NewGuid():N}"[..24];
+        using var refusedNote = await admin.PostAsJsonAsync("/api/v1/cavers",
+            new { fullName = name, notes = new string('n', 10_001) });
+        await ShouldBeRefusedNamingAsync(refusedNote, "notes");
+
+        using var created = await admin.PostAsJsonAsync("/api/v1/cavers",
+            new { fullName = name, notes = new string('n', 10_000) });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        using var refusedEdit = await admin.PutAsJsonAsync($"/api/v1/cavers/{id}",
+            new { fullName = name, notes = new string('n', 10_001) });
+        await ShouldBeRefusedNamingAsync(refusedEdit, "notes");
     }
 
     private object CaveBody(string member, decimal value)
