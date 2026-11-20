@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useBlocker } from 'react-router-dom';
+import { isLeavingDeliberately } from '../auth/leaving.ts';
 
 /**
  * The mask setting every long form's Modal or Drawer takes: a click beside the dialog never
@@ -87,4 +89,58 @@ export function useDiscardGuard(): (dirty: DirtySource, discard: () => void) => 
     },
     [modal, t],
   );
+}
+
+/**
+ * The same question for a page that is left rather than closed: a link followed elsewhere, the
+ * main menu, the back button. `dirty` is read at the moment of leaving, so typing tracked in refs
+ * is seen without a re-render. A reload or a closed tab can only be met by the browser's own
+ * question, whose wording the browser chooses.
+ *
+ * A move that keeps the page (only the query string changes) is let through. Clear whatever
+ * `dirty` reads before the page's own moves that keep the work — a save that opens what it saved,
+ * a Cancel already answered — or they are asked about too.
+ *
+ * Needs a data router, as the application has; a component tree under a plain `MemoryRouter`
+ * cannot use it.
+ */
+export function useLeaveGuard(dirty: () => boolean): void {
+  const { t } = useTranslation();
+  const { modal } = App.useApp();
+  const read = useRef(dirty);
+  read.current = dirty;
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname && read.current(),
+  );
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') {
+      return;
+    }
+    const dialog = modal.confirm({
+      title: t('common.discardTitle'),
+      content: t('common.discardBody'),
+      okText: t('common.discardOk'),
+      okButtonProps: { danger: true, 'data-testid': 'discard-confirm' },
+      cancelText: t('common.keepEditing'),
+      onOk: () => blocker.proceed(),
+      onCancel: () => blocker.reset(),
+    });
+    return () => dialog.destroy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- asked once per blocked move
+  }, [blocker.state]);
+
+  useEffect(() => {
+    const ask = (event: BeforeUnloadEvent) => {
+      if (!read.current() || isLeavingDeliberately()) {
+        return;
+      }
+      event.preventDefault();
+      // Older engines show their question only when a return value is set.
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', ask);
+    return () => window.removeEventListener('beforeunload', ask);
+  }, []);
 }
