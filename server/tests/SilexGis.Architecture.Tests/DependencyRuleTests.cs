@@ -220,11 +220,14 @@ public class DependencyRuleTests
         // it locates an executable on the host and runs it. Nothing here wants that, and a web
         // application that can be talked into starting a local process from an uploaded file is
         // a different kind of program than this one. Reading the parsers does not require it, so
-        // assert the rest stays unreachable rather than trusting that nobody calls it.
+        // assert the rest stays unreachable rather than trusting that nobody calls it. (The library
+        // has since moved its Blender runner into an assembly of its own, and the rule after this
+        // one keeps that assembly out of the build altogether; this list still judges every type
+        // of every module that is taken, the compiler's among them.)
         //
         // One process is let through, deliberately and by name: the Therion compiler, which turns a
         // survey uploaded from a field device into its models and drawings. It is started only
-        // inside a sandbox, and the rule after this one confines the types that start it to the
+        // inside a sandbox, and a rule further down confines the types that start it to the
         // single class that applies the sandbox — the allow-list says which types, that rule says
         // from where.
         //
@@ -273,6 +276,109 @@ public class DependencyRuleTests
                 + "locates an executable, starts a process or opens a shell, it does not belong in "
                 + "a web application and the call is the thing to remove.");
         }
+    }
+
+    [Fact]
+    public void Nothing_here_references_the_survey_library_module_that_runs_Blender()
+    {
+        // The survey library keeps everything that finds a Blender executable and starts it in an
+        // assembly of its own, and its readers and geometry do not reference that assembly. So the
+        // rule above has a coarser twin that does not depend on anybody reading a type list: the
+        // assembly is in nothing this application builds. The type allow-list still stands — it
+        // judges every type that is used; this judges the assembly before any type of it is.
+        //
+        // Two readings, because each sees what the other cannot. The compiled references, followed
+        // through every survey-library assembly they lead to, are what the running program loads,
+        // whichever module brings it in. But the compiler leaves out a reference no code uses, so a
+        // project reference added and not yet called is invisible there; the build's dependency
+        // manifest lists every project the build pulled in, used or not, and closes that gap.
+        var loaded = TherionAssembliesReachedFrom(
+            typeof(Visibility).Assembly,
+            typeof(InfrastructureMarker).Assembly,
+            typeof(Program).Assembly,
+            typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+            typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly);
+
+        // The positive half, so the walk cannot pass by finding nothing: the readers are reached.
+        loaded.ShouldContain(SurveyModelModule);
+        loaded.ShouldNotContain(
+            BlenderExecutionModule,
+            "A SilexGIS assembly reaches the survey library's Blender runner, through: "
+            + string.Join(", ", loaded.OrderBy(n => n, StringComparer.Ordinal))
+            + ". Nothing in a web application may start Blender; remove whatever brought it in.");
+
+        var built = ProjectsInBuildManifest();
+        built.ShouldContain(SurveyModelModule);
+        built.ShouldNotContain(
+            BlenderExecutionModule,
+            "The build pulls in the survey library's Blender runner. No project here may reference "
+            + $"{BlenderExecutionModule}, directly or through another module of the library.");
+    }
+
+    /// <summary>The survey library's model records and readers, which the application does use.</summary>
+    private const string SurveyModelModule = "Therion.Cave3D";
+
+    /// <summary>The survey library's assembly that finds Blender and starts it.</summary>
+    private const string BlenderExecutionModule = "Therion.Blender.Execution";
+
+    /// <summary>
+    /// The survey-library assemblies the given assemblies reference, followed transitively through
+    /// each survey-library assembly's own references, read from the files next to this test without
+    /// loading them.
+    /// </summary>
+    private static HashSet<string> TherionAssembliesReachedFrom(params Assembly[] roots)
+    {
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var name in root.GetReferencedAssemblies().Select(a => a.Name ?? string.Empty))
+            {
+                if (IsTherionName(name) && reached.Add(name))
+                {
+                    pending.Enqueue(name);
+                }
+            }
+        }
+
+        while (pending.TryDequeue(out var current))
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, current + ".dll");
+            File.Exists(path).ShouldBeTrue($"{current} is referenced but not in the build output at {path}.");
+
+            using var stream = File.OpenRead(path);
+            using var pe = new PEReader(stream);
+            var metadata = pe.GetMetadataReader();
+            foreach (var handle in metadata.AssemblyReferences)
+            {
+                var name = metadata.GetString(metadata.GetAssemblyReference(handle).Name);
+                if (IsTherionName(name) && reached.Add(name))
+                {
+                    pending.Enqueue(name);
+                }
+            }
+        }
+
+        return reached;
+    }
+
+    /// <summary>
+    /// The names of the projects this test's build pulled in, read from its dependency manifest:
+    /// every SilexGIS project it references and everything those reference in turn.
+    /// </summary>
+    private static HashSet<string> ProjectsInBuildManifest()
+    {
+        var manifest = Path.Combine(
+            AppContext.BaseDirectory,
+            typeof(DependencyRuleTests).Assembly.GetName().Name + ".deps.json");
+        File.Exists(manifest).ShouldBeTrue($"No dependency manifest at {manifest}.");
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+        return document.RootElement.GetProperty("libraries").EnumerateObject()
+            .Where(library => library.Value.GetProperty("type").GetString() == "project")
+            .Select(library => library.Name.Split('/')[0])
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
