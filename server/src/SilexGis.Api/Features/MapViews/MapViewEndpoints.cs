@@ -111,6 +111,12 @@ public sealed class MapViewWriteRequestValidator : AbstractValidator<MapViewWrit
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Description).MaximumLength(2000);
+        RuleFor(x => x.Visibility).IsInEnum();
+        // Club visibility says "the club this belongs to may read it", so it needs a club to
+        // name; without one it would be an audience that admits nobody, silently.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
         RuleFor(x => x.Config)
             .Must(c => c.ValueKind == JsonValueKind.Object)
             .WithMessage("Config must be a JSON object.");

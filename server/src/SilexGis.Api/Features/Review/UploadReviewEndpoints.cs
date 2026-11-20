@@ -43,6 +43,7 @@ public static class UploadReviewEndpoints
     public const string BatchNotFoundCode = "review.batch_not_found";
     public const string ItemNotFoundCode = "review.item_not_found";
     public const string NotPendingCode = "review.not_pending";
+    public const string BatchRevertedCode = "review.batch_reverted";
     public const string ChangedSinceCode = "review.changed_since";
     public const string FieldsUnsupportedCode = "review.fields_unsupported";
     public const string OwnBatchCode = "review.own_batch";
@@ -111,6 +112,11 @@ public static class UploadReviewEndpoints
     /// </summary>
     private static ProblemHttpResult OwnBatch() =>
         ApiProblems.Forbidden(OwnBatchCode, "Uploads are decided by somebody other than the account that sent them.");
+
+    private static ProblemHttpResult BatchReverted() =>
+        ApiProblems.Conflict(
+            BatchRevertedCode,
+            "This upload has been undone; a line of it that was turned down can no longer be accepted.");
 
     private static bool MayRead(AccessContext ctx) => UploadReviewRules.MayRead(ctx);
 
@@ -330,6 +336,13 @@ public static class UploadReviewEndpoints
             return ApiProblems.Conflict(NotPendingCode, "This line has already been decided.");
         }
 
+        // Asked again under the batch's lock by the decision itself; this answers the common case
+        // before any work is done.
+        if (found.Batch.RevertedAt is not null)
+        {
+            return BatchReverted();
+        }
+
         var fields = new Dictionary<long, IReadOnlyList<string>>();
         if (accept && request.Fields is { } named)
         {
@@ -468,6 +481,11 @@ public static class UploadReviewEndpoints
             return (null, ApiProblems.Conflict(
                 NotPendingCode,
                 "What this decision reaches was decided already, by this or another decision, or can no longer be changed."));
+        }
+        catch (HeldBatchRevertedException)
+        {
+            db.ChangeTracker.Clear();
+            return (null, BatchReverted());
         }
         catch (HeldWriteUnavailableException e)
         {

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import type { ExpeditionInfo, ResLinkMember } from '../../api/hooks.ts';
 import MemberChip from '../../components/reslinks/MemberChip.tsx';
 import ExpeditionDetailPage from './ExpeditionDetailPage.tsx';
@@ -323,13 +324,30 @@ describe('a chip naming a camp', () => {
   });
 });
 
+describe('a camp delete', () => {
+  it('sends the version of the camp the page is showing', async () => {
+    const shown = camp();
+    noteVersionOfReading(shown, new Response(null, { headers: { ETag: '"41"' } }));
+    campSpy.mockReturnValue({ data: shown, isPending: false, isError: false });
+    accessSpy.mockReturnValue({ data: { actions: 'read,write,delete' } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('expedition-delete'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    await vi.waitFor(() =>
+      expect(deleteCamp).toHaveBeenCalledWith({ id: CAMP, ifMatch: '"41"' }),
+    );
+  });
+});
+
 describe('a camp delete that was not carried out', () => {
   async function deleteTheCamp() {
     accessSpy.mockReturnValue({ data: { actions: 'read,write,delete' } });
     renderPage();
     fireEvent.click(screen.getByTestId('expedition-delete'));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
-    await vi.waitFor(() => expect(deleteCamp).toHaveBeenCalledWith(CAMP));
+    await vi.waitFor(() =>
+      expect(deleteCamp).toHaveBeenCalledWith(expect.objectContaining({ id: CAMP })),
+    );
   }
 
   it('says the caller may not delete the camp when the server refuses them', async () => {

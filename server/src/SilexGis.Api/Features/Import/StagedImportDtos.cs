@@ -236,12 +236,45 @@ public sealed class ImportPreviewRequestValidator : AbstractValidator<ImportPrev
     }
 }
 
+/// <summary>How much one review may carry, and how each decision in it is held.</summary>
+internal static class ImportReviewRules
+{
+    /// <summary>
+    /// The most decisions, and the most candidates selected, one review may carry: a candidate per
+    /// row of a file far larger than any cave registry. A review is stored and read back whole on
+    /// every save, so without a bound one request could make every later save of it unbounded too.
+    /// </summary>
+    public const int MaxEntries = 200_000;
+
+    public static void Apply<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<KeyValuePair<string, ImportDecision>>?>> decisions)
+    {
+        validator.RuleFor(decisions)
+            .Must(d => d is null || d.Count() <= MaxEntries)
+            .WithMessage($"A review holds at most {MaxEntries} decisions.");
+        // An enum binds any number of its underlying type; one outside the defined actions would be
+        // stored in the review and read differently by the preview and by the confirmation.
+        validator.RuleForEach(decisions).ChildRules(entry =>
+        {
+            entry.RuleFor(e => e.Key).MaximumLength(40);
+            entry.RuleFor(e => e.Value.Action).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Kind).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Name).MaximumLength(255).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.FeatureTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.CaveTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.EntranceTypeCode).MaximumLength(100).When(e => e.Value is not null);
+        });
+    }
+}
+
 public sealed class ImportSessionWriteRequestValidator : AbstractValidator<ImportSessionWriteRequest>
 {
     public ImportSessionWriteRequestValidator()
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new ImportOptionsValidator()!);
         RuleFor(x => x.Decisions).NotNull();
+        ImportReviewRules.Apply(this, x => x.Decisions);
     }
 }
 
@@ -251,6 +284,10 @@ public sealed class ImportCommitRequestValidator : AbstractValidator<ImportCommi
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new ImportOptionsValidator()!);
         RuleFor(x => x.Selection).NotNull();
+        RuleFor(x => x.Selection)
+            .Must(s => s is null || s.Count <= ImportReviewRules.MaxEntries)
+            .WithMessage($"A confirmation selects at most {ImportReviewRules.MaxEntries} candidates.");
+        ImportReviewRules.Apply(this, x => x.Decisions);
 
         // A reviewed confirmation of no rows would queue a job that records an empty batch.
         // Without review the selection is the rules' to make, so the caller sends none.

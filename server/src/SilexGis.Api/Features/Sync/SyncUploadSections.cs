@@ -317,8 +317,21 @@ internal abstract class SyncUploadSection<TItem, TProposal> : ISyncUploadSection
             return new SyncHeldAcceptance(new SyncApplied(resolution.Settled!, null), ChangedSince: false);
         }
 
-        return new SyncHeldAcceptance(
-            await ApplyAsync(run, fields is null ? fresh : await NarrowedAsync(run, fresh, fields, ct), ct), ChangedSince: false);
+        var applied = await ApplyAsync(run, fields is null ? fresh : await NarrowedAsync(run, fresh, fields, ct), ct);
+
+        // The check above reads the row without its lock, and the write takes the lock and checks
+        // again. Another upload that wrote the row and committed while this one waited on it moves
+        // the revision in between: that is the same row changed since as the check above answers,
+        // and is answered the same way, so the reviewer can still choose to write over it. Decided
+        // as a refusal, the line would be closed for good.
+        if (!overCurrent
+            && applied.Result is { Status: SyncRowStatus.Conflict, Revision: { } moved }
+            && Rebased(item, moved) is not null)
+        {
+            return new SyncHeldAcceptance(applied, ChangedSince: true);
+        }
+
+        return new SyncHeldAcceptance(applied, ChangedSince: false);
     }
 
     private TProposal ReadHeld(string proposal) =>

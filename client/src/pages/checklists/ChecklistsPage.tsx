@@ -38,6 +38,7 @@ import {
 import List from '../../components/List.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import { checklistProblem, type ChecklistAct } from './checklistProblems.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 /** The audience a list is given, in the order they widen. */
 const visibilities = ['private', 'cavingGroup', 'authenticated', 'public'] as const;
@@ -101,9 +102,16 @@ export default function ChecklistsPage() {
     }
   };
 
-  // The listing carries no version per list, so a list is read on its own before it is changed.
-  // That answer — not the listing row, which may be older — is what the dialog is filled from.
+  // Each listing row carries its lines and the version they were read at, so the dialog is filled
+  // from the row and the rewrite is held to the row's version: a list changed since the row was
+  // read is refused rather than rewritten from lines nobody saw. A row without a version is read
+  // on its own first, and the dialog is filled from that answer and held to its version.
   const openForEdit = async (list: ChecklistInfo) => {
+    if (list.version) {
+      openedAtVersion.current = list.version;
+      openFor(list);
+      return;
+    }
     setReading(list.id);
     try {
       const held = await readForChange(list.id);
@@ -116,10 +124,25 @@ export default function ChecklistsPage() {
     }
   };
 
-  // A delete is decided on the list as this page showed it. The version sent is the one read now,
-  // so it is held to that only when the list has not moved since the listing was read; when it
-  // has, the person is told and shown it again instead of deleting what they have not seen.
+  // A delete is decided on the list as this page showed it, so it is held to the version of the
+  // row shown; a list changed since is refused, and the shared conflict prompt says so while the
+  // lists are read again. A row without a version falls back to reading the list now and deleting
+  // only when it has not moved since the listing was read.
   const deleteShown = async (list: ChecklistInfo) => {
+    if (list.version) {
+      remove.mutate(
+        { id: list.id, ifMatch: list.version },
+        {
+          onError: (error) => {
+            if (isConcurrencyConflict(error)) {
+              void refetch();
+            }
+            tell(error, 'delete');
+          },
+        },
+      );
+      return;
+    }
     setReading(list.id);
     try {
       const held = await readForChange(list.id);

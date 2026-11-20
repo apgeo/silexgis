@@ -64,6 +64,9 @@ export default function MessagingSettingsPage() {
   const { data: settings, isLoading, isError, error, refetch } = useAdminSettings(canRead);
 
   const onSaved = (next: AdminSettings) => queryClient.setQueryData(queryKeys.adminSettings, next);
+  // A section somebody saved over since this page read it: the stored values are read again, and
+  // the form refills from them with the version a save of them is held to.
+  const onStale = () => void refetch();
 
   // While capabilities load, render nothing rather than flashing a refusal at people
   // who do hold the right; the server enforces regardless.
@@ -103,7 +106,7 @@ export default function MessagingSettingsPage() {
                   <MailOutlined /> {t('admin.messaging.mailTab')}
                 </span>
               ),
-              children: <MailForm settings={settings} onSaved={onSaved} defaultTestRecipient={me?.email ?? ''} />,
+              children: <MailForm settings={settings} onSaved={onSaved} onStale={onStale} defaultTestRecipient={me?.email ?? ''} />,
             },
             {
               key: 'sms',
@@ -112,7 +115,7 @@ export default function MessagingSettingsPage() {
                   <MobileOutlined /> {t('admin.messaging.smsTab')}
                 </span>
               ),
-              children: <SmsForm settings={settings} onSaved={onSaved} />,
+              children: <SmsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'policy',
@@ -121,7 +124,7 @@ export default function MessagingSettingsPage() {
                   <SafetyOutlined /> {t('admin.messaging.policyTab')}
                 </span>
               ),
-              children: <PolicyForm settings={settings} onSaved={onSaved} />,
+              children: <PolicyForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'protection',
@@ -130,7 +133,7 @@ export default function MessagingSettingsPage() {
                   <EnvironmentOutlined /> {t('admin.messaging.protectionTab')}
                 </span>
               ),
-              children: <ProtectionForm settings={settings} onSaved={onSaved} />,
+              children: <ProtectionForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'import',
@@ -139,7 +142,7 @@ export default function MessagingSettingsPage() {
                   <ImportOutlined /> {t('admin.messaging.importTab')}
                 </span>
               ),
-              children: <ImportForm settings={settings} onSaved={onSaved} />,
+              children: <ImportForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'sync',
@@ -148,7 +151,7 @@ export default function MessagingSettingsPage() {
                   <SyncOutlined /> {t('admin.messaging.syncTab')}
                 </span>
               ),
-              children: <SyncSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <SyncSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'notifications',
@@ -159,8 +162,8 @@ export default function MessagingSettingsPage() {
               ),
               children: (
                 <Flex vertical gap={32}>
-                  <NotificationsForm settings={settings} onSaved={onSaved} />
-                  <AnnouncementsForm settings={settings} onSaved={onSaved} />
+                  <NotificationsForm settings={settings} onSaved={onSaved} onStale={onStale} />
+                  <AnnouncementsForm settings={settings} onSaved={onSaved} onStale={onStale} />
                 </Flex>
               ),
             },
@@ -171,7 +174,7 @@ export default function MessagingSettingsPage() {
                   <CameraOutlined /> {t('admin.messaging.photoLibrariesTab')}
                 </span>
               ),
-              children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} />,
+              children: <PhotoLibrariesForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'survey-uploads',
@@ -180,7 +183,7 @@ export default function MessagingSettingsPage() {
                   <CloudUploadOutlined /> {t('admin.messaging.surveyUploadsTab')}
                 </span>
               ),
-              children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <SurveyUploadsSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'map-symbols',
@@ -189,7 +192,7 @@ export default function MessagingSettingsPage() {
                   <AimOutlined /> {t('mapSymbols.tab')}
                 </span>
               ),
-              children: <MapSymbolsSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <MapSymbolsSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'test-data',
@@ -198,7 +201,7 @@ export default function MessagingSettingsPage() {
                   <ExperimentOutlined /> {t('admin.messaging.testDataTab')}
                 </span>
               ),
-              children: <TestDataSettingsForm settings={settings} onSaved={onSaved} />,
+              children: <TestDataSettingsForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               key: 'workspace',
@@ -207,7 +210,7 @@ export default function MessagingSettingsPage() {
                   <AppstoreOutlined /> {t('workspace.admin.tab')}
                 </span>
               ),
-              children: <WorkspaceDefaultForm settings={settings} onSaved={onSaved} />,
+              children: <WorkspaceDefaultForm settings={settings} onSaved={onSaved} onStale={onStale} />,
             },
             {
               // Not a section of the stored settings: it is kept on the catalogue's own rows,

@@ -149,6 +149,7 @@ public sealed class UserAddressWriteRequestValidator : AbstractValidator<UserAdd
         {
             RuleFor(x => x.Geom!.Type).Equal("Point");
             RuleFor(x => x.Geom!.Coordinates)
+                .Cascade(CascadeMode.Stop)
                 .NotNull()
                 .Must(c => c.Length is 2 or 3).WithMessage("A point needs two or three coordinates.");
             RuleFor(x => x.Geom!.Coordinates[0])

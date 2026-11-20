@@ -187,6 +187,17 @@ public static class SyncUploadEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         try
         {
+            // A row that creates a feature or names its container works out hierarchy state, under
+            // the hierarchy lock. Taken first, before the upload holds any row it edits: taken
+            // there, a protection switched on above such a row by a writer already holding the lock
+            // would wait for the row while the upload waits for the lock, and the database would
+            // abort one of them. An upload that only edits rows in place never takes it, so phones
+            // sending field changes do not queue behind each other.
+            if (request.Rows?.Any(r => r.BaseRevision is null || r.ParentId is not null) == true)
+            {
+                await HierarchyLockSql.TakeAsync(db, ct);
+            }
+
             // The identifier is claimed before a single row is written. Two copies of the same
             // batch in flight at once both get past the replay check above, and if the rows went
             // in first the loser would fail on a feature's own primary key — a violation this

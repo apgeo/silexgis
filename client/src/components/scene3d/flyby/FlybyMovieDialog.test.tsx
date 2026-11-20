@@ -28,11 +28,13 @@ vi.mock('../../../api/hooks.ts', () => ({
   }),
   // The lists the flyby's own panel names things from, which is on screen until the movie panel opens.
   useMapLayers: () => ({ data: [] }),
-  useRasterMaps: () => ({ data: { items: [] } }),
-  useGeofiles: () => ({ data: { items: [] } }),
   useSavedFilters: () => ({ data: [] }),
   useFeatureTypes: () => ({ data: [] }),
   useSearch: () => ({ data: undefined }),
+}));
+vi.mock('../../../api/hooks/mapLayers.ts', () => ({
+  useRasterMapLayers: () => ({ data: [] }),
+  useGeofileLayers: () => ({ data: [] }),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,

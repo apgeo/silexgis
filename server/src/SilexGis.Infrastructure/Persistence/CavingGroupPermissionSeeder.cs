@@ -51,8 +51,8 @@ public static class CavingGroupPermissionSeeder
     {
         var members = new PermissionGroup
         {
-            Name = await UniqueNameAsync(db, $"{group.Name} — members", ct),
-            Slug = await UniqueSlugAsync(db, $"{group.Slug}-members", ct),
+            Name = await UniqueNameAsync(db, group.Name, " — members", ct),
+            Slug = await UniqueSlugAsync(db, group.Slug, "-members", ct),
             IsSeeded = true,
         };
         db.PermissionGroups.Add(members);
@@ -78,8 +78,8 @@ public static class CavingGroupPermissionSeeder
 
         var managers = new PermissionGroup
         {
-            Name = await UniqueNameAsync(db, $"{group.Name} — managers", ct),
-            Slug = await UniqueSlugAsync(db, $"{group.Slug}-managers", ct),
+            Name = await UniqueNameAsync(db, group.Name, " — managers", ct),
+            Slug = await UniqueSlugAsync(db, group.Slug, "-managers", ct),
             IsSeeded = true,
         };
         db.PermissionGroups.Add(managers);
@@ -117,25 +117,45 @@ public static class CavingGroupPermissionSeeder
         });
     }
 
-    private static async Task<string> UniqueNameAsync(SilexGisDbContext db, string name, CancellationToken ct)
+    /// <summary>
+    /// The width of a permission group's name and slug columns — the same as a caving group's, so
+    /// a club whose name fills its own column would otherwise derive names its permission groups
+    /// cannot hold, and its creation would fail with the database refusing the value.
+    /// </summary>
+    internal const int DerivedMaxLength = 100;
+
+    private static async Task<string> UniqueNameAsync(
+        SilexGisDbContext db, string groupName, string suffix, CancellationToken ct)
     {
-        var candidate = name;
+        var candidate = Fit(groupName, suffix);
         for (var i = 2; await db.PermissionGroups.AnyAsync(g => g.Name == candidate, ct); i++)
         {
-            candidate = $"{name} ({i})";
+            candidate = Fit(groupName, $"{suffix} ({i})");
         }
 
         return candidate;
     }
 
-    private static async Task<string> UniqueSlugAsync(SilexGisDbContext db, string slug, CancellationToken ct)
+    private static async Task<string> UniqueSlugAsync(
+        SilexGisDbContext db, string groupSlug, string suffix, CancellationToken ct)
     {
-        var candidate = slug;
+        var candidate = Fit(groupSlug, suffix);
         for (var i = 2; await db.PermissionGroups.AnyAsync(g => g.Slug == candidate, ct); i++)
         {
-            candidate = $"{slug}-{i}";
+            candidate = Fit(groupSlug, $"{suffix}-{i}");
         }
 
         return candidate;
+    }
+
+    /// <summary>
+    /// The club's own part shortened so the whole fits the column: the suffix — what the group is
+    /// for, and the number that keeps it unique — is the part that has to survive.
+    /// </summary>
+    internal static string Fit(string stem, string suffix)
+    {
+        var room = DerivedMaxLength - suffix.Length;
+        var kept = stem.Length <= room ? stem : stem[..room].TrimEnd();
+        return kept + suffix;
     }
 }

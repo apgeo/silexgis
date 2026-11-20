@@ -141,11 +141,15 @@ try
         // members, as it must be for a document that went through a jsonb column. A polymorphic
         // object that names no shape at all is a malformed body rather than a server fault.
         options.SerializerOptions.AllowOutOfOrderMetadataProperties = true;
+        // A record saved whole (a settings section) is held to every yes/no and number being
+        // sent, so a member left out is refused rather than saved as false or 0.
         options.SerializerOptions.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
             System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
-                options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-                SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
-            SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects);
+                System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
+                    options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+                    SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
+                SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects),
+            SilexGis.Api.Common.CompleteBodies.RequireValueMembers);
     });
 
     // A request the framework cannot bind — a body naming a word an enum does not have, a null
@@ -333,6 +337,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // The roster and caving-group writes ask whether filling a trustee caving group hands an
     // account more than the caller holds; the permission area answers with its own rule judgement.
     builder.Services.AddScoped<ITrusteeRightsBound, SilexGis.Api.Features.Permissions.TrusteeRightsBound>();
+    // A trip leaving a camp, and a camp being deleted, take away the rules the camp's sharing wrote
+    // on its trips; lifting a deny among them is bounded by the permission area's own judgement.
+    builder.Services.AddScoped<IRuleRemovalBound, SilexGis.Api.Features.Permissions.RuleRemovalBound>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.

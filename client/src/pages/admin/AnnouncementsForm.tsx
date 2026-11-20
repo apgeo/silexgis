@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type AnnouncementSettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 import { type SectionProps } from './settingsSection.tsx';
 
 /**
@@ -23,7 +23,7 @@ import { type SectionProps } from './settingsSection.tsx';
  * switch about spending money back to its default, and a switch that turns itself off when
  * somebody edits an unrelated field is worse than no switch.
  */
-export default function AnnouncementsForm({ settings, onSaved }: SectionProps) {
+export default function AnnouncementsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<AnnouncementSettings>();
@@ -34,9 +34,15 @@ export default function AnnouncementsForm({ settings, onSaved }: SectionProps) {
   const save = async (values: AnnouncementSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/announcements', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/announcements', {
+        headers: sectionIfMatch(settings.versions?.announcements),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

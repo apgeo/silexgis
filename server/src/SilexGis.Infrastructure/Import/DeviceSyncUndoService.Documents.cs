@@ -61,6 +61,9 @@ public sealed partial class DeviceSyncUndoService
             return DocumentResult(item, documentId, change, SyncUndoOutcomes.NotUndone, SyncUndoReasons.AlreadyUndone, [], []);
         }
 
+        // Locked before it is read: its title and its photograph's caption, which share its key, are
+        // compared below as they stand once every writer ahead of the undo has committed.
+        await HoldRowAsync(UndoLockedRow.Document, documentId, ct);
         var document = await db.Documents.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Id == documentId, ct);
         if (document is null)
         {

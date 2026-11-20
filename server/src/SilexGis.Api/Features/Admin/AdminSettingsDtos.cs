@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
+using SilexGis.Api.Common;
 using SilexGis.Domain.Map;
 using SilexGis.Domain.Settings;
 
@@ -28,6 +29,7 @@ public sealed record MailSettingsDto(
 /// null leaves the stored one alone (the page never had it to send back), and an empty string
 /// clears it — which is how an operator moves to a relay that wants no authentication.
 /// </summary>
+[EveryValueRequired]
 public sealed record MailSettingsWriteRequest(
     bool Enabled,
     string Host,
@@ -52,6 +54,7 @@ public sealed record SmsSettingsDto(
     string? From,
     int TimeoutSeconds);
 
+[EveryValueRequired]
 public sealed record SmsSettingsWriteRequest(
     bool Enabled,
     string Url,
@@ -63,6 +66,7 @@ public sealed record SmsSettingsWriteRequest(
     string? From,
     int TimeoutSeconds);
 
+[EveryValueRequired]
 public sealed record SecuritySettingsDto(
     bool RequireConfirmedEmail,
     bool SendConfirmationOnRegistration,
@@ -79,6 +83,7 @@ public sealed record SecuritySettingsDto(
 /// a reader still gets the files no copy without the location can be made of while they do not,
 /// and whether a phone is told the size and hash of a copy without the location.
 /// </summary>
+[EveryValueRequired]
 public sealed record ProtectionSettingsDto(
     bool RevealProtectedAssociations,
     bool CalendarFeedEnabled,
@@ -109,12 +114,36 @@ public sealed record AdminSettingsDto(
     MapSymbolSettingsDto MapSymbols,
     bool MailConfigured,
     bool SmsConfigured,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    AdminSettingsVersionsDto Versions);
+
+/// <summary>
+/// The version of each section as this read shows it. A section is saved whole, so its save names
+/// the version the form was filled from as <c>If-Match</c>, and a save made from a section
+/// somebody else has saved over since is refused rather than putting their values back. Each is a
+/// digest of the section exactly as answered here — secrets appear only as whether one is stored —
+/// so it moves when, and only when, what the page shows of that section moves.
+/// </summary>
+public sealed record AdminSettingsVersionsDto(
+    string Mail,
+    string Sms,
+    string Security,
+    string Protection,
+    string Import,
+    string Interface,
+    string Notifications,
+    string Announcements,
+    string PhotoLibraries,
+    string Sync,
+    string SurveyUploads,
+    string TestData,
+    string MapSymbols);
 
 /// <summary>
 /// What the installation has decided about surveys sent from a field device: whether a cave an
 /// upload created takes that upload's first model as its shape.
 /// </summary>
+[EveryValueRequired]
 public sealed record SurveyUploadSettingsDto(bool FirstModelOfCreatedCave);
 
 /// <summary>
@@ -125,6 +154,7 @@ public sealed record SurveyUploadSettingsDto(bool FirstModelOfCreatedCave);
 public sealed record TestDataSettingsDto(bool Enabled, bool DeploymentAllows);
 
 /// <summary>Switches the generator on or off for full administrators.</summary>
+[EveryValueRequired]
 public sealed record TestDataSettingsWriteRequest(bool Enabled);
 
 /// <summary>
@@ -156,6 +186,7 @@ public sealed class TestDataSettingsWriteRequestValidator : AbstractValidator<Te
 /// directory and whom it lists, whether a phone trip that does not match cleanly is still made a
 /// trip, and how long waiting file bytes are kept.
 /// </summary>
+[EveryValueRequired]
 public sealed record SyncSettingsDto(
     bool PeopleDirectoryEnabled,
     PeopleDirectoryScope PeopleDirectoryScope,
@@ -187,6 +218,7 @@ public sealed record SyncSettingsDto(
 /// start or stop the containers beside it.
 /// </para>
 /// </remarks>
+[EveryValueRequired]
 public sealed record PhotoLibrarySuspensionDto(bool ImmichSuspended, bool PhotoPrismSuspended);
 
 /// <summary>
@@ -209,6 +241,7 @@ public sealed class PhotoLibrarySuspensionDtoValidator : AbstractValidator<Photo
 /// <param name="PhotoClusterRadiusMeters">
 /// How far apart two photographs can be and still be proposed as one place.
 /// </param>
+[EveryValueRequired]
 public sealed record ImportSettingsDto(
     bool AllowCreateWithoutReview,
     double DuplicateRadiusMeters,
@@ -229,6 +262,7 @@ public sealed record InterfaceSettingsDto(string PanelDefaults);
 /// Days a notification is kept before it and the record of how it was sent are deleted. Read back
 /// as the window actually in force, so a page never shows a number the pruner would refuse.
 /// </param>
+[EveryValueRequired]
 public sealed record NotificationSettingsDto(int RetentionDays);
 
 public sealed class NotificationSettingsDtoValidator : AbstractValidator<NotificationSettingsDto>
@@ -259,6 +293,7 @@ public sealed class NotificationSettingsDtoValidator : AbstractValidator<Notific
 /// pieces in a language with diacritics where it costs one without them. Read back as the ceiling
 /// actually in force, so a page never shows a number nothing would count against.
 /// </param>
+[EveryValueRequired]
 public sealed record AnnouncementSettingsDto(bool PaidChannelsEnabled, int DailyPaidMessageCap);
 
 public sealed class AnnouncementSettingsDtoValidator : AbstractValidator<AnnouncementSettingsDto>

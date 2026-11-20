@@ -573,6 +573,101 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
     }
 
     /// <summary>
+    /// Taking a trip out of a camp lifts the deny the camp's sharing wrote on it, so it is bounded
+    /// exactly as withdrawing that deny is: somebody who may edit the camp's membership but does
+    /// not hold, on the trip, what the deny withholds is refused and the trip stays in the camp.
+    /// </summary>
+    [Fact]
+    public async Task Evicting_a_trip_that_carries_a_camps_deny_takes_the_rights_it_withholds()
+    {
+        var camp = await CreateCampAsync();
+        var trip = await CreateTripAsync(organiser, "A trip the camp closes, then lets go");
+        await JoinAsync(camp, trip);
+        await CampDenyAsync(camp, trip);
+
+        // Allowed to edit the camp, so the eviction itself is theirs to make; holding no Delete
+        // on the trip, which the seeded editor ruleset does not carry.
+        await AllowAsync(strangerId, AccessDomain.Expeditions, AccessAction.Read | AccessAction.Write, camp);
+
+        var refused = await stranger.DeleteAsync($"/api/v1/expeditions/{camp}/trips/{trip}");
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, refusedBody);
+        refusedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+        (await CampOfAsync(trip)).ShouldBe(camp, "a refused eviction leaves the trip where it was");
+        (await CampRuleOnAsync(trip, camp)).Effect.ShouldBe(AccessEffect.Deny);
+
+        var evicted = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}/trips/{trip}");
+        evicted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await evicted.Content.ReadAsStringAsync());
+        (await CampOfAsync(trip)).ShouldBeNull();
+        (await RulesOnAsync(trip)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The trip's own side — leaving a camp, or moving to another — lifts the old camp's deny in
+    /// the same way, and is bounded the same way.
+    /// </summary>
+    [Fact]
+    public async Task Leaving_or_moving_a_trip_that_carries_a_camps_deny_takes_the_rights_it_withholds()
+    {
+        var camp = await CreateCampAsync();
+        var other = await CreateCampAsync();
+        var trip = await CreateTripAsync(organiser, "A trip somebody else may edit");
+        await JoinAsync(camp, trip);
+        await CampDenyAsync(camp, trip);
+
+        // May edit the trip and the camp it would move to, but holds no Delete on the trip.
+        await AllowAsync(strangerId, AccessDomain.TripLogs, AccessAction.Read | AccessAction.Write, trip);
+        await AllowAsync(strangerId, AccessDomain.Expeditions, AccessAction.Read | AccessAction.Write, other);
+
+        var left = await stranger.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/expedition", new { expeditionId = (Guid?)null });
+        var leftBody = await left.Content.ReadAsStringAsync();
+        left.StatusCode.ShouldBe(HttpStatusCode.Forbidden, leftBody);
+        leftBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+
+        var moved = await stranger.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/expedition", new { expeditionId = other });
+        var movedBody = await moved.Content.ReadAsStringAsync();
+        moved.StatusCode.ShouldBe(HttpStatusCode.Forbidden, movedBody);
+        movedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+
+        (await CampOfAsync(trip)).ShouldBe(camp, "neither refusal moved the trip");
+        (await CampRuleOnAsync(trip, camp)).Effect.ShouldBe(AccessEffect.Deny);
+
+        // The trip's owner holds everything the deny withholds, and moves it.
+        var ownerMoved = await organiser.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/expedition", new { expeditionId = other });
+        ownerMoved.StatusCode.ShouldBe(HttpStatusCode.OK, await ownerMoved.Content.ReadAsStringAsync());
+        (await CampOfAsync(trip)).ShouldBe(other);
+        (await RulesOnAsync(trip)).ShouldNotContain(r => r.GrantedViaExpeditionId == camp);
+    }
+
+    /// <summary>
+    /// Deleting a camp takes with it the rules its sharing wrote on the trips it gathered, and the
+    /// trips stay: so a deny among them is lifted, and the delete is bounded as withdrawing it is.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_a_camp_whose_sharing_denies_on_a_trip_takes_the_rights_it_withholds()
+    {
+        var camp = await CreateCampAsync();
+        var trip = await CreateTripAsync(organiser, "A trip that outlives its camp");
+        await JoinAsync(camp, trip);
+        await CampDenyAsync(camp, trip);
+
+        // May delete the camp, holds no Delete on the trip.
+        await AllowAsync(strangerId, AccessDomain.Expeditions, AccessAction.Read | AccessAction.Delete, camp);
+
+        var refused = await stranger.DeleteAsync($"/api/v1/expeditions/{camp}");
+        var refusedBody = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, refusedBody);
+        refusedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+        (await CampOfAsync(trip)).ShouldBe(camp, "a refused delete leaves the camp and its trips");
+        (await CampRuleOnAsync(trip, camp)).Effect.ShouldBe(AccessEffect.Deny);
+
+        var deleted = await organiser.DeleteAsync($"/api/v1/expeditions/{camp}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
+        (await CampOfAsync(trip)).ShouldBeNull();
+        (await RulesOnAsync(trip)).ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// A deleted trip keeps every rule written on it — its own and the camp's alike — so that
     /// putting it back is exact, and the integrity check does not call them orphans meanwhile:
     /// their anchor is still there. They go when the trip is removed for good, and leave nothing
@@ -859,6 +954,45 @@ public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable,
     {
         var response = await organiser.PostAsync($"/api/v1/expeditions/{campId}/sharing/re-apply", null);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The camp's sharing closes the trip to the reader for Read and Delete — Delete being the
+    /// flag the seeded editor ruleset does not carry, so only the trip's owner holds it there.
+    /// </summary>
+    private async Task CampDenyAsync(Guid campId, Guid tripId)
+    {
+        var closed = await CascadeAsync(campId, organiserId, new ExpeditionShareEntryWrite(
+            AccessSubjectKind.User, readerId, AccessEffect.Deny, AccessAction.Read | AccessAction.Delete));
+        closed.Problem.ShouldBeNull();
+        (await CampRuleOnAsync(tripId, campId)).Effect.ShouldBe(AccessEffect.Deny);
+    }
+
+    private async Task AllowAsync(Guid userId, AccessDomain domain, AccessAction actions, Guid scopeId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Allow,
+            Domain = domain,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = scopeId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid?> CampOfAsync(Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ExpeditionTrips.AsNoTracking()
+            .Where(x => x.TripLogId == tripId)
+            .Select(x => (Guid?)x.ExpeditionId)
+            .SingleOrDefaultAsync();
     }
 
     private async Task<AccessEntry> CampRuleOnAsync(Guid tripId, Guid campId) =>

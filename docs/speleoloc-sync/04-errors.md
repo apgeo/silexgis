@@ -418,8 +418,10 @@ boundary is stated so that a gap is not mistaken for an omission.
   may neither read the review queue nor is the uploader), `acl.forbidden` (403 — may read the queue
   but not decide), `review.own_batch` (403 — nobody decides about their own uploads),
   `review.not_pending` (409 — nothing in it waits any more, or another decision reached one of its
-  lines first; a turned-down line can still be accepted on its own while its bytes are kept and no later
-  upload replaced it, and is answered this once that is no longer so), `review.source_unsupported` (409 —
+  lines first; a turned-down line can still be accepted on its own while its bytes are kept, no later
+  upload replaced it and its upload was not undone, and is answered this once that is no longer so),
+  `review.batch_reverted` (409 — the upload was undone, so a turned-down line of it can no longer be
+  accepted; nothing was decided), `review.source_unsupported` (409 —
   this server cannot decide that kind of held batch; its lines still wait), `review.changed_since` (409 — a held edit's
   row was written by somebody else since the phone read it; the problem lists the `reviewIds`, and
   nothing was decided — send `overCurrent: true` to write the accepted fields onto the current row),

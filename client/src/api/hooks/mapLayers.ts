@@ -2,10 +2,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../client.ts';
 import { unwrap } from './shared.ts';
+import { queryKeys } from './queryKeys.ts';
 import type { GeofileInfo, RasterMapInfo } from './geodata.ts';
 
-/** The largest page the list routes answer. */
-const PAGE_SIZE = 500;
+/** The largest page the server hands out; the walk below asks for it to keep the round trips few. */
+const LAYER_PAGE_SIZE = 500;
 
 /**
  * A ceiling on how many pages one reading walks, so a catalogue that keeps growing while it is read
@@ -13,48 +14,65 @@ const PAGE_SIZE = 500;
  */
 const MAX_PAGES = 20;
 
-/**
- * Every row of a paged list, page by page. The map offers each imported file and each ready
- * picture as a layer, and the list routes cannot narrow by state, so a single page would quietly
- * leave out whatever sorted after its end — a picture that is ready and simply never offered.
- */
-export async function readEveryPage<T>(
-  readPage: (page: number) => Promise<{ items: T[]; totalItems: number }>,
-): Promise<{ items: T[]; totalItems: number }> {
-  const first = await readPage(1);
-  const items = [...first.items];
-  const pages = Math.min(Math.ceil(first.totalItems / PAGE_SIZE), MAX_PAGES);
-  for (let page = 2; page <= pages; page++) {
-    const next = await readPage(page);
-    if (next.items.length === 0) {
-      break;
-    }
-    items.push(...next.items);
-  }
-  return { items, totalItems: first.totalItems };
+/** One page of a paged list, as every paged route answers. */
+interface Page<T> {
+  items: T[];
+  pageSize: number;
+  totalItems: number;
 }
 
-/** Every geofile this reader may see, for the map's layer list. */
-export function useEveryGeofile() {
+/**
+ * Every row of a paged list, page after page until the total is reached. The map offers each
+ * drawable file as a layer, and a list cut at one page lost the oldest ones from the layer list
+ * for good once an installation held more than fitted on it. A page that fails fails the whole
+ * reading, rather than answering with a short list that looks complete.
+ */
+export async function readAllPages<T>(read: (page: number) => Promise<Page<T>>): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; ; page++) {
+    const answer = await read(page);
+    all.push(...answer.items);
+    // An empty or short page ends the walk even when the total says otherwise: rows deleted
+    // while the pages were being turned would otherwise keep it asking for pages past the end.
+    if (
+      answer.items.length === 0 ||
+      answer.items.length < answer.pageSize ||
+      all.length >= answer.totalItems ||
+      page >= MAX_PAGES
+    ) {
+      return all;
+    }
+  }
+}
+
+/**
+ * The imported vector files this caller may see — every one, not a first page — which the map,
+ * the 3D view and the flyby panels offer as layers. The server keeps only the imported ones
+ * before it counts, so files still importing or failed never take a place on a page.
+ */
+export function useGeofileLayers() {
   return useQuery({
-    // Under the geofile lists' own prefix, so whatever refreshes them after a write refreshes this.
-    queryKey: ['geofiles', 'list', 'every'] as const,
-    queryFn: (): Promise<{ items: GeofileInfo[]; totalItems: number }> =>
-      readEveryPage((page) =>
-        unwrap(api.GET('/api/v1/geofiles', { params: { query: { page, pageSize: PAGE_SIZE } } })),
+    queryKey: queryKeys.geofileLayers,
+    queryFn: () =>
+      readAllPages<GeofileInfo>((page) =>
+        unwrap(api.GET('/api/v1/geofiles', { params: { query: { ready: true, page, pageSize: LAYER_PAGE_SIZE } } })),
       ),
   });
 }
 
-/** Every georeferenced map this reader may see, for the map's and the 3D view's layer lists. */
-export function useEveryRasterMap() {
+/**
+ * The georeferenced maps and map sheets ready to draw that this caller may see — every one. Read
+ * again every eight minutes, because each carries a signed address for its picture that lives ten.
+ */
+export function useRasterMapLayers() {
   return useQuery({
-    queryKey: ['raster-maps', 'list', 'every'] as const,
-    queryFn: (): Promise<{ items: RasterMapInfo[]; totalItems: number }> =>
-      readEveryPage((page) =>
-        unwrap(api.GET('/api/v1/georeferenced-maps', { params: { query: { page, pageSize: PAGE_SIZE } } })),
+    queryKey: queryKeys.rasterMapLayers,
+    queryFn: () =>
+      readAllPages<RasterMapInfo>((page) =>
+        unwrap(
+          api.GET('/api/v1/georeferenced-maps', { params: { query: { ready: true, page, pageSize: LAYER_PAGE_SIZE } } }),
+        ),
       ),
-    // The signed picture addresses expire after ten minutes; read them again before they do.
     refetchInterval: 8 * 60_000,
   });
 }

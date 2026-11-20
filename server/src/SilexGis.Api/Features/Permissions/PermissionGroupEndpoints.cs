@@ -326,7 +326,7 @@ public static class PermissionGroupEndpoints
     // ---- rules ----
 
     private static async Task<Results<Ok<List<AccessEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> GetEntriesAsync(
-        Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        Guid id, HttpContext http, SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -344,16 +344,26 @@ public static class PermissionGroupEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // The rules and their version in one snapshot: read apart, a replacement landing between
+        // them would pair the older rules with the newer version, and a save made from this
+        // reading would then be taken over the replacement it never saw.
+        await using var snapshot = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
         var entries = await db.AccessEntries.AsNoTracking()
             .Where(e => e.PermissionGroupId == id)
             .OrderBy(e => e.Domain).ThenBy(e => e.ScopeKind).ThenBy(e => e.Id)
             .ToListAsync(ct);
+        var version = await ConcurrencySql.AccessRuleSetVersionAsync(
+            db, [.. entries.Select(e => e.Id)], ct);
+        await snapshot.CommitAsync(ct);
+        http.Response.Headers.ETag = $"\"{version}\"";
         return TypedResults.Ok(await AccessEntryMapping.ProjectAsync(db, ctx, entries, ct));
     }
 
     private static async Task<Results<Ok<List<AccessEntryDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ReplaceEntriesAsync(
         Guid id,
         AccessEntryReplaceRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -399,7 +409,21 @@ public static class PermissionGroupEndpoints
             staged.Add(entry);
         }
 
+        // The replacement is whole: every rule the request does not name is taken off. Made from
+        // an old reading it would take off the rules somebody added since, so it is held to the
+        // version of the set it was read at when it names one — offered rather than required, so
+        // a caller that sends none keeps last-write-wins. Replacements of this group's rules are
+        // serialised from here to the commit, and the set is read under that lock.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await ConcurrencySql.LockWholeSetAsync(db, $"permission-group-rules:{id}", ct);
         var current = await db.AccessEntries.Where(e => e.PermissionGroupId == id).ToListAsync(ct);
+        var version = await ConcurrencySql.AccessRuleSetVersionAsync(
+            db, [.. current.Select(e => e.Id)], ct);
+        if (Concurrency.CheckIfMatchVersion(http, version) is { } stale)
+        {
+            return stale;
+        }
+
         if (await AccessEntryMapping.StageReplaceAsync(db, ctx, current, staged, ct) is { } refused)
         {
             return refused;
@@ -411,6 +435,10 @@ public static class PermissionGroupEndpoints
             .Where(e => e.PermissionGroupId == id)
             .OrderBy(e => e.Domain).ThenBy(e => e.ScopeKind).ThenBy(e => e.Id)
             .ToListAsync(ct);
+        var produced = await ConcurrencySql.AccessRuleSetVersionAsync(
+            db, [.. saved.Select(e => e.Id)], ct);
+        await transaction.CommitAsync(ct);
+        http.Response.Headers.ETag = $"\"{produced}\"";
         return TypedResults.Ok(await AccessEntryMapping.ProjectAsync(db, ctx, saved, ct));
     }
 
@@ -608,7 +636,18 @@ public static class PermissionGroupEndpoints
         // one that most needs the live-membership guard.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.PermissionGroupMembers.Remove(member);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The same removal, sent twice at once, landed first: the member is gone, as asked, and
+            // whatever the other request staged with it was its to send.
+            await transaction.RollbackAsync(ct);
+            return TypedResults.NoContent();
+        }
+
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
             await transaction.RollbackAsync(ct);

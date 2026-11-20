@@ -158,6 +158,17 @@ internal sealed class SyncHoldRecorder(Guid uploaderId)
     public async Task PersistAsync(
         SilexGisDbContext db, ImportBatch batch, DateTimeOffset now, int releasedBytesRetentionDays, CancellationToken ct)
     {
+        // The waiting lines this upload repeats or replaces were matched on a read made inside the
+        // check, whose locks the roll-back gave up. A reviewer may have decided some of them since:
+        // they are taken now, and only those still waiting count. A repeat of a line decided
+        // meanwhile keeps nothing — the phone was answered with that line's review, and learns
+        // the decision on it — and a replaced line decided meanwhile is not replaced.
+        var stillWaiting = (await SyncHeldLineSql.LockPendingAsync(
+                db,
+                [.. lines.Select(l => l.RepeatsItemId).OfType<long>().Concat(lines.SelectMany(l => l.Supersedes))],
+                ct))
+            .ToHashSet();
+
         var created = new Dictionary<Guid, ImportBatchItem>();
         var pending = new List<(SyncHeldLine Line, ImportBatchItem Item)>();
         foreach (var line in lines.Where(l => l.RepeatsItemId is null))
@@ -183,17 +194,26 @@ internal sealed class SyncHoldRecorder(Guid uploaderId)
 
         await db.SaveChangesAsync(ct);
 
-        // The bytes every waiting line names — new or repeated — are kept until it is decided.
+        // The bytes every waiting line names — new, or repeating one still waiting — are kept until
+        // it is decided. A repeat of a line decided meanwhile keeps nothing: the decision already
+        // gave its bytes back, and no waiting line would name them again.
         await HeldUploadBytes.ParkAsync(
             db, uploaderId,
-            [.. lines.Where(l => l.HeldUploadSessionId is not null).Select(l => l.HeldUploadSessionId!.Value).Distinct()],
+            [.. lines.Where(l => l.HeldUploadSessionId is not null
+                    && (l.RepeatsItemId is not { } repeated || stillWaiting.Contains(repeated)))
+                .Select(l => l.HeldUploadSessionId!.Value).Distinct()],
             ct);
 
         var touched = new HashSet<Guid>();
         var superseded = new List<long>();
         foreach (var (line, item) in pending.Where(p => p.Line.Supersedes.Count > 0))
         {
-            var replaced = line.Supersedes.ToArray();
+            var replaced = line.Supersedes.Where(stillWaiting.Contains).ToArray();
+            if (replaced.Length == 0)
+            {
+                continue;
+            }
+
             superseded.AddRange(replaced);
             touched.UnionWith(await db.ImportBatchItems.AsNoTracking()
                 .Where(i => replaced.Contains(i.Id))
@@ -222,7 +242,8 @@ internal sealed class SyncHoldRecorder(Guid uploaderId)
         // A dependency is on a create that is still waiting — one kept just now, a repeat of one
         // already waiting, or one an earlier upload left waiting. A row that refers to something
         // that exists already depends on nothing held.
-        var repeats = lines.Where(l => l.RepeatsItemId is not null && l.Action == ImportDecisionAction.Create)
+        var repeats = lines.Where(l => l.RepeatsItemId is { } repeated && stillWaiting.Contains(repeated)
+                && l.Action == ImportDecisionAction.Create)
             .ToDictionary(l => l.RowId, l => l.RepeatsItemId!.Value);
         var unresolved = pending.SelectMany(p => p.Line.Refers)
             .Where(id => !created.ContainsKey(id) && !repeats.ContainsKey(id))

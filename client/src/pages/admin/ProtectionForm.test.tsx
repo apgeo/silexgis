@@ -16,7 +16,8 @@ import type { AdminSettings } from '../../api/hooks.ts';
 
 const put = vi.fn();
 
-vi.mock('../../api/client.ts', () => ({
+vi.mock('../../api/client.ts', async () => ({
+  ApiError: (await vi.importActual<typeof import('../../api/client.ts')>('../../api/client.ts')).ApiError,
   api: {
     GET: vi.fn(),
     PUT: (...args: unknown[]) => put(...args),
@@ -97,6 +98,40 @@ describe('ProtectionForm', () => {
     await vi.waitFor(() => expect(put).toHaveBeenCalled());
     expect(put.mock.calls[0][0]).toBe('/api/v1/admin/settings/protection');
     expect(put.mock.calls[0][1].body).toEqual({ ...stored, describeLocationFreeCopies: true });
+  });
+
+  // The section is saved whole, so the save names the version of the section the form was filled
+  // from: a save made after another administrator saved the section is refused, not taken over
+  // their values.
+  it('saves against the version of the section it was filled from', async () => {
+    render(form({ protection: stored, versions: { protection: 'p1', mail: 'm1' } } as unknown as AdminSettings));
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0][1].headers).toEqual({ 'If-Match': '"p1"' });
+  });
+
+  it('reads the settings again and says why when the section was saved over since', async () => {
+    const onStale = vi.fn();
+    put.mockResolvedValue({ data: undefined, error: { status: 412, code: 'concurrency.version_mismatch' } });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <App>
+          <ProtectionForm
+            settings={{ protection: stored, versions: { protection: 'p1' } } as unknown as AdminSettings}
+            onSaved={onSaved}
+            onStale={onStale}
+          />
+        </App>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/Someone else changed this since you loaded it/)).toBeTruthy();
+    expect(onStale).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
   // Every section's save answers the whole stored document, so every open section form is

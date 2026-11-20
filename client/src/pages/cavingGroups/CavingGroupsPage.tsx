@@ -414,7 +414,7 @@ export default function CavingGroupsPage() {
       >
         <Form form={form} layout="vertical" initialValues={{ type: 'cavingClub' }}>
           <Form.Item name="name" label={t('cavingGroups.name')} rules={[{ required: true }]}>
-            <Input maxLength={120} />
+            <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="type" label={t('cavingGroups.type')} rules={[{ required: true }]}>
             <Select
@@ -425,7 +425,7 @@ export default function CavingGroupsPage() {
             />
           </Form.Item>
           <Form.Item name="description" label={t('features.description')}>
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={2} maxLength={2000} />
           </Form.Item>
           <Form.Item name="website" label={t('caves.fields.website')}>
             <Input maxLength={255} />

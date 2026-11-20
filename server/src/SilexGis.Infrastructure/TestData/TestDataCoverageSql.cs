@@ -67,8 +67,10 @@ public static class TestDataCoverageSql
         }
 
         select.Append(" FROM ").Append(Quote(scope.Table))
-            .Append(" WHERE ").Append(Quote(scope.KeyColumn)).Append("::text IN (")
-            .Append("SELECT row_id FROM test_data_rows WHERE run_id = @run AND table_name = @registry)");
+            // The registry's text id is cast, never the table's uuid key: a cast key cannot use the
+            // key's index, and every scope would read its whole table to count one run's rows.
+            .Append(" WHERE ").Append(Quote(scope.KeyColumn)).Append(" IN (")
+            .Append("SELECT row_id::uuid FROM test_data_rows WHERE run_id = @run AND table_name = @registry)");
 
         await using var command = await CommandAsync(db, ct);
         command.CommandText = select.ToString();

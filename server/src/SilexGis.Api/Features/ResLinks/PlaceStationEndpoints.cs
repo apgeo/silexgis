@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.PlaceStations;
 using SilexGis.Infrastructure.Persistence;
 
@@ -27,14 +28,28 @@ public static class PlaceStationEndpoints
         SilexGisDbContext db, PlaceStationStore store, IAccessService access, AccessContext ctx, Guid id, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // The place's lock comes before the mapping is read, as for every write to a mapping: a phone
+        // that removed the same mapping meanwhile has committed by then, and the read below sees it.
+        var placeId = await PlaceStationQueries.Rows(db).AsNoTracking()
+            .Where(r => r.Id == id).Select(r => (Guid?)r.PlaceId).FirstOrDefaultAsync(ct);
+        if (placeId is null)
+        {
+            return ApiProblems.NotFound(ResLinkEndpoints.NotFoundCode);
+        }
+
+        await store.LockAsync(placeId.Value, ct);
         var mapping = await store.FindAsync(id, ct);
         if (mapping is null)
         {
             return ApiProblems.NotFound(ResLinkEndpoints.NotFoundCode);
         }
 
-        await store.LockAsync(mapping.PlaceId, ct);
-        if (!await MayWritePlaceAsync(db, access, ctx, mapping.PlaceId, ct))
+        // The link may already be tracked from the read that showed it to the caller, and a tracked
+        // row is handed back as it was then, not as it is now.
+        await db.Entry(mapping.Link).ReloadAsync(ct);
+
+        if (!(await WritablePlacesAsync(db, access, ctx, [mapping.PlaceId], ct)).Contains(mapping.PlaceId))
         {
             return ApiProblems.Forbidden(detail: "Removing a place's station takes the right to change the place.");
         }
@@ -58,22 +73,17 @@ public static class PlaceStationEndpoints
             .Where(r => ids.Contains(r.Id))
             .Select(r => new { r.Id, r.PlaceId })
             .ToListAsync(ct);
-        var writable = new HashSet<Guid>();
-        foreach (var place in places.Select(p => p.PlaceId).Distinct())
-        {
-            if (await MayWritePlaceAsync(db, access, ctx, place, ct))
-            {
-                writable.Add(place);
-            }
-        }
-
+        // One read of the places and one decision over all of them: a well-mapped survey model holds a
+        // mapping per place, and asking place by place cost two queries each on every listing.
+        var writable = await WritablePlacesAsync(db, access, ctx, [.. places.Select(p => p.PlaceId).Distinct()], ct);
         return [.. places.Where(p => writable.Contains(p.PlaceId)).Select(p => p.Id)];
     }
 
-    private static async Task<bool> MayWritePlaceAsync(
-        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid placeId, CancellationToken ct)
+    /// <summary>Of these places, the ones this caller may change — the right a mapping is curated by.</summary>
+    private static async Task<HashSet<Guid>> WritablePlacesAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, IReadOnlyCollection<Guid> placeIds, CancellationToken ct)
     {
-        var place = await db.Features.AsNoTracking().FirstOrDefaultAsync(f => f.Id == placeId, ct);
-        return place is not null && (await access.DecideAsync(ctx, AccessAction.Write, place, ct)).Allowed;
+        var places = await db.Features.AsNoTracking().Where(f => placeIds.Contains(f.Id)).ToListAsync(ct);
+        return await ProtectedWrites.WritableAsync(access, ctx, places, ct);
     }
 }

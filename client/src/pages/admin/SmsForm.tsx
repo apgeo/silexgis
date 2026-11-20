@@ -16,10 +16,10 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type SmsSettingsWrite } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
 import { type SectionProps, SECRET_KEPT, SaveNotices, StatusBanner } from './settingsSection.tsx';
 
-export default function SmsForm({ settings, onSaved }: SectionProps) {
+export default function SmsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<SmsSettingsWrite & { authHeader?: string }>();
@@ -37,6 +37,7 @@ export default function SmsForm({ settings, onSaved }: SectionProps) {
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/sms', {
+        headers: sectionIfMatch(settings.versions?.sms),
         body: {
           ...values,
           // Extra headers are not editable here yet; passing the stored set back keeps a save
@@ -47,6 +48,9 @@ export default function SmsForm({ settings, onSaved }: SectionProps) {
       });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

@@ -99,8 +99,9 @@ public static class PlaceStationAnchor
             {
                 if (offsets.ValueKind != JsonValueKind.Array
                     || offsets.GetArrayLength() != 3
-                    || offsets.EnumerateArray().Any(v => v.ValueKind != JsonValueKind.Number))
+                    || offsets.EnumerateArray().Any(v => v.ValueKind != JsonValueKind.Number || !v.TryGetDouble(out var d) || !double.IsFinite(d)))
                 {
+                    // A number beyond the double range (1e400) is valid JSON that reads as infinity.
                     return null;
                 }
 

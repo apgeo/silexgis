@@ -6,7 +6,7 @@ import Button from '../../components/Button.tsx';
 import { api } from '../../api/client.ts';
 import type { AdminSettings, SyncSettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 
 /** The server refuses anything outside this; stated here so the field says so before it is pressed. */
 const MIN_DAYS = 1;
@@ -24,9 +24,12 @@ const MAX_DAYS = 365;
 export default function SyncSettingsForm({
   settings,
   onSaved,
+  onStale,
 }: {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -40,9 +43,15 @@ export default function SyncSettingsForm({
   const save = async (values: SyncSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/sync', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/sync', {
+        headers: sectionIfMatch(settings.versions?.sync),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

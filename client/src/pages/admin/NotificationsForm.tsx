@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type NotificationSettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 import { type SectionProps } from './settingsSection.tsx';
 
 /**
@@ -19,7 +19,7 @@ import { type SectionProps } from './settingsSection.tsx';
  * still readable as one: an installation that never opens this tab keeps whatever its environment
  * says, and what is saved here replaces it from the next prune onwards.
  */
-export default function NotificationsForm({ settings, onSaved }: SectionProps) {
+export default function NotificationsForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<NotificationSettings>();
@@ -30,9 +30,15 @@ export default function NotificationsForm({ settings, onSaved }: SectionProps) {
   const save = async (values: NotificationSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/notifications', {
+        headers: sectionIfMatch(settings.versions?.notifications),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

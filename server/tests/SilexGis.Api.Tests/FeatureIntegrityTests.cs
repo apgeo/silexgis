@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -11,6 +13,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -26,6 +29,7 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
     private readonly SilexGisApiFactory factory;
     private Guid ownerId;
     private long caveTypeId;
+    private long entranceTypeId;
 
     public FeatureIntegrityTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -38,7 +42,45 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+        entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
     }
+
+    /// <summary>
+    /// The scheduled pass is due when the last one was queued at least an interval ago, or none ever
+    /// was — counted from the queue, not from when this process started, so an instance restarted
+    /// more often than the interval is still checked, and a restart does not queue a second pass.
+    /// </summary>
+    [Fact]
+    public async Task A_scheduled_pass_is_due_from_the_last_pass_not_from_start_up()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.FeatureIntegrityVerify).ExecuteDeleteAsync();
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        FeatureIntegrityScheduler Started() => new(
+            factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new FeatureIntegrityOptions { Interval = TimeSpan.FromHours(24) }),
+            clock,
+            NullLogger<FeatureIntegrityScheduler>.Instance);
+
+        (await Started().QueueIfDueAsync(CancellationToken.None)).ShouldBeTrue("no pass was ever queued");
+        await FinishPassesAsync(db);
+
+        // A restart an hour later, and one a day less an hour after the pass: nothing is due.
+        clock.Now = clock.Now.AddHours(1);
+        (await Started().QueueIfDueAsync(CancellationToken.None)).ShouldBeFalse();
+        clock.Now = clock.Now.AddHours(22);
+        (await Started().QueueIfDueAsync(CancellationToken.None)).ShouldBeFalse();
+
+        // A day after the last pass, whatever the process's age: due.
+        clock.Now = clock.Now.AddHours(2);
+        (await Started().QueueIfDueAsync(CancellationToken.None)).ShouldBeTrue();
+        (await db.ProcessingJobs.CountAsync(j => j.Kind == ProcessingJobKinds.FeatureIntegrityVerify)).ShouldBe(2);
+    }
+
+    private static Task FinishPassesAsync(SilexGisDbContext db) =>
+        db.ProcessingJobs.Where(j => j.Kind == ProcessingJobKinds.FeatureIntegrityVerify)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, ProcessingJobStatus.Succeeded));
 
     [Fact]
     public async Task A_cave_left_without_a_default_centerline_is_reported()
@@ -180,16 +222,38 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
         }
     }
 
+    /// <summary>
+    /// The kinds that have no table of their own, so nothing exists for a pair to point at and
+    /// the verifier has nothing to check them against. Every other value of the shared vocabulary
+    /// is driven below: a member added to it later fails here until the verifier covers it or it
+    /// is named on this list with its reason.
+    /// </summary>
+    private static readonly AttachedEntityType[] KindsWithoutATable =
+    [
+        // Reserved for a comment entity that does not exist yet.
+        AttachedEntityType.Comment,
+    ];
+
+    public static TheoryData<AttachedEntityType> KindsWithATable()
+    {
+        var data = new TheoryData<AttachedEntityType>();
+        foreach (var type in Enum.GetValues<AttachedEntityType>().Except(KindsWithoutATable))
+        {
+            data.Add(type);
+        }
+
+        return data;
+    }
+
     [Theory]
-    [InlineData(AttachedEntityType.Album)]
-    [InlineData(AttachedEntityType.Expedition)]
+    [MemberData(nameof(KindsWithATable))]
     public async Task A_row_pointing_at_a_vanished_target_is_reported_for_every_kind_that_has_a_table(
         AttachedEntityType type)
     {
         // The polymorphic pair has no foreign key, so nothing but this check notices a row
         // whose target is gone. The net is a list of kinds, one line each, and a kind left off
-        // it is silently unchecked rather than loudly wrong — which is why each kind that has
-        // a table of its own is driven rather than read off the list.
+        // it is silently unchecked rather than loudly wrong — which is why every kind that has
+        // a table of its own is driven from the enumeration rather than read off the list.
         (await VerifyAsync()).ShouldBeEmpty();
 
         var tagId = await ExecuteReturningAsync(async db =>
@@ -220,6 +284,107 @@ public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassF
             // The other tests of this class start from a database the verifier finds clean.
             await ExecuteAsync(db => db.Taggings.Where(t => t.EntityId == vanished).ExecuteDeleteAsync());
             await ExecuteAsync(db => db.Tags.Where(t => t.Id == tagId).ExecuteDeleteAsync());
+        }
+
+        (await VerifyAsync()).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Binning a document keeps its tags, attachments and link memberships so that putting it
+    /// back is exact. Those rows point at a row that still exists, only hidden; the nightly pass
+    /// must not report them as pointing at nothing, while a pair naming a document that really
+    /// is gone is still reported.
+    /// </summary>
+    [Fact]
+    public async Task A_binned_document_keeps_its_tags_without_being_reported_as_an_orphan()
+    {
+        (await VerifyAsync()).ShouldBeEmpty();
+
+        var (documentId, tagId) = await ExecuteReturningAsync(async db =>
+        {
+            var name = $"binned-doc-{Guid.NewGuid():N}"[..20];
+            var tag = new Tag { Name = name, Slug = name };
+            var document = new Document { Title = "Binned integrity document", OwnerUserId = ownerId };
+            db.Tags.Add(tag);
+            db.Documents.Add(document);
+            await db.SaveChangesAsync();
+            db.Taggings.Add(new Tagging { TagId = tag.Id, EntityType = AttachedEntityType.Document, EntityId = document.Id });
+            await db.SaveChangesAsync();
+            return (document.Id, tag.Id);
+        });
+
+        try
+        {
+            await ExecuteAsync(db => db.Documents
+                .Where(d => d.Id == documentId)
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.DeletedAt, DateTimeOffset.UtcNow)));
+
+            (await VerifyAsync()).ShouldBeEmpty();
+
+            // The positive case in the same breath: a document that is really gone still shows.
+            await ExecuteAsync(db => db.Documents.IgnoreQueryFilters()
+                .Where(d => d.Id == documentId)
+                .ExecuteDeleteAsync());
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("tagging_orphan");
+            problem.Detail.ShouldContain(documentId.ToString());
+        }
+        finally
+        {
+            await ExecuteAsync(db => db.Taggings.Where(t => t.EntityId == documentId).ExecuteDeleteAsync());
+            await ExecuteAsync(db => db.Documents.IgnoreQueryFilters().Where(d => d.Id == documentId).ExecuteDeleteAsync());
+            await ExecuteAsync(db => db.Tags.Where(t => t.Id == tagId).ExecuteDeleteAsync());
+        }
+
+        (await VerifyAsync()).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A cave with live entrances has exactly one main one: its point is the cave's point. With
+    /// none marked main the verifier reports that, and does not compare the cave's point with
+    /// whichever entrance the database happened to return first.
+    /// </summary>
+    [Fact]
+    public async Task A_cave_with_entrances_but_no_main_one_is_reported()
+    {
+        var caveId = await SeedCaveWithCenterlinesAsync(count: 1);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            for (var i = 0; i < 2; i++)
+            {
+                await writer.CreateEntranceAsync(
+                    new Feature
+                    {
+                        Name = $"Integrity entrance {i}",
+                        OwnerUserId = ownerId,
+                        Geom = new Point(25.1 + (i * 0.01), 45.1) { SRID = 4326 },
+                    },
+                    new CaveEntrance { CaveFeatureId = caveId, EntranceTypeId = entranceTypeId });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        (await VerifyAsync()).ShouldBeEmpty();
+
+        var mainId = await SingleAsync(db => db.CaveEntrances
+            .Where(e => e.CaveFeatureId == caveId && e.IsMain).Select(e => e.Id));
+        try
+        {
+            await ExecuteAsync(db => db.CaveEntrances
+                .Where(e => e.Id == mainId)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsMain, false)));
+
+            var problem = (await VerifyAsync()).ShouldHaveSingleItem();
+            problem.Check.ShouldBe("main_entrance");
+            problem.FeatureId.ShouldBe(caveId);
+        }
+        finally
+        {
+            await ExecuteAsync(db => db.CaveEntrances
+                .Where(e => e.Id == mainId)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.IsMain, true)));
         }
 
         (await VerifyAsync()).ShouldBeEmpty();

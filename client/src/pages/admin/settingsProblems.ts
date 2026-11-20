@@ -13,11 +13,7 @@ import { ApiError } from '../../api/client.ts';
  * only see literal keys.
  */
 export function settingsSaveProblem(error: unknown, t: TFunction): string {
-  const code = error instanceof ApiError
-    ? error.code
-    : typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : undefined;
+  const code = problemCode(error);
 
   switch (code) {
     case 'validation.failed':
@@ -27,6 +23,8 @@ export function settingsSaveProblem(error: unknown, t: TFunction): string {
       return t('admin.settingsProblems.forbidden');
     case 'settings.sms_gateway_internal':
       return t('admin.settingsProblems.smsGatewayInternal');
+    case 'concurrency.version_mismatch':
+      return t('common.conflict');
     default:
       return t('common.saveFailed');
   }
@@ -77,4 +75,29 @@ export function testSendProblem(error: unknown, t: TFunction): string {
     default:
       return t('admin.messaging.testRequestFailed');
   }
+}
+
+function problemCode(error: unknown): string | undefined {
+  return error instanceof ApiError
+    ? error.code
+    : typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : undefined;
+}
+
+/**
+ * Whether a section save was refused because somebody saved the section after this page read
+ * it. A section is saved whole, so such a save would have put their values back; the page is
+ * read again instead, and the administrator reapplies their change to what is stored now.
+ */
+export function isSettingsConflict(error: unknown): boolean {
+  return problemCode(error) === 'concurrency.version_mismatch';
+}
+
+/**
+ * The precondition a section save carries: the version of the section the form was filled from,
+ * which the settings read hands out per section. Without one the save is not held to anything.
+ */
+export function sectionIfMatch(version: string | null | undefined): { 'If-Match': string } | undefined {
+  return version ? { 'If-Match': `"${version}"` } : undefined;
 }

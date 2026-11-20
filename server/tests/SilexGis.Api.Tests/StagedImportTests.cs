@@ -605,6 +605,8 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
             allowCreateWithoutReview = true,
             duplicateRadiusMeters = 50,
             duplicateNameSimilarity = 0.8,
+            photoProximityRadiusMeters = PhotoImportOptions.DefaultProximityRadiusMeters,
+            photoClusterRadiusMeters = PhotoImportOptions.DefaultClusterRadiusMeters,
         });
         saved.StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -630,6 +632,8 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
                 allowCreateWithoutReview = false,
                 duplicateRadiusMeters = 50,
                 duplicateNameSimilarity = 0.8,
+                photoProximityRadiusMeters = PhotoImportOptions.DefaultProximityRadiusMeters,
+                photoClusterRadiusMeters = PhotoImportOptions.DefaultClusterRadiusMeters,
             });
         }
     }
@@ -1261,6 +1265,8 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
             allowCreateWithoutReview = true,
             duplicateRadiusMeters = 50,
             duplicateNameSimilarity = 0.8,
+            photoProximityRadiusMeters = PhotoImportOptions.DefaultProximityRadiusMeters,
+            photoClusterRadiusMeters = PhotoImportOptions.DefaultClusterRadiusMeters,
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         try
@@ -1288,6 +1294,8 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
                 allowCreateWithoutReview = false,
                 duplicateRadiusMeters = 50,
                 duplicateNameSimilarity = 0.8,
+                photoProximityRadiusMeters = PhotoImportOptions.DefaultProximityRadiusMeters,
+                photoClusterRadiusMeters = PhotoImportOptions.DefaultClusterRadiusMeters,
             });
         }
     }

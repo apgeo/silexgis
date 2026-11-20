@@ -179,4 +179,11 @@ public class PlacePointFrameTests
     [Fact]
     public void A_whole_turn_leaves_a_point_where_it_was() =>
         ImageRegionTurn.TurnPoint(0.2, 0.7, 4).ShouldBe((0.2, 0.7));
+    [Fact]
+    public void A_fraction_beyond_the_double_range_is_read_as_no_fraction()
+    {
+        var parsed = PlacePointAnchor.Read("""{"px": 3, "py": 4, "x": 1e400, "y": 0.5}""");
+        parsed.ShouldNotBeNull();
+        parsed.Value.X.ShouldBeNull();
+    }
 }

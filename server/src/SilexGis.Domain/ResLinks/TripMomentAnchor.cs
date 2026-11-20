@@ -33,6 +33,28 @@ public static class TripMomentAnchor
             [AtField] = at.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
         });
 
+    // A date, a time and an offset, all three. A time without an offset is read in whatever zone
+    // the server runs in, and a time without a date on whatever day it is read; either would make
+    // one stored anchor name different moments on different servers or different days.
+    private static readonly string[] InstantFormats =
+    [
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz",
+        "yyyy-MM-dd'T'HH:mm:sszzz",
+        "yyyy-MM-dd'T'HH:mmzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm'Z'",
+    ];
+
+    /// <summary>
+    /// Reads an instant written as ISO 8601 with its date, its time and an explicit offset (or
+    /// <c>Z</c>); anything less is not an instant, because its meaning would depend on where and
+    /// when it is read.
+    /// </summary>
+    public static bool TryParseInstant(string? text, out DateTimeOffset at) =>
+        DateTimeOffset.TryParseExact(
+            text, InstantFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out at);
+
     /// <summary>
     /// The moment a stored payload names, or null when there is none to read — a payload that is
     /// absent (withheld from this caller, or an anchor of another kind), malformed, or carrying
@@ -56,10 +78,7 @@ public static class TripMomentAnchor
                 return null;
             }
 
-            return DateTimeOffset.TryParse(
-                element.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
-                ? at
-                : null;
+            return TryParseInstant(element.GetString(), out var at) ? at : null;
         }
         catch (JsonException)
         {

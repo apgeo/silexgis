@@ -44,8 +44,24 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
     {
         "POST /api/v1/albums/{id:guid}/reorder",
         "PUT /api/v1/trip-logs/{id:guid}/expedition",
-        "PUT /api/v1/users/{id:guid}",
-        "PUT /api/v1/users/{id:guid}/upload-review",
+    };
+
+    /// <summary>
+    /// Routes binding a query object ([AsParameters]) that no validation filter checks, as
+    /// "METHOD pattern". A query object carries free text and numbers as a body does; the same rule
+    /// holds, and the same may-shrink-never-grow list.
+    /// </summary>
+    private static readonly HashSet<string> KnownUnvalidatedQueries = new(StringComparer.Ordinal)
+    {
+    };
+
+    /// <summary>
+    /// Validators registered for a body or query object that hold no rule at all, by type name:
+    /// a validator with no rules makes a route look covered while passing everything. A body made
+    /// only of switches (every member a bool) has nothing to refuse and is not counted.
+    /// </summary>
+    private static readonly HashSet<string> KnownEmptyValidators = new(StringComparer.Ordinal)
+    {
     };
 
     private readonly SilexGisApiFactory factory;
@@ -106,6 +122,57 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
     }
 
     [Fact]
+    public void Every_route_binding_a_query_object_runs_the_validation_filter_for_it()
+    {
+        using var scope = factory.Services.CreateScope();
+        var routes = QueryObjectRoutes().ToList();
+        var unvalidated = routes
+            .Where(r => !r.Validated.Contains(r.QueryType)
+                || scope.ServiceProvider.GetService(typeof(IValidator<>).MakeGenericType(r.QueryType)) is null)
+            .Select(r => r.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var newGaps = unvalidated.Except(KnownUnvalidatedQueries).Order().ToList();
+        var closed = KnownUnvalidatedQueries.Except(unvalidated).Order().ToList();
+
+        // The walk finds query-object routes at all, and recognises one that is covered.
+        routes.ShouldContain(r => r.Name == "GET /api/v1/photos/");
+        newGaps.ShouldBeEmpty(
+            "these routes bind a query object without WithValidation<T>() and a validator for it:\n"
+            + string.Join("\n", newGaps));
+        closed.ShouldBeEmpty(
+            "these routes are validated now (or gone); take them off the known-gap list:\n"
+            + string.Join("\n", closed));
+    }
+
+    [Fact]
+    public void Every_validator_a_route_runs_holds_at_least_one_rule()
+    {
+        using var scope = factory.Services.CreateScope();
+        var types = BodyRoutes().Where(r => r.Validated is not null).Select(r => r.BodyType)
+            .Concat(QueryObjectRoutes().Select(r => r.QueryType))
+            .Distinct()
+            .Where(t => !t.GetProperties().All(p => p.PropertyType == typeof(bool)));
+        var empty = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var type in types)
+        {
+            if (scope.ServiceProvider.GetService(typeof(IValidator<>).MakeGenericType(type))
+                    is IEnumerable<FluentValidation.IValidationRule> rules
+                && !rules.Any())
+            {
+                empty.Add(type.Name);
+            }
+        }
+
+        var newGaps = empty.Except(KnownEmptyValidators).Order().ToList();
+        var closed = KnownEmptyValidators.Except(empty).Order().ToList();
+        newGaps.ShouldBeEmpty("these validators hold no rule:\n" + string.Join("\n", newGaps));
+        closed.ShouldBeEmpty(
+            "these validators have rules now (or are gone); take them off the known-gap list:\n"
+            + string.Join("\n", closed));
+    }
+
+    [Fact]
     public void The_walk_sees_the_routes_it_is_meant_to_judge()
     {
         // The two tests above pass on an empty table, so this one proves the walk finds body routes
@@ -140,6 +207,34 @@ public sealed class RequestValidationCoverageTests : IClassFixture<PostgresFixtu
     }
 
     private sealed record BodyRoute(string Name, Type BodyType, Type? Validated);
+
+    private IEnumerable<QueryObjectRoute> QueryObjectRoutes()
+    {
+        var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+        foreach (var endpoint in endpoints.OfType<RouteEndpoint>())
+        {
+            var handler = endpoint.Metadata.GetMetadata<System.Reflection.MethodInfo>();
+            if (handler is null)
+            {
+                continue;
+            }
+
+            var validated = endpoint.Metadata.GetOrderedMetadata<ValidatedBodyMetadata>()
+                .Select(m => m.RequestType).ToHashSet();
+            var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
+            foreach (var parameter in handler.GetParameters()
+                         .Where(p => p.GetCustomAttributes(typeof(Microsoft.AspNetCore.Http.AsParametersAttribute), false).Length > 0))
+            {
+                foreach (var method in methods)
+                {
+                    yield return new QueryObjectRoute(
+                        $"{method} {endpoint.RoutePattern.RawText}", parameter.ParameterType, validated);
+                }
+            }
+        }
+    }
+
+    private sealed record QueryObjectRoute(string Name, Type QueryType, HashSet<Type> Validated);
 
     public void Dispose() => factory.Dispose();
 }

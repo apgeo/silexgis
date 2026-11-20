@@ -168,6 +168,7 @@ public static class DocumentEndpoints
 
     private static async Task<Results<Ok<DocumentDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -188,12 +189,14 @@ public static class DocumentEndpoints
             return ApiProblems.NotFound("document.not_found");
         }
 
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.Documents, id, ct);
         return TypedResults.Ok(ToDto(subject, subject.Content));
     }
 
     private static async Task<Results<Ok<DocumentDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
         Guid id,
         DocumentUpdateRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         DocumentWriteService documents,
         IAccessService access,
@@ -215,6 +218,26 @@ public static class DocumentEndpoints
             return await CanReadAsync(db, access, ctx, subject, ct)
                 ? ApiProblems.Forbidden("document.write_forbidden")
                 : ApiProblems.NotFound("document.not_found");
+        }
+
+        // The update rewrites every field the form shows — the language among them, which reading
+        // the document's text also writes — so a form filled before such a change would put the
+        // old values back unseen. It is held to the version it was read at when it names one;
+        // offered rather than required, so a caller that sends none keeps last-write-wins. Taken
+        // after the access decision, so that a caller who may not write learns nothing from a
+        // stale version that the plain refusal would not have told them.
+        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Documents, id, ct);
+        if (hold.Refusal is { } stale)
+        {
+            return stale;
+        }
+
+        // Decided again on the row as held: its audience and club may have changed meanwhile.
+        subject = await LoadAsync(db, id, ct);
+        if (subject is null
+            || !await DocumentAccessRules.CanWriteAsync(db, access, ctx, subject.Document, subject.Content?.File, ct))
+        {
+            return ApiProblems.NotFound("document.not_found");
         }
 
         if (request.CavingGroupId is { } requestedGroupId
@@ -259,9 +282,13 @@ public static class DocumentEndpoints
         }
 
         var updated = await LoadAsync(db, id, ct);
-        return updated?.Content is null
-            ? ApiProblems.NotFound("document.not_found")
-            : TypedResults.Ok(ToDto(updated, updated.Content));
+        if (updated?.Content is null)
+        {
+            return ApiProblems.NotFound("document.not_found");
+        }
+
+        await hold.AnswerAsync(ct);
+        return TypedResults.Ok(ToDto(updated, updated.Content));
     }
 
     /// <summary>

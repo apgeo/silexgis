@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -24,8 +25,13 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
     private Guid ownerId;
     private long caveTypeId;
 
+    private readonly PauseBeforeClosureSave pause = new();
+
     public FeatureDerivedStateRepairTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            configureServices: services =>
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(pause)));
 
     public async ValueTask InitializeAsync()
     {
@@ -44,6 +50,44 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
     /// protection flag it should not have, so both directions of the closure repair are seen, and an
     /// untouched pair that must not be rewritten.
     /// </summary>
+    /// <summary>
+    /// A repair holds back phones' downloads from before it stamps anything: while it stands between
+    /// its scan and its first write, the oldest unfinished writing transaction — the bound every
+    /// download stops short of — is the repair's own. Without it, an edit committing beside the scan
+    /// could hand a phone a position past the stamp the corrections then commit with, and the phone
+    /// would never download them.
+    /// </summary>
+    [Fact]
+    public async Task A_repair_holds_back_downloads_before_it_stamps_its_corrections()
+    {
+        var (oldParent, _) = await SeedCaveWithCenterlineAsync(lengthM: null);
+        var (moved, _) = await SeedCaveWithCenterlineAsync(lengthM: null);
+        await MoveAsync(moved, oldParent, inTransaction: true);
+        await ExecuteAsync(db => db.FeatureAncestors
+            .Where(a => a.FeatureId == moved && a.AncestorId == oldParent).ExecuteDeleteAsync());
+
+        try
+        {
+            pause.Arm();
+            var repair = Task.Run(() => RepairAsync(apply: true));
+            await pause.Reached.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var writers = await ExecuteReturningAsync(db => db.Database.SqlQueryRaw<long>(
+                "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
+                + "WHERE datname = current_database() AND pid <> pg_backend_pid() "
+                + "AND backend_type = 'client backend' AND backend_xid IS NOT NULL").SingleAsync());
+            writers.ShouldBeGreaterThanOrEqualTo(1L, "the repair must hold a transaction id before it writes its first stamp");
+
+            pause.Release();
+            (await repair.WaitAsync(TimeSpan.FromSeconds(60))).Applied.ShouldBeTrue();
+        }
+        finally
+        {
+            pause.Release();
+            pause.Disarm();
+        }
+    }
+
     [Fact]
     public async Task A_stale_ancestry_is_counted_left_alone_by_a_dry_run_and_repaired_by_apply()
     {
@@ -101,6 +145,11 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
             (await CountAsync()).ShouldBe(broken);
             (await ProtectedEffectiveAsync(guardedLine)).ShouldBeFalse();
 
+            // A device downloads features in updated_at order from its cursor, so a correction that
+            // left the column alone would never reach a device that already holds the row.
+            var guardedStampBefore = await UpdatedAtAsync(guardedLine);
+            var openCaveStampBefore = await UpdatedAtAsync(openCave);
+
             // Applied, it rewrites exactly the two rows the count named and nothing beside them.
             var applied = await RepairAsync(apply: true);
             applied.Applied.ShouldBeTrue();
@@ -114,6 +163,8 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
             (await ProtectedEffectiveAsync(guardedLine)).ShouldBeTrue();
             (await ProtectedEffectiveAsync(openLine)).ShouldBeFalse();
             (await ProtectedEffectiveAsync(openCave)).ShouldBeFalse();
+            (await UpdatedAtAsync(guardedLine)).ShouldBeGreaterThan(guardedStampBefore);
+            (await UpdatedAtAsync(openCave)).ShouldBe(openCaveStampBefore);
             (await ExecuteReturningAsync(db => db.Features
                     .Where(f => f.Id == guardedLine).Select(f => f.AncestorIds).SingleAsync()))
                 .Order().ShouldBe(guardedAncestors.Order());
@@ -138,6 +189,50 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
                 await db.Features.Where(f => f.Id == openLine)
                     .ExecuteUpdateAsync(s => s.SetProperty(f => f.IsProtectedEffective, false));
             });
+        }
+    }
+
+    /// <summary>
+    /// A feature whose only defect is a missing closure row is moved while the repair is between
+    /// its scan and its commit. The repair must not commit the closure row its scan worked out for
+    /// the old parent beside the move: the move waits for it, then replaces the closure from what
+    /// the repair left, and nothing is wrong afterwards.
+    /// </summary>
+    [Fact]
+    public async Task A_move_made_while_a_repair_runs_waits_for_it_and_leaves_nothing_wrong()
+    {
+        var (oldParent, _) = await SeedCaveWithCenterlineAsync(lengthM: null);
+        var (newParent, _) = await SeedCaveWithCenterlineAsync(lengthM: null);
+        var (moved, _) = await SeedCaveWithCenterlineAsync(lengthM: null);
+        await MoveAsync(moved, oldParent, inTransaction: true);
+        (await CountAsync()).FeaturesWrong.ShouldBe(0);
+
+        await ExecuteAsync(db => db.FeatureAncestors
+            .Where(a => a.FeatureId == moved && a.AncestorId == oldParent).ExecuteDeleteAsync());
+        (await CountAsync()).ClosureWrong.ShouldBe(1);
+
+        try
+        {
+            pause.Arm();
+            var repair = Task.Run(() => RepairAsync(apply: true));
+            await pause.Reached.WaitAsync(TimeSpan.FromSeconds(60));
+
+            var move = Task.Run(() => MoveAsync(moved, newParent, inTransaction: true));
+            await Task.WhenAny(move, Task.Delay(TimeSpan.FromSeconds(2)));
+            move.IsCompleted.ShouldBeFalse("the move must wait for the repair's lock");
+
+            pause.Release();
+            var result = await repair.WaitAsync(TimeSpan.FromSeconds(60));
+            await move.WaitAsync(TimeSpan.FromSeconds(60));
+
+            result.Applied.ShouldBeTrue();
+            (await CountAsync()).FeaturesWrong.ShouldBe(0);
+            (await VerifyAsync()).ShouldBeEmpty();
+        }
+        finally
+        {
+            pause.Release();
+            pause.Disarm();
         }
     }
 
@@ -326,6 +421,66 @@ public sealed class FeatureDerivedStateRepairTests : IAsyncLifetime, IDisposable
     {
         using var scope = factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync();
+    }
+
+    /// <summary>
+    /// Replaces a feature's parents through the write service, inside a transaction as the routes
+    /// that move a feature run it, so the hierarchy lock lasts until the move commits.
+    /// </summary>
+    private async Task MoveAsync(Guid featureId, Guid parentId, bool inTransaction)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+        await using var transaction = inTransaction ? await db.Database.BeginTransactionAsync() : null;
+        await writer.SetParentsAsync(featureId, [new ParentSpec(parentId, IsPrimary: true)]);
+        await db.SaveChangesAsync();
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync();
+        }
+    }
+
+    private Task<DateTimeOffset> UpdatedAtAsync(Guid featureId) =>
+        ExecuteReturningAsync(db => db.Features.IgnoreQueryFilters()
+            .Where(f => f.Id == featureId).Select(f => f.UpdatedAt).SingleAsync());
+
+    /// <summary>
+    /// Holds the first save that inserts closure rows — the repair's — until released, once armed,
+    /// so a test can act while the repair stands between its scan and its commit.
+    /// </summary>
+    private sealed class PauseBeforeClosureSave : SaveChangesInterceptor
+    {
+        private TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int armed;
+
+        public Task Reached => reached.Task;
+
+        public void Arm()
+        {
+            reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Volatile.Write(ref armed, 1);
+        }
+
+        public void Release() => release.TrySetResult();
+
+        public void Disarm() => Volatile.Write(ref armed, 0);
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { } context
+                && context.ChangeTracker.Entries<FeatureAncestor>().Any(e => e.State == EntityState.Added)
+                && Interlocked.CompareExchange(ref armed, 0, 1) == 1)
+            {
+                reached.TrySetResult();
+                await release.Task.WaitAsync(cancellationToken);
+            }
+
+            return result;
+        }
     }
 
     private Task<bool> ProtectedEffectiveAsync(Guid featureId) =>

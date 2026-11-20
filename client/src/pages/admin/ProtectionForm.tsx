@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type ProtectionSettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 import { type SectionProps } from './settingsSection.tsx';
 
 /**
@@ -20,7 +20,7 @@ import { type SectionProps } from './settingsSection.tsx';
  * is gets told which documents point at it. The photo switches decide what travels inside the
  * files handed out; which reader may be told a location stays the server's rule either way.
  */
-export default function ProtectionForm({ settings, onSaved }: SectionProps) {
+export default function ProtectionForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<ProtectionSettings>();
@@ -31,9 +31,15 @@ export default function ProtectionForm({ settings, onSaved }: SectionProps) {
   const save = async (values: ProtectionSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/protection', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/protection', {
+        headers: sectionIfMatch(settings.versions?.protection),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

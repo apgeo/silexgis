@@ -11,6 +11,8 @@ export const SECRET_KEPT = '••••••••';
 export interface SectionProps {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }
 
 /** The notes a save came back with, each said as a warning the administrator can act on. */

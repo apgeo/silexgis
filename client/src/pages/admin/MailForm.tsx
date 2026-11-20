@@ -15,12 +15,13 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type MailSettingsWrite } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem, testSendProblem } from './settingsProblems.ts';
 import { type SectionProps, SECRET_KEPT, SaveNotices, StatusBanner } from './settingsSection.tsx';
 
 export default function MailForm({
   settings,
   onSaved,
+  onStale,
   defaultTestRecipient,
 }: SectionProps & { defaultTestRecipient: string }) {
   const { t } = useTranslation();
@@ -41,6 +42,7 @@ export default function MailForm({
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/mail', {
+        headers: sectionIfMatch(settings.versions?.mail),
         body: {
           ...values,
           // Both blank and the placeholder mean "unchanged", so re-saving a form the operator
@@ -50,6 +52,9 @@ export default function MailForm({
       });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

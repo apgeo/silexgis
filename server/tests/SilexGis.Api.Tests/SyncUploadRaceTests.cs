@@ -235,11 +235,13 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
     }
 
     [Fact]
-    public async Task The_same_new_row_in_two_batches_at_once_is_a_conflict_to_retry_and_the_retry_finds_it_here()
+    public async Task The_same_new_row_in_two_batches_at_once_waits_for_the_first_and_finds_it_here()
     {
         // The rows of a batch that timed out, resent under a new batch identifier while the first
-        // attempt is still applying: the second insert of the phone's identifier waits for the
-        // first and then finds it taken.
+        // attempt is still applying. An upload that creates a feature holds the lock every change to
+        // the cave hierarchy takes, so the resend waits for the first attempt to commit and then
+        // finds the phone's row already here: unchanged, with nothing to send again and nothing
+        // stored twice.
         var stallId = Guid.CreateVersion7();
         var stallRevision = Row(
             await UploadAsync(first, firstSet, Guid.CreateVersion7(), Cave(stallId, $"Stall {marker}")),
@@ -251,22 +253,16 @@ public sealed class SyncUploadRaceTests : IAsyncLifetime, IDisposable, IClassFix
             [Cave(newId, $"New {marker}"), Cave(stallId, "Renamed by the first upload", baseRevision: stallRevision)]);
         await stall.WaitForWaitersAsync(1, firstUpload);
 
-        var resentBatch = Guid.CreateVersion7();
-        var resent = PostBatchAsync(first, firstSet, resentBatch, [Cave(newId, $"New {marker}")]);
+        var resent = PostBatchAsync(first, firstSet, Guid.CreateVersion7(), [Cave(newId, $"New {marker}")]);
         await stall.WaitForWaitersAsync(2, resent);
+        resent.IsCompleted.ShouldBeFalse("the resend has to wait for the first attempt, not answer beside it");
 
         await stall.ReleaseAsync();
         Row(await AnswerOf(await firstUpload), newId).GetProperty("status").GetString().ShouldBe("created");
 
-        // Not a server failure: the phone is told to send it again, and nothing of it was kept.
-        var collided = await resent;
-        var payload = await collided.Content.ReadAsStringAsync();
-        collided.StatusCode.ShouldBe(HttpStatusCode.Conflict, payload);
-        JsonDocument.Parse(payload).RootElement.GetProperty("code").GetString().ShouldBe("sync.batch_conflict");
-
-        var retried = await AnswerOf(await PostBatchAsync(first, firstSet, resentBatch, [Cave(newId, $"New {marker}")]));
-        Row(retried, newId).GetProperty("status").GetString().ShouldBe("unchanged");
-        retried.GetProperty("replayed").GetBoolean().ShouldBeFalse();
+        var after = await AnswerOf(await resent);
+        Row(after, newId).GetProperty("status").GetString().ShouldBe("unchanged");
+        after.GetProperty("replayed").GetBoolean().ShouldBeFalse();
 
         await using var check = factory.Services.CreateAsyncScope();
         var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();

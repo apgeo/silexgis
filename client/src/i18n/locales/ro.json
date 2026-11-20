@@ -1539,6 +1539,7 @@
     "problem": {
       "generic": "Decizia nu a putut fi luată.",
       "review_not_pending": "Ceva la care ajunge această decizie a fost deja decis sau nu mai poate fi schimbat. Pagina arată ultima stare.",
+      "review_batch_reverted": "Această încărcare a fost anulată, așa că o linie respinsă din ea nu mai poate fi acceptată. Cereți proprietarului telefonului să o trimită din nou dacă mai este dorită.",
       "review_own_batch": "Încărcările sunt decise de altcineva decât contul care le-a trimis.",
       "review_batch_not_found": "Această încărcare nu așteaptă verificarea sau nu ai voie să o vezi.",
       "review_item_not_found": "Această linie nu mai există.",
@@ -4053,6 +4054,8 @@
     "phoneResendTooSoon": "Așteaptă un minut înainte să ceri din nou codul.",
     "phoneNothingPending": "Niciun număr nu mai așteaptă codul.",
     "phoneUseOther": "Folosește alt număr",
+    "phoneCancelPending": "Renunță la acest număr",
+    "phonePendingCancelled": "Ai renunțat la numărul care aștepta codul.",
     "phoneSendFailed": "Codul nu a putut fi trimis la acel număr.",
     "phoneTaken": "Alt cont folosește deja acel număr.",
     "phoneHint": "Folosit doar pentru codurile de autentificare. Introdu-l în format internațional, de exemplu +40712345678.",

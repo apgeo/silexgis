@@ -160,6 +160,25 @@ describe('a number waiting for its code', () => {
       expect(post).toHaveBeenCalledWith('/api/v1/me/phone/change', { body: { phoneNumber: '+40700000001' } }));
   });
 
+  it('drops only the waiting number, leaving a confirmed one alone', async () => {
+    phone = { ...pending, phoneNumber: '+40700000001', confirmed: true };
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('security.phoneCancelPending') }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('/api/v1/me/phone/pending'));
+    expect(remove).not.toHaveBeenCalledWith('/api/v1/me/phone');
+    expect(await screen.findByText(i18n.t('security.phonePendingCancelled'))).toBeInTheDocument();
+  });
+
+  it('offers dropping the waiting number even without a text gateway', () => {
+    phone = { ...pending, smsConfigured: false };
+    show();
+
+    expect(screen.getByRole('button', { name: i18n.t('security.phoneCancelPending') })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('security.phoneResend') })).toBeNull();
+  });
+
   it('says a send failed when the request never reached the server', async () => {
     phone = pending;
     post.mockRejectedValue(new TypeError('Failed to fetch'));

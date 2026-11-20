@@ -9,6 +9,8 @@ import type { EntityType } from '../../api/hooks.ts';
 import { ACTION_ORDER } from './accessDisplay.ts';
 
 const replace = vi.fn();
+// The rule lists the saves carried, one per save; the version each was sent under is asserted apart.
+const sentEntries = () => replace.mock.calls.map((call) => (call[0] as { entries: unknown[] }).entries);
 // The read made just before a save; by default it answers whatever is stored now.
 const refetch = vi.fn();
 // The camp a cascade row names, as the reader's own read of it answers: a name when they may
@@ -155,7 +157,7 @@ describe('PermissionsModal on a trip', () => {
 
     // The rule the trip owns travels; the camp's does not, in the same save.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: 'user-9', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });
@@ -211,7 +213,7 @@ describe('PermissionsModal on a trip', () => {
 
     // One rule saved, and it is the trip's own — the camp's is still left where the camp is.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
   });
@@ -259,7 +261,7 @@ describe('PermissionsModal on a trip', () => {
 
     // Ana's row holds no action any more, so it is not sent: the save is what remains.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });
@@ -366,7 +368,7 @@ describe('PermissionsModal opened about an account', () => {
     // One confirmation, one save: the drafted rule and the club's own, which a full replace
     // would otherwise have dropped.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
@@ -383,7 +385,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([]);
+    expect(sentEntries()).toContainEqual([]);
   });
 
   it('drafts nothing for an id that names nobody, and says nothing about it', () => {
@@ -420,7 +422,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
   });
@@ -448,7 +450,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });
@@ -466,7 +468,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
   });
@@ -564,7 +566,7 @@ describe('PermissionsModal when the stored rules move under an open edit', () =>
     fireEvent.click(saveButton());
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: 'user-9', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });

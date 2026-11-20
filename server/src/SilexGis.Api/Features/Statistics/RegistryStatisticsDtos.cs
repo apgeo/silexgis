@@ -213,6 +213,7 @@ public sealed class RegistryDistributionRequestValidator : AbstractValidator<Reg
 {
     public RegistryDistributionRequestValidator()
     {
+        RegistryScopeRules.Apply(this);
         RuleFor(x => x.Measure)
             .Must(text => RegistryMeasures.TryParse(text, out _))
             .WithMessage($"measure must name one of: {RegistryMeasures.Accepted}.");
@@ -253,6 +254,7 @@ public sealed class RegistryCorrelationRequestValidator : AbstractValidator<Regi
 {
     public RegistryCorrelationRequestValidator()
     {
+        RegistryScopeRules.Apply(this);
         RuleFor(x => x.X)
             .Must(text => RegistryMeasures.TryParse(text, out _))
             .WithMessage($"x must name one of: {RegistryMeasures.Accepted}.");
@@ -284,7 +286,7 @@ public sealed class RegistryCategoriesRequestValidator : AbstractValidator<Regis
             .Must(c => SilexGis.Api.Common.RouteEnums.TryParse<RegistryCategory>(c, out _))
             .WithMessage(
                 $"Must name a category: {string.Join(", ", SilexGis.Api.Common.RouteEnums.WireNames<RegistryCategory>())}.");
-        RuleFor(x => x.Region).MaximumLength(200).When(x => x.Region is not null);
+        RegistryScopeRules.Apply(this);
     }
 }
 
@@ -292,10 +294,10 @@ public sealed class RegistryRegionsRequestValidator : AbstractValidator<Registry
 {
     public RegistryRegionsRequestValidator()
     {
-        // Nothing to bound: the breakdown takes no number, and its scope fields are either an
-        // identifier that exists or one that matches nothing. The validator exists so the route
-        // has the same shape as its siblings and so a bound added later has somewhere to go.
-        RuleFor(x => x.Region).MaximumLength(200).When(x => x.Region is not null);
+        // The breakdown takes no number, and its scope fields are either an identifier that
+        // exists or one that matches nothing; what is left to bound is the scope every statistic
+        // shares.
+        RegistryScopeRules.Apply(this);
     }
 }
 
@@ -400,6 +402,7 @@ public sealed class RegistryClusteringRequestValidator : AbstractValidator<Regis
 {
     public RegistryClusteringRequestValidator()
     {
+        RegistryScopeRules.Apply(this);
         RuleFor(x => x.Measures)
             .Must(text => RegistryMeasureList.TryParse(text, out _))
             .WithMessage(
@@ -606,3 +609,18 @@ public sealed record RegistryClusterProjectionDto(
     RegistryProjectionAxisDto First,
     RegistryProjectionAxisDto Second,
     IReadOnlyList<RegistryProjectionPositionDto> Positions);
+
+/// <summary>
+/// The rules every registry statistic shares for its scope, written once so that a new statistic
+/// gets them by naming this rather than by remembering them.
+/// </summary>
+internal static class RegistryScopeRules
+{
+    /// <summary>The longest region name a scope may carry, the width the region is stored at.</summary>
+    public const int MaxRegionLength = 200;
+
+    public static void Apply<T>(AbstractValidator<T> validator)
+        where T : IRegistryScopeRequest =>
+        validator.RuleFor(x => x.Region).MaximumLength(MaxRegionLength).When(x => x.Region is not null);
+}
+

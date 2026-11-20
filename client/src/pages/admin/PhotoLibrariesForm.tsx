@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { queryKeys, usePhotoLibraries, type PhotoLibrarySuspension } from '../../api/hooks.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 import { type SectionProps } from './settingsSection.tsx';
 
 /**
@@ -60,7 +60,7 @@ const STOP_COMMAND: Partial<Record<string, string>> = {
  * somebody removed from the deployment.
  * </p>
  */
-export default function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
+export default function PhotoLibrariesForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -87,9 +87,15 @@ export default function PhotoLibrariesForm({ settings, onSaved }: SectionProps) 
         ...(current?.photoLibraries ?? settings.photoLibraries),
         [field]: suspended,
       };
-      const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', { body });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', {
+        headers: sectionIfMatch(settings.versions?.photoLibraries),
+        body,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

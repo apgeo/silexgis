@@ -5,7 +5,8 @@ import { App, Flex, Input, Popover, Select, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
   hasAccessAction,
   useCabinets,
@@ -93,6 +94,8 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   // read is polled, and each equal answer arriving as a new object would otherwise put the
   // stored title back over whatever is being typed.
   const filled = useRef<{ id: string; settled: boolean } | null>(null);
+  // The version of the reading the form was filled from, which the save is held to.
+  const filledAt = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!open) {
       filled.current = null;
@@ -108,6 +111,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       return;
     }
     filled.current = { id: document.id, settled };
+    filledAt.current = versionReadWith(document);
     setTitle(document.title);
     setTypeId(document.documentTypeId);
     setVisibility(document.visibility);
@@ -170,6 +174,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
     try {
       await updateDocument.mutateAsync({
         id: documentId,
+        ifMatch: filledAt.current,
         title: title.trim(),
         documentTypeId: typeId,
         metadata,
@@ -185,6 +190,11 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       message.success(t('common.saved'));
       setOpen(false);
     } catch (error) {
+      // A document changed since the form was filled is worded once, by the application's
+      // conflict warning.
+      if (isConcurrencyConflict(error)) {
+        return;
+      }
       // Two refusals are worth naming rather than folding into "save failed": metadata the
       // kind's schema rejects, and binding to a club the saver does not belong to — both
       // leave someone guessing which control was at fault otherwise.

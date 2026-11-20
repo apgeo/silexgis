@@ -91,7 +91,7 @@ describe('a write on a dated record', () => {
     const { wrapper, stale } = harness();
     const { result } = renderHook(() => useDeleteExpedition(), { wrapper });
     await act(async () => {
-      await result.current.mutateAsync('camp-1');
+      await result.current.mutateAsync({ id: 'camp-1' });
     });
     expect(stale(queryKeys.calendar(month))).toBe(true);
     expect(stale(queryKeys.campAreasMap('bbox', 'a', 'b'))).toBe(true);

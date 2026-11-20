@@ -201,7 +201,9 @@ export const groups = {
     // Bytes a phone stages through the same transfer routes, the sweep and the quota over them.
     'SyncStagedUploadTests',
   ],
-  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'UploadedGeodataCeilingTests', 'ImportedCoordinatesTests'],
+  geofiles: ['GeofileTests', 'JobFailureRecordingTests', 'PagedListOrderTests', 'UploadedGeodataDriverTests', 'UploadedGeodataCeilingTests', 'ImportedCoordinatesTests',
+    // The map's layer lists narrowed to what can be drawn, walked past a hundred.
+    'ReadyLayerListTests'],
   georeferencedMaps: [
     'GeoreferencedMapTests', 'GeoreferencedMapSheetTests', 'GeoreferencedMapStationPointTests', 'MapSheetRenderingTests',
     'FilterWorldConformanceTests', 'FilterWorldListParityTests',
@@ -211,6 +213,8 @@ export const groups = {
     'BulkImportTests', 'PhotoImportTests',
     'ServerDirectoryContainmentTests',
     'SpeleolocTripImportTests', 'StagedImportTests', 'TripTrackImportTests',
+    // The bounds a vector or trip review holds its decisions and selections to.
+    'ImportReviewBoundsTests',
     // A phone recording is placed by the archive import's resolver.
     'TripRecordingConversionTests',
     // Every import commit names its batch on the history it writes.
@@ -288,8 +292,12 @@ export const groups = {
     'SignInProtectionTests', 'StartupSettingsTests', 'TestLoginTests', 'TestLoginRealDataGuardTests', 'TrustedProxyTests', 'TwoFactorChannelTests',
     // Walks the endpoint table: every route reading a JSON body runs a registered validator.
     'RequestValidationCoverageTests',
+    // Bodies past a column, an undefined audience, null members, unbounded lists, wildcard search.
+    'RequestValidationGapTests',
     'UserAdministrationLastAdministratorTests', 'UserAdministrationTests', 'UserTwoFactorResetTests',
     'UserDeleteBlockedTests', 'LoggedMessageSecretsTests',
+    // Administrators' writes racing the sign-in machinery's on the account row, and doubled removals.
+    'AccountWriteRaceTests',
     // The account mark that holds an account's uploads and file imports for review.
     'SyncUploadHoldTests', 'FileImportReviewHoldTests', 'TripImportCommitTests', 'SpeleolocTripImportTests',
     'TripRecordingConversionTests',
@@ -305,6 +313,8 @@ export const groups = {
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
     'ResLinkTargetPictureTests',
+    // A link listing decides the documents it shows for the whole set at once.
+    'DocumentLinkQueryCostTests',
     // A place a phone pinned on its map is a link shown whole or not at all, and written only by
     // the phone's sync and the map screen.
     'PlacePointProtectionTests', 'PlacePointWriteTests',
@@ -352,6 +362,8 @@ export const groups = {
     'AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests',
     // The demo dataset and the test logins refuse a database holding data they did not create.
     'RealDataGuardTests', 'TestLoginBootstrapContentGuardTests', 'DemoAlongsideRealDataTests',
+    // A settings section is saved whole, held to the version its form was filled from.
+    'AdminSettingsVersionTests',
     // Which map backgrounds a document may copy is an administrator's setting, kept across
     // restarts beside the shipped catalogue's answer.
     'MapBackgroundDocumentChoiceTests',
@@ -715,10 +727,10 @@ export const crossCutting = {
   },
   permissionClasses: [
     'AccessApiTests', 'AccessHistoryTests', 'AccessKeyTests', 'AccessModelTests',
-    'AclAndCavingGroupTests', 'AdminMessagingTests', 'AlbumAndPublicGalleryTests',
-    'AnnotatedTextApiTests', 'AreaTerrainStatisticsTests', 'AuthFlowTests',
-    'BasemapDownloadTests', 'BulkImportTests', 'CabinetApiTests', 'CaveDomainTests',
-    'CaveExternalIdTests', 'CaveOverburdenTests', 'CavePotentialModelTests',
+    'AclAndCavingGroupTests', 'AdminMessagingTests', 'AdminSettingsVersionTests',
+    'AlbumAndPublicGalleryTests', 'AnnotatedTextApiTests', 'AreaTerrainStatisticsTests',
+    'AuthFlowTests', 'BasemapDownloadTests', 'BulkImportTests', 'CabinetApiTests',
+    'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests', 'CavePotentialModelTests',
     'CavePotentialResultTests', 'CaveQrPublicationTests', 'CaverRosterTests',
     'CavingGroupAnnouncementTests', 'CavingGroupMembershipTests', 'CenterlineTests',
     'ChecklistAuthoringTests', 'DocumentAccessApiTests', 'DocumentCommentApiTests',
@@ -800,17 +812,17 @@ export const crossCutting = {
     'PublicTripDepthPlacesTests', 'PublicTripDiagnosticsTests', 'PublicTripMomentPicturesTests',
     'PublicTripPlannedReturnTests', 'PublishedLinkWithdrawalTests', 'PublishedLinksAdminTests',
     'PublishedNamesNowhereTests', 'PublishedSurveyBoundsTests', 'RegistryStatisticsTests',
-    'RelativeAltitudeTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
-    'ResLinkTargetPictureTests', 'SearchEndpointTests', 'SharedViewDataTests',
-    'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
-    'StagedImportTests', 'StorageAlertTests', 'StorageReportTests', 'StorageRoomTests',
-    'StructuralMeasurementTests', 'StructuralStereonetTests', 'StructureComparisonTests',
-    'SurveyCompilationTests', 'SurveyGraphTests', 'SurveyModelPlacementTests',
-    'SurveyModelReadingTests', 'SurveyModelTests', 'SurveyModelTileTests',
-    'SurveyModelTrackedTripCountsTests', 'SurveyModelTrackedTripReplayTests',
-    'SurveyModelTrackedTripsTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
-    'SurveyUploadExternalStepTests', 'SurveyUploadMandeyeTests',
-    'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
+    'RelativeAltitudeTests', 'RequestValidationGapTests', 'ResLinkApiTests',
+    'ResLinkProtectionFloorTests', 'ResLinkTargetPictureTests', 'SearchEndpointTests',
+    'SharedViewDataTests', 'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests',
+    'SpeologieCatalogueTests', 'StagedImportTests', 'StorageAlertTests', 'StorageReportTests',
+    'StorageRoomTests', 'StructuralMeasurementTests', 'StructuralStereonetTests',
+    'StructureComparisonTests', 'SurveyCompilationTests', 'SurveyGraphTests',
+    'SurveyModelPlacementTests', 'SurveyModelReadingTests', 'SurveyModelTests',
+    'SurveyModelTileTests', 'SurveyModelTrackedTripCountsTests',
+    'SurveyModelTrackedTripReplayTests', 'SurveyModelTrackedTripsTests',
+    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyUploadExternalStepTests',
+    'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadPipelineTests',
     'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests',
     'SurveyUploadPublicLinkTests', 'SurveyUploadRouteTests', 'SurveyUploadSchemaTests',
     'SurveyUploadSurfaceTests', 'SurveyUploadViewerTests', 'SurveyWallsTests',

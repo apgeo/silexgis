@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { Checkbox, Collapse, Input, InputNumber, Segmented, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useFeatureTypes, useGeofiles, useMapLayers, useRasterMaps, useSavedFilters } from '../../../api/hooks.ts';
+import { useFeatureTypes, useMapLayers, useSavedFilters } from '../../../api/hooks.ts';
+import { useGeofileLayers, useRasterMapLayers } from '../../../api/hooks/mapLayers.ts';
 import {
   FLYBY_CHANGE_KINDS,
   FLYBY_CUT_CHANGES,
@@ -76,14 +77,14 @@ function useLayerNames(features: readonly FlybyFeatureLayer[]) {
   const { t } = useTranslation();
   const { data: featureTypes } = useFeatureTypes();
   const { data: catalog } = useMapLayers();
-  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
+  const { data: rasterLayers } = useRasterMapLayers();
+  const { data: geofileLayers } = useGeofileLayers();
   const { data: savedFilters } = useSavedFilters();
   const filterLayers = useWorkspaceStore((state) => state.filterLayers);
   return useMemo(() => {
     const layers = catalog ?? [];
     const backgrounds = layers.filter((entry) => entry.isBase && isDrawableIn3d(entry, layers));
-    const rasters = rasterPage?.items ?? [];
+    const rasters = rasterLayers ?? [];
     const filterName = (savedFilterId: string) =>
       savedFilters?.find((filter) => filter.id.toLowerCase() === savedFilterId.toLowerCase())?.name;
     /** One of the flyby's own layers, called by what it shows. */
@@ -113,7 +114,7 @@ function useLayerNames(features: readonly FlybyFeatureLayer[]) {
         case 'raster':
           return rasters.find((raster) => raster.id === id)?.name ?? t('flyby.look.layer.unknown');
         case 'file':
-          return geofilePage?.items.find((file) => file.id === id)?.name ?? t('flyby.look.layer.unknown');
+          return geofileLayers?.find((file) => file.id === id)?.name ?? t('flyby.look.layer.unknown');
         case 'features':
           return featureName(features.find((layer) => layer.id === id));
         default:
@@ -127,7 +128,7 @@ function useLayerNames(features: readonly FlybyFeatureLayer[]) {
         .filter((entry) => !entry.isBase && isDrawableIn3d(entry, layers))
         .map((entry) => ({ value: flybyLayerKey('overlay', Number(entry.id)), label: entry.name })),
       ...rasters.filter((raster) => raster.cogUrl).map((raster) => ({ value: flybyLayerKey('raster', raster.id), label: raster.name })),
-      ...(geofilePage?.items ?? [])
+      ...(geofileLayers ?? [])
         .filter((file) => file.importStatus === 'imported')
         .map((file) => ({ value: flybyLayerKey('file', file.id), label: file.name })),
       ...filterLayers.map((spec) => ({
@@ -156,7 +157,7 @@ function useLayerNames(features: readonly FlybyFeatureLayer[]) {
       backgroundName,
       layerName,
     };
-  }, [catalog, rasterPage, geofilePage, savedFilters, filterLayers, featureTypes, features, t]);
+  }, [catalog, rasterLayers, geofileLayers, savedFilters, filterLayers, featureTypes, features, t]);
 }
 
 /** A colour well with a name, which a keyboard reaches and a test can fill in. */

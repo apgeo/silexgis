@@ -22,7 +22,7 @@ import {
   useCavePotentialResults,
   useSurveyModel,
 } from '../api/hooks.ts';
-import { useEveryGeofile, useEveryRasterMap } from '../api/hooks/mapLayers.ts';
+import { useGeofileLayers, useRasterMapLayers } from '../api/hooks/mapLayers.ts';
 import MapLayerReadsNotice from '../components/map/MapLayerReadsNotice.tsx';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useEditScope } from '../components/map/useEditScope.ts';
@@ -274,13 +274,10 @@ export default function MapPage() {
   });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
-  // Every file, not a first page: one past the end of a page would never be offered as a layer.
-  const geofilesRead = useEveryGeofile();
-  const geofilePage = geofilesRead.data;
-  const importedGeofiles = useMemo(
-    () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
-    [geofilePage],
-  );
+  // Every imported file, not a first page: the server narrows to them before it counts.
+  const geofilesRead = useGeofileLayers();
+  const geofileLayers = geofilesRead.data;
+  const importedGeofiles = useMemo(() => geofileLayers ?? [], [geofileLayers]);
   const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
   const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
   const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
@@ -300,12 +297,10 @@ export default function MapPage() {
   const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
   const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
   const resetBaseOpacity = useWorkspaceStore((s) => s.resetBaseOpacity);
-  const rastersRead = useEveryRasterMap();
-  const rasterPage = rastersRead.data;
-  const readyRasters = useMemo(
-    () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
-    [rasterPage],
-  );
+  // Every map ready to draw, not a first page: the server narrows to them before it counts.
+  const rastersRead = useRasterMapLayers();
+  const rasterLayers = rastersRead.data;
+  const readyRasters = useMemo(() => rasterLayers ?? [], [rasterLayers]);
   // Every computed picture of the ground, finished or not: the panel lists the unfinished ones
   // too, because a picture somebody asked for and cannot see anywhere reads as a lost request.
   //

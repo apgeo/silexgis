@@ -6,7 +6,7 @@ import Button from '../../components/Button.tsx';
 import { api } from '../../api/client.ts';
 import type { AdminSettings, TestDataSettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 
 /**
  * The administrators' half of the test-data generator's switch.
@@ -18,9 +18,12 @@ import { settingsSaveProblem } from './settingsProblems.ts';
 export default function TestDataSettingsForm({
   settings,
   onSaved,
+  onStale,
 }: {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -33,9 +36,15 @@ export default function TestDataSettingsForm({
   const save = async (values: Pick<TestDataSettings, 'enabled'>) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/test-data', { body: { enabled: values.enabled } });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/test-data', {
+        headers: sectionIfMatch(settings.versions?.testData),
+        body: { enabled: values.enabled },
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

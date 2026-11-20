@@ -11,10 +11,10 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { type SecuritySettings } from '../../api/hooks.ts';
 import { useSectionFields } from './useSectionFields.ts';
-import { settingsSaveProblem } from './settingsProblems.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 import { type SectionProps } from './settingsSection.tsx';
 
-export default function PolicyForm({ settings, onSaved }: SectionProps) {
+export default function PolicyForm({ settings, onSaved, onStale }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<SecuritySettings>();
@@ -25,9 +25,15 @@ export default function PolicyForm({ settings, onSaved }: SectionProps) {
   const save = async (values: SecuritySettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/security', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/security', {
+        headers: sectionIfMatch(settings.versions?.security),
+        body: values,
+      });
       if (error !== undefined || !data) {
         message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);

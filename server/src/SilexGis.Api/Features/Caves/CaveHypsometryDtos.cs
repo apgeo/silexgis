@@ -143,7 +143,9 @@ public sealed class SaveCaveLevelBandsRequestValidator : AbstractValidator<SaveC
 
         RuleFor(x => x.Note).MaximumLength(CaveLevelBandLimits.MaxNoteLength);
 
-        RuleForEach(x => x.Bands).ChildRules(band =>
+        // A null band binds from `[null]`; the child rules skip it, and it would be stored as a
+        // reading's band and read back as one with no edges.
+        RuleForEach(x => x.Bands).NotNull().ChildRules(band =>
         {
             band.RuleFor(b => b.FromM).Must(double.IsFinite)
                 .WithMessage("A band edge must be a number.");
@@ -155,7 +157,7 @@ public sealed class SaveCaveLevelBandsRequestValidator : AbstractValidator<SaveC
         });
 
         RuleFor(x => x.Bands!).Must(BeAscendingAndDisjoint)
-            .When(x => x.Bands is not null && x.Bands.Count > 1)
+            .When(x => x.Bands is not null && x.Bands.Count > 1 && x.Bands.All(b => b is not null))
             .WithMessage("Level bands must be in ascending order and must not overlap.");
     }
 

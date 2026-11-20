@@ -25,6 +25,28 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
 {
     public async Task<IReadOnlyList<IntegrityProblem>> VerifyAsync(CancellationToken ct = default)
     {
+        // Every read below in one snapshot. Read as separate statements, the edges of one moment
+        // would be compared with the features and closure of a later one, and a move committed in
+        // between would fail the pass with divergences that never existed. Read only, and rolled
+        // back. A caller already inside a transaction keeps its own.
+        await using var snapshot = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct)
+            : null;
+        try
+        {
+            return await VerifyInSnapshotAsync(ct);
+        }
+        finally
+        {
+            if (snapshot is not null)
+            {
+                await snapshot.RollbackAsync(CancellationToken.None);
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<IntegrityProblem>> VerifyInSnapshotAsync(CancellationToken ct)
+    {
         var problems = new List<IntegrityProblem>();
 
         var storedEdges = await db.FeatureHierarchyEdges
@@ -180,16 +202,19 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                     $"stored {cave.EntranceCount}, actual {cave.Entrances.Count}"));
             }
 
-            // One anchor per cave: with two mains the cave's point is whichever the last write
-            // happened to pick, and the check below — which takes the first — cannot see it.
+            // One anchor per cave: a cave with live entrances has exactly one main one, and its
+            // point is the cave's point. With two the cave's point is whichever the last write
+            // happened to pick; with none it is the point of an entrance that is no longer main.
+            // Either way there is no single right answer to compare the cave's point with, so the
+            // comparison below is made only when exactly one main exists.
             var mains = cave.Entrances.Count(e => e.IsMain);
-            if (mains > 1)
+            if (cave.Entrances.Count > 0 && mains != 1)
             {
                 problems.Add(new IntegrityProblem("main_entrance", cave.Id, $"{mains} entrances are marked main"));
+                continue;
             }
 
-            var main = cave.Entrances.FirstOrDefault(e => e.IsMain) ?? cave.Entrances.FirstOrDefault();
-            var expectedGeom = main?.Geom;
+            var expectedGeom = cave.Entrances.SingleOrDefault(e => e.IsMain)?.Geom;
             if ((cave.CaveGeom is null) != (expectedGeom is null)
                 || (cave.CaveGeom is not null && !cave.CaveGeom.EqualsExact(expectedGeom)))
             {
@@ -399,12 +424,16 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         await CheckAsync(AttachedEntityType.GeoreferencedMap, db.GeoreferencedMaps.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.MapView, db.MapViews.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.StoredFile, db.StoredFiles.Select(x => x.Id));
-        await CheckAsync(AttachedEntityType.Document, db.Documents.Select(x => x.Id));
+        // Binned documents included, for the same reason as deleted trips: binning keeps every tag,
+        // attachment and link membership so that a restore is exact.
+        await CheckAsync(AttachedEntityType.Document, db.Documents.IgnoreQueryFilters().Select(x => x.Id));
         await CheckAsync(AttachedEntityType.SurveyModel, db.SurveyModels.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Caver, db.Cavers.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Cabinet, db.Cabinets.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Album, db.Albums.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Expedition, db.Expeditions.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Event, db.Events.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Checklist, db.Checklists.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.TripRecording, db.TripRecordings.IgnoreQueryFilters().Select(x => x.Id));
         await CheckAsync(AttachedEntityType.TripRecordingPoint, db.TripRecordingPoints.IgnoreQueryFilters().Select(x => x.Id));
 

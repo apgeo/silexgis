@@ -224,6 +224,52 @@ public sealed class PermissionGroupCrudTests : IAsyncLifetime, IDisposable, ICla
         (await ReplaceEntriesAsync(id)).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// The rule list is read with the version of the whole set and saved under it: a save made
+    /// from a reading somebody else has saved over since — an empty list filled in meanwhile
+    /// included — is refused instead of taking their rules off, while a save naming no version
+    /// still lands. A caller who may not write the group is refused as before, stale or not.
+    /// </summary>
+    [Fact]
+    public async Task A_rule_list_save_is_held_to_the_version_of_the_list_it_was_read_at()
+    {
+        var id = await CreateAsync($"Versioned rules {suffix}");
+        var url = $"/api/v1/permission-groups/{id}/entries";
+        var features = new { effect = "allow", domain = "features", actions = "read", scopeKind = "all" };
+        var trips = new { effect = "allow", domain = "tripLogs", actions = "read", scopeKind = "all" };
+
+        var empty = await admin.GetAsync(url);
+        empty.StatusCode.ShouldBe(HttpStatusCode.OK, await empty.Content.ReadAsStringAsync());
+        var openedEmpty = empty.Headers.ETag?.ToString();
+        openedEmpty.ShouldNotBeNull("an empty list has a version too");
+
+        var first = await admin.PutWithIfMatchAsync(url, new { entries = new object[] { features } }, openedEmpty);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var produced = first.Headers.ETag?.ToString();
+        produced.ShouldNotBeNull();
+        produced.ShouldNotBe(openedEmpty);
+        (await admin.GetAsync(url)).Headers.ETag?.ToString().ShouldBe(produced);
+
+        // The empty reading, saved again: the list was filled since, so it is refused and the
+        // rule the other save added stays.
+        var stale = await admin.PutWithIfMatchAsync(url, new { entries = new object[] { trips } }, openedEmpty);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+        (await stale.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+        var kept = (await admin.GetFromJsonAsync<JsonElement>(url)).EnumerateArray()
+            .Select(e => e.GetProperty("domain").GetString()).ToList();
+        kept.ShouldBe(["features"]);
+
+        // Somebody outside the permission model learns nothing from naming a version.
+        (await viewer.PutWithIfMatchAsync(url, new { entries = Array.Empty<object>() }, produced))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The current version is accepted, and a save naming none keeps last-write-wins.
+        (await admin.PutWithIfMatchAsync(url, new { entries = new object[] { features, trips } }, produced))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.PutAsJsonAsync(url, new { entries = Array.Empty<object>() }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     // ---- helpers ----
 
     private async Task<JsonElement[]> ReplaceEntriesAsync(Guid id, params object[] entries)

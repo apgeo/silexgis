@@ -110,9 +110,17 @@ export function useUpdateExpedition() {
 export function useDeleteExpedition() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
-    onSuccess: (_, id) => {
+    // `ifMatch` names the version of the camp the page is showing, so a camp changed by somebody
+    // else since it was opened is refused instead of deleted unseen. Left out, the delete carries
+    // the newest version read.
+    mutationFn: ({ id, ifMatch }: { id: string; ifMatch?: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+        }),
+      ),
+    onSuccess: (_, { id }) => {
       void invalidateDatedRows(queryClient, 'expeditions');
       return invalidateAfterDelete(queryClient, ['expeditions'], id);
     },

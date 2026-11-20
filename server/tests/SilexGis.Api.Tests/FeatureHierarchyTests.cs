@@ -22,6 +22,8 @@ namespace SilexGis.Api.Tests;
 public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
+    private readonly PauseAtCommit commits = new();
+    private readonly PauseSaveOf saves = new();
 
     private HttpClient owner = null!;    // Editor
     private HttpClient outsider = null!; // Editor, unrelated
@@ -34,7 +36,10 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
     private long caveTypeId;
 
     public FeatureHierarchyTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            configureServices: services =>
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(commits, saves)));
 
     public async ValueTask InitializeAsync()
     {
@@ -622,6 +627,196 @@ public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassF
         ownersReplace.StatusCode.ShouldBe(HttpStatusCode.OK, await ownersReplace.Content.ReadAsStringAsync());
         (await ownersReplace.Content.ReadFromJsonAsync<JsonArray>())!
             .Select(p => p!["id"]!.GetValue<Guid>()).ShouldBe([shown]);
+    }
+
+    /// <summary>
+    /// A feature created under an area while a protection is switched on above that area: held at
+    /// its commit, the creation has worked out its row's protection from the area as it stood, and
+    /// the protection then waits for it and stamps the new row too — instead of reading the edges
+    /// without the uncommitted one, so that both commit and the new row is stored unprotected under
+    /// a protected area.
+    /// </summary>
+    [Fact]
+    public async Task A_feature_created_beside_a_protection_switched_on_above_it_is_stored_protected()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var outer = await CreateAreaAsync(owner, $"Outer {marker}");
+        var inner = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Inner {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.53, 45.63),
+            visibility = "authenticated",
+            parents = new[] { new { parentId = outer, isPrimary = true } },
+        });
+
+        var name = $"Created beside {marker}";
+        commits.Arm(sql => sql.Contains("INSERT INTO features", StringComparison.OrdinalIgnoreCase));
+        var create = owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name,
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.54, 45.64),
+            visibility = "authenticated",
+            parents = new[] { new { parentId = inner, isPrimary = true } },
+        }, TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+
+        var protect = Task.Run(async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await writer.SetLocationProtectedAsync(outer, true);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, protect);
+        commits.Release();
+
+        var created = await create;
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        await protect;
+
+        using var check = factory.Services.CreateScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await read.Features.AsNoTracking().SingleAsync(f => f.Name == name)).IsProtectedEffective
+            .ShouldBeTrue("a row created under a protected area must be stored protected");
+        var problems = await check.ServiceProvider.GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync();
+        problems.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Two moves at once that would each close the other's loop: the second, started while the
+    /// first is held at its commit, waits for it and is then refused as a cycle — instead of both
+    /// reading the edges as they were before either committed.
+    /// </summary>
+    [Fact]
+    public async Task Two_moves_that_together_would_make_a_cycle_are_decided_one_after_the_other()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var left = await CreateAreaAsync(owner, $"Left {marker}");
+        var right = await CreateAreaAsync(owner, $"Right {marker}");
+
+        commits.Arm(sql => sql.Contains("INSERT INTO feature_hierarchy_edges", StringComparison.OrdinalIgnoreCase));
+        var first = owner.PutAsJsonAsync($"/api/v1/features/{left}/parents",
+            new { parents = new[] { new { parentId = right, isPrimary = true } } }, TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+        var second = owner.PutAsJsonAsync($"/api/v1/features/{right}/parents",
+            new { parents = new[] { new { parentId = left, isPrimary = true } } }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, second);
+        commits.Release();
+
+        var firstAnswer = await first;
+        firstAnswer.StatusCode.ShouldBe(HttpStatusCode.OK, await firstAnswer.Content.ReadAsStringAsync());
+        var secondAnswer = await second;
+        secondAnswer.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await secondAnswer.Content.ReadAsStringAsync());
+        (await secondAnswer.Content.ReadFromJsonAsync<JsonObject>())!["code"]!.GetValue<string>()
+            .ShouldBe("feature.hierarchy_cycle");
+    }
+
+    /// <summary>
+    /// A protection switched on for an area and one for a feature inside it, at once, through the
+    /// versioned edit: the area's write is held just before it stamps the feature inside, and the
+    /// feature's edit is started then. Both are answered — the second waits for the first instead
+    /// of the two waiting on each other until the database aborts one.
+    /// </summary>
+    [Fact]
+    public async Task Protecting_an_area_and_a_feature_inside_it_at_once_answers_both()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var area = await CreateAreaAsync(owner, $"Area {marker}");
+        var inside = await CreateFeatureAsync(owner, new
+        {
+            kind = "generic",
+            name = $"Inside {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.55, 45.65),
+            visibility = "authenticated",
+            parents = new[] { new { parentId = area, isPrimary = true } },
+        });
+        var polygon = (await owner.GetFromJsonAsync<JsonObject>($"/api/v1/features/{area}"))!["feature"]!["geometry"]!.DeepClone();
+
+        saves.Arm(area);
+        var outer = owner.PutWithIfMatchAsync($"/api/v1/features/{area}", new
+        {
+            name = $"Area {marker}",
+            featureTypeId = karstAreaTypeId,
+            geometry = polygon,
+            locationProtected = true,
+            visibility = "authenticated",
+        });
+        await saves.WaitPausedAsync();
+        var inner = owner.PutWithIfMatchAsync($"/api/v1/features/{inside}", new
+        {
+            name = $"Inside {marker}",
+            featureTypeId = sinkholeTypeId,
+            geometry = Point(25.55, 45.65),
+            locationProtected = true,
+            visibility = "authenticated",
+        });
+        await LockWaits.WaitAsync(factory, inner);
+        saves.Release();
+
+        var outerAnswer = await outer;
+        outerAnswer.StatusCode.ShouldBe(HttpStatusCode.OK, await outerAnswer.Content.ReadAsStringAsync());
+        var innerAnswer = await inner;
+        innerAnswer.StatusCode.ShouldBe(HttpStatusCode.OK, await innerAnswer.Content.ReadAsStringAsync());
+
+        using var check = factory.Services.CreateScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await read.Features.AsNoTracking().SingleAsync(f => f.Id == inside);
+        stored.LocationProtected.ShouldBeTrue();
+        stored.IsProtectedEffective.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// Holds the first save, after <see cref="Arm"/>, that changes the named feature — before any of
+    /// its statements are sent — until <see cref="Release"/>. Bounded, so a test that never
+    /// releases cannot hang the suite.
+    /// </summary>
+    private sealed class PauseSaveOf : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        private TaskCompletionSource paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private Guid? armed;
+
+        public void Arm(Guid featureId)
+        {
+            paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            armed = featureId;
+        }
+
+        public void Release() => released.TrySetResult();
+
+        public async Task WaitPausedAsync()
+        {
+            if (await Task.WhenAny(paused.Task, Task.Delay(TimeSpan.FromSeconds(30))) != paused.Task)
+            {
+                throw new TimeoutException("the save to hold never came");
+            }
+        }
+
+        public override async ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (armed is { } id
+                && eventData.Context is { } context
+                && context.ChangeTracker.Entries<Feature>().Any(e => e.State == EntityState.Modified && e.Entity.Id == id))
+            {
+                armed = null;
+                paused.TrySetResult();
+                await Task.WhenAny(released.Task, Task.Delay(TimeSpan.FromSeconds(60), CancellationToken.None));
+            }
+
+            return result;
+        }
     }
 
     private static object Point(double lon, double lat) =>
