@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 /** One hit inside a paginated document, and one in a file that arrived whole. */
 const hits = [
@@ -64,9 +65,21 @@ const everything = {
 /** What the box is told the server answered. Reset after each test to the fixture above. */
 let searchData: typeof everything = everything;
 
+/** A read that did not land, per query; undefined = the read answered. */
+let searchFailure: unknown;
+let placesFailure: unknown;
+const searchRefetch = vi.fn();
+const placesRefetch = vi.fn();
+
 vi.mock('../../api/hooks.ts', () => ({
-  useSearch: () => ({ data: searchData }),
-  useNominatim: () => ({ data: [] }),
+  useSearch: () =>
+    searchFailure === undefined
+      ? { data: searchData, isError: false, error: null, refetch: searchRefetch }
+      : { data: undefined, isError: true, error: searchFailure, refetch: searchRefetch },
+  useNominatim: () =>
+    placesFailure === undefined
+      ? { data: [], isError: false, error: null, refetch: placesRefetch }
+      : { data: undefined, isError: true, error: placesFailure, refetch: placesRefetch },
 }));
 vi.mock('../../hooks/useDebouncedValue.ts', () => ({ useDebouncedValue: (value: string) => value }));
 vi.mock('../../map/mapContext.ts', () => ({ flyTo: vi.fn() }));
@@ -76,6 +89,10 @@ const { default: MapSearch } = await import('./MapSearch.tsx');
 afterEach(() => {
   cleanup();
   searchData = everything;
+  searchFailure = undefined;
+  placesFailure = undefined;
+  searchRefetch.mockReset();
+  placesRefetch.mockReset();
 });
 
 function Where() {
@@ -180,5 +197,41 @@ describe('MapSearch', () => {
     // Paired with the case that does index them, so a rule that simply stopped carrying page
     // numbers at all could not pass this.
     expect(pick('Raport de tură')).toBe('/documents/doc-paged?page=7');
+  });
+});
+
+describe('MapSearch when a search does not land', () => {
+  it('says the search failed, never that nothing matched, and asks again when picked', () => {
+    searchFailure = new TypeError('Failed to fetch');
+    show();
+
+    const entry = screen.getByTestId('search:failed');
+    expect(entry.textContent).toMatch(/could not be run just now/);
+    expect(screen.queryByText(/No document text matched/)).toBeNull();
+    fireEvent.click(entry);
+    expect(searchRefetch).toHaveBeenCalledTimes(1);
+    // The question has not been answered, so what was typed stays.
+    expect(screen.getByRole('combobox')).toHaveValue('terminal');
+    expect(screen.getByTestId('where').textContent).toBe('/map');
+  });
+
+  it('words a refused search as a refusal and does not offer to ask again', () => {
+    searchFailure = new ApiError(400, 'validation.failed');
+    show();
+
+    const entry = screen.getByTestId('search:failed');
+    expect(entry.textContent).toMatch(/refused this search/);
+    fireEvent.click(entry);
+    expect(searchRefetch).not.toHaveBeenCalled();
+  });
+
+  it('says the place names could not be looked up beside the archive\'s own answers', () => {
+    placesFailure = new Error('Place-name lookup answered 503');
+    show();
+
+    expect(screen.getByText('Bihor summer camp — 2026-07-18 – 2026-08-01')).toBeTruthy();
+    const entry = screen.getByTestId('places:failed');
+    fireEvent.click(entry);
+    expect(placesRefetch).toHaveBeenCalledTimes(1);
   });
 });
