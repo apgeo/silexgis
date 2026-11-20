@@ -111,9 +111,21 @@ test('two surveys of a cave are laid over one another and set side by side, thei
     await viewer.locator('.ant-modal-title').hover();
     return settledPicture(viewer.getByTestId(testId), { stillFor: 1_500 });
   };
-  /** Fewer pixels than this changing is the same drawing drawn twice, not a part shown or hidden. */
-  const partDrawn = 150;
+  /**
+   * How many pixels have to change for a part to have been shown or hidden, measured here rather
+   * than fixed: the drawing is pictured twice with nothing changed in between, and a part has to
+   * move several times what that moved. The part hidden here is a few short passages, a hundred
+   * or two pixels in a model a few hundred pixels tall, and the side-by-side viewers draw it
+   * smaller still — so a fixed count large enough to be safe from a redraw sits right at the size
+   * of the part itself. The floor keeps a redraw that happens to come back pixel-identical from
+   * letting a handful of pixels pass for a part.
+   */
+  const partDrawnIn = async (testId: string, picture: Buffer) => {
+    const sameDrawing = await differingPixels(page, picture, await drawn(testId));
+    return Math.max(4 * sameDrawing, 40);
+  };
   const overlaidWhole = await drawn('caveview-compare-overlay');
+  const partDrawn = await partDrawnIn('caveview-compare-overlay', overlaidWhole);
 
   // ---- One part of the survey, hidden in both at once ----
   const inEarlier = viewer.getByTestId('caveview-compare-survey-primary-p8.bens_dig');
@@ -167,11 +179,12 @@ test('two surveys of a cave are laid over one another and set side by side, thei
   // In the second viewer's drawing too, which is a viewer built after the part was hidden: shown
   // there, the drawing changes; hidden again, it is the drawing it was.
   const apartHidden = await drawn('caveview-compare-other');
+  const partDrawnApart = await partDrawnIn('caveview-compare-other', apartHidden);
   await inLater.check();
   await expect(inLater).toBeChecked();
   const apartShown = await drawn('caveview-compare-other');
   const shownDiffers = await differingPixels(page, apartHidden, apartShown);
-  expect(shownDiffers, 'showing the part drew it in the second viewer').toBeGreaterThan(partDrawn);
+  expect(shownDiffers, 'showing the part drew it in the second viewer').toBeGreaterThan(partDrawnApart);
   await inLater.uncheck();
   await expect(inLater).not.toBeChecked();
   expect(
