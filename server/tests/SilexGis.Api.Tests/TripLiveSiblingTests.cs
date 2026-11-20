@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Buffers.Text;
-using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -769,8 +767,12 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         }
 
         // And nothing else the same link opens has moved: the followed page of the party still
-        // underground, and the cave's past trips behind the finished one.
-        (await client.GetAsync(Follow(running.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // underground, and the cave's past trips behind the finished one. The followed page reads
+        // the database, so it also shows this counter sees the host's commands: without it the
+        // zeros above would be what a counter that was never attached reports.
+        var followed = await CountedAsync(counter, client, Follow(running.Token));
+        followed.Status.ShouldBe(HttpStatusCode.OK);
+        followed.Commands.ShouldBeGreaterThan(0);
         (await client.GetAsync(PastList(over.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -1365,60 +1367,6 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         return (response.StatusCode, counter.Count);
     }
 
-    /// <summary>Every command the host sends to the database, counted and nothing else.</summary>
-    private sealed class CommandCounter : DbCommandInterceptor
-    {
-        private int count;
-
-        public int Count => Volatile.Read(ref count);
-
-        public void Reset() => Interlocked.Exchange(ref count, 0);
-
-        public override InterceptionResult<DbDataReader> ReaderExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
-        {
-            Interlocked.Increment(ref count);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref count);
-            return new(result);
-        }
-
-        public override InterceptionResult<object> ScalarExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
-        {
-            Interlocked.Increment(ref count);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<object> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref count);
-            return new(result);
-        }
-
-        public override InterceptionResult<int> NonQueryExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
-        {
-            Interlocked.Increment(ref count);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref count);
-            return new(result);
-        }
-    }
 
     private async Task<Guid> CaveAsync(bool locationProtected)
     {
