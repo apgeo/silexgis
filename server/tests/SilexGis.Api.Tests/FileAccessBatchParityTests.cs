@@ -461,7 +461,7 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
         await db.Attachments.Where(a => fileIds.Contains(a.FileId)).ExecuteDeleteAsync();
 
         // One of these is visible to every signed-in account, which would put it in the
-        // listings other classes in this collection are counting.
+        // listings the other tests of this class are counting.
         await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ExecuteDeleteAsync();
         Dispose();
     }

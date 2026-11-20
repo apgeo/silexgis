@@ -551,8 +551,8 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
     /// key that binds to nothing fails silently and looks exactly like one that works, because the
     /// shipped default goes on doing the job — a wrong name here would leave every text masked out
     /// and three of the four tests below would pass for the wrong reason. A saved row replaces
-    /// configuration wholesale and this suite shares one database, so any answer another class
-    /// left behind is cleared first.
+    /// configuration wholesale and the tests of this class share one database, so any answer
+    /// another test left behind is cleared first.
     /// </remarks>
     private async Task StartAsync(bool payForMessages = true)
     {
@@ -580,7 +580,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
         // targeted delivery failure that must land on its own row.
         await db.Notifications.ExecuteDeleteAsync();
 
-        // And announcements another class recorded but never had handed out: what a day has
+        // And announcements another test recorded but never had handed out: what a day has
         // promised counts towards its ceiling as well as what it has already handed over.
         await db.CavingGroupAnnouncements.Where(a => a.ExpandedAt == null).ExecuteDeleteAsync();
 
@@ -895,9 +895,9 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
     /// </summary>
     /// <remarks>
     /// Three deletes and not one, because what the day has committed to is not only what it has
-    /// handed over: an announcement another class left unrouted, or one accepted and not yet
-    /// handed out, is spending a test here would see and could not account for. Every class in
-    /// this suite shares one database and none of them run at the same time as each other.
+    /// handed over: an announcement another test left unrouted, or one accepted and not yet
+    /// handed out, is spending a test here would see and could not account for. The tests of this
+    /// class share one database and none of them run at the same time as each other.
     /// </remarks>
     private async Task ClearTodaysSpendingAsync()
     {
@@ -958,7 +958,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
 
     /// <summary>
     /// A number unique to this class and this test. One number reaches exactly one account and
-    /// every test class shares one database, so a fixed one would collide with a neighbour's.
+    /// the tests of this class share one database, so a fixed one would collide with a neighbour's.
     /// </summary>
     private string Number(int index) =>
         "+4" + ((uint)suffix.GetHashCode(StringComparison.Ordinal) % 100000000U)

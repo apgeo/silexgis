@@ -127,7 +127,7 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
     [Fact]
     public async Task An_archives_report_names_every_file_so_a_failure_is_something_to_act_on()
     {
-        // Bodies are unique per run: these suites share one database, so identical content in
+        // Bodies are unique per run: the tests of this class share one database, so identical content in
         // two tests would be recognised as a duplicate — correctly — and skipped.
         var archive = Zip(("survey.txt", $"a survey {Guid.NewGuid()}"), ("empty.txt", string.Empty));
         var batchId = await ExpandAsync(archive, cabinetId: null);

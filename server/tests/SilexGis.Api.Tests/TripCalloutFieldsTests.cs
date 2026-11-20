@@ -163,8 +163,8 @@ public sealed class TripCalloutFieldsTests : IAsyncLifetime, IDisposable, IClass
     [Fact]
     public void The_pass_is_switched_off_wherever_the_tests_run()
     {
-        // Every test class in this suite shares one database. A pass left running under any of
-        // them writes to trips the others own — moving an armed party to overdue and queueing an
+        // The tests of a class share one database. A pass left running under any of them
+        // writes to trips the others own — moving an armed party to overdue and queueing an
         // alarm nobody asked for, in a class containing no bug at all. So the setting is asserted
         // on the running host rather than trusted: it is the whole of what keeps the suite honest
         // about what wrote a row.

@@ -655,7 +655,7 @@ public sealed class CaveDomainTests : IAsyncLifetime, IDisposable, IClassFixture
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    /// <summary>Cave ids of this test run only — the database is shared by the whole collection.</summary>
+    /// <summary>Cave ids of this test run only — the tests of this class share one database.</summary>
     private async Task<List<Guid>> ListCaveIdsAsync(HttpClient client)
     {
         var page = await GetJsonAsync(client, $"/api/v1/caves?pageSize=200&search={suffix}");

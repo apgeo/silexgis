@@ -954,8 +954,8 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
 
     /// <summary>Says whether this installation will pay for messages, as the administrator's form does.</summary>
     /// <remarks>
-    /// Cleared again afterwards: every class here shares one database, and an installation-wide
-    /// answer left switched on would follow the next test class into its own assertions.
+    /// Cleared again afterwards: the tests of this class share one database, and an
+    /// installation-wide answer left switched on would follow the next test into its assertions.
     /// </remarks>
     private async Task SetPaidChannelsAsync(bool pay)
     {

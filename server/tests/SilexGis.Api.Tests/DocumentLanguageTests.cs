@@ -26,8 +26,8 @@ namespace SilexGis.Api.Tests;
 /// </para>
 /// <para>
 /// Each upload carries a nonsense word unique to the run and every query asks for it alongside
-/// the real term, because the database is shared with the rest of the collection and a hit
-/// counted over the whole archive would say nothing about what this query decided.
+/// the real term, because the tests of this class share one database and a hit counted over the
+/// whole archive would say nothing about what this query decided.
 /// </para>
 /// </summary>
 public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

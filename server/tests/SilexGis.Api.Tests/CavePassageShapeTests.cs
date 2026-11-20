@@ -60,8 +60,8 @@ public sealed class CavePassageShapeTests : IAsyncLifetime, IDisposable, IClassF
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             },
-            // The queue lives in the container every test class shares; a drain started here would
-            // claim work another class queued and fail it against storage this host does not have.
+            // No drain in this host: one would claim the jobs these tests queue and run them on its
+            // own schedule, a second writer beside the tests that run each job by hand.
             JobWorkers.RemoveFrom);
     }
 

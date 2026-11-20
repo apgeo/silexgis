@@ -598,7 +598,7 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
 
     /// <summary>
     /// The occurrences of one series this caller reaches. Narrowed by the suffix as well as the
-    /// key, because the fixture shares one database with every other suite.
+    /// key, because the tests of this class share one database.
     /// </summary>
     private async Task<List<JsonElement>> BySeriesAsync(HttpClient client, Guid seriesId)
     {

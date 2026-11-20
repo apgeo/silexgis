@@ -171,8 +171,8 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     /// <summary>
     /// Gives the subject a confirmed sign-in number, which is the only kind there is. Unique per
-    /// account because one number reaches exactly one account, and every class in this suite
-    /// shares one database.
+    /// account because one number reaches exactly one account, and the tests of this class
+    /// share one database.
     /// </summary>
     private async Task<string> ConfirmViewerPhoneAsync()
     {

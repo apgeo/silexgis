@@ -122,7 +122,7 @@ public sealed class TripReportTrackingTests : IAsyncLifetime, IDisposable, IClas
 
     public async ValueTask DisposeAsync()
     {
-        // The layout is a row of a table every class shares; the trips and caves are named apart.
+        // The layout is a row of a table every test of this class reads; the trips and caves are named apart.
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.ReportTemplates.Where(t => t.Id == layoutId || t.Id == stationLayoutId).ExecuteDeleteAsync();

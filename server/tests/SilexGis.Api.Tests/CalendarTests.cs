@@ -32,9 +32,9 @@ namespace SilexGis.Api.Tests;
 /// "she cannot see it" assertion made with one of those proves nothing at all.
 /// </para>
 /// <para>
-/// Every window here is far enough out that no other test class's rows fall in it, so the
-/// assertions are on exact sets rather than deltas around a baseline: the PostGIS container is
-/// shared by the whole collection.
+/// Every window here is far enough out that no other test's rows fall in it, so the assertions
+/// are on exact sets rather than deltas around a baseline: the tests of this class share one
+/// database.
 /// </para>
 /// </remarks>
 public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

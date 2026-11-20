@@ -42,7 +42,7 @@ public sealed class TestLoginTests : IDisposable, IClassFixture<PostgresFixture>
     [Fact]
     public async Task The_switch_gates_the_writes_and_not_only_the_announcement()
     {
-        // Both halves live in one test on purpose. Every class in this suite shares one
+        // Both halves live in one test on purpose. The tests of this class share one
         // database, so "no account with this address exists" is not a claim a test can make --
         // a sibling running with the switch on has already created them. What *is* provable,
         // and is the property that matters, is that a host started with the switch off writes

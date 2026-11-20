@@ -47,9 +47,9 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
     private HttpClient anonymous = null!;
 
     /// <summary>
-    /// Token woven into every name this instance seeds. The suite shares one database and
-    /// this export is search-scoped, so a class that did not tag its rows would export
-    /// another class's caves and assert against them.
+    /// Token woven into every name this instance seeds. The tests of this class share one
+    /// database and this export is search-scoped, so a test that did not tag its rows would
+    /// export another test's caves and assert against them.
     /// </summary>
     private string tag = null!;
 

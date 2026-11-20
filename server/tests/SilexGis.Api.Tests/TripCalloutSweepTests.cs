@@ -387,7 +387,7 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
     /// <remarks>
     /// Asked of the scheduler directly rather than by starting a live schedule, and inside a
     /// transaction that is rolled back: a pass committed here would be claimed by the worker and
-    /// would read every trip in the database this suite shares. The switched-off case is asserted
+    /// would read every trip in the database the tests of this class share. The switched-off case is asserted
     /// beside it, so neither half is a negative standing on its own.
     /// </remarks>
     [Fact]
@@ -425,7 +425,7 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
     public async Task A_trip_that_is_nearly_here_is_mentioned_once()
     {
         // Opened deliberately: the run-up window is shut wherever these tests run, because a pass
-        // reads every trip in the database this suite shares.
+        // reads every trip in the database the tests of this class share.
         using var reminding = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?> { ["TripCallout:ReminderLead"] = "2.00:00:00" });
@@ -499,9 +499,9 @@ public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     /// <summary>
-    /// A zero interval is a real operator setting and it is what keeps this suite honest: every
-    /// class shares one database, so a schedule left running under one of them would move another
-    /// class's armed trip to overdue and queue an alarm nobody asked for.
+    /// A zero interval is a real operator setting and it is what keeps this suite honest: the tests
+    /// of a class share one database, so a schedule left running under one of them would move
+    /// another test's armed trip to overdue and queue an alarm nobody asked for.
     /// </summary>
     [Fact]
     public async Task A_zero_interval_queues_no_pass_at_all()

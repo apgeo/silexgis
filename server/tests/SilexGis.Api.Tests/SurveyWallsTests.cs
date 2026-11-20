@@ -51,9 +51,8 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
             },
             services =>
             {
-                // The queue lives in the container every test class shares, so a drain started
-                // here would claim work another class queued and fail it against storage this
-                // host does not have. This class runs its own jobs, one at a time.
+                // No drain in this host: one would claim the jobs these tests queue and run them
+                // on its own schedule. This class runs its own jobs, one at a time.
                 JobWorkers.RemoveFrom(services);
 
                 // The real store, with one thing it can be told to refuse. Everything else about
