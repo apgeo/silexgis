@@ -3,7 +3,7 @@ import type { GlobalToken } from 'antd';
 import type { EChartsOption } from 'echarts';
 import type { TFunction } from 'i18next';
 import type { CavePotentialRateCurve, CavePotentialTrainingInfo } from '../../api/hooks/cavePotential.ts';
-import { axisStyle, paletteFor, themedTooltip } from '../../components/statistics/chartTheme.ts';
+import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
 
 /** An area under a rate curve as it is written: three decimals, which is what the figure is good for. */
 export function formatAuc(value: number): string {

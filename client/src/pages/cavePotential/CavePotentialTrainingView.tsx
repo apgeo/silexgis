@@ -9,7 +9,7 @@ import type {
   EvidenceLayerInfo,
 } from '../../api/hooks/cavePotential.ts';
 import { useECharts } from '../../components/statistics/useECharts.ts';
-import { formatAuc, rateCurvesOption } from './cavePotentialCurves.ts';
+import { formatAuc, rateCurvesOption } from '../../components/statistics/cavePotentialCurves.ts';
 import { classLabel, evidenceName } from './cavePotentialNames.ts';
 
 /** A figure of a weight table: a dash where the class has none. */
