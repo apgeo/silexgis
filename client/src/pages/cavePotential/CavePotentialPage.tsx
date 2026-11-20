@@ -29,7 +29,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import CavePotentialModelEditor from './CavePotentialModelEditor.tsx';
 import CavePotentialRunForm from './CavePotentialRunForm.tsx';
 import CavePotentialTrainingView from './CavePotentialTrainingView.tsx';
-import { formatAuc } from './cavePotentialCurves.ts';
+import { formatAuc } from '../../components/statistics/cavePotentialCurves.ts';
 import { mapAddressOf } from './cavePotentialModel.ts';
 import { isDataDriven } from './cavePotentialNames.ts';
 import { cavePotentialFailureText } from '../../components/map/cavePotentialFailure.ts';
