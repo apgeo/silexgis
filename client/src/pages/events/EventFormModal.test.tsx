@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import dayjs from 'dayjs';
 import '../../i18n';
 import type { EventDefaults, EventInfo } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
@@ -356,5 +357,67 @@ describe('leaving the event dialog with typed work', () => {
     fireEvent.mouseUp(wrap);
     fireEvent.click(wrap);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('creating an event', () => {
+  // A day of the month the calendar opens on, so no paging through months is needed.
+  const DAY = dayjs().date(15).format('YYYY-MM-DD');
+
+  /** Picks one day of this month in the range's calendar, as a person would: start and end alike. */
+  async function pickDay(day: string) {
+    const [first] = Array.from(document.querySelectorAll<HTMLInputElement>('.ant-picker-range input'));
+    fireEvent.mouseDown(first);
+    fireEvent.click(first);
+    const cell = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(`td[title="${day}"]`);
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    fireEvent.click(cell);
+    fireEvent.click(document.querySelector<HTMLElement>(`td[title="${day}"]`)!);
+  }
+
+  it('sends a plain one-day event with its day and the audience it was given', async () => {
+    createSpy.mockResolvedValue({ id: 'event-1' });
+    defaultsSpy.mockReturnValue({ data: answered });
+    show();
+
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Club night' } });
+    await pickDay(DAY);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy.mock.calls[0][0]).toMatchObject({
+      title: 'Club night',
+      startDate: DAY,
+      endDate: null,
+      startTime: null,
+      endTime: null,
+      visibility: 'cavingGroup',
+      cavingGroupId: 'club-1',
+    });
+    expect(createSpy.mock.calls[0][0]).not.toHaveProperty('recurrence');
+  });
+
+  it('sends a repetition that stops after a number of occurrences', async () => {
+    createSpy.mockResolvedValue({ id: 'event-1' });
+    defaultsSpy.mockReturnValue({ data: answered });
+    show();
+
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Club night' } });
+    await pickDay(DAY);
+    fireEvent.click(screen.getByTestId('event-repeats'));
+    await waitFor(() => expect(screen.getByTestId('event-repeat-rule')).toBeTruthy());
+    fireEvent.change(screen.getByTestId('event-repeat-rule'), { target: { value: 'every Tuesday' } });
+    fireEvent.change(screen.getByTestId('event-repeat-count'), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy.mock.calls[0][0]).toMatchObject({
+      title: 'Club night',
+      startDate: DAY,
+      recurrence: { frequency: 'weekly', rule: 'every Tuesday', count: 6, until: null },
+    });
   });
 });

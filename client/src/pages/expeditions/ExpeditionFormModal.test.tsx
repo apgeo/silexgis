@@ -37,10 +37,20 @@ vi.mock('../../api/hooks.ts', () => ({
 // field is a form control like any other here, so a stub that reports the value it holds is
 // what this test needs from it.
 vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
-  default: ({ value }: { value?: unknown }) => (
-    <div data-testid="expedition-working-area">{value ? 'a shape' : 'no shape'}</div>
+  default: ({ value, onChange }: { value?: unknown; onChange?: (next: unknown) => void }) => (
+    <div data-testid="expedition-working-area">
+      {value ? 'a shape' : 'no shape'}
+      <button type="button" onClick={() => onChange?.(null)}>clear the area</button>
+      <button type="button" onClick={() => onChange?.(DRAWN_AREA)}>draw an area</button>
+    </div>
   ),
 }));
+
+/** A working area as the map field hands one over. */
+const DRAWN_AREA = {
+  type: 'Polygon',
+  coordinates: [[[22.6, 46.5], [22.7, 46.5], [22.7, 46.6], [22.6, 46.5]]],
+};
 
 const { default: ExpeditionFormModal } = await import('./ExpeditionFormModal.tsx');
 
@@ -192,9 +202,14 @@ describe('ExpeditionFormModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await vi.waitFor(() => expect(updateCamp).toHaveBeenCalled());
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too — whatever words it would have used.
+    updateCamp.mockRejectedValue(new ApiError(403, 'access.caving_group_binding_forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText(i18n.t('expeditions.problems.cavingGroupForbidden'));
+    // The witness is the only message on screen: the stale refusal asked for none, in any words.
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByTestId('expedition-form-name')).toHaveValue('Bihor summer camp');
   });
@@ -239,5 +254,43 @@ describe('ExpeditionFormModal leaving with typed work', () => {
     fireEvent.mouseUp(wrap);
     fireEvent.click(wrap);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  describe('the working area through a save', () => {
+    beforeEach(() => {
+      versionOnFile.mockReset().mockReturnValue(undefined);
+      updateCamp.mockReset().mockResolvedValue({ id: 'camp-1' });
+    });
+
+    const area = {
+      type: 'Polygon',
+      coordinates: [[[22.5, 46.5], [22.6, 46.5], [22.6, 46.6], [22.5, 46.5]]],
+    } as unknown as ExpeditionInfo['geom'];
+
+    it('carries an area the editor never touched', async () => {
+      show(camp({ geom: area }));
+      expect(screen.getByTestId('expedition-working-area')).toHaveTextContent('a shape');
+      fireEvent.change(screen.getByTestId('expedition-form-name'), { target: { value: 'Renamed camp' } });
+
+      const body = await savedBody(updateCamp);
+      expect(body.geom).toEqual(area);
+    });
+
+    it('drops the area when it is cleared', async () => {
+      show(camp({ geom: area }));
+      fireEvent.click(screen.getByRole('button', { name: 'clear the area' }));
+      expect(screen.getByTestId('expedition-working-area')).toHaveTextContent('no shape');
+
+      const body = await savedBody(updateCamp);
+      expect(body.geom).toBeNull();
+    });
+
+    it('sends an area drawn on a camp that had none', async () => {
+      show(camp());
+      fireEvent.click(screen.getByRole('button', { name: 'draw an area' }));
+
+      const body = await savedBody(updateCamp);
+      expect(body.geom).toEqual(DRAWN_AREA);
+    });
   });
 });

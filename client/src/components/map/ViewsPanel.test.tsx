@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client.ts';
 import '../../i18n';
@@ -31,13 +31,24 @@ vi.mock('../../map/viewConfig.ts', async () => {
   const actual = await vi.importActual<typeof import('../../map/viewConfig.ts')>('../../map/viewConfig.ts');
   return { ...actual, exportMapImage: () => Promise.resolve(exported) };
 });
-vi.mock('./ViewShareDialog.tsx', () => ({ default: () => null }));
+// The dialog is tested on its own; here it only shows what the panel handed it.
+vi.mock('./ViewShareDialog.tsx', () => ({
+  default: ({ shared }: { shared: { name: string; url: string; leavesOut: unknown } | null }) =>
+    shared ? (
+      <div data-testid="shared-link" data-name={shared.name} data-leaves-out={JSON.stringify(shared.leavesOut)}>
+        {shared.url}
+      </div>
+    ) : null,
+}));
 
 const { default: ViewsPanel } = await import('./ViewsPanel.tsx');
 
 afterEach(() => {
   cleanup();
   views = [];
+  createSpy.mockReset();
+  deleteSpy.mockReset();
+  shareSpy.mockReset();
 });
 
 const VIEW: ViewConfig = {
@@ -179,5 +190,74 @@ describe('a saved-view write the server refuses', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
     await vi.waitFor(() => expect(deleteSpy).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(screen.getAllByText(/This saved view is no longer there/)).toHaveLength(2));
+  });
+});
+
+describe('the saved views themselves', () => {
+  function showViews(onApply: (view: unknown) => void = () => {}) {
+    render(
+      <App>
+        <ViewsPanel onCapture={() => VIEW} onApply={onApply} />
+      </App>,
+    );
+  }
+
+  it('applies the view whose name is pressed', () => {
+    views = [
+      { id: 'v1', name: 'Bihor overview', isHome: false, config: VIEW },
+      { id: 'v2', name: 'Padiș close', isHome: false, config: VIEW },
+    ];
+    const onApply = vi.fn();
+    showViews(onApply);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Padiș close' }));
+
+    expect(onApply).toHaveBeenCalledWith(views[1]);
+  });
+
+  it('saves the view privately, as an ordinary view, and empties the name box', async () => {
+    createSpy.mockResolvedValue({});
+    showViews();
+
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: '  Bihor overview ' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('views.save') }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy).toHaveBeenCalledWith({
+      name: 'Bihor overview',
+      description: null,
+      config: VIEW,
+      isHome: false,
+      cavingGroupId: null,
+      visibility: 'private',
+    });
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('keeps the typed name when the save is refused', async () => {
+    createSpy.mockRejectedValue(new TypeError('Failed to fetch'));
+    showViews();
+
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'Bihor overview' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('views.save') }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(box).toHaveValue('Bihor overview');
+  });
+
+  it('shows the shared link at this installation\'s own address, under the view\'s name', async () => {
+    views = [{ id: 'v1', name: 'Bihor overview', isHome: false, config: VIEW }];
+    shareSpy.mockResolvedValue({ id: 'v1', shareToken: 'tok-123' });
+    showViews();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('a11y.shareView', { name: 'Bihor overview' }) }));
+
+    const link = await screen.findByTestId('shared-link');
+    expect(shareSpy).toHaveBeenCalledWith('v1');
+    expect(link.textContent).toBe(`${window.location.origin}/shared/view/tok-123`);
+    expect(link).toHaveAttribute('data-name', 'Bihor overview');
   });
 });

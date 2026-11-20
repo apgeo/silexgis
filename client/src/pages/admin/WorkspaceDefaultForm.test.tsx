@@ -3,11 +3,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { AdminSettings } from '../../api/hooks.ts';
 
 const put = vi.fn();
-vi.mock('../../api/client.ts', () => ({ api: { PUT: (...args: unknown[]) => put(...args) } }));
+// Only the transport is replaced: the refusal type the wording is chosen by stays the real one.
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  api: { PUT: (...args: unknown[]) => put(...args) },
+}));
 
 const { default: WorkspaceDefaultForm } = await import('./WorkspaceDefaultForm.tsx');
 
@@ -53,5 +57,22 @@ describe('the starting arrangement form', () => {
     renderForm('[1,2,3]');
     expect(screen.getByText(/could not be read/)).toBeTruthy();
     expect(screen.queryByTestId('workspace-default-save')).toBeNull();
+  });
+});
+
+describe('WorkspaceDefaultForm when the save does not go through', () => {
+  it.each([
+    ['refused as invalid', () => put.mockResolvedValue({ data: undefined, error: { code: 'validation.failed' } }), 'admin.settingsProblems.invalid'],
+    ['refused for want of the right', () => put.mockResolvedValue({ data: undefined, error: { code: 'access.forbidden' } }), 'admin.settingsProblems.forbidden'],
+    ['never answered', () => put.mockRejectedValue(new TypeError('Failed to fetch')), 'common.saveFailed'],
+  ])('says why when it is %s, and does not report it saved', async (_how, fail, wording) => {
+    fail();
+    const onSaved = renderForm('{"main":{"width":24}}');
+
+    fireEvent.click(screen.getByTestId('workspace-default-save'));
+
+    expect(await screen.findByText(i18n.t(wording))).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.queryByText(i18n.t('common.saved'))).toBeNull();
   });
 });

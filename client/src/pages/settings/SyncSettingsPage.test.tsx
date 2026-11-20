@@ -10,6 +10,7 @@ import { ApiError } from '../../api/client.ts';
 import type { SyncSet } from '../../api/hooks.ts';
 
 const createMutate = vi.fn();
+const deleteMutate = vi.fn();
 const updateSpy: { current: ReturnType<typeof vi.fn> } = { current: vi.fn() };
 
 let sets: SyncSet[] = [];
@@ -56,7 +57,7 @@ vi.mock('../../api/hooks.ts', async () => {
     },
     useCreateSyncSet: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateSyncSet: () => ({ mutateAsync: updateSpy.current, isPending: false }),
-    useDeleteSyncSet: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeleteSyncSet: () => ({ mutateAsync: deleteMutate, isPending: false }),
   };
 });
 
@@ -183,5 +184,35 @@ describe('a failed read of the sync sets', () => {
       setsRead.failed = false;
       setsRead.refetch.mockReset();
     }
+  });
+});
+
+describe('withdrawing a set from the phones', () => {
+  async function revokeAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.sync.revoke') }));
+    const confirm = await screen.findAllByRole('button', { name: i18n.t('settings.sync.revoke') });
+    fireEvent.click(confirm[confirm.length - 1]);
+  }
+
+  it('deletes the set the confirmation was for and says so', async () => {
+    deleteMutate.mockReset().mockResolvedValue(undefined);
+    sets = [setOf([])];
+    renderPage();
+
+    await revokeAndConfirm();
+
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalledWith('set-1'));
+    expect(await screen.findByText(i18n.t('settings.sync.revoked'))).toBeInTheDocument();
+  });
+
+  it('says a withdrawal failed and does not report the set withdrawn', async () => {
+    deleteMutate.mockReset().mockRejectedValue(new TypeError('Failed to fetch'));
+    sets = [setOf([])];
+    renderPage();
+
+    await revokeAndConfirm();
+
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('settings.sync.revoked'))).toBeNull();
   });
 });

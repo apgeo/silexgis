@@ -439,6 +439,8 @@
     "noActivity": "Nu a fost adăugat nimic încă.",
     "loadFailed": "Panoul de bord nu a putut fi încărcat.",
     "noViews": "Nicio vedere salvată încă.",
+    "viewsFailed": "Vederile tale salvate nu au putut fi citite acum. Asta nu spune nimic despre care le ai.",
+    "workAreasFailed": "Zonele de lucru nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "untitled": "Fără titlu",
     "kind": {
       "cave": "Peșteră",
@@ -3468,8 +3470,10 @@
     "manage": "Administrează",
     "addMember": "Adaugă",
     "removeConfirm": "Elimini acest membru?",
+    "membersLoadFailed": "Lista membrilor nu a putut fi citită acum. Asta nu spune nimic despre cine este pe ea, așa că nimeni nu poate fi adăugat până nu a fost citită.",
     "announce": {
       "open": "Anunță",
+      "audienceFailed": "Persoanele la care ar ajunge nu au putut fi numărate acum. Anunțul nu poate fi trimis până nu au fost numărate.",
       "title": "Anunț pentru {{name}}",
       "message": "Anunț",
       "placeholder": "Un singur rând — o schimbare de oră, un loc de întâlnire, o închidere.",
@@ -3633,6 +3637,7 @@
     }
   },
   "statistics": {
+    "cardReadFailed": "Aceste cifre nu au putut fi citite acum. Asta nu spune nimic despre peștera însăși.",
     "title": "Statistici din ture",
     "open": "Statistici",
     "asVisibleToYou": "Numărate peste turele pe care le poți citi. Cineva cu alt acces vede alte totaluri pentru același subiect, iar amândouă sunt corecte.",
@@ -4161,6 +4166,7 @@
     "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
     "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "viewer3dLoadFailed": "Modelele topografice nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "viewer3dUnavailable": "Acest model topografic nu mai este disponibil sau nu ai acces la el.",
     "scene3dTitle": "Scena 3D",
     "sections": {
@@ -5975,6 +5981,9 @@
     "centerline": "Drumuire"
   },
   "search": {
+    "refused": "Serverul a refuzat această căutare.",
+    "failed": "Căutarea nu a putut fi făcută acum. Asta nu spune nimic despre ce conține arhiva. Apasă aici pentru a încerca din nou.",
+    "placesFailed": "Numele de locuri nu au putut fi căutate acum. Apasă aici pentru a încerca din nou.",
     "features": "Obiecte",
     "trips": "Jurnale de tură",
     "expeditions": "Tabere",
@@ -6216,6 +6225,7 @@
     "squareFor": "Cod QR pentru {{code}}"
   },
   "resLinks": {
+    "targetSearchFailed": "Căutarea țintei legăturii nu a putut fi făcută acum. Asta nu spune nimic despre dacă ea există.",
     "titleCount": "Elemente legate ({{count}})",
     "incomplete": "Incompletă",
     "incompleteHint": "Doar un element al acestei legături îți este vizibil. O legătură spune ceva abia când unește două sau mai multe — adaugă încă un element, dacă există unul de adăugat.",
@@ -6661,6 +6671,8 @@
     "batchFromDevice": "Încărcare de pe telefon",
     "batchMode": "Cum",
     "batchDetail": "Ce a creat acest import",
+    "batchDetailLoadFailed": "Ce a făcut acest import nu a putut fi citit acum. Asta nu spune nimic despre ce a creat.",
+    "batchesLoadFailed": "Importurile nu au putut fi citite acum. Asta nu spune nimic despre care există sau ce se poate anula.",
     "confirmedAt": "Confirmat",
     "modes": {
       "reviewed": "Verificat",

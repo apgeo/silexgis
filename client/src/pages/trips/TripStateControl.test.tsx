@@ -7,9 +7,14 @@ import { ApiError } from '../../api/client.ts';
 import type { ActivityState, Visibility } from '../../api/hooks.ts';
 
 const move = vi.fn();
+/** What the move hook says about a move already on its way; nothing by default. */
+let inFlight: { isPending: boolean; variables: { state: ActivityState } | undefined } = {
+  isPending: false,
+  variables: undefined,
+};
 
 vi.mock('../../api/hooks.ts', () => ({
-  useMoveTripLog: () => ({ mutateAsync: move, isPending: false, variables: undefined }),
+  useMoveTripLog: () => ({ mutateAsync: move, ...inFlight }),
 }));
 
 const { default: TripStateControl } = await import('./TripStateControl.tsx');
@@ -34,6 +39,7 @@ const newDateButton = () => screen.queryByRole('button', { name: 'Settle a new d
 
 beforeEach(() => {
   move.mockReset().mockResolvedValue({});
+  inFlight = { isPending: false, variables: undefined };
 });
 
 afterEach(cleanup);
@@ -242,9 +248,32 @@ describe('TripStateControl', () => {
     fireEvent.click(draftButton()!);
 
     await vi.waitFor(() => expect(move).toHaveBeenCalledTimes(1));
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, a sentence the stale refusal had asked for
+    // would be there too — no waiting on the clock for something that should not appear.
+    move.mockRejectedValue(new ApiError(409, 'trip_log.state_transition_invalid'));
+    fireEvent.click(draftButton()!);
+
+    await screen.findByText(i18n.t('trips.stateTransitionInvalid'));
+    // The witness is the only message on screen: the stale refusal asked for none, in any words.
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(document.querySelector('.ant-message-success')).toBeNull();
+  });
+
+  it('holds every move while one is on its way, and marks the one being made', () => {
+    // A second press while the first is still answering would send a second move from a state the
+    // trip may no longer be in.
+    inFlight = { isPending: true, variables: { state: 'published' } };
+    show('draft');
+
+    // A spinning button is named with its spinner too, so it is found by the words it carries.
+    const publishing = screen.getByRole('button', { name: /Publish$/ });
+    expect(publishing).toHaveClass('ant-btn-loading');
+    expect(doneButton()).not.toHaveClass('ant-btn-loading');
+    for (const button of [publishing, doneButton(), callOffButton()]) {
+      expect(button).toBeDisabled();
+    }
+    fireEvent.click(doneButton()!);
+    expect(move).not.toHaveBeenCalled();
   });
 });

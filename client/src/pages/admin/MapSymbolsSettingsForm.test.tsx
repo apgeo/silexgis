@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { queryKeys, type AdminSettings } from '../../api/hooks.ts';
 
 /**
@@ -13,7 +13,9 @@ import { queryKeys, type AdminSettings } from '../../api/hooks.ts';
 
 const put = vi.fn();
 
-vi.mock('../../api/client.ts', () => ({
+// Only the transport is replaced: the refusal type the wording is chosen by stays the real one.
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
   api: { PUT: (...args: unknown[]) => put(...args) },
 }));
 
@@ -77,5 +79,22 @@ describe('MapSymbolsSettingsForm', () => {
     );
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.mapConfig });
+  });
+});
+
+describe('MapSymbolsSettingsForm when the save does not go through', () => {
+  it.each([
+    ['refused as invalid', () => put.mockResolvedValue({ data: undefined, error: { code: 'validation.failed' } }), 'admin.settingsProblems.invalid'],
+    ['refused for want of the right', () => put.mockResolvedValue({ data: undefined, error: { code: 'access.forbidden' } }), 'admin.settingsProblems.forbidden'],
+    ['never answered', () => put.mockRejectedValue(new TypeError('Failed to fetch')), 'common.saveFailed'],
+  ])('says why when it is %s, and does not report it saved', async (_how, fail, wording) => {
+    fail();
+    show('osm_cave.svg', 'shape:triangle:aa0000');
+
+    fireEvent.click(screen.getByTestId('admin-map-symbols-save'));
+
+    expect(await screen.findByText(i18n.t(wording))).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.queryByText(i18n.t('common.saved'))).toBeNull();
   });
 });

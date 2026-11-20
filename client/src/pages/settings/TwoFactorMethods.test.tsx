@@ -15,6 +15,7 @@ import type { MfaStatus } from '../../api/hooks.ts';
 const t = i18n.getFixedT('en');
 const post = vi.fn();
 const del = vi.fn();
+const put = vi.fn();
 
 vi.mock('../../api/client.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/client.ts')>('../../api/client.ts');
@@ -24,6 +25,7 @@ vi.mock('../../api/client.ts', async () => {
       ...actual.api,
       POST: (...args: unknown[]) => post(...args),
       DELETE: (...args: unknown[]) => del(...args),
+      PUT: (...args: unknown[]) => put(...args),
     },
   };
 });
@@ -68,6 +70,7 @@ async function press(button: HTMLElement) {
 beforeEach(() => {
   post.mockReset();
   del.mockReset();
+  put.mockReset();
   post.mockImplementation((path: string) => {
     if (path === '/api/v1/me/mfa/enroll') {
       return Promise.resolve({ data: { sharedKey: 'ABCD EFGH', authenticatorUri: 'otpauth://totp/x?secret=ABCDEFGH' } });
@@ -126,5 +129,98 @@ describe('a request that never comes back', () => {
 
     expect(del).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(t('common.saveFailed'))).toBeInTheDocument();
+  });
+});
+
+/** Makes the confirm step answer a refusal the way the server does: in `error`, not thrown. */
+function refuseConfirm(code: string) {
+  const answered = post.getMockImplementation()!;
+  post.mockImplementation((path: string, ...rest: unknown[]) =>
+    path === '/api/v1/me/mfa/methods/{method}'
+      ? Promise.resolve({ error: { status: 400, code }, response: new Response(null, { status: 400 }) })
+      : answered(path, ...rest),
+  );
+}
+
+describe('a refused step', () => {
+  async function typeAndConfirm() {
+    fireEvent.change(screen.getByLabelText(t('security.codePlaceholder')), { target: { value: '123456' } });
+    await press(screen.getByRole('button', { name: t('security.confirm') }));
+  }
+
+  it('says the account is locked when the server says so, and does not invite another code', async () => {
+    refuseConfirm('auth.locked_out');
+    show();
+    await press(turnOn(1));
+    await typeAndConfirm();
+
+    // Told only "the code is invalid", somebody retypes a correct code indefinitely — and on the
+    // texted method asks for another paid message each time.
+    expect(await screen.findByText(t('security.lockedOut'))).toBeInTheDocument();
+    expect(screen.queryByText(t('security.codeInvalid'))).toBeNull();
+    expect(screen.queryByText(t('security.enabled'))).toBeNull();
+  });
+
+  it('says the code was wrong for any other refusal, and keeps the form and the typed code', async () => {
+    refuseConfirm('auth.mfa_code_invalid');
+    show();
+    await press(turnOn(0));
+    await typeAndConfirm();
+
+    expect(await screen.findByText(t('security.codeInvalid'))).toBeInTheDocument();
+    expect(screen.queryByText(t('security.lockedOut'))).toBeNull();
+    expect(screen.getByLabelText(t('security.codePlaceholder'))).toHaveValue('123456');
+    // The shared key stays too: it is the only way to finish adding the authenticator.
+    expect(screen.getByText('ABCD EFGH')).toBeInTheDocument();
+  });
+
+  it('says the code could not be sent when the challenge is refused, and opens no code form', async () => {
+    post.mockImplementation((path: string) =>
+      path === '/api/v1/me/mfa/methods/{method}/challenge'
+        ? Promise.resolve({ error: { status: 400, code: 'auth.mfa_method_not_ready' } })
+        : Promise.reject(new Error(`unexpected ${path}`)),
+    );
+    show();
+    await press(turnOn(1));
+
+    expect(await screen.findByText(t('security.challengeFailed'))).toBeInTheDocument();
+    expect(screen.queryByLabelText(t('security.codePlaceholder'))).toBeNull();
+    expect(turnOn(1)).not.toHaveClass('ant-btn-loading');
+  });
+
+  it('says the default could not be changed when the server refuses it', async () => {
+    put.mockResolvedValue({ error: { status: 400, code: 'auth.mfa_method_not_enabled' } });
+    show(['authenticator', 'email']);
+
+    await press(screen.getAllByRole('button', { name: t('security.makeDefault') })[0]);
+
+    expect(put).toHaveBeenCalledWith('/api/v1/me/mfa/preferred', { body: { method: 'authenticator' } });
+    expect(await screen.findByText(t('common.saveFailed'))).toBeInTheDocument();
+  });
+});
+
+describe('a later method', () => {
+  it('keeps the recovery codes already shown when its answer carries none', async () => {
+    show();
+    await press(turnOn(0));
+    fireEvent.change(screen.getByLabelText(t('security.codePlaceholder')), { target: { value: '123456' } });
+    await press(screen.getByRole('button', { name: t('security.confirm') }));
+    expect(screen.getByText(/aaaa-1111/)).toBeInTheDocument();
+
+    // Codes come back only the first time; an empty list must not replace the set being kept.
+    post.mockImplementation((path: string) =>
+      path === '/api/v1/me/mfa/methods/{method}'
+        ? Promise.resolve({ data: { codes: [] } })
+        : Promise.resolve({ data: { destination: 'a***@example.org' } }),
+    );
+    await press(turnOn(1));
+    fireEvent.change(screen.getByLabelText(t('security.codePlaceholder')), { target: { value: '654321' } });
+    await press(screen.getByRole('button', { name: t('security.confirm') }));
+
+    expect(post).toHaveBeenLastCalledWith(
+      '/api/v1/me/mfa/methods/{method}',
+      expect.objectContaining({ body: { code: '654321' } }),
+    );
+    expect(screen.getByText(/aaaa-1111/)).toBeInTheDocument();
   });
 });

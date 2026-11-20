@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n';
+import { ApiError } from '../../../api/client.ts';
 import type { AccessCatalog, PermissionGroup } from '../../../api/hooks.ts';
 
 const t = i18n.getFixedT('en');
@@ -292,5 +293,30 @@ describe('RulesTab keeping a rule valid as its domain or scope changes', () => {
     });
     const sent = (replace.mock.calls[0][0] as { entries: { actions: string; domain: string }[] }).entries;
     expect(sent[0]).toMatchObject({ domain: 'tripLogs', actions: 'read' });
+  });
+});
+
+describe('RulesTab when the save is refused', () => {
+  it('says why, keeps the added rule, and leaves the work unsaved and saveable', async () => {
+    replace.mockRejectedValue(new ApiError(403, 'access_entry.exceeds_own_rights'));
+    render(tab());
+    fireEvent.click(addButton());
+
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+
+    expect(await screen.findByText(t('permissionGroups.exceedsOwnRights'))).toBeInTheDocument();
+    expect(dirtyChanged).toHaveBeenLastCalledWith(true);
+    expect(dirtyChanged).not.toHaveBeenCalledWith(false);
+    expect(saveButton()).toBeEnabled();
+
+    // The drafts are still the ones that were refused: a second press sends the same two rules.
+    replace.mockResolvedValue([]);
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(replace).toHaveBeenCalledTimes(2);
+    expect((replace.mock.calls[1][0] as { entries: unknown[] }).entries).toHaveLength(2);
   });
 });

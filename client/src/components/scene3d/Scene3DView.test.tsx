@@ -22,6 +22,36 @@ import {
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
 vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
+// The two saved-filter layer loaders the view keeps (its own and a flyby's), real but with a way in:
+// a test can tell the view one of them failed, and see what the view's Try again asks of each.
+const filterLayerLoaders = vi.hoisted(
+  () => [] as { emit(state: { loadFailed: boolean }): void; reload: ReturnType<typeof vi.fn> }[],
+);
+vi.mock('../../scene3d/filterLayers3d.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../scene3d/filterLayers3d.ts')>();
+  return {
+    ...actual,
+    attachFilterLayers3d: (...args: Parameters<typeof actual.attachFilterLayers3d>) => {
+      const handle = actual.attachFilterLayers3d(...args);
+      const listeners = new Set<(state: { loadFailed: boolean }) => void>();
+      const subscribe = handle.subscribe.bind(handle);
+      const reload = vi.fn(handle.reload.bind(handle));
+      Object.assign(handle, {
+        subscribe(listener: (state: { loadFailed: boolean }) => void) {
+          listeners.add(listener);
+          const off = subscribe(listener);
+          return () => {
+            listeners.delete(listener);
+            off();
+          };
+        },
+        reload,
+      });
+      filterLayerLoaders.push({ emit: (state) => listeners.forEach((listener) => listener(state)), reload });
+      return handle;
+    },
+  };
+});
 // How many of the next downloads of the engine's code fail the way a dropped connection makes them
 // fail — after the retrying, which has its own tests. Zero leaves the real loading alone.
 const codeDownload = vi.hoisted(() => ({ failures: 0 }));
@@ -2595,5 +2625,34 @@ describe('Scene3DView relief', () => {
     // The person's own is left as it was.
     expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(2);
     expect(viewExaggeration3d()).toBe(4);
+  });
+});
+
+describe('saved-filter layers the scene could not load', () => {
+  afterEach(() => {
+    filterLayerLoaders.length = 0;
+  });
+
+  it.each([
+    ['the scene\'s own', 0],
+    ['a flyby\'s', 1],
+  ])('says %s filter layers could not be loaded, and the retry asks both loaders again', async (_whose, which) => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(filterLayerLoaders.length).toBeGreaterThanOrEqual(2));
+    const [listed, flyby] = filterLayerLoaders.slice(-2);
+    const failing = which === 0 ? listed : flyby;
+    expect(screen.queryByTestId('scene3d-filter-layers-failed')).toBeNull();
+
+    act(() => failing.emit({ loadFailed: true }));
+
+    const notice = await screen.findByTestId('scene3d-filter-layers-failed');
+    expect(notice).toHaveTextContent(i18n.t('scene3d.filterLayersFailed'));
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(listed.reload).toHaveBeenCalled();
+    expect(flyby.reload).toHaveBeenCalled();
+
+    act(() => failing.emit({ loadFailed: false }));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-filter-layers-failed')).toBeNull());
   });
 });

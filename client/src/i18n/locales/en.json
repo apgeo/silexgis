@@ -439,6 +439,8 @@
     "noActivity": "Nothing has been added yet.",
     "loadFailed": "The dashboard could not be loaded.",
     "noViews": "No saved views yet.",
+    "viewsFailed": "Your saved views could not be read just now. This says nothing about which you have.",
+    "workAreasFailed": "The work areas could not be read just now. This says nothing about which there are.",
     "untitled": "Untitled",
     "kind": {
       "cave": "Cave",
@@ -3468,8 +3470,10 @@
     "manage": "Manage",
     "addMember": "Add",
     "removeConfirm": "Remove this member?",
+    "membersLoadFailed": "This roster could not be read just now. This says nothing about who is on it, so nobody can be added until it has been read.",
     "announce": {
       "open": "Announce",
+      "audienceFailed": "The people this would reach could not be counted just now. It cannot be sent until they have been.",
       "title": "Announce to {{name}}",
       "message": "Announcement",
       "placeholder": "One line — a change of time, a meeting place, a closure.",
@@ -3633,6 +3637,7 @@
     }
   },
   "statistics": {
+    "cardReadFailed": "These figures could not be read just now. That says nothing about the cave itself.",
     "title": "Trip statistics",
     "open": "Statistics",
     "asVisibleToYou": "Counted over the trips you may read. Somebody with different access sees different totals for the same subject, and both are right.",
@@ -4161,6 +4166,7 @@
     "popOutScene3d": "Open the 3D scene in its own window",
     "viewer3dTitle": "3D viewer",
     "viewer3dEmpty": "Select a cave with a 3D model to display it here.",
+    "viewer3dLoadFailed": "The survey models could not be read just now. This says nothing about which there are.",
     "viewer3dUnavailable": "This survey model is no longer available, or you may not see it.",
     "scene3dTitle": "3D scene",
     "sections": {
@@ -5962,6 +5968,9 @@
     "centerline": "Centerline"
   },
   "search": {
+    "refused": "The server refused this search.",
+    "failed": "The search could not be run just now. That says nothing about what the archive holds. Press here to try again.",
+    "placesFailed": "Place names could not be looked up just now. Press here to try again.",
     "features": "Features",
     "trips": "Trip logs",
     "expeditions": "Camps",
@@ -6203,6 +6212,7 @@
     "squareFor": "QR code for {{code}}"
   },
   "resLinks": {
+    "targetSearchFailed": "The search for what to link could not be run just now. That says nothing about whether it exists.",
     "titleCount": "Linked items ({{count}})",
     "incomplete": "Incomplete",
     "incompleteHint": "Only one item of this link is visible to you. A link says something once it connects two or more — add another item if there is one to add.",
@@ -6648,6 +6658,8 @@
     "batchFromDevice": "Phone upload",
     "batchMode": "How",
     "batchDetail": "What this import created",
+    "batchDetailLoadFailed": "What this upload did could not be read just now. This says nothing about what it created.",
+    "batchesLoadFailed": "The uploads could not be read just now. This says nothing about which there are, or what can be undone.",
     "confirmedAt": "Confirmed",
     "modes": {
       "reviewed": "Reviewed",

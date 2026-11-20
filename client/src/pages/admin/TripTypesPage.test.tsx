@@ -13,7 +13,9 @@ const listRead = vi.hoisted(() => {
   };
 });
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { TripTypeWrite } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
@@ -143,8 +145,7 @@ describe('TripTypesPage', () => {
       fireEvent.change(name, { target: { value: '' } });
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(updateMutate).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {
@@ -204,5 +205,31 @@ describe('leaving the TripTypes dialog with typed work', () => {
     expect(screen.getByLabelText('Field data schema (JSON Schema)')).toHaveValue('{"type":"object"}');
     // A close starts the dialog's leaving animation; it must not have begun.
     expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');
+  });
+});
+
+describe('TripTypesPage deleting an entry', () => {
+  /** Presses Delete on the one deletable row and confirms in the question that follows. */
+  async function deleteAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    // The confirmation's own button carries the same word; the one in the popover is the last.
+    const confirm = await screen.findAllByRole('button', { name: /^(Delete|OK|Yes)$/ });
+    fireEvent.click(confirm[confirm.length - 1]);
+  }
+
+  it('deletes the entry the confirmation was for', async () => {
+    show();
+    await deleteAndConfirm();
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalledWith(2));
+  });
+
+  it('says why an entry still in use cannot be deleted, rather than a bare failure', async () => {
+    deleteMutate.mockRejectedValue(new ApiError(409, 'trip_type.in_use'));
+    show();
+    await deleteAndConfirm();
+
+    expect(await screen.findByText(i18n.t('admin.tripTypes.inUse'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 });
