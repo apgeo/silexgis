@@ -133,6 +133,7 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
         var warpedPath = Path.Combine(workDirectory, "warped.tif");
         var args = new List<string> { "-t_srs", "EPSG:3857", "-r", "bilinear", "-of", "GTiff", "-co", "ALPHA=YES" };
         args.AddRange(MethodArguments(placement.Transformation));
+        args.AddRange(PreviewSize(placed, args, workDirectory, maxPixels));
 
         double[] extent3857;
         double[] extent4326;
@@ -251,6 +252,49 @@ public sealed class MapWarpService(ICrsRegistry crsRegistry)
         }
 
         return vrt;
+    }
+
+    /// <summary>
+    /// The output size a preview is held to: none when the warp's own choice is within
+    /// <paramref name="maxPixels"/> on its longer side, otherwise that choice scaled down to it.
+    /// </summary>
+    /// <remarks>
+    /// The warp picks its output resolution from the finest part of the placed picture. A
+    /// placement half-way through being typed is easily lopsided — three corners already on a
+    /// few hundred metres of ground, the fourth still where the editor first laid it tens of
+    /// kilometres away — and the finest part then sets the resolution over the whole stretch:
+    /// a picture hundreds of thousands of pixels across, which takes minutes. Nobody waits for
+    /// it (the next keystroke asks for another preview), but the server goes on drawing it,
+    /// holding a preview slot and the processors that publishing a map needs. Asking the warp
+    /// for its choice through a virtual output computes no pixels, so it costs next to nothing.
+    /// </remarks>
+    private static string[] PreviewSize(Dataset placed, List<string> args, string workDirectory, int maxPixels)
+    {
+        var probeArgs = new List<string>(args);
+        var format = probeArgs.IndexOf("-of");
+        probeArgs[format + 1] = "VRT";
+        probeArgs.RemoveRange(probeArgs.IndexOf("-co"), 2);
+        var probePath = Path.Combine(workDirectory, "size.vrt");
+        int width, height;
+        using (var probe = Run(() => Gdal.Warp(probePath, [placed], new GDALWarpAppOptions([.. probeArgs]), null, null), "The placement could not be tried"))
+        {
+            width = probe.RasterXSize;
+            height = probe.RasterYSize;
+        }
+
+        var longer = Math.Max(width, height);
+        if (longer <= maxPixels)
+        {
+            return [];
+        }
+
+        var shrink = (double)maxPixels / longer;
+        return
+        [
+            "-ts",
+            Math.Max(1, (int)Math.Round(width * shrink)).ToString(CultureInfo.InvariantCulture),
+            Math.Max(1, (int)Math.Round(height * shrink)).ToString(CultureInfo.InvariantCulture),
+        ];
     }
 
     private static IEnumerable<string> MethodArguments(string transformation) => transformation switch

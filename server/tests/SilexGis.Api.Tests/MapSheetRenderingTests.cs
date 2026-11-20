@@ -94,6 +94,26 @@ public sealed class MapSheetRenderingTests(ITestOutputHelper output) : IDisposab
     }
 
     [Fact]
+    public void A_lopsided_placement_half_way_through_typing_is_previewed_at_the_preview_size()
+    {
+        // Three corners typed onto a few hundred metres of ground, the fourth still where the
+        // editor first laid it, tens of kilometres off: the warp's own choice of resolution
+        // follows the finest corner over the whole stretch, a picture that took minutes to draw.
+        var pdf = Write("lopsided.pdf", PdfSheetFixtures.PlainPdf());
+        var options = new GeoreferencedMapOptions { DefaultDpiUnplaced = 72 };
+        var drawn = new PdfSheetRenderService().Render(new SheetRenderRequest(pdf, 1, null, null, Dir("render")), options, default);
+        var placement = new MapPlacement(1, MapTransformations.Homography, "EPSG:4326",
+            [new(0, 0, 24, 45.502), new(1, 0, 24.004, 45.502), new(1, 1, 24.004, 45.5), new(0, 1, 23.856, 44.99)], null);
+
+        var clock = Stopwatch.StartNew();
+        var preview = new MapWarpService(Crs).Preview(drawn.PreviewPath, placement, Dir("preview"), 512);
+        output.WriteLine($"previewed {preview.Width}x{preview.Height} in {clock.ElapsedMilliseconds} ms");
+
+        Math.Max(preview.Width, preview.Height).ShouldBe(512);
+        preview.Png.Length.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
     public void Every_setting_out_of_range_refuses_start_up_naming_the_setting()
     {
         var validator = new GeoreferencedMapOptionsValidator();
