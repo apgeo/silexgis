@@ -30,14 +30,25 @@ test.afterEach(async ({ page }) => {
 const SOMETHING_SHOWN = 100;
 
 interface Spots {
-  /** Page points over the drawn survey, spread out, nearest the middle first. */
+  /** Points over the drawn survey, spread out, nearest the middle first. */
   drawn: { x: number; y: number }[];
-  /** A page point over the model's surface with nothing drawn anywhere near it. */
+  /** A point over the model's surface with nothing drawn anywhere near it. */
   empty: { x: number; y: number } | null;
 }
 
 /**
- * Where on the page the survey is drawn and where nothing is, read off a picture of the viewer:
+ * A tap at a point of the viewer, given from the viewer's top left corner. Where the viewer is on
+ * the page is read at the moment of the tap, not when the point was found: a tap on a station puts
+ * a line naming it above the viewer, which moves the viewer down the dialog, and a point fixed to
+ * the page from before would then land on whatever has moved under it — the viewer's own toolbar.
+ */
+async function tapAt(page: Page, container: Locator, spot: { x: number; y: number }) {
+  const box = (await container.boundingBox())!;
+  await page.touchscreen.tap(box.x + spot.x, box.y + spot.y);
+}
+
+/**
+ * Where in the viewer the survey is drawn and where nothing is, read off a picture of the viewer:
  * the colour most of the picture is in is the background, and only points whose topmost element
  * is the viewer's own drawing surface are offered — a tap on a toolbar button is not a tap on the
  * model.
@@ -103,8 +114,8 @@ async function spotsOn(page: Page, container: Locator, picture: Buffer): Promise
           spread.push(spot);
         }
       }
-      const toPage = ({ x, y }: { x: number; y: number }) => ({ x: box.x + x / scale, y: box.y + y / scale });
-      return { drawn: spread.slice(0, 24).map(toPage), empty: empty === null ? null : toPage(empty) };
+      const inViewer = ({ x, y }: { x: number; y: number }) => ({ x: x / scale, y: y / scale });
+      return { drawn: spread.slice(0, 24).map(inViewer), empty: empty === null ? null : inViewer(empty) };
     },
     { data: picture.toString('base64'), box },
   );
@@ -128,13 +139,34 @@ test('on a phone a tap on the survey shows what was tapped without moving the mo
   expect(spots.drawn.length, 'the survey is drawn on the model').toBeGreaterThan(0);
   expect(spots.empty, 'some of the model is empty space').not.toBeNull();
 
+  /**
+   * The viewer pictured where it stood when `before` was taken. A tap on a station also offers it
+   * for linking, in a line above the viewer that stays until it is dismissed, and that line pushes
+   * the viewer down the dialog to a fractional device-pixel position: every edge in the picture —
+   * the toolbar's plain icons as much as the model — is then rasterised a fraction of a pixel
+   * over, thousands of pixels off with nothing in the viewer changed. Dismissing the offer puts
+   * the viewer back, so what is compared is only what the viewer itself drew.
+   */
+  const pictured = async () => {
+    // Settled first: the offer appears once the viewer has worked out what was tapped, which can
+    // be a frame or two after the tap itself.
+    const settled = await settledPicture(container, { stillFor: 1_500 });
+    const offer = viewer.locator('.ant-alert').filter({ hasText: 'Station' });
+    if ((await offer.count()) === 0) {
+      return settled;
+    }
+    await offer.locator('.ant-alert-close-icon').click();
+    await expect(offer).toHaveCount(0);
+    return settledPicture(container, { stillFor: 1_500 });
+  };
+
   // Tapped where the survey is drawn until a tap shows something: a line between two stations
   // may answer nothing, and nothing here knows where the stations themselves are drawn.
   let shown: Buffer | null = null;
   let shownBy = 0;
   for (const spot of spots.drawn) {
-    await page.touchscreen.tap(spot.x, spot.y);
-    const now = await settledPicture(container, { stillFor: 1_500 });
+    await tapAt(page, container, spot);
+    const now = await pictured();
     const changed = await differingPixels(page, before, now);
     if (changed > SOMETHING_SHOWN) {
       shown = now;
@@ -146,8 +178,8 @@ test('on a phone a tap on the survey shows what was tapped without moving the mo
 
   // A tap on empty space takes it off, and what is left is the picture from before the first tap:
   // the camera did not move. A model flown towards what was tapped would differ everywhere.
-  await page.touchscreen.tap(spots.empty!.x, spots.empty!.y);
-  const after = await settledPicture(container, { stillFor: 1_500 });
+  await tapAt(page, container, spots.empty!);
+  const after = await pictured();
   expect(
     await differingPixels(page, before, after),
     'after the tap beside the survey the drawing is the one from before the first tap',
