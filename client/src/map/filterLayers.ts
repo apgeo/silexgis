@@ -19,6 +19,7 @@ import {
 import { getOverlayGroup } from './mapContext.ts';
 import { isMapFilterRefusal } from './mapFilters.ts';
 import { filterLayerPalette, type FilterLayerColor } from './markerPalette.ts';
+import { translucent } from '../theme.ts';
 
 /**
  * The map layers drawn from saved filters, one per filter, each with a source and a loader of its
@@ -220,12 +221,6 @@ function shape(symbol: FilterLayerSymbol, color: string, radius: number, dashed:
     default:
       return new CircleStyle({ fill, stroke, radius, declutterMode: 'obstacle' });
   }
-}
-
-/** Translucent version of a palette colour, for polygon fills. */
-function translucent(hex: string, alpha: number): string {
-  const value = Number.parseInt(hex.slice(1), 16);
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 export function filterLayerStyle(

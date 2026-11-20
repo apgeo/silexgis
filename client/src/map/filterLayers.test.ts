@@ -13,7 +13,7 @@ vi.mock('../api/hooks/map.ts', () => ({
 }));
 
 const { addFilterLayer, filterLayerId, updateFilterLayer } = await import('./filterLayerList.ts');
-const { detachFilterLayers, onFilterLayerRefusal, syncFilterLayers } = await import('./filterLayers.ts');
+const { detachFilterLayers, filterLayerStyle, onFilterLayerRefusal, syncFilterLayers } = await import('./filterLayers.ts');
 const { findOverlayLayer, getOverlayOrder } = await import('./mapContext.ts');
 
 const first = '00000000-0000-4000-8000-000000000001';
@@ -127,5 +127,14 @@ describe('the layers drawn from saved filters', () => {
     syncFilterLayers(map, list, new Set(), new globalThis.Map());
     await settle();
     expect(fetchEntranceFeatures).not.toHaveBeenCalled();
+  });
+
+  it('fills an area in its colour made see-through, under an outline in the colour itself', async () => {
+    const { default: Feature } = await import('ol/Feature');
+    const { default: Polygon } = await import('ol/geom/Polygon');
+    const area = new Feature(new Polygon([[[0, 0], [1, 0], [1, 1], [0, 0]]]));
+    const style = filterLayerStyle(area, 'green', undefined);
+    expect(style.getStroke()?.getColor()).toBe('#389e0d');
+    expect(style.getFill()?.getColor()).toBe('rgba(56, 158, 13, 0.15)');
   });
 });
