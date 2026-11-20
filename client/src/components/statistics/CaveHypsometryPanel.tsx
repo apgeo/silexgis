@@ -2,6 +2,7 @@
 import { App, Card, Empty, Popconfirm, Space, Table, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 import {
   useCaveHypsometry,
@@ -67,6 +68,18 @@ export default function CaveHypsometryPanel({
       // The one case worth naming: two people recording a reading of the same cave at the same
       // moment. The server refuses the second and the reader has to re-read what stands.
       message.error(t('hypsometry.saveFailed'));
+    }
+  };
+
+  const withdraw = async () => {
+    try {
+      await clear.mutateAsync();
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice; a second toast would only
+      // repeat it in other words.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('hypsometry.clearFailed'));
+      }
     }
   };
 
@@ -162,7 +175,7 @@ export default function CaveHypsometryPanel({
             {saved?.confirmed && (
               <Popconfirm
                 title={t('hypsometry.clearConfirm')}
-                onConfirm={() => clear.mutate()}
+                onConfirm={withdraw}
                 okText={t('common.ok')}
                 cancelText={t('common.cancel')}
               >

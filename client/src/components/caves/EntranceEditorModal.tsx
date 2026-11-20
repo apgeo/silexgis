@@ -19,6 +19,7 @@ import {
 import { isConcurrencyConflict } from '../../api/client.ts';
 import { clampLonLat } from '../../geo/coords.ts';
 import DialogHost from '../DialogHost.tsx';
+import { useFormEdits } from '../useDiscardGuard.ts';
 import PositionTextInput from '../coordinates/PositionTextInput.tsx';
 import { useSmallMap } from '../map/useSmallMap.ts';
 import { entranceWriteProblem } from './entranceWriteProblems.ts';
@@ -56,6 +57,9 @@ export default function EntranceEditorModal({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<EntranceFormValues>();
+  // A click on the mini-map and a pasted position move the entrance through setFieldsValue, which
+  // the form does not report as an edit, so both mark the form edited themselves.
+  const edits = useFormEdits(open);
   const marker = useRef(new Feature<Point>());
   // OpenLayers draws outside React, so the marker reads the theme's colour through a ref.
   const { token } = theme.useToken();
@@ -109,6 +113,7 @@ export default function EntranceEditorModal({
         }
         const [clickLon, clickLat] = toLonLat(event.coordinate);
         form.setFieldsValue({ lon: Number(clickLon.toFixed(6)), lat: Number(clickLat.toFixed(6)) });
+        edits.onValuesChange();
         placeMarker(clickLon, clickLat, false);
       });
     },
@@ -207,6 +212,7 @@ export default function EntranceEditorModal({
       title={entrance ? t('entrances.edit') : t('entrances.add')}
       open={open}
       onCancel={onClose}
+      dirty={edits.edited}
       onOk={() => void onOk()}
       okLoading={createEntrance.isPending || updateEntrance.isPending}
       width={720}
@@ -220,7 +226,7 @@ export default function EntranceEditorModal({
         />
       )}
       <div ref={targetRef} style={{ height: 280, marginBottom: 16, background: token.colorFillTertiary }} />
-      <Form<EntranceFormValues> form={form} layout="vertical">
+      <Form<EntranceFormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Flex gap={12} wrap>
           <Form.Item name="name" label={t('caves.name')} style={{ width: 220 }}>
             <Input />
@@ -240,6 +246,7 @@ export default function EntranceEditorModal({
             onPosition={([lon, lat]) => {
               const [clampedLon, clampedLat] = clampLonLat(Number(lon.toFixed(7)), Number(lat.toFixed(7)));
               form.setFieldsValue({ lon: clampedLon, lat: clampedLat });
+              edits.onValuesChange();
               placeMarker(clampedLon, clampedLat, true);
             }}
           />

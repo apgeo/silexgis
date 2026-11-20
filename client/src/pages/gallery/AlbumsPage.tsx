@@ -5,9 +5,10 @@ import {
 } from '@ant-design/icons';
 import {
   Alert, App, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin, Tooltip,
-  Typography,
+  Typography, theme,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -37,6 +38,7 @@ import { albumShareProblem } from './albumProblems.ts';
  */
 export default function AlbumsPage() {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message, modal } = App.useApp();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
@@ -229,7 +231,7 @@ export default function AlbumsPage() {
                   <Flex
                     align="center"
                     justify="center"
-                    style={{ height: 150, background: 'rgba(0,0,0,0.04)' }}
+                    style={{ height: 150, background: token.colorFillQuaternary }}
                   >
                     <PictureOutlined style={{ fontSize: 28, opacity: 0.4 }} />
                   </Flex>
@@ -277,6 +279,8 @@ function AlbumEditModal({
 }) {
   const { t } = useTranslation();
   const [form] = Form.useForm<{ title: string; description?: string; visibility: Visibility }>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits();
 
   const save = async () => {
     let values: { title: string; description?: string; visibility: Visibility };
@@ -297,7 +301,8 @@ function AlbumEditModal({
     <Modal
       open
       title={editing === 'new' ? t('gallery.newAlbum') : t('gallery.editAlbum')}
-      onCancel={onCancel}
+      onCancel={() => requestDiscard(edits.edited, onCancel)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       onOk={() => void save()}
       confirmLoading={busy}
       destroyOnHidden
@@ -306,6 +311,7 @@ function AlbumEditModal({
         form={form}
         layout="vertical"
         requiredMark={false}
+        onValuesChange={edits.onValuesChange}
         initialValues={
           editing === 'new'
             ? { visibility: 'private' }

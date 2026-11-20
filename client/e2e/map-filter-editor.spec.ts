@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { asPerson, registerAccount } from './arrange.ts';
-import { gotoRoute, login, mapAddress } from './helpers.ts';
+import { gotoRoute, login, mapAddress, pixelOnMap } from './helpers.ts';
 
 /**
  * The map's own filter written in the condition editor: opened from the map, offering the feature
@@ -23,6 +23,22 @@ async function entrancesAnswered(page: Page, which: (address: URL) => boolean): 
   );
   const body = (await response.json()) as { features: { properties: { cluster?: boolean; count?: number } }[] };
   return body.features.reduce((sum, f) => sum + (f.properties.cluster === true ? Number(f.properties.count ?? 0) : 1), 0);
+}
+
+/** The first point the entrance layer answered with, as longitude and latitude. */
+async function firstAnsweredPoint(page: Page, which: (address: URL) => boolean) {
+  const response = await page.waitForResponse(
+    (r) => r.ok() && new URL(r.url()).pathname === '/api/v1/map/cave-entrances' && which(new URL(r.url())),
+    { timeout: 60_000 },
+  );
+  const body = (await response.json()) as {
+    features: { geometry: { coordinates: [number, number] }; properties: { cluster?: boolean; count?: number } }[];
+  };
+  const count = body.features.reduce(
+    (sum, f) => sum + (f.properties.cluster === true ? Number(f.properties.count ?? 0) : 1),
+    0,
+  );
+  return { count, points: body.features.map((f) => f.geometry.coordinates) };
 }
 
 const unfiltered = (address: URL) => !address.searchParams.has('savedFilterId') && !address.searchParams.has('filter');
@@ -122,11 +138,34 @@ test('the map offers its own places to a spatial condition: its view, an outline
   await login(page, member.email, member.password);
 
   await page.goto('about:blank');
-  const everything = entrancesAnswered(page, unfiltered);
+  const everything = firstAnsweredPoint(page, unfiltered);
   await gotoRoute(page, mapAddress(COUNTRY));
   await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
-  const all = await everything;
+  const { count: all, points } = await everything;
   expect(all).toBeGreaterThan(0);
+
+  // The outline is drawn around one entrance the layer answered with, so it holds at least that
+  // one, and small enough to leave out its neighbours — an outline drawn at a fixed place could
+  // hold none, and "fewer than all" would still pass. The entrance taken is the one farthest from
+  // its nearest neighbour, and the map is brought close enough that the neighbour is at least
+  // fifty pixels off: at the country's zoom the demonstration caves sit a few pixels apart.
+  const onScreen = await Promise.all(points.map(([lon, lat]) => pixelOnMap(page, COUNTRY, lat, lon)));
+  const apart = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const nearestOther = onScreen.map((here, i) =>
+    Math.min(...onScreen.filter((_, j) => j !== i).map((there) => apart(here, there)), Number.POSITIVE_INFINITY));
+  const loneliest = nearestOther.indexOf(Math.max(...nearestOther));
+  expect(points.length, 'the outline needs a neighbour to leave out').toBeGreaterThan(1);
+  const closer = Math.min(6, Math.max(0, Math.ceil(Math.log2(50 / Math.max(1, nearestOther[loneliest])))));
+  const [lon, lat] = points[loneliest];
+  const CLOSE = { lat, lon, zoom: COUNTRY.zoom + closer };
+  // The camera is in the address's fragment, so going straight from one map address to another
+  // is a move within the same page that loads nothing; leaving the page first makes it a load.
+  await page.goto('about:blank');
+  const here = entrancesAnswered(page, unfiltered);
+  await gotoRoute(page, mapAddress(CLOSE));
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+  const inView = await here;
 
   // ---- a position row, inside the map view ----
   await page.getByTestId('map-filter-edit').click();
@@ -145,12 +184,20 @@ test('the map offers its own places to a spatial condition: its view, an outline
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^an outline drawn on the map$/ }).click();
   await page.getByTestId('filter-editor-value-0-draw').click();
   await expect(page.getByTestId('filter-editor')).toBeHidden();
-  const box = (await page.locator('.ol-viewport').boundingBox())!;
-  const at = (fx: number, fy: number) => ({ x: box.x + box.width * fx, y: box.y + box.height * fy });
-  for (const [fx, fy] of [[0.05, 0.1], [0.3, 0.1], [0.3, 0.9]]) {
-    await page.mouse.click(at(fx, fy).x, at(fx, fy).y);
+  const centre = await pixelOnMap(page, CLOSE, lat, lon);
+  // Never wider than half the way to the neighbour, and never so small that a corner falls within
+  // the drawing's own snapping distance of the first and closes the outline early.
+  const half = Math.min(25, Math.floor((nearestOther[loneliest] * 2 ** closer) / 2));
+  expect(half, 'the entrance cannot be outlined alone even this close').toBeGreaterThanOrEqual(10);
+  const corners = [
+    [centre.x - half, centre.y - half],
+    [centre.x + half, centre.y - half],
+    [centre.x + half, centre.y + half],
+  ];
+  for (const [x, y] of corners) {
+    await page.mouse.click(x, y);
   }
-  await page.mouse.dblclick(at(0.05, 0.9).x, at(0.05, 0.9).y);
+  await page.mouse.dblclick(centre.x - half, centre.y + half);
   await expect(page.getByTestId('filter-editor')).toBeVisible();
   await expect(page.getByTestId('filter-editor-value-0-outline-set')).toBeVisible();
 
@@ -158,11 +205,21 @@ test('the map offers its own places to a spatial condition: its view, an outline
   // ---- one to store ----
   const narrowing = entrancesAnswered(page, withDocument);
   await page.getByTestId('filter-editor-apply').click();
-  expect(await narrowing).toBeLessThan(all);
+  const inside = await narrowing;
+  expect(inside, 'the outline was drawn around an entrance, so it holds at least that one').toBeGreaterThan(0);
+  expect(inside, 'the outline leaves out the neighbour in view').toBeLessThan(inView);
   await page.getByTestId('map-filter-edit').click();
   await expect(page.getByTestId('map-filter-save')).toBeDisabled();
   await page.getByTestId('filter-editor-cancel').click();
   await expect(page.getByTestId('filter-editor')).toBeHidden();
+
+  // Back to the whole country with no filter, so what the next condition keeps is its own doing
+  // and is counted against everything the layer holds.
+  await page.goto('about:blank');
+  const unnarrowed = entrancesAnswered(page, unfiltered);
+  await gotoRoute(page, mapAddress(COUNTRY));
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+  await unnarrowed;
 
   // ---- the selected object: picked in the map's selector, it is both what a distance is measured
   // ---- from and what the selector ranks nearest first from ----
@@ -193,12 +250,25 @@ test('the map offers its own places to a spatial condition: its view, an outline
   await expect(nearest).toBeHidden();
   await page.getByTestId('map-filter-edit').click();
   await page.getByTestId('filter-editor-add-row-root').click();
-  await page.getByTestId('filter-editor-field-1').click();
+  await page.getByTestId('filter-editor-field-0').click();
   await page.keyboard.type('Posit');
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^Position$/ }).click();
-  await page.getByTestId('filter-editor-op-1').click();
+  await page.getByTestId('filter-editor-op-0').click();
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^within$/ }).click();
-  await page.getByTestId('filter-editor-value-1-anchor-kind').click();
+  await page.getByTestId('filter-editor-value-0-radius').fill('1000');
+  await page.getByTestId('filter-editor-value-0-anchor-kind').click();
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^the selected object$/ }).click();
-  await expect(page.getByTestId('filter-editor-value-1-selection')).toBeVisible();
+  await expect(page.getByTestId('filter-editor-value-0-selection')).toBeVisible();
+
+  // ---- applied: a kilometre of the selected cave keeps its own entrance and not the country's ----
+  // The address carries the document base64url-encoded; the answer waited for is the one asked with
+  // the within condition, not a late answer to the earlier outline.
+  const asksWithin = (address: URL) =>
+    withDocument(address)
+    && Buffer.from(address.searchParams.get('filter') ?? '', 'base64url').toString('utf8').includes('"within"');
+  const near = entrancesAnswered(page, asksWithin);
+  await page.getByTestId('filter-editor-apply').click();
+  const kept = await near;
+  expect(kept, 'the selected cave is within a kilometre of itself').toBeGreaterThan(0);
+  expect(kept).toBeLessThan(all);
 });

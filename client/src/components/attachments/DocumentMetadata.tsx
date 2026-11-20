@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ProfileOutlined } from '@ant-design/icons';
 import { App, Flex, Input, Popover, Select, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -76,6 +77,15 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [language, setLanguage] = useState<string | null>(null);
   const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const requestDiscard = useDiscardGuard();
+
+  // What the form held when it was last filled from the server, to tell typed work from a form
+  // only looked at. Filing is left out: it is saved the moment it is chosen.
+  const formPrint = (form: unknown[]) => JSON.stringify(form);
+  const filledPrint = useRef('');
+  const edited = () =>
+    filledPrint.current !== '' &&
+    formPrint([title, typeId, visibility, cavingGroupId, language, values]) !== filledPrint.current;
 
   // Refill from server state when the popover opens, and again when the fetch that the
   // opening started arrives — another edit may have landed since the cached copy was read.
@@ -86,6 +96,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   useEffect(() => {
     if (!open) {
       filled.current = null;
+      filledPrint.current = '';
       return;
     }
     if (!document) {
@@ -104,6 +115,14 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
     setLanguage(document.language);
     setFiledIn(document.cabinetIds);
     setValues((document.metadata as Record<string, unknown> | null) ?? {});
+    filledPrint.current = formPrint([
+      document.title,
+      document.documentTypeId,
+      document.visibility,
+      document.cavingGroupId,
+      document.language,
+      (document.metadata as Record<string, unknown> | null) ?? {},
+    ]);
   }, [open, document, documentFetching]);
 
   const selectedType = types?.find((type) => type.id === typeId);
@@ -290,7 +309,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       title={t('documents.metadata')}
       trigger="click"
       open={open}
-      onOpenChange={setOpen}
+      // A click outside, or on the button again, closes the popover; with something typed it
+      // asks first, as the next opening would refill the form from the server.
+      onOpenChange={(next) => (next ? setOpen(true) : requestDiscard(edited, () => setOpen(false)))}
     >
       <Button size="small" type="text" icon={<ProfileOutlined />} aria-label={t('documents.metadata')} />
     </Popover>

@@ -454,6 +454,27 @@
     "allMyTrips": "All my trips"
   },
   "auth": {
+    "forgotPassword": "Forgot your password?",
+    "forgotTitle": "Choose a new password",
+    "forgotIntro": "Type the address you sign in with. If it has an account here, a link to choose a new password is mailed to it.",
+    "forgotSubmit": "Send the link",
+    "forgotSent": "If an account exists for that address, a mail is on its way with a link to choose a new password.",
+    "backToSignIn": "Back to sign in",
+    "createAccount": "Create account",
+    "registerTitle": "Create an account",
+    "displayName": "Your name (optional)",
+    "registerMailSent": "Request received. Check your mailbox: a mail with the next step is on its way.",
+    "registerDone": "Request received. If this address was new here, you can now sign in with it and this password. If it already had an account, sign in with that account's password, or choose a new one.",
+    "registerMailNotSent": "Request received, but no mail could be sent to confirm the address. Ask an administrator of this installation to confirm it.",
+    "registerRejected": "The address or the password was not accepted. Use a valid address and a password of at least 10 characters.",
+    "registrationDisabled": "This installation does not open accounts on request. Ask one of its administrators for an invitation.",
+    "configFailed": "The sign-in options could not be read, so sign-in providers may be missing.",
+    "externalNoAccount": "There is no account here for that sign-in, and this installation does not open one from that provider. Ask an administrator to create or invite your account.",
+    "externalEmailUnverified": "The provider has not verified your address. Verify it with the provider, then try again.",
+    "externalLinkRequired": "An account here already uses that address, but the provider has not verified it. Sign in with your password, then link the provider from your security settings.",
+    "externalNoEmail": "The provider did not share an email address, so no account could be matched. Allow it to share your address, or sign in with your password.",
+    "externalNotAllowed": "This account may not sign in yet. Its address may still need confirming; otherwise ask an administrator.",
+    "externalProviderUnknown": "That sign-in provider is not set up on this installation.",
     "email": "Email",
     "password": "Password",
     "signIn": "Sign in",
@@ -468,7 +489,6 @@
     "signInWith": "Sign in with {{provider}}",
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
     "serverUnreachable": "Cannot reach the server",
-    "configFailed": "The ways to sign in could not be read just now; the password form below may not be the one this installation uses.",
     "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
     "unreachable": "The server could not be reached. Check the connection, then try again.",
     "serverFailed": "The server could not complete this right now. Try again in a moment.",
@@ -533,6 +553,10 @@
     "save": "Save",
     "ok": "OK",
     "cancel": "Cancel",
+    "discardTitle": "Discard your changes?",
+    "discardBody": "What you changed here has not been saved and will be lost.",
+    "discardOk": "Discard",
+    "keepEditing": "Keep editing",
     "edit": "Edit",
     "back": "Back",
     "continue": "Continue",
@@ -1083,6 +1107,10 @@
     "parentFixed": "An entrance or a centreline sits under its own cave and nowhere else. To protect it, protect its cave, or put the cave under the protected area.",
     "problems": {
       "typeChangeForbidden": "You may not edit features of the type you are changing this one into, so nothing was saved. Keep its current type, or ask someone who may edit that type.",
+      "linkSelf": "A feature cannot be linked to itself. Choose a different feature.",
+      "linkKindUnknown": "That kind of link is no longer offered. Reload and choose another.",
+      "linkDuplicate": "The same feature is linked twice with the same kind of link. Remove one of the two.",
+      "linkTargetNotFound": "One of the linked features is no longer there, or you can no longer see it. Remove it and save again.",
       "parentPrimaryHidden": "This feature's main parent is one you cannot see, so you cannot change its parents. Ask someone who can see that parent."
     },
     "parentFixedNote": "An entrance or a centreline sits under its own cave and nowhere else, so its parent cannot be changed here. To protect it, protect its cave, or put the cave under the protected area.",
@@ -1124,6 +1152,8 @@
     "currentVersion": "current",
     "noVersions": "No versions yet.",
     "versionsLoadFailed": "The versions could not be read just now.",
+    "versionInUse": "This version is still in use, so it cannot be deleted.",
+    "headUndeletable": "The current version cannot be deleted. Upload a new version instead, then delete this one.",
     "deleteVersionConfirm": "Delete this version? Its content is removed permanently.",
     "details": "Details",
     "caption": "Caption",
@@ -1488,6 +1518,8 @@
     "selectLine": "Select {{name}}",
     "acceptSelected": "Accept selected ({{count}})",
     "rejectSelected": "Reject selected ({{count}})",
+    "rejectSelectedTitle": "Reject {{count}} lines?",
+    "rejectSelectedExplain": "These {{count}} lines are not written, and the uploader is told, with the note below. A rejected line can still be accepted afterwards, with “Accept after all”.",
     "noteLabel": "Note to the uploader (optional, sent with the next decision)",
     "notePlaceholder": "Why, or what to do instead",
     "showDecided": "Show lines already decided",
@@ -1597,6 +1629,7 @@
     "batchStarted": "Uploaded"
   },
   "gallery": {
+    "creditLoadFailed": "The photograph could not be read, so its credit cannot be changed yet.",
     "filter": {
       "advanced": "Conditions…",
       "advancedTitle": "Photograph conditions",
@@ -1940,6 +1973,9 @@
     "tabImports": "Imports"
   },
   "mapEdit": {
+    "entranceNotCreated": "The cave was created but its entrance was not: {{problem}}",
+    "entranceNotCreatedTitle": "The cave was created but its entrance was not.",
+    "entranceRetryHint": "Press OK to add only the entrance to this cave; the cave is not created a second time. Closing keeps the cave without an entrance, and one can be added on its sheet.",
     "featureType": "Feature type",
     "draw": "Draw",
     "modify": "Modify (drag vertices; Alt+click deletes)",
@@ -2185,6 +2221,7 @@
       "weather_note": "Weather note",
       "whatsapp_group_url": "Group chat link"
     },
+    "stateTransitionInvalid": "This change is not possible from the state it is in now: somebody may have moved it meanwhile. Reload to see where it stands.",
     "state": "State",
     "stateValues": {
       "draft": "Draft",
@@ -2385,6 +2422,7 @@
     "calloutOverdueBody": "The alarm time passed and nobody had said the party was out. Everyone on the trip has been told.",
     "calloutStandDown": "The party is out",
     "calloutStoodDownSuccess": "Recorded — the callout has been stood down.",
+    "calloutNotArmed": "This trip has no overdue check left to stand down: somebody may have cleared it already.",
     "calloutStandDownFailed": "The callout could not be stood down. Try again, and reach somebody another way if it keeps failing.",
     "calloutArrange": "Arrange a callout",
     "calloutChange": "Change the callout",
@@ -3313,6 +3351,19 @@
     "action": "Action",
     "entityType": "Entity",
     "entityId": "Entity id",
+    "actions": {
+      "created": "Created",
+      "updated": "Changed",
+      "deleted": "Deleted",
+      "permission_changed": "Permissions changed",
+      "notification_retried": "Message sent again",
+      "login": "Signed in",
+      "two_factor_reset": "Second factor reset",
+      "upload_review_marked": "Upload review changed",
+      "external_account_linked": "External sign-in took over the account",
+      "exported": "Exported",
+      "storage_reclaimed": "Storage reclaimed"
+    },
     "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
   },
   "history": {
@@ -3327,6 +3378,9 @@
     "systemUser": "System",
     "restoreField": "Restore this value",
     "restoreAll": "Restore all values from before this change",
+    "restoreAllConfirm": "Put back {{count}} values from before this change?",
+    "restoreAllOk": "Put back",
+    "restoreFailed": "The earlier value could not be put back. Try again.",
     "restored": "Value restored.",
     "restoredPartly_one": "{{count}} value was put back. Some were left as they are:",
     "restoredPartly": "{{count}} values were put back. Some were left as they are:",
@@ -3425,6 +3479,8 @@
       "send": "Send",
       "done": "Sent. People told: {{people}}",
       "queued": "Being sent — this club is large enough that the notices are written in the background. People to be told: {{people}}",
+      "tooSoon": "You wrote to a caving group a moment ago. Wait a few minutes before sending another announcement.",
+      "paidCapReached": "This installation has reached what it will spend on text messages today, so the announcement was not sent to anyone. It can be sent tomorrow, or an administrator can raise the daily limit.",
       "failed": "The announcement was not sent. Please try again."
     },
     "roles": {
@@ -3463,6 +3519,9 @@
       "grantsFullAdmin": "Only a full administrator can do this: it would make this person's account a full administrator.",
       "revokesFullAdmin": "Only a full administrator can do this: it would take full administration away from an account.",
       "exceedsOwnRights": "You cannot do this: it would give this person's account rights you do not hold yourself.",
+      "mergeTwoAccounts": "Both entries have an account of their own. Detach the account from one of them before merging.",
+      "mergeSelf": "A person cannot be merged into themselves. Choose a different entry to merge.",
+      "mergeRaced": "Something about one of these people changed while the merge ran, so nothing was merged. Reload and try again.",
       "memberRaced": "Somebody else added this person to the group at the same moment. Reload the group and try again.",
       "lastFullAdmin": "This would leave the installation without a full administrator who can sign in."
     },
@@ -3897,7 +3956,7 @@
     "searchFeature": "Search features…",
     "addFeature": "Add",
     "noMembers": "No features in this set.",
-    "membersLoadFailed": "The features in this set could not be read just now, so the set cannot be saved until they have been.",
+    "membersLoadFailed": "The set’s members could not be read, so its membership cannot be changed yet.",
     "deleteConfirm": "Delete this feature set?",
     "inUse": "Rules still point at this feature set; remove them first.",
     "nameInvalid": "A feature set name needs at least one letter or digit.",
@@ -4165,6 +4224,7 @@
     "unsupportedTitle": "This browser cannot show the 3D view",
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
     "openFlatMap": "Open the 2D map",
+    "startFailedHint": "Something in this browser stopped the 3D view from starting. Try again; if it fails the same way, reload the page.",
     "startFailed": "The 3D view could not be started",
     "downloadFailedTitle": "The 3D view did not finish downloading",
     "downloadFailedHint": "The 3D view is a large download (about a megabyte), and the connection was too slow or dropped before it arrived. Nothing is wrong with the map or the data. Try again, or reload the page if SilexGIS was updated since you opened it.",
@@ -4845,6 +4905,17 @@
   },
   "centerlines": {
     "loadFailed": "This cave's centerlines could not be read just now. This says nothing about whether any have been uploaded.",
+    "problems": {
+      "formatUnsupported": "This kind of file is not read as a centerline. Upload a GeoJSON, GPX, KML or KMZ file.",
+      "sizeInvalid": "The file is empty or larger than 20 MB.",
+      "unreadable": "The file could not be read as a centerline: it may be damaged, or not the format its name says.",
+      "noLines": "The file holds no lines. A centerline needs at least one line, not only points.",
+      "surveyModelInvalid": "The chosen survey model does not belong to this cave.",
+      "defaultRequired": "A cave with centerlines always has one as its shape. Make another one the default instead.",
+      "notFound": "This centerline is no longer there: somebody may have deleted it.",
+      "caveNotFound": "This cave is no longer there, or you can no longer see it.",
+      "forbidden": "You may not change this cave's centerlines."
+    },
     "title": "Centerlines",
     "upload": "Upload centerline",
     "uploaded": "Centerline uploaded",
@@ -5855,6 +5926,7 @@
   "notifications": {
     "bell": "Notifications",
     "title": "Notifications",
+    "markFailed": "The notification could not be marked as read. Try again.",
     "markAllRead": "Mark all as read",
     "allCategories": "All categories",
     "scopeAll": "All",
@@ -6442,6 +6514,8 @@
     }
   },
   "importReview": {
+    "saveFailed": "Your latest changes to this review could not be saved.",
+    "saveFailedHint": "Confirming is held until they are, so it creates what you see here. Try again, or make another change to save again.",
     "held": "Your account's imports wait for a reviewer. Nothing has been created yet; it will be once a reviewer accepts it."
   },
   "vectorImport": {
@@ -6613,6 +6687,7 @@
       }
     },
     "revert": "Undo",
+    "revertFailed": "The import could not be undone. Try again.",
     "reverted": "The import was undone.",
     "revertedTag": "Undone",
     "reviewPendingTag": "Waiting for review",
@@ -6758,16 +6833,16 @@
     }
   },
   "termRules": {
+    "loadFailed": "The rule set could not be read, so it cannot be changed yet.",
     "errors": {
+      "seededUndeletable": "The set this installation ships with cannot be deleted: it is what imports fall back to when no other set applies.",
+      "promotionForbidden": "Only an administrator can change what everybody inherits.",
+      "promoteFailed": "The set could not be made the installation default. Try again.",
       "notEditable": "This set cannot be changed here. Make a copy of your own and change that.",
       "notFound": "This set is no longer there: somebody may have deleted it.",
       "groupNotFound": "The caving group this set belongs to is no longer there.",
       "forbidden": "Your account may not change this set."
     },
-    "discardTitle": "Close without saving?",
-    "discardBody": "The changes made to this set are lost.",
-    "discardOk": "Close and lose them",
-    "keepEditing": "Keep editing",
     "title": "Detection rules",
     "intro": "What a waypoint called Peștera, P., aven, izbuc, ponor or doline is proposed to become. Order decides: when two rules claim one candidate, the earlier one wins.",
     "name": "Name",
@@ -6784,7 +6859,6 @@
     "promote": "Make default",
     "makeInstallationDefault": "Make this what every import starts from",
     "promoted": "Every import now starts from this set.",
-    "promoteFailed": "Only an administrator can change what everybody inherits.",
     "deleteConfirm": "Delete this rule set?",
     "default": "Default",
     "shipped": "Shipped",
@@ -7120,6 +7194,7 @@
     }
   },
   "fileStorage": {
+    "remeasureFailed": "The files were deleted, but storage could not be measured again: the figures shown are from before.",
     "title": "Storage",
     "intro": "What fills this installation's file store, how fast it grows, and what could be deleted. Uploaded originals are never offered for deletion.",
     "measure": "Measure now",
@@ -7770,6 +7845,14 @@
       "failed": "The surface was not made. The progress above says why."
     },
     "problems": {
+      "pointCloudInvalid": "The point cloud is not a LAS or LAZ file this server can read: its header is missing, short or does not add up.",
+      "recordingInvalid": "The scanner recording could not be processed: a part of it does not read, a log lacks the columns it should have, or a piece is missing its pair.",
+      "workerUnavailable": "No scan-processing worker is available on this installation, or the one there cannot run a step this upload needs. Ask an administrator.",
+      "workerSilent": "The job was left for the scan-processing worker and nothing took it up in the time allowed. Ask an administrator whether the worker is running, then run it again.",
+      "workerFailed": "The scan-processing worker took the job and reported that it failed or was stopped. Run it again; if it fails the same way, ask an administrator.",
+      "workerTimeout": "Processing took longer than this installation allows one job.",
+      "workerInterrupted": "The scan-processing worker was stopped while it ran, and its half-written results are not used. Run the upload again to start the step afresh.",
+      "exportInvalid": "The point cloud made from the recording failed its check, so nothing was built on it. Run it again; if it fails the same way, the recording may be damaged.",
       "surfaceUnplaced": "The surface was made but not saved: the scan is no longer placed, or the cave chosen for it is gone. Place the scan and make the surface again.",
       "surfaceNeedsTiles": "A surface is made of a scan that has been processed and tiled.",
       "surfaceNeedsPlacement": "Place the scan first: its surface is saved standing where the scan stands.",
@@ -8803,6 +8886,7 @@
     "noProposal": "The measurements do not separate into levels.",
     "notConfirmed": "No reading has been recorded yet",
     "confirm": "Record this reading",
+    "clearFailed": "The reading could not be withdrawn. Try again.",
     "clear": "Withdraw the reading",
     "clearConfirm": "Withdraw the recorded reading of this cave's levels?",
     "saved": "The reading was recorded.",
@@ -10141,6 +10225,13 @@
     "namePlaceholder": "Name",
     "openSaved": "Open a saved flyby",
     "deleteSaved": "Delete the saved flyby of this name",
+    "deleteConfirm": "Delete the saved flyby “{{name}}”? It is kept only in this browser, so it cannot be brought back.",
+    "replaceTitle": "Replace the saved flyby “{{name}}”?",
+    "replaceBody": "A flyby is already saved under this name in this browser. Saving replaces it.",
+    "replaceOk": "Replace",
+    "closeTitle": "Close with unsaved changes?",
+    "closeBody": "The flyby is kept for when you open this panel again, but only until the page is reloaded or closed. Save it to keep it in this browser.",
+    "closeOk": "Close",
     "saveFile": "Save to file",
     "openFile": "Open from file",
     "holdsPlace": "This flyby holds a pinned place. Its file shows where that is to anyone it is sent to.",

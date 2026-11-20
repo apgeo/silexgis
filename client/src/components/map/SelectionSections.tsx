@@ -146,7 +146,7 @@ export function PanelSectionsMenu({ scope }: { scope: PanelScope }) {
 
   return (
     <Flex gap={4} align="center" wrap style={{ padding: '4px 0' }}>
-      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('panel.hiddenSections')}
       </Typography.Text>
       {[...layout.hidden].map((id) => (

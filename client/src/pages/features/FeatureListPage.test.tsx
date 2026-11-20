@@ -9,6 +9,7 @@ import { featureListDocument, readFeatureListAddress } from '../../filters/featu
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
 import { ApiError } from '../../api/client.ts';
 
+const deleteFeatureSpy = vi.fn();
 const { canSpy, doorSpy, featuresSpy, featuresError, featuresRefetch, downloadSpy, savedFilters, createSpy, heldWrites } = vi.hoisted(() => ({
   canSpy: vi.fn(),
   featuresError: { current: null as unknown },
@@ -58,7 +59,7 @@ const SINKHOLE = {
 vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useCreateDoor: (domain: string) => doorSpy(domain),
-  useDeleteFeature: () => ({ mutateAsync: vi.fn() }),
+  useDeleteFeature: () => ({ mutateAsync: deleteFeatureSpy }),
   useFeatureTypes: () => ({ data: [{ id: 7, code: 'sinkhole', name: 'Sinkhole' }] }),
   useFeatures: (params: unknown) => {
     featuresSpy(params);
@@ -143,6 +144,7 @@ beforeEach(async () => {
   createSpy.mockReset();
   heldWrites.on = false;
   heldWrites.queue = [];
+  deleteFeatureSpy.mockReset();
 });
 
 /** The address as the list last wrote it. */
@@ -158,6 +160,21 @@ function writtenAddress() {
  * A read that failed is told apart from a filter the server would not run: only the second may
  * say the reader's filter was refused, and neither is drawn as a list with nothing in it.
  */
+describe('deleting a feature from the list', () => {
+  it('says a refused delete in the words of a delete, not of a failed save', async () => {
+    canSpy.mockReturnValue(true);
+    deleteFeatureSpy.mockRejectedValue(new ApiError(503, undefined));
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('iconButtons.delete') }));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+});
+
 describe('a feature list that could not be read', () => {
   it('says the list could not be read, with a retry, when an unfiltered list fails', () => {
     featuresError.current = new ApiError(500);

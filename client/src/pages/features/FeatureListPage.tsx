@@ -5,6 +5,8 @@ import { Alert, App, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tool
 import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadFile, featureExportUrl } from '../../api/download.ts';
 import {
@@ -164,8 +166,10 @@ export default function FeatureListPage() {
       await deleteFeature.mutateAsync(id);
       surfaceFeaturesChanged();
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 

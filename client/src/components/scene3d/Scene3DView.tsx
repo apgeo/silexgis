@@ -633,6 +633,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   /** Whether the flyby tool is open over the scene. */
   const [flybyOpen, setFlybyOpen] = useState(false);
+  const flybyCloseRequest = useRef<(() => void) | null>(null);
   // Whether a flyby has the camera. Held twice: as state for the chrome that is held meanwhile, and
   // in a ref for the exchange with the flat map and the address bar, which ask at the moment of
   // each message and must not make the effect that owns them run again.
@@ -1715,8 +1716,41 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
       )}
+      {/* Said in the reader's language, with the browser's own words kept small beneath for
+          whoever is asked about it. Trying again starts the view afresh, as after a failed
+          download: what refused it may have let go meanwhile. */}
       {status === 'error' && !downloadFailed && (
-        <Alert type="error" showIcon title={t('scene3d.startFailed')} description={errorDetail} />
+        <Alert
+          type="error"
+          showIcon
+          data-testid="scene3d-start-failed"
+          title={t('scene3d.startFailed')}
+          description={
+            <>
+              <Typography.Paragraph style={{ marginBottom: 4 }}>{t('scene3d.startFailedHint')}</Typography.Paragraph>
+              {errorDetail && (
+                <Typography.Text type="secondary" code style={{ fontSize: 12 }}>
+                  {errorDetail}
+                </Typography.Text>
+              )}
+            </>
+          }
+          action={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button
+                size="small"
+                type="primary"
+                data-testid="scene3d-start-retry"
+                onClick={() => setRebuildToken((token) => token + 1)}
+              >
+                {t('common.retry')}
+              </Button>
+              <Button size="small" onClick={() => window.location.reload()}>
+                {t('errorBoundary.reload')}
+              </Button>
+            </div>
+          }
+        />
       )}
       {/* Not an error of the view: its code did not arrive. Trying again starts the view afresh and
           asks for the code once more; reloading is the answer when the installation was updated
@@ -1811,7 +1845,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           onSaveImage={saveImage}
           savingImage={savingImage}
           flybyOpen={flybyOpen}
-          onFlybyOpenChange={setFlybyOpen}
+          // Closing from the toolbar goes through the tool's own close, which asks about unsaved
+          // changes; with the tool not mounted there is nothing to ask about.
+          onFlybyOpenChange={(next) => {
+            if (!next && flybyCloseRequest.current) {
+              flybyCloseRequest.current();
+            } else {
+              setFlybyOpen(next);
+            }
+          }}
         />
       )}
       {status === 'ready' && showingHere && flybyOpen && (
@@ -1820,6 +1862,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           selection={selection}
           onActiveChange={changeFlybyActive}
           onClose={() => setFlybyOpen(false)}
+          closeRequest={flybyCloseRequest}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer

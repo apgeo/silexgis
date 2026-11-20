@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../i18n';
+import i18n from '../i18n';
+import { ApiError } from '../api/client.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import { registerViewControl, resetViewControlsForTests } from '../viewlinks/viewTargets.ts';
 import type { ResourceRef } from '../viewlinks/resourceRef.ts';
@@ -66,6 +67,7 @@ const linkRead = { totalItems: 1, isError: false };
 /** What the read of the text itself failed with, when a test makes it fail. */
 const textRead: { failure: unknown; refetch: ReturnType<typeof vi.fn> } = { failure: undefined, refetch: vi.fn() };
 const refetchLinks = vi.fn();
+const deleteLinkMutateAsync = vi.fn();
 
 vi.mock('../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../api/hooks.ts')>('../api/hooks.ts');
@@ -83,7 +85,7 @@ vi.mock('../api/hooks.ts', async () => {
             isError: false,
             refetch: refetchLinks,
           },
-    useDeleteResLink: () => ({ mutateAsync: vi.fn() }),
+    useDeleteResLink: () => ({ mutateAsync: deleteLinkMutateAsync }),
   };
 });
 
@@ -107,6 +109,9 @@ beforeEach(() => {
   textRead.failure = undefined;
   textRead.refetch.mockReset();
   refetchLinks.mockReset();
+  deleteLinkMutateAsync.mockReset();
+  annotatedText.mayWrite = false;
+  link.mayEdit = false;
   resetViewControlsForTests();
   useWorkspaceStore.setState({ selection: null });
 });
@@ -199,5 +204,24 @@ describe('the links the reader could not draw', () => {
     expect(notice).toHaveTextContent("The links of this text could not be loaded");
     fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }));
     expect(refetchLinks).toHaveBeenCalled();
+  });
+});
+
+describe('deleting a link', () => {
+  it('says why when the deletion is refused, rather than leaving the rejection unhandled', async () => {
+    annotatedText.mayWrite = true;
+    link.mayEdit = true;
+    deleteLinkMutateAsync.mockRejectedValue(new ApiError(503, undefined));
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit links' }));
+    fireEvent.mouseEnter(await screen.findByTestId('tl-passage'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete link' }, { timeout: 3000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteLinkMutateAsync).toHaveBeenCalledWith('link-1'));
+    // The refusal is said in words. Before, the rejected promise escaped the dialog as an unhandled
+    // rejection (which fails this run by itself) and nothing was said at all.
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
   });
 });

@@ -14,6 +14,8 @@ import ConfirmEmailPage from './pages/ConfirmEmailPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import NotFoundPage from './pages/NotFoundPage.tsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.tsx';
+import RegisterPage from './pages/RegisterPage.tsx';
 import UnsubscribePage from './pages/UnsubscribePage.tsx';
 import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx';
 
@@ -159,6 +161,10 @@ export const routes: RouteObject[] = guarded([
   { path: '/auth/callback', element: <CallbackPage /> },
   { path: '/confirm-email', element: <ConfirmEmailPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
+  // Asking for a reset mail, and opening an account where the installation allows it: the two ways
+  // in that need no administrator. Both answer alike whether or not an address has an account.
+  { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/register', element: <RegisterPage /> },
   // The opt-out link in a notification; anonymous, because it is opened from a mail client.
   { path: '/unsubscribe', element: <UnsubscribePage /> },
   { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },

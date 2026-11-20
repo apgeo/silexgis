@@ -28,6 +28,14 @@ export const SURVEY_UPLOAD_RUN_ERROR_KEYS: Record<string, string> = {
   'survey_pipeline.store_failed': 'surveyUploads.problems.storeFailed',
   'survey_pipeline.storage_insufficient': 'surveyUploads.problems.storageInsufficient',
   'survey_pipeline.surface_unplaced': 'surveyUploads.problems.surfaceUnplaced',
+  'survey_pipeline.point_cloud_invalid': 'surveyUploads.problems.pointCloudInvalid',
+  'survey_pipeline.recording_invalid': 'surveyUploads.problems.recordingInvalid',
+  'survey_pipeline.worker_unavailable': 'surveyUploads.problems.workerUnavailable',
+  'survey_pipeline.worker_silent': 'surveyUploads.problems.workerSilent',
+  'survey_pipeline.worker_failed': 'surveyUploads.problems.workerFailed',
+  'survey_pipeline.worker_timeout': 'surveyUploads.problems.workerTimeout',
+  'survey_pipeline.worker_interrupted': 'surveyUploads.problems.workerInterrupted',
+  'survey_pipeline.export_invalid': 'surveyUploads.problems.exportInvalid',
 };
 
 /**

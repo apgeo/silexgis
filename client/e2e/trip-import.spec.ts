@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, searchFindsNoTrip } from './helpers.ts';
 
 /**
  * A club's spreadsheet of past trips becomes trips in the archive, through one review screen
@@ -148,9 +148,7 @@ test.describe('trip import', () => {
     await expect(page.getByText('The import was undone.')).toBeVisible({ timeout: 20_000 });
 
     await page.goto('/trip-logs');
-    await page.getByPlaceholder('Search by title…').fill(String(stamp));
-    await expect(page.getByRole('row', { name: new RegExp(firstTrip) })).toHaveCount(0, {
-      timeout: 20_000,
-    });
+    await searchFindsNoTrip(page, String(stamp));
+    await expect(page.getByRole('row', { name: new RegExp(firstTrip) })).toHaveCount(0);
   });
 });

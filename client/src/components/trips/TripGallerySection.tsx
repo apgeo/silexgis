@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Card, Empty, Flex, Spin, Typography } from 'antd';
+import { Alert, App, Card, Empty, Flex, Spin, Typography, theme } from 'antd';
 import Button from '../Button.tsx';
 import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +55,7 @@ export default function TripGallerySection({
   tripTitle: string;
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { data: capabilities } = useCapabilities();
@@ -142,7 +143,7 @@ export default function TripGallerySection({
                   <Flex
                     align="center"
                     justify="center"
-                    style={{ height: 100, background: 'rgba(0,0,0,0.04)' }}
+                    style={{ height: 100, background: token.colorFillQuaternary }}
                   >
                     <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
                   </Flex>

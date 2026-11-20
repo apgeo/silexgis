@@ -31,6 +31,7 @@ import {
   type FeatureTypeWrite,
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import { surfaceFeaturePalette } from '../../map/markerPalette.ts';
 import SymbolPicker, { SymbolPreview, SymbolSourcesNote } from '../../components/map/SymbolPicker.tsx';
@@ -99,8 +100,10 @@ export default function FeatureTypesPage() {
   const [editing, setEditing] = useState<FeatureType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<FeatureTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   const shipped = editing?.isSeeded === true;
   const bound = editing !== null && editing.boundKind !== 'generic';
 
@@ -294,7 +297,8 @@ export default function FeatureTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.featureTypes.edit') : t('admin.featureTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -302,7 +306,7 @@ export default function FeatureTypesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           {shipped && (
             <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('admin.featureTypes.shippedNote')} />
           )}

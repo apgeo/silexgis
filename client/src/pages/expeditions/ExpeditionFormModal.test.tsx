@@ -209,3 +209,35 @@ describe('ExpeditionFormModal', () => {
     expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 });
+
+describe('ExpeditionFormModal leaving with typed work', () => {
+  afterEach(cleanup);
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = vi.fn();
+    show(camp(), onClose);
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = vi.fn();
+    show(camp(), onClose);
+    fireEvent.change(screen.getByTestId('expedition-form-name'), { target: { value: 'Summer camp, renamed' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click beside it', () => {
+    const onClose = vi.fn();
+    show(camp(), onClose);
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

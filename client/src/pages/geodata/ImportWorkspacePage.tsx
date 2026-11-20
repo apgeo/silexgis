@@ -26,6 +26,7 @@ import ImportResultModal from '../../components/import/ImportResultModal.tsx';
 import LithologyMappingCard from '../../components/import/LithologyMappingCard.tsx';
 import RuleHitList from '../../components/import/RuleHitList.tsx';
 import SelectionToolbar, { type CandidateFilters } from '../../components/import/SelectionToolbar.tsx';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
 import { refusalText } from '../../components/geodata/refusalText.ts';
 import { ApiError } from '../../api/client.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -235,6 +236,7 @@ export default function ImportWorkspacePage() {
           {session.data?.allowCreateWithoutReview && (
             <Button
               onClick={() => void onCommit(true)}
+              disabled={saveSession.isError}
               loading={commit.isPending}
               data-testid="import-commit-all"
             >
@@ -243,7 +245,7 @@ export default function ImportWorkspacePage() {
           )}
           <Button
             type="primary"
-            disabled={selected.size === 0 || preview.isError}
+            disabled={selected.size === 0 || preview.isError || saveSession.isError}
             loading={commit.isPending}
             onClick={() => void onCommit(false)}
             data-testid="import-commit"
@@ -252,6 +254,12 @@ export default function ImportWorkspacePage() {
           </Button>
         </Space>
       </Flex>
+
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
 
       {preview.isError && (
         <Alert

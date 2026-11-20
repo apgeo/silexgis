@@ -788,3 +788,52 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"2"');
   });
 });
+
+describe('TripFormModal leaving with typed work', () => {
+  afterEach(cleanup);
+
+  function showClosable(subject: TripLogInfo | null) {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <TripFormModal open trip={subject} onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable(trip());
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    const onClose = showClosable(trip());
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend, part two' } });
+    cancel();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Digging weekend, part two');
+
+    // The first question may still be in the document, fading out; the newest one comes last.
+    const before = screen.queryAllByTestId('discard-confirm').length;
+    cancel();
+    await vi.waitFor(() => expect(screen.getAllByTestId('discard-confirm').length).toBe(before + 1));
+    fireEvent.click(screen.getAllByTestId('discard-confirm').at(-1)!);
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click beside it', () => {
+    const onClose = showClosable(trip());
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

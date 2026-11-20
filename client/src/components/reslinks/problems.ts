@@ -65,18 +65,25 @@ const byCode: Record<string, string> = {
   'reslink.place_point.frame_unknown': 'resLinks.problems.placePointFrameUnknown',
 };
 
-/** The message to show for a failed link write. */
-export function resLinkProblemMessage(error: unknown, t: TFunction): string {
+/**
+ * The message to show for a failed link write. `fallbackKey` is what an unrecognised failure
+ * reads as, so that a deletion is not reported as a failed save.
+ */
+export function resLinkProblemMessage(
+  error: unknown,
+  t: TFunction,
+  fallbackKey = 'common.saveFailed',
+): string {
   if (!(error instanceof ApiError)) {
-    return t('common.saveFailed');
+    return t(fallbackKey);
   }
   if (error.status === 401) {
     return t('resLinks.problems.signedOut');
   }
   const code = error.code;
   if (!code) {
-    return t('common.saveFailed');
+    return t(fallbackKey);
   }
   const key = byStatusAndCode[`${error.status}:${code}`] ?? byCode[code];
-  return key ? t(key) : t('common.saveFailed');
+  return key ? t(key) : t(fallbackKey);
 }

@@ -9,6 +9,11 @@ import type { ImportCandidate, ImportPreview, ImportPreviewRequest, ImportSessio
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
 const previewRefetch = vi.fn();
 const sessionRefetch = vi.fn();
 const previewCalls: { body: ImportPreviewRequest; enabled: boolean }[] = [];
@@ -119,7 +124,7 @@ vi.mock('../../api/hooks.ts', () => ({
       ? { data: undefined, isError: true, error: sessionFailure, refetch: sessionRefetch }
       : { data: session, isError: false },
   useEffectiveTermRuleSet: () => ({ data: null }),
-  useSaveImportSession: () => ({ mutate: saveSessionMutate }),
+  useSaveImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
   useImportPreview: (_geofileId: string, body: ImportPreviewRequest, enabled: boolean) => {
     previewCalls.push({ body, enabled });
     // A failed dry run still holds the previous answer as data when the query kept it, which is
@@ -177,6 +182,9 @@ describe('ImportWorkspacePage', () => {
       failures: [],
     });
     saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
     session = { ...session, allowCreateWithoutReview: false, decisions: {} };
     preview = fullPreview;
     previewFailure = null;
@@ -234,6 +242,26 @@ describe('ImportWorkspacePage', () => {
   it('says when two rules claimed one candidate rather than arbitrating silently', async () => {
     show();
     expect(await screen.findByText('Two rules claimed it')).toBeInTheDocument();
+  });
+
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { geofileId: 'g1', body: { options: {}, decisions: {} } };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    await screen.findByText('Ursilor');
+    fireEvent.click(screen.getByTestId('import-select-all'));
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
   });
 
   it('creates only what was selected, and nothing until the button is pressed', async () => {

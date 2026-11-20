@@ -10,7 +10,22 @@ import {
   SaveOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { Alert, AutoComplete, Checkbox, Collapse, Input, InputNumber, Radio, Segmented, Select, Slider, Typography } from 'antd';
+import {
+  Alert,
+  App,
+  AutoComplete,
+  Checkbox,
+  Collapse,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Radio,
+  Segmented,
+  Select,
+  Slider,
+  Typography,
+  type ButtonProps,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCaveNames, useGeofiles, useSavedFilters, useSearch } from '../../../api/hooks.ts';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue.ts';
@@ -33,6 +48,7 @@ import {
 } from '../../../flyby/flybyPresets.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
+import { useDiscardGuard } from '../../useDiscardGuard.ts';
 import FlybyLookPanel from './FlybyLookPanel.tsx';
 import FlybySections from './FlybySections.tsx';
 import FlybyViews from './FlybyViews.tsx';
@@ -113,6 +129,8 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   const removeFlyby = useFlybyStore((state) => state.remove);
   const loadRoute = useFlybyStore((state) => state.loadRoute);
   const setLoadRoute = useFlybyStore((state) => state.setLoadRoute);
+  const { modal } = App.useApp();
+  const requestDiscard = useDiscardGuard();
 
   const { document } = flyby;
   const busy = flyby.active;
@@ -172,8 +190,10 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
     }
     const opened = file.size <= FLYBY_FILE_MAX_BYTES ? parseFlybyFile(await file.text()) : null;
     if (opened) {
-      flyby.setTrouble(undefined);
-      flyby.open(opened);
+      requestDiscard(flyby.dirty, () => {
+        flyby.setTrouble(undefined);
+        flyby.open(opened);
+      });
     } else {
       flyby.setTrouble({ kind: 'badFile' });
     }
@@ -189,6 +209,29 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
     { value: 'view', label: t('flyby.source.view') },
     { value: 'file', label: t('flyby.source.file') },
   ];
+
+  const save = () => {
+    if (!document) {
+      return;
+    }
+    const named = flyby.name.trim();
+    const write = () => {
+      saveFlyby({ ...document, name: named });
+      flyby.markClean();
+    };
+    if (!library.some((entry) => entry.name === named)) {
+      write();
+      return;
+    }
+    modal.confirm({
+      title: t('flyby.replaceTitle', { name: named }),
+      content: t('flyby.replaceBody'),
+      okText: t('flyby.replaceOk'),
+      okButtonProps: { danger: true, 'data-testid': 'flyby-replace-confirm' },
+      cancelText: t('common.cancel'),
+      onOk: write,
+    });
+  };
 
   return (
     <section className="scene3d-flyby-panel" data-testid="flyby-panel" aria-label={t('flyby.title')}>
@@ -525,7 +568,7 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
             size="small"
             icon={<SaveOutlined />}
             disabled={!document || flyby.name.trim().length === 0}
-            onClick={() => document && saveFlyby({ ...document, name: flyby.name.trim() })}
+            onClick={save}
             data-testid="flyby-save"
           >
             {t('common.save')}
@@ -542,23 +585,33 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
               onChange={(value: string | null) => {
                 const kept = library.find((entry) => entry.name === value);
                 if (kept) {
-                  flyby.setTrouble(undefined);
-                  flyby.open(kept);
+                  requestDiscard(flyby.dirty, () => {
+                    flyby.setTrouble(undefined);
+                    flyby.open(kept);
+                  });
                 }
               }}
               aria-label={t('flyby.openSaved')}
               data-testid="flyby-saved"
               options={library.map((entry) => ({ value: entry.name, label: entry.name }))}
             />
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={!library.some((entry) => entry.name === flyby.name.trim())}
-              onClick={() => removeFlyby(flyby.name.trim())}
-              aria-label={t('flyby.deleteSaved')}
-              data-testid="flyby-delete"
-            />
+            {/* Saved flybys live only in this browser: a deleted one has no other copy to come back from. */}
+            <Popconfirm
+              title={t('flyby.deleteConfirm', { name: flyby.name.trim() })}
+              onConfirm={() => removeFlyby(flyby.name.trim())}
+              okText={t('iconButtons.delete')}
+              okButtonProps={{ danger: true, 'data-testid': 'flyby-delete-confirm' } as ButtonProps}
+              cancelText={t('common.cancel')}
+            >
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!library.some((entry) => entry.name === flyby.name.trim())}
+                aria-label={t('flyby.deleteSaved')}
+                data-testid="flyby-delete"
+              />
+            </Popconfirm>
           </div>
         )}
         <div className="scene3d-flyby-row">

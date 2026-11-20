@@ -200,3 +200,23 @@ describe('the hierarchy card', () => {
     expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
   });
 });
+
+describe('leaving the parent editor with changes', () => {
+  it('closes at once when nothing was changed', async () => {
+    show('generic');
+    fireEvent.click(screen.getByRole('button', { name: /Edit parents/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: the list was only looked at, so no question follows.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing an added parent away', async () => {
+    show('generic');
+    await openEditorAndSearch();
+    fireEvent.click(screen.getByRole('button', { name: /Zona Bihor/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('hierarchy-parent-picker-input')).toBeTruthy();
+  });
+});

@@ -7,6 +7,7 @@ import { api, ApiError } from '../../api/client.ts';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import type { AuditEntry } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { AUDIT_ACTION_KEYS } from './auditActions.ts';
 
 const actionColor: Record<string, string> = {
   created: 'green',
@@ -94,7 +95,9 @@ export default function AuditPage() {
             title: t('audit.action'),
             dataIndex: 'action',
             width: 120,
-            render: (value: string) => <Tag color={actionColor[value]}>{value}</Tag>,
+            render: (value: string) => (
+              <Tag color={actionColor[value]}>{AUDIT_ACTION_KEYS[value] ? t(AUDIT_ACTION_KEYS[value]) : value}</Tag>
+            ),
           },
           { title: t('audit.entityType'), dataIndex: 'entityType', width: 160 },
           { title: t('audit.entityId'), dataIndex: 'entityId', ellipsis: true },

@@ -15,6 +15,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import DialogHost from '../DialogHost.tsx';
+import { useFormEdits } from '../useDiscardGuard.ts';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 
 interface LibraryPhotoFeatureModalProps {
@@ -119,6 +120,7 @@ export default function LibraryPhotoFeatureModal({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const edits = useFormEdits(target !== null);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
   const { data: featureTypes } = useGenericFeatureTypes();
@@ -214,6 +216,8 @@ export default function LibraryPhotoFeatureModal({
       title={t('libraryPhotos.createTitle')}
       open={target !== null}
       onCancel={onClose}
+      // Once the feature exists there is nothing left to lose by closing.
+      dirty={() => created === null && edits.edited()}
       onOk={created ? undefined : () => void submit()}
       okLoading={saving}
     >
@@ -256,7 +260,12 @@ export default function LibraryPhotoFeatureModal({
           <Typography.Paragraph type="secondary">
             {t('libraryPhotos.createHint')}
           </Typography.Paragraph>
-          <Form<FormValues> form={form} layout="vertical" initialValues={{ choice: 'cave' }}>
+          <Form<FormValues>
+            form={form}
+            layout="vertical"
+            initialValues={{ choice: 'cave' }}
+            onValuesChange={edits.onValuesChange}
+          >
             <Form.Item name="choice" label={t('libraryPhotos.kind')} rules={[{ required: true }]}>
               <Select
                 options={[

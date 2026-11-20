@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ImageMagick;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -1109,6 +1110,34 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         // Signing in still resolves by address, so a chosen handle never breaks login.
         using var reauthenticated = await AuthHelper.BearerClientAsync(factory, MyEmail);
         (await reauthenticated.GetAsync("/api/v1/me")).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    // A new user name rotates the security stamp, and the browser's sign-in cookie (what the
+    // authorization endpoint reads to issue every later token) carries the old one. The change
+    // used to answer with only the cookie's deletion, so the member was signed out at their next
+    // page load.
+    [Fact]
+    public async Task Changing_the_user_name_keeps_the_browser_signed_in()
+    {
+        var changed = await me.PutAsJsonAsync("/api/v1/me/username", new { username = $"kept-{suffix}" });
+        changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+
+        var authorize = await me.GetAsync(AuthHelper.AuthorizeUrl());
+        authorize.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        authorize.Headers.Location!.ToString().ShouldContain("code=");
+    }
+
+    [Fact]
+    public async Task Changing_the_user_name_from_a_token_only_client_issues_no_cookie()
+    {
+        using var tokenOnly = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        tokenOnly.DefaultRequestHeaders.Authorization = me.DefaultRequestHeaders.Authorization;
+
+        var changed = await tokenOnly.PutAsJsonAsync("/api/v1/me/username", new { username = $"token-{suffix}" });
+        changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+        changed.Headers.TryGetValues("Set-Cookie", out var cookies);
+        (cookies ?? []).ShouldNotContain(c => c.StartsWith("silexgis.session=", StringComparison.Ordinal)
+            && !c.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
     }
 
     // A preferences write used to move the account row's concurrency stamp (it no longer does).

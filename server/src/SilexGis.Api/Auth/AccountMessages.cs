@@ -191,8 +191,12 @@ public static class AccountMessages
     private static string ConfirmUrl(IConfiguration configuration, Guid userId, string token) =>
         $"{PublicUrl(configuration)}/confirm-email?user={userId}&token={Uri.EscapeDataString(token)}";
 
-    /// <summary>A change is confirmed from the settings page, where the person already is.</summary>
-    private static string SettingsConfirmUrl(IConfiguration configuration, string token) =>
+    /// <summary>
+    /// Where an address-change link lands: the settings page, where the person already is. Public
+    /// because a development host without mail hands this same address back to the caller instead
+    /// of sending it.
+    /// </summary>
+    public static string SettingsConfirmUrl(IConfiguration configuration, string token) =>
         $"{PublicUrl(configuration)}/settings/emails?confirm={Uri.EscapeDataString(token)}";
 
     private static string ResetUrl(IConfiguration configuration, string email, string token) =>

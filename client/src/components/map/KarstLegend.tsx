@@ -43,7 +43,7 @@ function Swatch({ fill, stroke, dashed }: { fill: string; stroke: string; dashed
 
 function Rows({ testId, rows }: { testId: string; rows: { key: string; swatch: ReactNode; label: string }[] }) {
   return (
-    <ul data-testid={testId} style={{ listStyle: 'none', margin: '4px 0 0', padding: 0, fontSize: 12 }}>
+    <ul data-testid={testId} className="hint-text" style={{ listStyle: 'none', margin: '4px 0 0', padding: 0 }}>
       {rows.map((row) => (
         <li key={row.key} data-testid={`${testId}-row`}>
           {row.swatch}
@@ -89,19 +89,20 @@ export function KarstDensityLegend({ state }: { state: KarstDensityLoadState }) 
   }
   if (state.bandMaxima.length === 0) {
     return (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-karst-density-legend-empty">
+      <Typography.Text type="secondary" className="hint-text" data-testid="map-karst-density-legend-empty">
         {t('map.karstLegend.noCaves')}
       </Typography.Text>
     );
   }
   return (
     <>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t(`map.karstLegend.unit.${state.mode}`)}
       </Typography.Text>
       <Typography.Text
         type="secondary"
-        style={{ fontSize: 12, display: 'block' }}
+        className="hint-text"
+        style={{ display: 'block' }}
         data-testid="map-karst-density-legend-scheme"
       >
         {t(`map.karstLegend.scheme.${state.bands}`)}
@@ -148,7 +149,7 @@ export function KarstIndexLegend({ state }: { state: KarstIndexLoadState }) {
         })}
       />
       {state.areaCount === 0 && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-karst-index-empty">
+        <Typography.Text type="secondary" className="hint-text" data-testid="map-karst-index-empty">
           {t('map.karstLegend.noAreas')}
         </Typography.Text>
       )}

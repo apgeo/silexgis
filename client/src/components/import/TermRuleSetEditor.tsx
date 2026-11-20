@@ -14,12 +14,15 @@ import {
   Input,
   Row,
   Select,
+  Skeleton,
   Space,
   Typography,
 } from 'antd';
 import Button from '../Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
+import { TERM_RULE_REFUSALS } from './termRuleProblems.ts';
 import {
   useCaveTypes,
   useCreateTermRuleSet,
@@ -53,13 +56,6 @@ function blankRule(index: number): TermRule {
   };
 }
 
-/** Refusals of a rule set that have a sentence of their own here. */
-const REFUSALS: Readonly<Record<string, string>> = {
-  'term_rules.not_editable': 'termRules.errors.notEditable',
-  'term_rules.not_found': 'termRules.errors.notFound',
-  'term_rules.group_not_found': 'termRules.errors.groupNotFound',
-};
-
 /**
  * Why a set could not be saved. The server checks the whole document — a pattern that cannot be
  * compiled, a rule naming a taxonomy its target does not use — and for that its own sentence is
@@ -70,7 +66,7 @@ function saveProblem(error: unknown, t: TFunction): string {
   if (!(error instanceof ApiError)) {
     return t('common.saveFailed');
   }
-  const known = error.code ? REFUSALS[error.code] : undefined;
+  const known = error.code ? TERM_RULE_REFUSALS[error.code] : undefined;
   if (known) {
     return t(known);
   }
@@ -92,7 +88,7 @@ function saveProblem(error: unknown, t: TFunction): string {
  */
 export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   const { t } = useTranslation();
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const detail = useTermRuleSet(setId ?? undefined);
   const create = useCreateTermRuleSet();
   const update = useUpdateTermRuleSet();
@@ -110,12 +106,17 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   // again while it is being edited — the window regaining focus, another change invalidating the
   // sets — is the same set, and filling the fields from it would throw away what was typed.
   const filledFrom = useRef<string | null>(null);
+  // The same, as state, so the drawer re-renders once the fields hold the stored set. Save
+  // replaces the stored set with what is on screen, so until then there is nothing to save:
+  // the empty fields are empty only because the set has not arrived.
+  const [filledWith, setFilledWith] = useState<string | null>(null);
 
   const open = setId !== null || creating;
 
   useEffect(() => {
     if (!open) {
       filledFrom.current = null;
+      setFilledWith(null);
       return;
     }
     const target = creating ? '' : setId;
@@ -134,9 +135,12 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
       return;
     }
     filledFrom.current = target;
+    setFilledWith(target);
     setError(null);
     setDirty(false);
   }, [open, creating, setId, detail.data]);
+
+  const ready = creating ? filledWith === '' : setId !== null && filledWith === setId;
 
   /** Every change to the set goes through here, which is what makes the closing question honest. */
   const changeRules = (change: (current: TermRule[]) => TermRule[]) => {
@@ -144,20 +148,8 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
     setDirty(true);
   };
 
-  const requestClose = () => {
-    if (!dirty) {
-      onClose();
-      return;
-    }
-    modal.confirm({
-      title: t('termRules.discardTitle'),
-      content: t('termRules.discardBody'),
-      okText: t('termRules.discardOk'),
-      okButtonProps: { danger: true },
-      cancelText: t('termRules.keepEditing'),
-      onOk: onClose,
-    });
-  };
+  const requestDiscard = useDiscardGuard();
+  const requestClose = () => requestDiscard(dirty, onClose);
 
   const patch = (index: number, changes: Partial<TermRule>) =>
     changeRules((current) => current.map((rule, i) => (i === index ? { ...rule, ...changes } : rule)));
@@ -184,6 +176,9 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
   };
 
   const onSave = async () => {
+    if (!ready) {
+      return;
+    }
     setError(null);
     try {
       if (creating) {
@@ -207,6 +202,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
       size="min(900px, 96vw)"
       title={creating ? t('termRules.newSet') : t('termRules.edit')}
       onClose={requestClose}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       extra={
         <Space>
@@ -214,6 +210,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
           <Button
             type="primary"
             loading={create.isPending || update.isPending}
+            disabled={!ready}
             onClick={() => void onSave()}
             data-testid="term-rules-save"
           >
@@ -222,194 +219,209 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
         </Space>
       }
     >
-      <Flex vertical gap={16}>
-        {error && <Alert type="error" showIcon title={t('termRules.invalid')} description={error} />}
+      {!ready && detail.isError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('termRules.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void detail.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {!ready && !detail.isError && <Skeleton active />}
+      {ready && (
+        <Flex vertical gap={16}>
+          {error && <Alert type="error" showIcon title={t('termRules.invalid')} description={error} />}
 
-        <Form layout="vertical">
-          <Form.Item label={t('termRules.name')} required>
-            <Input
-              value={name}
-              maxLength={200}
-              onChange={(e) => {
-                setName(e.target.value);
-                setDirty(true);
-              }}
-            />
-          </Form.Item>
-          <Form.Item label={t('features.description')}>
-            <Input.TextArea
-              rows={2}
-              value={description}
-              maxLength={2000}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                setDirty(true);
-              }}
-            />
-          </Form.Item>
-        </Form>
+          <Form layout="vertical">
+            <Form.Item label={t('termRules.name')} required>
+              <Input
+                value={name}
+                maxLength={200}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setDirty(true);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label={t('features.description')}>
+              <Input.TextArea
+                rows={2}
+                value={description}
+                maxLength={2000}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setDirty(true);
+                }}
+              />
+            </Form.Item>
+          </Form>
 
-        <Typography.Text type="secondary">{t('termRules.orderHint')}</Typography.Text>
+          <Typography.Text type="secondary">{t('termRules.orderHint')}</Typography.Text>
 
-        {rules.map((rule, index) => (
-          <Card
-            key={rule.id}
-            size="small"
-            title={
-              <Flex gap={8} align="center">
-                <Typography.Text type="secondary">{index + 1}.</Typography.Text>
-                <Input
-                  size="small"
-                  placeholder={t('termRules.ruleName')}
-                  value={rule.name}
-                  onChange={(e) => patch(index, { name: e.target.value })}
-                  style={{ maxWidth: 260 }}
-                />
-                <Checkbox
-                  checked={rule.enabled ?? true}
-                  onChange={(e) => patch(index, { enabled: e.target.checked })}
-                >
-                  {t('termRules.enabled')}
-                </Checkbox>
-              </Flex>
-            }
-            extra={
-              <Space.Compact>
-                <Button size="small" icon={<UpOutlined />} aria-label={t('iconButtons.moveUp')} onClick={() => move(index, -1)} />
-                <Button size="small" icon={<DownOutlined />} aria-label={t('iconButtons.moveDown')} onClick={() => move(index, 1)} />
-                <Button
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  aria-label={t('iconButtons.delete')}
-                  onClick={() => changeRules((current) => current.filter((_, i) => i !== index))}
-                />
-              </Space.Compact>
-            }
-          >
-            <Row gutter={[12, 8]}>
-              <Col xs={24} md={8}>
-                <Form.Item label={t('termRules.matchMode')} style={{ marginBottom: 8 }}>
-                  <Select
+          {rules.map((rule, index) => (
+            <Card
+              key={rule.id}
+              size="small"
+              title={
+                <Flex gap={8} align="center">
+                  <Typography.Text type="secondary">{index + 1}.</Typography.Text>
+                  <Input
                     size="small"
-                    value={rule.matchMode ?? 'wholeWord'}
-                    onChange={(value) => patch(index, { matchMode: value })}
-                    options={(['contains', 'wholeWord', 'prefix', 'regex'] as const).map((mode) => ({
-                      value: mode,
-                      label: t(`termRules.matchModes.${mode}`),
-                    }))}
+                    placeholder={t('termRules.ruleName')}
+                    value={rule.name}
+                    onChange={(e) => patch(index, { name: e.target.value })}
+                    style={{ maxWidth: 260 }}
                   />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item label={t('termRules.target')} style={{ marginBottom: 8 }}>
-                  <Select
-                    size="small"
-                    value={rule.target ?? 'surfaceFeature'}
-                    onChange={(value: ImportTargetKind) =>
-                      // Clearing the other two codes with the target keeps the rule savable:
-                      // a rule may only name the taxonomy its target uses.
-                      patch(index, {
-                        target: value,
-                        caveTypeCode: null,
-                        entranceTypeCode: null,
-                        featureTypeCode: null,
-                      })
-                    }
-                    options={(['cave', 'caveEntrance', 'surfaceFeature'] as const).map((kind) => ({
-                      value: kind,
-                      label: t(`vectorImport.kinds.${kind}`),
-                    }))}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item label={t('termRules.proposedType')} style={{ marginBottom: 8 }}>
-                  <Select
-                    size="small"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    value={
-                      rule.target === 'cave'
-                        ? (rule.caveTypeCode ?? undefined)
-                        : rule.target === 'caveEntrance'
-                          ? (rule.entranceTypeCode ?? undefined)
-                          : (rule.featureTypeCode ?? undefined)
-                    }
-                    onChange={(value?: string) =>
-                      patch(index, {
-                        caveTypeCode: rule.target === 'cave' ? (value ?? null) : null,
-                        entranceTypeCode: rule.target === 'caveEntrance' ? (value ?? null) : null,
-                        featureTypeCode: rule.target === 'surfaceFeature' ? (value ?? null) : null,
-                      })
-                    }
-                    options={typeOptions(rule.target ?? 'surfaceFeature')}
-                  />
-                </Form.Item>
-              </Col>
-
-              {LANGUAGES.map((language) => (
-                <Col xs={24} md={8} key={language}>
-                  <Form.Item
-                    label={t(`termRules.languages.${language === '*' ? 'any' : language}`)}
-                    style={{ marginBottom: 8 }}
+                  <Checkbox
+                    checked={rule.enabled ?? true}
+                    onChange={(e) => patch(index, { enabled: e.target.checked })}
                   >
+                    {t('termRules.enabled')}
+                  </Checkbox>
+                </Flex>
+              }
+              extra={
+                <Space.Compact>
+                  <Button size="small" icon={<UpOutlined />} aria-label={t('iconButtons.moveUp')} onClick={() => move(index, -1)} />
+                  <Button size="small" icon={<DownOutlined />} aria-label={t('iconButtons.moveDown')} onClick={() => move(index, 1)} />
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    aria-label={t('iconButtons.delete')}
+                    onClick={() => changeRules((current) => current.filter((_, i) => i !== index))}
+                  />
+                </Space.Compact>
+              }
+            >
+              <Row gutter={[12, 8]}>
+                <Col xs={24} md={8}>
+                  <Form.Item label={t('termRules.matchMode')} style={{ marginBottom: 8 }}>
                     <Select
                       size="small"
-                      mode="tags"
-                      value={rule.terms?.[language] ?? []}
-                      onChange={(value: string[]) =>
-                        patch(index, { terms: { ...rule.terms, [language]: value } })
-                      }
-                      placeholder={t('termRules.termsPlaceholder')}
-                      open={false}
-                      suffixIcon={null}
+                      value={rule.matchMode ?? 'wholeWord'}
+                      onChange={(value) => patch(index, { matchMode: value })}
+                      options={(['contains', 'wholeWord', 'prefix', 'regex'] as const).map((mode) => ({
+                        value: mode,
+                        label: t(`termRules.matchModes.${mode}`),
+                      }))}
                     />
                   </Form.Item>
                 </Col>
-              ))}
+                <Col xs={24} md={8}>
+                  <Form.Item label={t('termRules.target')} style={{ marginBottom: 8 }}>
+                    <Select
+                      size="small"
+                      value={rule.target ?? 'surfaceFeature'}
+                      onChange={(value: ImportTargetKind) =>
+                        // Clearing the other two codes with the target keeps the rule savable:
+                        // a rule may only name the taxonomy its target uses.
+                        patch(index, {
+                          target: value,
+                          caveTypeCode: null,
+                          entranceTypeCode: null,
+                          featureTypeCode: null,
+                        })
+                      }
+                      options={(['cave', 'caveEntrance', 'surfaceFeature'] as const).map((kind) => ({
+                        value: kind,
+                        label: t(`vectorImport.kinds.${kind}`),
+                      }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label={t('termRules.proposedType')} style={{ marginBottom: 8 }}>
+                    <Select
+                      size="small"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      value={
+                        rule.target === 'cave'
+                          ? (rule.caveTypeCode ?? undefined)
+                          : rule.target === 'caveEntrance'
+                            ? (rule.entranceTypeCode ?? undefined)
+                            : (rule.featureTypeCode ?? undefined)
+                      }
+                      onChange={(value?: string) =>
+                        patch(index, {
+                          caveTypeCode: rule.target === 'cave' ? (value ?? null) : null,
+                          entranceTypeCode: rule.target === 'caveEntrance' ? (value ?? null) : null,
+                          featureTypeCode: rule.target === 'surfaceFeature' ? (value ?? null) : null,
+                        })
+                      }
+                      options={typeOptions(rule.target ?? 'surfaceFeature')}
+                    />
+                  </Form.Item>
+                </Col>
 
-              <Col xs={24} md={8}>
-                <Form.Item label={t('termRules.strip')} style={{ marginBottom: 8 }}>
-                  <Select
-                    size="small"
-                    value={rule.strip ?? 'none'}
-                    onChange={(value) => patch(index, { strip: value })}
-                    options={(['none', 'leading', 'trailing', 'anywhere'] as const).map((mode) => ({
-                      value: mode,
-                      label: t(`termRules.stripModes.${mode}`),
-                    }))}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={16}>
-                <Space>
-                  <Checkbox
-                    checked={rule.matchName ?? true}
-                    onChange={(e) => patch(index, { matchName: e.target.checked })}
-                  >
-                    {t('termRules.readName')}
-                  </Checkbox>
-                  <Checkbox
-                    checked={rule.matchDescription ?? false}
-                    onChange={(e) => patch(index, { matchDescription: e.target.checked })}
-                  >
-                    {t('termRules.readDescription')}
-                  </Checkbox>
-                </Space>
-              </Col>
-            </Row>
-          </Card>
-        ))}
+                {LANGUAGES.map((language) => (
+                  <Col xs={24} md={8} key={language}>
+                    <Form.Item
+                      label={t(`termRules.languages.${language === '*' ? 'any' : language}`)}
+                      style={{ marginBottom: 8 }}
+                    >
+                      <Select
+                        size="small"
+                        mode="tags"
+                        value={rule.terms?.[language] ?? []}
+                        onChange={(value: string[]) =>
+                          patch(index, { terms: { ...rule.terms, [language]: value } })
+                        }
+                        placeholder={t('termRules.termsPlaceholder')}
+                        open={false}
+                        suffixIcon={null}
+                      />
+                    </Form.Item>
+                  </Col>
+                ))}
 
-        <Button
-          icon={<PlusOutlined />}
-          onClick={() => changeRules((current) => [...current, blankRule(current.length)])}
-        >
-          {t('termRules.addRule')}
-        </Button>
-      </Flex>
+                <Col xs={24} md={8}>
+                  <Form.Item label={t('termRules.strip')} style={{ marginBottom: 8 }}>
+                    <Select
+                      size="small"
+                      value={rule.strip ?? 'none'}
+                      onChange={(value) => patch(index, { strip: value })}
+                      options={(['none', 'leading', 'trailing', 'anywhere'] as const).map((mode) => ({
+                        value: mode,
+                        label: t(`termRules.stripModes.${mode}`),
+                      }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={16}>
+                  <Space>
+                    <Checkbox
+                      checked={rule.matchName ?? true}
+                      onChange={(e) => patch(index, { matchName: e.target.checked })}
+                    >
+                      {t('termRules.readName')}
+                    </Checkbox>
+                    <Checkbox
+                      checked={rule.matchDescription ?? false}
+                      onChange={(e) => patch(index, { matchDescription: e.target.checked })}
+                    >
+                      {t('termRules.readDescription')}
+                    </Checkbox>
+                  </Space>
+                </Col>
+              </Row>
+            </Card>
+          ))}
+
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => changeRules((current) => [...current, blankRule(current.length)])}
+          >
+            {t('termRules.addRule')}
+          </Button>
+        </Flex>
+      )}
     </Drawer>
   );
 }

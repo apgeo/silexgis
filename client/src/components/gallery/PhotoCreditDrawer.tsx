@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
+import { Alert, App, Drawer, Flex, Form, Input, Segmented, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useCapabilities,
@@ -61,14 +62,26 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<CreditForm>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(documentId !== null);
 
-  const { data: photo, isPending } = usePhoto(documentId ?? undefined);
+  const {
+    data: photo,
+    isPending,
+    isError,
+    refetch: refetchPhoto,
+  } = usePhoto(documentId ?? undefined);
   const { data: cavers } = useCavers();
   const { data: capabilities } = useCapabilities();
   const updateCredit = useUpdatePhotoCredit();
   const setPublic = useSetPhotoPublic();
 
   const attribution = Form.useWatch('attribution', form);
+
+  // Every credit field is written on Save, so a save from a form that was never filled from the
+  // stored photograph would blank the stored credit. Saving is possible only once the picture
+  // this drawer is open on has been read.
+  const loaded = photo !== undefined && photo.documentId === documentId;
 
   // Loaded rather than initial values: the drawer stays mounted while a different picture is
   // opened from the viewer behind it, so the form has to be refilled rather than constructed.
@@ -86,6 +99,8 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       return;
     }
     filledFor.current = photo.documentId;
+    // A different picture starts with nothing typed for it.
+    edits.forget();
 
     form.setFieldsValue({
       attribution: photo.credit.photographerCaverId ? 'roster' : 'other',
@@ -95,10 +110,10 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
       licenceCode: photo.credit.licenceCode ?? undefined,
       placeName: photo.credit.placeName ?? undefined,
     });
-  }, [photo, form]);
+  }, [photo, form, edits]);
 
   const submit = async () => {
-    if (!documentId) {
+    if (!documentId || !loaded || filledFor.current !== documentId) {
       return;
     }
 
@@ -144,19 +159,43 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
   return (
     <Drawer
       open={documentId !== null}
-      onClose={onClose}
+      onClose={() => requestDiscard(edits.edited, onClose)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       placement="right"
       size="large"
       title={t('gallery.editCredit')}
       destroyOnHidden
       extra={
-        <Button type="primary" loading={updateCredit.isPending} onClick={() => void submit()}>
+        <Button
+          type="primary"
+          disabled={!loaded}
+          loading={updateCredit.isPending}
+          onClick={() => void submit()}
+        >
           {t('common.save')}
         </Button>
       }
     >
-      {isPending || !photo ? null : (
-        <Form form={form} layout="vertical" requiredMark={false} data-testid="photo-credit-form">
+      {isError && !loaded && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('gallery.creditLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetchPhoto()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {isPending || !loaded ? null : (
+        <Form
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          data-testid="photo-credit-form"
+          onValuesChange={edits.onValuesChange}
+        >
           <Form.Item name="attribution" label={t('gallery.photographer')}>
             <Segmented
               options={[

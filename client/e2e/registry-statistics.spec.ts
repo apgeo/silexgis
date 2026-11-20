@@ -162,3 +162,25 @@ test('breaks the registry down by region and exports the narrowing on screen', a
   const fileQuery = asked((await exported).url());
   expect(fileQuery.get('region')).toBe(asked(page.url()).get('region'));
 });
+
+test('breaks the registry down by category, one row for every group the server answered', async ({ page }) => {
+  await login(page);
+  const answered = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/stats/registry/categories',
+    { timeout: 60_000 },
+  );
+  await gotoRoute(page, '/statistics/categories');
+  const response = await answered;
+  expect(response.ok(), `the categories breakdown answered ${response.status()}`).toBeTruthy();
+  const { groups } = (await response.json()) as { groups: unknown[] };
+
+  await expect(page.getByRole('heading', { name: 'The registry by category' })).toBeVisible();
+  // What the page shows is what the server said: its rows, or its "nothing here" when there were
+  // none — never one standing in for the other.
+  if (groups.length > 0) {
+    await expect(page.getByTestId('registry-categories-table').locator('tbody tr.ant-table-row'))
+      .toHaveCount(groups.length);
+  } else {
+    await expect(page.getByText('No caves in this scope.')).toBeVisible();
+  }
+});

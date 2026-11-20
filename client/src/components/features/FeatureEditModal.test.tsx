@@ -195,3 +195,39 @@ describe('the structural reading form', () => {
     expect(properties).not.toHaveProperty('dip_direction');
   });
 });
+
+describe('FeatureEditModal leaving with typed work', () => {
+  function showClosable() {
+    const onCancel = vi.fn();
+    render(
+      <AntApp>
+        <FeatureEditModal
+          open
+          title="Edit feature"
+          geometryType="Point"
+          initial={{ visibility: 'private', name: 'Izbuc', description: 'Saved text' }}
+          withParent={false}
+          onCancel={onCancel}
+          onSubmit={vi.fn()}
+        />
+      </AntApp>,
+    );
+    return onCancel;
+  }
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed into a filled form', () => {
+    const onCancel = showClosable();
+    cancel();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing a typed description away', async () => {
+    const onCancel = showClosable();
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A long description' } });
+    cancel();
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
+  });
+});

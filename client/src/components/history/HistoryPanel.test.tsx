@@ -274,6 +274,10 @@ describe('HistoryPanel', () => {
           // The server holds the full shape beside a summary, so even the summarised geometry offers it.
           expect(screen.getAllByLabelText('Restore this value')).toHaveLength(2);
           fireEvent.click(screen.getByText('Restore all values from before this change'));
+          // Several values at once are put back only once the count was said and agreed to.
+          expect(await screen.findByText('Put back 2 values from before this change?')).toBeTruthy();
+          expect(restoreOnServer).not.toHaveBeenCalled();
+          fireEvent.click(screen.getByTestId('history-restore-all-confirm'));
 
           await waitFor(() =>
             expect(restoreOnServer).toHaveBeenCalledWith({

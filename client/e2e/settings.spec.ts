@@ -54,55 +54,6 @@ test.describe('settings', () => {
     await expect(page.getByText('Two-factor authentication')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('the profile saves a name and an address with a point picked on the map', async ({ page }) => {
-    await page.goto('/settings/profile');
-
-    // Unique per run, and removed at the end: the dev database persists between runs, so a
-    // fixed label would accumulate and make every later assertion ambiguous.
-    const stamp = Date.now();
-    const surname = `Pop-${stamp}`;
-    const addressLabel = `Home-${stamp}`;
-    await page.getByLabel('First name').fill('Ana');
-    await page.getByLabel('Surname').fill(surname);
-
-    await page.getByRole('button', { name: 'Add an address' }).click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByLabel('Label').fill(addressLabel);
-    await dialog.getByLabel('City').fill('Braşov');
-
-    await dialog.getByRole('button', { name: 'Pick on the map' }).click();
-    const picker = page.getByTestId('point-picker-map');
-    await expect(picker.locator('canvas')).toBeVisible({ timeout: 20_000 });
-    await picker.click({ position: { x: 300, y: 180 } });
-    await page.getByRole('button', { name: 'Use this point' }).click();
-
-    // Saves the address (its own resource), then the profile fields.
-    await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
-    // The picked point comes back as formatted coordinates on the saved row.
-    await expect(page.getByText(/°[NS] .*°[EW]/).first()).toBeVisible();
-
-    // Waits on the request itself: a second "Saved." toast is indistinguishable from the one
-    // the address save just raised, so reloading on the toast would race the profile write.
-    const profileSaved = page.waitForResponse(
-      (r) => r.url().endsWith('/api/v1/me') && r.request().method() === 'PUT',
-    );
-    await page.getByRole('button', { name: 'Save' }).last().click();
-    await profileSaved;
-
-    await page.reload();
-    await expect(page.getByLabel('Surname')).toHaveValue(surname);
-
-    // last(): the section's own card also contains the row, so the filter matches both.
-    const card = page.locator('.ant-card').filter({ hasText: addressLabel }).last();
-    await expect(card).toBeVisible();
-
-    // Clean up, so a re-run starts from the same state this one did.
-    await card.getByLabel('Remove address').click();
-    await confirmOk(page);
-    await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
-  });
-
   test('a limit for the cave walls is kept for this browser across a reload, and handed back', async ({
     page,
   }) => {
@@ -285,9 +236,63 @@ test.describe('settings', () => {
   });
 });
 
-// An account minted for the run, never the shared administrator: one of these changes the
-// password it signs in with, and the other puts a club on the profile it saves.
+// An account minted for the run, never the shared administrator: these write the name, the
+// password and the club of the account they sign in as.
 test.describe('settings, on an account of its own', () => {
+  // The name written here is the account's own, and every screen that shows its holder shows
+  // it: on the shared administrator it would rename that account for every spec running beside
+  // this one, and for every run after it.
+  test('the profile saves a name and an address with a point picked on the map', async ({ page }) => {
+    const account = await registerAccount(page.request, 'profile');
+    await login(page, account.email, account.password);
+    await gotoRoute(page, '/settings/profile');
+
+    // Unique per run, and removed at the end: the dev database persists between runs, so a
+    // fixed label would accumulate and make every later assertion ambiguous.
+    const stamp = Date.now();
+    const surname = `Pop-${stamp}`;
+    const addressLabel = `Home-${stamp}`;
+    await page.getByLabel('First name').fill('Ana');
+    await page.getByLabel('Surname').fill(surname);
+
+    await page.getByRole('button', { name: 'Add an address' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Label').fill(addressLabel);
+    await dialog.getByLabel('City').fill('Braşov');
+
+    await dialog.getByRole('button', { name: 'Pick on the map' }).click();
+    const picker = page.getByTestId('point-picker-map');
+    await expect(picker.locator('canvas')).toBeVisible({ timeout: 20_000 });
+    await picker.click({ position: { x: 300, y: 180 } });
+    await page.getByRole('button', { name: 'Use this point' }).click();
+
+    // Saves the address (its own resource), then the profile fields.
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+    // The picked point comes back as formatted coordinates on the saved row.
+    await expect(page.getByText(/°[NS] .*°[EW]/).first()).toBeVisible();
+
+    // Waits on the request itself: a second "Saved." toast is indistinguishable from the one
+    // the address save just raised, so reloading on the toast would race the profile write.
+    const profileSaved = page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/me') && r.request().method() === 'PUT',
+    );
+    await page.getByRole('button', { name: 'Save' }).last().click();
+    expect((await profileSaved).ok()).toBe(true);
+
+    await page.reload();
+    await expect(page.getByLabel('Surname')).toHaveValue(surname);
+
+    // last(): the section's own card also contains the row, so the filter matches both.
+    const card = page.locator('.ant-card').filter({ hasText: addressLabel }).last();
+    await expect(card).toBeVisible();
+
+    // Clean up, so a re-run starts from the same state this one did.
+    await card.getByLabel('Remove address').click();
+    await confirmOk(page);
+    await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });
+  });
+
   test('a password change signs this browser out, and the new password signs back in', async ({
     page,
     consoleErrors,

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A read of the list that did not land, switched on by the test that needs it.
@@ -156,5 +156,44 @@ describe('a failed read of the list', () => {
       listRead.failed = false;
       listRead.refetch.mockReset();
     }
+  });
+});
+
+describe('leaving the ReportTemplates dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /Add a layout/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: nothing was typed, so no question follows.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /Add a layout/ }));
+    await waitFor(() => expect(screen.getByTestId('report-template-body')).toBeTruthy());
+    fireEvent.change(screen.getByTestId('report-template-body'), { target: { value: '{"type":"object"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Keep editing' }).at(-1)!);
+    expect(screen.getByTestId('report-template-body')).toHaveValue('{"type":"object"}');
+  });
+
+  it('is not closed by a click beside it', async () => {
+    show();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    await waitFor(() => expect(screen.getByTestId('report-template-body')).toBeTruthy());
+    fireEvent.change(screen.getByTestId('report-template-body'), { target: { value: '{"type":"object"}' } });
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByTestId('report-template-body')).toHaveValue('{"type":"object"}');
+    // A close starts the dialog's leaving animation; it must not have begun.
+    expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');
   });
 });

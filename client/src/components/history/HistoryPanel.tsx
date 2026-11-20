@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import { LockOutlined, UndoOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { Alert, App, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
+import { Alert, App, Card, Empty, Popconfirm, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   useHistory,
   useRestoreFromHistory,
@@ -280,8 +281,10 @@ function HistoryEventItem({
           setOutcome(result);
         }
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('history.restoreFailed'));
+      }
     } finally {
       setRestoring(null);
     }
@@ -380,16 +383,26 @@ function HistoryEventItem({
         </div>
       )}
 
+      {/* One value is put back from its own row on one click; several at once rewrite the record
+          wholesale, so the count is said and agreed to first. */}
       {restorable.length > 1 && (
-        <Button
-          size="small"
-          type="link"
-          icon={<UndoOutlined />}
-          loading={restoring === restorable.join(',')}
-          onClick={() => void doRestore(restorable)}
+        <Popconfirm
+          title={t('history.restoreAllConfirm', { count: restorable.length })}
+          okText={t('history.restoreAllOk')}
+          okButtonProps={{ 'data-testid': 'history-restore-all-confirm' } as Record<string, string>}
+          cancelText={t('common.cancel')}
+          onConfirm={() => void doRestore(restorable)}
         >
-          {t('history.restoreAll')}
-        </Button>
+          <Button
+            size="small"
+            type="link"
+            icon={<UndoOutlined />}
+            loading={restoring === restorable.join(',')}
+            data-testid="history-restore-all"
+          >
+            {t('history.restoreAll')}
+          </Button>
+        </Popconfirm>
       )}
 
       {outcome && (

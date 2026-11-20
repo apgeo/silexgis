@@ -134,3 +134,25 @@ describe('the links card target picker', () => {
     expect(row).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+describe('leaving the links editor with changes', () => {
+  it('closes at once when nothing was changed', async () => {
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /Edit links/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: the list was only looked at, so no question follows.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing an added link away', async () => {
+    show();
+    await openEditorAndSearch();
+    fireEvent.click(screen.getByRole('button', { name: /Izbucul Tăuz/ }));
+    chooseKind();
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('feature-link-target-picker-input')).toBeTruthy();
+  });
+});

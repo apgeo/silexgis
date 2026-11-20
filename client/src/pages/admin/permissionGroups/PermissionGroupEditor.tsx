@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { LockOutlined } from '@ant-design/icons';
 import { App, Drawer, Flex, Form, Input, Tabs, Tag } from 'antd';
 import Button from '../../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useUpdatePermissionGroup,
@@ -36,10 +37,16 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
   // Whether a preview has been looked at since the rules last changed — saving a
   // ruleset that contains a deny is gated on it.
   const [previewSeen, setPreviewSeen] = useState(false);
+  // Unsaved work in either half of the drawer: rules the rules tab holds as drafts, and a name or
+  // description typed into the header but not yet saved. Closing asks before throwing either away.
+  const requestDiscard = useDiscardGuard();
+  const [rulesUnsaved, setRulesUnsaved] = useState(false);
+  const renameEdits = useFormEdits();
 
   const onRename = async (values: { name: string; description?: string }) => {
     try {
       await updateGroup.mutateAsync({ name: values.name, description: values.description ?? null });
+      renameEdits.forget();
       message.success(t('common.saved'));
     } catch (error) {
       message.error(permissionGroupNameProblem(error, t));
@@ -56,7 +63,8 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
         </Flex>
       }
       open={open}
-      onClose={onClose}
+      onClose={() => requestDiscard(() => rulesUnsaved || renameEdits.edited(), onClose)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       size={1000}
       destroyOnHidden
     >
@@ -65,6 +73,7 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
         layout="inline"
         initialValues={{ name: group.name, description: group.description ?? undefined }}
         onFinish={(values) => void onRename(values)}
+        onValuesChange={renameEdits.onValuesChange}
         style={{ marginBottom: 16 }}
       >
         <Form.Item name="name" rules={[{ required: true }, { max: 100 }]}>
@@ -98,6 +107,7 @@ export default function PermissionGroupEditor({ group, catalog, open, onClose }:
                 catalog={catalog}
                 previewSeen={previewSeen}
                 onRulesChanged={() => setPreviewSeen(false)}
+                onDirtyChange={setRulesUnsaved}
                 onRequestPreview={() => setActiveTab('preview')}
               />
             ),

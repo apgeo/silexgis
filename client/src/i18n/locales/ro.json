@@ -454,6 +454,27 @@
     "allMyTrips": "Toate turele mele"
   },
   "auth": {
+    "forgotPassword": "Ai uitat parola?",
+    "forgotTitle": "Alege o parolă nouă",
+    "forgotIntro": "Scrie adresa cu care te autentifici. Dacă are un cont aici, i se trimite prin e-mail un link pentru alegerea unei parole noi.",
+    "forgotSubmit": "Trimite linkul",
+    "forgotSent": "Dacă există un cont pentru această adresă, un e-mail cu un link pentru alegerea unei parole noi este pe drum.",
+    "backToSignIn": "Înapoi la autentificare",
+    "createAccount": "Creează un cont",
+    "registerTitle": "Creează un cont",
+    "displayName": "Numele tău (opțional)",
+    "registerMailSent": "Cererea a fost primită. Verifică-ți căsuța de e-mail: un mesaj cu pasul următor este pe drum.",
+    "registerDone": "Cererea a fost primită. Dacă adresa era nouă aici, te poți autentifica acum cu ea și cu această parolă. Dacă avea deja un cont, autentifică-te cu parola acelui cont sau alege una nouă.",
+    "registerMailNotSent": "Cererea a fost primită, dar nu s-a putut trimite un e-mail de confirmare a adresei. Cere unui administrator al acestei instalări să o confirme.",
+    "registerRejected": "Adresa sau parola nu a fost acceptată. Folosește o adresă validă și o parolă de cel puțin 10 caractere.",
+    "registrationDisabled": "Această instalare nu deschide conturi la cerere. Cere o invitație unuia dintre administratorii ei.",
+    "configFailed": "Opțiunile de autentificare nu au putut fi citite, deci este posibil să lipsească furnizorii de autentificare.",
+    "externalNoAccount": "Nu există aici un cont pentru această autentificare, iar această instalare nu deschide unul prin acest furnizor. Cere unui administrator să-ți creeze contul sau să te invite.",
+    "externalEmailUnverified": "Furnizorul nu ți-a verificat adresa. Verific-o la furnizor, apoi încearcă din nou.",
+    "externalLinkRequired": "Un cont de aici folosește deja această adresă, dar furnizorul nu a verificat-o. Autentifică-te cu parola, apoi asociază furnizorul din setările de securitate.",
+    "externalNoEmail": "Furnizorul nu a transmis o adresă de e-mail, deci contul nu a putut fi găsit. Permite-i să-ți transmită adresa sau autentifică-te cu parola.",
+    "externalNotAllowed": "Acest cont nu se poate autentifica încă. Este posibil ca adresa să trebuiască încă confirmată; altfel, cere ajutorul unui administrator.",
+    "externalProviderUnknown": "Acest furnizor de autentificare nu este configurat pe această instalare.",
     "email": "Email",
     "password": "Parolă",
     "signIn": "Autentificare",
@@ -468,7 +489,6 @@
     "signInWith": "Autentificare cu {{provider}}",
     "externalFailed": "Autentificarea externă nu a fost finalizată. Încearcă din nou sau folosește parola.",
     "serverUnreachable": "Serverul nu poate fi contactat",
-    "configFailed": "Modurile de autentificare nu au putut fi citite acum; formularul cu parolă de mai jos s-ar putea să nu fie cel folosit de această instalare.",
     "serverUnreachableHint": "Autentificarea nu a putut fi inițiată. Verifică dacă serverul funcționează, apoi încearcă din nou.",
     "unreachable": "Serverul nu a putut fi contactat. Verifică conexiunea, apoi încearcă din nou.",
     "serverFailed": "Serverul nu a putut finaliza acum această operație. Încearcă din nou peste câteva momente.",
@@ -533,6 +553,10 @@
     "save": "Salvează",
     "ok": "OK",
     "cancel": "Anulează",
+    "discardTitle": "Renunți la modificări?",
+    "discardBody": "Ce ai modificat aici nu a fost salvat și se va pierde.",
+    "discardOk": "Renunță",
+    "keepEditing": "Continuă editarea",
     "edit": "Editează",
     "back": "Înapoi",
     "continue": "Continuă",
@@ -1083,6 +1107,10 @@
     "parentFixed": "O intrare sau o drumuire stă doar sub propria peșteră. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
     "problems": {
       "typeChangeForbidden": "Nu ai dreptul să modifici obiecte de tipul în care îl schimbi pe acesta, așa că nimic nu a fost salvat. Păstrează-i tipul actual sau cere ajutorul cuiva care poate modifica acel tip.",
+      "linkSelf": "Un obiect nu poate fi legat de el însuși. Alege alt obiect.",
+      "linkKindUnknown": "Acest fel de legătură nu mai este oferit. Reîncarcă și alege altul.",
+      "linkDuplicate": "Același obiect este legat de două ori cu același fel de legătură. Șterge una dintre ele.",
+      "linkTargetNotFound": "Unul dintre obiectele legate nu mai există sau nu îl mai poți vedea. Șterge-l și salvează din nou.",
       "parentPrimaryHidden": "Părintele principal al acestui obiect este unul pe care nu îl poți vedea, așa că nu îi poți schimba părinții. Cere ajutorul cuiva care vede acel părinte."
     },
     "parentFixedNote": "O intrare sau o drumuire stă doar sub propria peșteră, așa că părintele ei nu poate fi schimbat aici. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
@@ -1124,6 +1152,8 @@
     "currentVersion": "curentă",
     "noVersions": "Încă nu există versiuni.",
     "versionsLoadFailed": "Versiunile nu au putut fi citite acum.",
+    "versionInUse": "Această versiune este încă folosită, așa că nu poate fi ștearsă.",
+    "headUndeletable": "Versiunea curentă nu poate fi ștearsă. Încarcă mai întâi o versiune nouă, apoi șterge-o pe aceasta.",
     "deleteVersionConfirm": "Ștergi această versiune? Conținutul ei este eliminat definitiv.",
     "details": "Detalii",
     "caption": "Legendă",
@@ -1488,6 +1518,8 @@
     "selectLine": "Selectează {{name}}",
     "acceptSelected": "Acceptă selecția ({{count}})",
     "rejectSelected": "Respinge selecția ({{count}})",
+    "rejectSelectedTitle": "Respingi {{count}} de linii?",
+    "rejectSelectedExplain": "Aceste {{count}} de linii nu sunt scrise, iar cel care le-a trimis este anunțat, cu nota de mai jos. O linie respinsă poate fi totuși acceptată ulterior, cu „Acceptă totuși”.",
     "noteLabel": "Notă pentru cel care a încărcat (opțională, trimisă cu următoarea decizie)",
     "notePlaceholder": "De ce, sau ce să facă în loc",
     "showDecided": "Arată liniile deja decise",
@@ -1597,6 +1629,7 @@
     "batchStarted": "Încărcat"
   },
   "gallery": {
+    "creditLoadFailed": "Fotografia nu a putut fi citită, așa că atribuirea ei nu poate fi modificată deocamdată.",
     "filter": {
       "advanced": "Condiții…",
       "advancedTitle": "Condiții pentru fotografii",
@@ -1940,6 +1973,9 @@
     "tabImports": "Importuri"
   },
   "mapEdit": {
+    "entranceNotCreated": "Peștera a fost creată, dar intrarea ei nu: {{problem}}",
+    "entranceNotCreatedTitle": "Peștera a fost creată, dar intrarea ei nu.",
+    "entranceRetryHint": "Apasă OK pentru a adăuga doar intrarea acestei peșteri; peștera nu este creată a doua oară. Dacă închizi, peștera rămâne fără intrare, iar intrarea poate fi adăugată din fișa ei.",
     "featureType": "Tip de obiect",
     "draw": "Desenează",
     "modify": "Modifică (trage vârfurile; Alt+clic șterge)",
@@ -2185,6 +2221,7 @@
       "weather_note": "Notă meteo",
       "whatsapp_group_url": "Link către grupul de discuții"
     },
+    "stateTransitionInvalid": "Această schimbare nu este posibilă din starea în care se află acum: poate cineva a mutat-o între timp. Reîncarcă pentru a vedea unde a rămas.",
     "state": "Stare",
     "stateValues": {
       "draft": "Ciornă",
@@ -2385,6 +2422,7 @@
     "calloutOverdueBody": "A trecut ora alarmei și nimeni nu confirmase că echipa a ieșit. Toți cei din tură au fost anunțați.",
     "calloutStandDown": "Echipa a ieșit",
     "calloutStoodDownSuccess": "Înregistrat — apelul de urgență a fost oprit.",
+    "calloutNotArmed": "Această ieșire nu mai are nicio verificare de întârziere de oprit: poate cineva a anulat-o deja.",
     "calloutStandDownFailed": "Apelul de urgență nu a putut fi oprit. Încearcă din nou și ia legătura pe altă cale dacă eroarea persistă.",
     "calloutArrange": "Stabilește o alarmă",
     "calloutChange": "Modifică alarma",
@@ -3313,6 +3351,19 @@
     "action": "Acțiune",
     "entityType": "Entitate",
     "entityId": "Id entitate",
+    "actions": {
+      "created": "Creat",
+      "updated": "Modificat",
+      "deleted": "Șters",
+      "permission_changed": "Permisiuni schimbate",
+      "notification_retried": "Mesaj retrimis",
+      "login": "Autentificare",
+      "two_factor_reset": "Al doilea factor resetat",
+      "upload_review_marked": "Verificarea încărcărilor schimbată",
+      "external_account_linked": "Autentificarea externă a preluat contul",
+      "exported": "Exportat",
+      "storage_reclaimed": "Spațiu de stocare eliberat"
+    },
     "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
   },
   "history": {
@@ -3327,6 +3378,9 @@
     "systemUser": "Sistem",
     "restoreField": "Restaurează această valoare",
     "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",
+    "restoreAllConfirm": "Pui la loc {{count}} de valori dinaintea acestei modificări?",
+    "restoreAllOk": "Pune la loc",
+    "restoreFailed": "Valoarea anterioară nu a putut fi pusă la loc. Încearcă din nou.",
     "restored": "Valoare restaurată.",
     "restoredPartly_one": "O valoare a fost restaurată. Unele au rămas neschimbate:",
     "restoredPartly": "{{count}} valori au fost restaurate. Unele au rămas neschimbate:",
@@ -3425,6 +3479,8 @@
       "send": "Trimite",
       "done": "Trimis. Persoane anunțate: {{people}}",
       "queued": "Se trimite — clubul este destul de mare încât anunțurile se scriu în fundal. Persoane care vor fi anunțate: {{people}}",
+      "tooSoon": "Ai scris unui grup de speologi acum câteva clipe. Așteaptă câteva minute înainte de a trimite un alt anunț.",
+      "paidCapReached": "Această instalare a atins azi suma pe care o cheltuie pe mesaje text, așa că anunțul nu a fost trimis nimănui. Poate fi trimis mâine sau un administrator poate mări limita zilnică.",
       "failed": "Anunțul nu a fost trimis. Încearcă din nou."
     },
     "roles": {
@@ -3463,6 +3519,9 @@
       "grantsFullAdmin": "Doar un administrator deplin poate face asta: contul acestei persoane ar deveni administrator deplin.",
       "revokesFullAdmin": "Doar un administrator deplin poate face asta: un cont și-ar pierde drepturile de administrator deplin.",
       "exceedsOwnRights": "Nu poți face asta: contul acestei persoane ar primi drepturi pe care tu nu le ai.",
+      "mergeTwoAccounts": "Ambele înregistrări au câte un cont propriu. Detașează contul de la una dintre ele înainte de a le uni.",
+      "mergeSelf": "O persoană nu poate fi unită cu ea însăși. Alege altă înregistrare de unit.",
+      "mergeRaced": "Ceva legat de una dintre aceste persoane s-a schimbat în timp ce se făcea unirea, așa că nu s-a unit nimic. Reîncarcă și încearcă din nou.",
       "memberRaced": "Altcineva a adăugat această persoană în grup în același moment. Reîncarcă grupul și încearcă din nou.",
       "lastFullAdmin": "Instalarea ar rămâne fără un administrator deplin care se poate autentifica."
     },
@@ -3897,7 +3956,7 @@
     "searchFeature": "Caută obiecte…",
     "addFeature": "Adaugă",
     "noMembers": "Niciun obiect în acest set.",
-    "membersLoadFailed": "Obiectele din acest set nu au putut fi citite acum, așa că setul nu poate fi salvat până nu sunt citite.",
+    "membersLoadFailed": "Membrii setului nu au putut fi citiți, așa că apartenența la set nu poate fi modificată deocamdată.",
     "deleteConfirm": "Ștergi acest set de obiecte?",
     "inUse": "Există reguli care se referă la acest set; elimină-le mai întâi.",
     "nameInvalid": "Denumirea unui set de obiecte trebuie să conțină cel puțin o literă sau o cifră.",
@@ -4165,6 +4224,7 @@
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
+    "startFailedHint": "Ceva din acest browser a împiedicat pornirea vizualizării 3D. Încearcă din nou; dacă eșuează la fel, reîncarcă pagina.",
     "startFailed": "Vizualizarea 3D nu a putut fi pornită",
     "downloadFailedTitle": "Vizualizarea 3D nu s-a descărcat complet",
     "downloadFailedHint": "Vizualizarea 3D este o descărcare mare (aproximativ un megaoctet), iar conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă. Harta și datele nu au nicio problemă. Încearcă din nou sau reîncarcă pagina dacă SilexGIS a fost actualizat de când ai deschis-o.",
@@ -4858,6 +4918,17 @@
   },
   "centerlines": {
     "loadFailed": "Drumuirile acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcată vreuna.",
+    "problems": {
+      "formatUnsupported": "Acest tip de fișier nu este citit ca drumuire. Încarcă un fișier GeoJSON, GPX, KML sau KMZ.",
+      "sizeInvalid": "Fișierul este gol sau mai mare de 20 MB.",
+      "unreadable": "Fișierul nu a putut fi citit ca drumuire: poate fi deteriorat sau nu are formatul pe care îl indică numele.",
+      "noLines": "Fișierul nu conține linii. O drumuire are nevoie de cel puțin o linie, nu doar de puncte.",
+      "surveyModelInvalid": "Modelul de topografie ales nu aparține acestei peșteri.",
+      "defaultRequired": "O peșteră cu drumuiri are mereu una ca formă. Setează în schimb o altă drumuire ca implicită.",
+      "notFound": "Această drumuire nu mai există: poate a șters-o cineva.",
+      "caveNotFound": "Această peșteră nu mai există sau nu o mai poți vedea.",
+      "forbidden": "Nu ai dreptul să modifici drumuirile acestei peșteri."
+    },
     "title": "Drumuiri",
     "upload": "Încarcă drumuire",
     "uploaded": "Drumuire încărcată",
@@ -5868,6 +5939,7 @@
   "notifications": {
     "bell": "Notificări",
     "title": "Notificări",
+    "markFailed": "Notificarea nu a putut fi marcată drept citită. Încearcă din nou.",
     "markAllRead": "Marchează tot ca citit",
     "allCategories": "Toate categoriile",
     "scopeAll": "Toate",
@@ -6455,6 +6527,8 @@
     }
   },
   "importReview": {
+    "saveFailed": "Ultimele tale modificări ale acestei verificări nu au putut fi salvate.",
+    "saveFailedHint": "Confirmarea așteaptă până sunt salvate, ca să creeze ce vezi aici. Încearcă din nou sau fă o altă modificare pentru a salva din nou.",
     "held": "Importurile contului tău așteaptă un recenzent. Nu s-a creat nimic încă; se va crea după ce un recenzent le acceptă."
   },
   "vectorImport": {
@@ -6626,6 +6700,7 @@
       }
     },
     "revert": "Anulează",
+    "revertFailed": "Importul nu a putut fi anulat. Încearcă din nou.",
     "reverted": "Importul a fost anulat.",
     "revertedTag": "Anulat",
     "reviewPendingTag": "Așteaptă verificarea",
@@ -6771,16 +6846,16 @@
     }
   },
   "termRules": {
+    "loadFailed": "Setul de reguli nu a putut fi citit, așa că nu poate fi modificat deocamdată.",
     "errors": {
+      "seededUndeletable": "Setul livrat cu această instalare nu poate fi șters: la el se întorc importurile când nu se aplică niciun alt set.",
+      "promotionForbidden": "Doar un administrator poate schimba ce moștenește toată lumea.",
+      "promoteFailed": "Setul nu a putut fi făcut implicit pentru instalare. Încearcă din nou.",
       "notEditable": "Acest set nu poate fi modificat aici. Fă-ți o copie proprie și modific-o pe aceea.",
       "notFound": "Acest set nu mai există: poate a fost șters de altcineva.",
       "groupNotFound": "Grupul de speologie căruia îi aparține setul nu mai există.",
       "forbidden": "Contul tău nu are voie să modifice acest set."
     },
-    "discardTitle": "Închizi fără să salvezi?",
-    "discardBody": "Modificările făcute acestui set se pierd.",
-    "discardOk": "Închide și renunță la ele",
-    "keepEditing": "Continuă editarea",
     "title": "Reguli de detectare",
     "intro": "Ce se propune să devină un punct numit Peștera, P., aven, izbuc, ponor sau dolină. Ordinea decide: când două reguli revendică același candidat, câștigă prima.",
     "name": "Nume",
@@ -6797,7 +6872,6 @@
     "promote": "Fă implicit",
     "makeInstallationDefault": "Fă din acesta punctul de plecare al oricărui import",
     "promoted": "Orice import pornește acum de la acest set.",
-    "promoteFailed": "Doar un administrator poate schimba ce moștenesc toți.",
     "deleteConfirm": "Ștergi acest set de reguli?",
     "default": "Implicit",
     "shipped": "Livrat",
@@ -7133,6 +7207,7 @@
     }
   },
   "fileStorage": {
+    "remeasureFailed": "Fișierele au fost șterse, dar spațiul de stocare nu a putut fi măsurat din nou: cifrele afișate sunt cele de dinainte.",
     "title": "Spațiu de stocare",
     "intro": "Ce ocupă depozitul de fișiere al instalației, cât de repede crește și ce s-ar putea șterge. Originalele încărcate nu sunt oferite niciodată spre ștergere.",
     "measure": "Măsoară acum",
@@ -7783,6 +7858,14 @@
       "failed": "Suprafața nu a fost făcută. Progresul de mai sus spune de ce."
     },
     "problems": {
+      "pointCloudInvalid": "Norul de puncte nu este un fișier LAS sau LAZ pe care acest server îl poate citi: antetul lipsește, e scurt sau nu se potrivește.",
+      "recordingInvalid": "Înregistrarea scanerului nu a putut fi procesată: o parte nu se citește, un jurnal nu are coloanele așteptate sau unei bucăți îi lipsește perechea.",
+      "workerUnavailable": "Nu există pe această instalare un proces care să prelucreze scanări, sau cel existent nu poate rula un pas de care are nevoie această încărcare. Întreabă un administrator.",
+      "workerSilent": "Lucrarea a fost lăsată procesului care prelucrează scanări și nimic nu a preluat-o în timpul permis. Întreabă un administrator dacă procesul rulează, apoi rulează din nou.",
+      "workerFailed": "Procesul care prelucrează scanări a preluat lucrarea și a raportat că a eșuat sau a fost oprit. Rulează din nou; dacă eșuează la fel, întreabă un administrator.",
+      "workerTimeout": "Prelucrarea a durat mai mult decât permite această instalare pentru o lucrare.",
+      "workerInterrupted": "Procesul care prelucrează scanări a fost oprit în timp ce rula, iar rezultatele scrise pe jumătate nu sunt folosite. Rulează din nou încărcarea pentru a relua pasul de la început.",
+      "exportInvalid": "Norul de puncte făcut din înregistrare nu a trecut verificarea, așa că nu s-a construit nimic pe el. Rulează din nou; dacă eșuează la fel, înregistrarea poate fi deteriorată.",
       "surfaceUnplaced": "Suprafața a fost făcută, dar nu a fost salvată: scanarea nu mai e plasată sau peștera aleasă pentru ea nu mai există. Plasează scanarea și fă din nou suprafața.",
       "surfaceNeedsTiles": "O suprafață se face dintr-o scanare procesată și împărțită în dale.",
       "surfaceNeedsPlacement": "Plasează întâi scanarea: suprafața ei se salvează acolo unde e plasată scanarea.",
@@ -8816,6 +8899,7 @@
     "noProposal": "Măsurătorile nu se separă în niveluri.",
     "notConfirmed": "Nu s-a înregistrat încă nicio citire",
     "confirm": "Înregistrează această citire",
+    "clearFailed": "Citirea nu a putut fi retrasă. Încearcă din nou.",
     "clear": "Retrage citirea",
     "clearConfirm": "Retragi citirea înregistrată a nivelurilor acestei peșteri?",
     "saved": "Citirea a fost înregistrată.",
@@ -10154,6 +10238,13 @@
     "namePlaceholder": "Nume",
     "openSaved": "Deschide un survol salvat",
     "deleteSaved": "Șterge survolul salvat cu acest nume",
+    "deleteConfirm": "Ștergi survolul salvat „{{name}}”? Este păstrat doar în acest browser, așa că nu mai poate fi recuperat.",
+    "replaceTitle": "Înlocuiești survolul salvat „{{name}}”?",
+    "replaceBody": "Un survol este deja salvat sub acest nume în acest browser. Salvarea îl înlocuiește.",
+    "replaceOk": "Înlocuiește",
+    "closeTitle": "Închizi cu modificări nesalvate?",
+    "closeBody": "Survolul este păstrat pentru când deschizi din nou acest panou, dar numai până la reîncărcarea sau închiderea paginii. Salvează-l ca să-l păstrezi în acest browser.",
+    "closeOk": "Închide",
     "saveFile": "Salvează în fișier",
     "openFile": "Deschide din fișier",
     "holdsPlace": "Acest survol conține un loc fixat. Fișierul lui arată unde este acel loc oricui îi este trimis.",

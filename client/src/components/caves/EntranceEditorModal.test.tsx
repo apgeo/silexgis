@@ -174,3 +174,28 @@ const surveyed: Entrance = {
   surveyedAt: '2025-08-14',
   approximateLocation: false,
 } as Entrance;
+
+describe('EntranceEditorModal leaving with typed work', () => {
+  function showClosable() {
+    const onClose = vi.fn();
+    render(dialog(true, onClose));
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Behind the boulder' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});

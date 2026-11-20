@@ -131,6 +131,10 @@ test('a drop of several files sends every one of them', async ({ page }) => {
   // upload control in the document, and an unscoped locator has previously posted a batch to
   // the wrong endpoint entirely.
   const dropped = payload(['one.txt', 'two.txt', 'three.txt']);
+  // Named, so the drop can be found again on the page that lists every drop.
+  const dropName = `E2E drop ${dropped.run}`;
+  // Reached through its form row: the field carries no accessible name of its own.
+  await drawer.locator('.ant-form-item').filter({ hasText: 'Name this batch' }).locator('input').fill(dropName);
   await drawer
     .getByTestId('upload-files')
     .locator('input[type=file]')
@@ -144,6 +148,14 @@ test('a drop of several files sends every one of them', async ({ page }) => {
   for (const name of dropped.names) {
     await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible({ timeout: 15_000 });
   }
+
+  // The drops report lists the drop under its name with what became of each file, newest first.
+  await gotoRoute(page, '/uploads');
+  await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible({ timeout: 45_000 });
+  const drop = page.getByRole('row').filter({ hasText: dropName });
+  await expect(drop).toHaveCount(1, { timeout: 30_000 });
+  await expect(drop).toContainText('3 stored · 0 skipped · 0 failed');
+  await expect(drop).toContainText('Browser');
 });
 
 test('a dropped folder keeps its structure as cabinets', async ({ page }) => {

@@ -19,6 +19,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCaveTypes,
@@ -66,6 +67,8 @@ const VISIBILITIES: Visibility[] = ['private', 'cavingGroup', 'authenticated', '
  */
 export default function SpeologieImportPage() {
   const { t } = useTranslation();
+  // At phone width the list and the placement map stack instead of holding their desktop widths.
+  const isMobile = useIsMobile();
   const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { message } = App.useApp();
@@ -340,7 +343,7 @@ export default function SpeologieImportPage() {
       </Card>
 
       <Flex gap={16} wrap align="start">
-        <div style={{ flex: '1 1 640px', minWidth: 400 }}>
+        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 640px', minWidth: isMobile ? 0 : 400 }}>
           <Table<SpeologieCave>
             rowKey="id"
             size="small"
@@ -352,7 +355,11 @@ export default function SpeologieImportPage() {
             data-testid="speologie-candidates"
           />
         </div>
-        <Card size="small" style={{ flex: '1 1 380px', minWidth: 320 }} title={t('speologie.wizard.position')}>
+        <Card
+          size="small"
+          style={{ flex: isMobile ? '1 1 100%' : '1 1 380px', minWidth: isMobile ? 0 : 320 }}
+          title={t('speologie.wizard.position')}
+        >
           <CataloguePlacementMap
             placed={placed}
             placingId={placingId}

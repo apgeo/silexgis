@@ -6,7 +6,7 @@ import Button from '../Button.tsx';
 import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 import { useDeleteFileVersion, useFileConfig, useFileVersions, useUploadFileVersion } from '../../api/hooks.ts';
 import { uploadReasonKey } from '../uploads/uploadReasons.ts';
 import { formatSize } from './fileFormat.ts';
@@ -63,8 +63,20 @@ export default function FileVersions({
     try {
       await deleteVersion.mutateAsync(id);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (isConcurrencyConflict(error)) {
+        return;
+      }
+      const code = error instanceof ApiError ? error.code : undefined;
+      message.error(
+        t(
+          code === 'file.version_in_use'
+            ? 'attachments.versionInUse'
+            : code === 'file.head_undeletable'
+              ? 'attachments.headUndeletable'
+              : 'common.deleteFailed',
+        ),
+      );
     }
   };
 

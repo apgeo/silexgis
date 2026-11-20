@@ -11,6 +11,7 @@ import {
   type FilterQueryBody,
 } from '../../../api/hooks.ts';
 import type { FilterDocument } from '../../../filters/types.ts';
+import { flybyDraftPrint, useFlybyDraftStore, type FlybyDraftState, type FlybySource } from './flybyDraft.ts';
 import {
   FLYBY_FILTER_LIMIT,
   flybyProblems,
@@ -100,8 +101,7 @@ export interface FlybyScene {
   relief?(): number;
 }
 
-/** Where the subjects of a flyby being put together come from. */
-export type FlybySource = 'selected' | 'inView' | 'filter' | 'view' | 'file';
+export type { FlybySource } from './flybyDraft.ts';
 
 /** What went wrong, in a form the panel puts into words. */
 export type FlybyTrouble =
@@ -197,35 +197,88 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
   // ---- what the flyby is about, and how it is built ----
 
   const selectedSubject = useMemo(() => subjectOfSelection(selection), [selection]);
-  const [source, setSourceState] = useState<FlybySource>(() => (subjectOfSelection(selection) ? 'selected' : 'view'));
-  const [caves, setCaves] = useState<CaveInView3D[]>(() => scene.cavesInView());
-  const [checked, setChecked] = useState<string[]>(() =>
-    scene
-      .cavesInView()
-      .slice(0, DEFAULT_TOUR_CAVES)
-      .map((cave) => cave.caveId),
+  // The flyby the tool held when it was last closed: opening the tool again carries on with it.
+  const [kept] = useState(() => useFlybyDraftStore.getState().draft);
+  const restored = kept?.state;
+  const [source, setSourceState] = useState<FlybySource>(
+    () => restored?.source ?? (subjectOfSelection(selection) ? 'selected' : 'view'),
   );
-  const [presetChoice, setPresetChoice] = useState<FlybyPresetId>();
+  const [caves, setCaves] = useState<CaveInView3D[]>(() => scene.cavesInView());
+  const [checked, setChecked] = useState<string[]>(
+    () =>
+      restored?.checked ??
+      scene
+        .cavesInView()
+        .slice(0, DEFAULT_TOUR_CAVES)
+        .map((cave) => cave.caveId),
+  );
+  const [presetChoice, setPresetChoice] = useState<FlybyPresetId | undefined>(restored?.presetChoice);
   /** The imported file a flyby along a line follows, when that is what it is about. */
-  const [fileId, setFileIdState] = useState<string>();
+  const [fileId, setFileIdState] = useState<string | undefined>(restored?.fileId);
   /** The saved filter whose caves a flyby is about, and how many of them at most. */
-  const [savedFilterId, setSavedFilterIdState] = useState<string>();
-  const [filterLimit, setFilterLimitState] = useState<number>(FLYBY_FILTER_LIMIT.initial);
-  const [options, setOptionsState] = useState<FlybyPresetOptions>(DEFAULT_FLYBY_PRESET_OPTIONS);
-  const [speed, setSpeed] = useState(1);
-  const [loop, setLoop] = useState(false);
-  const [name, setName] = useState('');
+  const [savedFilterId, setSavedFilterIdState] = useState<string | undefined>(restored?.savedFilterId);
+  const [filterLimit, setFilterLimitState] = useState<number>(restored?.filterLimit ?? FLYBY_FILTER_LIMIT.initial);
+  const [options, setOptionsState] = useState<FlybyPresetOptions>(restored?.options ?? DEFAULT_FLYBY_PRESET_OPTIONS);
+  const [speed, setSpeed] = useState(restored?.speed ?? 1);
+  const [loop, setLoop] = useState(restored?.loop ?? false);
+  const [name, setName] = useState(restored?.name ?? '');
   /** A document opened from the kept ones or a file, or one whose sections were changed by hand. */
-  const [edited, setEdited] = useState<FlybyDocument | null>(null);
+  const [edited, setEdited] = useState<FlybyDocument | null>(restored?.edited ?? null);
   // How the scene looks, its timed changes and the texts over it: kept apart from the sections, so
   // building the sections again from another preset or option keeps what was set here.
-  const [look, setLook] = useState<FlybyLook>({ sky: FLYBY_PRESET_SKY });
-  const [changes, setChanges] = useState<FlybyChange[]>([]);
-  const [texts, setTexts] = useState<FlybyTexts>({});
+  const [look, setLook] = useState<FlybyLook>(restored?.look ?? { sky: FLYBY_PRESET_SKY });
+  const [changes, setChanges] = useState<FlybyChange[]>(restored?.changes ?? []);
+  const [texts, setTexts] = useState<FlybyTexts>(restored?.texts ?? {});
   /** The layers of features the flyby draws itself. */
-  const [features, setFeatures] = useState<FlybyFeatureLayer[]>([]);
+  const [features, setFeatures] = useState<FlybyFeatureLayer[]>(restored?.features ?? []);
   /** The camera views captured for a flyby through them, in the order they are flown. */
-  const [views, setViewsState] = useState<FlybyCapturedView[]>([]);
+  const [views, setViewsState] = useState<FlybyCapturedView[]>(restored?.views ?? []);
+
+  // ---- unsaved changes ----
+
+  const draft = useMemo<FlybyDraftState>(
+    () => ({
+      source,
+      checked,
+      presetChoice,
+      fileId,
+      savedFilterId,
+      filterLimit,
+      options,
+      speed,
+      loop,
+      name,
+      edited,
+      look,
+      changes,
+      texts,
+      features,
+      views,
+    }),
+    [source, checked, presetChoice, fileId, savedFilterId, filterLimit, options, speed, loop, name, edited, look, changes, texts, features, views],
+  );
+  const print = useMemo(() => flybyDraftPrint(draft), [draft]);
+  // What "nothing to lose" looks like: the tool as it opened, or the flyby last saved or opened.
+  const [clean, setClean] = useState(() => kept?.clean ?? print);
+  const latest = useRef({ draft, print, clean });
+  latest.current = { draft, print, clean };
+  const [cleanAsked, setCleanAsked] = useState(0);
+  useEffect(() => {
+    if (cleanAsked > 0) {
+      setClean(latest.current.print);
+    }
+  }, [cleanAsked]);
+  /** Marks what the tool holds now as saved: it is what the next "unsaved changes" is measured from. */
+  const markClean = useCallback(() => setCleanAsked((n) => n + 1), []);
+  const dirty = print !== clean;
+  // Closing the tool unmounts this hook; the draft goes to the store and the next mount takes it up.
+  useEffect(
+    () => () => {
+      const { draft: last, clean: lastClean } = latest.current;
+      useFlybyDraftStore.getState().keep({ state: last, clean: lastClean });
+    },
+    [],
+  );
 
   const subjects = useMemo<FlybySubject[]>(() => {
     switch (source) {
@@ -379,6 +432,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     setChanges(opened.changes ?? []);
     setTexts(opened.texts ?? {});
     setFeatures(opened.features ?? []);
+    // The opened flyby is what is kept elsewhere: nothing is unsaved until it is changed.
+    setCleanAsked((n) => n + 1);
   }, []);
 
   // ---- the world the subjects are found in ----
@@ -788,6 +843,8 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     name,
     setName,
     document,
+    dirty,
+    markClean,
     edited: edited !== null,
     edit,
     views,

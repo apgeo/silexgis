@@ -2,7 +2,7 @@
 import {
   DeleteOutlined, DownloadOutlined, FileOutlined, InboxOutlined, StarFilled, StarOutlined,
 } from '@ant-design/icons';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 import {
   App, Card, Empty, Flex, Image, Popconfirm, Tooltip, Typography, Upload, theme,
 } from 'antd';
@@ -31,6 +31,7 @@ import PhotoPositionAction from './PhotoPositionAction.tsx';
 import { formatSize } from './fileFormat.ts';
 import LocationRemovedTag from './LocationRemovedTag.tsx';
 import { useDuplicatePrompt } from '../uploads/useDuplicatePrompt.ts';
+import { uploadReasonKey } from '../uploads/uploadReasons.ts';
 import { downloadTitle } from './downloadTitle.ts';
 import PlaceMapAction from '../../rastermap/PlaceMapAction.tsx';
 
@@ -142,8 +143,14 @@ export default function AttachmentSection({
         sortOrder: (attachments?.length ?? 0) + 1,
       });
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // Worded by the catalogue every upload uses — too large, a type this installation does not
+      // take, no room left, the connection lost — rather than as a bare "save failed".
+      message.error(
+        error instanceof ApiError
+          ? t(uploadReasonKey(error.code, 'failed', error.status))
+          : t(uploadReasonKey(undefined, 'failed', 0)),
+      );
     }
   };
 
@@ -151,8 +158,10 @@ export default function AttachmentSection({
     try {
       await deleteAttachment.mutateAsync(attachment.id);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('common.deleteFailed'));
+      }
     }
   };
 

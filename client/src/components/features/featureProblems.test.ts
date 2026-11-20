@@ -30,6 +30,10 @@ const codes: [string, number][] = [
   ['feature_set.name_invalid', 400],
   ['feature_set.name_taken', 400],
   ['feature_set.in_use', 409],
+  ['feature.link_self', 400],
+  ['feature.link_kind_unknown', 400],
+  ['feature.link_duplicate', 400],
+  ['feature.link_target_not_found', 400],
 ];
 
 /** A dotted key read straight out of a locale file, so a missing entry is not hidden by fallback. */

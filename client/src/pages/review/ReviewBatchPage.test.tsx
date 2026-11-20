@@ -365,6 +365,51 @@ describe('the batch view', () => {
     expect(spies.acceptItem.mock.calls[0][0].reviewId).toBe('L1');
   });
 
+  it('asks before rejecting more than one line, showing the count and the note, and sends the note as edited there', async () => {
+    show([cave, entrance]);
+    fireEvent.change(screen.getByTestId('review-note'), { target: { value: 'Draft' } });
+    fireEvent.click(screen.getByTestId('review-group-select'));
+    fireEvent.click(screen.getByTestId('review-reject-selected'));
+    const question = await screen.findByTestId('review-reject-confirm');
+    expect(spies.rejectItem).not.toHaveBeenCalled();
+    expect(question.textContent).toContain('2');
+    const note = screen.getByTestId('review-reject-note') as HTMLTextAreaElement;
+    expect(note.value).toBe('Draft');
+    fireEvent.change(note, { target: { value: 'Duplicates of last week' } });
+    fireEvent.click(screen.getByTestId('review-reject-confirm-ok'));
+    await waitFor(() => expect(spies.rejectItem).toHaveBeenCalledTimes(2));
+    expect(spies.rejectItem.mock.calls[0][0]).toMatchObject({ reviewId: 'L1', note: 'Duplicates of last week' });
+  });
+
+  it('rejects nothing when the reviewer declines the question about several lines', async () => {
+    show([cave, entrance]);
+    fireEvent.click(screen.getByTestId('review-group-select'));
+    fireEvent.click(screen.getByTestId('review-reject-selected'));
+    await screen.findByTestId('review-reject-confirm');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Cancel' })).at(-1)!);
+    // The selection survives the declined question, so the reviewer can still act on it.
+    expect(screen.getByTestId('review-reject-selected').textContent).toContain('2');
+    expect(spies.rejectItem).not.toHaveBeenCalled();
+  });
+
+  it('rejects a single line without a question', async () => {
+    show([edit]);
+    fireEvent.click(screen.getByTestId('review-line-reject'));
+    await waitFor(() => expect(spies.rejectItem).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('review-reject-confirm')).toBeNull();
+  });
+
+  it('keeps the selection when a decision fails', async () => {
+    spies.acceptItem.mockRejectedValueOnce(new ApiError(500, undefined, 'down'));
+    show([cave, entrance]);
+    fireEvent.click(screen.getByTestId('review-group-select'));
+    expect(screen.getByTestId('review-accept-selected').textContent).toContain('2');
+    fireEvent.click(screen.getByTestId('review-accept-selected'));
+    await waitFor(() => expect(spies.acceptItem).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('review-accept-selected')).not.toBeDisabled());
+    expect(screen.getByTestId('review-accept-selected').textContent).toContain('2');
+  });
+
   it('offers to take a rejection back, and shows the reason a line could not be written', () => {
     show([
       { ...cave, decision: 'rejected' } as HeldLine,

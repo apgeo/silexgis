@@ -221,3 +221,31 @@ describe('AlbumsPage', () => {
     expect([...DOCUMENT_VISIBILITIES].sort()).toEqual(['authenticated', 'cavingGroup', 'private', 'public']);
   });
 });
+
+describe('leaving the album dialog with typed work', () => {
+  it('closes at once when nothing was typed', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /New album/ }));
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing a typed title away, and a click beside it does not close it', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /New album/ }));
+    const title = await screen.findByLabelText('Title');
+    fireEvent.change(title, { target: { value: 'Winter camp' } });
+
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(screen.getByLabelText('Title')).toHaveValue('Winter camp');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Title')).toHaveValue('Winter camp');
+  });
+});

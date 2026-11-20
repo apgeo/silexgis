@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import {
   getFeatureTypeNameByCode,
   setFeatureTypeCatalog,
@@ -833,8 +833,17 @@ describe('Scene3DView', () => {
     renderView();
 
     expect(await screen.findByText('The 3D view could not be started')).toBeInTheDocument();
+    // Said in the reader's language first; the browser's own words stay, small, for whoever is
+    // asked about it.
+    expect(screen.getByText(i18n.t('scene3d.startFailedHint'))).toBeInTheDocument();
     expect(await screen.findByText(/different container/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload the page' })).toBeInTheDocument();
+
+    // Once whatever held the scene has let go, trying again starts the view without a reload.
     other.release();
+    fireEvent.click(screen.getByTestId('scene3d-start-retry'));
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    expect(screen.queryByText('The 3D view could not be started')).not.toBeInTheDocument();
   });
 
   it('says the view did not finish downloading, not that it broke, and starts it when asked again', async () => {

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { AttachmentInfo } from '../../api/hooks.ts';
 
 function attachment(over: Partial<AttachmentInfo> & { kind?: string; name?: string } = {}): AttachmentInfo {
@@ -47,6 +48,7 @@ function attachment(over: Partial<AttachmentInfo> & { kind?: string; name?: stri
 
 let attachments: AttachmentInfo[] = [];
 let setPrimaryAnswer: () => Promise<void> = () => Promise.resolve();
+const uploadSpy = vi.fn();
 const setPrimarySpy = vi.fn((_: { id: string; primary: boolean }) => setPrimaryAnswer());
 
 /** A mutation whose pending flag and variables follow its request, as TanStack Query's do. */
@@ -74,7 +76,7 @@ vi.mock('../../api/hooks.ts', () => ({
       ? { data: attachments, isError: false, error: null, refetch: vi.fn() }
       : { data: undefined, isError: true, error: attachmentsFailure, refetch: vi.fn() },
   useFileConfig: () => ({ data: { maxUploadBytes: 1024 * 1024 } }),
-  useUploadFile: () => ({ mutateAsync: vi.fn() }),
+  useUploadFile: () => ({ mutateAsync: uploadSpy }),
   useCreateAttachment: () => ({ mutateAsync: vi.fn() }),
   useDeleteAttachment: () => ({ mutateAsync: vi.fn() }),
   useSetPrimaryAttachment: () => useFakeMutation(setPrimarySpy),
@@ -144,6 +146,16 @@ describe('AttachmentSection', () => {
     draw();
     fireEvent.click(screen.getByRole('button', { name: 'Use as the headline picture' }));
     expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
+  });
+
+  it('says why the server refused an upload instead of a bare "save failed"', async () => {
+    uploadSpy.mockRejectedValue(new ApiError(400, 'file.type_not_accepted'));
+    draw();
+    const input = document.querySelector('input[type="file"]')!;
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array(10)], 'tool.exe')] } });
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalled());
+    expect(await screen.findByText('This file type is not accepted')).toBeInTheDocument();
   });
 
   it('draws a report and a document with the same controls, in their own lists', () => {

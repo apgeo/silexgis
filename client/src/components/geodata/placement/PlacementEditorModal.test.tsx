@@ -560,3 +560,51 @@ describe('the placement editor and what the installation knows', () => {
     expect(screen.queryByTestId('placement-use-stations')).toBeNull();
   });
 });
+
+describe('the placement editor and work not yet saved', () => {
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  const closeCross = () => fireEvent.click(document.querySelector('.ant-modal-close') as HTMLElement);
+
+  it('closes at once when only the starting corners it chose itself are there', async () => {
+    show(sheet({ status: 'unplaced', placement: null, placementSource: null }));
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before Cancel throws away a moved corner, and closes only on the answer', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    cancel();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('discard-confirm'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('asks the same of the close cross and Escape, and is not closed by a click beside it', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(screen.queryAllByText('Discard your changes?')).toHaveLength(0);
+    closeCross();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not ask once the placement was saved', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByTestId('placement-save'));
+    await screen.findByTestId('placement-publishing');
+    closeCross();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

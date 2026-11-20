@@ -11,7 +11,7 @@ import {
   useStandDownTripCallout,
   type TripCalloutState,
 } from '../../api/hooks.ts';
-import { isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
 import { useNow } from '../../hooks/useNow.ts';
 
 interface Props {
@@ -102,8 +102,14 @@ export default function TripCalloutPanel({
     try {
       await standDown.mutateAsync({ id: tripId });
       message.success(t('trips.calloutStoodDownSuccess'));
-    } catch {
-      message.error(t('trips.calloutStandDownFailed'));
+    } catch (error) {
+      // No check is armed any more: there is nothing left to stand down, and trying again would be
+      // refused the same way.
+      if (error instanceof ApiError && error.code === 'trip_log.callout_not_armed') {
+        message.info(t('trips.calloutNotArmed'));
+      } else {
+        message.error(t('trips.calloutStandDownFailed'));
+      }
     }
   };
 

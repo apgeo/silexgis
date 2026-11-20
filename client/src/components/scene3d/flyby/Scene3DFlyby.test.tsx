@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { App as AntApp } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n';
 import en from '../../../i18n/locales/en.json';
@@ -13,6 +14,7 @@ import type { Scene3DCameraState, Scene3DCore } from '../../../scene3d/scene3dEn
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import type { WorkspaceSelection } from '../../../stores/workspaceStore.ts';
 import FlybySections from './FlybySections.tsx';
+import { useFlybyDraftStore } from './flybyDraft.ts';
 import Scene3DFlyby from './Scene3DFlyby.tsx';
 import { flybySayWords, type FlybyScene } from './useFlyby.ts';
 import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
@@ -146,7 +148,9 @@ function renderFlyby(scene = fakeScene(), selection: WorkspaceSelection | null =
   const onClose = vi.fn();
   const { unmount } = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Scene3DFlyby scene={scene} selection={selection} onActiveChange={onActiveChange} onClose={onClose} />
+      <AntApp>
+        <Scene3DFlyby scene={scene} selection={selection} onActiveChange={onActiveChange} onClose={onClose} />
+      </AntApp>
     </QueryClientProvider>,
   );
   return { scene, onActiveChange, onClose, unmount };
@@ -164,6 +168,7 @@ const status = () => screen.getByTestId('flyby-time').dataset.status;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
   useFlybyStore.setState({ library: [], loadRoute: false });
+  useFlybyDraftStore.setState({ draft: null });
   saveBlob.mockClear();
 });
 
@@ -336,8 +341,92 @@ describe('the flyby tool over the 3D scene', () => {
     // Its file is the same document, and names the cave by id alone.
     fireEvent.click(screen.getByTestId('flyby-file-save'));
     expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'evening-tour.flyby.json');
+    // Deleting asks first: the library is in this browser alone, so nothing could bring it back.
     fireEvent.click(screen.getByTestId('flyby-delete'));
+    expect(useFlybyStore.getState().library).toHaveLength(1);
+    fireEvent.click(screen.getByTestId('flyby-delete-confirm'));
     expect(useFlybyStore.getState().library).toEqual([]);
+  });
+
+  it('asks before saving over a flyby kept under the same name', async () => {
+    // The questions are antd confirms, which appear on real timers.
+    vi.useRealTimers();
+    renderFlyby();
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Evening tour' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    expect(useFlybyStore.getState().library[0].loop).toBe(false);
+    fireEvent.click(screen.getByTestId('flyby-loop'));
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    expect(useFlybyStore.getState().library[0].loop).toBe(false);
+    fireEvent.click(await screen.findByTestId('flyby-replace-confirm'));
+    expect(useFlybyStore.getState().library).toHaveLength(1);
+    expect(useFlybyStore.getState().library[0].loop).toBe(true);
+  });
+
+  it('asks before closing with unsaved changes, and gives the draft back when the tool is opened again', async () => {
+    // The questions are antd confirms, which appear on real timers.
+    vi.useRealTimers();
+    const first = renderFlyby();
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Half made' } });
+    fireEvent.click(screen.getByTestId('flyby-close'));
+    expect(first.onClose).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('flyby-close-confirm'));
+    expect(first.onClose).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    const second = renderFlyby();
+    expect(screen.getByTestId('flyby-name')).toHaveValue('Half made');
+    // Still unsaved after coming back, so closing still says so.
+    fireEvent.click(screen.getByTestId('flyby-close'));
+    expect(second.onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks the same question when closed from outside the tool, as the 3D toolbar does', async () => {
+    // The questions are antd confirms, which appear on real timers.
+    vi.useRealTimers();
+    const closeRequest: { current: (() => void) | null } = { current: null };
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AntApp>
+          <Scene3DFlyby
+            scene={fakeScene()}
+            selection={caveSelected}
+            onActiveChange={vi.fn()}
+            onClose={onClose}
+            closeRequest={closeRequest}
+          />
+        </AntApp>
+      </QueryClientProvider>,
+    );
+    expect(closeRequest.current).not.toBeNull();
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Half made' } });
+    act(() => closeRequest.current!());
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('flyby-close-confirm'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes at once once the changes are saved', () => {
+    const { onClose } = renderFlyby();
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Kept' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    fireEvent.click(screen.getByTestId('flyby-close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before a saved flyby replaces unsaved changes', async () => {
+    // The questions are antd confirms, which appear on real timers.
+    vi.useRealTimers();
+    renderFlyby();
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Kept' } });
+    fireEvent.click(screen.getByTestId('flyby-save'));
+    fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Typed since' } });
+    fireEvent.mouseDown(within(screen.getByTestId('flyby-saved')).getByRole('combobox'));
+    fireEvent.click(await screen.findByTitle('Kept'));
+    expect(screen.getByTestId('flyby-name')).toHaveValue('Typed since');
+    fireEvent.click(await screen.findByTestId('discard-confirm'));
+    expect(screen.getByTestId('flyby-name')).toHaveValue('Kept');
   });
 
   it('opens a flyby from a file, and refuses a file that is not one', async () => {

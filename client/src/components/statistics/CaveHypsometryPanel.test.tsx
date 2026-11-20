@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { CaveHypsometry, CaveLevelBands } from '../../api/hooks.ts';
 
 const { hypsometrySpy, bandsSpy, saveSpy, clearSpy } = vi.hoisted(() => ({
@@ -20,6 +21,8 @@ vi.mock('../../api/hooks.ts', () => ({
 }));
 
 const { default: CaveHypsometryPanel } = await import('./CaveHypsometryPanel.tsx');
+
+const clearMutateAsync = vi.fn();
 
 const twoStoreys: CaveHypsometry = {
   caveId: 'cave-1',
@@ -64,7 +67,7 @@ function show(
   hypsometrySpy.mockReturnValue({ data, isLoading, isError });
   bandsSpy.mockReturnValue({ data: saved });
   saveSpy.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
-  clearSpy.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  clearSpy.mockReturnValue({ mutate: vi.fn(), mutateAsync: clearMutateAsync, isPending: false });
   return render(
     <App>
       <CaveHypsometryPanel caveId="cave-1" canEdit={canEdit} />
@@ -75,6 +78,16 @@ function show(
 afterEach(cleanup);
 
 describe('CaveHypsometryPanel', () => {
+  it('says so when withdrawing the recorded reading fails', async () => {
+    clearMutateAsync.mockReset().mockRejectedValue(new ApiError(503, undefined));
+    show(twoStoreys, { ...nothingSaved, confirmed: true, bands: [{ fromM: 1000, toM: 1009, label: null }] });
+    fireEvent.click(screen.getByTestId('hypsometry-clear'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(clearMutateAsync).toHaveBeenCalled());
+    expect(await screen.findByText(i18n.t('hypsometry.clearFailed'))).toBeTruthy();
+  });
+
   it('draws the histogram and lists the proposed levels as a proposal', () => {
     show(twoStoreys);
 

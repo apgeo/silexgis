@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Descriptions, Flex, Spin, Tag, Typography } from 'antd';
+import { Alert, Card, Descriptions, Flex, Spin, Tag, Typography, theme } from 'antd';
 import Button from '../components/Button.tsx';
 import List from '../components/List.tsx';
 import Map from 'ol/Map';
@@ -16,6 +16,7 @@ import { ApiError } from '../api/client.ts';
 import { useSharedFeature } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
 import { editorBackgroundLayer } from '../map/editorBackground.ts';
+import { translucent } from '../theme.ts';
 
 /**
  * Anonymous read-only page for a shared feature. The share token resolves server-side to a
@@ -30,6 +31,10 @@ import { editorBackgroundLayer } from '../map/editorBackground.ts';
  */
 export default function SharedFeaturePage() {
   const { t, i18n } = useTranslation();
+  const { token: colors } = theme.useToken();
+  // The shared feature is drawn in the application's own primary colour, read from the theme so the
+  // page follows it.
+  const highlight = colors.colorPrimary;
   const { token } = useParams<{ token: string }>();
   const location = useLocation();
   const { signIn } = useAuth();
@@ -61,11 +66,11 @@ export default function SharedFeaturePage() {
         new VectorLayer({
           source: new VectorSource({ features: [new Feature(geom)] }),
           style: new Style({
-            stroke: new Stroke({ color: '#146262', width: 3 }),
-            fill: new Fill({ color: 'rgba(20, 98, 98, 0.15)' }),
+            stroke: new Stroke({ color: highlight, width: 3 }),
+            fill: new Fill({ color: translucent(highlight, 0.15) }),
             image: new CircleStyle({
               radius: 8,
-              fill: new Fill({ color: '#146262' }),
+              fill: new Fill({ color: highlight }),
               stroke: new Stroke({ color: '#fff', width: 2 }),
             }),
           }),
@@ -75,7 +80,7 @@ export default function SharedFeaturePage() {
     });
     map.getView().fit(geom.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 });
     return () => map.setTarget(undefined);
-  }, [envelope, i18n.language]);
+  }, [envelope, i18n.language, highlight]);
 
   if (error) {
     // Only the two answers the server gives about the link itself are said as such. Anything else —
@@ -163,7 +168,7 @@ export default function SharedFeaturePage() {
       <Flex
         align="center"
         gap={8}
-        style={{ padding: '8px 16px', borderBottom: '1px solid rgba(128,128,128,0.25)' }}
+        style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.colorBorderSecondary}` }}
       >
         <Typography.Title level={5} style={{ margin: 0, flex: 1 }}>
           {feature.name ?? t('features.unnamed')}
@@ -186,7 +191,7 @@ export default function SharedFeaturePage() {
         )}
 
         {feature.geometry && (
-          <div ref={mapTarget} data-testid="shared-feature-map" style={{ height: 320, marginBottom: 16, background: '#e8ecef' }} />
+          <div ref={mapTarget} data-testid="shared-feature-map" style={{ height: 320, marginBottom: 16, background: colors.colorFillTertiary }} />
         )}
 
         {feature.description && (

@@ -29,10 +29,11 @@ export const SURVEY_SOURCE_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
 export function surveySourceProblemMessage(
   error: unknown,
   t: ReturnType<typeof useTranslation>['t'],
+  fallbackKey = 'surveySources.uploadFailed',
 ): string {
   if (!(error instanceof ApiError) || !error.code) {
-    return t('surveySources.uploadFailed');
+    return t(fallbackKey);
   }
   const key = SURVEY_SOURCE_PROBLEM_MESSAGE_KEYS[error.code];
-  return key ? t(key) : t('surveySources.uploadFailed');
+  return key ? t(key) : t(fallbackKey);
 }

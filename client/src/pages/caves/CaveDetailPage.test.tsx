@@ -474,6 +474,50 @@ describe('CaveDetailPage when the cave cannot be read', () => {
   });
 });
 
+describe('CaveDetailPage deleting the cave', () => {
+  it('says a refused delete in the words of a delete, not of a failed save', async () => {
+    can = true;
+    entrances = [];
+    deleteCave.mockRejectedValue(new ApiError(503, undefined));
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
+  it('leaves a version conflict to the application\'s own notice', async () => {
+    can = true;
+    entrances = [];
+    deleteCave.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    render(
+      <App>
+        <MemoryRouter>
+          <CaveDetailPage />
+        </MemoryRouter>
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('cave-delete'));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    await vi.waitFor(() => expect(deleteCave).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+});
+
 describe('CaveDetailPage deleting an entrance', () => {
   // A refused delete leaves the row where it was; the reader is told why, in the page's own
   // words, and the refusal does not escape as an unhandled rejection.
@@ -578,9 +622,9 @@ describe('CaveDetailPage deleting the cave', () => {
   });
 
   it.each([
-    ['refused', new ApiError(403, 'forbidden')],
-    ['cut off by a lost connection', new TypeError('Failed to fetch')],
-  ])('says a delete that was %s failed and stays on the cave', async (_label, failure) => {
+    ['refused', new ApiError(403, 'forbidden'), 'mapEdit.problems.forbidden'],
+    ['cut off by a lost connection', new TypeError('Failed to fetch'), 'common.deleteFailed'],
+  ])('says a delete that was %s failed and stays on the cave', async (_label, failure, words) => {
     entrances = [];
     summary = allowedToDelete();
     deleteCave.mockRejectedValue(failure);
@@ -588,7 +632,7 @@ describe('CaveDetailPage deleting the cave', () => {
 
     await confirmDelete();
 
-    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t(words))).toBeInTheDocument();
     expect(screen.queryByText(i18n.t('common.deleted'))).not.toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalledWith('/caves');
   });

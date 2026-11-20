@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import { App, Badge, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { CheckOutlined } from '@ant-design/icons';
@@ -51,6 +51,7 @@ type Scope = 'all' | 'unread';
  */
 export default function NotificationsPage() {
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [category, setCategory] = useState<NotificationCategoryName | undefined>(undefined);
@@ -71,7 +72,7 @@ export default function NotificationsPage() {
    */
   const open = (record: NotificationItem) => {
     if (record.readAt === null) {
-      markRead.mutate(record.id);
+      markRead.mutate(record.id, { onError: () => message.error(t('notifications.markFailed')) });
     }
   };
 
@@ -106,7 +107,9 @@ export default function NotificationsPage() {
         </Typography.Title>
         <Button
           icon={<CheckOutlined />}
-          onClick={() => markAllRead.mutate()}
+          onClick={() =>
+            markAllRead.mutate(undefined, { onError: () => message.error(t('notifications.markFailed')) })
+          }
           loading={markAllRead.isPending}
         >
           {t('notifications.markAllRead')}
@@ -140,6 +143,8 @@ export default function NotificationsPage() {
           }))}
         />
       </Flex>
+      {/* A failed read is not an empty inbox: this list carries security alerts and review
+          decisions, so "nothing to read" would be the one wrong answer. */}
       <ReadFailedAlert
         error={readError}
         isError={isError}
@@ -154,7 +159,7 @@ export default function NotificationsPage() {
         size="small"
         loading={isFetching && !data}
         dataSource={data?.items}
-        locale={{ emptyText: isError ? ' ' : t('notifications.empty') }}
+        locale={{ emptyText: isError && !data ? ' ' : t('notifications.empty') }}
         onRow={(record) => ({ onClick: () => open(record) })}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);

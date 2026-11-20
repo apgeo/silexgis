@@ -81,6 +81,7 @@ const stored: Entry[] = [
 ];
 
 const rulesChanged = vi.fn();
+const dirtyChanged = vi.fn();
 
 function tab(previewSeen = false) {
   return (
@@ -90,6 +91,7 @@ function tab(previewSeen = false) {
         catalog={catalog}
         previewSeen={previewSeen}
         onRulesChanged={rulesChanged}
+        onDirtyChange={dirtyChanged}
         onRequestPreview={() => {}}
       />
     </App>
@@ -105,6 +107,7 @@ beforeEach(() => {
   // The read made just before a save answers whatever is stored at that moment.
   refetch.mockImplementation(() => Promise.resolve({ data: entriesQuery.data }));
   rulesChanged.mockReset();
+  dirtyChanged.mockReset();
   replace.mockReset();
   replace.mockResolvedValue([]);
 });
@@ -148,6 +151,16 @@ describe('RulesTab before the stored rules are known', () => {
     expect(replace).toHaveBeenCalledTimes(1);
     const sent = replace.mock.calls[0][0] as { actions: string }[];
     expect(sent).toHaveLength(2);
+  });
+
+  it('tells the drawer when the drafts start and stop holding unsaved work', async () => {
+    render(tab());
+    fireEvent.click(addButton());
+    expect(dirtyChanged).toHaveBeenLastCalledWith(true);
+    await act(async () => {
+      fireEvent.click(saveButton());
+    });
+    expect(dirtyChanged).toHaveBeenLastCalledWith(false);
   });
 });
 

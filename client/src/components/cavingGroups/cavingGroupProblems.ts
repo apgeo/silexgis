@@ -22,3 +22,20 @@ export function cavingGroupCreateProblem(error: unknown, t: TFunction): string {
       return t('cavingGroupPicker.createFailed');
   }
 }
+
+/**
+ * Why an announcement to a caving group was refused. The wait between two announcements and the
+ * day's spending ceiling refuse the same send however often it is pressed, so they are said as
+ * what they are rather than as a failure worth repeating.
+ */
+export function announcementProblem(error: unknown, t: TFunction): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case 'caving_group.announcement_too_soon':
+        return t('cavingGroups.announce.tooSoon');
+      case 'caving_group.announcement_paid_cap_reached':
+        return t('cavingGroups.announce.paidCapReached');
+    }
+  }
+  return t('cavingGroups.announce.failed');
+}

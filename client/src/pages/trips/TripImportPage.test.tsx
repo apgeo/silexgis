@@ -9,6 +9,13 @@ import type { TripImportPreview, TripImportSession } from '../../api/hooks.ts';
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// A failed dry run, when a test sets one.
+const previewState: { error: unknown } = { error: null };
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
 const navigate = vi.fn();
 const uploadMutate = vi.fn();
 
@@ -163,8 +170,8 @@ const preview: TripImportPreview = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripImportSession: () => ({ data: session, isError: false }),
-  useSaveTripImportSession: () => ({ mutate: saveSessionMutate }),
-  useTripImportPreview: () => ({ data: preview, isFetching: false, error: null }),
+  useSaveTripImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
+  useTripImportPreview: () => ({ data: preview, isFetching: false, error: previewState.error }),
   useCommitTripImport: () => ({ mutateAsync: commitMutate, isPending: false }),
   useUploadFile: () => ({ mutateAsync: uploadMutate, isPending: false }),
   useDocument: () => ({ data: document_ }),
@@ -203,6 +210,10 @@ beforeEach(() => {
   document_ = undefined;
   commitMutate.mockReset();
   saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
+  previewState.error = null;
   navigate.mockReset();
   uploadMutate.mockReset();
 });
@@ -233,6 +244,36 @@ describe('TripImportPage', () => {
       expect(summary.textContent).toContain(title);
     }
     expect(within(summary).getAllByText('0').length).toBeGreaterThanOrEqual(4);
+  });
+
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  // The server's own sentence is English whatever language the page is in; the code is what the
+  // page words, and the sentence is not shown.
+  it('words a refused dry run from its code, not with the server\'s English sentence', async () => {
+    previewState.error = new ApiError(400, 'trip_import.file_unreadable', 'The sheet could not be parsed: bad header.');
+    show();
+    const notice = await screen.findByTestId('trip-import-preview-error');
+    expect(notice).toHaveTextContent(i18n.t('tripImport.errors.fileUnreadable'));
+    expect(notice).not.toHaveTextContent('could not be parsed');
+  });
+
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { fileId: 'file-1', body: { options: {}, decisions: {} } };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    fireEvent.click(screen.getByTestId('trip-import-take-3'));
+    await waitFor(() => expect(screen.getByTestId('trip-import-commit').textContent).toContain('1'));
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('trip-import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('trip-import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
   });
 
   it('confirms the rows the server calls selectable, less the ones just set aside', async () => {

@@ -11,15 +11,17 @@ const MEMBER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TYPED = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
-const { replaceSpy, createSpy, queryCalls, stored, failedRead } = vi.hoisted(() => ({
+const { replaceSpy, createSpy, refetchMembers, queryCalls, stored, failedRead } = vi.hoisted(() => ({
   // Which read did not land, switched on by the test that needs it.
   failedRead: { sets: false, members: false, refetch: vi.fn() },
   replaceSpy: vi.fn(),
+  refetchMembers: vi.fn(),
   createSpy: vi.fn(),
   queryCalls: [] as { body: unknown; enabled: boolean }[],
   // One array for every render, as a query cache would hand back: the drawer copies the members
   // into its draft whenever this changes.
   stored: {
+    membersFailed: false,
     sets: [{ id: '99999999-9999-4999-8999-999999999999', name: 'Zona de test', description: null, memberCount: 1 }],
     members: [
       { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Peștera Deja', kind: 'cave', typeName: null },
@@ -44,7 +46,13 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureSetMembers: () =>
     failedRead.members
       ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: failedRead.refetch }
-      : { data: stored.members, isPending: false },
+      : {
+          data: stored.membersFailed ? undefined : stored.members,
+          isPending: false,
+          isError: stored.membersFailed,
+          error: stored.membersFailed ? new TypeError('offline') : null,
+          refetch: refetchMembers,
+        },
   useReplaceFeatureSetMembers: () => ({ mutateAsync: replaceSpy, isPending: false }),
   useFeatureTypes: () => ({ data: [{ id: 7, code: 'spring', name: 'Izvor test' }] }),
   useFilterVocabulary: () => ({
@@ -93,6 +101,8 @@ afterEach(cleanup);
 beforeEach(() => {
   replaceSpy.mockReset().mockResolvedValue(undefined);
   createSpy.mockReset().mockResolvedValue(undefined);
+  refetchMembers.mockReset();
+  stored.membersFailed = false;
   queryCalls.length = 0;
   failedRead.sets = false;
   failedRead.members = false;
@@ -126,6 +136,31 @@ describe('failed reads of feature sets', () => {
     expect(within(drawer).getByRole('button', { name: 'Save' })).toBeDisabled();
     fireEvent.click(within(drawer).getByRole('button', { name: i18n.t('common.retry') }));
     expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the feature set member drawer when the members cannot be read', () => {
+  it('says so, offers a retry, and never saves an empty membership over the stored one', async () => {
+    stored.membersFailed = true;
+    render(
+      <App>
+        <FeatureSetsPage />
+      </App>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit features' }));
+    const drawer = await screen.findByRole('dialog');
+
+    expect(
+      within(drawer).getByText('The set’s members could not be read, so its membership cannot be changed yet.'),
+    ).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Retry' }));
+    expect(refetchMembers).toHaveBeenCalledTimes(1);
+
+    const save = within(drawer).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(replaceSpy).not.toHaveBeenCalled();
   });
 });
 

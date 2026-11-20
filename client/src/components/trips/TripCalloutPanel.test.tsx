@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { TripCalloutState } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 
@@ -158,6 +158,17 @@ describe('TripCalloutPanel', () => {
     show('armed');
     fireEvent.click(screen.getByTestId('trip-callout-stand-down'));
     expect(standDown).toHaveBeenCalledWith({ id: 'trip-1' });
+  });
+
+  // Refused because no check is armed any more (somebody cleared it meanwhile): trying again
+  // fails the same way, and the reader needs to know there is nothing left to stand down.
+  it('says there is no check left to stand down rather than asking to try again', async () => {
+    standDown.mockRejectedValue(new ApiError(409, 'trip_log.callout_not_armed'));
+    show('armed');
+    fireEvent.click(screen.getByTestId('trip-callout-stand-down'));
+
+    expect(await screen.findByText(i18n.t('trips.calloutNotArmed'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('trips.calloutStandDownFailed'))).toBeNull();
   });
 
   it('stops offering the tap once the party has said it is out', () => {

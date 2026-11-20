@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useCan,
@@ -90,6 +91,8 @@ export default function ChecklistsPage() {
   const [open, setOpen] = useState(false);
   const [initial, setInitial] = useState<FormValues | undefined>(undefined);
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
 
   const tell = (error: unknown, act: ChecklistAct) => {
     const sentence = checklistProblem(error, act, t);
@@ -259,15 +262,17 @@ export default function ChecklistsPage() {
       <Modal
         open={open}
         title={editing ? t('checklists.edit') : t('checklists.new')}
-        onCancel={() => setOpen(false)}
+        onCancel={() => requestDiscard(edits.edited, () => setOpen(false))}
         onOk={() => void form.submit()}
         confirmLoading={create.isPending || update.isPending}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         destroyOnHidden
       >
         <Form
           form={form}
           layout="vertical"
           initialValues={initial}
+          onValuesChange={edits.onValuesChange}
           onFinish={(values) => void submit(values)}
         >
           <Form.Item
