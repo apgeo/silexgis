@@ -9,12 +9,18 @@
          combines into this project's AGPL-3.0 because those sources are deliberately not marked
          "Incompatible With Secondary Licenses". Referenced from Infrastructure and not from
          Domain on purpose: parsing untrusted uploaded bytes is infrastructure work, and the
-         architecture tests assert that placement rather than trusting it. -->
-    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Blender\Therion.Blender.csproj" />
+         architecture tests assert that placement rather than trusting it.
+         Two modules, the lowest layers of what used to be one: the model records with the two
+         readers (and a writer of the Therion format, used for invented development data), and the
+         centreline graph built from a model. The library's scene builder and, above all, the part
+         that finds Blender and runs it are separate assemblies that are not referenced; the
+         architecture tests assert that the second one is in nothing this application builds. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Cave3D\Therion.Cave3D.csproj" />
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.CaveGeometry\Therion.CaveGeometry.csproj" />
     <!-- The reader for what a Therion compilation printed while it ran: the loop-error table it
          reports, the versions it ran at and whether it finished. Same repository, same submodule
-         pin and the same MPL-2.0 terms as the module above, so the licence argument is unchanged.
-         It is a different module, and it costs more than the first one did: it brings two further
+         pin and the same MPL-2.0 terms as the modules above, so the licence argument is unchanged.
+         It is a different module, and it costs more than the readers did: it brings two further
          projects with it (Therion.Core and Therion.Processing.Abstractions), and it shares one flat
          namespace with code that starts an external process. Checked before taking it — none of the
          three declares a NuGet package reference, so nothing new enters the package audit; the
@@ -24,7 +30,7 @@
     <!-- The builder of a compilable Therion project around a survey a field device uploaded: it
          reads the survey's header, plans the configuration file and the sketch copies around it,
          and names the outputs that configuration asks for. Same repository, pin and MPL-2.0 terms
-         as the two modules above. It costs the most of the three: it brings Therion.Syntax and
+         as the modules above. It costs the most of them: it brings Therion.Syntax and
          Therion.Semantics with it, and with them the first NuGet packages any of this library
          declares — MessagePack (for a parse cache this application never opens), Superpower and
          three Microsoft packages. The project owner accepted MessagePack's published advisories for

@@ -12,9 +12,9 @@ using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
-using Therion.Blender;
-using CaveSurvey = Therion.Blender.CaveSurvey;
-using Therion.Blender.Parsing;
+using Therion.Cave3D;
+using CaveSurvey = Therion.Cave3D.CaveSurvey;
+using Therion.Cave3D.Parsing;
 
 namespace SilexGis.Api.Tests;
 

@@ -10,8 +10,8 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
-using Therion.Blender;
-using Therion.Blender.Parsing;
+using Therion.Cave3D;
+using Therion.Cave3D.Parsing;
 
 namespace SilexGis.Api.Tests;
 

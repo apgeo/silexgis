@@ -5,8 +5,8 @@ using Shouldly;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Surveys;
-using Therion.Blender;
-using Therion.Blender.Geometry;
+using Therion.Cave3D;
+using Therion.CaveGeometry;
 
 namespace SilexGis.Api.Tests;
 

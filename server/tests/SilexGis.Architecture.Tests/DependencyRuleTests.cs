@@ -290,17 +290,17 @@ public class DependencyRuleTests
     private static readonly HashSet<string> AllowedTherionTypes = new(StringComparer.Ordinal)
     {
         // The parsed cave model and the shapes hanging off it.
-        "Therion.Blender.CaveLrud",
-        "Therion.Blender.CaveModel",
-        "Therion.Blender.CavePassage",
-        "Therion.Blender.CavePassageStation",
-        "Therion.Blender.CaveShot",
-        "Therion.Blender.CaveShotFlags",
-        "Therion.Blender.CaveShotSection",
-        "Therion.Blender.CaveStation",
-        "Therion.Blender.CaveStationFlags",
-        "Therion.Blender.CaveSurvey",
-        "Therion.Blender.CaveVector3",
+        "Therion.Cave3D.CaveLrud",
+        "Therion.Cave3D.CaveModel",
+        "Therion.Cave3D.CavePassage",
+        "Therion.Cave3D.CavePassageStation",
+        "Therion.Cave3D.CaveShot",
+        "Therion.Cave3D.CaveShotFlags",
+        "Therion.Cave3D.CaveShotSection",
+        "Therion.Cave3D.CaveStation",
+        "Therion.Cave3D.CaveStationFlags",
+        "Therion.Cave3D.CaveSurvey",
+        "Therion.Cave3D.CaveVector3",
 
         // The rest of what hangs off a parsed model, reachable since the reading began marking a
         // file's wall shots for itself: that produces a model with the legs changed and everything
@@ -309,31 +309,31 @@ public class DependencyRuleTests
         // describing wall meshes, a terrain height grid, its texture and a loop-closure error, and
         // an enum naming which of the two formats a model was read from. Not one of them reads a
         // file, locates anything or starts anything; they are shapes a reader hands back.
-        "Therion.Blender.CaveScrap",
-        "Therion.Blender.CaveSourceFormat",
-        "Therion.Blender.CaveSurfaceBitmap",
-        "Therion.Blender.CaveSurfaceGrid",
-        "Therion.Blender.CaveTraverseError",
+        "Therion.Cave3D.CaveScrap",
+        "Therion.Cave3D.CaveSourceFormat",
+        "Therion.Cave3D.CaveSurfaceBitmap",
+        "Therion.Cave3D.CaveSurfaceGrid",
+        "Therion.Cave3D.CaveTraverseError",
 
         // One face of a wall surface the compiler modelled: three positions in the point list of
         // the record above, and nothing else. Reached since those surfaces are drawn as walls, and
         // a value with three numbers in it is as far from starting a process as a type can be.
-        "Therion.Blender.CaveTriangle",
+        "Therion.Cave3D.CaveTriangle",
 
         // The centreline graph derived from a model.
-        "Therion.Blender.Geometry.CenterlineBranch",
-        "Therion.Blender.Geometry.CenterlineComponent",
-        "Therion.Blender.Geometry.CenterlineEdgeGeometry",
-        "Therion.Blender.Geometry.CenterlineGraph",
-        "Therion.Blender.Geometry.CenterlineReducedGraph",
+        "Therion.CaveGeometry.CenterlineBranch",
+        "Therion.CaveGeometry.CenterlineComponent",
+        "Therion.CaveGeometry.CenterlineEdgeGeometry",
+        "Therion.CaveGeometry.CenterlineGraph",
+        "Therion.CaveGeometry.CenterlineReducedGraph",
 
         // Reading a survey file, and the refusal when it is not one.
-        "Therion.Blender.Parsing.CaveFileFormatException",
-        "Therion.Blender.Parsing.CaveModelReader",
+        "Therion.Cave3D.Parsing.CaveFileFormatException",
+        "Therion.Cave3D.Parsing.CaveModelReader",
 
         // Writing an invented survey in the compiled Therion format for the development data: a
         // model in, bytes in memory out. It reads nothing, locates nothing and starts nothing.
-        "Therion.Blender.Parsing.LoxWriter",
+        "Therion.Cave3D.Parsing.LoxWriter",
 
         // The orientation statistics, which the domain reaches (and only the domain should need):
         // azimuth folding, the plane and line records with the pole of a plane, the equal-area

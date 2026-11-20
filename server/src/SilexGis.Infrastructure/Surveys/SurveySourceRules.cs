@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using Therion.Blender;
+using Therion.Cave3D;
 
 namespace SilexGis.Infrastructure.Surveys;
 

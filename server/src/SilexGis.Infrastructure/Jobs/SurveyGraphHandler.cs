@@ -12,9 +12,9 @@ using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
-using Therion.Blender;
-using Therion.Blender.Parsing;
-using Therion.Blender.Geometry;
+using Therion.Cave3D;
+using Therion.Cave3D.Parsing;
+using Therion.CaveGeometry;
 
 namespace SilexGis.Infrastructure.Jobs;
 

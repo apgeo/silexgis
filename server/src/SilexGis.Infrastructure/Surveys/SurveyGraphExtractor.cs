@@ -4,7 +4,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Geodata;
-using Therion.Blender;
+using Therion.Cave3D;
 
 namespace SilexGis.Infrastructure.Surveys;
 
@@ -482,7 +482,7 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
     /// </summary>
     private static Dictionary<uint, string> SurveyPaths(CaveModel model)
     {
-        var byId = new Dictionary<uint, Therion.Blender.CaveSurvey>(model.Surveys.Count);
+        var byId = new Dictionary<uint, Therion.Cave3D.CaveSurvey>(model.Surveys.Count);
         foreach (var survey in model.Surveys)
         {
             byId[survey.Id] = survey;

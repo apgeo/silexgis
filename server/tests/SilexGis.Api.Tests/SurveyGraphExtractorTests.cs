@@ -6,10 +6,10 @@ using SilexGis.Domain.Geo;
 using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Surveys;
-using Therion.Blender;
-using CaveSurvey = Therion.Blender.CaveSurvey;
-using Therion.Blender.Geometry;
-using Therion.Blender.Parsing;
+using Therion.Cave3D;
+using CaveSurvey = Therion.Cave3D.CaveSurvey;
+using Therion.CaveGeometry;
+using Therion.Cave3D.Parsing;
 
 namespace SilexGis.Api.Tests;
 

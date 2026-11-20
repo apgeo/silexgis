@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
-using Therion.Blender.Geometry;
+using Therion.CaveGeometry;
 
 namespace SilexGis.Infrastructure.Surveys;
 
