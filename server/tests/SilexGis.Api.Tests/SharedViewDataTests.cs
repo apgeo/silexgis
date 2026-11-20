@@ -576,6 +576,36 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={window}&zoom=14")).ShouldBe(2);
     }
 
+    /// <summary>
+    /// An entrance is drawn on a link by its cave's level, so a cave that has been deleted takes its
+    /// entrance off the link even where the entrance row itself was left live — at the point zoom,
+    /// whose statement is a query, and at the cluster zoom, whose statement is SQL, alike.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_of_a_deleted_cave_is_not_drawn_on_a_link()
+    {
+        var cave = await CreateCaveAsync("Link Deleted Cave", 20.101, 69.101, "public", locationProtected: false);
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false, 20.1, 69.1));
+        const string window = "20.0,69.0,20.2,69.2";
+
+        // Drawn while the cave stands.
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(1);
+        var standing = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=6"))["features"]!.AsArray();
+        standing.ShouldHaveSingleItem()!["properties"]!["count"]!.GetValue<int>().ShouldBe(1);
+
+        // Only the cave is marked deleted; its entrance row stays live.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.Where(f => f.Id == cave.Id)
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.DeletedAt, DateTimeOffset.UtcNow))).ShouldBe(1);
+            (await db.Features.CountAsync(f => f.Id == cave.EntranceId)).ShouldBe(1);
+        }
+
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(0);
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=6")).ShouldBe(0);
+    }
+
     /// <summary>A view saved narrowed to a tag is narrowed to it on its link too, on all three statements.</summary>
     [Fact]
     public async Task A_link_is_narrowed_by_the_views_tag_filter()

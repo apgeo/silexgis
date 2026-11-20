@@ -3,6 +3,8 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OSGeo.GDAL;
 using OSGeo.OGR;
@@ -10,6 +12,8 @@ using OSGeo.OSR;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Infrastructure;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Geodata;
 
 namespace SilexGis.Api.Tests;
@@ -163,6 +167,53 @@ public sealed class UploadedGeodataCeilingTests : IDisposable
 
         var loose = new RasterCogService(Options.Create(new UploadedGeodataOptions { MaxRasterPixelValues = 64 * 64 }));
         loose.ConvertToCog(map, Path.Combine(root, "out", "loose.tif")).Width.ShouldBe(64);
+    }
+
+    [Fact]
+    public void A_ceiling_of_zero_or_less_stops_start_up_naming_the_setting_and_the_defaults_pass()
+    {
+        // Bound and validated the way the application registers it: the read of the settings is
+        // what start-up validation performs.
+        IOptions<UploadedGeodataOptions> Settings(params (string Key, string Value)[] values)
+        {
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(values.ToDictionary(v => v.Key, v => (string?)v.Value))
+                .Build();
+            var services = new ServiceCollection();
+            services.AddSilexGisGeodata(configuration);
+            return services.BuildServiceProvider().GetRequiredService<IOptions<UploadedGeodataOptions>>();
+        }
+
+        Settings().Value.MaxFeatures.ShouldBe(new UploadedGeodataOptions().MaxFeatures);
+        Settings(("UploadedGeodata:MaxFeatures", "1")).Value.MaxFeatures.ShouldBe(1);
+
+        var refused = Should.Throw<OptionsValidationException>(() => Settings(
+            ("UploadedGeodata:MaxFeatures", "0"),
+            ("UploadedGeodata:MaxKmzDocumentBytes", "-1")).Value);
+        refused.Failures.ShouldContain("UploadedGeodata:MaxFeatures must be above 0.");
+        refused.Failures.ShouldContain("UploadedGeodata:MaxKmzDocumentBytes must be above 0.");
+
+        var validator = new UploadedGeodataOptionsValidator();
+        validator.Validate(null, new UploadedGeodataOptions { MaxZippedShapefileBytes = 0 }).Failed.ShouldBeTrue();
+        validator.Validate(null, new UploadedGeodataOptions { MaxRasterPixelValues = -5 }).Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_kmz_document_is_copied_out_into_the_file_store_s_scratch_folder_and_removed_after_the_read()
+    {
+        var store = Path.Combine(root, "store");
+        var reader = new GdalVectorIO(files: Options.Create(new FilesOptions { Root = store }));
+        var scratch = Path.Combine(store, "scratch");
+        reader.ScratchDirectory.ShouldBe(scratch);
+
+        var kmz = Path.Combine(root, "scratch-places.kmz");
+        Zip(kmz, ("doc.kml", Kml(points: 2)));
+        reader.Read(kmz, GeofileFormat.Kmz).Features.Count.ShouldBe(2);
+
+        // The copy was made there (the folder exists only because the read created it) and is
+        // gone once the read has ended.
+        Directory.Exists(scratch).ShouldBeTrue();
+        Directory.EnumerateFileSystemEntries(scratch).ShouldBeEmpty();
     }
 
     private static GdalVectorIO Reader(UploadedGeodataOptions options) => new(Options.Create(options));

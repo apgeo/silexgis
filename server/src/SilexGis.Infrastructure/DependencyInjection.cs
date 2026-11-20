@@ -388,8 +388,11 @@ public static class DependencyInjection
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddScoped<ContentIntake>();
-        services.Configure<UploadedGeodataOptions>(
-            configuration.GetSection(UploadedGeodataOptions.SectionName));
+        services.AddOptions<UploadedGeodataOptions>()
+            .Bind(configuration.GetSection(UploadedGeodataOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<UploadedGeodataOptions>,
+            UploadedGeodataOptionsValidator>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
         services.AddOptions<GeoreferencedMapOptions>()

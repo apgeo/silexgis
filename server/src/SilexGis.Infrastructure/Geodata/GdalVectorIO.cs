@@ -10,6 +10,7 @@ using OSGeo.OSR;
 using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Import;
+using SilexGis.Infrastructure.Files;
 using Geometry = NetTopologySuite.Geometries.Geometry;
 
 namespace SilexGis.Infrastructure.Geodata;
@@ -19,9 +20,22 @@ namespace SilexGis.Infrastructure.Geodata;
 /// NetTopologySuite directly — they are line-oriented text/hex dumps, not OGR datasets.
 /// All geometries are normalized to EPSG:4326 on read.
 /// </summary>
-public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = null) : IVectorIO
+public sealed class GdalVectorIO(
+    IOptions<UploadedGeodataOptions>? options = null,
+    IOptions<FilesOptions>? files = null) : IVectorIO
 {
     private readonly UploadedGeodataOptions limits = options?.Value ?? new UploadedGeodataOptions();
+
+    /// <summary>
+    /// Where a KMZ's document is copied out to be read: the file store's own scratch folder,
+    /// not the system's temporary directory. The copy may be as large as the KMZ document
+    /// ceiling, a few hundred megabytes, and a server's temporary directory is often memory —
+    /// several uploads read at once would take that memory from every other process. Without
+    /// file settings (a caller outside the application) the system's temporary directory is used.
+    /// </summary>
+    internal string ScratchDirectory { get; } = files is null
+        ? Path.GetTempPath()
+        : Path.Combine(Path.GetFullPath(files.Value.Root, AppContext.BaseDirectory), "scratch");
 
     /// <summary>The same entry ceiling the upload request's format sniffing applies.</summary>
     private const int MaxArchiveEntries = ArchiveFormatSniffer.MaxArchiveEntries;
@@ -85,7 +99,7 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
         }
     }
 
-    private static VectorDataset ReadAnyFormat(
+    private VectorDataset ReadAnyFormat(
         string absolutePath, GeofileFormat format, GeofileSourceOptions? sourceOptions, UploadedGeodataOptions limits)
     {
         if (format is GeofileFormat.Wkt or GeofileFormat.Wkb)
@@ -111,7 +125,7 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
         // driver (KML or LIBKML) a GDAL build carries.
         if (format == GeofileFormat.Kmz)
         {
-            var document = ExtractKmzDocument(absolutePath, limits.MaxKmzDocumentBytes);
+            var document = ExtractKmzDocument(absolutePath, limits.MaxKmzDocumentBytes, ScratchDirectory);
             try
             {
                 return ReadDataSource(document, format, limits);
@@ -215,7 +229,7 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
             }
             catch (IOException)
             {
-                // Best-effort temp cleanup; the OS temp dir is periodically purged anyway.
+                // Best-effort cleanup of a scratch copy; nothing reads it once the read has ended.
             }
         }
     }
@@ -653,7 +667,7 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
     /// exported by something else may hold one under any name, so the convention is preferred
     /// and the first KML found is the fallback.
     /// </summary>
-    private static string ExtractKmzDocument(string absolutePath, long maxDocumentBytes)
+    private static string ExtractKmzDocument(string absolutePath, long maxDocumentBytes, string scratchDirectory)
     {
         using var archive = OpenArchive(absolutePath, "The file is not a readable KMZ archive.");
         var entry = archive.Entries.FirstOrDefault(e =>
@@ -666,7 +680,8 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
             throw TooLargeOnceExpanded("The KML document inside this KMZ", maxDocumentBytes);
         }
 
-        var target = Path.Combine(Path.GetTempPath(), $"silexgis-kmz-{Guid.NewGuid():N}.kml");
+        Directory.CreateDirectory(scratchDirectory);
+        var target = Path.Combine(scratchDirectory, $"silexgis-kmz-{Guid.NewGuid():N}.kml");
         try
         {
             using (var source = entry.Open())
@@ -711,7 +726,7 @@ public sealed class GdalVectorIO(IOptions<UploadedGeodataOptions>? options = nul
         }
         catch (IOException)
         {
-            // Best-effort temp cleanup; the OS temp dir is periodically purged anyway.
+            // Best-effort cleanup of a scratch copy; nothing reads it once the read has ended.
         }
     }
 
