@@ -26,6 +26,7 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
     private readonly SilexGisApiFactory factory;
     private readonly PauseFirstDecisionCommit pause = new();
     private readonly PauseAtCommit commits = new();
+    private readonly PauseBeforeStatement statements = new();
     private HttpClient uploader = null!;
     private HttpClient reviewer = null!;
     private Guid uploaderId;
@@ -37,7 +38,7 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             configureServices: services =>
-                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(pause, commits)));
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(pause, commits, statements)));
 
     public async ValueTask InitializeAsync()
     {
@@ -689,6 +690,161 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// An undo and a phone's resend crossing: the undo holds its upload's row and the rows it takes
+    /// back, then its commit; the resend takes the hierarchy lock, meets a row the undo holds, and
+    /// afterwards settles the earlier batch whose waiting line it replaces. The resend waits for the
+    /// undo and both finish — no deadlock — and neither loses what the other wrote: the cave the
+    /// undo took back stays taken back, the batch stays undone, and the replaced line and its batch
+    /// are settled.
+    /// </summary>
+    [Fact]
+    public async Task An_undo_and_a_resend_replacing_a_waiting_line_cross_without_deadlock_or_lost_write()
+    {
+        await MarkAsync(false);
+        var undoneCave = Guid.CreateVersion7();
+        var landed = await UploadAsync(Held: false, Cave(undoneCave, "Taken back"));
+        var undoneBatch = landed.GetProperty("importBatchId").GetGuid();
+        var revision = landed.GetProperty("rows")[0].GetProperty("revision").GetDateTimeOffset();
+
+        await MarkAsync(true);
+        var waitingCave = Guid.CreateVersion7();
+        var waiting = await UploadAsync(Held: true, Cave(waitingCave, "Still waiting"));
+        var waitingBatch = waiting.GetProperty("importBatchId").GetGuid();
+        var waitingLine = waiting.GetProperty("rows")[0].GetProperty("reviewId").GetGuid();
+
+        commits.Arm(UndoStampsItsLines);
+        var undo = uploader.PostAsJsonAsync($"/api/v1/import-batches/{undoneBatch}/revert", new { }, TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+        var resend = uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", new
+        {
+            batchId = Guid.CreateVersion7(),
+            contractVersion = 1,
+            clientFeatures = new[] { "held" },
+            rows = new[] { Edit(undoneCave, revision, "Edited meanwhile", null), Cave(waitingCave, "Renamed while waiting") },
+        }, TestContext.Current.CancellationToken);
+        await using (var watch = factory.Services.CreateAsyncScope())
+        {
+            await LockWaits.UntilParkedAsync(
+                watch.ServiceProvider.GetRequiredService<SilexGisDbContext>(), 1, resend,
+                "the resend editing a row the undo holds");
+        }
+
+        commits.Release();
+
+        var undone = await undo;
+        undone.StatusCode.ShouldBe(HttpStatusCode.OK, await undone.Content.ReadAsStringAsync());
+        var resent = await resend;
+        resent.StatusCode.ShouldBe(HttpStatusCode.OK, await resent.Content.ReadAsStringAsync());
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.Features.AsNoTracking().AnyAsync(f => f.Id == undoneCave))
+            .ShouldBeFalse("the cave the undo took back stays taken back");
+        (await db.ImportBatches.AsNoTracking().SingleAsync(b => b.Id == undoneBatch)).RevertedAt.ShouldNotBeNull();
+        (await db.ImportBatchItems.AsNoTracking().SingleAsync(i => i.ReviewId == waitingLine))
+            .ReviewDecision.ShouldBe(ImportReviewDecision.Superseded);
+        (await db.ImportBatches.AsNoTracking().SingleAsync(b => b.Id == waitingBatch))
+            .ReviewState.ShouldNotBe(ImportReviewState.Pending, "a batch whose every waiting line was replaced is settled");
+        (await db.ImportBatchItems.AsNoTracking().CountAsync(i => i.ProposalRowId == waitingCave
+                && i.ReviewDecision == ImportReviewDecision.Pending))
+            .ShouldBe(1, "the replacement waits in the resend's own batch");
+    }
+
+    /// <summary>
+    /// An undo and a phone's upload that edit the same two rows in opposite orders. The undo takes
+    /// its upload's rows back newest line first, the phone writes its rows in the order it sent
+    /// them, so each can hold one row while it waits for the other: the database finds the cycle
+    /// and breaks it by refusing one of the two. What has to hold is that the refusal is one the
+    /// caller may simply send again, that the one let through writes what it would have written
+    /// alone, and that sending the refused one again loses nothing either wrote.
+    /// </summary>
+    [Fact]
+    public async Task An_undo_and_a_phone_upload_crossing_two_rows_in_opposite_orders_lose_nothing()
+    {
+        await MarkAsync(false);
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+        var made = await UploadAsync(Held: false, Cave(first, "First as made"), Cave(second, "Second as made"));
+        var edited = await UploadAsync(
+            Held: false,
+            Edit(first, made.GetProperty("rows")[0].GetProperty("revision").GetDateTimeOffset(), "First as edited", null),
+            Edit(second, made.GetProperty("rows")[1].GetProperty("revision").GetDateTimeOffset(), "Second as edited", null));
+        var undone = edited.GetProperty("importBatchId").GetGuid();
+        var firstRevision = edited.GetProperty("rows")[0].GetProperty("revision").GetDateTimeOffset();
+        var secondRevision = edited.GetProperty("rows")[1].GetProperty("revision").GetDateTimeOffset();
+
+        // The undo has taken the second row (its newest line) and is about to take the first.
+        statements.Arm(command => command.CommandText.Contains("FROM features WHERE id =", StringComparison.Ordinal)
+            && command.CommandText.Contains("FOR NO KEY UPDATE", StringComparison.Ordinal)
+            && command.Parameters.Cast<DbParameter>().Any(p => Equals(p.Value, first)));
+        var undo = uploader.PostAsJsonAsync($"/api/v1/import-batches/{undone}/revert", new { }, TestContext.Current.CancellationToken);
+        await statements.WaitPausedAsync();
+
+        // The phone writes the first row and then waits for the second, which the undo holds.
+        var phoneBatch = Guid.CreateVersion7();
+        object PhoneUpload() => new
+        {
+            batchId = phoneBatch,
+            contractVersion = 1,
+            clientFeatures = Array.Empty<string>(),
+            rows = new[]
+            {
+                Edit(first, firstRevision, "First from the phone", null),
+                Edit(second, secondRevision, "Second from the phone", null),
+            },
+        };
+        var phone = uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", PhoneUpload(), TestContext.Current.CancellationToken);
+        await using (var watch = factory.Services.CreateAsyncScope())
+        {
+            await LockWaits.UntilParkedAsync(
+                watch.ServiceProvider.GetRequiredService<SilexGisDbContext>(), 1, phone,
+                "the phone upload waiting for the row the undo holds");
+        }
+
+        statements.Release();
+        var undoAnswer = await undo;
+        var phoneAnswer = await phone;
+        var undoBody = await undoAnswer.Content.ReadAsStringAsync();
+        var phoneBody = await phoneAnswer.Content.ReadAsStringAsync();
+
+        // Exactly one of the two went through. The other is refused as a collision: an undo with
+        // the retryable conflict, a phone upload with the server fault its routes keep answering
+        // and phones send again.
+        var undoWent = undoAnswer.StatusCode == HttpStatusCode.OK;
+        var phoneWent = phoneAnswer.StatusCode == HttpStatusCode.OK;
+        (undoWent ^ phoneWent).ShouldBeTrue($"undo {(int)undoAnswer.StatusCode} {undoBody}; phone {(int)phoneAnswer.StatusCode} {phoneBody}");
+        if (!undoWent)
+        {
+            undoAnswer.StatusCode.ShouldBe(HttpStatusCode.Conflict, undoBody);
+            (await CodeAsync(undoAnswer)).ShouldBe("concurrency.transaction_conflict");
+        }
+        else
+        {
+            phoneAnswer.StatusCode.ShouldBe(HttpStatusCode.InternalServerError, phoneBody);
+        }
+
+        // Sent again, the refused one meets what the other committed and writes nothing over it.
+        if (!undoWent)
+        {
+            (await uploader.PostAsJsonAsync($"/api/v1/import-batches/{undone}/revert", new { }, TestContext.Current.CancellationToken))
+                .StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+        else
+        {
+            (await uploader.PostAsJsonAsync($"/api/v1/sync/sets/{set}/upload", PhoneUpload(), TestContext.Current.CancellationToken))
+                .StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var names = await db.Features.AsNoTracking().Where(f => f.Id == first || f.Id == second)
+            .OrderBy(f => f.Id == first ? 0 : 1).Select(f => f.Name).ToListAsync(TestContext.Current.CancellationToken);
+        names.ShouldBe(undoWent
+            ? ["First as made", "Second as made"]
+            : ["First from the phone", "Second from the phone"]);
+    }
+
+    /// <summary>
     /// A held line whose kept proposal this build can no longer read is answered as failed with its
     /// own code, and the rest of the batch is decided as usual, instead of the whole acceptance
     /// failing.
@@ -844,6 +1000,50 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
     {
         Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Holds the first statement after <see cref="Arm"/> that the given test picks out, before it
+    /// runs, until <see cref="Release"/> — so whatever its transaction took before that statement
+    /// is held while a second request is started. Bounded, so a test that never releases cannot
+    /// hang the suite.
+    /// </summary>
+    private sealed class PauseBeforeStatement : DbCommandInterceptor
+    {
+        private TaskCompletionSource paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private Func<DbCommand, bool>? marks;
+
+        public void Arm(Func<DbCommand, bool> statement)
+        {
+            paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Volatile.Write(ref marks, statement);
+        }
+
+        public void Release() => released.TrySetResult();
+
+        public async Task WaitPausedAsync()
+        {
+            if (await Task.WhenAny(paused.Task, Task.Delay(TimeSpan.FromSeconds(30))) != paused.Task)
+            {
+                throw new TimeoutException("the statement to hold was never reached");
+            }
+        }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref marks) is { } statement && statement(command)
+                && Interlocked.CompareExchange(ref marks, null, statement) == statement)
+            {
+                paused.TrySetResult();
+                await Task.WhenAny(released.Task, Task.Delay(TimeSpan.FromSeconds(60), CancellationToken.None));
+            }
+
+            return result;
+        }
     }
 
     /// <summary>
