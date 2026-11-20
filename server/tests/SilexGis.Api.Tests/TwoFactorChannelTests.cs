@@ -50,8 +50,8 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
         mailed.Channel.ShouldBe("email");
 
         // A wrong code does not switch anything on.
-        (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code = "000000" }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        await ShouldRefuseCodeAsync(
+            await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code = "000000" }));
 
         var enable = await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code = mailed.Code });
         enable.StatusCode.ShouldBe(HttpStatusCode.OK, await enable.Content.ReadAsStringAsync());
@@ -107,6 +107,13 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
         response.IsSuccessStatusCode.ShouldBeTrue(
             $"{response.RequestMessage?.Method} {response.RequestMessage?.RequestUri}: "
             + await response.Content.ReadAsStringAsync());
+
+    private static async Task ShouldRefuseCodeAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("code").GetString().ShouldBe("auth.mfa_invalid");
+    }
 
     private static async Task<bool> MethodEnabledAsync(HttpClient client, string method) =>
         (await client.GetFromJsonAsync<JsonElement>("/api/v1/me/mfa/")).GetProperty("methods").EnumerateArray()
@@ -164,7 +171,7 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
             .GetProperty("confirmed").GetBoolean().ShouldBeTrue();
 
         // Now the method can be switched on.
-        await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null);
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null));
         var enable = await client.PostAsJsonAsync(
             "/api/v1/me/mfa/methods/sms", new { code = factory.Messages.LastTo(number).Code });
         enable.StatusCode.ShouldBe(HttpStatusCode.OK, await enable.Content.ReadAsStringAsync());
@@ -224,9 +231,10 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     public async Task Disallowing_a_method_afterwards_leaves_the_recovery_code_as_the_way_in()
     {
         var client = await AuthHelper.BearerClientAsync(factory, email);
-        await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null);
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null));
         var enable = await client.PostAsJsonAsync(
             "/api/v1/me/mfa/methods/email", new { code = factory.Messages.LastTo(email).Code });
+        enable.StatusCode.ShouldBe(HttpStatusCode.OK, await enable.Content.ReadAsStringAsync());
         var recoveryCodes = (await enable.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("codes").EnumerateArray().Select(x => x.GetString()!).ToList();
 
@@ -264,8 +272,9 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     public async Task Codes_cannot_be_requested_again_immediately()
     {
         var client = await AuthHelper.BearerClientAsync(factory, email);
-        await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null);
-        await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code = factory.Messages.LastTo(email).Code });
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null));
+        await ShouldSucceedAsync(await client.PostAsJsonAsync(
+            "/api/v1/me/mfa/methods/email", new { code = factory.Messages.LastTo(email).Code }));
 
         using var fresh = factory.CreateClient();
         await fresh.PostAsJsonAsync("/api/v1/auth/login", new { email, password = AuthHelper.Password });
@@ -286,19 +295,20 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
 
         // Confirm a number so both delivered methods are usable.
         var number = "+40733333333";
-        await client.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number });
-        await client.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(number).Code });
+        await ShouldSucceedAsync(await client.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number }));
+        await ShouldSucceedAsync(await client.PostAsJsonAsync(
+            "/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(number).Code }));
 
-        await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null);
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/email/challenge", null));
         var emailCode = factory.Messages.LastTo(email).Code;
 
-        await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null);
+        await ShouldSucceedAsync(await client.PostAsync("/api/v1/me/mfa/methods/sms/challenge", null));
         var smsCode = factory.Messages.LastTo(number).Code;
+        smsCode.ShouldNotBe(emailCode, "two deliveries that happened to share a code could not show which one was taken");
 
         // Both providers answer the same Identity purpose, so a shared storage key would have
         // let the second code replace the first — and each validate against the other's channel.
-        (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/sms", new { code = emailCode }))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        await ShouldRefuseCodeAsync(await client.PostAsJsonAsync("/api/v1/me/mfa/methods/sms", new { code = emailCode }));
 
         (await client.PostAsJsonAsync("/api/v1/me/mfa/methods/email", new { code = emailCode }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -42,9 +42,8 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             },
-            // The queue lives in the container every test class shares, so a drain started here
-            // would claim work another class queued and fail it against storage this host does not
-            // have. This class runs its own jobs, deliberately, one at a time.
+            // No drain in this host: one would claim the jobs these tests queue and run them on its
+            // own schedule. This class runs its own jobs, deliberately, one at a time.
             JobWorkers.RemoveFrom);
     }
 
@@ -82,13 +81,16 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
 
         var read = await GetModelAsync(owner, modelId);
         read.GetProperty("status").GetString().ShouldBe("ready", read.ToString());
-        read.GetProperty("anchorLongitude").GetDouble().ShouldBeInRange(-10, 5);
-        read.GetProperty("anchorLatitude").GetDouble().ShouldBeInRange(45, 62);
+        // Where this file's own grid puts its anchor, to within about ten metres: a window wide
+        // enough to hold most of a country would pass a placement that is kilometres out.
+        read.GetProperty("anchorLongitude").GetDouble().ShouldBe(-1.839214, 0.0001);
+        read.GetProperty("anchorLatitude").GetDouble().ShouldBe(53.331494, 0.0001);
 
         // What the file holds, and what matching leg endpoints to stations by exact coordinate
-        // equality could not keep. Both counts are recorded rather than left to be inferred.
-        read.GetProperty("droppedShotCount").GetInt32().ShouldBeGreaterThanOrEqualTo(0);
-        read.GetProperty("mergedStationCount").GetInt32().ShouldBeGreaterThanOrEqualTo(0);
+        // equality could not keep. Both counts are recorded rather than left to be inferred, and
+        // are pinned to what this file gives, so a graph that recorded the wrong numbers fails.
+        read.GetProperty("droppedShotCount").GetInt32().ShouldBe(1);
+        read.GetProperty("mergedStationCount").GetInt32().ShouldBe(4);
 
         var stations = await PageAsync(owner, $"/api/v1/survey-models/{modelId}/stations?pageSize=500");
         stations.GetProperty("totalItems").GetInt32().ShouldBe(393);

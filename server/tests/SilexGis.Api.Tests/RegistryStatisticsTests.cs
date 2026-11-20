@@ -329,13 +329,15 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
 
         // A measure correlated with itself fits a perfect line through every cave and says nothing,
         // and two spellings of one measure are still one measure.
-        (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=depth&y=Depth"))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The refusal is the whole-request rule, which names no single field: a refusal of x or y
+        // alone would mean the second spelling was not read as a measure at all.
+        (await (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=depth&y=Depth"))
+            .RefusedFieldsAsync()).ShouldBe([""]);
 
         // And a name the registry does not publish is refused rather than answered as whichever
         // measure happened to be first.
-        (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=altitude&y=depth"))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=altitude&y=depth"))
+            .RefusedFieldsAsync()).ShouldBe(["X"]);
     }
 
     [Fact]
@@ -396,15 +398,17 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task A_comparison_names_a_measure_and_a_category_it_knows()
     {
-        foreach (var query in new[]
+        // Each refusal names the one field it is about, so a request refused for another reason
+        // cannot pass for the rule its row pins.
+        foreach (var (query, field) in new[]
                  {
-                     "categories?measure=surveyedLength",
-                     "categories?measure=surveyedLength&category=region",
-                     "categories?measure=colour&category=caveType",
+                     ("categories?measure=surveyedLength", "Category"),
+                     ("categories?measure=surveyedLength&category=region", "Category"),
+                     ("categories?measure=colour&category=caveType", "Measure"),
                  })
         {
             var response = await owner.GetAsync($"/api/v1/stats/registry/{query}");
-            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, query);
+            (await response.RefusedFieldsAsync()).ShouldBe([field], query);
         }
 
         // The positive twin: a well-formed request over the same routes is answered.

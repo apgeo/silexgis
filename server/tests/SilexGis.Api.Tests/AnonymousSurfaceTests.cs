@@ -48,7 +48,7 @@ public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposabl
     /// one is allowed to. A line added here without a reason to say is a line that should not be
     /// added.
     /// </summary>
-    private static readonly (string Method, string Route, string Why)[] Recorded =
+    internal static readonly (string Method, string Route, string Why)[] Recorded =
     [
         // Signing in cannot require being signed in.
         ("POST", "/api/v1/auth/login", "the caller has no session yet, which is the point"),
