@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -49,19 +48,23 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db)
     private static readonly FeatureKind[] ComparableKinds = [FeatureKind.CaveEntrance, FeatureKind.Generic];
 
     /// <summary>
-    /// A ceiling on the read. A page of candidates spread over a whole massif with a
-    /// five-kilometre radius could otherwise sweep in every feature an installation has; the
-    /// nearest neighbours of each candidate are still found among the rows nearest the page —
-    /// which holds because the read is ordered by distance before it is cut, and would not
-    /// otherwise.
+    /// A ceiling on the read: the most rows the pool takes for one candidate, and, shared out, for a
+    /// page of them. A candidate with a whole massif inside its radius could otherwise sweep in
+    /// every feature an installation has; its nearest neighbours still survive the cut, because
+    /// each candidate's rows are ordered by distance from that candidate before they are cut.
     /// </summary>
     public const int MaxNearbyFeatures = 2000;
 
     /// <summary>
-    /// The objects near any of the given points that this caller may both read and place. One
-    /// envelope over all of them, grown by the radius: the points come from one file or one
-    /// trip, so they are near each other by construction, and this turns a proximity query per
-    /// candidate into a single indexed read.
+    /// The fewest rows any one candidate is given however many share the ceiling: more than any
+    /// caller shows for one candidate, with room for the rows an upload has just written beside it,
+    /// which the sync report leaves out after the cut.
+    /// </summary>
+    public const int MinNearbyPerCandidate = 16;
+
+    /// <summary>
+    /// The objects near any of the given points that this caller may both read and place: for each
+    /// point, the nearest ones within the radius, found through the geometry index from that point.
     /// </summary>
     public async Task<IReadOnlyList<ProximityHit>> NearAsync(
         IReadOnlyCollection<Point> points,
@@ -74,38 +77,20 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db)
             return [];
         }
 
-        var envelope = new Envelope();
-        foreach (var point in points)
-        {
-            envelope.ExpandToInclude(point.EnvelopeInternal);
-        }
-
-        var factory = new GeometryFactory(new PrecisionModel(), 4326);
-        var search = factory.ToGeometry(Geodesy.ExpandedBy(envelope, radiusMeters));
-
-        // The ceiling below only keeps the promise this class makes — that the nearest neighbours
-        // survive it — if the rows it cuts are the far ones. Without an order the database is free
-        // to return any rows it likes from inside the box, so on an installation holding more than
-        // the ceiling within one search the object standing closest could be the one dropped, and
-        // the answer would be "nothing is near here" while something was a metre away. Silence is
-        // this answer's failure mode, which is why the order is not an optimisation.
+        // Each candidate is ranked from itself, not from the middle of the page: the points of one
+        // file or one trip can lie at both ends of a county, and a pool ordered around the middle
+        // and cut once would spend its ceiling on what lies between them while the entrance a
+        // metre from one end — the duplicate this exists to find — was cut. Silence is this
+        // answer's failure mode, which is why the order is not an optimisation.
         //
-        // Ordered in degrees rather than metres, deliberately: over a box this small the two agree
-        // on which rows are nearest, and the true metric distance is computed by the caller from
-        // what survives. A metric sort here would cost a projection per row to decide what to throw
-        // away.
-        var centre = factory.CreatePoint(envelope.Centre);
-
-        // Who may be in the pool is decided before the pool is ordered and cut. Dropped after the
-        // cut instead, a protected entrance the caller may read but not place still took one of
-        // its places whenever the reach held more than the ceiling — and since the order is by
-        // true distance, which placeable hit survived at the far end changed exactly as the
-        // hidden one moved nearer the centre or further from it, which is a position. So readable
-        // and placeable are both decided inside the one statement that orders and cuts, with the
-        // caller's own access fragments: no list of protected ids is fetched and sent back, so the
-        // read costs the same however many protected rows the reach holds.
+        // Who may be in the pool is decided inside the same statement, before each candidate's
+        // order and cut, with the caller's own access fragments: a protected entrance the caller
+        // may read but not place, dropped only after the cut, would have taken a place and moved
+        // which placeable row survived as its true position did.
+        var candidates = points.Select(p => p.Coordinate).Distinct().ToList();
+        var perCandidate = Math.Max(MinNearbyPerCandidate, MaxNearbyFeatures / candidates.Count);
         var nearestIds = await ProximitySql.NearestPlaceableIdsAsync(
-            db, ctx, search.EnvelopeInternal, centre.Coordinate, ComparableKinds, MaxNearbyFeatures, ct);
+            db, ctx, candidates, radiusMeters, ComparableKinds, perCandidate, ct);
         var rank = nearestIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
         var nearby = (await db.Features.AsNoTracking()
                 .Where(f => nearestIds.Contains(f.Id))

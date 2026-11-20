@@ -245,6 +245,113 @@ public sealed class HiddenRowCapTests : IAsyncLifetime, IDisposable, IClassFixtu
         forOwner.ShouldContain(hit => hit.Kind == FeatureKind.CaveEntrance);
     }
 
+    /// <summary>
+    /// Two candidates far apart with more points between them than the pool holds: each candidate
+    /// still finds the place a metre from it. Ranked from the middle of the page and cut once, the
+    /// pool was spent on the points between them and both neighbours were cut.
+    /// </summary>
+    [Fact]
+    public async Task Each_candidate_keeps_its_nearest_place_however_many_lie_between_the_candidates()
+    {
+        const double lon = 16.80;
+        const double lat = 63.80;
+        const double halfSpan = 0.15;
+        var geometry = new GeometryFactory(new PrecisionModel(), 4326);
+        var west = geometry.CreatePoint(new Coordinate(lon - halfSpan, lat));
+        var east = geometry.CreatePoint(new Coordinate(lon + halfSpan, lat));
+        Guid westNeighbour;
+        Guid eastNeighbour;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
+
+            Task<Feature> PointAsync(string name, double x, double y) => writer.CreateGenericAsync(new Feature
+            {
+                Name = name,
+                FeatureTypeId = sinkholeTypeId,
+                Geom = geometry.CreatePoint(new Coordinate(x, y)),
+                OwnerUserId = ownerId,
+                Visibility = Visibility.Authenticated,
+            }, []);
+
+            writer.BeginDeferredDerivedState();
+            for (var i = 0; i <= VisibleProximitySearch.MaxNearbyFeatures; i++)
+            {
+                var angle = 2 * Math.PI * i / VisibleProximitySearch.MaxNearbyFeatures;
+                await PointAsync($"Between {i}", lon + (0.01 * Math.Cos(angle)), lat + (0.005 * Math.Sin(angle)));
+            }
+
+            // About a metre east of the west candidate and west of the east one.
+            westNeighbour = (await PointAsync("West neighbour", west.X + 0.00002, lat)).Id;
+            eastNeighbour = (await PointAsync("East neighbour", east.X - 0.00002, lat)).Id;
+            await writer.FlushDerivedStateAsync();
+            await db.SaveChangesAsync();
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var search = scope.ServiceProvider.GetRequiredService<VisibleProximitySearch>();
+            var ctx = await AccessContextResolver.ResolveAsync(db, ownerId);
+
+            // A radius that reaches the points between from either candidate.
+            var pool = await search.NearAsync([west, east], 10_000, ctx);
+            var ids = pool.Select(hit => hit.FeatureId).ToList();
+            ids.ShouldContain(westNeighbour, "the west candidate's neighbour was cut from the pool");
+            ids.ShouldContain(eastNeighbour, "the east candidate's neighbour was cut from the pool");
+
+            // One candidate alone is still given the whole ceiling.
+            (await search.NearAsync([west], 10_000, ctx)).Count.ShouldBe(VisibleProximitySearch.MaxNearbyFeatures);
+        }
+    }
+
+    /// <summary>
+    /// The proximity pool holds points only, decided before its cut: an area lying over the
+    /// centre — nearer than any point can be — does not take the place a point then loses.
+    /// </summary>
+    [Fact]
+    public async Task An_area_over_the_centre_does_not_take_a_point_s_place_in_the_proximity_pool()
+    {
+        const double lon = 16.60;
+        const double lat = 63.60;
+        var geometry = new GeometryFactory(new PrecisionModel(), 4326);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+        var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync();
+        var areaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
+
+        var area = await writer.CreateGenericAsync(new Feature
+        {
+            Name = "Pool area over the centre",
+            FeatureTypeId = areaTypeId,
+            Geom = geometry.CreatePolygon([
+                new(lon - 0.0005, lat - 0.0005), new(lon + 0.0005, lat - 0.0005),
+                new(lon + 0.0005, lat + 0.0005), new(lon - 0.0005, lat + 0.0005), new(lon - 0.0005, lat - 0.0005)]),
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Authenticated,
+        }, []);
+        var point = await writer.CreateGenericAsync(new Feature
+        {
+            Name = "Pool point beside the area",
+            FeatureTypeId = sinkholeTypeId,
+            Geom = geometry.CreatePoint(new Coordinate(lon + 0.002, lat)),
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Authenticated,
+        }, []);
+        await db.SaveChangesAsync();
+
+        var ctx = await AccessContextResolver.ResolveAsync(db, ownerId);
+        var ids = await ProximitySql.NearestPlaceableIdsAsync(
+            db, ctx, [new Coordinate(lon, lat)], 1000, [FeatureKind.Generic], 1, CancellationToken.None);
+
+        ids.ShouldBe([point.Id]);
+        (await db.Features.CountAsync(f => f.Id == area.Id)).ShouldBe(1);
+    }
+
     private async Task<IReadOnlyList<ProximityHit>> NearAsync(Guid userId, Point centre)
     {
         using var scope = factory.Services.CreateScope();

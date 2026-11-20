@@ -346,12 +346,16 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var connection = db.Database.GetDbConnection();
 
         var ctx = new AccessContext(strangerId, false, [], []);
+        // Two candidates at opposite corners of the seeded window, each ranked from itself.
         var (sql, parameters) = ProximitySql.Build(
             ctx,
-            new NetTopologySuite.Geometries.Envelope(West, East, South, North),
-            new NetTopologySuite.Geometries.Coordinate((West + East) / 2, (South + North) / 2),
+            [
+                new NetTopologySuite.Geometries.Coordinate(West, South),
+                new NetTopologySuite.Geometries.Coordinate(East, North),
+            ],
+            5_000,
             [FeatureKind.CaveEntrance, FeatureKind.Generic],
-            VisibleProximitySearch.MaxNearbyFeatures);
+            VisibleProximitySearch.MaxNearbyFeatures / 2);
         var plan = await ExplainAsync(connection, parameters, "proximity pool (guarded)", sql);
         plan.ShouldContain("ix_features_geom", Case.Insensitive,
             "the proximity pool must reach the feature table through a geometry index");
