@@ -60,6 +60,12 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
         await Should.ThrowAsync<ScanHandoffTamperedException>(
             ScanWorkerHandoff.CopyInAsync(job, source, "pointCloudLaz.laz", TestContext.Current.CancellationToken));
         File.ReadAllText(target).ShouldBe("kept as it was");
+
+        // The same source copied into a job directory with nothing at the name arrives whole, so
+        // the refusal above is the link's doing and not a copy that refuses everything.
+        var plain = await handoff.BeginAsync("pointcloud.estimate", "job-plain-input", TestContext.Current.CancellationToken);
+        await ScanWorkerHandoff.CopyInAsync(plain, source, "pointCloudLaz.laz", TestContext.Current.CancellationToken);
+        File.ReadAllText(Path.Combine(plain, "pointCloudLaz.laz")).ShouldBe("the upload");
     }
 
     [Fact]
@@ -76,6 +82,13 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
         await Should.ThrowAsync<ScanHandoffTamperedException>(
             ScanWorkerHandoff.IssueAsync(job, "pointcloud.estimate", JsonDocument.Parse("{}").RootElement, new Dictionary<string, string>(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Directory.EnumerateFileSystemEntries(outside).ShouldBeEmpty();
+
+        // A job directory that is still a directory takes both the copy and the request.
+        var plain = await handoff.BeginAsync("pointcloud.estimate", "job-plain-directory", TestContext.Current.CancellationToken);
+        await ScanWorkerHandoff.CopyInAsync(plain, source, "pointCloudLaz.laz", TestContext.Current.CancellationToken);
+        await ScanWorkerHandoff.IssueAsync(plain, "pointcloud.estimate", JsonDocument.Parse("{}").RootElement, new Dictionary<string, string>(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        File.ReadAllText(Path.Combine(plain, "pointCloudLaz.laz")).ShouldBe("the upload");
+        File.Exists(Path.Combine(plain, ScanWorkerHandoff.RequestFile)).ShouldBeTrue();
     }
 
     [Fact]
@@ -121,9 +134,21 @@ public sealed class ScanWorkerHandoffFilesTests : IDisposable
     [Fact]
     public void An_announcement_that_is_a_link_is_no_announcement()
     {
+        var announcement = """{"worker":"elsewhere","steps":[{"id":"pointcloud.estimate","tool":"laspy","version":"1"}]}""";
+
+        // The same announcement as a plain file in the hand-off directory is read, so the null
+        // below is the link's doing and not a reader that answers null to everything.
+        var plain = Path.Combine(root, ScanWorkerHandoff.CapabilitiesFile);
+        File.WriteAllText(plain, announcement);
+        var read = handoff.ReadCapabilities();
+        read.ShouldNotBeNull();
+        read.Worker.ShouldBe("elsewhere");
+        read.Steps.Select(s => s.Id).ShouldBe(["pointcloud.estimate"]);
+        File.Delete(plain);
+
         var target = Path.Combine(outside, "capabilities.json");
-        File.WriteAllText(target, """{"worker":"elsewhere","steps":[{"id":"pointcloud.estimate","tool":"laspy","version":"1"}]}""");
-        File.CreateSymbolicLink(Path.Combine(root, ScanWorkerHandoff.CapabilitiesFile), target);
+        File.WriteAllText(target, announcement);
+        File.CreateSymbolicLink(plain, target);
 
         handoff.ReadCapabilities().ShouldBeNull();
     }

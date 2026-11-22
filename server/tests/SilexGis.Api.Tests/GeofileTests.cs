@@ -36,9 +36,9 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     private Guid viewerId;
 
     /// <summary>
-    /// Token woven into every name this instance seeds. The whole suite shares one
+    /// Token woven into every name this instance seeds. The tests of this class share one
     /// database, so search-scoped export assertions must not be able to see another
-    /// class's rows (xUnit builds one instance per test, so the token is per test).
+    /// test's rows (xUnit builds one instance per test, so the token is per test).
     /// </summary>
     private string tag = null!;
 

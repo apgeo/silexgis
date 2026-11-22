@@ -376,7 +376,10 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = Enumerable.Range(1, 201).Select(i => new { text = $"Line {i}" }).ToArray(),
         });
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.RefusedFieldsAsync()).ShouldBe(["Items"]);
+
+        var untouched = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
+        untouched!.Items.Select(x => x.Text).ShouldBe(["Permit obtained"]);
 
         var exactly = await owner.PutAsJsonAsync($"/api/v1/checklists/{list.Id}", new
         {

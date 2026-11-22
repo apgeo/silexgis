@@ -157,9 +157,9 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
-        // Any answer another class saved is cleared, so the configured one above is the one that
-        // is read. A saved row replaces configuration wholesale, and this suite shares one
-        // database.
+        // Any answer another test saved is cleared, so the configured one above is the one that
+        // is read. A saved row replaces configuration wholesale, and the tests of this class
+        // share one database.
         await db.AppSettings.Where(s => s.Key == AppSettingSections.Announcements).ExecuteDeleteAsync();
 
         var cavingGroup = new CavingGroup
@@ -529,8 +529,8 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     /// <remarks>
     /// Written straight into the outbox rather than produced by a hundred announcements, because
     /// what is under test here is the arithmetic and not the transport, and the day's rows left by
-    /// other test classes are cleared first so the count under test is this test's own. Every class in this suite shares one database and they do not run at the same
-    /// time as each other.
+    /// other tests are cleared first so the count under test is this test's own. The tests of this
+    /// class share one database and do not run at the same time as each other.
     /// </remarks>
     private async Task SpendAsync(int count)
     {

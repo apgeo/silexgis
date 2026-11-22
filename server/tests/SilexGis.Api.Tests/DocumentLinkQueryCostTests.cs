@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -86,6 +84,8 @@ public sealed class DocumentLinkQueryCostTests : IAsyncLifetime, IDisposable, IC
         await ListAsync(many, 12);
         var forMany = commands.Count;
 
+        // Zero on both sides would mean the counter was never attached and the equality proved nothing.
+        forFew.ShouldBeGreaterThan(0);
         forMany.ShouldBe(forFew, $"two documents cost {forFew} queries and twelve cost {forMany}");
     }
 
@@ -147,45 +147,5 @@ public sealed class DocumentLinkQueryCostTests : IAsyncLifetime, IDisposable, IC
         var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId);
         return await db.DocumentVersions.AsNoTracking()
             .Where(v => v.Id == file.DocumentVersionId).Select(v => v.DocumentId).FirstAsync();
-    }
-
-    /// <summary>Every command a host sends to the database, counted and nothing else.</summary>
-    private sealed class CommandCounter : DbCommandInterceptor
-    {
-        private int count;
-
-        public int Count => Volatile.Read(ref count);
-
-        public void Reset() => Interlocked.Exchange(ref count, 0);
-
-        public override InterceptionResult<DbDataReader> ReaderExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
-        {
-            Interlocked.Increment(ref count);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref count);
-            return new(result);
-        }
-
-        public override InterceptionResult<object> ScalarExecuting(
-            DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
-        {
-            Interlocked.Increment(ref count);
-            return result;
-        }
-
-        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
-            DbCommand command, CommandEventData eventData, InterceptionResult<object> result,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref count);
-            return new(result);
-        }
     }
 }

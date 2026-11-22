@@ -56,7 +56,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
 
     /// <summary>
     /// A second invented photograph, far enough from the first that nothing created at one is near
-    /// the other. Every test class in this suite shares one database, so a case asserting that
+    /// the other. The tests of this class share one database, so a case asserting that
     /// nothing was already standing nearby has to stand somewhere nothing else builds — otherwise it
     /// passes or fails on which order the tests happened to run in.
     /// </summary>
@@ -127,8 +127,8 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     /// </summary>
     /// <remarks>
     /// Which photo libraries this installation is using is one stored row for the whole
-    /// installation, and every class in this suite shares one database — so a case that stopped a
-    /// library and then failed an assertion would hand the next class a host that quietly refuses
+    /// installation, and the tests of this class share one database — so a case that stopped a
+    /// library and then failed an assertion would hand the next test a host that quietly refuses
     /// every photo-library route, with nothing in its own failure naming the cause. Done here
     /// rather than at the end of each case for exactly that reason: it has to happen on the path
     /// where something went wrong.
@@ -941,7 +941,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         second.Status.ShouldBe(HttpStatusCode.Created, second.Body);
 
         // Information, not a refusal: the object asked for was created, and the answer says what was
-        // already standing there. Named exactly — every class in this suite shares one database, so
+        // already standing there. Named exactly — the tests of this class share one database, so
         // "something came back" would pass on a neighbour some other test left behind.
         var entrances = await JsonAsync(admin, $"/api/v1/caves/{first.Json.GetProperty("featureId").GetString()}/entrances");
         var firstEntranceId = entrances[0].GetProperty("id").GetString();

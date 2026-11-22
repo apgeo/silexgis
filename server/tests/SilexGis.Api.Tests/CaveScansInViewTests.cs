@@ -29,7 +29,7 @@ namespace SilexGis.Api.Tests;
 /// <remarks>
 /// <para>
 /// Every test works in a box of its own, drawn somewhere on open ocean at random, because the
-/// database is the one every class shares and a box is a query over all of it.
+/// tests of this class share one database and a box is a query over all of it.
 /// </para>
 /// <para>
 /// Scans are sent through the upload route and tiled by a canned worker on the far side of the

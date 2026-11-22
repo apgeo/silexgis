@@ -31,10 +31,10 @@ namespace SilexGis.Api.Tests;
 /// </remarks>
 public sealed class TripMapDerivedPositionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
-    // This suite's own corner of the world and its own day. The database is shared between
-    // suites, and both the unlocated figure and the truncation flag are counts over everything
-    // the caller may read in the window — so the window has to belong to this suite alone or the
-    // numbers below are somebody else's fixtures as much as they are these.
+    // This class's own corner of the world and its own day. Its tests share one database, and
+    // both the unlocated figure and the truncation flag are counts over everything the caller
+    // may read in the window — so the window has to belong to this class alone or the numbers
+    // below are another test's fixtures as much as they are these.
     private const double Lat = 46.71834;
     private const double Lon = 22.83951;
     // A day of its own per case, and that is not tidiness. Both figures this suite asserts —

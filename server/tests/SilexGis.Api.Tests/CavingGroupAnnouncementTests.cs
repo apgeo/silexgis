@@ -44,7 +44,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
     {
         connectionString = postgres.ConnectionString;
         // The queue's own worker is stopped here as well as on the capped host below. It claims
-        // anything claimable in the shared database every couple of seconds, and a tick landing
+        // anything claimable in this class's database every couple of seconds, and a tick landing
         // between a request and the assertions a few milliseconds later would turn "nobody has
         // been told yet" into a failure about code that is working.
         factory = new SilexGisApiFactory(connectionString, null, JobWorkers.RemoveFrom);
@@ -176,7 +176,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
         (await ordinary.GetAsync($"/api/v1/caving-groups/{cavingGroupId}/announcements/audience"))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // Taken away again, rulesets and all: this suite shares one database and a club left
+        // Taken away again, rulesets and all: the tests of this class share one database and a club left
         // behind carries a permission group nobody in a later test expects to find.
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();

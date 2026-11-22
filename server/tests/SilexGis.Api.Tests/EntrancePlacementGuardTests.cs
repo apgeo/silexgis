@@ -31,11 +31,6 @@ namespace SilexGis.Api.Tests;
 /// Promotion writes no coordinate of its own, so a guard placed on the coordinate write does not
 /// see it; the guard has to sit on the promotion.
 /// </para>
-/// <para>
-/// <b>Not yet run.</b> This class needs a PostGIS database, and the machine-wide gate is held by
-/// another effort. It compiles and is written against the shape its neighbours use, but no verdict
-/// exists for it and none should be claimed until one does.
-/// </para>
 /// </remarks>
 public sealed class EntrancePlacementGuardTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {

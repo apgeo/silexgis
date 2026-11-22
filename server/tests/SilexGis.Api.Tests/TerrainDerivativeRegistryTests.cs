@@ -317,8 +317,8 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
     /// Runs the job that draws the picture, and answers the id of the run that drew it.
     /// </summary>
     /// <remarks>
-    /// Driven directly rather than by queueing and waiting: the database this suite runs against is
-    /// shared, so a queued row is claimed by whichever worker in whichever run reaches it first.
+    /// Driven directly rather than by queueing and waiting: the tests of this class share one
+    /// database, so a queued row would be claimed by whichever test's worker reaches it first.
     /// </remarks>
     private async Task<long> ComputeAsync(Guid layerId)
     {

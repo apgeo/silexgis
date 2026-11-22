@@ -124,8 +124,8 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
 
         // Taken before the first archive, because both uploads are being counted: the one that
-        // lodges the log and the revision that corrects it. Every class in this assembly shares one
-        // database and they run in sequence, so the job table already holds whatever ran before —
+        // lodges the log and the revision that corrects it. The tests of this class share one
+        // database, so the job table already holds whatever ran before —
         // what is under test is how many runs *these two uploads* add, which is a difference and
         // never a total. (The reading below is executed by hand rather than queued, so it adds
         // none of its own; that is the point of asserting the queue at all.)
@@ -191,7 +191,7 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
-    /// Runs queued to re-read a compilation log, across the whole shared database.
+    /// Runs queued to re-read a compilation log, across the whole of this class's database.
     /// </summary>
     /// <remarks>
     /// Only ever meaningful as a difference across an action — see the caller. A total would count

@@ -34,7 +34,7 @@ namespace SilexGis.Api.Tests;
 /// happens — while the owner, who places it exactly, is the control in the same test.
 /// </para>
 /// <para>
-/// Each test works in a spot of its own, far from anything else in the shared database, so a
+/// Each test works in a spot of its own, far from anything else in this class's database, so a
 /// question asked over a few kilometres sees only the rows the test put there.
 /// </para>
 /// </remarks>

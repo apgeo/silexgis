@@ -42,6 +42,8 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
 
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
+    private string ownerEmail = null!;
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
@@ -51,21 +53,26 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
     public TripTrackingCaveNoteTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
-            postgres.ConnectionString,
-            new Dictionary<string, string?>
-            {
-                ["Files:Root"] = filesRoot,
-                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-            },
+            connectionString,
+            HostSettings(),
             // Workers off: the graph-extraction job would otherwise pick up the invented survey
             // file below, fail to read it, and rewrite the very station rows these tests seed.
             JobWorkers.RemoveFrom);
     }
 
+    /// <summary>What every host of this class is configured with, a second one included.</summary>
+    private Dictionary<string, string?> HostSettings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+    };
+
     public async ValueTask InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
+        ownerEmail = $"cvn-own-{suffix}@t.local";
         // An editor writes the log and may place the cave. The reader is a plain viewer: the
         // editors' group reads past protection by design and could not stand for "may not be told".
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cvn-own-{suffix}@t.local");
@@ -280,7 +287,8 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
         // All at once, under a second key: sends that look before any has written are let in by the
         // table alone — and a row with no person must count there as a row. A smoke test for that
         // half: nothing forces the overlap, and handled one after another the sends give the same
-        // verdict by finding the note already written.
+        // verdict by finding the note already written. The overlap is forced in the test after
+        // this one.
         var racedKey = Guid.NewGuid();
         var sends = await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => PostEventAsync(owner, trip, CaveNote(racedKey))));
         var answered = new HashSet<Guid>();
@@ -303,6 +311,45 @@ public sealed class TripTrackingCaveNoteTests : IAsyncLifetime, IDisposable, ICl
         // Two acts saying the same thing are still two notes: the key names the act, not its words.
         (await PostEventAsync(owner, trip, CaveNote(Guid.NewGuid()))).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await LogAsync(owner, trip)).Count.ShouldBe(3);
+    }
+
+    /// <summary>
+    /// The forced twin of the "all at once" half above. The send under test has looked for its
+    /// act, found nothing and is about to write when the same note is sent again and written in
+    /// full. Its own row names nobody, so only a constraint that counts "nobody" as a value refuses
+    /// it, and only the recovery from that refusal answers it with the other send's note.
+    /// </summary>
+    [Fact]
+    public async Task A_note_about_the_cave_whose_duplicate_is_written_after_it_looked_is_answered_with_that_note()
+    {
+        var (trip, _) = await ArmedTripAsync("Cave note, duplicate written first", guests: 1);
+        var key = Guid.NewGuid();
+
+        HttpResponseMessage? duplicate = null;
+        var meanwhile = new BeforeFirstSave<TripPositionEvent>(
+            e => e.TripLogId == trip,
+            async () => duplicate = await PostEventAsync(owner, trip, CaveNote(key)));
+        using var host = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(meanwhile));
+        });
+        var interrupted = await AuthHelper.BearerClientAsync(host, ownerEmail);
+
+        var send = await PostEventAsync(interrupted, trip, CaveNote(key));
+
+        meanwhile.Fired.ShouldBeTrue("the duplicate has to be written between the look and the write");
+        duplicate!.StatusCode.ShouldBe(HttpStatusCode.OK, await duplicate.Content.ReadAsStringAsync());
+        send.StatusCode.ShouldBe(HttpStatusCode.OK, await send.Content.ReadAsStringAsync());
+        var written = (await BodyAsync(duplicate)).EnumerateArray().ShouldHaveSingleItem().GetProperty("id").GetGuid();
+        (await BodyAsync(send)).EnumerateArray().ShouldHaveSingleItem().GetProperty("id").GetGuid().ShouldBe(written);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.IgnoreQueryFilters().Where(e => e.TripLogId == trip).Select(e => e.Id).ToListAsync())
+            .ShouldBe([written]);
+        (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
+            && a.EntityType == nameof(TripPositionEvent))).ShouldBe(1);
     }
 
     // ---- who is told ---------------------------------------------------------------------

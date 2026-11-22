@@ -20,9 +20,9 @@ namespace SilexGis.Api.Tests;
 /// test, so a query that returned nothing at all could not pass.
 /// <para>
 /// Every seeded page carries a nonsense word unique to the run and every query asks for it, so
-/// results and totals are exact rather than "at least": the database is shared with every other
-/// suite in the collection, and a total that counted somebody else's uploads would prove nothing
-/// about the total this query computes.
+/// results and totals are exact rather than "at least": the tests of this class share one
+/// database, and a total that counted another test's uploads would prove nothing about the total
+/// this query computes.
 /// </para>
 /// </summary>
 public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

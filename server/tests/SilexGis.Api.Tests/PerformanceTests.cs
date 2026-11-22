@@ -1355,7 +1355,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// sanctioned mutator of the aggregate's derived state, but it is row-at-a-time by design;
     /// at 100k rows this test writes the same end state in one statement instead — so it must
     /// reproduce every invariant the service maintains, or the integrity verifier (which walks
-    /// the whole shared database) would report this data as corrupt:
+    /// the whole of this class's database) would report this data as corrupt:
     /// primary containment edge per entrance, ancestor arrays and closure rows carrying self +
     /// the cave, effective protection, and the cave mirror (entrance count and the cave
     /// feature's representative point = its main entrance). Entrance rows are seeded
@@ -1921,9 +1921,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// Removes the bulk-seeded rows again.
     ///
     /// <para>
-    /// This class shares one database with nearly every other class in the assembly, and they run
-    /// one after another rather than side by side, so whatever it leaves behind is queried by
-    /// every class ordered after it for the rest of the run. A hundred thousand extra entrances
+    /// The tests of this class share one database, so whatever one leaves behind is queried by
+    /// every test ordered after it. A hundred thousand extra entrances
     /// is enough to push ordinary reads past the command timeout: it was measured producing
     /// seventeen failures on surfaces nothing had touched, all of them timeouts wearing the
     /// costume of a server error, and each one passing on its own the moment it was re-run

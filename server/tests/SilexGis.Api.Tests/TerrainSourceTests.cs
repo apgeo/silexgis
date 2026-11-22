@@ -72,9 +72,8 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
             },
             services =>
             {
-                // This class queues terrain work, so it runs none of the drains itself: every test
-                // class shares one PostGIS container and the queue lives in it. What it queues is
-                // deleted again when it finishes, for the mirror-image reason.
+                // This class queues terrain work and runs it by hand, so it runs none of the drains:
+                // one would claim the same jobs on its own schedule.
                 JobWorkers.RemoveFrom(services);
 
                 // Only the step that obtains rasters, which is the one under test here. The walk
@@ -778,9 +777,9 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
 
     /// <summary>
-    /// Everything this class queued, taken out of the shared queue again. Left there, another test
-    /// class's terrain worker would claim these and run them against a host with none of this
-    /// class's directories.
+    /// Everything this test queued, taken out of the queue again. xUnit builds one instance per
+    /// test and the tests of this class share one database, so a build or a job left behind would
+    /// be found by the next test's run and claimed alongside its own.
     /// </summary>
     public async ValueTask DisposeAsync()
     {

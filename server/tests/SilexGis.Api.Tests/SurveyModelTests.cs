@@ -41,9 +41,8 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             },
-            // Every upload here queues work, and the queue lives in the container every test class
-            // shares: a drain started in this host would claim work another class queued and fail
-            // it against storage this host does not have. The tests that care run their own job.
+            // Every upload here queues work, and a drain started in this host would claim it and run
+            // it on its own schedule, beside the tests that run their own job by hand.
             JobWorkers.RemoveFrom);
     }
 

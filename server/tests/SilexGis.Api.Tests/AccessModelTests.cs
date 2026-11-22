@@ -341,7 +341,7 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixtur
             .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug)
             .Select(g => g.Id).SingleAsync();
 
-        // The database is shared across suites, so other full administrators exist. Park
+        // Other tests of this class make full administrators of their own. Park
         // every direct membership (including this account's own) for the duration: the
         // group-mediated path must then be the installation's only one.
         var parkedMembers = await db.PermissionGroupMembers

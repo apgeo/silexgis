@@ -435,7 +435,7 @@ public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable, IClas
 
     /// <summary>
     /// The member's own inbox line for one event, found by the notification the sweep wrote for
-    /// them rather than by position, because the suite shares a database with every other class.
+    /// them rather than by position, because the tests of this class share one database.
     /// </summary>
     private async Task<JsonElement> InboxLineAsync(Guid eventId)
     {
