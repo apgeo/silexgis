@@ -542,7 +542,9 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var connection = db.Database.GetDbConnection();
 
-        foreach (var (lon, lat) in new[] { (25d, 0d), (25d, 46d), (25d, -70d), (25d, 85d) })
+        // The last two put the radius across the antimeridian and across the north pole, where the
+        // points the database measures have longitudes on the far side of the stored range.
+        foreach (var (lon, lat) in new[] { (25d, 0d), (25d, 46d), (25d, -70d), (25d, 85d), (179.95d, -17d), (25d, 89.9d) })
         {
             var reach = SpatialReach.Around(
                 new NetTopologySuite.Geometries.Envelope(lon, lon, lat, lat), SpatialConditions.DefaultMaxRadiusMeters);
@@ -559,6 +561,23 @@ public sealed class FilterSpatialConditionTests : IAsyncLifetime, IDisposable, I
                 p => reach.Contains(p.X, p.Y),
                 $"the reach around {lon}, {lat} falls short of the radius the database measures");
         }
+    }
+
+    [Fact]
+    public async Task A_radius_across_the_antimeridian_finds_an_entrance_on_the_other_side()
+    {
+        // About eleven kilometres apart, on either side of 180 degrees. Neither is protected, so
+        // the owner and the viewer are both measured on the stored point.
+        var (caveId, entranceId) = await CaveWithEntranceAsync("Dateline", -179.95, -17, locationProtected: false);
+        var anchor = new PointValue(179.95, -17);
+
+        var within = await IdsAsync(owner, Within(20_000, anchor));
+        within.ShouldContain(entranceId, "a radius reaching across the antimeridian lost the row on the other side");
+        within.ShouldContain(caveId);
+        (await IdsAsync(viewer, Within(20_000, anchor))).ShouldContain(entranceId);
+
+        // The radius is still a radius: short of the eleven kilometres, nothing.
+        (await IdsAsync(owner, Within(5_000, anchor))).ShouldNotContain(entranceId);
     }
 
     // ---------- the surfaces that read a filter ----------

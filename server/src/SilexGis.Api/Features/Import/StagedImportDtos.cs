@@ -319,8 +319,18 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
             .NotEmpty()
             .When(x => x.Areas == ImportAreaHandling.ImportAsArea)
             .WithMessage("Say which kind of area an outline becomes.");
-        RuleFor(x => x.Languages).NotNull();
-        RuleFor(x => x.TagIds).NotNull();
+        // Both lists are stored with the session on every save and sent back on every commit, the
+        // tags as one membership list, so neither may grow past what a person could have chosen.
+        RuleFor(x => x.Languages).Cascade(CascadeMode.Stop).NotNull()
+            .Must(languages => languages.Count <= MaxLanguages)
+            .WithMessage($"At most {MaxLanguages} languages.");
+        RuleForEach(x => x.Languages)
+            .Must(language => !string.IsNullOrWhiteSpace(language) && language.Length <= MaxLanguageTagLength)
+            .WithMessage($"A language is a non-empty tag of at most {MaxLanguageTagLength} characters.")
+            .When(x => x.Languages is not null && x.Languages.Count <= MaxLanguages);
+        RuleFor(x => x.TagIds).Cascade(CascadeMode.Stop).NotNull()
+            .Must(ids => ids.Count <= MaxTags)
+            .WithMessage($"At most {MaxTags} tags.");
         RuleFor(x => x.Mapping).NotNull();
         RuleFor(x => x.Mapping.LithologyField).MaximumLength(200).When(x => x.Mapping is not null);
         RuleFor(x => x.Mapping.LithologyValues)
@@ -341,6 +351,15 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
 
     /// <summary>More distinct rock names than any geology map's legend carries.</summary>
     public const int MaxLithologyValues = 500;
+
+    /// <summary>More languages than any term rule set is written in.</summary>
+    public const int MaxLanguages = 50;
+
+    /// <summary>The longest language tag stored anywhere else in the application.</summary>
+    public const int MaxLanguageTagLength = 32;
+
+    /// <summary>The same tag ceiling the photograph import keeps.</summary>
+    public const int MaxTags = 50;
 }
 
 /// <summary>

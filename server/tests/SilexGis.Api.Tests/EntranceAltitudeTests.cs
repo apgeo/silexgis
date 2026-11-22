@@ -6,6 +6,7 @@ using MaxRev.Gdal.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
+using Npgsql;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using Shouldly;
@@ -17,6 +18,7 @@ using SilexGis.Domain.Geo;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Terrain;
 
 namespace SilexGis.Api.Tests;
 
@@ -45,6 +47,14 @@ public sealed class EntranceAltitudeTests : IAsyncLifetime, IDisposable, IClassF
 
     private readonly SilexGisApiFactory factory;
     private readonly string buildRoot;
+    private readonly string connectionString;
+
+    // Rows the elevation read checks it could lock from a connection of its own, and what it found.
+    private Guid[]? probedRows;
+    private bool? probedRowsWereFree;
+
+    // Something done to the database from a connection of its own while the elevation is read.
+    private Func<Task>? duringRead;
 
     private HttpClient owner = null!;
     private HttpClient viewer = null!;
@@ -61,10 +71,16 @@ public sealed class EntranceAltitudeTests : IAsyncLifetime, IDisposable, IClassF
     public EntranceAltitudeTests(PostgresFixture postgres)
     {
         buildRoot = Path.Combine(TestScratch.Root, $"silexgis-entalt-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
-            JobWorkers.RemoveFrom);
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.AddSingleton<IDemSampleService>(sp =>
+                    new ProbingSampler(sp.GetRequiredService<GdalDemSampler>(), this));
+            });
     }
 
     public async ValueTask InitializeAsync()
@@ -304,6 +320,121 @@ public sealed class EntranceAltitudeTests : IAsyncLifetime, IDisposable, IClassF
 
         var untouched = await ReadJsonAsync(owner, $"/api/v1/caves/{recorded}/altitude-disagreement");
         untouched.GetProperty("entrances")[0].GetProperty("recordedAltitudeM").GetDecimal().ShouldBe(1100m);
+    }
+
+    [Fact]
+    public async Task Filling_reads_the_elevation_data_without_holding_the_cave_or_the_entrance()
+    {
+        // The elevation read can wait behind other terrain requests. Taken while the cave's and the
+        // entrance's rows are locked, it would stall every edit of that cave for as long as it waits.
+        var area = await CreateAreaAsync();
+        var cave = await CaveWithEntranceAsync(area, null);
+        var entrance = await EntranceIdAsync(cave);
+
+        probedRows = [cave, entrance];
+        probedRowsWereFree = null;
+        try
+        {
+            var filled = await owner.PostAsync($"/api/v1/cave-entrances/{entrance}/fill-altitude", null);
+            filled.StatusCode.ShouldBe(HttpStatusCode.OK, await filled.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            probedRows = null;
+        }
+
+        probedRowsWereFree.ShouldBe(true);
+    }
+
+    [Fact]
+    public async Task Filling_decides_again_on_the_rows_it_holds_after_the_ground_was_read()
+    {
+        // The reader may write both caves through a grant on each, and places them only while they
+        // are unprotected: no grant of exact view comes with the write.
+        var area = await CreateAreaAsync();
+        var open = await CaveWithEntranceAsync(area, null);
+        var guarded = await CaveWithEntranceAsync(area, null);
+        var deleted = await CaveWithEntranceAsync(area, null);
+        foreach (var cave in new[] { open, guarded, deleted })
+        {
+            await GrantFeatureAsync(viewerUserId, cave, AccessAction.Read | AccessAction.Write);
+        }
+
+        var openEntrance = await EntranceIdAsync(open);
+        var guardedEntrance = await EntranceIdAsync(guarded);
+        var deletedEntrance = await EntranceIdAsync(deleted);
+
+        // The control: nothing changes while the ground is read, and the reader fills it.
+        var filled = await viewer.PostAsync($"/api/v1/cave-entrances/{openEntrance}/fill-altitude", null);
+        filled.StatusCode.ShouldBe(HttpStatusCode.OK, await filled.Content.ReadAsStringAsync());
+
+        // The cave's location is protected while its ground is read: the fill is answered as for an
+        // entrance the reader may not place — absent — and writes nothing.
+        duringRead = () => ExecuteAsync(
+            "UPDATE features SET location_protected = true, is_protected_effective = true WHERE id = @cave; "
+            + "UPDATE features SET is_protected_effective = true WHERE id = @entrance",
+            guarded, guardedEntrance);
+        var withheld = await FillDuringAsync(guardedEntrance);
+        withheld.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(withheld)).ShouldBe("entrance.not_found");
+        (await AltitudeOfAsync(guardedEntrance)).ShouldBeNull();
+
+        // The cave is deleted while its ground is read.
+        duringRead = () => ExecuteAsync(
+            "UPDATE features SET deleted_at = now() WHERE id = @cave", deleted, deletedEntrance);
+        var gone = await FillDuringAsync(deletedEntrance);
+        gone.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(gone)).ShouldBe("entrance.not_found");
+        (await AltitudeOfAsync(deletedEntrance)).ShouldBeNull();
+    }
+
+    private async Task<HttpResponseMessage> FillDuringAsync(Guid entrance)
+    {
+        try
+        {
+            return await viewer.PostAsync($"/api/v1/cave-entrances/{entrance}/fill-altitude", null);
+        }
+        finally
+        {
+            duringRead = null;
+        }
+    }
+
+    private async Task ExecuteAsync(string sql, Guid cave, Guid entrance)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        // Bounded, so a fill that held the rows through the read fails this test rather than
+        // waiting on it for ever.
+        await using var command = new NpgsqlCommand("SET lock_timeout = '10s'; " + sql, connection);
+        command.Parameters.AddWithValue("cave", cave);
+        command.Parameters.AddWithValue("entrance", entrance);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task<decimal?> AltitudeOfAsync(Guid entrance)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.CaveEntrances.IgnoreQueryFilters()
+            .Where(e => e.Id == entrance).Select(e => e.Altitude).SingleAsync();
+    }
+
+    private async Task GrantFeatureAsync(Guid userId, Guid featureId, AccessAction actions)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Domain = AccessDomain.Features,
+            Actions = actions,
+            Effect = AccessEffect.Allow,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = featureId,
+        });
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -591,5 +722,50 @@ public sealed class EntranceAltitudeTests : IAsyncLifetime, IDisposable, IClassF
 
         band.WriteRaster(0, 0, 16, 16, pixels, 16, 16, 0, 0);
         dataset.FlushCache();
+    }
+
+    private async Task<bool> RowsAreFreeAsync(Guid[] ids)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using var command = new NpgsqlCommand(
+            "SELECT id FROM features WHERE id = ANY(@ids) FOR UPDATE NOWAIT", connection, transaction);
+        command.Parameters.AddWithValue("ids", ids);
+        try
+        {
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+            }
+
+            return true;
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The real sampler, with a look at the cave's and the entrance's rows taken while it reads.
+    /// </summary>
+    private sealed class ProbingSampler(GdalDemSampler inner, EntranceAltitudeTests test) : IDemSampleService
+    {
+        public async Task<IReadOnlyList<DemSample>> SampleAsync(
+            TerrainCoverage coverage, IReadOnlyList<DemSamplePoint> points, CancellationToken ct)
+        {
+            if (test.probedRows is { } ids)
+            {
+                test.probedRowsWereFree = await test.RowsAreFreeAsync(ids);
+            }
+
+            if (test.duringRead is { } change)
+            {
+                await change();
+            }
+
+            return await inner.SampleAsync(coverage, points, ct);
+        }
     }
 }

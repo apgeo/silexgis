@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Options;
+
 namespace SilexGis.Infrastructure.Geodata;
 
 /// <summary>
@@ -41,4 +43,31 @@ public sealed class UploadedGeodataOptions
     /// default is two gigapixels in three bands, about a 45,000-pixel square colour scan.
     /// </summary>
     public long MaxRasterPixelValues { get; set; } = 6_000_000_000;
+}
+
+/// <summary>
+/// Refuses start-up on a ceiling of zero or less, naming the setting. Every ceiling here is
+/// compared with "more than", so zero would refuse every upload of its kind, and a negative
+/// figure would do the same while reading as a typing slip; neither means "no ceiling".
+/// </summary>
+public sealed class UploadedGeodataOptionsValidator : IValidateOptions<UploadedGeodataOptions>
+{
+    public ValidateOptionsResult Validate(string? name, UploadedGeodataOptions o)
+    {
+        ArgumentNullException.ThrowIfNull(o);
+        var failures = new List<string>();
+        Positive(o.MaxZippedShapefileBytes, nameof(UploadedGeodataOptions.MaxZippedShapefileBytes));
+        Positive(o.MaxKmzDocumentBytes, nameof(UploadedGeodataOptions.MaxKmzDocumentBytes));
+        Positive(o.MaxFeatures, nameof(UploadedGeodataOptions.MaxFeatures));
+        Positive(o.MaxRasterPixelValues, nameof(UploadedGeodataOptions.MaxRasterPixelValues));
+        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+
+        void Positive(long value, string setting)
+        {
+            if (value <= 0)
+            {
+                failures.Add($"{UploadedGeodataOptions.SectionName}:{setting} must be above 0.");
+            }
+        }
+    }
 }

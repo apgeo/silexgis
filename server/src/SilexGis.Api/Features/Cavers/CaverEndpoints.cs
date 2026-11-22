@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
@@ -38,6 +39,21 @@ public sealed record CaverWriteRequest(
 
 public sealed record CaverAccountLinkRequest(Guid UserId);
 
+/// <summary>The roster list's filters.</summary>
+/// <param name="Search">Part of a person's name, matched without regard to case or accents.</param>
+/// <param name="Unlinked">True for people with no account attached.</param>
+public sealed record CaverListQuery(
+    [property: FromQuery(Name = "search")] string? Search,
+    [property: FromQuery(Name = "unlinked")] bool? Unlinked);
+
+public sealed class CaverListQueryValidator : AbstractValidator<CaverListQuery>
+{
+    /// <summary>The longest name search the roster takes: longer than any name it holds.</summary>
+    public const int MaxSearchLength = 200;
+
+    public CaverListQueryValidator() => RuleFor(x => x.Search).MaximumLength(MaxSearchLength);
+}
+
 public sealed record CaverMergeRequest(Guid SourceCaverId);
 
 /// <summary>
@@ -70,7 +86,14 @@ public sealed class CaverWriteRequestValidator : AbstractValidator<CaverWriteReq
         // way to see which field was the problem.
         RuleFor(x => x.Email).MaximumLength(320);
         RuleFor(x => x.Phone).MaximumLength(40);
+        // Free text about a person, kept by the roster's keepers. A merge joins two entries' notes,
+        // so a merged note can come out longer than this; its next edit is refused naming the
+        // notes until they are shortened, which is the only place the excess can be seen anyway.
+        RuleFor(x => x.Notes).MaximumLength(MaxNotesLength);
     }
+
+    /// <summary>The longest note a roster entry takes.</summary>
+    public const int MaxNotesLength = 10_000;
 }
 
 public sealed class CaverAccountLinkRequestValidator : AbstractValidator<CaverAccountLinkRequest>
@@ -98,7 +121,7 @@ public static class CaverEndpoints
     {
         var cavers = api.MapGroup("/cavers").WithTags("Cavers");
 
-        cavers.MapGet("/", ListAsync).WithSummary("The roster, filtered by an optional name search.");
+        cavers.MapGet("/", ListAsync).WithValidation<CaverListQuery>().WithSummary("The roster, filtered by an optional name search.");
         cavers.MapGet("/{id:guid}", GetAsync).WithSummary("One person, with their caving groups.");
         cavers.MapPost("/", CreateAsync).WithValidation<CaverWriteRequest>()
             .WithSummary("Adds a person to the roster.");
@@ -138,8 +161,7 @@ public static class CaverEndpoints
             caverId is { } id ? new AccessTargetFacts { ObjectId = id } : null).Allowed;
 
     private static async Task<Results<Ok<List<CaverDto>>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
-        string? search,
-        bool? unlinked,
+        [AsParameters] CaverListQuery query,
         SilexGisDbContext db,
         IUserContextAccessor userAccessor,
         IAccessContextAccessor accessAccessor,
@@ -157,19 +179,19 @@ public static class CaverEndpoints
             return ApiProblems.Forbidden("access.forbidden");
         }
 
-        var query = db.Cavers.AsNoTracking();
-        if (!string.IsNullOrWhiteSpace(search))
+        var rows = db.Cavers.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var pattern = $"%{search.Trim()}%";
-            query = query.Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.FullName), EF.Functions.Unaccent(pattern)));
+            var pattern = $"%{query.Search.Trim()}%";
+            rows = rows.Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.FullName), EF.Functions.Unaccent(pattern)));
         }
 
-        if (unlinked == true)
+        if (query.Unlinked == true)
         {
-            query = query.Where(c => c.UserId == null);
+            rows = rows.Where(c => c.UserId == null);
         }
 
-        var cavers = await query.OrderBy(c => c.FullName).Take(200).ToListAsync(ct);
+        var cavers = await rows.OrderBy(c => c.FullName).Take(200).ToListAsync(ct);
         return TypedResults.Ok(await ProjectAsync(db, user, ctx, cavers, ct));
     }
 

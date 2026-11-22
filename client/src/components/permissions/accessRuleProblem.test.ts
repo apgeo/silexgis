@@ -15,6 +15,7 @@ describe('accessRuleProblem', () => {
     'access_entry.anchor_not_found',
     'access_entry.scope_invalid',
     'access.forbidden',
+    'permission_group.default_membership',
   ];
 
   it('says why a rule or member write was refused, each in its own words, in both languages', () => {

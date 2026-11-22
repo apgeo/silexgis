@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -27,6 +29,7 @@ public static class PermissionGroupEndpoints
     public const string ProtectedCode = "permission_group.protected";
     public const string NotFoundCode = "permission_group.not_found";
     public const string NameTakenCode = "permission_group.name_taken";
+    public const string DefaultMembershipCode = "permission_group.default_membership";
     public const string DenyFullAdministratorsCode = "permission_group.deny_full_administrators";
 
     // A group is unique on its name and on its slug, and either can be the one PostgreSQL
@@ -283,7 +286,11 @@ public static class PermissionGroupEndpoints
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
-        Guid id, SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        Guid id,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        IOptions<AuthOptions> authOptions,
+        CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -305,6 +312,16 @@ public static class PermissionGroupEndpoints
         if (group.IsProtected)
         {
             return ApiProblems.Conflict(ProtectedCode, "This permission group cannot be deleted.");
+        }
+
+        // New accounts are joined to groups by short name. Deleted while the setting still names
+        // it, the short name would be free again, and the next group created under the same name
+        // would silently become the one every new account joins.
+        if (authOptions.Value.DefaultPermissionGroupSlugs.Contains(group.Slug))
+        {
+            return ApiProblems.Conflict(DefaultMembershipCode,
+                "New accounts join this permission group. Remove it from the default-membership "
+                + "setting (SILEXGIS__Auth__DefaultPermissionGroups) before deleting it.");
         }
 
         // Entries and trustee rows cascade. An allow or a trustee row only ever narrows access
