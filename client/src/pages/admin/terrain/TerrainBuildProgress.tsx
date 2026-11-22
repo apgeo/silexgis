@@ -14,6 +14,7 @@ import {
 } from './terrainBuild.ts';
 import { TerrainBakeDegraded, TerrainBakeTimedOut } from './TerrainBakeLimits.tsx';
 import TerrainWorkerMissing from './TerrainWorkerMissing.tsx';
+import { FONT_SIZE } from '../../../theme.ts';
 
 interface Props {
   buildId: string;
@@ -207,7 +208,7 @@ export default function TerrainBuildProgress({ buildId }: Props) {
               data-testid="terrain-log-tail"
               style={{
                 margin: '8px 0 0',
-                fontSize: 12,
+                fontSize: FONT_SIZE.sm,
                 whiteSpace: 'pre-wrap',
                 maxHeight: 240,
                 overflow: 'auto',

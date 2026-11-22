@@ -51,7 +51,7 @@ export default function CavePotentialTrainingView({ result, training, evidenceLa
             heldOutCells: training.heldOutCells,
           })}
         </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-training-split">
+        <Typography.Text type="secondary" className="hint-text" data-testid="cave-potential-training-split">
           {t('cavePotential.training.split', {
             percent: Math.round(training.heldOutShare * 100),
             seed: training.seed,
@@ -59,11 +59,11 @@ export default function CavePotentialTrainingView({ result, training, evidenceLa
           })}
         </Typography.Text>
         {training.protectedEntrances > 0 && (
-          <Typography.Text type="warning" style={{ fontSize: 12 }} data-testid="cave-potential-training-protected">
+          <Typography.Text type="warning" className="hint-text" data-testid="cave-potential-training-protected">
             {t('cavePotential.training.protectedEntrances', { n: training.protectedEntrances })}
           </Typography.Text>
         )}
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t(
             weightsOfEvidence
               ? 'cavePotential.training.scaleWeightsOfEvidence'
@@ -72,7 +72,7 @@ export default function CavePotentialTrainingView({ result, training, evidenceLa
           )}
         </Typography.Text>
         {training.expectedOccurrences !== null && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-training-expected">
+          <Typography.Text type="secondary" className="hint-text" data-testid="cave-potential-training-expected">
             {t('cavePotential.training.expected', {
               expected: training.expectedOccurrences.toFixed(1),
               trainingCells: training.trainingCells,
@@ -102,7 +102,7 @@ export default function CavePotentialTrainingView({ result, training, evidenceLa
         data-testid="cave-potential-rate-curves"
         style={{ width: '100%', maxWidth: 560, height: 300 }}
       />
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('cavePotential.training.curvesHint')}
       </Typography.Text>
 
@@ -186,7 +186,7 @@ export default function CavePotentialTrainingView({ result, training, evidenceLa
           </div>
         );
       })}
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('cavePotential.training.tablesHint')}
       </Typography.Text>
     </Flex>

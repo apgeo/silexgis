@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, mapAddress, registryRow } from './helpers.ts';
+import { gotoRoute, login, mapAddress, registryRow, pickCaveType } from './helpers.ts';
 
 // From a doline to the place where a cave beneath it comes nearest the surface, and on to the map.
 //
@@ -27,8 +27,7 @@ const TOLERANCE = 24;
 async function createCave(page: Page, name: string) {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
   return new URL(page.url()).pathname.split('/').filter(Boolean).pop()!;

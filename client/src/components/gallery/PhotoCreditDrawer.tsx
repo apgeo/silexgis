@@ -253,7 +253,7 @@ export default function PhotoCreditDrawer({ documentId, onClose }: PhotoCreditDr
                 />
                 <Typography.Text>{t('gallery.inPublicGallery')}</Typography.Text>
               </Flex>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" className="hint-text">
                 {t('gallery.inPublicGalleryHint')}
               </Typography.Text>
             </Flex>

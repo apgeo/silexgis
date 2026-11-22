@@ -36,10 +36,10 @@ export default function CavePotentialLegend({
         style={{ height: 10, borderRadius: 2, background: ramp, border: '1px solid rgba(0, 0, 0, 0.25)' }}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Typography.Text style={{ fontSize: 12 }}>{t('cavePotential.legend.low')}</Typography.Text>
-        <Typography.Text style={{ fontSize: 12 }}>{t('cavePotential.legend.high')}</Typography.Text>
+        <Typography.Text className="hint-text">{t('cavePotential.legend.low')}</Typography.Text>
+        <Typography.Text className="hint-text">{t('cavePotential.legend.high')}</Typography.Text>
       </div>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="cave-potential-caveat">
+      <Typography.Text type="secondary" className="hint-text" data-testid="cave-potential-caveat">
         {t('cavePotential.legend.caveat')}
         {relative ? ` ${t('cavePotential.legend.relativeCaveat')}` : ''}
         {usesPositions ? ` ${t('cavePotential.legend.positionsCaveat')}` : ''}

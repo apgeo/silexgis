@@ -16,6 +16,7 @@ import {
 import Lightbox from '../gallery/Lightbox.tsx';
 import PhotoGrid from '../gallery/PhotoGrid.tsx';
 import { viewPhoto } from '../gallery/photoView.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * How many of the trip's photographs are drawn here.
@@ -145,7 +146,7 @@ export default function TripGallerySection({
                     justify="center"
                     style={{ height: 100, background: token.colorFillQuaternary }}
                   >
-                    <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
+                    <PictureOutlined style={{ fontSize: FONT_SIZE.heading3, opacity: 0.4 }} />
                   </Flex>
                 )
               }

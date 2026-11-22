@@ -82,7 +82,7 @@ export default function KarstDensityControls({
         ) : load.status === 'error' ? (
           <Alert type="warning" showIcon title={t('map.karstDensity.failed')} />
         ) : (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-karst-density-cell">
+          <Typography.Text type="secondary" className="hint-text" data-testid="map-karst-density-cell">
             {load.status === 'ok' && load.cellMetres !== null
               ? t('map.karstDensity.cell', {
                   metres: Math.round(load.cellMetres),

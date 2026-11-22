@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 
 /**
  * The compiler log the server tests read, not a second copy of it. A log is a long file whose
@@ -38,8 +38,7 @@ function closure(page: Page) {
 async function createCave(page: Page, name: string) {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
 }

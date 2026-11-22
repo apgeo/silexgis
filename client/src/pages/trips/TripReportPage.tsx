@@ -585,7 +585,7 @@ export default function TripReportPage() {
                         <img src={photo.thumbnailUrl} alt={photo.credit.caption ?? photo.title} />
                       )}
                       <figcaption>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" className="hint-text">
                           {[photo.credit.caption ?? photo.title, photo.credit.photographerName]
                             .filter(Boolean)
                             .join(' — ')}

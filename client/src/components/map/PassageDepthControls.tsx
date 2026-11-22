@@ -9,6 +9,7 @@ import {
   subscribePassageDepthLoadState,
   type PassageDepthLoadState,
 } from '../../map/passageDepthLayer.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /** The key: one swatch per class, in metres of rock over the passage. */
 export function PassageDepthLegend({ state }: { state: PassageDepthLoadState }) {
@@ -16,7 +17,7 @@ export function PassageDepthLegend({ state }: { state: PassageDepthLoadState }) 
   const { token } = theme.useToken();
   const labels = passageDepthClassLabels(state.classEdgesM, t);
   return (
-    <ul data-testid="map-passage-depth-legend" style={{ listStyle: 'none', margin: '4px 0 0', padding: 0, fontSize: 12 }}>
+    <ul data-testid="map-passage-depth-legend" style={{ listStyle: 'none', margin: '4px 0 0', padding: 0, fontSize: FONT_SIZE.sm }}>
       {labels.map((label, index) => (
         <li key={index} data-testid="map-passage-depth-legend-row">
           <span
@@ -70,7 +71,7 @@ export default function PassageDepthControls() {
         <Alert type="info" showIcon data-testid="map-passage-depth-no-terrain" title={t('map.passageDepth.noTerrain')} />
       ) : load.status === 'ok' ? (
         <>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-passage-depth-note">
+          <Typography.Text type="secondary" className="hint-text" data-testid="map-passage-depth-note">
             {load.caveCount > 0
               ? t('map.passageDepth.shown', { count: load.caveCount })
               : t('map.passageDepth.none')}
@@ -87,7 +88,7 @@ export default function PassageDepthControls() {
           )}
         </>
       ) : (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('map.passageDepth.loading')}
         </Typography.Text>
       )}

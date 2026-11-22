@@ -189,7 +189,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
               {counted && t(counted.key, counted.values)}
             </Typography.Text>
 
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('libraryPhotos.browse.readAt', {
                 when: new Date(data.readAt).toLocaleTimeString(i18n.resolvedLanguage),
               })}

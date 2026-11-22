@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Locator, type Page } from '@playwright/test';
-import { gotoRoute } from './helpers.ts';
+import { gotoRoute, pickCaveType } from './helpers.ts';
 import { bearerToken } from './rastermapApi.ts';
 
 /**
@@ -26,8 +26,7 @@ export async function caveWithSurvey(page: Page, made: string[]): Promise<string
   await page.goto('/caves/new');
   const caveName = `E2E Label Sizes ${Date.now()}`;
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())![1];

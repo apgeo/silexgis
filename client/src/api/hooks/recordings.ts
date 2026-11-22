@@ -81,7 +81,12 @@ export function useCommitRecordingImport() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
-      void queryClient.invalidateQueries({ queryKey: ['trip-recordings'] });
+      // Everything that lists recordings, but not the review just confirmed: it stays on screen
+      // behind the result, and asked again it would only be refused as already made into a trip.
+      void queryClient.invalidateQueries({
+        queryKey: ['trip-recordings'],
+        predicate: (query) => query.queryKey[1] !== 'import-preview',
+      });
     },
   });
 }

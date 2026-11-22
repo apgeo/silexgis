@@ -10,6 +10,7 @@ import {
   type SurveyUploadLinkAudience,
 } from '../../api/hooks.ts';
 import { surveyUploadRequestErrorText } from './surveyUploadProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /** The server's refusal of a link to a protected cave's results asked for without the acknowledgement. */
 const PROTECTED_REFUSAL = 'survey_upload.public_link_refused_protected';
@@ -107,7 +108,7 @@ export default function MakePublicLinkDialog({
             {SURVEY_UPLOAD_LINK_AUDIENCES.map((a) => (
               <Radio key={a} value={a} data-testid={`survey-upload-link-audience-${a}`}>
                 {t(`surveyUploads.link.audience.${a}`)}
-                <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                <Typography.Text type="secondary" style={{ display: 'block', fontSize: FONT_SIZE.sm }}>
                   {t(`surveyUploads.link.audienceHint.${a}`)}
                 </Typography.Text>
               </Radio>

@@ -7,6 +7,7 @@ import {
   type SurveyCompilationInfo,
   type SurveyLoopError,
 } from '../../api/hooks.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * How well a cave's surveys closed, as the compiler that compiled them reported it.
@@ -42,7 +43,7 @@ export default function SurveyQualityPanel({ caveId }: { caveId: string }) {
 
   return (
     <Card title={t('surveyQuality.title')} style={{ marginTop: 16 }} data-testid="survey-closure">
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Paragraph type="secondary" className="hint-text">
         {t('surveyQuality.explanation')}
       </Typography.Paragraph>
       {compilations.map((compilation) => (
@@ -247,7 +248,7 @@ function Compilation({
       {compilation.status === 'read' &&
         compilation.outcome !== 'failed' &&
         compilation.loops.length === 0 && (
-        <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 12 }}>
+        <Typography.Paragraph type="secondary" style={{ fontSize: FONT_SIZE.sm, marginTop: 12 }}>
           {compilation.loopCount === 0
             ? t('surveyQuality.noLoops')
             : compilation.loopCount === null || compilation.loopCount === undefined
@@ -262,7 +263,7 @@ function Compilation({
               error columns are both sortable, so a fixed sentence naming one of them would, the
               moment a reader sorted by the other, rank the loops by distance under the ratio's
               name — which is the single confusion this paragraph exists to prevent. */}
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ fontSize: FONT_SIZE.sm, marginTop: 12 }}>
             {`${t(ORDER_KEYS[sortField] ?? 'surveyQuality.orderedBy.table')} ${t('surveyQuality.orderingExplanation')}`}
           </Typography.Paragraph>
           <Table<SurveyLoopError>

@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
 import { surveyRead, tryAsPerson } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 import {
   AT_FIRST_MOMENT,
@@ -131,7 +131,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   // The visitor's browser is watched like the signed-in one, and this flow refuses a track on
   // purpose and then revokes the link: each is answered 404, which the browser logs.
   guard.allow(
-    /the server responded with a status of 404/,
+    /\/api\/v1\/public\/trips\/[^?:\s]+(\?|:|$)/,
     'this flow refuses one past track and then revokes the link, and each read that finds them gone is answered 404',
   );
   const stamp = Date.now();
@@ -141,8 +141,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   // ---- The cave and its survey ----
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
@@ -781,8 +780,7 @@ test('a visitor watches another party of the cave on the survey of the link they
     // ---- One cave, one survey, and two parties in it at once, each followed and published ----
     await page.goto('/caves/new');
     await page.getByLabel('Name', { exact: true }).fill(caveName);
-    await page.getByLabel('Type', { exact: true }).click();
-    await page.locator('.ant-select-item-option').first().click();
+    await pickCaveType(page);
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
     const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

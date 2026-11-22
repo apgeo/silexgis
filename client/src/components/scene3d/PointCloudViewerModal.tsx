@@ -256,7 +256,7 @@ export default function PointCloudViewerModal({
               {measureReadout}
             </Typography.Text>
           )}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('scene3d.pointCloud.localFrameHint')}
           </Typography.Text>
         </Flex>

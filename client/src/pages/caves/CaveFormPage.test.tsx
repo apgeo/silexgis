@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CaveWrite } from '../../api/hooks.ts';
@@ -26,20 +26,34 @@ vi.mock('../../api/client.ts', async (original) => ({
   lastReadETag: (path: string) => versionOnFile(path),
 }));
 
-vi.mock('../../api/hooks.ts', () => ({
-  useCave: () => ({
-    data: caveOnScreen,
-    isPending: caveOnScreen === undefined && caveReadError === undefined,
-    isError: caveReadError !== undefined,
-    error: caveReadError ?? null,
-    refetch: refetchCave,
-  }),
-  useCaveTypes: () => ({ data: [{ id: 1, name: 'Cave' }] }),
-  useRockTypes: () => ({ data: [] }),
-  useFeatureTypes: () => ({ data: [] }),
-  useCreateCave: () => ({ mutateAsync: createCave, isPending: false }),
-  useUpdateCave: () => ({ mutateAsync: updateCave, isPending: false }),
-}));
+// The page's read of the cave, re-delivered when a test stands for a fresh read: the router holds
+// its route elements once, so re-rendering the tree from outside would not reach the page.
+const readers = new Set<() => void>();
+function rereadCave() {
+  act(() => readers.forEach((notify) => notify()));
+}
+
+vi.mock('../../api/hooks.ts', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (notify: () => void) => {
+    readers.add(notify);
+    return () => readers.delete(notify);
+  };
+  return {
+    useCave: () => ({
+      data: useSyncExternalStore(subscribe, () => caveOnScreen),
+      isPending: caveOnScreen === undefined && caveReadError === undefined,
+      isError: caveReadError !== undefined,
+      error: caveReadError ?? null,
+      refetch: refetchCave,
+    }),
+    useCaveTypes: () => ({ data: [{ id: 1, name: 'Cave' }] }),
+    useRockTypes: () => ({ data: [] }),
+    useFeatureTypes: () => ({ data: [] }),
+    useCreateCave: () => ({ mutateAsync: createCave, isPending: false }),
+    useUpdateCave: () => ({ mutateAsync: updateCave, isPending: false }),
+  };
+});
 
 const { default: CaveFormPage } = await import('./CaveFormPage.tsx');
 
@@ -71,16 +85,22 @@ function aCaveAt(version: string, overrides: Record<string, unknown> = {}) {
   return cave;
 }
 
-function page() {
+/** The page under a data router, as in the application, so leaving it can be asked about. */
+let router: ReturnType<typeof createMemoryRouter>;
+
+function page(history: string[] = ['/caves/cave-1/edit']) {
+  router = createMemoryRouter(
+    [
+      { path: '/caves/:id/edit', element: <CaveFormPage /> },
+      { path: '/caves/:id', element: <div data-testid="cave-sheet" /> },
+      { path: '/map', element: <div data-testid="map-page" /> },
+    ],
+    { initialEntries: history, initialIndex: history.length - 1 },
+  );
   return (
-    <MemoryRouter initialEntries={['/caves/cave-1/edit']}>
-      <App>
-        <Routes>
-          <Route path="/caves/:id/edit" element={<CaveFormPage />} />
-          <Route path="/caves/:id" element={<div data-testid="cave-sheet" />} />
-        </Routes>
-      </App>
-    </MemoryRouter>
+    <App>
+      <RouterProvider router={router} />
+    </App>
   );
 }
 
@@ -134,7 +154,7 @@ describe('editing a cave the page reads again meanwhile', () => {
 
     onFile('"2"');
     caveOnScreen = aCave({ name: 'Renamed by somebody else' });
-    view.rerender(page());
+    rereadCave();
 
     expect(screen.getByLabelText('Description')).toHaveValue(
       'A long description somebody is part way through',
@@ -150,7 +170,7 @@ describe('editing a cave the page reads again meanwhile', () => {
 
     onFile('"2"');
     caveOnScreen = aCaveAt('"2"', { name: 'Renamed by somebody else' });
-    view.rerender(page());
+    rereadCave();
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateCave).toHaveBeenCalledTimes(1));
@@ -251,16 +271,7 @@ describe('what a cave save sends', () => {
 describe('CaveFormPage left with typed work', () => {
   /** Opened from the cave's sheet, so Cancel has somewhere to go back to. */
   function fromSheet() {
-    return (
-      <MemoryRouter initialEntries={['/caves/cave-1', '/caves/cave-1/edit']} initialIndex={1}>
-        <App>
-          <Routes>
-            <Route path="/caves/:id/edit" element={<CaveFormPage />} />
-            <Route path="/caves/:id" element={<div data-testid="cave-sheet" />} />
-          </Routes>
-        </App>
-      </MemoryRouter>
-    );
+    return page(['/caves/cave-1', '/caves/cave-1/edit']);
   }
 
   const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -282,5 +293,59 @@ describe('CaveFormPage left with typed work', () => {
     expect(screen.getByLabelText('Description')).toHaveValue('Half a description');
     fireEvent.click(screen.getByTestId('discard-confirm'));
     expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+    // The one question was the whole of it: the move back was not asked about a second time.
+    expect(screen.getAllByTestId('discard-confirm')).toHaveLength(1);
+  });
+
+  it('asks before a move to another page throws typing away, and stays until told', async () => {
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Half a description' } });
+
+    await act(async () => {
+      void router.navigate('/map');
+    });
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.queryByTestId('map-page')).toBeNull();
+    expect(screen.getByLabelText('Description')).toHaveValue('Half a description');
+
+    await act(async () => {
+      void router.navigate(-1);
+    });
+    await waitFor(() => expect(screen.getAllByTestId('discard-confirm')).toHaveLength(2));
+    fireEvent.click(screen.getAllByTestId('discard-confirm')[1]);
+    expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+  });
+
+  it('lets a move away through unasked when nothing was typed', async () => {
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    await act(async () => {
+      void router.navigate('/map');
+    });
+    expect(await screen.findByTestId('map-page')).toBeInTheDocument();
+  });
+
+  it('opens the saved cave without asking, the typing being saved', async () => {
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A finished description' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByTestId('cave-sheet')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('discard-confirm')).toHaveLength(0);
+  });
+
+  it('has the browser ask before a reload or a closed tab only while something is typed', async () => {
+    const unloadAsks = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const view = render(fromSheet());
+    await waitFor(() => expect(nameInput(view.container)).toHaveValue('Peștera de Test'));
+    expect(unloadAsks()).toBe(false);
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Half a description' } });
+    expect(unloadAsks()).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { surveyRead, tryAsPerson, versionOf } from './arrange.ts';
 import { ownContext, test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 import { uniquePng } from './png.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
@@ -139,8 +139,7 @@ test('as installed, a visitor holding only a link reads a cave’s own name for 
   // ---- The cave and the survey its parties are followed on ----
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

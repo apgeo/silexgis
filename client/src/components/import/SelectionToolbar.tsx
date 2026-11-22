@@ -156,7 +156,7 @@ export default function SelectionToolbar({
           </Button>
         </Flex>
 
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('vectorImport.fileSummary', {
             candidates: counts.candidates,
             matched: counts.matched,

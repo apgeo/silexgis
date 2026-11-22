@@ -35,7 +35,7 @@ import SurveyUploadProgressPanel from '../../components/surveyUploads/SurveyUplo
 import MakePublicLinkDialog from '../../components/surveyUploads/MakePublicLinkDialog.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
 import { surveyUploadRequestErrorText } from '../../components/surveyUploads/surveyUploadProblems.ts';
-import { DOWNLOAD_BUTTON } from '../../theme.ts';
+import { DOWNLOAD_BUTTON, FONT_SIZE } from '../../theme.ts';
 
 /**
  * The place a run is watched: where it is, what it said, what it produced, and what can be done
@@ -231,7 +231,7 @@ function StatusBody({ upload, canWrite }: { upload: SurveyUpload; canWrite: bool
             ) : (
               <pre
                 data-testid="survey-upload-log-tail"
-                style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
+                style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
               >
                 {upload.logTail}
               </pre>

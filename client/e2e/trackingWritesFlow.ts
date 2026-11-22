@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
-import { chooseOption, gotoRoute, login, confirmOk } from './helpers.ts';
+import { chooseOption, gotoRoute, login, confirmOk, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
@@ -115,8 +115,7 @@ export async function correctImportAndReportByPlace(page: Page) {
   // ---- A cave of this run's own, with the committed survey fixture on it ----
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

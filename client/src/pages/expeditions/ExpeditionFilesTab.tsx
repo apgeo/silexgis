@@ -12,6 +12,7 @@ import {
   useCreateAlbum,
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What is filed against the camp: the permit, the plan, the photographs somebody attached to the
@@ -138,7 +139,7 @@ function ExpeditionAlbums({
                     justify="center"
                     style={{ height: 100, background: token.colorFillQuaternary }}
                   >
-                    <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
+                    <PictureOutlined style={{ fontSize: FONT_SIZE.heading3, opacity: 0.4 }} />
                   </Flex>
                 )
               }

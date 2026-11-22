@@ -83,7 +83,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                 children: full.rockCode ? (
                   <Space orientation="vertical" size={0}>
                     <span>{full.rockCode}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {t('speologie.detail.rockCodeHint')}
                     </Typography.Text>
                   </Space>
@@ -105,7 +105,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                 children: full.hydroBasin ? (
                   <Space orientation="vertical" size={0}>
                     <span>{full.hydroBasin.name}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {full.hydroBasin.path}
                     </Typography.Text>
                   </Space>
@@ -114,7 +114,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                   // hold — show the number rather than nothing, and say why it is only a number.
                   <Space orientation="vertical" size={0}>
                     <span>{full.hydroBasinId}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {t('speologie.detail.hydroBasinUnknown')}
                     </Typography.Text>
                   </Space>

@@ -130,7 +130,7 @@ function UploadRow({ item, onDismiss }: { item: UploadItem; onDismiss: () => voi
           {item.name}
         </Typography.Text>
         <Progress percent={item.state === 'done' ? 100 : percent} status={status} size="small" showInfo={false} />
-        <Typography.Text type={item.state === 'failed' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+        <Typography.Text type={item.state === 'failed' ? 'danger' : 'secondary'} className="hint-text">
           {line}
         </Typography.Text>
       </Flex>

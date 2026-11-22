@@ -99,7 +99,7 @@ export default function SurveySourceSection({ caveId, canEdit }: { caveId: strin
         )
       }
     >
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Paragraph type="secondary" className="hint-text">
         {t('surveySources.explanation')}
       </Typography.Paragraph>
       <ReadFailedAlert

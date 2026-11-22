@@ -420,7 +420,7 @@ function SchemaPreview({ form }: { form: ReturnType<typeof Form.useForm<FeatureT
 
   return (
     <Flex vertical gap={4}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.featureTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (

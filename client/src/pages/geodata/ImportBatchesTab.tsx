@@ -202,7 +202,7 @@ export default function ImportBatchesTab() {
                   {batchLabel(row.source, name)}
                 </Typography.Link>
                 {row.termRuleSetName && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {row.termRuleSetName}
                   </Typography.Text>
                 )}

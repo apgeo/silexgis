@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useBlocker } from 'react-router-dom';
+import { isLeavingDeliberately } from '../../auth/leaving.ts';
 
 /**
  * Asks before the map page is left while it holds unsaved edits. Drawings and reshapes live only
@@ -45,6 +46,9 @@ export function useUnsavedEditsGuard(unsaved: number): void {
       return;
     }
     const ask = (event: BeforeUnloadEvent) => {
+      if (isLeavingDeliberately()) {
+        return;
+      }
       event.preventDefault();
       // Older engines show their question only when a return value is set.
       event.returnValue = '';

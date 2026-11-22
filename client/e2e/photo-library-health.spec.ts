@@ -20,7 +20,7 @@ const expected = process.env.SILEXGIS_E2E_LIBRARY_STATE ?? 'healthy';
 test(`the panel reports a library that is ${expected}`, async ({ page, consoleErrors }) => {
   if (expected !== 'healthy') {
     consoleErrors.allow(
-      /the server responded with a status of 503/,
+      /\/api\/v1\/photo-libraries\/photoprism\/(map|recheck)(\?|:|$)/,
       'the library was stopped for this run, and the application answers a request it cannot ' +
         'pass on to it with 503 — which is what the panel then has to say in words',
     );

@@ -7,7 +7,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { surveyRead, tryAsPerson } from './arrange.ts';
 import { coveredControls } from './caveviewLabelSizeFlow.ts';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 import { tintedPng } from './png.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
@@ -122,8 +122,7 @@ test('a photograph hung on a moment of a trip is in the movie of it, for as long
   await page.goto('/caves/new');
   const caveName = `E2E Movie Pictures Cave ${stamp}`;
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())![1];

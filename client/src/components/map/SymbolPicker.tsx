@@ -136,7 +136,7 @@ export function SymbolPreview({
 export function SymbolSourcesNote() {
   const { t } = useTranslation();
   return (
-    <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+    <Typography.Paragraph type="secondary" className="hint-text">
       {t('mapSymbols.sources')}
     </Typography.Paragraph>
   );

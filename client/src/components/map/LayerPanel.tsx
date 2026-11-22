@@ -1100,7 +1100,7 @@ export default function LayerPanel({
           <Divider style={{ margin: '12px 0' }} />
           <Typography.Text strong>{t('cavePotential.layers.title')}</Typography.Text>
           <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('cavePotential.layers.hint')}
             </Typography.Text>
           </div>
@@ -1123,7 +1123,7 @@ export default function LayerPanel({
                 </Checkbox>
                 {/* A result is known by where it was run and when: the same model run twice over
                     one area gives two rows that only the date tells apart. */}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {[
                     result.areaName,
                     t('cavePotential.layers.cell', { meters: result.cellMeters }),

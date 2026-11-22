@@ -25,7 +25,7 @@ test('a deleted document leaves the cave and its own address, and is restored wh
   // the browser writes a console error for every request that answered 404, however well the
   // page handled it.
   consoleErrors.allow(
-    /status of 404/,
+    /\/api\/v1\/(documents\/[0-9a-f-]{36}(\/comments)?|reslinks\/for-target)(\?|:|$)/,
     'this flow opens the address of a document it has just deleted, which the server answers as not found',
   );
 

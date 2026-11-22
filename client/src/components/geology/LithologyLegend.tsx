@@ -7,6 +7,7 @@ import { getSurfaceFeatureSource } from '../../map/featureLayer.ts';
 import { lithologyAppearance } from '../../map/lithologyAppearance.ts';
 import { lithologyLabel } from './lithology.ts';
 import { type LithologyKeyEntry, lithologyKeyOf } from './lithologyKey.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * The key to the geological units on the map: a swatch per class actually drawn in the loaded
@@ -36,7 +37,7 @@ export default function LithologyLegend() {
 
   return (
     <div style={{ marginTop: 8 }} role="group" aria-label={t('geology.legend.title')} data-testid="lithology-legend">
-      <Typography.Text strong style={{ fontSize: 12 }}>
+      <Typography.Text strong className="hint-text">
         {t('geology.legend.title')}
       </Typography.Text>
       <ul style={{ listStyle: 'none', margin: '4px 0 0', padding: 0 }}>
@@ -46,7 +47,7 @@ export default function LithologyLegend() {
             <li
               key={entry.lithology ?? ''}
               data-standing={look.standing}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: '20px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: FONT_SIZE.sm, lineHeight: '20px' }}
             >
               <span
                 aria-hidden
@@ -62,13 +63,13 @@ export default function LithologyLegend() {
               <span>
                 {lithologyLabel(t, entry.lithology)}
                 {look.standing === 'karstifiable' && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {' '}
                     · {t('geology.karstifiable')}
                   </Typography.Text>
                 )}
                 {look.standing === 'unrecognised' && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {' '}
                     · {t('geology.unrecognised')}
                   </Typography.Text>

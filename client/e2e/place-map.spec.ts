@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { asPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, pickCaveType } from './helpers.ts';
 import { uniquePng } from './png.ts';
 import { bearerToken } from './rastermapApi.ts';
 
@@ -257,8 +257,7 @@ test("the places a phone pinned on a survey's declared map are drawn on its map 
   // A cave with the committed survey fixture on it, made as a person makes it.
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

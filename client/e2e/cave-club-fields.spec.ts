@@ -4,7 +4,7 @@ import { expect } from '@playwright/test';
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
 import { asPerson, tryAsPerson } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, pickCaveType } from './helpers.ts';
 
 interface FeatureTypeRow {
   id: number;
@@ -79,8 +79,7 @@ test('a field the club adds to the cave type is offered on the cave form and sho
 
     const caveTypes = await asPerson<{ id: number; name: string }[]>(page, 'GET', '/api/v1/cave-types');
     await page.getByLabel('Name').first().fill(name);
-    await page.getByLabel('Type', { exact: true }).click();
-    await page.getByTitle(caveTypes[0].name).first().click();
+    await pickCaveType(page, caveTypes[0].name);
     await page.getByTestId(`cave-club-field-${key}`).fill('45');
     const saved = page.waitForResponse(
       (r) => r.url().endsWith('/api/v1/caves') && r.request().method() === 'POST',

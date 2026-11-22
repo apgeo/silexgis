@@ -125,7 +125,11 @@ export const specs = {
     'georeferenced-sheet.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
-  imports: ['vector-import.spec.ts', 'geology.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
+  imports: [
+    'vector-import.spec.ts', 'geology.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts',
+    // A phone recording reviewed and recorded onto a trip.
+    'speleoloc-recording-commit.spec.ts',
+  ],
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
@@ -238,7 +242,7 @@ export const specs = {
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
     'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
     'phone-users.spec.ts', 'sync-settings-admin.spec.ts', 'recordings-attention.spec.ts',
-    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts',
+    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts', 'speleoloc-recording-commit.spec.ts',
   ],
   tags: ['trips.spec.ts'],
   taxonomies: [],

@@ -14,7 +14,7 @@ import { relationPhraseFor } from '../components/reslinks/relations.ts';
 import { useDeleteResLink } from '../api/hooks.ts';
 import { isConcurrencyConflict } from '../api/client.ts';
 import { resLinkProblemMessage } from '../components/reslinks/problems.ts';
-import { resolveDark } from '../theme.ts';
+import { resolveDark, FONT_SIZE } from '../theme.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
@@ -308,7 +308,7 @@ export default function AnnotatedTextPanel({
         <Typography.Text
           type="warning"
           data-testid="tl-links-cut-off"
-          style={{ padding: '0 12px', fontSize: 12, flex: '0 0 auto' }}
+          style={{ padding: '0 12px', fontSize: FONT_SIZE.sm, flex: '0 0 auto' }}
         >
           {t('textLink.linksCutOff', { shown: linkPage.items.length, total: linkPage.totalItems })}
         </Typography.Text>
@@ -375,7 +375,7 @@ function ControlList({
     // Said rather than left blank. A reader whose clicks appear to do nothing needs to know that
     // there is no view open to send them to, which is a different problem from a broken link.
     return (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('textLink.controls.none')}
       </Typography.Text>
     );
@@ -383,7 +383,7 @@ function ControlList({
 
   return (
     <Flex vertical gap={6} style={{ minWidth: 220 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('textLink.controls.hint')}
       </Typography.Text>
       {controls.map((control) => (

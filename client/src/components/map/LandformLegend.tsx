@@ -26,7 +26,7 @@ export default function LandformLegend() {
               border: '1px solid rgba(0, 0, 0, 0.25)',
             }}
           />
-          <Typography.Text style={{ fontSize: 12 }}>{t(`terrain.landforms.${name}`)}</Typography.Text>
+          <Typography.Text className="hint-text">{t(`terrain.landforms.${name}`)}</Typography.Text>
         </span>
       ))}
     </div>

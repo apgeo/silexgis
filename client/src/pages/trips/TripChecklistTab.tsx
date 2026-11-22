@@ -9,6 +9,7 @@ import {
 import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
 import { tripChecklistTickProblem } from './tripChecklistProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What this trip settles before it sets off, and how much of it is settled.
@@ -127,7 +128,7 @@ export default function TripChecklistTab({
               </Checkbox>
               {item.ticked && item.tickedAt ? (
                 <Tooltip title={new Date(item.tickedAt).toLocaleString()}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 24 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, marginLeft: 24 }}>
                     {t('trips.checklistTickedAt', {
                       when: new Date(item.tickedAt).toLocaleDateString(),
                     })}

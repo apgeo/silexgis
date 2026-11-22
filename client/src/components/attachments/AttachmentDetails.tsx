@@ -28,7 +28,7 @@ const ROLES: AttachmentRole[] = [
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {label}
       </Typography.Text>
       {children}
@@ -147,7 +147,7 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
           />
           <Typography.Text>{t('attachments.inDeviceDefaultSet')}</Typography.Text>
         </Flex>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('attachments.inDeviceDefaultSetHint')}
         </Typography.Text>
       </Flex>

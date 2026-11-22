@@ -386,7 +386,7 @@ export default function CaveListPage() {
                   label: karstLinkWithheld ? (
                     <Flex vertical data-testid="cave-registry-karstlink-withheld">
                       <span>{t('karstlinkExport.menuItem')}</span>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      <Typography.Text type="secondary" className="hint-text">
                         {t('karstlinkExport.notInWindow')}
                       </Typography.Text>
                     </Flex>

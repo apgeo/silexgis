@@ -261,7 +261,7 @@ function SchemaPreview({ form }: { form: ReturnType<typeof Form.useForm<Document
 
   return (
     <Flex vertical gap={4}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.documentTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (

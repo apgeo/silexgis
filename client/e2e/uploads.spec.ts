@@ -197,7 +197,7 @@ test('uploading the same bytes again is warned about and can be accepted', async
   // The refusal this flow exists to drive. The browser logs every 409 to the console, so the
   // one this test provokes on purpose is declared rather than left to look like a defect.
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\/uploads\/[^/?:\s]+\/complete)?(\?|:|$)/,
     'the duplicate refusal this test asks for on purpose',
   );
 

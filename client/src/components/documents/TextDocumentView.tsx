@@ -42,7 +42,7 @@ export default function TextDocumentView({ file }: { file: FileInfo }) {
         {data.text}
       </Typography.Paragraph>
       {data.truncated && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('documents.viewer.textTruncated', {
             kilobytes: Math.round(maxInlineTextBytes / 1024),
           })}

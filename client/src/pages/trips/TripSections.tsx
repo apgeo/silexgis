@@ -376,7 +376,7 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
     <Flex vertical gap={12}>
       {MEASURES.map((measure) => (
         <Flex vertical gap={2} key={measure}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t(`trips.${measure}`)}
           </Typography.Text>
           {canEdit ? (
@@ -469,7 +469,7 @@ function SectionField({
   const { t } = useTranslation();
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {field.required ? `${label} *` : label}
       </Typography.Text>
       {/* A person is picked from the roster rather than typed: the field holds an identity, and

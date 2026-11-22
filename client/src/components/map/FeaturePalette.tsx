@@ -35,7 +35,7 @@ export default function FeaturePalette({ featureTypes, value, onChange }: Featur
     <div className="feature-palette">
       {groups.map((group) => (
         <div key={group.kind} className="feature-palette-group">
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t(`mapEdit.groups.${group.kind}`)}
           </Typography.Text>
           <div className="feature-palette-grid">

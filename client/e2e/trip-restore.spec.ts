@@ -37,7 +37,7 @@ test('a deleted trip leaves the list and its own address, and is restored with i
   // browser writes a console error for every request that answered 404, however well the page
   // handled it.
   consoleErrors.allow(
-    /status of 404/,
+    /\/api\/v1\/(trip-logs|objects\/tripLog)\/[^/?:\s]+(\/effective-access)?(\?|:|$)/,
     'this flow opens the address of a trip it has just deleted, which the server answers as not found',
   );
 

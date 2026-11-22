@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect } from '@playwright/test';
 import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -26,8 +26,7 @@ test('a compiled survey is read in the background and the list follows it there'
 
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
@@ -121,8 +120,7 @@ test('a corrected survey uploaded to take over becomes the current one once it h
 
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

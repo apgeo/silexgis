@@ -94,7 +94,7 @@ export default function LibraryAlbumChooser({
           screen: the words went to the library whole and the album narrowed nothing. Saying it
           over an empty chooser would be noise. */}
       {searching && albumId !== null && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('libraryPhotos.albums.notWithASearch')}
         </Typography.Text>
       )}
@@ -102,7 +102,7 @@ export default function LibraryAlbumChooser({
       {/* A short list that does not say it is short is a wrong answer: a reader whose album is
           missing concludes the library has lost it. */}
       {albums?.truncated && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('libraryPhotos.albums.truncated', { count: albums.items.length })}
         </Typography.Text>
       )}

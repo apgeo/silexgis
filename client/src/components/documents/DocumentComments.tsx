@@ -122,7 +122,7 @@ export default function DocumentComments({ documentId }: { documentId: string })
 
   const body = (comment: DocumentComment) => (
     <div key={comment.id} style={{ marginBottom: 12 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {line(comment)}
       </Typography.Text>
       {editing === comment.id ? (

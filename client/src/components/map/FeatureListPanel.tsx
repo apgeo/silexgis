@@ -169,7 +169,7 @@ function InViewGrid({ features, attributeFilter, nameTitle, columns = [], onPick
       />
       {selectedKeys.length > 0 && (
         <Flex align="center" justify="space-between" style={{ padding: '4px 8px' }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('map.selectedCount', { count: selectedKeys.length })}
           </Typography.Text>
           <Button size="small" icon={<AimOutlined />} onClick={zoomToSelected}>

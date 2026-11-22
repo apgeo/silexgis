@@ -152,7 +152,7 @@ function PickedTable() {
       {/* What the set asked about and what came back can differ — an object the reader may not see
           is simply not listed — and the count above is of the set, so the gap is not explained in
           a way that would itself say something about the missing objects. */}
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('panel.multiHint')}
       </Typography.Text>
     </div>

@@ -133,7 +133,7 @@ test.describe('following a published trip on a phone', () => {
     // token, an unknown one, a revoked one and a cave somebody has since protected all answer
     // identically on purpose, because telling them apart tells a stranger which tokens exist.
     consoleErrors.allow(
-      /Failed to load resource.*404/,
+      /\/api\/v1\/public\/trips\/definitely-not-a-real-token-000(\/[a-z-]+)?(\?|:|$)/,
       'the not-found answer this test navigates to on purpose',
     );
 

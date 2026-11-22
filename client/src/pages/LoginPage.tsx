@@ -462,7 +462,7 @@ export default function LoginPage() {
             style={{ marginBottom: 16 }}
             description={
               <Flex vertical gap={8}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t('auth.testLogins.hint')}
                 </Typography.Text>
                 {testLogins.map((login) => (
@@ -495,7 +495,7 @@ export default function LoginPage() {
                         </Popover>
                       )}
                     </Flex>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {login.email} · {login.password}
                     </Typography.Text>
                   </Flex>

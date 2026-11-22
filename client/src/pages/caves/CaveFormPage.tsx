@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Spin, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
-import { useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
+import { useDiscardGuard, useFormEdits, useLeaveGuard } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -51,10 +51,16 @@ export default function CaveFormPage() {
   );
   const [extra, setExtra] = useState<Record<string, unknown>>({});
   // The club's own fields live beside the antd form, so the form's own record of what was touched
-  // does not see them; a change to one is noted here for the question Cancel asks.
+  // does not see them; a change to one is noted here for the question leaving the form asks.
   const extraTouched = useRef(false);
   const requestDiscard = useDiscardGuard();
   const edits = useFormEdits();
+  const typed = () => edits.edited() || extraTouched.current;
+  const forgetTyping = () => {
+    edits.forget();
+    extraTouched.current = false;
+  };
+  useLeaveGuard(typed);
 
   // The cave the form was filled from, and the version of it, taken once per cave. The page goes
   // on reading the cave under the form — on a return to the browser tab, after an entrance is
@@ -113,6 +119,7 @@ export default function CaveFormPage() {
         ? await updateCave.mutateAsync({ body, ifMatch: seeded.current?.version })
         : await createCave.mutateAsync(body);
       message.success(t('common.saved'));
+      forgetTyping();
       navigate(`/caves/${saved.id}`);
     } catch (error) {
       // A stale version is worded once, by the application's conflict warning; a refusal worded
@@ -361,7 +368,12 @@ export default function CaveFormPage() {
           />
           <Flex gap={8} justify="end" style={{ marginTop: 16 }}>
             <Button
-              onClick={() => requestDiscard(() => edits.edited() || extraTouched.current, () => navigate(-1))}
+              onClick={() =>
+                requestDiscard(typed, () => {
+                  forgetTyping();
+                  navigate(-1);
+                })
+              }
             >
               {t('common.cancel')}
             </Button>

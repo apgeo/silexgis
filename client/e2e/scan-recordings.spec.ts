@@ -282,7 +282,7 @@ test('a finished scan offers its session for refining, and the server refuses a 
   consoleErrors,
 }) => {
   test.setTimeout(180_000);
-  consoleErrors.allow(/status of 400/, 'the refined session is sent for a scan the server made no session for, and refused on purpose');
+  consoleErrors.allow(/\/api\/v1\/survey-uploads(\/[^/?:\s]+(\/(complete|files\/[^/?:\s]+))?)?(\?|:|$)/, 'the refined session is sent for a scan the server made no session for, and refused on purpose');
   const folder = test.info().outputPath('Refine_e2e');
   writeRecording(folder);
   const { uploadId } = await sendWithOdometryElsewhere(page, folder);

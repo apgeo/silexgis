@@ -53,6 +53,7 @@ import {
   memberRoute,
   targetTypeEntry,
 } from '../../components/reslinks/registry.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /** Members of one target type, in the order the link records them. */
 function groupByType(members: ResLinkMember[]): [string, ResLinkMember[]][] {
@@ -133,7 +134,7 @@ function MemberCard({
             style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }}
           />
         ) : (
-          <Icon style={{ fontSize: 24, marginTop: 4 }} />
+          <Icon style={{ fontSize: FONT_SIZE.heading3, marginTop: 4 }} />
         )}
         <Flex vertical gap={4} flex={1}>
           <Flex align="center" gap={8} wrap>

@@ -833,7 +833,7 @@ test('choosing kinds narrows the events, leaves the trips listed, and travels in
     // one draws the sentence for a calendar that could not be read — not a calendar quietly
     // showing every kind. The browser writes a console error for any request answered 400.
     consoleErrors.allow(
-      /status of 400/,
+      /\/api\/v1\/calendar(\?|:|$)/,
       'this flow opens a link naming a kind the server does not have, which it refuses',
     );
     await gotoRoute(page, `/calendar?from=${first}&to=${last}&kind=banana`);

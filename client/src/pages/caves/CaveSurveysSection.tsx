@@ -48,7 +48,7 @@ export default function CaveSurveysSection({ caveId }: { caveId: string }) {
 
   return (
     <Card title={t('surveyUploads.surveys.title')} style={{ marginTop: 16 }} data-testid="cave-surveys">
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Paragraph type="secondary" className="hint-text">
         {t('surveyUploads.surveys.explanation')}
       </Typography.Paragraph>
       {surveys

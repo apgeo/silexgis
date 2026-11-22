@@ -324,7 +324,7 @@ function SchemaPreview({
 
   return (
     <Flex vertical gap={4} style={{ marginBottom: 16 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.tripTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (
@@ -342,7 +342,7 @@ function SchemaPreview({
           report is written, so a field this schema demands has nowhere to be answered when the
           trip is created and every new trip of this purpose is refused. */}
       {fields.some((schemaField) => schemaField.required) && (
-        <Typography.Text type="warning" style={{ fontSize: 12 }} data-testid={`schema-required-warning-${field}`}>
+        <Typography.Text type="warning" className="hint-text" data-testid={`schema-required-warning-${field}`}>
           {t('admin.tripTypes.requiredWarning')}
         </Typography.Text>
       )}
