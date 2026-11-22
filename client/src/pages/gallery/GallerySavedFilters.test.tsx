@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import type { FilterNode } from '../../filters/types.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createSpy = vi.hoisted(() => vi.fn());
 
@@ -63,8 +64,7 @@ it('Save with no name marks the field, sends nothing and leaves no unhandled rej
   fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
   await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-  // Long enough for a rejection with no handler to be reported.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await afterRejectionsAreReported();
   expect(createSpy).not.toHaveBeenCalled();
   expect(unhandled).toEqual([]);
 });

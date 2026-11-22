@@ -11,6 +11,7 @@ import {
   type SpeleogeneticPatternKind,
 } from '../../api/hooks.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * What kind of cave a survey's shape suggests, with the rules that said so.
@@ -34,9 +35,13 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  */
 export default function CavePatternPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCavePattern(caveId);
+  const { data, isLoading, isError, error, refetch } = useCavePattern(caveId);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('passagePattern.title')} error={error} onRetry={refetch} testId="cave-pattern-read-failed" />
+    );
+  }
 
   const body = () => {
     if (isLoading || !data) return <Empty description={t('passagePattern.loading')} />;

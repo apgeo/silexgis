@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ApiError } from '../../api/client.ts';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 import { useCaveOverburden, type CaveOverburdenSample } from '../../api/hooks.ts';
 import Button from '../Button.tsx';
 import { setOverburdenHighlight } from '../../workspace/overburdenHighlight.ts';
@@ -49,7 +50,7 @@ const ALTITUDES_RELATIVE_CODE = 'cave.altitudes_relative';
  */
 export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError, error } = useCaveOverburden(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveOverburden(caveId);
   const altitudesRelative = error instanceof ApiError && error.code === ALTITUDES_RELATIVE_CODE;
   /** Which reading is being pointed at, by index into the profile's own list. */
   const [picked, setPicked] = useState<number | null>(null);
@@ -147,7 +148,11 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
     setOverburdenHighlight(null);
   }, [caveId, data]);
 
-  if (isError && !altitudesRelative) return null;
+  if (isError && !altitudesRelative) {
+    return (
+      <StatisticsCardReadFailed title={t('overburden.title')} error={error} onRetry={refetch} testId="cave-overburden-read-failed" />
+    );
+  }
 
   const body = () => {
     // Refused by the server, with its reason: the survey's heights are about its own zero point,

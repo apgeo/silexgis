@@ -275,8 +275,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Main survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Main survey'));
+      fireEvent.click(option);
     });
 
     fireEvent.click(screen.getByTestId('trip-tracking-arm'));
@@ -442,8 +443,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Corrected survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Corrected survey'));
+      fireEvent.click(option);
     });
 
     expect(screen.getByTestId('trip-tracking-model-swap-clears-datum')).toHaveTextContent(
@@ -461,8 +463,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Corrected survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Corrected survey'));
+      fireEvent.click(option);
     });
     fireEvent.change(screen.getByTestId('trip-tracking-reference'), { target: { value: 'Q9' } });
 
@@ -476,8 +479,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Corrected survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Corrected survey'));
+      fireEvent.click(option);
     });
 
     expect(screen.queryByTestId('trip-tracking-model-swap-clears-datum')).not.toBeInTheDocument();
@@ -495,8 +499,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Corrected survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Corrected survey'));
+      fireEvent.click(option);
     });
     fireEvent.click(screen.getByTestId('trip-tracking-save'));
 
@@ -522,8 +527,9 @@ describe('TrackingConfigCard', () => {
     await act(async () => {
       fireEvent.mouseDown(model);
     });
+    const option = await screen.findByTitle('Corrected survey');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('Corrected survey'));
+      fireEvent.click(option);
     });
     fireEvent.click(screen.getByTestId('trip-tracking-save'));
 

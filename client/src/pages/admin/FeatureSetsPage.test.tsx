@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /** The membership editor of a feature set. Every name and identifier below is invented. */
 
@@ -249,8 +250,7 @@ describe('creating a feature set', () => {
       const name = within(dialog).getByLabelText('Name');
       fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(createSpy).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

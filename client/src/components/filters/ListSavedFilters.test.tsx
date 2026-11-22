@@ -7,6 +7,7 @@ import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterNode } from '../../filters/types.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const gpx: FilterNode = { node: 'condition', field: 'format', op: 'equals', values: [{ type: 'id', value: 'gpx' }] };
 const createSpy = vi.fn();
@@ -68,8 +69,7 @@ it('Save with no name marks the field, sends nothing and leaves no unhandled rej
 
   const name = screen.getByTestId('saved-filter-name');
   await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-  // Long enough for a rejection with no handler to be reported.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await afterRejectionsAreReported();
   expect(createSpy).not.toHaveBeenCalled();
   expect(unhandled).toEqual([]);
 });

@@ -60,9 +60,9 @@ vi.mock('../../api/client.ts', async () => {
 
 const { default: PhoneNumberCard } = await import('./PhoneNumberCard.tsx');
 
-function show() {
+function show(client = new QueryClient()) {
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <App>
         <PhoneNumberCard />
       </App>
@@ -187,5 +187,59 @@ describe('a number waiting for its code', () => {
     fireEvent.click(screen.getByRole('button', { name: i18n.t('security.phoneResend') }));
 
     expect(await screen.findByText(i18n.t('security.phoneSendFailed'))).toBeInTheDocument();
+  });
+});
+
+describe('confirming the texted code', () => {
+  const pending: PhoneStatus = { phoneNumber: null, confirmed: false, pendingPhoneNumber: '+40700000009', smsConfigured: true };
+
+  async function typeAndConfirm(code = ' 123456 ') {
+    fireEvent.change(screen.getByLabelText(i18n.t('security.codePlaceholder')), { target: { value: code } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('security.confirm') }));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+  }
+
+  it('sends the typed code, says the number is confirmed and clears the code', async () => {
+    phone = pending;
+    post.mockResolvedValue({ data: undefined, error: undefined });
+    show();
+
+    await typeAndConfirm();
+
+    expect(post).toHaveBeenCalledWith('/api/v1/me/phone/confirm', { body: { code: '123456' } });
+    expect(await screen.findByText(i18n.t('security.phoneConfirmed'))).toBeInTheDocument();
+    expect(screen.getByLabelText(i18n.t('security.codePlaceholder'))).toHaveValue('');
+  });
+
+  it.each([
+    ['auth.locked_out', 'security.lockedOut'],
+    ['me.phone_taken', 'security.phoneTaken'],
+    ['me.phone_code_invalid', 'security.codeInvalid'],
+  ])('words the %s refusal on its own and keeps the typed code', async (code, wording) => {
+    phone = pending;
+    post.mockResolvedValue({ data: undefined, error: { code } });
+    show();
+
+    await typeAndConfirm('123456');
+
+    expect(await screen.findByText(i18n.t(wording))).toBeInTheDocument();
+    for (const other of ['security.lockedOut', 'security.phoneTaken', 'security.codeInvalid'].filter((key) => key !== wording)) {
+      expect(screen.queryByText(i18n.t(other))).toBeNull();
+    }
+    expect(screen.queryByText(i18n.t('security.phoneConfirmed'))).toBeNull();
+    expect(screen.getByLabelText(i18n.t('security.codePlaceholder'))).toHaveValue('123456');
+  });
+
+  it('says nothing is waiting any more and reads the card again when the pending number is gone', async () => {
+    phone = pending;
+    post.mockResolvedValue({ data: undefined, error: { code: 'me.phone_change_missing' } });
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    show(client);
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('security.phoneResend') }));
+
+    expect(await screen.findByText(i18n.t('security.phoneNothingPending'))).toBeInTheDocument();
+    expect(invalidate).toHaveBeenCalled();
   });
 });

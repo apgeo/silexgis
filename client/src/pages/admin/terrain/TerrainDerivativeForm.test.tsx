@@ -69,8 +69,9 @@ async function chooseKind(label: string) {
   await act(async () => {
     fireEvent.mouseDown(picker);
   });
+  const option = await screen.findByTitle(label);
   await act(async () => {
-    fireEvent.click(await screen.findByTitle(label));
+    fireEvent.click(option);
   });
 }
 

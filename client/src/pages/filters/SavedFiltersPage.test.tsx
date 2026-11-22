@@ -8,6 +8,7 @@ import i18n from '../../i18n';
 import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/caveRegistry.ts';
 import { galleryDocument, galleryWhere, readGalleryFilter } from '../../filters/gallery.ts';
 import type { SavedFilter } from '../../api/hooks/savedFilters.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const { filters, updateSpy, deleteSpy, filtersFailure } = vi.hoisted(() => ({
   filtersFailure: { current: undefined as unknown },
@@ -163,8 +164,7 @@ describe('the saved filters screen', () => {
 
       await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
       expect(updateSpy).not.toHaveBeenCalled();
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', record);

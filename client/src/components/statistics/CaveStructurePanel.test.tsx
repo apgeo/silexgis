@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const { comparisonSpy } = vi.hoisted(() => ({ comparisonSpy: vi.fn() }));
 
@@ -38,8 +39,10 @@ const answer = {
   divergence: null,
 };
 
-function show(data: typeof answer | Record<string, unknown>) {
-  comparisonSpy.mockReturnValue({ data, isLoading: false, isError: false });
+const readRefetch = vi.fn();
+
+function show(data: typeof answer | Record<string, unknown> | undefined, error: unknown = null) {
+  comparisonSpy.mockReturnValue({ data, isLoading: false, isError: error !== null, error, refetch: readRefetch });
   return render(<CaveStructurePanel caveId="cave-1" />);
 }
 
@@ -62,5 +65,22 @@ describe('CaveStructurePanel', () => {
     const title = screen.getByTestId('right-title').textContent ?? '';
     expect(title).not.toMatch(/\d+ m\b/);
     expect(title).toContain('3');
+  });
+});
+
+describe('CaveStructurePanel when its read fails', () => {
+  it('draws nothing when the server refuses the cave', () => {
+    const { container } = show(undefined, new ApiError(404, 'cave.not_found'));
+    expect(container.textContent).toBe('');
+  });
+
+  it('names any other failure with a way to ask again instead of vanishing from the page', () => {
+    readRefetch.mockReset();
+    show(undefined, new TypeError('Failed to fetch'));
+
+    const failed = screen.getByTestId('cave-structure-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
   });
 });

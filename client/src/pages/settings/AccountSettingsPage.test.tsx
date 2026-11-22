@@ -34,8 +34,9 @@ async function renameTo(name: string) {
   );
   fireEvent.change(screen.getByLabelText(t('settings.profile.username')), { target: { value: name } });
   fireEvent.click(screen.getByRole('button', { name: t('settings.account.changeUsername') }));
+  const option = await screen.findByRole('button', { name: /OK|Yes/ });
   await act(async () => {
-    fireEvent.click(await screen.findByRole('button', { name: /OK|Yes/ }));
+    fireEvent.click(option);
   });
 }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A read of the list that did not land, switched on by the test that needs it.
@@ -13,7 +13,9 @@ const listRead = vi.hoisted(() => {
   };
 });
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ExpeditionRosterRoleWrite } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
@@ -111,8 +113,7 @@ describe('ExpeditionRosterRolesPage', () => {
       const name = screen.getByLabelText('Name');
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(createMutate).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {
@@ -133,5 +134,31 @@ describe('a failed read of the list', () => {
       listRead.failed = false;
       listRead.refetch.mockReset();
     }
+  });
+});
+
+describe('ExpeditionRosterRolesPage deleting an entry', () => {
+  /** Presses Delete on the one deletable row and confirms in the question that follows. */
+  async function deleteAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    // The confirmation's own button carries the same word; the one in the popover is the last.
+    const confirm = await screen.findAllByRole('button', { name: /^(Delete|OK|Yes)$/ });
+    fireEvent.click(confirm[confirm.length - 1]);
+  }
+
+  it('deletes the entry the confirmation was for', async () => {
+    show();
+    await deleteAndConfirm();
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalledWith(3));
+  });
+
+  it('says why an entry still in use cannot be deleted, rather than a bare failure', async () => {
+    deleteMutate.mockRejectedValue(new ApiError(409, 'expedition_roster_role.in_use'));
+    show();
+    await deleteAndConfirm();
+
+    expect(await screen.findByText(i18n.t('admin.campRosterRoles.inUse'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.deleteFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
   });
 });

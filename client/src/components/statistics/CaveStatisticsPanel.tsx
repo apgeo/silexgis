@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { SurveyUploadStatistics } from '../../api/hooks/surveyUploads.ts';
 import { useCaveSurveyStatistics, useSurveyModels, type MorphometryComparison } from '../../api/hooks.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * What a cave's own line work measures, set against what the record says about it.
@@ -31,7 +32,8 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
-  const { data, isLoading, isError } = useCaveSurveyStatistics(caveId);
+  const { t } = useTranslation();
+  const { data, isLoading, isError, error, refetch } = useCaveSurveyStatistics(caveId);
   // The cave's page already lists its surveys, so this shares that query rather than adding a
   // request: it is here only to turn the model this answer came from into the name the reader
   // sees in that list.
@@ -39,7 +41,11 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
 
   // A cave the caller may not read — or may read but not place exactly — is refused, and then a
   // panel of blanks would be a claim about the cave rather than about the reader's access.
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('statistics.cave.title')} error={error} onRetry={refetch} testId="cave-survey-statistics-read-failed" />
+    );
+  }
 
   // Which of the cave's uploads answered. Named where the name is known, and by its identifier
   // otherwise — a reader comparing today's figures with the ones they wrote down last week has to

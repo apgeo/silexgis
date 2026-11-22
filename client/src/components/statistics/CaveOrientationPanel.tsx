@@ -7,6 +7,7 @@ import { useCaveOrientation } from '../../api/hooks.ts';
 import DipHistogram from './DipHistogram.tsx';
 import RoseDiagram from './RoseDiagram.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * Which way a cave's passages run, and how steeply.
@@ -30,11 +31,16 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * </p>
  */
 export default function CaveOrientationPanel({ caveId }: { caveId: string }) {
-  const { data, isLoading, isError } = useCaveOrientation(caveId);
+  const { t } = useTranslation();
+  const { data, isLoading, isError, error, refetch } = useCaveOrientation(caveId);
 
   // Refused for this reader, or refused because the cave's exact position is closed to them —
   // the server answers both the same way on purpose, and a panel of blanks would misreport it.
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('statistics.orientation.title')} error={error} onRetry={refetch} testId="cave-orientation-read-failed" />
+    );
+  }
 
   return <SurveyOrientationView data={data} isLoading={isLoading} />;
 }

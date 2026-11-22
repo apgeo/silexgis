@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import ElevationHistogram from './ElevationHistogram.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * How much of a cave's passage sits at each height, the storeys it appears to have been cut at, and
@@ -47,12 +48,16 @@ export default function CaveHypsometryPanel({
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading, isError } = useCaveHypsometry(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveHypsometry(caveId);
   const { data: saved } = useCaveLevelBands(caveId);
   const save = useSaveCaveLevelBands(caveId);
   const clear = useClearCaveLevelBands(caveId);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('hypsometry.caveTitle')} error={error} onRetry={refetch} testId="cave-hypsometry-read-failed" />
+    );
+  }
 
   const proposal = data?.proposal ?? null;
   const proposed: ElevationBand[] = proposal?.bands ?? [];

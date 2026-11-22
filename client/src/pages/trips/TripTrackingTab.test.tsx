@@ -816,8 +816,9 @@ describe('TripTrackingTab', () => {
     await act(async () => {
       fireEvent.mouseDown(kind);
     });
+    const option = await screen.findByTitle('At a depth');
     await act(async () => {
-      fireEvent.click(await screen.findByTitle('At a depth'));
+      fireEvent.click(option);
     });
 
     fireEvent.change(screen.getByTestId('trip-tracking-depth'), { target: { value: '120' } });

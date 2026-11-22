@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { SurveyUploadTopology } from '../../api/hooks/surveyUploads.ts';
 import { caveHasMeasurableSurvey, useCaveTopology, useSurveyModels } from '../../api/hooks.ts';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * The shape of a cave's passage network, as the figures the karst literature uses to tell one kind
@@ -32,13 +33,14 @@ import { caveHasMeasurableSurvey, useCaveTopology, useSurveyModels } from '../..
  * </p>
  */
 export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
+  const { t } = useTranslation();
   // Shares the cave page's existing list rather than adding a request. Two jobs: it turns the
   // upload these figures came from into the name the reader sees in that list, and it says whether
   // there is anything to measure at all — a cave with no read line plot is asked nothing, because
   // the answer would be a refusal and a refused request is an error on the console of every cave
   // page in the application.
   const { data: models } = useSurveyModels(caveId);
-  const { data, isError } = useCaveTopology(caveId, caveHasMeasurableSurvey(models));
+  const { data, isError, error, refetch } = useCaveTopology(caveId, caveHasMeasurableSurvey(models));
 
   // Three refusals arrive here as one: a cave the caller may not read, one they may read but not
   // place exactly, and one whose passage network has never been measured. In all three a panel of
@@ -47,7 +49,12 @@ export default function CaveTopologyPanel({ caveId }: { caveId: string }) {
   // The same holds while the answer is still being fetched, which is why there is no skeleton
   // here: a grid of dashes that resolves into either figures or nothing at all reads as a cave
   // measured to be empty for however long it is on screen.
-  if (isError || !data) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('statistics.topology.title')} error={error} onRetry={refetch} testId="cave-topology-read-failed" />
+    );
+  }
+  if (!data) return null;
 
   const answeringModel = data.surveyModelId
     ? (models?.find((model) => model.id === data.surveyModelId)?.name ?? data.surveyModelId)

@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { AccessKey, AccessKeyList } from '../../api/hooks.ts';
 
@@ -18,6 +18,7 @@ import type { AccessKey, AccessKeyList } from '../../api/hooks.ts';
 
 const createMutate = vi.fn();
 const revokeMutate = vi.fn();
+const keysRefetch = vi.fn();
 let list: AccessKeyList;
 let queryState: { isPending: boolean; isError: boolean; error: unknown };
 
@@ -38,7 +39,7 @@ vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     ...actual,
-    useAccessKeys: () => ({ data: list, refetch: vi.fn(), ...queryState }),
+    useAccessKeys: () => ({ data: list, refetch: keysRefetch, ...queryState }),
     useCreateAccessKey: () => ({ mutateAsync: createMutate, isPending: false }),
     useRevokeAccessKey: () => ({ mutateAsync: revokeMutate, isPending: false, variables: undefined }),
   };
@@ -138,5 +139,32 @@ describe('the access keys page', () => {
     fireEvent.click(within(confirm.closest('.ant-popover') as HTMLElement).getByRole('button', { name: 'Revoke' }));
 
     await waitFor(() => expect(revokeMutate).toHaveBeenCalledWith('k1'));
+  });
+});
+
+describe('the access keys page when something does not go through', () => {
+  it('names a failed read of the keys and reads them again when asked, instead of saying there are none', () => {
+    keysRefetch.mockReset();
+    queryState = { isPending: false, isError: true, error: new TypeError('Failed to fetch') };
+    show();
+
+    expect(screen.getByText(i18n.t('accessKeys.loadFailed'))).toBeInTheDocument();
+    expect(screen.queryByText('No access keys yet.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(keysRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a withdrawal failed and does not report the key revoked', async () => {
+    revokeMutate.mockRejectedValue(new TypeError('Failed to fetch'));
+    list.keys = [keyOf({})];
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    const confirm = await screen.findAllByRole('button', { name: 'Revoke' });
+    fireEvent.click(confirm[confirm.length - 1]);
+
+    await waitFor(() => expect(revokeMutate).toHaveBeenCalledWith('k1'));
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('accessKeys.revokedMessage'))).toBeNull();
   });
 });

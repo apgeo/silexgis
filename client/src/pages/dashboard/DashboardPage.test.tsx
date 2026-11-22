@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
@@ -67,10 +67,15 @@ const summaryQuery = vi.fn(
 /** The work areas the board offers as a way into a season; empty in most of these tests. */
 let workAreas: { id: string; name: string; description: null; parentId: null; childCount: number; geometry: null }[] = [];
 
+const sideRefetch = vi.fn();
+const viewsQuery = vi.fn((): Record<string, unknown> => ({ data: views }));
+const workAreasQuery = vi.fn((): Record<string, unknown> => ({ data: { items: workAreas, truncated: false } }));
+const failedSideRead = { data: undefined, isError: true, error: new Error('network'), refetch: sideRefetch };
+
 vi.mock('../../api/hooks.ts', () => ({
   useDashboardSummary: () => summaryQuery(),
-  useMapViews: () => ({ data: views }),
-  useWorkAreas: () => ({ data: { items: workAreas, truncated: false } }),
+  useMapViews: () => viewsQuery(),
+  useWorkAreas: () => workAreasQuery(),
   useMyTripLogs: (params: unknown) => {
     myTripsSpy(params);
     return upcomingQuery();
@@ -112,6 +117,9 @@ const countOn = (title: string) =>
 // would stack up and the text queries would match several times over.
 afterEach(() => {
   cleanup();
+  viewsQuery.mockImplementation(() => ({ data: views }));
+  workAreasQuery.mockImplementation(() => ({ data: { items: workAreas, truncated: false } }));
+  sideRefetch.mockReset();
   canCreate.mockReturnValue(true);
   tripDoor.mockImplementation(() => ({ canCreate: canCreate(), unbound: canCreate(), cavingGroups: [] }));
   refetch.mockClear();
@@ -253,5 +261,32 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: /Import file/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /New trip log/ }));
     expect(screen.getByTestId('location')).toHaveTextContent('/trip-logs');
+  });
+
+  /**
+   * A card whose read did not land is not an empty card: "no saved views yet" or "no work areas"
+   * after a dropped connection tells the reader something false. Each names the failure and
+   * offers to read again.
+   */
+  it('reports saved views it could not read instead of saying there are none', () => {
+    viewsQuery.mockReturnValue(failedSideRead);
+    renderPage();
+
+    const alert = screen.getByTestId('dashboard-views-load-failed');
+    expect(alert.textContent).toContain('Your saved views could not be read just now');
+    expect(screen.queryByText('No saved views yet.')).not.toBeInTheDocument();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(sideRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports work areas it could not read instead of saying there are none', () => {
+    workAreasQuery.mockReturnValue(failedSideRead);
+    renderPage();
+
+    const alert = screen.getByTestId('dashboard-work-areas-load-failed');
+    expect(alert.textContent).toContain('The work areas could not be read just now');
+    expect(screen.queryByText(i18n.t('workAreas.none'))).not.toBeInTheDocument();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(sideRefetch).toHaveBeenCalledTimes(1);
   });
 });

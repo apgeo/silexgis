@@ -45,6 +45,7 @@ const TYPES = [
   featureType('1', 'Spring', false),
   featureType('2', 'Passage marker', true),
   featureType('3', 'Structural measurement', false, 'structural_measurement', READING_SCHEMA),
+  featureType('4', 'Shaft', false, null, JSON.stringify({ type: 'object', properties: { depth: { type: 'number', title: 'Depth (m)' } } })),
 ];
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -229,5 +230,45 @@ describe('FeatureEditModal leaving with typed work', () => {
     expect(onCancel).not.toHaveBeenCalled();
     fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
     await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('what the feature dialog submits', () => {
+  it('trims the texts, keeps properties the schema does not know, and drops one that was emptied', async () => {
+    const onSubmit = show({
+      featureTypeId: 4,
+      name: '  Shaft head ',
+      description: '   ',
+      visibility: 'private',
+      locationProtected: true,
+      properties: { legacy: 1, depth: 5 },
+    });
+
+    const depth = await screen.findByLabelText('Depth (m)');
+    expect(depth).toHaveValue('5');
+    fireEvent.change(depth, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^(OK|Save)$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Shaft head',
+      featureTypeId: 4,
+      description: null,
+      visibility: 'private',
+      locationProtected: true,
+      primaryParentId: null,
+      // A key written by an earlier schema, or by another client, survives a save from this one.
+      properties: { legacy: 1 },
+    });
+  });
+
+  it('sends a changed property value over the one it opened with', async () => {
+    const onSubmit = show({ featureTypeId: 4, name: 'Shaft', properties: { legacy: 'kept', depth: 5 } });
+
+    fireEvent.change(await screen.findByLabelText('Depth (m)'), { target: { value: '42' } });
+    fireEvent.click(screen.getByRole('button', { name: /^(OK|Save)$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ name: 'Shaft', properties: { legacy: 'kept', depth: 42 } });
   });
 });

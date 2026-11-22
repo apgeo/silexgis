@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
-const { mutate, reset, armed, state } = vi.hoisted(() => ({
+const { mutate, reset, armed, state, showLine, disarm } = vi.hoisted(() => ({
   mutate: vi.fn(),
   reset: vi.fn(),
+  showLine: vi.fn(),
+  disarm: vi.fn(),
   armed: { finish: null as null | ((p: { longitude: number; latitude: number }[]) => void) },
   state: { data: undefined as unknown, isPending: false, isError: false },
 }));
@@ -16,9 +18,9 @@ vi.mock('../../api/hooks/karstProfiles.ts', () => ({
 vi.mock('../../map/terrainProfileTool.ts', () => ({
   armTerrainProfileDraw: (cb: typeof armed.finish) => {
     armed.finish = cb;
-    return vi.fn();
+    return disarm;
   },
-  showTerrainProfileLine: vi.fn(),
+  showTerrainProfileLine: showLine,
 }));
 vi.mock('../statistics/DistributionCharts.tsx', () => ({
   EnvelopeChart: ({ x, testId }: { x: number[]; testId?: string }) => (
@@ -34,6 +36,10 @@ afterEach(() => {
   state.isPending = false;
   state.isError = false;
   mutate.mockClear();
+  reset.mockClear();
+  showLine.mockClear();
+  disarm.mockClear();
+  armed.finish = null;
 });
 
 describe('TerrainProfileTool', () => {
@@ -97,5 +103,48 @@ describe('TerrainProfileTool', () => {
     render(<TerrainProfileTool />);
     expect(screen.queryByTestId('chart-terrain-profile')).toBeNull();
     expect(screen.getByTestId('terrain-profile-tool').textContent).toMatch(/does not reach/);
+  });
+});
+
+describe('TerrainProfileTool leaves nothing behind', () => {
+  const line = [
+    { longitude: 25, latitude: 46 },
+    { longitude: 25.01, latitude: 46 },
+  ];
+
+  it('takes the drawn line and the answer away when closed', () => {
+    state.isError = true;
+    render(<TerrainProfileTool />);
+    showLine.mockClear();
+    reset.mockClear();
+
+    fireEvent.click(screen.getByTestId('terrain-profile-close'));
+
+    expect(reset).toHaveBeenCalled();
+    expect(showLine).toHaveBeenLastCalledWith(null);
+  });
+
+  it('disarms the drawing and clears the line when the map is left mid-draw', () => {
+    const { unmount } = render(<TerrainProfileTool />);
+    fireEvent.click(screen.getByTestId('terrain-profile-button'));
+    expect(disarm).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(disarm).toHaveBeenCalledTimes(1);
+    expect(showLine).toHaveBeenLastCalledWith(null);
+  });
+
+  it('forgets the previous profile and its line before a second one is drawn', () => {
+    render(<TerrainProfileTool />);
+    fireEvent.click(screen.getByTestId('terrain-profile-button'));
+    act(() => armed.finish?.(line));
+    expect(showLine).toHaveBeenLastCalledWith(line);
+    reset.mockClear();
+
+    fireEvent.click(screen.getByTestId('terrain-profile-button'));
+
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(showLine).toHaveBeenLastCalledWith(null);
   });
 });

@@ -50,6 +50,8 @@ const encoding = {
   closed: 0,
   /** While set, adding a frame waits until the test lets it go. */
   hold: null as Promise<void> | null,
+  /** While set, the encoder breaks on this frame, as one that runs out of memory does. */
+  breakAt: null as number | null,
 };
 const formats: MovieFormatSupport[] = [
   { format: 'gif', supported: true, codec: null },
@@ -67,6 +69,9 @@ vi.mock('../../../movie/encode/movieEncoder.ts', async (original) => ({
       prime: async () => undefined,
       addFrame: async () => {
         encoding.frames += 1;
+        if (encoding.breakAt !== null && encoding.frames >= encoding.breakAt) {
+          throw new Error('The encoder gave up on frame 12');
+        }
         if (encoding.hold) {
           await encoding.hold;
         }
@@ -234,6 +239,7 @@ beforeEach(() => {
   encoding.frames = 0;
   encoding.closed = 0;
   encoding.hold = null;
+  encoding.breakAt = null;
 });
 
 afterEach(() => {
@@ -448,5 +454,29 @@ describe('making a movie of a flyby', () => {
     await openMovie();
     expect(screen.getByTestId('flyby-movie-gif-too-long')).toHaveTextContent('at most 600 frames, and this one would have 750');
     expect(screen.getByTestId('flyby-movie-export')).toBeDisabled();
+  });
+});
+
+describe('a flyby movie that cannot be made', () => {
+  it('says the export failed, saves nothing, hands the view back and lets it be tried again', async () => {
+    encoding.breakAt = 12;
+    useFlybyStore.setState({ movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, format: 'webm', draft: true } });
+    const { scene, onActiveChange } = renderFlyby();
+    await openMovie();
+
+    fireEvent.click(screen.getByTestId('flyby-movie-export'));
+    for (let tries = 0; tries < 100 && !screen.queryByTestId('flyby-movie-failed'); tries += 1) {
+      await pass(50);
+    }
+
+    const failed = screen.getByTestId('flyby-movie-failed');
+    expect(failed).toHaveTextContent('The encoder gave up on frame 12');
+    // A broken movie is never written to a file somebody would then share.
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(encoding.closed).toBeGreaterThan(0);
+    expect(scene.capture.open).toBeNull();
+    expect(scene.camera()).toEqual(HOME);
+    expect(onActiveChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByTestId('flyby-movie-export')).toBeEnabled();
   });
 });

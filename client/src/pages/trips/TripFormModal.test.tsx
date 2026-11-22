@@ -759,9 +759,14 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
 
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too — whatever words it would have used. No waiting on the clock.
+    updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.participant_tracked'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText(/has reports on this trip's tracking/);
 
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue('Digging weekend')).toBeInTheDocument();

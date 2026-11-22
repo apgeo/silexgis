@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { AdminSettings } from '../../api/hooks.ts';
 
 /**
@@ -151,5 +151,22 @@ describe('ProtectionForm', () => {
       mail: { host: 'b' },
     } as unknown as AdminSettings));
     expect(fingerprint().getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('ProtectionForm when the save does not go through', () => {
+  it.each([
+    ['refused as invalid', () => put.mockResolvedValue({ data: undefined, error: { code: 'validation.failed' } }), 'admin.settingsProblems.invalid'],
+    ['refused for want of the right', () => put.mockResolvedValue({ data: undefined, error: { code: 'access.forbidden' } }), 'admin.settingsProblems.forbidden'],
+    ['never answered', () => put.mockRejectedValue(new TypeError('Failed to fetch')), 'common.saveFailed'],
+  ])('says why when it is %s, and does not report it saved', async (_how, fail, wording) => {
+    fail();
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(i18n.t(wording))).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.queryByText(i18n.t('common.saved'))).toBeNull();
   });
 });

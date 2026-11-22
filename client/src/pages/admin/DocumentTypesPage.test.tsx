@@ -13,6 +13,7 @@ const listRead = vi.hoisted(() => {
   };
 });
 import i18n from '../../i18n';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const documentTypes = [
   {
@@ -154,8 +155,7 @@ describe('DocumentTypesPage', () => {
       fireEvent.click(screen.getByText('Save'));
 
       await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(updateMutate).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

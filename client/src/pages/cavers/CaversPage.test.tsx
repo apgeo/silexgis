@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const t = i18n.getFixedT('en');
 
@@ -283,8 +284,7 @@ describe('a save with the name emptied', () => {
       fireEvent.change(name, { target: { value: '' } });
       fireEvent.click(screen.getByRole('button', { name: 'OK' }));
       await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-      // Long enough for a rejection with no handler to be reported.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await afterRejectionsAreReported();
       expect(put).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
     } finally {

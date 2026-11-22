@@ -43,6 +43,7 @@ import { featureDetailPath } from '../../components/features/featureNavigation.t
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 
 const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
   feature: <GoldOutlined />,
@@ -58,10 +59,12 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
-  const { data: views } = useMapViews();
+  const viewsRead = useMapViews();
+  const { data: views } = viewsRead;
   // Only the top of the tree here. The board is a way into a season, not the overview: the levels
   // beneath are opened on the overview, which knows how to draw and frame them.
-  const { data: workAreas } = useWorkAreas();
+  const workAreasRead = useWorkAreas();
+  const { data: workAreas } = workAreasRead;
   const topLevelAreas = useMemo(() => topLevel(workAreas?.items ?? []), [workAreas]);
   // A panel of its own, and a request of its own, rather than a fourth source in the activity
   // feed. Two independent reasons, either of which is sufficient. The feed is ordered by when a
@@ -296,6 +299,17 @@ export default function DashboardPage() {
                     </Button>
                   ))}
                 </Flex>
+              ) : workAreasRead.isError ? (
+                // Unknown, not empty: a read that never answered has not said there are none.
+                <ReadFailedAlert
+                  isError
+                  error={workAreasRead.error}
+                  held={false}
+                  onRetry={workAreasRead.refetch}
+                  title={t('dashboard.workAreasFailed')}
+                  testId="dashboard-work-areas-load-failed"
+                  style={{ marginBottom: 0 }}
+                />
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('workAreas.none')} />
               )}
@@ -314,6 +328,16 @@ export default function DashboardPage() {
                     </Button>
                   ))}
                 </Flex>
+              ) : viewsRead.isError ? (
+                <ReadFailedAlert
+                  isError
+                  error={viewsRead.error}
+                  held={false}
+                  onRetry={viewsRead.refetch}
+                  title={t('dashboard.viewsFailed')}
+                  testId="dashboard-views-load-failed"
+                  style={{ marginBottom: 0 }}
+                />
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.noViews')} />
               )}

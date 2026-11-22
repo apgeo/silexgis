@@ -7,6 +7,7 @@ import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument } from '../../filters/types.ts';
 import type { SpatialSources } from '../filters/spatialSources.ts';
 import type { MapFilter } from '../../map/mapFilters.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createSpy = vi.hoisted(() => vi.fn());
 const savedFilterId = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
@@ -163,8 +164,7 @@ it('Save with no name marks the field, sends nothing and leaves no unhandled rej
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
-    // Long enough for a rejection with no handler to be reported.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await afterRejectionsAreReported();
     expect(createSpy).not.toHaveBeenCalled();
     expect(unhandled).toEqual([]);
   } finally {

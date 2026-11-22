@@ -2,7 +2,7 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { CalendarFeedList } from '../../api/hooks.ts';
 
 /**
@@ -127,5 +127,36 @@ describe('the calendar feed card', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     await waitFor(() => expect(revokeMutate).toHaveBeenCalledWith('live'));
+  });
+});
+
+describe('the calendar feed card when a write does not go through', () => {
+  it('says the address could not be made, shows none and keeps the typed name', async () => {
+    mintMutate.mockRejectedValue(new TypeError('Failed to fetch'));
+    show();
+
+    fireEvent.change(screen.getByLabelText('Name for this address'), { target: { value: 'Phone' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create a feed address' }));
+
+    expect(await screen.findByText(i18n.t('settings.account.calendarFeed.mintFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/calendar\/feed\//)).toBeNull();
+    expect(screen.queryByText(/shown only once/)).toBeNull();
+    expect(screen.getByLabelText('Name for this address')).toHaveValue('Phone');
+  });
+
+  it('says a refused withdrawal failed and does not report the address withdrawn', async () => {
+    revokeMutate.mockRejectedValue(new TypeError('Failed to fetch'));
+    list = {
+      enabled: true,
+      feeds: [{ id: 'live', label: 'Phone', createdAt: '2026-10-01T10:00:00Z', revokedAt: null }],
+    };
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('settings.account.calendarFeed.revokedMessage'))).toBeNull();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
   });
 });

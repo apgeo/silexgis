@@ -75,9 +75,22 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
   // animation, so it cannot be relied on to have emptied the search box by the next click.
   const [pickerSession, setPickerSession] = useState(0);
 
+  // Whether the new-cave form has ever been drawn. The dialog draws it only once opened, and a form
+  // never drawn holds nothing to clear — asked to reset, the form library only reports that it is
+  // not connected to anything.
+  const caveFormOpen = mode === 'add-cave' && lonLat !== null;
+  const caveFormDrawn = useRef(false);
+  useEffect(() => {
+    if (caveFormOpen) {
+      caveFormDrawn.current = true;
+    }
+  }, [caveFormOpen]);
+
   useEffect(() => {
     if (mode === null) {
-      form.resetFields();
+      if (caveFormDrawn.current) {
+        form.resetFields();
+      }
       setCreatedCaveId(null);
       setEntranceProblem(null);
       setPickedCaveId(null);
@@ -208,7 +221,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
       <DialogHost
         kind="cave-add"
         title={t('mapEdit.newCaveHere')}
-        open={mode === 'add-cave' && lonLat !== null}
+        open={caveFormOpen}
         onCancel={cancelNewCave}
         dirty={edits.edited}
         onOk={() => void submitNewCave()}
