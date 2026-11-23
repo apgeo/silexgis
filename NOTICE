@@ -12,9 +12,9 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
-ThIDE — Therion.Build, Therion.Cave3D, Therion.CaveGeometry, Therion.Core,
-        Therion.Orientation, Therion.Processing.Abstractions, Therion.Semantics,
-        Therion.Syntax, Therion.Workspace
+ThIDE — Therion.Blender, Therion.Build, Therion.Cave3D, Therion.CaveGeometry,
+        Therion.Core, Therion.Orientation, Therion.Processing.Abstractions,
+        Therion.Semantics, Therion.Syntax, Therion.Workspace
 --------------------------------------------------------------------------------
 Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d)
 and the survey model they produce, the centreline graph built from that model,
@@ -22,9 +22,17 @@ the reader for what a Therion compilation printed while it ran, the runner that
 starts a Therion compilation, and the builder of a compilable Therion project
 around a survey uploaded from a field device, and the orientation statistics of
 structural readings (poles, the equal-area net, Kamb density contours and
-Watson's U-squared test). Not vendored:
+Watson's U-squared test), and the scene plan a Blender render is described by,
+with the writer of a render bundle. Not vendored:
 the source is a Git submodule at server/external/ThIDE, pinned to the commit
 below, and the built assemblies are redistributed inside the server image.
+
+A render bundle is a zip this application hands to a signed-in reader, who
+renders it with Blender on a machine of their own. It carries ThIDE's player —
+Python source held inside the Therion.Blender assembly — unmodified, with the
+text of the MPL-2.0 (LICENSE) and a note of where its source is (NOTICE) written
+into the bundle by ThIDE's own writer. This application does not run the player
+and does not start Blender.
 
   Source:    https://github.com/apgeo/ThIDE
   Commit:    e02ec92cd81fa936bd804aa2b1a7d103f813f290
