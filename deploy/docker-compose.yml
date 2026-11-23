@@ -197,6 +197,12 @@ services:
       # SILEXGIS_MAX_UPLOAD_BYTES (and the raster and survey-file limits). The default is the value
       # this image always had. Read when the container starts: `docker compose up -d web`.
       SILEXGIS__Web__MaxBodySize: ${SILEXGIS_MAX_BODY_SIZE:-1024m}
+      # Where the web service's proxy finds the API, as host:port. The service name is right for a
+      # stack on its own; a stack whose web service also joins a network shared with other Compose
+      # projects names the API by its container name (`<project>-api-1:8080`), because a service
+      # called `api` in another project on that network answers to the bare name too. Read when the
+      # container starts: `docker compose up -d web`.
+      SILEXGIS__Web__ApiUpstream: ${SILEXGIS_API_UPSTREAM:-api:8080}
     ports:
       - "${SILEXGIS_HTTP_PORT:-8080}:80"
     volumes:

@@ -377,6 +377,33 @@ describe('ImportWorkspacePage', () => {
     expect(commitMutate.mock.calls[0][0].body.selection).toEqual([1]);
   });
 
+  it('sends the rock classes the reviewer chose with the confirmation that creates the units', async () => {
+    // A geology map: one rock name the vocabulary recognises, one it does not. The server's own
+    // tests prove a mapping on the confirmation becomes the units' classes; this proves the class
+    // chosen on the card is the mapping the confirmation carries.
+    preview = {
+      ...fullPreview,
+      areaCount: 2,
+      lithologyValues: [
+        { value: 'Flis carpatic', count: 3, code: null, match: 'unmatched' },
+        { value: 'Calcar', count: 2, code: 'limestone', match: 'recognised' },
+      ],
+    };
+    show();
+    await screen.findByText('Ursilor');
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Class for Flis carpatic' }));
+    fireEvent.click(await screen.findByTitle('Shale / marl'));
+
+    fireEvent.click(screen.getByTestId('import-select-all'));
+    fireEvent.click(screen.getByTestId('import-commit'));
+
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+    const body = commitMutate.mock.calls[0][0].body;
+    // Only the answered value: a recognised one is the server's to resolve, not the browser's.
+    expect(body.options.mapping.lithologyValues).toEqual({ 'Flis carpatic': 'shale_marl' });
+  });
+
   it('asks for a dry run once the reviewer pauses, not on every letter typed into an option', async () => {
     show();
     await screen.findByText('Ursilor');

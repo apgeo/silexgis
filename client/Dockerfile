@@ -34,6 +34,10 @@ ENV SILEXGIS__Web__FrameAncestors=""
 # today's value so an installation that sets nothing behaves exactly as before; it has to stay above
 # every upload cap the application is configured with, since this limit answers first.
 ENV SILEXGIS__Web__MaxBodySize="1024m"
+# Where the proxy finds the API, as host:port. The Compose service name is right unless this
+# container shares a network with another project that also has a service called `api`; then the
+# API's unique container name is (see the upstream block in the configuration).
+ENV SILEXGIS__Web__ApiUpstream="api:8080"
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

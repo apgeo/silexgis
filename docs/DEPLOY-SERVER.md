@@ -448,5 +448,12 @@ Check that `silexgis-keys` is mounted and owned by the container's `app` user.
 Kestrel's limits (derived from them automatically), and the proxy's `client_max_body_size`, which
 the `web` container reads from `SILEXGIS_MAX_BODY_SIZE` at start (default `1024m`). INSTALL.md, "Upload sizes", has the detail.
 
+**502 on every page while the api reports healthy, on a host with several installations.** When an
+installation's `web` service joins a network shared with other Compose projects (the front proxy's),
+any other project's service called `api` on that network answers to the bare name too, and the web
+proxy may send everything there. Check with `docker exec <project>-web-1 getent hosts api`: an
+address outside the project's own network is the wrong one. Set `SILEXGIS_API_UPSTREAM=<project>-api-1:8080`
+in that installation's `.env` and `docker compose up -d web`.
+
 **Disk filling.** `docker system df`. Image layers live under `/var/lib/docker` and old build
 caches accumulate; `docker system prune -a` reclaims them, at the cost of a slower next build.

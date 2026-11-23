@@ -284,6 +284,49 @@ describe('surfaceFeatureLines', () => {
     expect(lines[0].positions).toHaveLength(4);
   });
 
+  it('draws a geological unit as its outline on the ground whatever its rock class', () => {
+    // The flat map fills a unit by its class; the scene draws every area as rings only, because a
+    // fill would hide the cave under it. So a karstifiable unit, one that is not, and one whose
+    // class the vocabulary does not know all come out as the same unfilled outline, each part of a
+    // multi-part unit with its own ring, each one still the feature a click opens.
+    const ring = (west: number) => [
+      [west, 45.51],
+      [west + 0.02, 45.51],
+      [west + 0.02, 45.53],
+      [west, 45.51],
+    ];
+    const unit = (id: string, geometry: unknown, lithology: unknown, karstifiable: unknown) => ({
+      type: 'Feature',
+      geometry,
+      properties: { id, typeCode: 'geological_unit', lithology, karstifiable },
+    });
+    const lines = surfaceFeatureLines(
+      collection([
+        unit('unit-limestone', { type: 'Polygon', coordinates: [ring(25.4)] }, 'limestone', true),
+        unit('unit-granite', { type: 'Polygon', coordinates: [ring(25.5)] }, 'granite', false),
+        unit(
+          'unit-unknown',
+          { type: 'MultiPolygon', coordinates: [[ring(25.6)], [ring(25.7)]] },
+          'not-a-class',
+          undefined,
+        ),
+      ]),
+    );
+
+    expect(lines.map((line) => (line.id as { featureId: string }).featureId)).toEqual([
+      'unit-limestone',
+      'unit-granite',
+      'unit-unknown',
+      'unit-unknown',
+    ]);
+    for (const line of lines) {
+      expect(line.color).toBe(surfaceFeaturePalette.line);
+      expect(line.clampToGround).toBe(true);
+      expect(line.positions).toHaveLength(4);
+      expect(line).not.toHaveProperty('fill');
+    }
+  });
+
   it('leaves point features to the marker pass', () => {
     expect(surfaceFeatureLines(collection([point(25, 45, { id: 'f' })]))).toEqual([]);
   });
