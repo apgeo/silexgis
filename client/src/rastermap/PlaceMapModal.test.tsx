@@ -2,7 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../i18n';
+import i18n from '../i18n';
+import { ApiError } from '../api/client.ts';
 import type { ResLink, ResLinkMember } from '../api/hooks.ts';
 import type { SheetMarker } from './coordinates.ts';
 import PlaceMapModal from './PlaceMapModal.tsx';
@@ -197,6 +198,57 @@ describe('a phone map opened as a map', () => {
         y: 0.25,
       }),
     );
+  });
+
+  it('says why a new point was refused and keeps the point and the place chosen for it', async () => {
+    createPoint.mockReset().mockRejectedValue(
+      new ApiError(409, 'reslink.place_point.place_pinned', 'That place already has a point on this map.'),
+    );
+    show();
+    fireEvent.click(screen.getByTestId('placemap-add'));
+    fireEvent.click(screen.getByTestId('fake-click-sheet'));
+    fireEvent.click(await screen.findByTestId('fake-pick-place'));
+    fireEvent.click(screen.getByTestId('placemap-save'));
+    expect(await screen.findByText(i18n.t('resLinks.problems.placePointPlacePinned'))).toBeInTheDocument();
+    // The work stays: the same save can be sent again once the reason is dealt with.
+    expect(screen.getByTestId('placemap-save')).not.toBeDisabled();
+    expect(screen.queryByText(i18n.t('placeMap.saved'))).not.toBeInTheDocument();
+  });
+
+  it('says why a move was refused and stays ready to place it again', async () => {
+    movePoint.mockReset().mockRejectedValue(new ApiError(409, 'reslink.place_point.fixed', 'Fixed by the phone.'));
+    links = [pin('a', 'Sala Mare')];
+    show();
+    fireEvent.click(screen.getByTestId('fake-marker-Sala Mare'));
+    fireEvent.click(await screen.findByTestId('placemap-move'));
+    fireEvent.click(screen.getByTestId('fake-click-sheet'));
+    expect(await screen.findByText(i18n.t('resLinks.problems.placePointFixed'))).toBeInTheDocument();
+    expect(screen.getByTestId('fake-view')).toHaveAttribute('data-placing', 'true');
+  });
+
+  it('says why a removal was refused, and a removal that did not land as a failed removal, not a failed save', async () => {
+    deleteLink
+      .mockReset()
+      .mockRejectedValueOnce(new ApiError(403, 'acl.forbidden', 'Forbidden.'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    links = [pin('a', 'Sala Mare')];
+    show();
+    const removeOnce = async () => {
+      fireEvent.click(screen.getByTestId('fake-marker-Sala Mare'));
+      fireEvent.click(await screen.findByTestId('placemap-delete'));
+      const confirm = await waitFor(() => {
+        const buttons = screen.getAllByRole('button', { name: 'Delete' });
+        expect(buttons.length).toBeGreaterThanOrEqual(2);
+        return buttons.filter((button) => button.getAttribute('data-testid') !== 'placemap-delete').at(-1)!;
+      });
+      fireEvent.click(confirm);
+    };
+    await removeOnce();
+    expect(await screen.findByText(i18n.t('resLinks.problems.forbidden'))).toBeInTheDocument();
+    await removeOnce();
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).not.toBeInTheDocument();
+    expect(deleteLink).toHaveBeenCalledTimes(2);
   });
 
   it('offers no change to a reader who may not change the cave, and says why on a pressed place', async () => {

@@ -4,6 +4,7 @@ import { App, Alert, Card, Flex, Form, Segmented, Spin, Switch, Table, Tag, Typo
 import Button from '../../components/Button.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../api/client.ts';
 import {
   NOTIFICATION_CHANNELS,
   useNotificationPreferences,
@@ -103,8 +104,14 @@ export default function NotificationSettingsPage() {
         })),
       });
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // The server refuses, rather than rewrites, a choice its rules do not allow on a channel;
+      // that is a different message from a save that never landed.
+      message.error(
+        error instanceof ApiError && error.code === 'me.notification_choice_refused'
+          ? t('settings.notifications.choiceRefused')
+          : t('common.saveFailed'),
+      );
     }
   };
 

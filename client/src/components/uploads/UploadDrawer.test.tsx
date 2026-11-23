@@ -3,8 +3,8 @@ import { App } from 'antd';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const { uploadOne, openBatch, closeBatch } = vi.hoisted(() => ({
   uploadOne: vi.fn(),
@@ -26,15 +26,23 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const { default: UploadDrawer } = await import('./UploadDrawer.tsx');
 
+/** Settle the batch-opening request the drawer is waiting on. */
+let answerOpen: (batch: { id: string }) => void = () => undefined;
+let refuseOpen: (error: unknown) => void = () => undefined;
+
 beforeEach(async () => {
   await i18n.changeLanguage('en');
   uploadOne.mockReset();
   openBatch.mockReset();
   closeBatch.mockReset();
-  // Slow enough that every file of the drop arrives before the batch is known — which is how
-  // a real drop meets the network.
+  // Held open until the test answers it, so every file of the drop arrives before the batch is
+  // known — which is how a real drop meets the network.
   openBatch.mockImplementation(
-    () => new Promise((resolve) => setTimeout(() => resolve({ id: 'batch-1' }), 20)),
+    () =>
+      new Promise((resolve, reject) => {
+        answerOpen = resolve;
+        refuseOpen = reject;
+      }),
   );
   closeBatch.mockResolvedValue(undefined);
 });
@@ -63,6 +71,9 @@ describe('UploadDrawer', () => {
     renderDrawer();
 
     drop('a.txt', 'b.txt', 'c.txt');
+    // Every file has arrived and is waiting on the one opening request.
+    await waitFor(() => expect(openBatch).toHaveBeenCalledTimes(1));
+    await act(async () => answerOpen({ id: 'batch-1' }));
 
     await waitFor(() => expect(uploadOne).toHaveBeenCalledTimes(3));
     expect(openBatch).toHaveBeenCalledTimes(1);
@@ -79,6 +90,8 @@ describe('UploadDrawer', () => {
     });
     const onClose = renderDrawer();
     drop('a.txt', 'b.txt');
+    await waitFor(() => expect(openBatch).toHaveBeenCalledTimes(1));
+    await act(async () => answerOpen({ id: 'batch-1' }));
     await waitFor(() => expect(signals.length).toBeGreaterThan(0));
 
     // Escape is the habit that used to end a 200-file drop without a word.
@@ -101,5 +114,33 @@ describe('UploadDrawer', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(signals.every((signal) => signal.aborted)).toBe(true);
     expect(closeBatch).toHaveBeenCalledWith('batch-1');
+  });
+
+  it('names why the server refused a file, and offers to try the refused one again', async () => {
+    uploadOne
+      .mockResolvedValueOnce({ fileId: 'f', documentId: 'd' })
+      .mockRejectedValueOnce(new ApiError(413, 'file.too_large', 'The file is larger than this installation accepts.'));
+    renderDrawer();
+
+    drop('a.txt', 'big.tif');
+    await waitFor(() => expect(openBatch).toHaveBeenCalledTimes(1));
+    await act(async () => answerOpen({ id: 'batch-1' }));
+
+    expect(await screen.findByText(i18n.t('uploads.reason.tooLarge'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('uploads.retryFailed', { count: 1 }) })).toBeInTheDocument();
+  });
+
+  it('still uploads every file when the drop itself could not be opened, without a batch to file them under', async () => {
+    uploadOne.mockResolvedValue({ fileId: 'f', documentId: 'd' });
+    renderDrawer();
+
+    drop('a.txt', 'b.txt');
+    await waitFor(() => expect(openBatch).toHaveBeenCalledTimes(1));
+    await act(async () => refuseOpen(new ApiError(403, 'access.forbidden', 'Forbidden.')));
+
+    await waitFor(() => expect(uploadOne).toHaveBeenCalledTimes(2));
+    for (const call of uploadOne.mock.calls) {
+      expect(call[1]).toMatchObject({ batchId: undefined, cabinetId: 'c1' });
+    }
   });
 });

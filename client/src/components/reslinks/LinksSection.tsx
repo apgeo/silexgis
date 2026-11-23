@@ -18,6 +18,7 @@ import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/
 import AddMemberModal from './AddMemberModal.tsx';
 import MemberChip from './MemberChip.tsx';
 import { mayEditResLink } from './permissions.ts';
+import { resLinkProblemMessage } from './problems.ts';
 import { MAP_PLACE_POINT_CODE } from '../../rastermap/vocabulary.ts';
 import { PLACE_AT_STATION_CODE, relationPhraseFor } from './relations.ts';
 import { linkPageRoute, linkPageUrl, type ResLinkTargetType } from './registry.ts';
@@ -116,9 +117,9 @@ function LinkRow({
       onOk: async () => {
         try {
           await deleteLink.mutateAsync(link.id);
-          message.success(t('common.saved'));
-        } catch {
-          message.error(t('common.saveFailed'));
+          message.success(t('common.deleted'));
+        } catch (error) {
+          message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
         }
       },
     });

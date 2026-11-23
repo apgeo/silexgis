@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { TermRule } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const updateMutate = vi.fn();
 const createMutate = vi.fn();
@@ -74,7 +75,7 @@ describe('a set that has not been read', () => {
     const save = await screen.findByTestId('term-rules-save');
     expect(save).toBeDisabled();
     fireEvent.click(save);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
@@ -92,7 +93,7 @@ describe('a set that has not been read', () => {
     const save = screen.getByTestId('term-rules-save');
     expect(save).toBeDisabled();
     fireEvent.click(save);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(updateMutate).not.toHaveBeenCalled();
   });
 });
@@ -154,8 +155,9 @@ describe('closing the rule editor', () => {
 
     fireEvent.click(screen.getByText(i18n.t('common.keepEditing')));
     // The dialog leaves through an animation that never ends here, so what is asserted is the
-    // outcome: nothing closed, and the change is still in the field.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // outcome once every answer already set going has landed: nothing closed, and the change is
+    // still in the field.
+    await afterRejectionsAreReported();
     expect(onClose).not.toHaveBeenCalled();
     expect(nameInput().value).toBe('Mine');
   });

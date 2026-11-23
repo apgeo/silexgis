@@ -121,7 +121,7 @@ export default function PlaceMapModal({ open, onClose, documentId, title, canEdi
           message.success(t('placeMap.deleted'));
           setPressed(null);
         } catch (error) {
-          message.error(resLinkProblemMessage(error, t));
+          message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
         }
       },
     });

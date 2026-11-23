@@ -144,6 +144,40 @@ describe('TestDataPage', () => {
     expect((screen.getByTestId('test-data-start') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('says a run is already going when the server refuses a second start, and names an invalid profile with its problems', async () => {
+    start
+      .mockRejectedValueOnce(new ApiError(409, 'testdata.run_in_progress', 'A test-data run or removal is already going.'))
+      .mockRejectedValueOnce(new ApiError(400, 'testdata.profile_invalid', 'caves.count must be at most 20000.'));
+    show();
+    fireEvent.click(screen.getByTestId('test-data-start'));
+    expect(await screen.findByText('A run or a removal is already going.')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('test-data-start'));
+    expect(await screen.findByText('The profile cannot run: caves.count must be at most 20000.')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('testData.started'))).toBeNull();
+  });
+
+  it('says why removing a run was refused, in the words for its code', async () => {
+    remove.mockRejectedValueOnce(
+      new ApiError(409, 'testdata.run_not_removable', 'Only a finished, failed or cancelled run can be removed, and only once.'),
+    );
+    show();
+    fireEvent.click(screen.getByTestId('test-data-remove'));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText(i18n.t('testData.notRemovable'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('testData.removeFailed'))).toBeNull();
+  });
+
+  it('says a run that finished before the cancel arrived has nothing to cancel', async () => {
+    overview = { ...overview, runs: [run({ id: 'going', status: 'running', progressDone: 5 })] };
+    cancel.mockRejectedValueOnce(
+      new ApiError(409, 'testdata.run_not_cancellable', 'Only a waiting or running run can be cancelled.'),
+    );
+    show();
+    fireEvent.click(screen.getByTestId('test-data-cancel'));
+    expect(await screen.findByText(i18n.t('testData.notCancellable'))).toBeTruthy();
+  });
+
   it('removes a finished run only after confirming, and offers to cancel one still going', async () => {
     overview = { ...overview, runs: [run({ id: 'going', status: 'running', progressDone: 5 })] };
     show();

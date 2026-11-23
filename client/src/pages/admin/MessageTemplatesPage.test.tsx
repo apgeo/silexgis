@@ -15,6 +15,9 @@ import type { MessageTemplate } from '../../api/hooks.ts';
  */
 
 const put = vi.fn();
+const refetchTemplates = vi.fn();
+// The list's read; replaced by a failed one where a test needs it.
+let templatesRead: Record<string, unknown>;
 const del = vi.fn();
 
 vi.mock('../../api/client.ts', async () => {
@@ -60,7 +63,7 @@ vi.mock('../../api/hooks.ts', async () => {
     hasAccessAction: actual.hasAccessAction,
     queryKeys: actual.queryKeys,
     useCapabilities: () => ({ data: { domains: { messageTemplates: 'read, write' } } }),
-    useMessageTemplates: () => ({ data: [template], isLoading: false }),
+    useMessageTemplates: () => templatesRead,
   };
 });
 
@@ -71,6 +74,8 @@ let client: QueryClient;
 
 beforeEach(async () => {
   await i18n.changeLanguage('en');
+  refetchTemplates.mockReset();
+  templatesRead = { data: [template], isLoading: false, isError: false, error: null, refetch: refetchTemplates };
   put.mockReset().mockResolvedValue({ data: {}, error: undefined, response: new Response(null, { status: 200 }) });
   del.mockReset().mockResolvedValue({ data: undefined, error: undefined, response: new Response(null, { status: 204 }) });
   client = new QueryClient();
@@ -141,5 +146,26 @@ describe('MessageTemplatesPage', () => {
     expect(await screen.findByText(t('admin.templates.usingDefault'))).toBeTruthy();
     // The English tab, now hidden, keeps its button; the Romanian one shown has nothing to restore.
     expect(screen.queryByRole('button', { name: t('admin.templates.reset') })).toBeNull();
+  });
+
+  it('names a failed read of the messages and reads again on Retry, instead of an empty page', () => {
+    templatesRead = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch: refetchTemplates,
+    };
+    render(
+      <QueryClientProvider client={client}>
+        <App>
+          <MessageTemplatesPage />
+        </App>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId('message-templates-load-failed')).toHaveTextContent(t('admin.listLoadFailed'));
+    expect(screen.queryByText('account.invite', { exact: false })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: t('common.retry') }));
+    expect(refetchTemplates).toHaveBeenCalledTimes(1);
   });
 });
