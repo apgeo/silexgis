@@ -236,6 +236,28 @@ const uploadSources: Record<components['schemas']['UploadSource'], true> = {
   surveyUpload: true,
 };
 
+/**
+ * Everything a Blender bundle of a flyby can be said to leave out. The movie panel lists each by a
+ * key built from the name the server knows it by, so a name added there would show as its own
+ * lookup key in the list a reader is told to check before making the file.
+ */
+const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'], true> = {
+  ground: true,
+  timedChanges: true,
+  reliefChanges: true,
+  wallColours: true,
+  surfaceOpening: true,
+  entrances: true,
+  surfaceFeatures: true,
+  scans: true,
+  photos: true,
+  mapLayers: true,
+  tracks: true,
+  layerOpacity: true,
+  wallsNotDownloaded: true,
+  moreCavesInView: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -810,6 +832,16 @@ describe('i18n locales', () => {
     expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
     expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
     expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
+  });
+
+  it('everything a Blender bundle can leave out is worded in both locales, and none is left over', () => {
+    const omissions = Object.keys(flybyBundleOmissions);
+    const enOmissions: Record<string, string> = en.flyby.bundle.leftOut;
+    const roOmissions: Record<string, string> = ro.flyby.bundle.leftOut;
+    expect(omissions.filter((name) => !enOmissions[name])).toEqual([]);
+    expect(omissions.filter((name) => !roOmissions[name])).toEqual([]);
+    expect(Object.keys(enOmissions).sort()).toEqual(omissions.sort());
+    expect(Object.keys(roOmissions).sort()).toEqual(omissions.sort());
   });
 
   it('every source an upload batch can come from is named in both locales, and none is left over', () => {

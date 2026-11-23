@@ -12,9 +12,9 @@
          architecture tests assert that placement rather than trusting it.
          Two modules, the lowest layers of what used to be one: the model records with the two
          readers (and a writer of the Therion format, used for invented development data), and the
-         centreline graph built from a model. The library's scene builder and, above all, the part
-         that finds Blender and runs it are separate assemblies that are not referenced; the
-         architecture tests assert that the second one is in nothing this application builds. -->
+         centreline graph built from a model. The part of the library that finds Blender and runs
+         it is a separate assembly that is not referenced; the architecture tests assert that it is
+         in nothing this application builds. -->
     <ProjectReference Include="..\..\external\ThIDE\src\Therion.Cave3D\Therion.Cave3D.csproj" />
     <ProjectReference Include="..\..\external\ThIDE\src\Therion.CaveGeometry\Therion.CaveGeometry.csproj" />
     <!-- The reader for what a Therion compilation printed while it ran: the loop-error table it
@@ -40,6 +40,18 @@
          here that does start the compiler is named in the architecture test, which also says which
          class alone may name it. -->
     <ProjectReference Include="..\..\external\ThIDE\src\Therion.Workspace\Therion.Workspace.csproj" />
+    <!-- The scene plan a Blender render is described by, its validator, and the writer of a render
+         bundle: a zip of the plan, the meshes it names and the library's own player, which somebody
+         unpacks and renders on a machine of their own. Same repository, pin and MPL-2.0 terms as
+         the modules above, and no package of its own: it references the two geometry modules
+         already taken and nothing else. Used for one thing — a flyby of the 3D scene handed over
+         as such a bundle — and it is the half of the library's Blender code that writes data. The
+         other half, which finds a Blender on the host and starts it, is a separate assembly
+         (Therion.Blender.Execution) that this module does not reference; the architecture tests
+         assert that it is in nothing this application builds, and name every type of this module
+         that is used. The player inside a bundle is the library's own Python, handed over under
+         its own licence with its notice — nothing here runs it. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Blender\Therion.Blender.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,7 +13,7 @@ import type {
  * blob download named by the server's Content-Disposition.
  */
 export async function downloadFile(url: string): Promise<void> {
-  return download(url);
+  await download(url);
 }
 
 /**
@@ -28,7 +28,7 @@ export async function downloadFile(url: string): Promise<void> {
  * decision has to be able to say which caves, and a thrown status number cannot.
  */
 export async function downloadFilePost(url: string, body: unknown): Promise<void> {
-  return download(url, body);
+  await download(url, body);
 }
 
 /**
@@ -39,7 +39,17 @@ export async function downloadFilePost(url: string, body: unknown): Promise<void
  * form with no way of finding where its parts begin.
  */
 export async function downloadFileForm(url: string, form: FormData): Promise<void> {
-  return download(url, form);
+  await download(url, form);
+}
+
+/**
+ * The same download with a body, answering with what the server said beside the file: a route that
+ * writes a file can state facts about it in its response headers — how much of what was asked for
+ * went into it — and a caller that has to tell its reader so needs them. `signal` calls the
+ * request off.
+ */
+export async function downloadFilePostWithHeaders(url: string, body: unknown, signal?: AbortSignal): Promise<Headers> {
+  return download(url, body, signal);
 }
 
 /** A refused download, carrying the server's stable code and members. */
@@ -57,7 +67,7 @@ export class DownloadError extends Error {
   }
 }
 
-async function download(url: string, body?: unknown): Promise<void> {
+async function download(url: string, body?: unknown, signal?: AbortSignal): Promise<Headers> {
   const headers: Record<string, string> = {};
   const form = body instanceof FormData ? body : undefined;
   if (body !== undefined && !form) {
@@ -73,6 +83,7 @@ async function download(url: string, body?: unknown): Promise<void> {
     method: body === undefined ? 'GET' : 'POST',
     headers,
     body: body === undefined ? undefined : (form ?? JSON.stringify(body)),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     let problem: Record<string, unknown> | undefined;
@@ -89,6 +100,7 @@ async function download(url: string, body?: unknown): Promise<void> {
   const fileName = decodeURIComponent(match?.[1] ?? 'export');
 
   saveBlob(await response.blob(), fileName);
+  return response.headers;
 }
 
 /**

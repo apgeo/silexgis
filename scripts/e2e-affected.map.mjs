@@ -27,6 +27,8 @@ export const specs = {
   analysis: ['terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts'],
   // Cave-potential models: written, run over an area and drawn on the map.
   cavePotential: ['cave-potential.spec.ts'],
+  // A flyby handed over as a render bundle for Blender: asked for through the movie panel, read back.
+  flybys: ['scene3d-flyby-bundle.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
@@ -185,6 +187,8 @@ export const specs = {
     'scene3d-flyby.spec.ts',
     // A flyby written to a movie file: the capture session, the boxed scene, the file read back.
     'scene3d-flyby-movie.spec.ts',
+    // A flyby downloaded as a bundle for Blender: what the panel says it leaves out, and the zip read back.
+    'scene3d-flyby-bundle.spec.ts',
     // A flyby that crosses backgrounds and colours the caves: the look changed, scrubbed back, handed back.
     'scene3d-flyby-look.spec.ts',
     // A flyby built by hand: views captured, sections added and moved, a change written, flown as edited.

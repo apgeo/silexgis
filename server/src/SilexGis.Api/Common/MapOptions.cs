@@ -211,6 +211,11 @@ public sealed class MapOptions
     /// still the operator's number for the same reason the cave ceiling is: the bytes a raised
     /// budget buys are served by this installation, to every member who raises it. A default
     /// configured above the ceiling is held to it.
+    /// <para>
+    /// The one place it is enforced on the server is a flyby's render bundle for Blender, which
+    /// reads walls here rather than in a browser: the walls put into one bundle are held to this
+    /// many bytes, and a cave whose walls would pass it is drawn by its survey lines.
+    /// </para>
     /// </remarks>
     public long MeshesInViewMaxBytesLimit { get; set; } = 512L * 1024 * 1024;
 

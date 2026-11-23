@@ -643,6 +643,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     flybyActiveRef.current = active;
     setFlybyActive(active);
   }, []);
+  // Where surveyed altitudes are drawn, as last applied to the scene: for whoever has to say, at a
+  // moment of its own choosing, where the scene has its caves.
+  const placementRef = useRef<Altitude3DPlacement>(ANCHORED_TO_SURFACE);
   // Everything the tool asks of this view, read through the refs at the moment it is asked, so the
   // object never changes and a scene rebuilt under a flyby is simply the scene it finds next.
   const flybyScene = useMemo<FlybyScene>(
@@ -697,6 +700,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         },
       },
       relief: () => lookSettingsRef.current.exaggeration,
+      altitudePlacement: () => placementRef.current,
+      caveSurveyTop: (caveId) => dataRef.current?.caveSurveyTop(caveId),
       look: createScene3DLookTarget(
         {
           engine: () => engineRef.current,
@@ -1445,6 +1450,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // second view taking the surface over — comes back with the caves where the ground is instead of
   // where the ellipsoid is.
   useEffect(() => {
+    placementRef.current = placement;
     dataRef.current?.setAltitudePlacement(placement);
     // The walls follow the same rule as the lines drawn inside them, and follow it at the same
     // moment: a mesh left at the height the bare ellipsoid put it, under ground that has since

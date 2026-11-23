@@ -923,6 +923,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/flybys/blender-bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A flyby of the 3D scene as a render bundle (.zip) for Blender: the camera at every frame as sent, and the walls or survey lines of the caves named, read for the caller. A cave the caller may not read or may not place exactly is not drawn, and neither is one with no survey; the answer counts them together. */
+        post: operations["flybyBlenderBundleDownload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -12915,6 +12932,90 @@ export interface components {
             fields: components["schemas"]["FilterFieldDto"][];
             sorts: components["schemas"]["SortKey"][];
         };
+        FlybyBlenderBundleRequest: {
+            name: null | string;
+            output: null | components["schemas"]["FlybyBundleOutputRequest"];
+            origin: null | components["schemas"]["FlybyBundleOriginRequest"];
+            placement: null | components["schemas"]["FlybyBundlePlacementRequest"];
+            /** Format: double */
+            relief: number;
+            frames: number[][];
+            caves: components["schemas"]["FlybyBundleCaveRequest"][];
+            look: null | components["schemas"]["FlybyBundleLookRequest"];
+            texts: null | components["schemas"]["FlybyBundleTextsRequest"];
+            leftOut: null | components["schemas"]["FlybyBundleOmission"][];
+        };
+        FlybyBundleCaptionRequest: {
+            text: string;
+            /** Format: double */
+            startS: number;
+            /** Format: double */
+            endS: number;
+        };
+        FlybyBundleCardRequest: {
+            text: string;
+            subtitle: null | string;
+            /** Format: double */
+            seconds: number;
+        };
+        FlybyBundleCaveRequest: {
+            /** Format: uuid */
+            caveId: string;
+            walls: boolean;
+            /** Format: double */
+            surveyTopM: null | number;
+            /** Format: double */
+            groundM: null | number;
+        };
+        FlybyBundleDepthBandRequest: {
+            /** Format: double */
+            fromM: number;
+            colour: string;
+        };
+        FlybyBundleLookRequest: {
+            lines: boolean;
+            sky: null | string;
+            lineColour: null | string;
+            depthBands: null | components["schemas"]["FlybyBundleDepthBandRequest"][];
+        };
+        /** @enum {unknown} */
+        FlybyBundleOmission: "ground" | "timedChanges" | "reliefChanges" | "wallColours" | "surfaceOpening" | "entrances" | "surfaceFeatures" | "scans" | "photos" | "mapLayers" | "tracks" | "layerOpacity" | "wallsNotDownloaded" | "moreCavesInView";
+        FlybyBundleOriginRequest: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            heightM: number;
+        };
+        FlybyBundleOutputRequest: {
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: double */
+            fps: number;
+            quality: null | components["schemas"]["FlybyBundleQuality"];
+        };
+        FlybyBundlePlacementRequest: {
+            absolute: boolean;
+            /** Format: double */
+            offsetM: number;
+        };
+        /** @enum {unknown} */
+        FlybyBundleQuality: "low" | "medium" | "high";
+        FlybyBundleTextsRequest: {
+            title: null | components["schemas"]["FlybyBundleCardRequest"];
+            end: null | components["schemas"]["FlybyBundleCardRequest"];
+            captions: null | components["schemas"]["FlybyBundleCaptionRequest"][];
+            corner: null | string;
+            cornerCaptions: null | components["schemas"]["FlybyBundleCaptionRequest"][];
+            /** Format: double */
+            fadeInS: number;
+            /** Format: double */
+            fadeOutS: number;
+            northArrow: boolean;
+        };
         ForgotPasswordRequest: {
             email: string;
         };
@@ -22770,6 +22871,48 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyBlenderBundleDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlybyBlenderBundleRequest"];
+            };
+        };
+        responses: {
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

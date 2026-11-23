@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
-using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Map;
 
@@ -60,7 +60,7 @@ public static class CaveMeshMapSql
     {
         var (visibilitySql, parameters) = AccessSql.FeatureVisibleToFragment(ctx, "f");
         AddBox(parameters, box);
-        AddMeshFormats(parameters);
+        CaveWallMeshSql.AddMeshFormats(parameters);
 
         var sql = $"""
             SELECT DISTINCT f.id
@@ -111,45 +111,24 @@ public static class CaveMeshMapSql
         // so a cave created — or newly protected — in between is absent from the list and is not
         // served, where a deny-list would serve it without ever having asked about it.
         parameters.Add("exact_ids", AccessSql.UuidArray([.. exactViewCaveIds]));
-        parameters.Add("wall_formats", AccessSql.SmallintArray(Formats(SurveyModelKind.WallMesh)));
-        parameters.Add("line_formats", AccessSql.SmallintArray(Formats(SurveyModelKind.LinePlot)));
-        AddMeshFormats(parameters);
+        CaveWallMeshSql.AddFormats(parameters);
         // The middle of the box, held inside the globe: a box is parsed, not believed, and the
         // distance below is undefined for a point that is not on the sphere.
         parameters.Add("centre_lon", Math.Clamp((box.West + box.East) / 2d, -180d, 180d));
         parameters.Add("centre_lat", Math.Clamp((box.South + box.North) / 2d, -90d, 90d));
 
-        // The choice is made over ALL of a cave's meshes and the box is applied to the one chosen,
-        // in that order. Filtering first would let an old mesh that happens to sit in the box
-        // stand in for the current one that does not, and the scene would draw a superseded
-        // survey exactly where the corrected one had been moved away from.
-        //
-        // The preference: the cave's current wall mesh; else its current line plot, where that
-        // has been given a mesh; else the newest model that has one. The last arm is what keeps
-        // a cave drawn when the mark sits on a model whose conversion has not finished or has
-        // failed, which is the ordinary state of a cave for a minute after every re-upload.
+        // The choice is made over ALL of a cave's meshes — by the one rule every drawing of a
+        // cave's walls shares — and the box is applied to the one chosen, in that order. Filtering
+        // first would let an old mesh that happens to sit in the box stand in for the current one
+        // that does not, and the scene would draw a superseded survey exactly where the corrected
+        // one had been moved away from.
         //
         // The cave id settles ties in the final order, so the same view always answers in the
         // same order: a caller that keeps the first few would otherwise swap one mesh for another
         // on every request for a view that had not moved.
         var sql = $"""
             WITH chosen AS (
-                SELECT DISTINCT ON (m.cave_feature_id)
-                       m.cave_feature_id, m.id, m.name, m.converted_file_id,
-                       m.anchor, m.anchor_height_m, m.triangle_count
-                FROM survey_models m
-                WHERE m.cave_feature_id = ANY(@exact_ids)
-                  AND m.format = ANY(@mesh_formats)
-                  AND m.converted_file_id IS NOT NULL
-                  AND m.anchor IS NOT NULL
-                  AND m.anchor_height_m IS NOT NULL
-                ORDER BY m.cave_feature_id,
-                         CASE WHEN m.is_current AND m.format = ANY(@wall_formats) THEN 0
-                              WHEN m.is_current AND m.format = ANY(@line_formats) THEN 1
-                              ELSE 2
-                         END,
-                         m.created_at DESC,
-                         m.id DESC
+                {CaveWallMeshSql.Chosen("@exact_ids")}
             )
             SELECT c.cave_feature_id AS "CaveId",
                    f.name AS "CaveName",
@@ -186,17 +165,4 @@ public static class CaveMeshMapSql
         parameters.Add("east", box.East);
         parameters.Add("north", box.North);
     }
-
-    /// <summary>
-    /// The formats whose converted file is a mesh the scene can draw: wall meshes and line plots.
-    /// Named in both statements because a point cloud's converted file is a tileset archive,
-    /// anchored the same way, and without the list it would be served as a mesh.
-    /// </summary>
-    private static void AddMeshFormats(DynamicParameters parameters) =>
-        parameters.Add("mesh_formats", AccessSql.SmallintArray(
-            [.. Formats(SurveyModelKind.WallMesh), .. Formats(SurveyModelKind.LinePlot)]));
-
-    /// <summary>The stored format values of one kind of model, from the one place that defines the kinds.</summary>
-    private static short[] Formats(SurveyModelKind kind) =>
-        [.. SurveyModelKinds.FormatsOf(kind).Select(format => (short)format)];
 }

@@ -49,4 +49,5 @@ export * from './hooks/surveyUploads.ts';
 export * from './hooks/surveyUploadPublicLinks.ts';
 export * from './hooks/surveyUploadViewer.ts';
 export * from './hooks/storage.ts';
+export * from './hooks/flybyBundle.ts';
 export { useInvalidateHistory } from './hooks/shared.ts';

@@ -148,6 +148,24 @@ public sealed class LocalTangentFrame
             origin.Y + (eastY * east) + (northY * north) + (upY * up),
             origin.Z + (northZ * north) + (upZ * up));
 
+    /// <summary>
+    /// A direction of this frame — so much east, north and up — as a direction in earth-centred
+    /// axes. A direction and not a point: the origin plays no part, so nothing of the Earth's
+    /// radius enters the arithmetic and a unit vector comes back a unit vector to the last bit.
+    /// </summary>
+    public (double X, double Y, double Z) DirectionToEcef(double east, double north, double up) =>
+        (
+            (eastX * east) + (northX * north) + (upX * up),
+            (eastY * east) + (northY * north) + (upY * up),
+            (northZ * north) + (upZ * up));
+
+    /// <summary>A direction in earth-centred axes as a direction of this frame: east, north and up.</summary>
+    public (double East, double North, double Up) DirectionFromEcef(double x, double y, double z) =>
+        (
+            (eastX * x) + (eastY * y),
+            (northX * x) + (northY * y) + (northZ * z),
+            (upX * x) + (upY * y) + (upZ * z));
+
     /// <summary>A point of this frame as longitude, latitude and height.</summary>
     public (double Longitude, double Latitude, double HeightM) GeodeticAt(double east, double north, double up) =>
         ToGeodetic(EcefAt(east, north, up));

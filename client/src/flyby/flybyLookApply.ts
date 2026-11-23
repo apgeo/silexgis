@@ -32,6 +32,13 @@ export interface FlybyBackgroundShown extends FlybyBackgroundState {
 export interface FlybyLookTarget {
   /** What the viewer has now, for the members a flyby eases away from. */
   viewerLook(layers: readonly FlybyLayerKey[]): FlybyLookBase;
+  /**
+   * The listed layers the viewer has switched on — overlays, georeferenced maps, imported files,
+   * layers drawn from saved filters — by their keys. A flyby leaves these as it finds them unless
+   * it names them, so whoever has to say what a picture of the scene holds asks here. Left out by
+   * a view that lists no such layers.
+   */
+  viewerLayers?(): FlybyLayerKey[];
   showBackground(shown: FlybyBackgroundShown | undefined): void;
   showLayer(key: FlybyLayerKey, state: FlybyLayerState | undefined): void;
   /**

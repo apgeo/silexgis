@@ -7,6 +7,7 @@ const {
   DownloadError,
   downloadFile,
   downloadFileForm,
+  downloadFilePostWithHeaders,
   expeditionReportUrl,
   geofileListExportUrl,
   reportPdfRefusal,
@@ -97,6 +98,66 @@ describe('downloadFileForm', () => {
       name: 'DownloadError',
       status: 400,
       code: 'trip_report.map_too_large',
+    });
+  });
+});
+
+describe('downloadFilePostWithHeaders', () => {
+  /**
+   * A route that writes a file can say something about it beside it — how much of what was asked
+   * for went in — and says it in headers, the body being the file. The caller gets them back.
+   */
+  it('posts the body as JSON, saves the file under the server\'s name and answers its headers', async () => {
+    const fetched = vi.fn(
+      async (_request: Request) =>
+        new Response(new Blob(['a zip']), {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="round-the-cave-blender.zip"',
+            'X-SilexGis-Bundle-Walls': '2',
+            'X-SilexGis-Bundle-Not-Drawn': '1',
+          },
+        }),
+    );
+    vi.stubGlobal('fetch', fetched);
+    URL.createObjectURL = vi.fn(() => 'blob:bundle');
+    URL.revokeObjectURL = vi.fn();
+    const saved: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+
+    const headers = await downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', { frames: [[1, 2]] });
+
+    const [request] = fetched.mock.calls[0];
+    expect(request.method).toBe('POST');
+    expect(request.headers.get('Content-Type')).toBe('application/json');
+    expect(await request.json()).toEqual({ frames: [[1, 2]] });
+    expect(saved).toEqual(['round-the-cave-blender.zip']);
+    expect(headers.get('X-SilexGis-Bundle-Walls')).toBe('2');
+    expect(headers.get('X-SilexGis-Bundle-Not-Drawn')).toBe('1');
+  });
+
+  it('is called off by its signal, and a refusal comes back with the server\'s code', async () => {
+    const calledOff = new AbortController();
+    const fetched = vi.fn(async (request: Request) => {
+      if (request.signal.aborted) {
+        throw new DOMException('The request was called off.', 'AbortError');
+      }
+      return new Response(JSON.stringify({ code: 'flyby_bundle.nothing_to_draw' }), {
+        status: 422,
+        headers: { 'content-type': 'application/problem+json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetched);
+
+    const refused = await downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', {}).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(DownloadError);
+    expect((refused as InstanceType<typeof DownloadError>).code).toBe('flyby_bundle.nothing_to_draw');
+
+    calledOff.abort();
+    await expect(downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', {}, calledOff.signal)).rejects.toMatchObject({
+      name: 'AbortError',
     });
   });
 });

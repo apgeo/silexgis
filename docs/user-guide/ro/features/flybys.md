@@ -322,6 +322,58 @@ Pentru un fișier fluent pe orice calculator, folosește **Rapid** sau **Fin**.
   trăiește mai mult decât verificarea care ți-a permis să le vezi, așa că trimite-l doar celor
   care au voie să vadă asta.
 
+### Un pachet pentru Blender
+
+Pe lângă MP4, WebM și GIF, rândul **Format** oferă **Pachet Blender (.zip)**. Nu este un film:
+este tot ce îi trebuie programului [Blender](https://www.blender.org/) ca să randeze el însuși
+survolul — traseul camerei, peșterile și un mic player — într-un singur zip. **Aici nu se
+randează nimic.** Dezarhivezi zip-ul pe calculatorul tău și îl randezi acolo cu Blender 4.2 sau
+mai nou; Blender luminează peștera cu o lampă pe cameră și îi desenează pereții ca rocă, lucru
+pe care vizualizarea 3D nu îl poate face.
+
+Ce intră în el:
+
+- **Camera la fiecare cadru**, exact cum o zboară survolul aici, la **25 de cadre pe secundă**
+  (un pachet are o singură rată, oricare ar fi cea a filmului), pentru tot survolul sau pentru
+  porțiunea aleasă, la mărimea cadrului și calitatea alese.
+- **Peșterile survolului cu pereții lor** și celelalte peșteri desenate în vizualizare doar prin
+  **drumuirile** lor. O peșteră a survolului care nu are pereți este desenată prin drumuiri.
+- **Pereții pe care vizualizarea nu i-a descărcat**: acolo unde vizualizarea încă îți așteaptă
+  acordul pentru un set mare de pereți, panoul întreabă din nou — *Include pereții celor N peșteri
+  care nu au fost descărcați în vizualizare*, cu mărimea lor. Bifat, ajung direct în pachet; în
+  vizualizare nu se mai descarcă nimic.
+- **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N”, săgeata
+  nordului și estompările, desenate cu literele programului Blender.
+- Culoarea cerului și relieful primului cadru al survolului.
+
+Ce nu intră: panoul le enumeră la **Nu sunt în pachet** înainte să faci fișierul, iar fișierul
+`README.txt` din pachet spune același lucru. Întotdeauna terenul și harta desenată pe el —
+peșterile stau în spațiu gol, sub un cer simplu — și, acolo unde survolul tău le are: schimbările
+de aspect din timpul lui (scena păstrează aspectul primului cadru), un relief care se schimbă,
+culorile de pe pereți, deschiderea tăiată în teren, marcajele intrărilor, fenomenele de
+suprafață, scanările, fotografiile, straturile suprapuse de hartă, hărțile georeferențiate și
+liniile fișierelor importate. Pachetul se face oricum.
+
+**Descarcă pachetul** pregătește survolul ca pentru un film făcut cu grijă, citește camera și
+cere serverului zip-ul, care este salvat ca `<numele survolului>-blender.zip`. Apoi panoul spune
+câte peșteri au intrat cu pereții lor și câte prin drumuiri. O peșteră pe care nu ai voie să o
+vezi, sau căreia nu ai voie să îi vezi locul exact, nu este în pachet, și nici una fără
+topografie; panoul spune doar câte lipsesc.
+
+În dosarul dezarhivat, `README.txt` spune cum se randează: `sh render.sh` pe Linux și macOS,
+`render.cmd` pe Windows, iar cu `--draft` după oricare, o privire rapidă mai întâi. Filmul este
+scris în dosarul `out`.
+
+- **Pachetul conține formele acestor peșteri și cum sunt așezate una față de alta — fără
+  coordonate, fără teren, fără hartă.** Trimite-l totuși doar celor care au voie să vadă aceste
+  peșteri; panoul o spune lângă buton, întotdeauna.
+- Dintr-un survol care nu este despre nicio peșteră — unul în jurul a „ce arată vizualizarea” sau
+  de-a lungul unui fișier importat — nu se poate face un pachet, și nici dintr-unul al cărui
+  aspect ascunde și pereții, și drumuirile. Un pachet are cel mult 20.000 de cadre (puțin peste
+  treisprezece minute).
+- Playerul din pachet face parte din ThIDE și vine sub licența lui (MPL-2.0); fișierele `LICENSE`
+  și `NOTICE` din pachet o spun.
+
 ## Păstrarea unui survol
 
 | Control | Face |

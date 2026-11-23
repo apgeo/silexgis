@@ -433,6 +433,93 @@ public class DependencyRuleTests
         "Therion.CaveGeometry.CenterlineGraph",
         "Therion.CaveGeometry.CenterlineReducedGraph",
 
+        // A flyby handed over as a render bundle: a zip somebody unpacks and renders with Blender
+        // on a machine of their own. Everything below is the half of the library's Blender code
+        // that writes data, read type by type when the first of them was used; the half that finds
+        // a Blender and starts it is another assembly, which the rule after this one keeps out of
+        // the build whatever this list says.
+        //
+        // A mesh as the library's writer takes one, and the writer: vertices and triangles in,
+        // the bytes of a binary PLY file out. And a box of two corners.
+        "Therion.CaveGeometry.BoundingBox",
+        "Therion.CaveGeometry.CaveMesh",
+        "Therion.CaveGeometry.Writers.PlyWriter",
+
+        // The scene plan — the description of one render that the bundle carries as JSON — in the
+        // records and enums it is made of: the frame, the clock, a model and its turn, the camera
+        // and each of its poses with the pose's own orientation, the look with its materials,
+        // lights and background, what is written over the picture, and where the render writes.
+        // Immutable values every one; the quaternion and the validator's error carry arithmetic
+        // and a sentence, and nothing else here carries any behaviour at all.
+        "Therion.Blender.ColorRgb",
+        "Therion.Blender.SpecError",
+        "Therion.Blender.Plan.PlanCamera",
+        "Therion.Blender.Plan.PlanCameraKey",
+        "Therion.Blender.Plan.PlanColorStop",
+        "Therion.Blender.Plan.PlanContainer",
+        "Therion.Blender.Plan.PlanEngine",
+        "Therion.Blender.Plan.PlanFrame",
+        "Therion.Blender.Plan.PlanInterpolation",
+        "Therion.Blender.Plan.PlanLight",
+        "Therion.Blender.Plan.PlanLook",
+        "Therion.Blender.Plan.PlanMaterial",
+        "Therion.Blender.Plan.PlanMaterialKind",
+        "Therion.Blender.Plan.PlanModel",
+        "Therion.Blender.Plan.PlanOutput",
+        "Therion.Blender.Plan.PlanOutputKind",
+        "Therion.Blender.Plan.PlanQuaternion",
+        "Therion.Blender.Plan.PlanRotation",
+        "Therion.Blender.Plan.PlanScreenItem",
+        "Therion.Blender.Plan.PlanScreenItemKind",
+        "Therion.Blender.Plan.PlanScreenTexts",
+        "Therion.Blender.Plan.PlanTimeline",
+        "Therion.Blender.Plan.PlanTurn",
+        "Therion.Blender.Plan.PlanWorld",
+        "Therion.Blender.Plan.PlanWorldKind",
+        "Therion.Blender.Plan.ScenePlan",
+
+        // What works on a plan: the validator (a plan in, a list of what is wrong with it out),
+        // the serializer (a plan in, JSON text out) and the builder, asked for two things — the
+        // draft copy of a plan, and the library's own rock and lights, which it gives by lowering
+        // a scene description to a plan. All three compute and return; none opens a file.
+        "Therion.Blender.Plan.ScenePlanBuilder",
+        "Therion.Blender.Plan.ScenePlanSerializer",
+        "Therion.Blender.Plan.ScenePlanValidator",
+
+        // The library's layout of the texts over a picture — where a title, a caption, a corner
+        // line and a north arrow stand and how large they are — and the description it lays out
+        // from: the scene description's records for overlays, captions and an end card, with the
+        // few neighbours a description cannot be built without (its source, materials, lighting,
+        // clock and output, and the camera poses and framing a layout is asked with). Plain
+        // records and enums, and two functions from records to records. The scene's metadata
+        // record is named only as the type of an argument that is left out.
+        "Therion.Blender.Plan.ScreenTextPlanner",
+        "Therion.Blender.Subtitles",
+        "Therion.Blender.AnimationSpec",
+        "Therion.Blender.CaptionSpec",
+        "Therion.Blender.EndCardSpec",
+        "Therion.Blender.LabelsSpec",
+        "Therion.Blender.LightingRig",
+        "Therion.Blender.LightingSpec",
+        "Therion.Blender.MaterialsSpec",
+        "Therion.Blender.OutputKind",
+        "Therion.Blender.OutputSpec",
+        "Therion.Blender.OverlaySpec",
+        "Therion.Blender.RockMaterial",
+        "Therion.Blender.SceneMeta",
+        "Therion.Blender.SceneSpec",
+        "Therion.Blender.SourceSpec",
+        "Therion.Blender.Emit.CameraFraming",
+        "Therion.Blender.Emit.CameraPlan",
+
+        // The bundle writer and what it is handed. It writes one zip into a stream it is given: the
+        // plan, the meshes read from the scratch files named, two run scripts, a licence, a notice
+        // and the player — Python the library carries as text and never runs. Read to its last
+        // line for this entry: it opens files to read them, writes to the one stream, and starts
+        // nothing; rendering is for whoever unpacks the zip.
+        "Therion.Blender.Player.RenderBundleContent",
+        "Therion.Blender.Player.RenderBundleWriter",
+
         // Reading a survey file, and the refusal when it is not one.
         "Therion.Cave3D.Parsing.CaveFileFormatException",
         "Therion.Cave3D.Parsing.CaveModelReader",

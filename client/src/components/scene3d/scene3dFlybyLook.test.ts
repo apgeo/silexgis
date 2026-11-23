@@ -223,6 +223,23 @@ function flyby(changes: FlybyChange[]): FlybyDocument {
 
 const at = (id: string, seconds = 4) => ({ id, section: 'orbit-1', at: 2, seconds });
 
+describe('the listed layers the viewer has switched on', () => {
+  it('are named by their keys, whatever a flyby holds, and only while they are on', () => {
+    const { target, viewer } = world();
+    // As the settings stand: the one tile overlay. The file and the filter layer are off.
+    expect(target.viewerLayers?.()).toEqual(['overlay:5']);
+
+    Object.assign(viewer, {
+      visibleRasterIds: ['r1'],
+      visibleGeofileIds: ['g1'],
+      filterLayers: [{ savedFilterId: 'f1', color: 'red', symbol: 'circle', visible: true }],
+    });
+    // A flyby hiding one of them changes what is drawn, not what the viewer has.
+    target.showLayer('overlay:5', { visible: false, opacity: 0 });
+    expect(target.viewerLayers?.()).toEqual(['overlay:5', 'raster:r1', 'file:g1', 'filter:f1']);
+  });
+});
+
 describe('one cave in a colour of its own', () => {
   it('tints the walls loaded for that cave and colours its survey lines, and hands both back', () => {
     const { state, target } = world();
