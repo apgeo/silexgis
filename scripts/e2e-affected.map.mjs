@@ -27,6 +27,8 @@ export const specs = {
   analysis: ['terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts'],
   // Cave-potential models: written, run over an area and drawn on the map.
   cavePotential: ['cave-potential.spec.ts'],
+  // A flyby handed over as a render bundle for Blender: no browser spec of its own yet.
+  flybys: [],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',

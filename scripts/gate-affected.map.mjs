@@ -388,8 +388,8 @@ export const groups = {
     'SurveyGraphExtractorTests', 'SurveyGraphTests', 'SurveyMeshTests', 'SurveyModelReadingTests',
     'SurveyModelTests', 'SurveyPlacementTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
-    // The walls a survey was given, read back out of their file.
-    'GlbReaderTests',
+    // The walls a survey was given, read back out of their file for a render bundle.
+    'FlybyBlenderBundleTests', 'GlbReaderTests',
     // A cave's surveys and the uploads that are versions of them, and the run that reads them.
     'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests', 'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests', 'SurveyUploadSurfaceTests',
     'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests',
@@ -518,6 +518,8 @@ export const groups = {
     // The landform picture, which is computed through it.
     'TerrainLandformsTests', 'TerrainLandformApiTests',
   ],
+  // A flyby of the 3D scene handed over as a render bundle for Blender.
+  flybys: ['FlybyBlenderBundleTests'],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],
 };
@@ -649,6 +651,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Messaging/': 'messaging',
   'server/src/SilexGis.Infrastructure/Metadata/': 'metadata',
   'server/src/SilexGis.Infrastructure/Notifications/': 'notifications',
+  'server/src/SilexGis.Infrastructure/Flybys/': 'flybys',
   'server/src/SilexGis.Infrastructure/Grottocenter/': 'exports',
   'server/src/SilexGis.Infrastructure/PhotoLibraries/': 'photoLibraries',
   // The body time limit and lost-body rule every outbound client reads its answers through.
