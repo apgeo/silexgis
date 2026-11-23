@@ -154,6 +154,24 @@ describe('the access keys page when something does not go through', () => {
     expect(keysRefetch).toHaveBeenCalledTimes(1);
   });
 
+  it('words a refused read of the keys as the sign-in requirement and offers no retry that would be refused again', () => {
+    keysRefetch.mockReset();
+    queryState = { isPending: false, isError: true, error: new ApiError(403, 'auth.access_key_not_accepted') };
+    show();
+
+    expect(screen.getByText(i18n.t('accessKeys.signInRequired'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).toBeNull();
+    expect(screen.queryByText('No access keys yet.')).toBeNull();
+  });
+
+  it('says so in general words when the server refused the read for another reason', () => {
+    queryState = { isPending: false, isError: true, error: new ApiError(404, 'not_found') };
+    show();
+
+    expect(screen.getByText(i18n.t('common.readRefused'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).toBeNull();
+  });
+
   it('says a withdrawal failed and does not report the key revoked', async () => {
     revokeMutate.mockRejectedValue(new TypeError('Failed to fetch'));
     list.keys = [keyOf({})];

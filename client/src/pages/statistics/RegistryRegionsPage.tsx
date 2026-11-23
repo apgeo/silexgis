@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
 import { downloadFile, registryRegionsExportUrl } from '../../api/download.ts';
 import { useCaveTypes, useRegistryRegions, useRockTypes } from '../../api/hooks.ts';
 import type { RegistryRegionRow } from '../../api/hooks.ts';
@@ -59,7 +59,7 @@ export default function RegistryRegionsPage() {
   };
 
   const query = useMemo(() => registryRegionsQuery(filter), [filter]);
-  const { data, isError, error } = useRegistryRegions(query);
+  const { data, isError, error, refetch } = useRegistryRegions(query);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
 
@@ -188,6 +188,14 @@ export default function RegistryRegionsPage() {
           data-testid="registry-regions-error"
           title={t('registryStats.regionsFailed')}
           description={error instanceof ApiError ? error.detail : undefined}
+          action={
+            // A refusal is the registry's answer to this question; asking again would repeat it.
+            isSettledRefusal(error) ? undefined : (
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
+          }
         />
       ) : data === undefined ? (
         <Skeleton active paragraph={{ rows: 8 }} />
