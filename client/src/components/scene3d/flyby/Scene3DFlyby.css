@@ -391,3 +391,9 @@
   height: 10px;
   border-radius: 50%;
 }
+
+/* What a Blender bundle leaves out, and what went into one: short lists inside the panel's width. */
+.scene3d-flyby-bundle-list {
+  margin: 0;
+  padding-inline-start: 18px;
+}

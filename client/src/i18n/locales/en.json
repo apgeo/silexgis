@@ -10150,6 +10150,62 @@
       "reportUnsettled": "{{count}} of them were taken before the scene had finished loading.",
       "reportSettled": "Every frame was taken with the scene fully loaded."
     },
+    "bundle": {
+      "format": "Blender bundle (.zip)",
+      "help": "A zip with the scene, the caves and a player. Unpack it and render it on your own machine with Blender {{version}} or newer — nothing is rendered here. It also holds a quick draft of the same scene.",
+      "fps": "A bundle is made at {{fps}} frames a second.",
+      "summary_one": "{{count}} frame of {{size}} · {{length}}",
+      "summary": "{{count}} frames of {{size}} · {{length}}",
+      "fileNamed": "The file is named after the flyby and ends in -blender.zip.",
+      "walls_one": "Include the walls of {{count}} cave that were not downloaded into the view ({{size}})",
+      "walls": "Include the walls of {{count}} caves that were not downloaded into the view ({{size}})",
+      "wallsHelp": "They go straight into the bundle; nothing more is downloaded into the view.",
+      "leftOutTitle": "Not in the bundle",
+      "leftOutHelp": "The bundle is made anyway, and its README says the same.",
+      "leftOut": {
+        "ground": "The ground and the map drawn on it: the caves stand in empty space, under a plain sky.",
+        "timedChanges": "The changes of the look while the flyby plays — layers, colours, backgrounds, the sky: the scene keeps the look of its first frame.",
+        "reliefChanges": "The change of the relief while the flyby plays: the scene keeps the relief of its first frame.",
+        "wallColours": "The colour the walls are tinted with: they are drawn as plain rock.",
+        "surfaceOpening": "The opening cut in the ground over a cave.",
+        "entrances": "The entrance markers.",
+        "surfaceFeatures": "The surface features and the layers of features.",
+        "scans": "The scans.",
+        "photos": "The station photographs.",
+        "mapLayers": "The map overlays and the georeferenced maps.",
+        "tracks": "The lines of imported files.",
+        "layerOpacity": "The strength layers are drawn at: what is shown is drawn in full.",
+        "wallsNotDownloaded": "The walls that were not downloaded into the view: those caves are drawn by their survey lines.",
+        "moreCavesInView": "Some of the caves in view: a bundle takes only so many."
+      },
+      "privacy": "The bundle holds the shape of these caves — their walls and survey lines — and how they lie to one another. It holds no coordinates, no terrain and no map. Still, send it only to people who may see these caves.",
+      "export": "Download the bundle",
+      "refusal": {
+        "tooLong": "A bundle holds at most {{max}} frames, and this one would have {{frames}}. Take a stretch of the flyby.",
+        "noCaves": "A bundle is made of caves, and this flyby is about none. Choose the caves it flies around first.",
+        "nothingShown": "The walls and the survey lines are both hidden in this flyby's look, so nothing would be drawn. Show one of them."
+      },
+      "progress": {
+        "preparing": "Getting the flyby ready…",
+        "asking": "Putting the bundle together…"
+      },
+      "saved": "The bundle was saved.",
+      "reportWalls_one": "{{count}} cave with its walls.",
+      "reportWalls": "{{count}} caves with their walls.",
+      "reportLines_one": "{{count}} cave by its survey lines.",
+      "reportLines": "{{count}} caves by their survey lines.",
+      "reportNotDrawn_one": "{{count}} cave is not in it: nothing of it is available to draw.",
+      "reportNotDrawn": "{{count}} caves are not in it: nothing of them is available to draw.",
+      "reportWallsLeftOut_one": "The walls of {{count}} cave were left out; it is drawn by its survey lines.",
+      "reportWallsLeftOut": "The walls of {{count}} caves were left out; they are drawn by their survey lines.",
+      "reportReadme": "README.txt inside the bundle says how to render it and what it leaves out.",
+      "failed": {
+        "nothingToDraw": "Nothing of this flyby's caves is available to draw, so there is no bundle to make.",
+        "tooLong": "The flyby has more frames than one bundle holds. Take a stretch of it.",
+        "frameRate": "A bundle cannot be made at that frame rate.",
+        "other": "The bundle could not be made."
+      }
+    },
     "layersHeld": "A flyby has the camera. Stop it to change the layers.",
     "unnamedCave": "Unnamed cave",
     "aboutTitle": "What to fly around",

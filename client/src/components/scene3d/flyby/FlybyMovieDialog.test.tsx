@@ -41,7 +41,10 @@ vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   geometryFor: async () => null,
 }));
 const saveBlob = vi.fn();
-vi.mock('../../../api/download.ts', () => ({ saveBlob: (...args: unknown[]) => saveBlob(...args) }));
+vi.mock('../../../api/download.ts', async (original) => ({
+  ...(await original<typeof import('../../../api/download.ts')>()),
+  saveBlob: (...args: unknown[]) => saveBlob(...args),
+}));
 
 /** What the encoder was given, and a way to hold it on a frame. */
 const encoding = {

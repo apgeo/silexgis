@@ -58,7 +58,7 @@ import {
   type FlybyWorld,
 } from '../../../flyby/flybySubjects.ts';
 import type { FlybyTextPlan } from '../../../flyby/flybyTexts.ts';
-import { flybyWallsQuestion, type FlybyWallsAsk, type FlybyWallsQuestion } from '../../../flyby/flybyWalls.ts';
+import { flybyRouteCaves, flybyWallsQuestion, type FlybyWallsAsk, type FlybyWallsQuestion } from '../../../flyby/flybyWalls.ts';
 import {
   compileFlyby,
   flybyLineFallbacks,
@@ -66,6 +66,7 @@ import {
   type FlybySayWords,
   type FlybyTimeline,
 } from '../../../flyby/flybyTimeline.ts';
+import type { Altitude3DPlacement } from '../../../scene3d/altitude3d.ts';
 import { metersBetween, readCamera3D } from '../../../scene3d/camera3d.ts';
 import { formatExaggeration } from '../../../scene3d/exaggeration3d.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
@@ -99,6 +100,13 @@ export interface FlybyScene {
    * saved view they opened brought. Left out, true height.
    */
   relief?(): number;
+  /**
+   * How the view turns a surveyed altitude into a drawn height now: where it was surveyed, when the
+   * ground has relief, or hung from the surface. Left out, hung from the surface.
+   */
+  altitudePlacement?(): Altitude3DPlacement;
+  /** The surveyed altitude the view hangs one cave from, when it has been told one. */
+  caveSurveyTop?(caveId: string): number | undefined;
 }
 
 export type { FlybySource } from './flybyDraft.ts';
@@ -558,7 +566,14 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
 
   // ---- playing ----
 
-  const playerRef = useRef<{ player: FlybyPlayer; key: string; timeline: FlybyTimeline; unsubscribe(): void } | null>(null);
+  const playerRef = useRef<{
+    player: FlybyPlayer;
+    key: string;
+    timeline: FlybyTimeline;
+    /** The caves the flyby visits, its saved filters' written out, in the order first visited. */
+    caves: string[];
+    unsubscribe(): void;
+  } | null>(null);
   /**
    * The subjects as last found, kept so a change of timing does not send the camera visiting again:
    * with the caves each saved filter kept, which the document is written out for again.
@@ -633,8 +648,12 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     }
   }, [tellMoment]);
 
-  /** The player for the document as it stands, prepared if it has to be; undefined when it cannot be. */
-  const ensurePlayer = useCallback(async (): Promise<FlybyPlayer | undefined> => {
+  /**
+   * The player for the document as it stands, prepared if it has to be; undefined when it cannot be.
+   * `wallsAsked` says the caller has already put the question about walls waiting for a yes to the
+   * viewer in its own words, so it is not put again here.
+   */
+  const ensurePlayer = useCallback(async (wallsAsked = false): Promise<FlybyPlayer | undefined> => {
     if (!document) {
       return undefined;
     }
@@ -682,7 +701,9 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
         timeline = prepared.timeline;
         setUnsettled(prepared.unsettled);
       }
-      await askAboutWalls(expanded.document, controller.signal);
+      if (!wallsAsked) {
+        await askAboutWalls(expanded.document, controller.signal);
+      }
       if (controller.signal.aborted) {
         throw new DOMException('The flyby was stopped before it played.', 'AbortError');
       }
@@ -729,7 +750,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
           return next;
         });
       });
-      playerRef.current = { player, key, timeline, unsubscribe };
+      playerRef.current = { player, key, timeline, caves: flybyRouteCaves(expanded.document), unsubscribe };
       setLength(timeline.length);
       return player;
     } catch (error) {
@@ -752,11 +773,23 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     }
   }, [document, scene, world, stage, loadRoute, say, reliefWords, dropPlayer, tellMoment, askAboutWalls]);
 
-  /** The path of the document as it stands, prepared if it has to be, for whatever films it. */
-  const ensureTimeline = useCallback(async (): Promise<FlybyTimeline | undefined> => {
-    const player = await ensurePlayer();
-    return player && playerRef.current?.player === player ? playerRef.current.timeline : undefined;
-  }, [ensurePlayer]);
+  /**
+   * The path of the document as it stands, prepared if it has to be, for whatever films it — or
+   * reads its camera, which asks about walls in its own place and says so with `wallsAsked`.
+   */
+  const ensureTimeline = useCallback(
+    async (wallsAsked = false): Promise<FlybyTimeline | undefined> => {
+      const player = await ensurePlayer(wallsAsked);
+      return player && playerRef.current?.player === player ? playerRef.current.timeline : undefined;
+    },
+    [ensurePlayer],
+  );
+
+  /**
+   * The caves of the flyby as last prepared — every cave it visits, those a saved filter stands for
+   * among them. Empty until it has been prepared.
+   */
+  const preparedCaves = useCallback((): string[] => playerRef.current?.caves ?? [], []);
 
   const play = useCallback(async () => {
     const player = await ensurePlayer();
@@ -873,6 +906,7 @@ export function useFlyby(scene: FlybyScene, selection: WorkspaceSelection | null
     answerWalls,
     ensurePlayer,
     ensureTimeline,
+    preparedCaves,
     stage,
     play,
     pause,

@@ -380,6 +380,15 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
         layers: Object.fromEntries(layers.map((key) => [key, viewerLayer(settings, key)])),
       };
     },
+    viewerLayers() {
+      const settings = handles.settings();
+      return [
+        ...settings.visibleTileOverlayIds.map((id) => `overlay:${id}`),
+        ...settings.visibleRasterIds.map((id) => `raster:${id}`),
+        ...settings.visibleGeofileIds.map((id) => `file:${id}`),
+        ...settings.filterLayers.filter((spec) => spec.visible).map((spec) => filterLayerId(spec.savedFilterId)),
+      ];
+    },
     showBackground(shown) {
       held.background = shown;
       const engine = handles.engine();

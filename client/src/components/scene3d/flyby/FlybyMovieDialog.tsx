@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { CloseOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { Alert, App, Checkbox, InputNumber, Progress, Radio, Select, Space, Typography } from 'antd';
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
-import { saveBlob } from '../../../api/download.ts';
+import { DownloadError, saveBlob } from '../../../api/download.ts';
 import { localIsoDate, MOVIE_GIF_SIZE_BUDGET, movieFileName, movieFileSizeEstimate, movieSlug } from '../../../caveview/movie/movieOutput.ts';
 import { MOVIE_SOCIAL_OUTPUT, moviePresetOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import { MOVIE_GIF_MAX_WIDTH, MOVIE_SIZES, MOVIE_VIDEO_FRAME_RATES } from '../../../caveview/movie/movieSettings.ts';
+import { FLYBY_BUNDLE_FPS, FLYBY_BUNDLE_MIN_BLENDER, type FlybyBundleRefusal } from '../../../flyby/flybyBlenderBundle.ts';
 import { flybyLength } from '../../../flyby/flybyDocument.ts';
 import {
   FLYBY_DRAFT_FPS,
@@ -47,9 +48,17 @@ import {
 import type { MovieSink } from '../../../movie/encode/movieSink.ts';
 import { videoBitrate } from '../../../movie/encode/video/videoEncoder.ts';
 import { chooseMovieFile, movieGoesToDisk, type MovieFileChoice } from '../../../movie/movieFileSink.ts';
+import { formatExaggeration } from '../../../scene3d/exaggeration3d.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
 import { MOVIE_ASPECTS } from '../../caveview/movie/movieChoices.ts';
+import {
+  downloadFlybyBundle,
+  FlybyBundleRefused,
+  flybyBundlePreview,
+  flybyBundleRouteCaves,
+  type FlybyBundleMade,
+} from './flybyBundleExport.ts';
 import { flybyClock } from './flybyClock.ts';
 import type { FlybyController, FlybyScene } from './useFlyby.ts';
 
@@ -102,7 +111,16 @@ interface ExportRun {
   progress: FlybyRecordingProgress | null;
   /** How far a live recording has got. */
   live: FlybyLiveProgress | null;
+  /** How far a bundle has got: the flyby being got ready, then the server putting the bundle together. */
+  bundle?: 'preparing' | 'asking';
 }
+
+/** The words for a bundle the server refused, by the code it refused with. */
+const BUNDLE_FAILURES: Record<string, string> = {
+  'flyby_bundle.nothing_to_draw': 'flyby.bundle.failed.nothingToDraw',
+  'flyby_bundle.too_long': 'flyby.bundle.failed.tooLong',
+  'flyby_bundle.frame_rate_unsupported': 'flyby.bundle.failed.frameRate',
+};
 
 /** What the panel says once a movie is made. */
 type MadeReport =
@@ -134,6 +152,12 @@ const LIVE_SMOOTH_SHARE = 0.8;
  * played in real time and filmed as it plays: no slower than the flyby, but what the file holds is
  * what the screen showed at the speed this machine drew it. The panel says so beside the choice, and
  * a live recording is written only as the containers that recorder writes.
+ *
+ * <b>And one that is not a movie at all.</b> Beside the formats stands the Blender bundle: a zip the
+ * server writes from the camera's path, which its reader renders with Blender on a machine of their
+ * own. Nothing is filmed for it — the camera is read at every frame, at one fixed rate — so the
+ * choices about how a frame is taken go away, and in their place the panel lists what of the flyby a
+ * bundle does not carry, before it is made.
  */
 export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onClose, ref }: FlybyMovieDialogProps) {
   const { t, i18n } = useTranslation();
@@ -147,7 +171,17 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const length = flyby.document ? flybyLength(flyby.document) : 0;
   const [part, setPart] = useState<'whole' | 'stretch'>('whole');
   const [stretch, setStretch] = useState<{ from: number; to: number }>({ from: 0, to: length });
-  const schedule = flybyFrameSchedule(length, output.fps, part === 'whole' ? undefined : stretch, settings.holdEndS);
+  // Whether what is made is a Blender bundle rather than a movie: a choice about this file, kept
+  // beside the movie's settings and not among them, so the next movie opens as the last one was.
+  const [asBundle, setAsBundle] = useState(false);
+  // Whether walls the view is still waiting for a yes about go into a bundle all the same.
+  const [includeWalls, setIncludeWalls] = useState(false);
+  const schedule = flybyFrameSchedule(
+    length,
+    asBundle ? FLYBY_BUNDLE_FPS : output.fps,
+    part === 'whole' ? undefined : stretch,
+    settings.holdEndS,
+  );
   const refusal = flybyMovieRefusal(output, schedule);
   const estimate = estimatedBytes(settings, output, schedule.count);
   const fileName = movieFileName(
@@ -245,6 +279,24 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const [run, setRun] = useState<ExportRun | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [report, setReport] = useState<MadeReport | null>(null);
+  const [bundleMade, setBundleMade] = useState<FlybyBundleMade | null>(null);
+
+  // ---- a bundle: what it would leave out, said while the reader is still choosing ----
+  const flown = flyby.document;
+  const routeCaves = flybyBundleRouteCaves(flown, flyby.preparedCaves());
+  const wallsPending = asBundle ? (scene.walls?.pending(routeCaves) ?? []) : [];
+  const wallsPendingBytes = wallsPending.reduce((total, walls) => total + walls.bytes, 0);
+  const wallsDeclined = wallsPending.length > 0 && !includeWalls;
+  const { from: scheduleFrom, to: scheduleTo, count: scheduleCount } = schedule;
+  const bundlePreview = useMemo(
+    () =>
+      asBundle && flown
+        ? flybyBundlePreview(flown, scene, { from: scheduleFrom, to: scheduleTo, count: scheduleCount }, wallsDeclined)
+        : null,
+    [asBundle, flown, scene, scheduleFrom, scheduleTo, scheduleCount, wallsDeclined],
+  );
+  const bundleRefusalText = (refused: NonNullable<FlybyBundleRefusal>) =>
+    refused.kind === 'tooLong' ? t('flyby.bundle.refusal.tooLong', refused) : t(`flyby.bundle.refusal.${refused.kind}`);
   const abortRef = useRef<AbortController | null>(null);
   const choosingFileRef = useRef(false);
   const exporting = run !== null;
@@ -408,6 +460,83 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
       setRun(null);
     }
   };
+  /**
+   * Asks the server for the Blender bundle. Nothing is filmed: the flyby is got ready exactly as for
+   * a careful movie — its route loaded, so the ground under the camera is the ground a movie finds —
+   * and the camera is read at every frame.
+   */
+  const exportBundle = async () => {
+    if (exporting || !flyby.document || bundlePreview?.refusal) {
+      return;
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setFailure(null);
+    setReport(null);
+    setBundleMade(null);
+    setRun({ progress: null, live: null, bundle: 'preparing' });
+    flyby.pause();
+    const engine = scene.engine();
+    const found = engine?.getCamera();
+    const held = flyby.playerState.status === 'idle' ? null : flyby.playerState.t;
+    try {
+      // The walls the view waits for a yes about are asked about in this panel, for the bundle;
+      // getting the flyby ready does not ask again whether to download them into the view.
+      const timeline = await flyby.ensureTimeline(true);
+      if (!timeline || !engine || controller.signal.aborted) {
+        if (!controller.signal.aborted) {
+          setFailure(t('flyby.movie.notReady'));
+        }
+        return;
+      }
+      setRun({ progress: null, live: null, bundle: 'asking' });
+      const made = await downloadFlybyBundle({
+        name: flyby.name,
+        timeline,
+        schedule: flybyFrameSchedule(
+          timeline.length,
+          FLYBY_BUNDLE_FPS,
+          part === 'whole' ? undefined : { ...stretch },
+          settings.holdEndS,
+        ),
+        size: flybyMovieFrameSize(settings),
+        quality: settings.quality,
+        scene,
+        groundHeight: flyby.stage.groundHeight,
+        routeCaves: flyby.preparedCaves(),
+        includeWalls,
+        reliefWords: (factor) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
+        signal: controller.signal,
+      });
+      setBundleMade(made);
+      void message.success(t('flyby.bundle.saved'));
+    } catch (error) {
+      if (controller.signal.aborted || isFlybyRecordingAbort(error)) {
+        return;
+      }
+      if (error instanceof FlybyBundleRefused) {
+        setFailure(bundleRefusalText(error.refusal));
+      } else if (error instanceof DownloadError) {
+        setFailure(t(BUNDLE_FAILURES[error.code ?? ''] ?? 'flyby.bundle.failed.other'));
+      } else {
+        setFailure(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      // Getting the flyby ready moved the camera about; the view goes back as it was found.
+      flyby.stage.look?.restore();
+      if (found) {
+        flyby.stage.setCamera(found);
+      }
+      flyby.stage.refreshData();
+      if (held !== null) {
+        flyby.seek(held);
+      }
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+      setRun(null);
+    }
+  };
   const cancelExport = () => abortRef.current?.abort();
 
   // ---- closing ----
@@ -457,6 +586,9 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const isGif = settings.format === 'gif';
   const rates = isGif ? GIF_FRAME_RATES : MOVIE_VIDEO_FRAME_RATES;
   const sizeLabel = `${output.width} × ${output.height}`;
+  // A bundle is rendered at the size chosen; a draft's halving is the movie's own.
+  const bundleSize = flybyMovieFrameSize(settings);
+  const bundleSizeLabel = `${bundleSize.width} × ${bundleSize.height}`;
   const progress = run?.progress ?? null;
   const liveProgress = run?.live ?? null;
 
@@ -506,9 +638,15 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         <Radio.Group
           optionType="button"
           size="small"
-          value={settings.format}
+          value={asBundle ? 'blender' : settings.format}
           disabled={exporting}
-          onChange={(event) => change({ format: event.target.value as MovieFormat })}
+          onChange={(event) => {
+            const chosen = event.target.value as MovieFormat | 'blender';
+            setAsBundle(chosen === 'blender');
+            if (chosen !== 'blender') {
+              change({ format: chosen });
+            }
+          }}
           aria-label={t('caveview.movie.format')}
           data-testid="flyby-movie-format"
         >
@@ -522,21 +660,26 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
               {t(`caveview.movie.formats.${format}`)}
             </Radio.Button>
           ))}
+          <Radio.Button value="blender" data-testid="flyby-movie-format-blender">
+            {t('flyby.bundle.format')}
+          </Radio.Button>
         </Radio.Group>
-        <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
-          {t(`caveview.movie.formatHelp.${settings.format}`)}
+        <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-movie-format-help">
+          {asBundle
+            ? t('flyby.bundle.help', { version: FLYBY_BUNDLE_MIN_BLENDER })
+            : t(`caveview.movie.formatHelp.${settings.format}`)}
         </Typography.Text>
-        {formats === null && !isGif && (
+        {!asBundle && formats === null && !isGif && (
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
             {t('caveview.movie.formatChecking')}
           </Typography.Text>
         )}
-        {!writesVideo && (
+        {!asBundle && !writesVideo && (
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-movie-no-video">
             {t('caveview.movie.formatNoVideoEncoder')}
           </Typography.Text>
         )}
-        {isLive && liveType === null && (
+        {!asBundle && isLive && liveType === null && (
           <Alert
             type="warning"
             showIcon
@@ -546,7 +689,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
             data-testid="flyby-movie-live-format"
           />
         )}
-        {!isLive && formatRefused && writesVideo && (
+        {!asBundle && !isLive && formatRefused && writesVideo && (
           <Alert
             type="warning"
             showIcon
@@ -576,8 +719,8 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
               options: MOVIE_SIZES.filter((entry) => aspectOf(entry.width, entry.height) === aspect.id).map((entry) => ({
                 value: entry.id,
                 label: `${entry.width} × ${entry.height}`,
-                disabled: isGif && !entry.gif,
-                title: isGif && !entry.gif ? t('caveview.movie.sizeGifLimit', { width: MOVIE_GIF_MAX_WIDTH }) : undefined,
+                disabled: !asBundle && isGif && !entry.gif,
+                title: !asBundle && isGif && !entry.gif ? t('caveview.movie.sizeGifLimit', { width: MOVIE_GIF_MAX_WIDTH }) : undefined,
               })),
             }))}
           />
@@ -586,15 +729,20 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           <Typography.Text>{t('caveview.movie.fps')}</Typography.Text>
           <Select
             size="small"
-            value={settings.fps}
-            disabled={exporting}
+            value={asBundle ? FLYBY_BUNDLE_FPS : settings.fps}
+            disabled={exporting || asBundle}
             style={{ minWidth: 80 }}
             onChange={(fps: number) => change({ fps })}
             aria-label={t('caveview.movie.fps')}
             data-testid="flyby-movie-fps"
-            options={rates.map((rate) => ({ value: rate, label: formatNumber(rate) }))}
+            options={(asBundle ? [FLYBY_BUNDLE_FPS] : rates).map((rate) => ({ value: rate, label: formatNumber(rate) }))}
           />
         </div>
+        {asBundle && (
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-bundle-fps">
+            {t('flyby.bundle.fps', { fps: FLYBY_BUNDLE_FPS })}
+          </Typography.Text>
+        )}
         <div className="scene3d-flyby-field">
           <Typography.Text>{t('caveview.movie.quality')}</Typography.Text>
           <Radio.Group
@@ -609,30 +757,34 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           />
         </div>
 
-        <Typography.Text strong>{t('flyby.movie.level')}</Typography.Text>
-        <Radio.Group
-          value={settings.level}
-          disabled={settings.draft || exporting}
-          onChange={(event) => chooseLevel(event.target.value as FlybyMovieSettings['level'])}
-          aria-label={t('flyby.movie.level')}
-          data-testid="flyby-movie-level"
-          className="scene3d-flyby-movie-choices"
-        >
-          {levels.map((level) => (
-            <Radio key={level} value={level} data-testid={`flyby-movie-level-${level}`}>
-              {t(`flyby.movie.levels.${level}`)}
-            </Radio>
-          ))}
-        </Radio.Group>
-        <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
-          {settings.draft ? t('flyby.movie.levelHelp.quick') : t(`flyby.movie.levelHelp.${settings.level}`)}
-        </Typography.Text>
-        <Checkbox checked={settings.draft} disabled={exporting} onChange={(event) => change({ draft: event.target.checked })} data-testid="flyby-movie-draft">
-          {t('flyby.movie.draft')}
-        </Checkbox>
-        <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
-          {t('flyby.movie.draftHelp', { fps: isGif ? GIF_FRAME_RATES[0] : FLYBY_DRAFT_FPS })}
-        </Typography.Text>
+        {!asBundle && (
+          <>
+            <Typography.Text strong>{t('flyby.movie.level')}</Typography.Text>
+            <Radio.Group
+              value={settings.level}
+              disabled={settings.draft || exporting}
+              onChange={(event) => chooseLevel(event.target.value as FlybyMovieSettings['level'])}
+              aria-label={t('flyby.movie.level')}
+              data-testid="flyby-movie-level"
+              className="scene3d-flyby-movie-choices"
+            >
+              {levels.map((level) => (
+                <Radio key={level} value={level} data-testid={`flyby-movie-level-${level}`}>
+                  {t(`flyby.movie.levels.${level}`)}
+                </Radio>
+              ))}
+            </Radio.Group>
+            <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+              {settings.draft ? t('flyby.movie.levelHelp.quick') : t(`flyby.movie.levelHelp.${settings.level}`)}
+            </Typography.Text>
+            <Checkbox checked={settings.draft} disabled={exporting} onChange={(event) => change({ draft: event.target.checked })} data-testid="flyby-movie-draft">
+              {t('flyby.movie.draft')}
+            </Checkbox>
+            <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+              {t('flyby.movie.draftHelp', { fps: isGif ? GIF_FRAME_RATES[0] : FLYBY_DRAFT_FPS })}
+            </Typography.Text>
+          </>
+        )}
 
         <Typography.Text strong>{t('flyby.movie.part')}</Typography.Text>
         <Radio.Group
@@ -692,17 +844,56 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
       </div>
 
       <Typography.Text data-testid="flyby-movie-summary">
-        {t(isLive ? 'flyby.movie.summaryLive' : 'flyby.movie.summary', {
-          count: schedule.count,
-          size: sizeLabel,
-          length: flybyClock(schedule.count / output.fps),
-          bytes: fileSizeText(estimate, i18n.language),
-        })}
+        {asBundle
+          ? t('flyby.bundle.summary', {
+              count: schedule.count,
+              size: bundleSizeLabel,
+              length: flybyClock(schedule.count / FLYBY_BUNDLE_FPS),
+            })
+          : t(isLive ? 'flyby.movie.summaryLive' : 'flyby.movie.summary', {
+              count: schedule.count,
+              size: sizeLabel,
+              length: flybyClock(schedule.count / output.fps),
+              bytes: fileSizeText(estimate, i18n.language),
+            })}
       </Typography.Text>
-      {refusal?.kind === 'gifTooLong' && (
+      {asBundle && wallsPending.length > 0 && (
+        <div className="scene3d-flyby-group">
+          <Checkbox
+            checked={includeWalls}
+            disabled={exporting}
+            onChange={(event) => setIncludeWalls(event.target.checked)}
+            data-testid="flyby-bundle-walls"
+          >
+            {t('flyby.bundle.walls', { count: wallsPending.length, size: fileSizeText(wallsPendingBytes, i18n.language) })}
+          </Checkbox>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+            {t('flyby.bundle.wallsHelp')}
+          </Typography.Text>
+        </div>
+      )}
+      {asBundle && bundlePreview?.refusal && (
+        <Alert type="warning" showIcon title={bundleRefusalText(bundlePreview.refusal)} data-testid="flyby-bundle-refused" />
+      )}
+      {asBundle && bundlePreview && (
+        <div className="scene3d-flyby-group" data-testid="flyby-bundle-left-out">
+          <Typography.Text strong>{t('flyby.bundle.leftOutTitle')}</Typography.Text>
+          <ul className="scene3d-flyby-bundle-list">
+            {bundlePreview.omissions.map((omission) => (
+              <li key={omission} data-testid={`flyby-bundle-left-out-${omission}`}>
+                {t(`flyby.bundle.leftOut.${omission}`)}
+              </li>
+            ))}
+          </ul>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+            {t('flyby.bundle.leftOutHelp')}
+          </Typography.Text>
+        </div>
+      )}
+      {!asBundle && refusal?.kind === 'gifTooLong' && (
         <Alert type="warning" showIcon title={t('flyby.movie.gifTooLong', refusal)} data-testid="flyby-movie-gif-too-long" />
       )}
-      {refusal === null && isGif && estimate > MOVIE_GIF_SIZE_BUDGET && (
+      {!asBundle && refusal === null && isGif && estimate > MOVIE_GIF_SIZE_BUDGET && (
         <Alert
           type="info"
           showIcon
@@ -711,13 +902,28 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         />
       )}
       <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-movie-file">
-        {run === null && !isLive && movieGoesToDisk(output.format, estimate)
-          ? t('caveview.movie.fileAsked', { name: fileName })
-          : t('caveview.movie.fileNamed', { name: fileName })}
+        {asBundle
+          ? t('flyby.bundle.fileNamed')
+          : run === null && !isLive && movieGoesToDisk(output.format, estimate)
+            ? t('caveview.movie.fileAsked', { name: fileName })
+            : t('caveview.movie.fileNamed', { name: fileName })}
       </Typography.Text>
-      <Alert type="info" showIcon title={t('flyby.movie.privacy')} data-testid="flyby-movie-privacy" />
+      <Alert
+        type="info"
+        showIcon
+        title={asBundle ? t('flyby.bundle.privacy') : t('flyby.movie.privacy')}
+        data-testid="flyby-movie-privacy"
+      />
 
-      {run !== null && liveProgress !== null && (
+      {run !== null && run.bundle !== undefined && (
+        <div data-testid="flyby-movie-progress" role="status">
+          <Progress percent={run.bundle === 'asking' ? 60 : 20} size="small" status="active" showInfo={false} />
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+            {t(`flyby.bundle.progress.${run.bundle}`)}
+          </Typography.Text>
+        </div>
+      )}
+      {run !== null && run.bundle === undefined && liveProgress !== null && (
         <div data-testid="flyby-movie-progress" role="status">
           <Progress percent={liveProgress.total > 0 ? Math.floor((liveProgress.seconds / liveProgress.total) * 100) : 0} size="small" />
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
@@ -725,7 +931,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           </Typography.Text>
         </div>
       )}
-      {run !== null && liveProgress === null && (
+      {run !== null && run.bundle === undefined && liveProgress === null && (
         <div data-testid="flyby-movie-progress" role="status">
           <Progress
             percent={progress === null || progress.total === 0 ? 0 : Math.floor((progress.done / progress.total) * 100)}
@@ -750,7 +956,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           data-testid="flyby-movie-failed"
         />
       )}
-      {report?.kind === 'live' && (
+      {!asBundle && report?.kind === 'live' && (
         <Alert
           type={report.report.fps < report.fps * LIVE_SMOOTH_SHARE ? 'warning' : 'success'}
           showIcon
@@ -763,7 +969,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           description={report.report.fps < report.fps * LIVE_SMOOTH_SHARE ? t('flyby.movie.liveReportSlow', { fps: report.fps }) : undefined}
         />
       )}
-      {report?.kind === 'frames' && report.level !== 'quick' && (
+      {!asBundle && report?.kind === 'frames' && report.level !== 'quick' && (
         <Alert
           type={report.report.unsettledFrames > 0 ? 'warning' : 'success'}
           showIcon
@@ -777,8 +983,42 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         />
       )}
 
+      {asBundle && bundleMade !== null && (
+        <Alert
+          type={bundleMade.notDrawn > 0 || bundleMade.wallsLeftOut > 0 ? 'warning' : 'success'}
+          showIcon
+          data-testid="flyby-bundle-report"
+          title={t('flyby.bundle.saved')}
+          description={
+            <ul className="scene3d-flyby-bundle-list">
+              {bundleMade.walls > 0 && <li>{t('flyby.bundle.reportWalls', { count: bundleMade.walls })}</li>}
+              {bundleMade.lines > 0 && <li>{t('flyby.bundle.reportLines', { count: bundleMade.lines })}</li>}
+              {bundleMade.wallsLeftOut > 0 && (
+                <li data-testid="flyby-bundle-report-walls-left-out">
+                  {t('flyby.bundle.reportWallsLeftOut', { count: bundleMade.wallsLeftOut })}
+                </li>
+              )}
+              {bundleMade.notDrawn > 0 && (
+                <li data-testid="flyby-bundle-report-not-drawn">{t('flyby.bundle.reportNotDrawn', { count: bundleMade.notDrawn })}</li>
+              )}
+              <li>{t('flyby.bundle.reportReadme')}</li>
+            </ul>
+          }
+        />
+      )}
+
       <Space>
-        {run === null ? (
+        {run === null && asBundle ? (
+          <Button
+            type="primary"
+            icon={<VideoCameraOutlined />}
+            disabled={!flyby.document || bundlePreview === null || bundlePreview.refusal !== null}
+            onClick={() => void exportBundle()}
+            data-testid="flyby-movie-export"
+          >
+            {t('flyby.bundle.export')}
+          </Button>
+        ) : run === null ? (
           <Button
             type="primary"
             icon={<VideoCameraOutlined />}

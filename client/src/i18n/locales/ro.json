@@ -10163,6 +10163,62 @@
       "reportUnsettled": "{{count}} dintre ele au fost luate înainte ca scena să termine de încărcat.",
       "reportSettled": "Toate cadrele au fost luate cu scena încărcată complet."
     },
+    "bundle": {
+      "format": "Pachet Blender (.zip)",
+      "help": "Un zip cu scena, peșterile și un player. Dezarhivează-l și randează-l pe calculatorul tău cu Blender {{version}} sau mai nou — aici nu se randează nimic. Conține și o ciornă rapidă a aceleiași scene.",
+      "fps": "Un pachet se face la {{fps}} cadre pe secundă.",
+      "summary_one": "{{count}} cadru de {{size}} · {{length}}",
+      "summary": "{{count}} cadre de {{size}} · {{length}}",
+      "fileNamed": "Fișierul poartă numele survolului și se termină în -blender.zip.",
+      "walls_one": "Include pereții unei peșteri care nu au fost descărcați în vizualizare ({{size}})",
+      "walls": "Include pereții celor {{count}} peșteri care nu au fost descărcați în vizualizare ({{size}})",
+      "wallsHelp": "Ajung direct în pachet; nu se mai descarcă nimic în vizualizare.",
+      "leftOutTitle": "Nu sunt în pachet",
+      "leftOutHelp": "Pachetul se face oricum, iar fișierul README din el spune același lucru.",
+      "leftOut": {
+        "ground": "Terenul și harta desenată pe el: peșterile stau în spațiu gol, sub un cer simplu.",
+        "timedChanges": "Schimbările de aspect din timpul survolului — straturi, culori, fundaluri, cerul: scena păstrează aspectul primului cadru.",
+        "reliefChanges": "Schimbarea reliefului din timpul survolului: scena păstrează relieful primului cadru.",
+        "wallColours": "Culoarea cu care sunt nuanțați pereții: sunt desenați ca rocă simplă.",
+        "surfaceOpening": "Deschiderea tăiată în teren deasupra unei peșteri.",
+        "entrances": "Marcajele intrărilor.",
+        "surfaceFeatures": "Fenomenele de suprafață și straturile de obiecte.",
+        "scans": "Scanările.",
+        "photos": "Fotografiile din stații.",
+        "mapLayers": "Straturile suprapuse de hartă și hărțile georeferențiate.",
+        "tracks": "Liniile fișierelor importate.",
+        "layerOpacity": "Intensitatea cu care sunt desenate straturile: ce se vede este desenat complet.",
+        "wallsNotDownloaded": "Pereții care nu au fost descărcați în vizualizare: acele peșteri sunt desenate prin drumuiri.",
+        "moreCavesInView": "O parte din peșterile din vizualizare: un pachet ia doar un număr limitat."
+      },
+      "privacy": "Pachetul conține forma acestor peșteri — pereții și drumuirile lor — și cum sunt așezate una față de alta. Nu conține coordonate, teren sau hartă. Totuși, trimite-l doar celor care au voie să vadă aceste peșteri.",
+      "export": "Descarcă pachetul",
+      "refusal": {
+        "tooLong": "Un pachet are cel mult {{max}} de cadre, iar acesta ar avea {{frames}}. Ia o porțiune din survol.",
+        "noCaves": "Un pachet este făcut din peșteri, iar acest survol nu este despre niciuna. Alege mai întâi peșterile în jurul cărora zboară.",
+        "nothingShown": "Pereții și drumuirile sunt amândouă ascunse în aspectul acestui survol, deci nu s-ar desena nimic. Afișează una dintre ele."
+      },
+      "progress": {
+        "preparing": "Se pregătește survolul…",
+        "asking": "Se alcătuiește pachetul…"
+      },
+      "saved": "Pachetul a fost salvat.",
+      "reportWalls_one": "{{count}} peșteră cu pereții ei.",
+      "reportWalls": "{{count}} peșteri cu pereții lor.",
+      "reportLines_one": "{{count}} peșteră prin drumuirile ei.",
+      "reportLines": "{{count}} peșteri prin drumuirile lor.",
+      "reportNotDrawn_one": "{{count}} peșteră nu este în el: nimic din ea nu este disponibil pentru desenare.",
+      "reportNotDrawn": "{{count}} peșteri nu sunt în el: nimic din ele nu este disponibil pentru desenare.",
+      "reportWallsLeftOut_one": "Pereții unei peșteri au fost lăsați deoparte; este desenată prin drumuiri.",
+      "reportWallsLeftOut": "Pereții a {{count}} peșteri au fost lăsați deoparte; sunt desenate prin drumuiri.",
+      "reportReadme": "Fișierul README.txt din pachet spune cum se randează și ce lasă deoparte.",
+      "failed": {
+        "nothingToDraw": "Nimic din peșterile acestui survol nu este disponibil pentru desenare, deci nu există pachet de făcut.",
+        "tooLong": "Survolul are mai multe cadre decât încap într-un pachet. Ia o porțiune din el.",
+        "frameRate": "Un pachet nu poate fi făcut la acest număr de cadre pe secundă.",
+        "other": "Pachetul nu a putut fi făcut."
+      }
+    },
     "layersHeld": "Camera este condusă de un survol. Oprește-l ca să schimbi straturile.",
     "unnamedCave": "Peșteră fără nume",
     "aboutTitle": "În jurul a ce se zboară",
