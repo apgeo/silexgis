@@ -236,6 +236,8 @@ export const groups = {
     'JobLeaseTests',
   ],
   map: [
+    // Which of a cave's meshes it is drawn by is one rule, read here and by the render bundle.
+    'FlybyBlenderBundleApiTests',
     'CaveMeshesInViewTests', 'CaveScansInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',
     'PersistenceTests', 'TerrainOptionsTests',
     // Which protected rows a caller's window holds, decided on the position they are shown.
@@ -389,7 +391,7 @@ export const groups = {
     'SurveyModelTests', 'SurveyPlacementTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
     'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
     // The walls a survey was given, read back out of their file for a render bundle.
-    'FlybyBlenderBundleTests', 'GlbReaderTests',
+    'FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'GlbReaderTests',
     // A cave's surveys and the uploads that are versions of them, and the run that reads them.
     'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests', 'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests', 'SurveyUploadSurfaceTests',
     'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests',
@@ -518,8 +520,9 @@ export const groups = {
     // The landform picture, which is computed through it.
     'TerrainLandformsTests', 'TerrainLandformApiTests',
   ],
-  // A flyby of the 3D scene handed over as a render bundle for Blender.
-  flybys: ['FlybyBlenderBundleTests'],
+  // A flyby of the 3D scene handed over as a render bundle for Blender: the route, the writer
+  // of the bundle, and the check that its camera is the camera the browser flew.
+  flybys: ['FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests'],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],
 };
@@ -552,6 +555,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/FeatureShares/': 'featureShares',
   'server/src/SilexGis.Api/Features/Features/': 'geoFeatures',
   'server/src/SilexGis.Api/Features/Files/': 'files',
+  'server/src/SilexGis.Api/Features/Flybys/': 'flybys',
   'server/src/SilexGis.Api/Features/Filters/': 'filters',
   'server/src/SilexGis.Api/Features/Geofiles/': 'geofiles',
   'server/src/SilexGis.Api/Features/GeoreferencedMaps/': 'georeferencedMaps',
@@ -747,7 +751,7 @@ export const crossCutting = {
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeaturePassagesTests', 'FeatureRestoreTests',
     'FeatureSetTests', 'FeatureShareTests', 'FeatureTests', 'FeatureTypeWriteTests',
-    'FileAttachmentTests', 'FileImportReviewHoldTests', 'GeofileTests', 'GeoreferencedMapTests',
+    'FileAttachmentTests', 'FileImportReviewHoldTests', 'FlybyBlenderBundleApiTests', 'GeofileTests', 'GeoreferencedMapTests',
     'HistoryRestoreTests', 'HypsometryTests', 'ImmichPhotoLibraryTests',
     'MapBackgroundDocumentChoiceTests', 'MapLayerKindTests', 'MapPassageDepthTests',
     'MapSymbolSettingsTests', 'MapViewTests', 'NotificationHealthTests',
@@ -806,6 +810,7 @@ export const crossCutting = {
     'FileAccessBatchParityTests', 'FileAttachmentTests', 'FileImportReviewHoldTests',
     'FilterEndpointTests', 'FilterKindPositionTests', 'FilterParityTests',
     'FilterSpatialConditionTests', 'FilterWorldConformanceTests', 'FilterWorldListParityTests',
+    'FlybyBlenderBundleApiTests',
     'GeofileTests', 'GeoreferencedMapSheetTests', 'GeoreferencedMapStationPointTests',
     'GeoreferencedMapTests', 'HiddenRowCapTests', 'HistoryRestoreTests', 'HistoryTests',
     'HypsometryTests', 'KarstLinkExportTests', 'MapClusterConfigurationTests',
