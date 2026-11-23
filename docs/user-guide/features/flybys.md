@@ -313,6 +313,55 @@ For a smooth file whatever the computer, use **Quick** or **Fine**.
 - **The movie shows where these caves are.** The panel says so beside Export, always: the file
   outlives the check that let you see them, so share it only with people who may see that.
 
+### A bundle for Blender
+
+Beside MP4, WebM and GIF the **Format** row offers **Blender bundle (.zip)**. It is not a movie:
+it is everything [Blender](https://www.blender.org/) needs to render the flyby itself — the
+camera's path, the caves and a small player — in one zip. **Nothing is rendered here.** You unpack
+the zip on your own computer and render it there with Blender 4.2 or newer; Blender lights the
+cave with a lamp on the camera and draws its walls as rock, which the 3D view cannot do.
+
+What goes into it:
+
+- **The camera at every frame**, exactly as the flyby flies it here, at **25 frames a second**
+  (a bundle has one rate, whatever the movie's is set to), for the whole flyby or the stretch you
+  chose, at the frame size and quality you chose.
+- **The flyby's own caves with their walls**, and the other caves drawn in the view by their
+  **survey lines** alone. A cave of the flyby that has no walls is drawn by its lines.
+- **Walls the view did not download**: where the view is still waiting for your yes about a large
+  set of walls, the panel asks again — *Include the walls of N caves that were not downloaded into
+  the view*, with their size. Ticked, they go straight into the bundle; nothing more is downloaded
+  into the view.
+- **The texts**: title, captions, end card, the corner line, "Relief ×N", the north arrow and
+  the fades, drawn in Blender's own lettering.
+- The sky colour and the relief of the flyby's first frame.
+
+What does not: the panel lists it under **Not in the bundle** before you make the file, and the
+bundle's own `README.txt` says the same. Always the ground and the map drawn on it — the caves
+stand in empty space under a plain sky — and, where your flyby has them: changes of the look
+while it plays (the scene keeps the look of its first frame), a relief that changes, colours on
+the walls, the opening cut in the ground, entrance markers, surface features, scans, photographs,
+map overlays, georeferenced maps and the lines of imported files. The bundle is made anyway.
+
+**Download the bundle** gets the flyby ready as for a careful movie, reads the camera and asks
+the server for the zip, which is saved as `<the flyby's name>-blender.zip`. Afterwards the panel
+says how many caves went in with their walls and how many by their lines. A cave you may not
+see, or may not see the exact place of, is not in the bundle, and neither is one with no survey;
+the panel says only how many are missing.
+
+In the unpacked folder, `README.txt` says how to render: `sh render.sh` on Linux and macOS,
+`render.cmd` on Windows, and `--draft` after either for a quick look first. The movie is written
+into the folder's `out`.
+
+- **The bundle holds the shapes of these caves and how they lie to one another — no coordinates,
+  no terrain, no map.** It should still go only to people who may see these caves; the panel
+  says so beside the button, always.
+- A flyby about no cave — one round "what the view shows", or along an imported file — cannot be
+  made a bundle of, and neither can one whose look hides walls and survey lines alike. A bundle
+  holds at most 20,000 frames (a little over thirteen minutes).
+- The player in the bundle is part of ThIDE and comes under its own licence (MPL-2.0); the
+  bundle's `LICENSE` and `NOTICE` say so.
+
 ## Keeping a flyby
 
 | Control | Does |
