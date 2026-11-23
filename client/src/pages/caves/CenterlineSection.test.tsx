@@ -75,7 +75,15 @@ describe('CenterlineSection deleting', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
 
     expect(remove).toHaveBeenCalled();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the conflict had asked for would be too.
+    remove.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const confirms = await screen.findAllByRole('tooltip');
+    fireEvent.click(within(confirms[confirms.length - 1]).getByRole('button', { name: /OK|Yes/ }));
+    await screen.findByText("You may not change this cave's centerlines.");
+
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('The deletion failed. Please try again.')).toBeNull();
   });
 });
@@ -145,7 +153,12 @@ describe('CenterlineSection refusals', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Make default shape' }));
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'cl-2' }));
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The witness is a second refusal in words of its own, drawn after anything the conflict asked for.
+    update.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'Make default shape' }));
+    await screen.findByText("You may not change this cave's centerlines.");
+
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 });

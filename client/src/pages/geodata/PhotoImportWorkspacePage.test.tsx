@@ -353,7 +353,8 @@ describe('PhotoImportWorkspacePage', () => {
     show();
     await screen.findByDisplayValue('Pestera Ursilor');
     fireEvent.click(screen.getByText(i18n.t('photoImport.optionsClock')));
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Past the first settled request, so what follows is only the typing.
+    await waitFor(() => expect(previewCalls.some((call) => call.enabled)).toBe(true));
 
     const offset = screen
       .getByText(i18n.t('photoImport.clockOffset'))
@@ -363,14 +364,13 @@ describe('PhotoImportWorkspacePage', () => {
     for (const typed of ['6', '60', '600', '3600']) {
       fireEvent.change(offset, { target: { value: typed } });
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const asked = new Set(
-      previewCalls.filter((call) => call.enabled).map((call) => call.body.options.cameraClockOffsetSeconds),
-    );
-    expect(asked.has(3600)).toBe(true);
+    // The witness that the pause was waited out: the request for the whole value is made. Every
+    // step before it was drawn synchronously, so one asked for on the way would be here first.
+    const asked = () =>
+      new Set(previewCalls.filter((call) => call.enabled).map((call) => call.body.options.cameraClockOffsetSeconds));
+    await waitFor(() => expect(asked().has(3600)).toBe(true));
     for (const partial of [6, 60, 600]) {
-      expect(asked.has(partial)).toBe(false);
+      expect(asked().has(partial)).toBe(false);
     }
   });
 });

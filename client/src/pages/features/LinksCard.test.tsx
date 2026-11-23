@@ -140,8 +140,10 @@ describe('leaving the links editor with changes', () => {
     show();
     fireEvent.click(screen.getByRole('button', { name: /Edit links/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-    // A guard against over-asking: the list was only looked at, so no question follows.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A guard against over-asking: the list was only looked at, so the dialog closes. Its leaving
+    // animation is the witness: a question would have kept it open.
+    await waitFor(() => expect(document.querySelector('.ant-modal')?.className).toContain('leave'));
+    expect(document.querySelectorAll('.ant-modal')).toHaveLength(1);
     expect(screen.queryByText('Discard your changes?')).toBeNull();
   });
 

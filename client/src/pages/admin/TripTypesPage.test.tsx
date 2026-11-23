@@ -176,8 +176,10 @@ describe('leaving the TripTypes dialog with typed work', () => {
     show();
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-    // A guard against over-asking: nothing was typed, so no question follows.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A guard against over-asking: nothing was typed, so the dialog closes. Its leaving animation
+    // is the witness: a question would have kept it open.
+    await waitFor(() => expect(document.querySelector('.ant-modal')?.className).toContain('leave'));
+    expect(document.querySelectorAll('.ant-modal')).toHaveLength(1);
     expect(screen.queryByText('Discard your changes?')).toBeNull();
   });
 
@@ -201,7 +203,14 @@ describe('leaving the TripTypes dialog with typed work', () => {
     fireEvent.mouseDown(wrap);
     fireEvent.mouseUp(wrap);
     fireEvent.click(wrap);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // A click beside must not even reach the dialog's cancel handler: that handler asks about
+    // typed work, so a question raised now would mean the click was routed, not let go.
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(0);
+    // The witness that the click beside was let go: Cancel, pressed next, asks about the typed
+    // work, which only a dialog still open and still holding that work does.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Field data schema (JSON Schema)')).toHaveValue('{"type":"object"}');
     // A close starts the dialog's leaving animation; it must not have begun.
     expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');

@@ -273,14 +273,12 @@ describe('AppLayout collapsed rail', () => {
     // because the pointer arrives first — which is exactly what this reproduces, and why the
     // reader reports it as a click that does nothing.
     fireEvent.mouseEnter(screen.getByText('Activity'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    });
 
     // On the marked-open class for the same reason the sibling test gives: jsdom draws no
     // flyout, so the popup itself cannot be asserted on either way. This class is what antd
-    // sets from the open state, and with the defect present it stays off.
-    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1);
+    // sets from the open state, and with the defect present it stays off. antd opens a hovered
+    // group after a short delay, so the class is waited for rather than slept towards.
+    await waitFor(() => expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1));
   });
 
   it('closes an open group when the rail narrows under it', () => {
