@@ -522,7 +522,7 @@ export const groups = {
   ],
   // A flyby of the 3D scene handed over as a render bundle for Blender: the route, the writer
   // of the bundle, and the check that its camera is the camera the browser flew.
-  flybys: ['FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests'],
+  flybys: ['FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'FlybyBundleParityTests'],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],
 };
