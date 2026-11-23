@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
 import { downloadFile, registryDistributionExportUrl } from '../../api/download.ts';
 import {
   useCaveTypes,
@@ -125,7 +125,7 @@ export default function RegistryDistributionPage() {
   };
 
   const query = useMemo(() => registryDistributionQuery(filter), [filter]);
-  const { data, isError, error, isPlaceholderData } = useRegistryDistribution(query);
+  const { data, isError, error, isPlaceholderData, refetch } = useRegistryDistribution(query);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
 
@@ -296,6 +296,14 @@ export default function RegistryDistributionPage() {
           data-testid="registry-distribution-error"
           title={t('registryStats.failed')}
           description={error instanceof ApiError ? error.detail : undefined}
+          action={
+            // A refusal is the registry's answer to this question; asking again would repeat it.
+            isSettledRefusal(error) ? undefined : (
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
+          }
         />
       ) : data === undefined ? (
         <Skeleton active paragraph={{ rows: 8 }} />

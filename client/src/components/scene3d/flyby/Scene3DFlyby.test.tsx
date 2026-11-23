@@ -21,7 +21,7 @@ import type { FlybyLookTarget } from '../../../flyby/flybyLookApply.ts';
 
 // The two reads the tool makes of the server: a cave's name for the panel, and where a cave is
 // when nothing of it is drawn. Both answered from here, so no request leaves the test.
-const { SAVED_FILTERS, asked, filterAnswer } = vi.hoisted(() => ({
+const { SAVED_FILTERS, asked, filterAnswer, failing, retried } = vi.hoisted(() => ({
   SAVED_FILTERS: [
     {
       id: 'f0000000-0000-4000-8000-000000000001',
@@ -35,7 +35,16 @@ const { SAVED_FILTERS, asked, filterAnswer } = vi.hoisted(() => ({
   asked: [] as unknown[],
   /** Whether the filter route answers with nothing, as for a reader who may see none of the caves. */
   filterAnswer: { empty: false },
+  /** Lists whose read fails in a test, and the re-reads each was asked for. */
+  failing: new Set<string>(),
+  retried: [] as string[],
 }));
+/** A list read as TanStack Query reports it: answered, or failed with nothing held. */
+function listRead<T>(name: string, data: T) {
+  return failing.has(name)
+    ? { data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: () => retried.push(name) }
+    : { data, isError: false, error: null, refetch: () => retried.push(name) };
+}
 vi.mock('../../../api/hooks.ts', () => ({
   useCaveNames: (ids: readonly string[]) =>
     new Map(ids.filter((id) => id !== 'unnamed').map((id) => [id, `Cave ${id.toUpperCase()}`])),
@@ -49,16 +58,15 @@ vi.mock('../../../api/hooks.ts', () => ({
     },
   }),
   // The lists the look panel names things from: two backgrounds, nothing else.
-  useMapLayers: () => ({
-    data: [
+  useMapLayers: () =>
+    listRead('catalogue', [
       { id: 1, name: 'Street map', isBase: true, layerKind: 'xyz', urlTemplate: 'https://tiles.example/{z}/{x}/{y}.png' },
       { id: 2, name: 'Aerial', isBase: true, layerKind: 'xyz', urlTemplate: 'https://aerial.example/{z}/{x}/{y}.png' },
-    ],
-  }),
+    ]),
   // Two kinds of feature from the catalogue, which a flyby's own layer can show.
-  useFeatureTypes: () => ({ data: [{ id: 3, name: 'Spring' }, { id: 9, name: 'Sinkhole' }] }),
+  useFeatureTypes: () => listRead('featureTypes', [{ id: 3, name: 'Spring' }, { id: 9, name: 'Sinkhole' }]),
   // One saved filter that can be run and one that no longer can; the first keeps caves b and a.
-  useSavedFilters: () => ({ data: SAVED_FILTERS }),
+  useSavedFilters: () => listRead('savedFilters', SAVED_FILTERS),
   savedFiltersQuery: () => ({ queryKey: ['saved-filters'], queryFn: async () => SAVED_FILTERS }),
   filterQueryOptions: (body: { document: unknown; pageSize: number }) => ({
     queryKey: ['filter-query', body],
@@ -92,8 +100,8 @@ vi.mock('../../../api/hooks.ts', () => ({
 }));
 // The layer lists: no maps, and one imported file, which a flyby along a line can follow.
 vi.mock('../../../api/hooks/mapLayers.ts', () => ({
-  useRasterMapLayers: () => ({ data: [] }),
-  useGeofileLayers: () => ({ data: [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }] }),
+  useRasterMapLayers: () => listRead('rasters', []),
+  useGeofileLayers: () => listRead('geofiles', [{ id: 'walk', name: 'Ridge walk', importStatus: 'imported' }]),
 }));
 vi.mock('../../../viewlinks/geoTargets.ts', () => ({
   APPROXIMATE_SPAN_DEGREES: 0.05,
@@ -172,6 +180,8 @@ beforeEach(() => {
   useFlybyStore.setState({ library: [], loadRoute: false });
   useFlybyDraftStore.setState({ draft: null });
   saveBlob.mockClear();
+  failing.clear();
+  retried.length = 0;
 });
 
 afterEach(() => {
@@ -1266,6 +1276,53 @@ describe('layers of features the flyby draws itself', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove the layer Features: Spring' }));
     expect(screen.queryByTestId('flyby-features-f1')).not.toBeInTheDocument();
     expect(screen.getByText('1 change')).toBeInTheDocument();
+  });
+});
+
+describe('a list the tool picks from that could not be read', () => {
+  it('names a failed read of the imported files instead of saying there are none, and reads them again', () => {
+    failing.add('geofiles');
+    renderFlyby();
+    fireEvent.click(screen.getByRole('radio', { name: 'An imported file' }));
+
+    const notice = screen.getByTestId('flyby-files-load-failed');
+    expect(notice).toHaveTextContent(i18n.t('flyby.source.filesLoadFailed'));
+    expect(screen.queryByText(i18n.t('flyby.source.noFiles'))).toBeNull();
+    fireEvent.click(within(notice).getByRole('button', { name: i18n.t('common.retry') }));
+    expect(retried).toContain('geofiles');
+  });
+
+  it('names a failed read of the saved filters instead of saying there are none, and reads them again', () => {
+    failing.add('savedFilters');
+    renderFlyby();
+    fireEvent.click(screen.getByRole('radio', { name: 'Caves a saved filter selects' }));
+
+    const notice = screen.getByTestId('flyby-filters-load-failed');
+    expect(notice).toHaveTextContent(i18n.t('flyby.byFilter.loadFailed'));
+    expect(screen.queryByText(i18n.t('flyby.byFilter.none'))).toBeNull();
+    fireEvent.click(within(notice).getByRole('button', { name: i18n.t('common.retry') }));
+    expect(retried).toEqual(['savedFilters']);
+  });
+
+  it('says once that the lists the look is named from could not be read, and reads again only those', () => {
+    failing.add('featureTypes');
+    failing.add('rasters');
+    renderFlyby();
+
+    const notice = screen.getByTestId('flyby-look-lists-load-failed');
+    expect(notice).toHaveTextContent(i18n.t('flyby.look.listsLoadFailed'));
+    fireEvent.click(within(notice).getByRole('button', { name: i18n.t('common.retry') }));
+    expect([...retried].sort()).toEqual(['featureTypes', 'rasters']);
+  });
+
+  it('says nothing of the kind while every list answered', () => {
+    renderFlyby();
+    // The look is drawn for the flyby the selection opened it on, and says nothing failed.
+    expect(screen.getByText(i18n.t('flyby.look.openingTitle'))).toBeInTheDocument();
+    expect(screen.queryByTestId('flyby-look-lists-load-failed')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'An imported file' }));
+    expect(screen.queryByTestId('flyby-files-load-failed')).toBeNull();
+    expect(screen.getByTestId('flyby-file')).toBeInTheDocument();
   });
 });
 

@@ -340,7 +340,9 @@ describe('closing the metadata popover with typed work', () => {
     show();
     await screen.findByDisplayValue('Ridicare topografică');
     fireEvent.mouseDown(window.document.body);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The witness that the click was answered: the editor starts to close. A question would have
+    // kept it open.
+    await waitFor(() => expect(window.document.querySelector('.ant-popover')?.className).toMatch(/leave|hidden/));
     expect(screen.queryByText('Discard your changes?')).toBeNull();
   });
 

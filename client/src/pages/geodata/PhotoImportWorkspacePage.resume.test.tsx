@@ -197,8 +197,9 @@ describe('reopening a photo review within the same browser visit', () => {
     show();
     // The reopened page shows the name saved last, not the proposal first read.
     expect(await screen.findByDisplayValue('Izbucul de sus')).toBeInTheDocument();
-    // Past the autosave's quiet period, so a save the reopened page makes has been sent.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    // A reopened page applies the saved review afresh and saves once the autosave's pause is over,
+    // so its own save is what is waited for: the save that would carry a first-read copy back.
+    await waitFor(() => expect(puts.length).toBeGreaterThan(savesBefore), { timeout: 3000 });
 
     for (const sent of puts.slice(savesBefore)) {
       expect(sent.decisions['file-1']?.name).toBe('Izbucul de sus');

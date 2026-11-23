@@ -9,6 +9,7 @@ import ro from '../../i18n/locales/ro.json';
 import { ApiError } from '../../api/client.ts';
 import { DOCUMENT_VISIBILITIES } from '../../components/attachments/visibilityChoices.ts';
 import AlbumsPage from './AlbumsPage.tsx';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const state = vi.hoisted(() => ({
   documents: 'read,write,share' as string,
@@ -109,7 +110,7 @@ describe('AlbumsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     expect(await screen.findByText('The deletion failed. Please try again.')).toBeTruthy();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
   });
 
@@ -130,7 +131,7 @@ describe('AlbumsPage', () => {
 
     expect(await screen.findByText(said)).toBeTruthy();
     expect(state.revoke).toHaveBeenCalledWith('a2');
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
   });
 
@@ -188,7 +189,7 @@ describe('AlbumsPage', () => {
     expect(await screen.findByText(en.gallery.shareForbidden)).toBeTruthy();
     expect(ro.gallery.shareForbidden).toBeTruthy();
     expect(ro.gallery.shareForbidden).not.toBe(en.gallery.shareForbidden);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
   });
 

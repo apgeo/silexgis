@@ -49,6 +49,7 @@ import {
 } from '../../../flyby/flybyPresets.ts';
 import { useFlybyStore } from '../../../stores/flybyStore.ts';
 import Button from '../../Button.tsx';
+import ReadFailedAlert from '../../ReadFailedAlert.tsx';
 import { useDiscardGuard } from '../../useDiscardGuard.ts';
 import FlybyLookPanel from './FlybyLookPanel.tsx';
 import FlybySections from './FlybySections.tsx';
@@ -146,12 +147,14 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
   ];
   const caveNames = useCaveNames(namedIds);
   // The imported files that hold something to follow: what a flyby along a line can be about.
-  const { data: geofileLayers } = useGeofileLayers();
+  const geofilesRead = useGeofileLayers();
+  const geofileLayers = geofilesRead.data;
   const files = geofileLayers ?? [];
   const caveLabel = (caveId: string) =>
     caveNames.get(caveId) ?? flyby.caves.find((cave) => cave.caveId === caveId)?.label ?? t('flyby.unnamedCave');
   // The saved filters this account may run: what a flyby about "the caves a filter keeps" picks from.
-  const { data: savedFilters } = useSavedFilters();
+  const savedFiltersRead = useSavedFilters();
+  const savedFilters = savedFiltersRead.data;
   const runnable = (savedFilters ?? []).filter((filter) => filter.state === 'ready');
   const filterName = (savedFilterId: string) =>
     savedFilters?.find((filter) => filter.id.toLowerCase() === savedFilterId.toLowerCase())?.name;
@@ -290,7 +293,19 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
         {flyby.source === 'selected' && !flyby.selectedSubject && (
           <Typography.Text type="secondary">{t('flyby.source.nothingSelected')}</Typography.Text>
         )}
+        {flyby.source === 'file' && (
+          <ReadFailedAlert
+            isError={geofilesRead.isError}
+            error={geofilesRead.error}
+            held={geofileLayers !== undefined}
+            onRetry={geofilesRead.refetch}
+            title={t('flyby.source.filesLoadFailed')}
+            testId="flyby-files-load-failed"
+          />
+        )}
         {flyby.source === 'file' &&
+          // A list that could not be read is not an empty one: no "you have no files" after a failure.
+          !(geofilesRead.isError && geofileLayers === undefined) &&
           (files.length === 0 ? (
             <Typography.Text type="secondary">{t('flyby.source.noFiles')}</Typography.Text>
           ) : (
@@ -309,7 +324,15 @@ export default function FlybyPanel({ flyby, onClose }: FlybyPanelProps) {
           ))}
         {flyby.source === 'filter' && (
           <div className="scene3d-flyby-caves" data-testid="flyby-by-filter">
-            {runnable.length === 0 ? (
+            <ReadFailedAlert
+              isError={savedFiltersRead.isError}
+              error={savedFiltersRead.error}
+              held={savedFilters !== undefined}
+              onRetry={savedFiltersRead.refetch}
+              title={t('flyby.byFilter.loadFailed')}
+              testId="flyby-filters-load-failed"
+            />
+            {savedFiltersRead.isError && savedFilters === undefined ? null : runnable.length === 0 ? (
               <Typography.Text type="secondary">{t('flyby.byFilter.none')}</Typography.Text>
             ) : (
               <Select

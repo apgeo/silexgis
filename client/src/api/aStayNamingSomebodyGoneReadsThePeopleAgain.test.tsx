@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExpeditionRosterEntryWrite } from './hooks.ts';
+import { afterRejectionsAreReported } from '../testEventLoop.ts';
 
 // The transport is stubbed rather than the network: what is under test is which questions a
 // refused write makes the page ask again, not what the server answers them with.
@@ -163,10 +164,11 @@ describe('a stay refused for any other reason', () => {
       ).rejects.toMatchObject({ code });
       await expect(result.current.record.mutateAsync(stay)).rejects.toMatchObject({ code });
     });
-    // Long enough for a read to have been asked for, had one been coming: in the cases above
-    // both are asked for before the refused write has finished being reported.
+    // A read, had one been coming, is asked for before the refused write has finished being
+    // reported (the cases above show it), so once every answer already set going has landed,
+    // one would be counted.
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await afterRejectionsAreReported();
     });
 
     expect(readsOf(PEOPLE)).toBe(1);

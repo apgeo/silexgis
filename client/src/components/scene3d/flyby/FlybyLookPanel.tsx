@@ -46,6 +46,7 @@ import { isDrawableIn3d } from '../../../scene3d/baseImagery3d.ts';
 import { EXAGGERATION_STEP, formatExaggeration } from '../../../scene3d/exaggeration3d.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
+import ReadFailedAlert from '../../ReadFailedAlert.tsx';
 import type { FlybyController } from './useFlyby.ts';
 
 /** The colour a control for one offers before anything was chosen. */
@@ -75,13 +76,29 @@ const OWN = 'own';
 /** Names for everything a flyby can name by id, from the lists the installation keeps and its own layers. */
 function useLayerNames(features: readonly FlybyFeatureLayer[]) {
   const { t } = useTranslation();
-  const { data: featureTypes } = useFeatureTypes();
-  const { data: catalog } = useMapLayers();
-  const { data: rasterLayers } = useRasterMapLayers();
-  const { data: geofileLayers } = useGeofileLayers();
-  const { data: savedFilters } = useSavedFilters();
+  const featureTypesRead = useFeatureTypes();
+  const catalogRead = useMapLayers();
+  const rastersRead = useRasterMapLayers();
+  const geofilesRead = useGeofileLayers();
+  const savedFiltersRead = useSavedFilters();
+  const featureTypes = featureTypesRead.data;
+  const catalog = catalogRead.data;
+  const rasterLayers = rastersRead.data;
+  const geofileLayers = geofilesRead.data;
+  const savedFilters = savedFiltersRead.data;
   const filterLayers = useWorkspaceStore((state) => state.filterLayers);
-  return useMemo(() => {
+  // A list that could not be read is not an empty one: the names and choices drawn from it would
+  // read as "unknown" or as nothing to pick, so the failure is said once, with a way to ask again.
+  const failedReads = [featureTypesRead, catalogRead, rastersRead, geofilesRead, savedFiltersRead].filter(
+    (read) => read.isError,
+  );
+  const failure = {
+    isError: failedReads.length > 0,
+    error: failedReads[0]?.error,
+    held: failedReads.every((read) => read.data !== undefined),
+    retry: () => failedReads.forEach((read) => void read.refetch()),
+  };
+  const names = useMemo(() => {
     const layers = catalog ?? [];
     const backgrounds = layers.filter((entry) => entry.isBase && isDrawableIn3d(entry, layers));
     const rasters = rasterLayers ?? [];
@@ -158,6 +175,7 @@ function useLayerNames(features: readonly FlybyFeatureLayer[]) {
       layerName,
     };
   }, [catalog, rasterLayers, geofileLayers, savedFilters, filterLayers, featureTypes, features, t]);
+  return { ...names, failure };
 }
 
 /** A colour well with a name, which a keyboard reaches and a test can fill in. */
@@ -209,73 +227,83 @@ export default function FlybyLookPanel({ flyby }: FlybyLookPanelProps) {
   const sectionOptions = document.sections.map((section) => ({ value: section.id, label: sectionLabel(section.id) }));
 
   return (
-    <Collapse
-      size="small"
-      ghost
-      items={[
-        {
-          key: 'look',
-          label: t('flyby.look.openingTitle'),
-          children: <OpeningLook look={look} setLook={flyby.setLook} backgrounds={names.backgrounds} layers={names.layers} busy={busy} />,
-        },
-        {
-          key: 'features',
-          label: t('flyby.features.title', { count: flyby.features.length }),
-          children: (
-            <FeatureLayers
-              features={flyby.features}
-              names={names}
-              busy={busy}
-              add={(source) => flyby.setFeatures([...flyby.features, newFeatureLayer(flyby.features, source)])}
-              restyle={(id, patch) =>
-                flyby.setFeatures(flyby.features.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)))
-              }
-              remove={(id) => {
-                const next = withoutFeatureLayer({ look, changes, features: flyby.features }, id);
-                flyby.setLook(next.look);
-                flyby.setChanges(next.changes);
-                flyby.setFeatures(next.features);
-              }}
-            />
-          ),
-        },
-        {
-          key: 'recipes',
-          label: t('flyby.look.recipesTitle'),
-          children: (
-            <Recipes
-              document={document}
-              names={names}
-              sectionOptions={sectionOptions}
-              busy={busy}
-              apply={(result) => {
-                flyby.setLook(result.look);
-                flyby.setChanges(result.changes);
-              }}
-            />
-          ),
-        },
-        {
-          key: 'changes',
-          label: t('flyby.look.changesTitle', { count: changes.length }),
-          children: (
-            <ChangeList
-              document={document}
-              changes={changes}
-              setChanges={flyby.setChanges}
-              sectionLabel={sectionLabel}
-              names={names}
-              busy={busy}
-            />
-          ),
-        },
-        {
-          key: 'texts',
-          label: t('flyby.look.textsTitle'),
-          children: <TextsEditor document={document} texts={texts} setTexts={flyby.setTexts} sectionLabel={sectionLabel} busy={busy} />,
-        },
-      ]}
-    />
+    <>
+      <ReadFailedAlert
+        isError={names.failure.isError}
+        error={names.failure.error}
+        held={names.failure.held}
+        onRetry={names.failure.retry}
+        title={t('flyby.look.listsLoadFailed')}
+        testId="flyby-look-lists-load-failed"
+      />
+      <Collapse
+        size="small"
+        ghost
+        items={[
+          {
+            key: 'look',
+            label: t('flyby.look.openingTitle'),
+            children: <OpeningLook look={look} setLook={flyby.setLook} backgrounds={names.backgrounds} layers={names.layers} busy={busy} />,
+          },
+          {
+            key: 'features',
+            label: t('flyby.features.title', { count: flyby.features.length }),
+            children: (
+              <FeatureLayers
+                features={flyby.features}
+                names={names}
+                busy={busy}
+                add={(source) => flyby.setFeatures([...flyby.features, newFeatureLayer(flyby.features, source)])}
+                restyle={(id, patch) =>
+                  flyby.setFeatures(flyby.features.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)))
+                }
+                remove={(id) => {
+                  const next = withoutFeatureLayer({ look, changes, features: flyby.features }, id);
+                  flyby.setLook(next.look);
+                  flyby.setChanges(next.changes);
+                  flyby.setFeatures(next.features);
+                }}
+              />
+            ),
+          },
+          {
+            key: 'recipes',
+            label: t('flyby.look.recipesTitle'),
+            children: (
+              <Recipes
+                document={document}
+                names={names}
+                sectionOptions={sectionOptions}
+                busy={busy}
+                apply={(result) => {
+                  flyby.setLook(result.look);
+                  flyby.setChanges(result.changes);
+                }}
+              />
+            ),
+          },
+          {
+            key: 'changes',
+            label: t('flyby.look.changesTitle', { count: changes.length }),
+            children: (
+              <ChangeList
+                document={document}
+                changes={changes}
+                setChanges={flyby.setChanges}
+                sectionLabel={sectionLabel}
+                names={names}
+                busy={busy}
+              />
+            ),
+          },
+          {
+            key: 'texts',
+            label: t('flyby.look.textsTitle'),
+            children: <TextsEditor document={document} texts={texts} setTexts={flyby.setTexts} sectionLabel={sectionLabel} busy={busy} />,
+          },
+        ]}
+      />
+    </>
   );
 }
 

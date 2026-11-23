@@ -4,6 +4,7 @@ import { MemoryMovieSink } from '../memoryMovieSink.ts';
 import { openMovieEncoder, probeMovieFormats } from '../movieEncoder.ts';
 import { isMovieSinkMismatch, type MovieSink } from '../movieSink.ts';
 import { h264Level, videoBitrate, videoCodecCandidates, type VideoMovieEncoder } from './videoEncoder.ts';
+import { afterRejectionsAreReported } from '../../../testEventLoop.ts';
 
 // ---- A stand-in for the browser's WebCodecs encoder: it records what it was asked, answers with
 // ---- small fake chunks, and lets a test hold its queue full to exercise back-pressure.
@@ -208,9 +209,10 @@ describe('video movie encoder', () => {
     for (let i = 0; i < 4; i++) await encoder.addFrame(canvas(), i);
     let settled = false;
     const fifth = encoder.addFrame(canvas(), 4).then(() => (settled = true));
-    await new Promise((r) => setTimeout(r, 20));
+    // The witness that the fifth frame got as far as the hold: the browser's queue has it.
+    await vi.waitFor(() => expect(fake.encodeQueueSize).toBe(5));
+    await afterRejectionsAreReported();
     expect(settled).toBe(false);
-    expect(fake.encodeQueueSize).toBe(5);
     fake.release();
     await fifth;
     expect(settled).toBe(true);
@@ -307,8 +309,10 @@ describe('video movie encoder, writing to a sink', () => {
     installWebCodecs();
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
+    let writes = 0;
     const slow: MovieSink = {
       write: async () => {
+        writes += 1;
         await gate;
         throw new Error('the disk is full');
       },
@@ -323,7 +327,9 @@ describe('video movie encoder, writing to a sink', () => {
       settled = true;
       return error;
     });
-    await new Promise((r) => setTimeout(r, 20));
+    // The witness that finishing got as far as the slow write: the sink was asked to write.
+    await vi.waitFor(() => expect(writes).toBe(1));
+    await afterRejectionsAreReported();
     expect(settled).toBe(false);
     release();
     const error = await finishing;

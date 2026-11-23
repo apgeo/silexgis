@@ -75,17 +75,22 @@ afterEach(cleanup);
  */
 it('does not reach for a form it never drew for a reader who may not write the trip', async () => {
   const consoleError = vi.spyOn(console, 'error');
+  // antd reports an unconnected form from a timer, not while the card renders; on a fake clock
+  // every timer the card set going is run, whatever its delay and however loaded the machine.
+  vi.useFakeTimers();
   try {
     const { rerender } = render(card(watch()));
     rerender(card(watch({ surveyModelId: '55555555-5555-5555-5555-555555555555', referenceStationName: 'st.12' })));
-    // antd reports an unconnected form from a timer, not while the card renders.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    act(() => {
+      vi.runAllTimers();
+    });
 
     const unconnected = consoleError.mock.calls
       .map(([first]) => String(first))
       .filter((line) => line.includes('not connected to any Form element'));
     expect(unconnected).toEqual([]);
   } finally {
+    vi.useRealTimers();
     consoleError.mockRestore();
   }
 });

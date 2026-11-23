@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
+import Button from '../../components/Button.tsx';
 import { useCaveTypes, useRegistryCategories, useRockTypes } from '../../api/hooks.ts';
 import type { RegistryCategoryGroup } from '../../api/hooks.ts';
 import { SummaryBoxChart } from '../../components/statistics/DistributionCharts.tsx';
@@ -62,7 +63,7 @@ export default function RegistryCategoriesPage() {
   };
 
   const query = useMemo(() => registryCategoriesQuery(filter), [filter]);
-  const { data, isError, error } = useRegistryCategories(query);
+  const { data, isError, error, refetch } = useRegistryCategories(query);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
 
@@ -137,6 +138,14 @@ export default function RegistryCategoriesPage() {
           showIcon
           title={t('registryStats.categoriesFailed')}
           description={error instanceof ApiError ? error.detail : undefined}
+          action={
+            // A refusal is the registry's answer to this question; asking again would repeat it.
+            isSettledRefusal(error) ? undefined : (
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
+          }
         />
       ) : !data ? (
         <Skeleton active />

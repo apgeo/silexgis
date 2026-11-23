@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterRejectionsAreReported } from '../testEventLoop.ts';
 
 // The transport is stubbed rather than the network: what is under test is whether the report is
 // asked for at all while the browser believes it has no connection, and what its caller is told.
@@ -44,8 +45,10 @@ async function outcomeOf(send: Promise<unknown>) {
     (landed) => (outcome = { landed }),
     (failed: unknown) => (outcome = { failed }),
   );
+  // "At once" is a turn of the event loop: every answer already set going has landed by then,
+  // and a send that waits for the connection to come back has not.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
   });
   return outcome as { landed?: unknown; failed?: unknown } | 'still waiting';
 }

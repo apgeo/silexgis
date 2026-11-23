@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import PhotoCreditDrawer from './PhotoCreditDrawer.tsx';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const hooks = vi.hoisted(() => ({
   photo: undefined as unknown,
@@ -93,7 +94,7 @@ describe('PhotoCreditDrawer', () => {
 
       // The field says what is wrong; the save is not sent.
       expect(await screen.findByText(/cannot be longer than 1000|1000/)).toBeTruthy();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await afterRejectionsAreReported();
       expect(hooks.updateCredit).not.toHaveBeenCalled();
       expect(unhandled).not.toHaveBeenCalled();
     } finally {
@@ -109,7 +110,7 @@ describe('PhotoCreditDrawer', () => {
     const save = screen.getByRole('button', { name: 'Save' });
     expect((save as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(save);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(hooks.updateCredit).not.toHaveBeenCalled();
   });
 
@@ -125,7 +126,7 @@ describe('PhotoCreditDrawer', () => {
     const save = screen.getByRole('button', { name: 'Save' });
     expect((save as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(save);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(hooks.updateCredit).not.toHaveBeenCalled();
 
     // The positive case: once the read succeeds the same button saves.

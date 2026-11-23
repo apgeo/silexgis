@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { basisSentence } from './basisSentence';
 import { useSearchParams } from 'react-router-dom';
 
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isSettledRefusal } from '../../api/client.ts';
 import { downloadFile, registryCorrelationExportUrl } from '../../api/download.ts';
 import { useCaveTypes, useRegistryCorrelation, useRegistryDistribution, useRockTypes } from '../../api/hooks.ts';
 import { RegistryCorrelationChart } from '../../components/statistics/RegistryCorrelationChart.tsx';
@@ -68,7 +68,7 @@ export default function RegistryCorrelationPage() {
   };
 
   const query = useMemo(() => registryCorrelationQuery(filter), [filter]);
-  const { data, isError, error, isPlaceholderData } = useRegistryCorrelation(query);
+  const { data, isError, error, isPlaceholderData, refetch } = useRegistryCorrelation(query);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
 
@@ -260,6 +260,14 @@ export default function RegistryCorrelationPage() {
           data-testid="registry-correlation-error"
           title={t('registryStats.correlationFailed')}
           description={error instanceof ApiError ? error.detail : undefined}
+          action={
+            // A refusal is the registry's answer to this question; asking again would repeat it.
+            isSettledRefusal(error) ? undefined : (
+              <Button size="small" onClick={() => void refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
+          }
         />
       ) : data === undefined ? (
         <Skeleton active paragraph={{ rows: 8 }} />

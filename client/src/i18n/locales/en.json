@@ -1733,7 +1733,9 @@
     "albumNotFound": "No such album",
     "albumNotFoundDetail": "This album does not exist, or it has been deleted.",
     "albumPhotosLoadFailed": "The pictures in this album could not be read just now. This says nothing about whether it holds any.",
-    "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
+    "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these.",
+    "createForbidden": "Your account may not make albums.",
+    "subjectGone": "What this album would be about is no longer there, or you may not see it."
   },
   "geodata": {
     "refusals": {
@@ -5169,7 +5171,12 @@
           "running": "Preparing…",
           "ready": "Ready",
           "failed": "Failed"
-        }
+        },
+        "inProgress": "An export is already being prepared. Wait for it to finish.",
+        "expired": "This export has expired. Prepare a new one.",
+        "gone": "This export is no longer available. Prepare a new one.",
+        "requestFailed": "The export could not be requested. Please try again.",
+        "downloadFailed": "The export could not be downloaded. Please try again."
       },
       "calendarFeed": {
         "heading": "Calendar feed",
@@ -5237,7 +5244,8 @@
         "securityAlerts": "Always sent — this one warns you about your own account.",
         "tripCallout": "Always sent, and never held for the daily summary — an overdue party is nobody's news in the morning."
       },
-      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is."
+      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
+      "choiceRefused": "One of these choices is not allowed on its channel, so nothing was saved. Reload the page to see what can be chosen."
     },
     "filters": {
       "heading": "Saved filters",
@@ -10097,7 +10105,10 @@
       "geodata": "with geodata, imports and devices",
       "accounts": "with account exports"
     },
-    "note": "Note"
+    "note": "Note",
+    "runGone": "This run is no longer there. The list shows what is left.",
+    "notRemovable": "Only a finished, failed or cancelled run can be removed, and only once.",
+    "notCancellable": "This run has already finished, so there is nothing to cancel."
   },
   "flyby": {
     "title": "Flyby",
@@ -10163,7 +10174,8 @@
       "shortestRoute": "Shortest route",
       "file": "An imported file",
       "pickFile": "The file to follow",
-      "noFiles": "No imported file is ready. Import a GPX or KML track under Geodata first."
+      "noFiles": "No imported file is ready. Import a GPX or KML track under Geodata first.",
+      "filesLoadFailed": "The imported files could not be read just now, so none can be picked."
     },
     "subject": {
       "all": "all together",
@@ -10358,7 +10370,8 @@
       "endSubtitle": "End card, second line",
       "fadeIn": "Rise out of black at the start",
       "fadeOut": "Sink to black at the end",
-      "trouble": "This flyby cannot be played as it stands: a change or a caption names a section it no longer has, starts outside its section, or changes the same thing as another change at the same time."
+      "trouble": "This flyby cannot be played as it stands: a change or a caption names a section it no longer has, starts outside its section, or changes the same thing as another change at the same time.",
+      "listsLoadFailed": "Some of the lists this panel names layers, filters and feature types from could not be read just now, so a name may show as unknown and a choice may be missing."
     },
     "edit": {
       "open": "Edit what {{section}} does",
@@ -10489,7 +10502,8 @@
       "eachOf": "each of {{name}}",
       "empty": "The saved filter this flyby is about selects no cave you may see, or can no longer be run.",
       "search": "Add a cave by name",
-      "searchNone": "No cave by that name"
+      "searchNone": "No cave by that name",
+      "loadFailed": "Your saved filters could not be read just now, so none can be picked."
     },
     "features": {
       "title_one": "Features the flyby shows ({{count}})",

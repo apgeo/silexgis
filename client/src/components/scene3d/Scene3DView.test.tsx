@@ -18,6 +18,7 @@ import {
   viewExaggeration3d,
   viewFlyTo,
 } from '../../workspace/viewCamera.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
@@ -394,6 +395,9 @@ describe('Scene3DView', () => {
     // second drawing context is not merely wasteful — a browser drops the oldest once a handful
     // are alive — so the second view joins this one, and says so rather than showing a blank box.
     withWebGl2(true);
+    // The loaders' settle runs on a clock the test moves; it still moves on its own as well, so
+    // the waits below proceed as they would.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
     const first = render(
       <Around>
         <Scene3DView />
@@ -411,7 +415,11 @@ describe('Scene3DView', () => {
     const drawn = engine.engineState.widgets[0].scene.primitives.items.length;
     expect(drawn).toBeGreaterThan(0);
     // Past the loaders' settle, nothing more was asked for or added: one view's worth, not two.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 2 * TERRAIN_OFFER_SETTLE_MILLISECONDS)));
+    // The clock is moved past it exactly, so the stretch does not depend on the machine's load.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * TERRAIN_OFFER_SETTLE_MILLISECONDS);
+    });
+    vi.useRealTimers();
     expect(centerlineRequests).toHaveLength(1);
     expect(caveMeshRequests.length).toBeLessThanOrEqual(1);
     expect(engine.engineState.widgets[0].scene.primitives.items.length).toBe(drawn);
@@ -1667,7 +1675,7 @@ describe('arriving with a cave to reveal', () => {
         await screen.findByText('What this link points at no longer exists, so the view stayed where it was.'),
       ).toBeInTheDocument();
       expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await afterRejectionsAreReported();
       expect(rejections).toEqual([]);
     } finally {
       window.removeEventListener('unhandledrejection', onRejection);

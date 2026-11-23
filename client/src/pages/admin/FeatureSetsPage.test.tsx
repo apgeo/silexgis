@@ -160,7 +160,7 @@ describe('the feature set member drawer when the members cannot be read', () => 
     const save = within(drawer).getByRole('button', { name: 'Save' });
     expect(save).toBeDisabled();
     fireEvent.click(save);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(replaceSpy).not.toHaveBeenCalled();
   });
 });

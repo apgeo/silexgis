@@ -374,7 +374,14 @@ describe('ChecklistsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     await waitFor(() => expect(updateMutate).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too, whatever words it used. No waiting on the clock.
+    updateMutate.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText('You may not change this checklist.');
+
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('That checklist could not be saved.')).toBeNull();
     expect(screen.queryByText('Stale.')).toBeNull();
     expect(screen.getByText('Edit checklist')).toBeTruthy();
@@ -439,7 +446,17 @@ describe('ChecklistsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     await waitFor(() => expect(deleteMutate).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The witness is a second refusal in words of its own: messages are drawn in the order they
+    // were asked for, so once it is on screen anything the stale refusal asked for would be too.
+    deleteMutate.mockImplementation((_variables, options: { onError: (error: unknown) => void }) =>
+      options.onError(new ApiError(403, 'acl.forbidden')),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this checklist' }));
+    const confirms = await screen.findAllByRole('button', { name: 'OK' });
+    fireEvent.click(confirms[confirms.length - 1]);
+    await screen.findByText('You may not change this checklist.');
+
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('That checklist could not be deleted.')).toBeNull();
     expect(screen.queryByText('Stale.')).toBeNull();
   });

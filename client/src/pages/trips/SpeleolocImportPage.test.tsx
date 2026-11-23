@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -231,8 +231,15 @@ function show() {
   return render(tree());
 }
 
-/** Long enough to outlast the autosave's 800 ms debounce with room to spare. */
-const afterTheDebounce = () => new Promise((resolve) => setTimeout(resolve, 1600));
+/**
+ * Moves a fake clock past the autosave's 800 ms debounce. The test starts the fake clock before
+ * the page draws, so the debounce is one of its timers and the wait is exact, not a stretch of
+ * real time that a loaded machine can cut short.
+ */
+const afterTheDebounce = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(1600);
+  });
 
 afterEach(cleanup);
 
@@ -537,15 +544,21 @@ describe('SpeleolocImportPage', () => {
     // is on screen is an empty set standing in for a review that exists — and a save replaces
     // rather than merges, so saving it would be the page destroying the review by being opened.
     session = { ...session, decisions: {}, positionsWithheld: true };
-    show();
+    // The clock still moves on its own, so the page's reads and the waits below proceed as usual.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      show();
 
-    const banner = await screen.findByTestId('speleoloc-import-withheld');
-    expect(banner.textContent).toContain('The review is still stored');
-    // Said on the screen too, because a page that silently stops saving is its own defect.
-    expect(banner.textContent).toContain('Nothing changed on this page is saved');
+      const banner = await screen.findByTestId('speleoloc-import-withheld');
+      expect(banner.textContent).toContain('The review is still stored');
+      // Said on the screen too, because a page that silently stops saving is its own defect.
+      expect(banner.textContent).toContain('Nothing changed on this page is saved');
 
-    await afterTheDebounce();
-    expect(saveSessionMutate).not.toHaveBeenCalled();
+      await afterTheDebounce();
+      expect(saveSessionMutate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('will not narrow the stations offered to one, which would hide every tie', async () => {

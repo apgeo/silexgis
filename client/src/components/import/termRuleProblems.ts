@@ -19,3 +19,27 @@ export function termRuleProblem(error: unknown, t: TFunction, fallbackKey: strin
   const known = error instanceof ApiError && error.code ? TERM_RULE_REFUSALS[error.code] : undefined;
   return t(known ?? fallbackKey);
 }
+
+/**
+ * Why a whole set sent to the server — saved from the editor or imported from a file — was
+ * refused. The server checks the whole document — a pattern that cannot be compiled, a rule naming
+ * a taxonomy its target does not use — and for that its own sentence is the useful one, since it
+ * names the rule that is wrong; no wording here could. Other refusals are worded by their code,
+ * and a failure that says nothing is said in the words of the act, given as `fallbackKey`.
+ */
+export function termRuleSaveProblem(error: unknown, t: TFunction, fallbackKey: string): string {
+  if (!(error instanceof ApiError)) {
+    return t(fallbackKey);
+  }
+  const known = error.code ? TERM_RULE_REFUSALS[error.code] : undefined;
+  if (known) {
+    return t(known);
+  }
+  if (error.status === 403) {
+    return t('termRules.errors.forbidden');
+  }
+  if (error.status >= 400 && error.status < 500 && error.detail) {
+    return error.detail;
+  }
+  return t(fallbackKey);
+}

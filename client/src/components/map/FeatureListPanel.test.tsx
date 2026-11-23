@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -110,18 +110,31 @@ describe('FeatureListPanel', () => {
     const field = mapFeature('f1', 'Doline field', 'doline');
     getEntranceSource().addFeatures([aven]);
     getSurfaceFeatureSource().addFeatures([field]);
-    renderPanel();
-    await screen.findByText('Aven');
-    // One change on a source — a reload, a selection highlight — starts a refresh; what it does
-    // has to end there, not set off the next one.
-    getEntranceSource().changed();
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const restyled = [vi.spyOn(aven, 'setStyle'), vi.spyOn(field, 'setStyle')];
+    // The refresh after a change waits on a timer; a fake clock moves it exactly, so "nothing
+    // more happened" is said of a known stretch rather than of however long a loaded machine took.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPanel();
+      await screen.findByText('Aven');
+      // One change on a source — a reload, a selection highlight — starts a refresh; what it does
+      // has to end there, not set off the next one.
+      getEntranceSource().addFeatures([entrance('e2', 'c2', 'Second aven')]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      // The witness that the refresh ran: the row the change brought is drawn.
+      expect(screen.getByText('Second aven')).toBeInTheDocument();
+      const restyled = [vi.spyOn(aven, 'setStyle'), vi.spyOn(field, 'setStyle')];
 
-    await new Promise((resolve) => setTimeout(resolve, 900));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(900);
+      });
 
-    for (const spy of restyled) {
-      expect(spy).not.toHaveBeenCalled();
+      for (const spy of restyled) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.useRealTimers();
     }
   });
 
