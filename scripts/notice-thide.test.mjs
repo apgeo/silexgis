@@ -11,6 +11,11 @@
 // will carry — in a fresh clone, as on CI, it is exactly the committed gitlink. No submodule
 // checkout is needed for that.
 //
+// The section's heading also lists the ThIDE modules that are redistributed, and a list kept by hand
+// goes stale the same way. It is compared with the ThIDE projects the server solution lists — every
+// project the server takes from the submodule, directly or through another module, is listed there,
+// because a Release build of the solution otherwise builds an unlisted one as Debug.
+//
 // Run from the repository root with `node --test "scripts/**/*.test.mjs"`.
 
 import { describe, it } from 'node:test';
@@ -65,6 +70,29 @@ describe('the ThIDE commit NOTICE names', () => {
   });
 });
 
+/** The module names a NOTICE section heading lists after its first word and dash, sorted. */
+export function headingModules(text, heading) {
+  const blocks = text.replace(/\r\n/g, '\n').split(/\n-{20,}\n/);
+  const block = blocks.find((b) => b.trimStart().startsWith(heading));
+  if (block === undefined) return undefined;
+  const list = block.trim().slice(heading.length).replace(/^\s*—\s*/, '');
+  return list.split(',').map((name) => name.trim()).filter(Boolean).sort();
+}
+
+/** The ThIDE project names a solution file lists, sorted. */
+export function solutionThideProjects(slnx) {
+  return [...slnx.matchAll(/Path="external\/ThIDE\/src\/([^/"]+)\/[^"]+\.csproj"/g)].map((m) => m[1]).sort();
+}
+
+describe('the ThIDE modules NOTICE lists', () => {
+  it('are the ThIDE projects the server solution builds', () => {
+    const notice = readFileSync(join(repoRoot, 'NOTICE'), 'utf8');
+    const built = solutionThideProjects(readFileSync(join(repoRoot, 'server', 'SilexGis.slnx'), 'utf8'));
+    assert.ok(built.length > 0, 'the server solution lists no ThIDE project');
+    assert.deepEqual(headingModules(notice, 'ThIDE'), built);
+  });
+});
+
 describe('reading NOTICE and the gitlink', () => {
   const sample = [
     'Header text',
@@ -86,6 +114,16 @@ describe('reading NOTICE and the gitlink', () => {
     assert.deepEqual(namedCommits(noticeSection(sample, 'ThIDE')), ['a'.repeat(40)]);
     assert.deepEqual(namedCommits(noticeSection(sample, 'Other')), ['b'.repeat(40)]);
     assert.equal(noticeSection(sample, 'Missing'), undefined);
+  });
+
+  it('reads the module list from a heading over several lines', () => {
+    const text = ['Header', '-'.repeat(80), 'ThIDE — B.One, A.Two,', '        C.Three', '-'.repeat(80), 'Body.', ''].join('\n');
+    assert.deepEqual(headingModules(text, 'ThIDE'), ['A.Two', 'B.One', 'C.Three']);
+    assert.equal(headingModules(text, 'Missing'), undefined);
+    assert.deepEqual(
+      solutionThideProjects('<Project Path="external/ThIDE/src/X.Y/X.Y.csproj" /><Project Path="src/Z/Z.csproj" />'),
+      ['X.Y'],
+    );
   });
 
   it('reads a gitlink and refuses an ordinary file entry', () => {
