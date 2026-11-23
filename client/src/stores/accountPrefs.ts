@@ -192,7 +192,13 @@ export function sanitizeAccountPrefs(read: AccountPrefs): Partial<AccountPrefsSt
     out.panels = panels as AccountPrefsState['panels'];
   }
   if (Array.isArray(layouts) && layouts.every((l) => isPlainObject(l) && typeof l.id === 'string' && typeof l.name === 'string')) {
-    out.layouts = layouts as AccountPrefsState['layouts'];
+    // A layout saved before any panel was moved holds empty panels, and the document drops empty
+    // parts: it comes back with none. Restoring it replaces the panels wholesale, so it must carry
+    // an object to replace them with.
+    out.layouts = layouts.map((l) => ({
+      ...l,
+      panels: isPlainObject(l.panels) ? l.panels : {},
+    })) as unknown as AccountPrefsState['layouts'];
   }
   if (isPlainObject(selectors)) {
     out.selectors = selectors as AccountPrefsState['selectors'];

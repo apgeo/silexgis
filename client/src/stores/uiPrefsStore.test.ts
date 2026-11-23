@@ -7,6 +7,7 @@ import {
   accountPrefDefaults,
   useUiPrefsStore,
 } from './uiPrefsStore.ts';
+import { pickAccountPrefs, readAccountPrefs, sanitizeAccountPrefs } from './accountPrefs.ts';
 
 afterEach(() => {
   useUiPrefsStore.setState({
@@ -402,6 +403,21 @@ describe('uiPrefsStore panel arrangements', () => {
 
     expect(useUiPrefsStore.getState().panels.main).toMatchObject({ width: 30 });
     expect(useUiPrefsStore.getState().panels.popout).toBeUndefined();
+  });
+
+  it('restores an arrangement saved before any panel was moved after it went through the account', () => {
+    // A member who never moved a panel saves an arrangement whose panels are empty. The account's
+    // document drops empty parts, so the layout comes back with no panels at all — and restoring
+    // it must still leave panels to read, or the map page fails on its first render.
+    useUiPrefsStore.getState().saveLayout('Untouched', false);
+    const stored = JSON.parse(JSON.stringify(pickAccountPrefs(useUiPrefsStore.getState())));
+    expect(stored.layouts[0].panels).toBeUndefined();
+
+    useUiPrefsStore.getState().applyAccountPrefs(sanitizeAccountPrefs(readAccountPrefs(stored)), stored);
+    const id = useUiPrefsStore.getState().layouts.find((l) => l.name === 'Untouched')!.id;
+    useUiPrefsStore.getState().applyLayout(id);
+
+    expect(useUiPrefsStore.getState().panels).toEqual({});
   });
 });
 
