@@ -301,6 +301,245 @@ public class FlybyBlenderBundleTests
         Encoding.UTF8.GetString(Bundle(Scene()).Entries["two-caves-blender/README.txt"]).ShouldNotContain("NOT IN THIS SCENE");
     }
 
+    // ---- what changes while the clip runs ----
+
+    [Fact]
+    public void A_flyby_that_changes_nothing_has_no_changes_in_its_plan()
+    {
+        var (_, plan) = Bundle(Scene());
+
+        plan.TryGetProperty("changes", out _).ShouldBeFalse();
+        plan.GetProperty("features").EnumerateArray().Select(f => f.GetString())
+            .ShouldBe(["models", "camera_track", "look", "output"]);
+    }
+
+    [Fact]
+    public void A_relief_that_changes_stretches_every_model_by_its_keys_and_lifts_each_frames_camera_by_what_they_give()
+    {
+        // True for the first ten frames, then up to twice as tall by the fortieth, eased.
+        var scene = Scene() with
+        {
+            Changes = FlybyBundleChanges.None with
+            {
+                Relief = [new(0, 1), new(10, 1), new(40, 2, FlybyBundleEasing.Smooth)],
+            },
+        };
+        var (_, plan) = Bundle(scene);
+
+        // The player's module for changes is asked for, after what it changes.
+        plan.GetProperty("features").EnumerateArray().Select(f => f.GetString())
+            .ShouldBe(["models", "camera_track", "look", "changes", "output"]);
+
+        var changes = Changes(plan);
+        foreach (var model in plan.GetProperty("models").EnumerateArray())
+        {
+            // Each model starts at the relief of the first frame and is stretched by the keys.
+            model.GetProperty("scale").EnumerateArray().Select(n => n.GetDouble()).ShouldBe([1, 1, 1]);
+            var keys = changes[model.GetProperty("id").GetString()!].GetProperty("scale").EnumerateArray().ToList();
+            keys.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.4, 1.6]);
+            keys.Select(k => k.GetProperty("value")[2].GetDouble()).ShouldBe([1, 1, 2]);
+            keys[2].GetProperty("value").EnumerateArray().Select(n => n.GetDouble()).ShouldBe([1, 1, 2]);
+            keys[2].GetProperty("easing").GetString().ShouldBe("smooth");
+            keys[1].TryGetProperty("easing", out _).ShouldBeFalse();
+        }
+
+        // The camera stands 120 m above the origin's height. Each frame it is drawn at 120 m times
+        // the relief the keys give there: half-way through the ramp, half-way up.
+        Eye(plan, 0)[2].ShouldBe(120, 0.01);
+        Eye(plan, 10)[2].ShouldBe(120, 0.01);
+        Eye(plan, 25)[2].ShouldBe(180, 0.01);
+        Eye(plan, 16)[2].ShouldBe(120 * (1 + ((3 * 0.04) - (2 * 0.008))), 0.01);
+        Eye(plan, 40)[2].ShouldBe(240, 0.01);
+        Eye(plan, 49)[2].ShouldBe(240, 0.01);
+    }
+
+    [Fact]
+    public void Under_a_changing_relief_a_model_is_stretched_about_the_level_of_the_scenes_zero()
+    {
+        // A scene with relief of its own: the caves where they were surveyed, 830 m up, about an
+        // origin 500 m up. The first cave stands 330 m above the origin's level.
+        var scene = Scene();
+        scene = scene with
+        {
+            OriginHeightM = 500,
+            Caves = [.. scene.Caves.Select(cave => cave with { AltitudeShiftM = 0 })],
+            Changes = FlybyBundleChanges.None with { Relief = [new(0, 1), new(49, 3)] },
+        };
+        var (entries, plan) = Bundle(scene);
+        var walls = plan.GetProperty("models").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "cave-01-walls");
+
+        // The point it is stretched about is the origin's own level under it — the scene's zero —
+        // and its mesh is lifted by the 330 m it stands above that: a cube from 320 to 330.
+        Translation(walls).ShouldBe([0, 0, 0]);
+        var (vertices, _) = Ply(entries["two-caves-blender/cave-01-walls.ply"]);
+        vertices.Min(v => v[2]).ShouldBe(320, 1e-3);
+        vertices.Max(v => v[2]).ShouldBe(330, 1e-3);
+
+        // So at a relief of k its top is k × 330 above the origin drawn at k × 500: at k × 830,
+        // where the globe draws it. And no number of the plan or of the mesh is the 830 itself:
+        // what the bundle holds are heights above the origin, never above the sea.
+        foreach (var model in plan.GetProperty("models").EnumerateArray())
+        {
+            Math.Abs(Translation(model)[2]).ShouldBeLessThan(1);
+        }
+
+        // Without a change of relief a model stands at its own zero and its mesh is as it was read.
+        var still = Bundle(scene with { Changes = FlybyBundleChanges.None, Relief = 2 });
+        Translation(still.Plan.GetProperty("models").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "cave-01-walls"))
+            .ShouldBe([0, 0, 660]);
+        Ply(still.Entries["two-caves-blender/cave-01-walls.ply"]).Vertices.Max(v => v[2]).ShouldBe(0, 1e-6);
+    }
+
+    [Fact]
+    public void Under_a_changing_relief_the_lines_carry_their_colours_by_depth_themselves()
+    {
+        var scene = Scene() with { Changes = FlybyBundleChanges.None with { Relief = [new(0, 1), new(49, 2)] } };
+        var (entries, plan) = Bundle(scene);
+
+        // A ramp of colours over height would stay where it is while the cave is stretched through
+        // it. The colours are on the lines instead: no ramp, one material that shows a mesh's own.
+        var materials = plan.GetProperty("look").GetProperty("materials").EnumerateArray().ToDictionary(m => m.GetProperty("id").GetString()!);
+        materials.Keys.ShouldNotContain("lines-01");
+        materials["lines-by-depth"].GetProperty("kind").GetString().ShouldBe("vertexColor");
+        var lines = plan.GetProperty("models").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "cave-01-lines");
+        lines.GetProperty("material").GetString().ShouldBe("lines-by-depth");
+
+        // Two legs, 0–60 m and 60–120 m below the top: the first is cut where the second band
+        // begins, 50 m down, so three tubes — one in the first colour, two in the second.
+        var (vertices, colours) = Ply(entries["two-caves-blender/cave-01-lines.ply"]);
+        vertices.Count.ShouldBe(24);
+        colours.ShouldNotBeNull();
+        colours.Take(8).ShouldAllBe(c => c == "d9480f");
+        colours.Skip(8).ShouldAllBe(c => c == "8c2f6b");
+        // The cut is 50 m below the first leg's start, which is the mesh's own zero.
+        vertices.Take(8).Min(v => v[2]).ShouldBe(-50, 0.5);
+        vertices.Skip(8).Take(8).Max(v => v[2]).ShouldBe(-50, 0.5);
+    }
+
+    [Fact]
+    public void A_layer_shown_hidden_and_faded_and_the_colours_laid_over_it_are_tracks_on_each_model()
+    {
+        var scene = Scene();
+        scene = scene with
+        {
+            Caves =
+            [
+                // The first cave is coloured apart; the second has only lines, which stand in for
+                // walls it has none of.
+                scene.Caves[0] with
+                {
+                    WallsTint = [new(0, "#3a3f4a", 0.6), new(5, "#ffcc00", 0, FlybyBundleEasing.Constant), new(15, "#ffcc00", 0.85, FlybyBundleEasing.Smooth)],
+                    LinesTint = [new(0, "#000000", 0), new(5, "#ffcc00", 1, FlybyBundleEasing.Constant)],
+                },
+                scene.Caves[1] with { LinesStandIn = true },
+            ],
+            Changes = FlybyBundleChanges.None with
+            {
+                Walls = new FlybyBundleLayerChanges(
+                    [new(30, false)],
+                    [new(0, 1), new(20, 1), new(30, 0, FlybyBundleEasing.Smooth)],
+                    [new(0, "#3a3f4a", 0.6)]),
+                Lines = new FlybyBundleLayerChanges([new(10, false), new(20, true)], [new(0, 0.5)], []),
+            },
+        };
+        var changes = Changes(Bundle(scene).Plan);
+
+        // The walls and the estimated passages are one layer: hidden from the frame the fade ends.
+        foreach (var id in (string[])["cave-01-walls", "cave-01-estimated"])
+        {
+            var visible = changes[id].GetProperty("visible").EnumerateArray().Single();
+            visible.GetProperty("t").GetDouble().ShouldBe(1.2);
+            visible.GetProperty("value").GetBoolean().ShouldBeFalse();
+            visible.TryGetProperty("fade", out _).ShouldBeFalse();
+
+            var opacity = changes[id].GetProperty("opacity").EnumerateArray().ToList();
+            opacity.Select(k => k.GetProperty("value").GetDouble()).ShouldBe([1, 1, 0]);
+            opacity[2].GetProperty("easing").GetString().ShouldBe("smooth");
+
+            // The cave's own colour, not the colour of every cave: three keys, the jump and the rise.
+            var tint = changes[id].GetProperty("tint").EnumerateArray().ToList();
+            tint.Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0.6, 0, 0.85]);
+            tint.Select(k => k.TryGetProperty("easing", out var e) ? e.GetString() : null).ShouldBe([null, "constant", "smooth"]);
+            // #ffcc00 as the light it stands for.
+            tint[2].GetProperty("color").EnumerateArray().Select(n => n.GetDouble()).ShouldBe([1, 0.603827, 0], 1e-6);
+            changes[id].TryGetProperty("scale", out _).ShouldBeFalse();
+        }
+
+        // The first cave's lines go with the lines' layer, and take the cave's own colour.
+        var lines = changes["cave-01-lines"];
+        lines.GetProperty("visible").EnumerateArray().Select(k => k.GetProperty("value").GetBoolean()).ShouldBe([false, true]);
+        lines.GetProperty("opacity").EnumerateArray().Single().GetProperty("value").GetDouble().ShouldBe(0.5);
+        lines.GetProperty("tint").EnumerateArray().Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0, 1]);
+
+        // The second cave's lines are all there is of it: shown and faded as the walls are, in
+        // their colours by depth, with no colour laid over them.
+        var standIn = changes["cave-02-lines"];
+        standIn.GetProperty("visible").EnumerateArray().Single().GetProperty("t").GetDouble().ShouldBe(1.2);
+        standIn.GetProperty("opacity").EnumerateArray().Count().ShouldBe(3);
+        standIn.TryGetProperty("tint", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Lines_wear_one_colour_or_their_colours_by_depth_as_their_track_needs()
+    {
+        // One colour throughout, by a track of one key: a plain material and nothing to play.
+        var scene = Scene();
+        var one = Bundle(scene with { Changes = FlybyBundleChanges.None with { Lines = new([], [], [new(0, "#ff8800", 1)]) } }).Plan;
+        one.GetProperty("models").EnumerateArray().Where(m => m.GetProperty("role").GetString() == "survey-lines")
+            .ShouldAllBe(m => m.GetProperty("material").GetString() == "lines");
+        one.TryGetProperty("changes", out _).ShouldBeFalse();
+
+        // Two colours one after the other: plain, in the first, with the second laid over it whole.
+        var two = Bundle(scene with
+        {
+            Changes = FlybyBundleChanges.None with { Lines = new([], [], [new(0, "#ff8800", 1), new(20, "#0088ff", 1, FlybyBundleEasing.Constant)]) },
+        }).Plan;
+        two.GetProperty("models").EnumerateArray().Where(m => m.GetProperty("role").GetString() == "survey-lines")
+            .ShouldAllBe(m => m.GetProperty("material").GetString() == "lines");
+        Changes(two)["cave-02-lines"].GetProperty("tint").EnumerateArray().Count().ShouldBe(2);
+
+        // By depth for part of the clip: the colours by depth underneath, a colour over them while it lasts.
+        var mixed = Bundle(scene with
+        {
+            Changes = FlybyBundleChanges.None with { Lines = new([], [], [new(0, "#000000", 0), new(20, "#0088ff", 1, FlybyBundleEasing.Constant)]) },
+        }).Plan;
+        mixed.GetProperty("models").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "cave-01-lines")
+            .GetProperty("material").GetString().ShouldBe("lines-01");
+        Changes(mixed)["cave-01-lines"].GetProperty("tint").EnumerateArray().Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0, 1]);
+    }
+
+    [Fact]
+    public void A_sky_that_changes_is_a_track_on_a_world_of_one_colour()
+    {
+        var keys = new FlybyBundleColourKey[] { new(0, "#000000"), new(10, "#000000"), new(11, "#101820"), new(12, "#203040") };
+        var plan = Bundle(Scene() with { Look = new FlybyBundleLook(null, null, []), Changes = FlybyBundleChanges.None with { Sky = keys } }).Plan;
+
+        // No sky is black — and a black that is about to change needs a world to change.
+        var world = plan.GetProperty("look").GetProperty("world");
+        world.GetProperty("kind").GetString().ShouldBe("color");
+        world.GetProperty("color").EnumerateArray().Select(n => n.GetDouble()).ShouldBe([0, 0, 0]);
+
+        var change = plan.GetProperty("changes").EnumerateArray().Single(c => !c.TryGetProperty("target", out _));
+        var track = change.GetProperty("worldColor").EnumerateArray().ToList();
+        track.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.4, 0.44, 0.48]);
+        track[3].GetProperty("value").EnumerateArray().Select(n => n.GetDouble()).ShouldBe([0.014444, 0.029557, 0.051269], 1e-6);
+
+        // One key is the sky of the whole clip, and no change at all.
+        var still = Bundle(Scene() with { Changes = FlybyBundleChanges.None with { Sky = [new(0, "#203040")] } }).Plan;
+        still.TryGetProperty("changes", out _).ShouldBeFalse();
+        still.GetProperty("look").GetProperty("world").GetProperty("color")[2].GetDouble().ShouldBe(0.051269, 1e-6);
+    }
+
+    [Fact]
+    public void A_plan_whose_changes_its_own_validator_refuses_is_not_handed_over()
+    {
+        // Two keys on one frame: the route's own checks stop this long before, and the survey
+        // library's validator is the second lock — a plan it does not pass is this code's fault.
+        var scene = Scene() with { Changes = FlybyBundleChanges.None with { Sky = [new(3, "#000000"), new(3, "#ffffff")] } };
+
+        Should.Throw<InvalidOperationException>(() => FlybyBlenderBundle.PlanJson(scene)).Message.ShouldContain("validator");
+    }
+
     [Fact]
     public void A_flyby_with_nothing_to_draw_or_no_frame_is_refused()
     {
@@ -439,6 +678,14 @@ public class FlybyBlenderBundleTests
         var plan = JsonDocument.Parse(entries[$"{top}/scene-plan.json"]).RootElement.Clone();
         return (entries, plan);
     }
+
+    /// <summary>The plan's changes by the id of the model each is of.</summary>
+    private static Dictionary<string, JsonElement> Changes(JsonElement plan) =>
+        plan.GetProperty("changes").EnumerateArray()
+            .Where(c => c.TryGetProperty("target", out _))
+            .ToDictionary(c => c.GetProperty("target").GetProperty("id").GetString()!);
+
+    private static (List<double[]> Vertices, List<string>? Colours) Ply(byte[] file) => BundlePly.Read(file);
 
     private static double[] Translation(JsonElement model) =>
         model.TryGetProperty("translation", out var at) ? [.. at.EnumerateArray().Select(n => n.GetDouble())] : [0, 0, 0];

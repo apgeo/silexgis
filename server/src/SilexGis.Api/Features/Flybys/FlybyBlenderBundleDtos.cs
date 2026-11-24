@@ -44,7 +44,7 @@ public sealed record FlybyBundleDepthBandRequest(double FromM, string Colour);
 /// <summary>
 /// The look of the scene at the clip's first frame.
 /// </summary>
-/// <param name="Lines">Whether survey lines are drawn at all.</param>
+/// <param name="Lines">Whether survey lines are drawn at any frame of the clip.</param>
 /// <param name="Sky">What stands behind everything, <c>#rrggbb</c>; left out, black.</param>
 /// <param name="LineColour">One colour for every line; left out, the colours by depth.</param>
 public sealed record FlybyBundleLookRequest(
@@ -52,6 +52,60 @@ public sealed record FlybyBundleLookRequest(
     string? Sky,
     string? LineColour,
     IReadOnlyList<FlybyBundleDepthBandRequest>? DepthBands);
+
+/// <summary>A number at a frame of the clip, counted from 0.</summary>
+/// <param name="Easing">How the number gets here from the key before; left out, evenly.</param>
+public sealed record FlybyBundleNumberKeyRequest(int Frame, double Value, FlybyBundleEasing? Easing);
+
+/// <summary>A colour, <c>#rrggbb</c>, at a frame of the clip.</summary>
+public sealed record FlybyBundleColourKeyRequest(int Frame, string Colour, FlybyBundleEasing? Easing);
+
+/// <summary>A colour laid over something by a strength from 0 to 1, at a frame of the clip.</summary>
+public sealed record FlybyBundleTintKeyRequest(int Frame, string Colour, double Strength, FlybyBundleEasing? Easing);
+
+/// <summary>From this frame on a layer is shown, or hidden. Each key says the opposite of the one before it.</summary>
+public sealed record FlybyBundleShownKeyRequest(int Frame, bool Shown);
+
+/// <summary>
+/// What changes of one layer of the scene — the walls, or the survey lines — while the clip runs.
+/// A member left out does not change.
+/// </summary>
+/// <param name="Shown">When the layer is shown and hidden; before the first key it is the other way round.</param>
+/// <param name="Opacity">How much of it is there, from 0 to 1; one key is that much throughout.</param>
+/// <param name="Tint">
+/// For walls, the colour mixed into their own by its strength. For survey lines, the one colour
+/// they are drawn in (strength 1) or their colours by depth (strength 0).
+/// </param>
+public sealed record FlybyBundleLayerChangesRequest(
+    IReadOnlyList<FlybyBundleShownKeyRequest>? Shown,
+    IReadOnlyList<FlybyBundleNumberKeyRequest>? Opacity,
+    IReadOnlyList<FlybyBundleTintKeyRequest>? Tint);
+
+/// <summary>
+/// One cave the flyby colours apart from the rest: what stands in for the colour of every cave's
+/// walls, and of every cave's lines, on this one.
+/// </summary>
+public sealed record FlybyBundleCaveChangesRequest(
+    Guid CaveId,
+    IReadOnlyList<FlybyBundleTintKeyRequest>? Walls,
+    IReadOnlyList<FlybyBundleTintKeyRequest>? Lines);
+
+/// <summary>
+/// What the flyby changes about the look while the clip runs, as keys on the clip's frames. Between
+/// two keys a value moves as the later key's easing says; before its first key it has that key's
+/// value and after its last it keeps it.
+/// </summary>
+/// <param name="Relief">
+/// How many times taller than true every height is drawn. The camera's heights are multiplied by
+/// what these keys give at each frame, and the caves are stretched by the same keys.
+/// </param>
+/// <param name="Sky">What stands behind everything; black for no sky.</param>
+public sealed record FlybyBundleChangesRequest(
+    IReadOnlyList<FlybyBundleNumberKeyRequest>? Relief,
+    IReadOnlyList<FlybyBundleColourKeyRequest>? Sky,
+    FlybyBundleLayerChangesRequest? Walls,
+    FlybyBundleLayerChangesRequest? Lines,
+    IReadOnlyList<FlybyBundleCaveChangesRequest>? Caves);
 
 /// <summary>A card of words over the picture.</summary>
 /// <param name="Seconds">
@@ -92,8 +146,12 @@ public sealed record FlybyBundleTextsRequest(
 /// and roll in degrees, the distance in metres to what the camera looks at, and the lens in degrees
 /// across the wider side of the picture.
 /// </param>
-/// <param name="Relief">How many times taller than true the scene draws every height.</param>
+/// <param name="Relief">
+/// How many times taller than true the scene draws every height, at the clip's first frame — and
+/// throughout, where <paramref name="Changes"/> gives the relief no keys.
+/// </param>
 /// <param name="LeftOut">What the flyby shows that a bundle cannot carry, by name.</param>
+/// <param name="Changes">What changes about the look while the clip runs; left out, nothing.</param>
 public sealed record FlybyBlenderBundleRequest(
     string? Name,
     FlybyBundleOutputRequest? Output,
@@ -104,7 +162,8 @@ public sealed record FlybyBlenderBundleRequest(
     IReadOnlyList<FlybyBundleCaveRequest>? Caves,
     FlybyBundleLookRequest? Look,
     FlybyBundleTextsRequest? Texts,
-    IReadOnlyList<FlybyBundleOmission>? LeftOut);
+    IReadOnlyList<FlybyBundleOmission>? LeftOut,
+    FlybyBundleChangesRequest? Changes = null);
 
 public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidator<FlybyBlenderBundleRequest>
 {
@@ -119,6 +178,14 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
 
     /// <summary>How many caves one bundle names.</summary>
     public const int MaxCaves = 100;
+
+    /// <summary>
+    /// How many keys all the tracks of one request hold together. A change is two keys where two
+    /// can say it and a key a frame where they cannot, so a long flyby with many caves coloured
+    /// apart runs to thousands; this is far past that and well short of what would make the plan
+    /// a burden to read.
+    /// </summary>
+    public const int MaxKeys = 400_000;
 
     private const int NumbersAFrame = 8;
     private const int MaxTextLength = 500;
@@ -206,13 +273,85 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
             RuleForEach(r => r.Texts!.CornerCaptions!).SetValidator(new CaptionValidator()).When(r => r.Texts!.CornerCaptions is not null);
         });
 
+        When(r => r.Changes is not null, () =>
+        {
+            // A frame of the clip, when the clip's own length is known; else any frame a clip can have.
+            static int Last(FlybyBlenderBundleRequest r) => r.Frames is { Count: > 0 and <= MaxFrames } frames ? frames.Count - 1 : MaxFrames - 1;
+            const string order = "Keys are in rising order of frame, each on a frame of its own, none after the clip's last.";
+
+            RuleFor(r => r.Changes!)
+                .Must(changes => Keys(changes) <= MaxKeys)
+                .WithMessage($"The changes of one bundle hold at most {MaxKeys} keys.");
+
+            RuleFor(r => r.Changes!.Relief!)
+                .Must((r, keys) => Rising(keys.Select(k => k?.Frame), Last(r))).WithMessage(order)
+                .Must(keys => keys.All(k => k is not null && k.Value is >= 0.5 and <= 5 && Eased(k.Easing)))
+                .WithMessage("A relief is a factor from 0.5 to 5.")
+                .When(r => r.Changes!.Relief is not null);
+            RuleFor(r => r.Changes!.Sky!)
+                .Must((r, keys) => Rising(keys.Select(k => k?.Frame), Last(r))).WithMessage(order)
+                .Must(keys => keys.All(k => k is not null && Colour(k.Colour) && Eased(k.Easing)))
+                .WithMessage("A colour is written #rrggbb.")
+                .When(r => r.Changes!.Sky is not null);
+
+            RuleFor(r => r.Changes!.Walls!).SetValidator(r => new LayerChangesValidator(Last(r))).When(r => r.Changes!.Walls is not null);
+            RuleFor(r => r.Changes!.Lines!).SetValidator(r => new LayerChangesValidator(Last(r))).When(r => r.Changes!.Lines is not null);
+
+            RuleFor(r => r.Changes!.Caves!.Count).LessThanOrEqualTo(MaxCaves).When(r => r.Changes!.Caves is not null);
+            RuleFor(r => r.Changes!.Caves!)
+                .Must((r, caves) =>
+                    caves.All(c => c is not null)
+                    && caves.Select(c => c.CaveId).Distinct().Count() == caves.Count
+                    && caves.All(c => (r.Caves ?? []).Any(named => named is not null && named.CaveId == c.CaveId)))
+                .WithMessage("A cave coloured apart is one of the caves the request names, named once.")
+                .When(r => r.Changes!.Caves is not null);
+            RuleForEach(r => r.Changes!.Caves!)
+                .Must((r, cave) => cave is null
+                    || ((cave.Walls is null || Tints(cave.Walls, Last(r))) && (cave.Lines is null || Tints(cave.Lines, Last(r)))))
+                .WithMessage("A cave's colours are keys in rising order of frame, each a colour written #rrggbb and a strength from 0 to 1.")
+                .When(r => r.Changes!.Caves is not null);
+        });
+
         RuleFor(r => r.LeftOut!.Count).LessThanOrEqualTo(32).When(r => r.LeftOut is not null);
         RuleForEach(r => r.LeftOut!).IsInEnum().When(r => r.LeftOut is not null);
     }
 
     private static bool Even(int pixels) => pixels % 2 == 0;
 
-    private static bool Colour(string value) => value is not null && ColourPattern().IsMatch(value);
+    /// <summary>Whether frames rise, each on its own, from the clip's first to its last; at least one.</summary>
+    private static bool Rising(IEnumerable<int?> frames, int last)
+    {
+        var before = -1;
+        var any = false;
+        foreach (var frame in frames)
+        {
+            if (frame is not { } at || at <= before || at > last)
+            {
+                return false;
+            }
+
+            before = at;
+            any = true;
+        }
+
+        return any;
+    }
+
+    private static bool Eased(FlybyBundleEasing? easing) => easing is null || Enum.IsDefined(easing.Value);
+
+    private static bool Tints(IReadOnlyList<FlybyBundleTintKeyRequest> keys, int last) =>
+        Rising(keys.Select(k => k?.Frame), last)
+        && keys.All(k => k is not null && Colour(k.Colour) && k.Strength is >= 0 and <= 1 && Eased(k.Easing));
+
+    private static int Keys(FlybyBundleChangesRequest changes)
+    {
+        static int Of(FlybyBundleLayerChangesRequest? layer) =>
+            (layer?.Shown?.Count ?? 0) + (layer?.Opacity?.Count ?? 0) + (layer?.Tint?.Count ?? 0);
+        return (changes.Relief?.Count ?? 0) + (changes.Sky?.Count ?? 0) + Of(changes.Walls) + Of(changes.Lines)
+               + (changes.Caves ?? []).Sum(c => (c?.Walls?.Count ?? 0) + (c?.Lines?.Count ?? 0));
+    }
+
+    private static bool Colour(string? value) => value is not null && ColourPattern().IsMatch(value);
 
     /// <summary>
     /// One frame's eight numbers, each finite and in the range its meaning has. The heights reach
@@ -232,6 +371,27 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
 
     [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
     private static partial Regex ColourPattern();
+
+    private sealed class LayerChangesValidator : AbstractValidator<FlybyBundleLayerChangesRequest>
+    {
+        public LayerChangesValidator(int last)
+        {
+            RuleFor(l => l.Shown!)
+                .Must(keys => Rising(keys.Select(k => k?.Frame), last)
+                              && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown))
+                .WithMessage("A layer is shown and hidden at keys in rising order of frame, each saying the opposite of the one before it.")
+                .When(l => l.Shown is not null);
+            RuleFor(l => l.Opacity!)
+                .Must(keys => Rising(keys.Select(k => k?.Frame), last)
+                              && keys.All(k => k.Value is >= 0 and <= 1 && Eased(k.Easing)))
+                .WithMessage("How much of a layer is there is keys in rising order of frame, each from 0 to 1.")
+                .When(l => l.Opacity is not null);
+            RuleFor(l => l.Tint!)
+                .Must(keys => Tints(keys, last))
+                .WithMessage("A layer's colour is keys in rising order of frame, each a colour written #rrggbb and a strength from 0 to 1.")
+                .When(l => l.Tint is not null);
+        }
+    }
 
     private sealed class CardValidator : AbstractValidator<FlybyBundleCardRequest>
     {

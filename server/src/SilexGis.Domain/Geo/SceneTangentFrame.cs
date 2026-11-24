@@ -41,6 +41,14 @@ public readonly record struct SceneView(SceneVector Eye, SceneVector Forward, Sc
 public readonly record struct ScenePlacement(SceneVector Translation, SceneVector Axis, double Degrees);
 
 /// <summary>
+/// Where a model stands in a scene whose relief changes: the point it is stretched about, the turn
+/// of its axes, and how far above that point — along the model's own up, in true metres — the
+/// model's own zero lies. A mesh drawn about its zero is lifted by <see cref="LiftM"/> before it is
+/// stretched, and then stands right at every relief.
+/// </summary>
+public readonly record struct ScenePivotPlacement(SceneVector Translation, SceneVector Axis, double Degrees, double LiftM);
+
+/// <summary>
 /// The frame a three-dimensional scene is laid out in when it leaves the globe: the east-north-up
 /// plane touching the ellipsoid at one chosen point, in metres from that point.
 ///
@@ -63,13 +71,27 @@ public readonly record struct ScenePlacement(SceneVector Translation, SceneVecto
 /// </para>
 ///
 /// <para>
+/// <b>A relief that changes.</b> One frame is one factor. A scene whose factor changes over time is
+/// a frame for each factor (<see cref="WithRelief"/>), all about the same point of the globe drawn
+/// at that factor — so the frames differ by a lift of the whole scene along the origin's up, which
+/// no picture shows. A camera is placed in the frame of its moment. A model cannot move: it is
+/// placed once, about a point chosen so that stretching it there is the globe's stretching of it
+/// (<see cref="PlacementAbout"/>).
+/// </para>
+///
+/// <para>
 /// <b>The frame names no place.</b> Nothing it hands back says where on the Earth its zero is: the
-/// origin is the zero vector, and positions are differences from it.
+/// origin is the zero vector, and positions are differences from it. Heights too are differences:
+/// a model is stretched about the level of the origin, not about the ellipsoid, so no number says
+/// how high above the sea anything is.
 /// </para>
 /// </summary>
 public sealed class SceneTangentFrame
 {
     private readonly LocalTangentFrame origin;
+    private readonly double longitude;
+    private readonly double latitude;
+    private readonly double heightM;
 
     /// <param name="longitude">Degrees east of the frame's zero, WGS 84.</param>
     /// <param name="latitude">Degrees north of it.</param>
@@ -83,8 +105,15 @@ public sealed class SceneTangentFrame
         }
 
         Relief = relief;
+        this.longitude = longitude;
+        this.latitude = latitude;
+        this.heightM = heightM;
         origin = new LocalTangentFrame(longitude, latitude, heightM * relief);
     }
+
+    /// <summary>The frame about the same point of the globe, for a scene drawn at another relief.</summary>
+    public SceneTangentFrame WithRelief(double relief) =>
+        relief == Relief ? this : new SceneTangentFrame(longitude, latitude, heightM, relief);
 
     /// <summary>How many times taller than true every height is drawn.</summary>
     public double Relief { get; }
@@ -143,6 +172,38 @@ public sealed class SceneTangentFrame
         var z = Carried(there, new SceneVector(0, 0, 1));
         var (axis, degrees) = AxisAngle(x, y, z);
         return new ScenePlacement(PointAt(longitude, latitude, drawnHeightM), axis, degrees);
+    }
+
+    /// <summary>
+    /// Where a model stands when the relief changes while it is looked at, and only its stretch
+    /// along its own up can follow: the point to stretch it about.
+    ///
+    /// <para>
+    /// The globe multiplies heights about the ellipsoid, and this frame's zero rides up and down
+    /// with its own origin as it does. Seen from the frame, a model whose zero is at the origin's
+    /// height stays put while it is stretched; one that is higher or lower moves along its own up
+    /// by the factor times the difference. So the model is stretched about the point of its own
+    /// vertical that is level with the origin, and its mesh is lifted by the difference first.
+    /// </para>
+    ///
+    /// <para>
+    /// It is exact for a model on the origin's vertical. Away from it the two verticals lean apart
+    /// by the curve of the Earth, and a change of the factor by <c>d</c> away from this frame's
+    /// own moves the model sideways by <c>d</c> × the origin's height × the sine of that lean,
+    /// which the fixed point cannot follow: 0.16 m for <c>d</c> = 1 at a kilometre's height and
+    /// a kilometre's distance. Following it exactly would mean stretching about the ellipsoid —
+    /// and writing down how high above it every model stands, which this frame does not say.
+    /// </para>
+    /// </summary>
+    /// <param name="drawnHeightM">The true height the model's own zero is drawn at.</param>
+    public ScenePivotPlacement PlacementAbout(double longitude, double latitude, double drawnHeightM)
+    {
+        var placed = PlacementAt(longitude, latitude, drawnHeightM);
+        var up = Carried(new LocalTangentFrame(longitude, latitude, drawnHeightM * Relief), new SceneVector(0, 0, 1));
+
+        // The origin's height, as far as it lies along this model's vertical.
+        var lift = drawnHeightM - (heightM * up.Z);
+        return new ScenePivotPlacement(placed.Translation - (up * (lift * Relief)), placed.Axis, placed.Degrees, lift);
     }
 
     /// <summary>

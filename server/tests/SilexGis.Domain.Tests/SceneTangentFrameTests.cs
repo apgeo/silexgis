@@ -208,6 +208,71 @@ public class SceneTangentFrameTests
         Close(placed.Translation + turned, onTheGlobe, 1e-6);
     }
 
+    [Fact]
+    public void A_frame_for_another_relief_is_about_the_same_place_drawn_at_that_relief()
+    {
+        var frame = new SceneTangentFrame(Lon, Lat, Height, 1.5);
+        var taller = frame.WithRelief(3);
+
+        taller.Relief.ShouldBe(3);
+        frame.WithRelief(1.5).ShouldBeSameAs(frame);
+        // Its own zero is still its zero, and a point 100 m above the origin is three times as far up.
+        Close(taller.PointAt(Lon, Lat, Height), new SceneVector(0, 0, 0), 1e-6);
+        Close(taller.PointAt(Lon, Lat, Height + 100), new SceneVector(0, 0, 300), 1e-6);
+        Close(frame.PointAt(Lon, Lat, Height + 100), new SceneVector(0, 0, 150), 1e-6);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.5)]
+    [InlineData(3)]
+    public void A_model_on_the_origins_vertical_stretched_about_the_origins_level_stands_right_at_every_relief(double relief)
+    {
+        // Placed once, in the frame of a relief of 2; then drawn at another.
+        var frame = new SceneTangentFrame(Lon, Lat, Height, 2);
+        var placed = frame.PlacementAbout(Lon, Lat, Height + 260);
+
+        // It stands 260 m above the origin's level, and that is all the placement says of heights.
+        placed.LiftM.ShouldBe(260, 1e-9);
+        Close(placed.Translation, new SceneVector(0, 0, 0), 1e-6);
+        placed.Degrees.ShouldBe(0);
+
+        // A corner 80 east, 60 north and 25 below the model's zero: lifted, stretched along the
+        // model's up by the relief, turned and moved — where the globe draws it at that relief.
+        var there = new LocalTangentFrame(Lon, Lat, Height + 260);
+        var (cornerLon, cornerLat, cornerHeight) = there.GeodeticAt(80, 60, -25);
+        var stretched = new SceneVector(80, 60, (-25 + placed.LiftM) * relief);
+        var inPlan = placed.Translation + Turned(stretched, placed.Axis, placed.Degrees);
+        // The corner's own vertical leans from the model's by the 100 m between them: a millimetre
+        // or two over these heights, which is the model being stretched along one up.
+        Close(inPlan, frame.WithRelief(relief).PointAt(cornerLon, cornerLat, cornerHeight), 0.05);
+    }
+
+    [Fact]
+    public void A_model_away_from_the_origin_is_off_only_by_the_lean_between_the_two_verticals()
+    {
+        // Two kilometres north of an origin 700 m up, 150 m lower, in a clip whose relief runs
+        // from 1 to 3: placed in the frame of the middle of that, 2.
+        var frame = new SceneTangentFrame(Lon, Lat, Height, 2);
+        var lat = Lat + (2000 / MetresPerDegree);
+        var placed = frame.PlacementAbout(Lon, lat, Height - 150);
+
+        // Level with the origin but for the drop of the Earth's curve between them, a third of a
+        // metre at two kilometres, the model's zero is 150 m below its stretching point.
+        placed.LiftM.ShouldBe(-150, 0.001);
+
+        foreach (var relief in (double[])[1, 1.5, 2, 2.5, 3])
+        {
+            var zero = placed.Translation + Turned(new SceneVector(0, 0, placed.LiftM * relief), placed.Axis, placed.Degrees);
+            var onTheGlobe = frame.WithRelief(relief).PointAt(Lon, lat, Height - 150);
+            var off = (zero - onTheGlobe).Length;
+
+            // Exact at the frame's own relief; elsewhere off by the change of relief times the
+            // origin's height times the lean — 700 m × 2 km / 6,371 km = 0.22 m for a whole factor.
+            off.ShouldBe(Math.Abs(relief - 2) * 700 * 2000 / 6_371_000, 0.002);
+        }
+    }
+
     /// <summary>A vector turned about an axis, right-handed: Rodrigues' formula, written out here and not borrowed.</summary>
     private static SceneVector Turned(SceneVector v, SceneVector axis, double degrees)
     {

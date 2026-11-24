@@ -445,6 +445,10 @@ public class DependencyRuleTests
         "Therion.CaveGeometry.CaveMesh",
         "Therion.CaveGeometry.Writers.PlyWriter",
 
+        // A vertex's colour as the three bytes a mesh file carries it in: a value and nothing else.
+        // Survey lines carry their colours by depth themselves in a scene whose relief changes.
+        "Therion.CaveGeometry.CaveColor",
+
         // The scene plan — the description of one render that the bundle carries as JSON — in the
         // records and enums it is made of: the frame, the clock, a model and its turn, the camera
         // and each of its poses with the pose's own orientation, the look with its materials,
@@ -477,6 +481,20 @@ public class DependencyRuleTests
         "Therion.Blender.Plan.PlanWorld",
         "Therion.Blender.Plan.PlanWorldKind",
         "Therion.Blender.Plan.ScenePlan",
+
+        // What changes while the clip runs, in the plan's own records: a change names its target
+        // and gives each property its keys — shown or hidden, how much of it is there, a colour
+        // laid over it, a model's stretch, the world's colour — each a time, a value and the word
+        // for how the value is reached. Immutable values and one enum; the player keys them in
+        // Blender, on the reader's machine, and nothing of that runs here.
+        "Therion.Blender.Plan.PlanChange",
+        "Therion.Blender.Plan.PlanChangeTarget",
+        "Therion.Blender.Plan.PlanColorKey",
+        "Therion.Blender.Plan.PlanEasing",
+        "Therion.Blender.Plan.PlanNumberKey",
+        "Therion.Blender.Plan.PlanTintKey",
+        "Therion.Blender.Plan.PlanVectorKey",
+        "Therion.Blender.Plan.PlanVisibleKey",
 
         // What works on a plan: the validator (a plan in, a list of what is wrong with it out),
         // the serializer (a plan in, JSON text out) and the builder, asked for two things — the

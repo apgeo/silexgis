@@ -12944,6 +12944,7 @@ export interface components {
             look: null | components["schemas"]["FlybyBundleLookRequest"];
             texts: null | components["schemas"]["FlybyBundleTextsRequest"];
             leftOut: null | components["schemas"]["FlybyBundleOmission"][];
+            changes?: null | components["schemas"]["FlybyBundleChangesRequest"];
         };
         FlybyBundleCaptionRequest: {
             text: string;
@@ -12958,6 +12959,12 @@ export interface components {
             /** Format: double */
             seconds: number;
         };
+        FlybyBundleCaveChangesRequest: {
+            /** Format: uuid */
+            caveId: string;
+            walls: null | components["schemas"]["FlybyBundleTintKeyRequest"][];
+            lines: null | components["schemas"]["FlybyBundleTintKeyRequest"][];
+        };
         FlybyBundleCaveRequest: {
             /** Format: uuid */
             caveId: string;
@@ -12967,16 +12974,43 @@ export interface components {
             /** Format: double */
             groundM: null | number;
         };
+        FlybyBundleChangesRequest: {
+            relief: null | components["schemas"]["FlybyBundleNumberKeyRequest"][];
+            sky: null | components["schemas"]["FlybyBundleColourKeyRequest"][];
+            walls: null | components["schemas"]["FlybyBundleLayerChangesRequest"];
+            lines: null | components["schemas"]["FlybyBundleLayerChangesRequest"];
+            caves: null | components["schemas"]["FlybyBundleCaveChangesRequest"][];
+        };
+        FlybyBundleColourKeyRequest: {
+            /** Format: int32 */
+            frame: number;
+            colour: string;
+            easing: null | components["schemas"]["FlybyBundleEasing"];
+        };
         FlybyBundleDepthBandRequest: {
             /** Format: double */
             fromM: number;
             colour: string;
+        };
+        /** @enum {unknown} */
+        FlybyBundleEasing: "linear" | "smooth" | "constant";
+        FlybyBundleLayerChangesRequest: {
+            shown: null | components["schemas"]["FlybyBundleShownKeyRequest"][];
+            opacity: null | components["schemas"]["FlybyBundleNumberKeyRequest"][];
+            tint: null | components["schemas"]["FlybyBundleTintKeyRequest"][];
         };
         FlybyBundleLookRequest: {
             lines: boolean;
             sky: null | string;
             lineColour: null | string;
             depthBands: null | components["schemas"]["FlybyBundleDepthBandRequest"][];
+        };
+        FlybyBundleNumberKeyRequest: {
+            /** Format: int32 */
+            frame: number;
+            /** Format: double */
+            value: number;
+            easing: null | components["schemas"]["FlybyBundleEasing"];
         };
         /** @enum {unknown} */
         FlybyBundleOmission: "ground" | "timedChanges" | "reliefChanges" | "wallColours" | "surfaceOpening" | "entrances" | "surfaceFeatures" | "scans" | "photos" | "mapLayers" | "tracks" | "layerOpacity" | "wallsNotDownloaded" | "moreCavesInView";
@@ -13004,6 +13038,11 @@ export interface components {
         };
         /** @enum {unknown} */
         FlybyBundleQuality: "low" | "medium" | "high";
+        FlybyBundleShownKeyRequest: {
+            /** Format: int32 */
+            frame: number;
+            shown: boolean;
+        };
         FlybyBundleTextsRequest: {
             title: null | components["schemas"]["FlybyBundleCardRequest"];
             end: null | components["schemas"]["FlybyBundleCardRequest"];
@@ -13015,6 +13054,14 @@ export interface components {
             /** Format: double */
             fadeOutS: number;
             northArrow: boolean;
+        };
+        FlybyBundleTintKeyRequest: {
+            /** Format: int32 */
+            frame: number;
+            colour: string;
+            /** Format: double */
+            strength: number;
+            easing: null | components["schemas"]["FlybyBundleEasing"];
         };
         ForgotPasswordRequest: {
             email: string;

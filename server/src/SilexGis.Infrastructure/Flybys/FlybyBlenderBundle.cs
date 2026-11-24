@@ -47,6 +47,16 @@ public sealed record FlybyBundleSummary(string FolderName, int Frames, int Model
 /// camera looking straight down keeps its heading and one far from the origin keeps its own
 /// horizon.
 /// </para>
+///
+/// <para>
+/// <b>What changes while the clip runs is written as keys, and the camera reads the same keys.</b>
+/// A relief that grows stretches every model along its own up, about the level of the frame's
+/// zero; the height of each frame's camera is multiplied by the relief those very keys give at
+/// that frame, so a cave and the camera looking at it are never drawn at two different reliefs.
+/// A colour over the walls or over one cave's walls, the colour of the lines, a layer shown,
+/// hidden or faded and the colour of the sky are tracks on the models and on the world. The lights
+/// do not change: the scene plan has no key for a light.
+/// </para>
 /// </summary>
 public static class FlybyBlenderBundle
 {
@@ -58,6 +68,7 @@ public static class FlybyBlenderBundle
 
     private const string RockMaterialId = "rock";
     private const string LinesMaterialId = "lines";
+    private const string LinesByDepthMaterialId = "lines-by-depth";
     private const string WallsRole = "walls";
     private const string EstimatedRole = "estimated-passages";
     private const string LinesRole = "survey-lines";
@@ -133,35 +144,95 @@ public static class FlybyBlenderBundle
             throw new ArgumentException("A flyby has at least one frame.", nameof(scene));
         }
 
-        var relief = scene.Relief;
-        var frame = new SceneTangentFrame(scene.OriginLongitude, scene.OriginLatitude, scene.OriginHeightM, relief);
+        var fps = scene.Fps;
+        var changes = scene.Changes;
+        double Seconds(int index) => Rounded(index / (double)fps);
+
+        // The relief at every frame, from the keys the models are stretched by. Where it changes,
+        // the models are laid out in the frame of the middle of its range — what a model placed
+        // once is off by grows with how far the relief is from its frame's — and each is stretched
+        // about a point level with the frame's zero.
+        var reliefs = Reliefs(scene);
+        var flattest = reliefs.Min();
+        var tallest = reliefs.Max();
+        var stretching = tallest > flattest;
+        var frame = new SceneTangentFrame(
+            scene.OriginLongitude, scene.OriginLatitude, scene.OriginHeightM, stretching ? (flattest + tallest) / 2 : reliefs[0]);
         var (rock, lights) = Borrowed.Value;
 
         var models = new List<PlanModel>();
+        var timed = new List<PlanChange>();
         var materials = new List<PlanMaterial> { rock with { Id = RockMaterialId } };
         var spheres = new List<(SceneVector Centre, double Radius)>();
-        CaveVector3? stretch = relief == 1 ? null : new CaveVector3(1, 1, Rounded(relief));
+        var layout = new Layout(frame, stretching, tallest, stretching || reliefs[0] != 1 ? new CaveVector3(1, 1, Rounded(reliefs[0])) : null);
+        var stretch = stretching
+            ? changes.Relief.Select(key => new PlanVectorKey(Seconds(key.Frame), new CaveVector3(1, 1, Rounded(key.Value)), Easing(key.Easing))).ToList()
+            : null;
+
+        // What changes of one model: the layer it belongs to shown, hidden and faded, the colour
+        // laid over it, and its stretch.
+        void Changing(string id, FlybyBundleLayerChanges layer, IReadOnlyList<FlybyBundleTintKey>? tint)
+        {
+            var change = new PlanChange
+            {
+                Target = new PlanChangeTarget { Id = id },
+                Visible = layer.Shown.Count > 0 ? [.. layer.Shown.Select(key => new PlanVisibleKey(Seconds(key.Frame), key.Shown))] : null,
+                Opacity = layer.Opacity.Count > 0
+                    ? [.. layer.Opacity.Select(key => new PlanNumberKey(Seconds(key.Frame), Rounded(key.Value), Easing(key.Easing)))]
+                    : null,
+                Tint = tint is { Count: > 0 }
+                    ? [.. tint.Select(key => new PlanTintKey(Seconds(key.Frame), Linear(key.Colour) ?? default, Rounded(key.Strength), Easing(key.Easing)))]
+                    : null,
+                Scale = stretch,
+            };
+            if (change is not { Visible: null, Opacity: null, Tint: null, Scale: null })
+            {
+                timed.Add(change);
+            }
+        }
 
         for (var i = 0; i < scene.Caves.Count; i++)
         {
             var cave = scene.Caves[i];
             var number = (i + 1).ToString("00", CultureInfo.InvariantCulture);
 
+            // A colour over the walls is a track only where it is ever seen.
+            var wallsTint = cave.WallsTint ?? changes.Walls.Tint;
+            var tinted = wallsTint.Any(key => key.Strength > 0) ? wallsTint : null;
+
             if (cave.Walls is { Mesh.TriangleCount: > 0 } walls)
             {
-                models.Add(Place(frame, $"cave-{number}-walls", WallsRole, RockMaterialId, walls, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                var id = $"cave-{number}-walls";
+                models.Add(Place(layout, id, WallsRole, RockMaterialId, walls, null, cave.AltitudeShiftM, spheres, writeMesh));
+                Changing(id, changes.Walls, tinted);
             }
 
             if (cave.Estimated is { Mesh.TriangleCount: > 0 } estimated)
             {
+                var id = $"cave-{number}-estimated";
                 var colour = cave.EstimatedColor ?? GlbWriter.WallColor;
                 var material = FlatMaterial("estimated", colour, materials);
-                models.Add(Place(frame, $"cave-{number}-estimated", EstimatedRole, material, estimated, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                models.Add(Place(layout, id, EstimatedRole, material, estimated, null, cave.AltitudeShiftM, spheres, writeMesh));
+                Changing(id, changes.Walls, tinted);
             }
 
-            if (cave.Legs.Count > 0 && Lines(frame, cave, scene.Look, number, materials) is { } lines)
+            if (cave.Legs.Count > 0)
             {
-                models.Add(Place(frame, $"cave-{number}-lines", LinesRole, lines.Material, lines.Mesh, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                // The lines' colour over the clip: this cave's own, else every cave's, else the one
+                // the look gives them for the whole of it.
+                var colours = cave.LinesTint ?? (changes.Lines.Tint.Count > 0 ? changes.Lines.Tint : null);
+                var oneColour = colours is null
+                    ? scene.Look.LineColour
+                    : colours.All(key => key.Strength > 0) ? colours[0].Colour : null;
+                if (Lines(layout, cave, scene.Look, oneColour, number, materials) is { } lines)
+                {
+                    var id = $"cave-{number}-lines";
+                    models.Add(Place(layout, id, LinesRole, lines.Material, lines.Mesh, lines.Colours, cave.AltitudeShiftM, spheres, writeMesh));
+                    Changing(
+                        id,
+                        cave.LinesStandIn ? changes.Walls : changes.Lines,
+                        colours is { Count: > 1 } || (colours is not null && oneColour is null && colours.Any(key => key.Strength > 0)) ? colours : null);
+                }
             }
         }
 
@@ -170,10 +241,28 @@ public static class FlybyBlenderBundle
             throw new ArgumentException("The flyby has nothing to draw.", nameof(scene));
         }
 
-        var fps = scene.Fps;
-        var views = scene.Poses
-            .Select(p => frame.ViewAt(p.Longitude, p.Latitude, p.HeightM, p.HeadingDeg, p.PitchDeg, p.RollDeg))
-            .ToList();
+        // The sky: one colour, or a colour that changes — which needs a world that has one.
+        var sky = changes.Sky.Count > 0 ? changes.Sky[0].Colour : scene.Look.SkyColour;
+        if (changes.Sky.Count > 1)
+        {
+            timed.Add(new PlanChange
+            {
+                WorldColor = [.. changes.Sky.Select(key => new PlanColorKey(Seconds(key.Frame), Linear(key.Colour) ?? default, Easing(key.Easing)))],
+            });
+            sky ??= "#000000";
+        }
+
+        // Each frame's camera in the frame of its own moment: its height times the relief the
+        // models have at that frame.
+        var views = new List<SceneView>(scene.Poses.Count);
+        var at = frame;
+        for (var i = 0; i < scene.Poses.Count; i++)
+        {
+            var p = scene.Poses[i];
+            at = at.Relief == reliefs[i] ? at : frame.WithRelief(reliefs[i]);
+            views.Add(at.ViewAt(p.Longitude, p.Latitude, p.HeightM, p.HeadingDeg, p.PitchDeg, p.RollDeg));
+        }
+
         var lenses = scene.Poses
             .Select(p => Rounded(SceneTangentFrame.FocalLength(
                 SceneTangentFrame.HorizontalFieldOfView(p.LensDeg, scene.Width, scene.Height), CameraPlanner.SensorWidthMm)))
@@ -187,7 +276,7 @@ public static class FlybyBlenderBundle
             var focus = Math.Max(scene.Poses[i].FocusM, 0.01);
             var turn = PlanQuaternion.FromView(Vector(view.Forward), Vector(view.Up));
             track.Add(new PlanCameraKey(
-                Rounded(i / (double)fps),
+                Seconds(i),
                 Rounded(view.Eye),
                 Rounded(view.Eye + (view.Forward * focus)),
                 lensChanges ? lenses[i] : null)
@@ -204,9 +293,14 @@ public static class FlybyBlenderBundle
         {
             Generator = "SilexGIS",
             Name = name,
-            Features = texts is null
-                ? ScenePlan.BasicFeatures
-                : [.. ScenePlan.PlayerFeatures.Where(f => f == ScenePlan.TextsFeature || ScenePlan.BasicFeatures.Contains(f))],
+            // The player's own order: what changes comes after what it changes, texts after that.
+            Features =
+            [
+                .. ScenePlan.PlayerFeatures.Where(f =>
+                    ScenePlan.BasicFeatures.Contains(f)
+                    || (f == ScenePlan.ChangesFeature && timed.Count > 0)
+                    || (f == ScenePlan.TextsFeature && texts is not null)),
+            ],
             // Zero, and no coordinate system: the frame is laid out about a point it does not name.
             Frame = new PlanFrame(),
             Timeline = new PlanTimeline { Fps = fps, FrameCount = views.Count },
@@ -232,10 +326,11 @@ public static class FlybyBlenderBundle
                 Height = scene.Height,
                 Materials = materials,
                 Lights = lights,
-                World = Linear(scene.Look.SkyColour) is { } sky
-                    ? new PlanWorld { Kind = PlanWorldKind.Color, Color = sky, Strength = 1 }
+                World = Linear(sky) is { } behind
+                    ? new PlanWorld { Kind = PlanWorldKind.Color, Color = behind, Strength = 1 }
                     : null,
             },
+            Changes = timed.Count > 0 ? timed : null,
             Texts = texts,
             Output = new PlanOutput
             {
@@ -261,53 +356,74 @@ public static class FlybyBlenderBundle
 
     // ---- models ----
 
+    /// <summary>
+    /// How the models of one scene are laid out: the frame, whether the relief changes while the
+    /// clip runs (each model is then stretched about a point level with the frame's zero), the
+    /// tallest relief of the clip, and the stretch every model starts with.
+    /// </summary>
+    private sealed record Layout(SceneTangentFrame Frame, bool Stretching, double Tallest, CaveVector3? Stretch);
+
     private static PlanModel Place(
-        SceneTangentFrame frame,
+        Layout layout,
         string id,
         string role,
         string material,
         FlybyBundleMesh mesh,
+        IReadOnlyList<CaveColor>? colours,
         double altitudeShiftM,
-        CaveVector3? stretch,
         List<(SceneVector Centre, double Radius)> spheres,
         Action<string, CaveMesh> writeMesh)
     {
-        var placement = frame.PlacementAt(mesh.AnchorLongitude, mesh.AnchorLatitude, mesh.AnchorAltitudeM + altitudeShiftM);
-        var path = id + ".ply";
-        writeMesh(path, Mesh(mesh.Mesh));
+        var height = mesh.AnchorAltitudeM + altitudeShiftM;
+        SceneVector translation;
+        SceneVector axis;
+        double degrees;
+        var lift = 0.0;
+        if (layout.Stretching)
+        {
+            (translation, axis, degrees, lift) = layout.Frame.PlacementAbout(mesh.AnchorLongitude, mesh.AnchorLatitude, height);
+        }
+        else
+        {
+            (translation, axis, degrees) = layout.Frame.PlacementAt(mesh.AnchorLongitude, mesh.AnchorLatitude, height);
+        }
 
-        // How far the mesh reaches from its zero point, for the camera's far limit: taller by the
-        // relief, which stretches it along its own up.
+        var path = id + ".ply";
+        writeMesh(path, Mesh(mesh.Mesh, lift, colours));
+
+        // How far the mesh reaches from the point it stands at, for the camera's far limit: taller
+        // by the relief, which stretches it along its own up — by the tallest the clip reaches.
         var reach = 0.0;
         var positions = mesh.Mesh.Positions;
         for (var v = 0; v < positions.Length; v += 3)
         {
-            var up = positions[v + 2] * frame.Relief;
+            var up = (positions[v + 2] + lift) * layout.Tallest;
             reach = Math.Max(reach, (positions[v] * positions[v]) + (positions[v + 1] * positions[v + 1]) + (up * up));
         }
 
-        spheres.Add((placement.Translation, Math.Sqrt(reach)));
+        spheres.Add((translation, Math.Sqrt(reach)));
 
         return new PlanModel
         {
             Id = id,
             Role = role,
             Path = path,
-            Translation = Rounded(placement.Translation),
-            Rotation = placement.Degrees == 0
+            Translation = Rounded(translation),
+            Rotation = degrees == 0
                 ? null
-                : new PlanRotation { Axis = Rounded(placement.Axis), Degrees = Math.Round(placement.Degrees, 9) },
-            Scale = stretch,
+                : new PlanRotation { Axis = Rounded(axis), Degrees = Math.Round(degrees, 9) },
+            Scale = layout.Stretch,
             Material = material,
         };
     }
 
-    private static CaveMesh Mesh(IndexedMesh mesh)
+    /// <param name="lift">Metres every vertex is raised by, along the mesh's own up.</param>
+    private static CaveMesh Mesh(IndexedMesh mesh, double lift, IReadOnlyList<CaveColor>? colours)
     {
         var vertices = new CaveVector3[mesh.VertexCount];
         for (var v = 0; v < vertices.Length; v++)
         {
-            vertices[v] = new CaveVector3(mesh.Positions[v * 3], mesh.Positions[(v * 3) + 1], mesh.Positions[(v * 3) + 2]);
+            vertices[v] = new CaveVector3(mesh.Positions[v * 3], mesh.Positions[(v * 3) + 1], mesh.Positions[(v * 3) + 2] + lift);
         }
 
         var triangles = new CaveTriangle[mesh.TriangleCount];
@@ -317,44 +433,117 @@ public static class FlybyBlenderBundle
                 (uint)mesh.Indices[t * 3], (uint)mesh.Indices[(t * 3) + 1], (uint)mesh.Indices[(t * 3) + 2]);
         }
 
-        return new CaveMesh { Vertices = vertices, Triangles = triangles };
+        return new CaveMesh { Vertices = vertices, Triangles = triangles, VertexColors = colours };
     }
 
     /// <summary>
     /// A cave's survey legs as thin tubes about the first leg's start, and the material they wear:
     /// one colour, or the colours by depth below the cave's highest point.
     /// </summary>
-    private static (FlybyBundleMesh Mesh, string Material)? Lines(
-        SceneTangentFrame frame, FlybyBundleCave cave, FlybyBundleLook look, string number, List<PlanMaterial> materials)
+    /// <param name="oneColour">The one colour the lines have for the whole clip; null for their colours by depth.</param>
+    private static (FlybyBundleMesh Mesh, string Material, IReadOnlyList<CaveColor>? Colours)? Lines(
+        Layout layout,
+        FlybyBundleCave cave,
+        FlybyBundleLook look,
+        string? oneColour,
+        string number,
+        List<PlanMaterial> materials)
     {
+        var frame = layout.Frame;
         var first = cave.Legs[0];
         var about = new LocalTangentFrame(first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
-        var mesh = SurveyLineTubes.Build(
-            cave.Legs.Select(leg => (
+        FlybyBundleMesh Placed(IndexedMesh tubes) => new(tubes, first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
+        IndexedMesh Tubes(IEnumerable<FlybyBundleLeg> legs, out int[] legOfVertex) => SurveyLineTubes.Build(
+            legs.Select(leg => (
                 about.ToLocal(leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM),
                 about.ToLocal(leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM))),
-            LineRadiusM);
-        if (mesh.TriangleCount == 0)
+            LineRadiusM,
+            out legOfVertex);
+
+        var bands = look.DepthBands
+            .Select(band => (band.FromM, Hex: band.Colour, Colour: Linear(band.Colour)))
+            .Where(band => band.Colour is not null && double.IsFinite(band.FromM) && band.FromM >= 0)
+            .OrderBy(band => band.FromM)
+            .Select(band => (band.FromM, band.Hex, Colour: band.Colour!.Value))
+            .ToList();
+
+        if (Linear(oneColour) is not null || bands.Count == 0)
+        {
+            var mesh = Tubes(cave.Legs, out _);
+            if (mesh.TriangleCount == 0)
+            {
+                return null;
+            }
+
+            var colour = Linear(oneColour) is { } given ? (given.R, given.G, given.B) : GlbWriter.WallColor;
+            return (Placed(mesh), FlatMaterial(LinesMaterialId, colour, materials), null);
+        }
+
+        if (layout.Stretching)
+        {
+            // A ramp of colours over height is over height in the scene, and a cave that is being
+            // stretched would slide through it. So the colours are put on the lines themselves:
+            // each leg is cut where a band begins, and every piece carries its band's colour.
+            var top = cave.Legs.Max(leg => Math.Max(leg.FromAltitudeM, leg.ToAltitudeM));
+            var pieces = new List<FlybyBundleLeg>();
+            var pieceBand = new List<int>();
+            foreach (var leg in cave.Legs)
+            {
+                // The shares of the leg at which it passes into another band, in order along it.
+                var cuts = new List<double> { 0 };
+                var fall = leg.ToAltitudeM - leg.FromAltitudeM;
+                if (fall != 0)
+                {
+                    cuts.AddRange(bands.Skip(1)
+                        .Select(band => (top - band.FromM - leg.FromAltitudeM) / fall)
+                        .Where(share => share > 0 && share < 1)
+                        .Order());
+                }
+
+                cuts.Add(1);
+                for (var c = 0; c + 1 < cuts.Count; c++)
+                {
+                    FlybyBundleLeg piece = new(
+                        Along(leg.FromLongitude, leg.ToLongitude, cuts[c]),
+                        Along(leg.FromLatitude, leg.ToLatitude, cuts[c]),
+                        Along(leg.FromAltitudeM, leg.ToAltitudeM, cuts[c]),
+                        Along(leg.FromLongitude, leg.ToLongitude, cuts[c + 1]),
+                        Along(leg.FromLatitude, leg.ToLatitude, cuts[c + 1]),
+                        Along(leg.FromAltitudeM, leg.ToAltitudeM, cuts[c + 1]));
+                    var depth = top - ((piece.FromAltitudeM + piece.ToAltitudeM) / 2);
+                    pieces.Add(piece);
+                    pieceBand.Add(bands.FindLastIndex(band => band.FromM <= depth) is var found and >= 0 ? found : 0);
+                }
+            }
+
+            var mesh = Tubes(pieces, out var pieceOfVertex);
+            if (mesh.TriangleCount == 0)
+            {
+                return null;
+            }
+
+            var palette = bands.Select(band => Bytes(band.Hex)).ToList();
+            if (materials.All(m => m.Id != LinesByDepthMaterialId))
+            {
+                materials.Add(new PlanMaterial
+                {
+                    Id = LinesByDepthMaterialId,
+                    Kind = PlanMaterialKind.VertexColor,
+                    Color = bands[0].Colour,
+                    Roughness = 0.9,
+                });
+            }
+
+            return (Placed(mesh), LinesByDepthMaterialId, [.. pieceOfVertex.Select(piece => palette[pieceBand[piece]])]);
+        }
+
+        var whole = Tubes(cave.Legs, out _);
+        if (whole.TriangleCount == 0)
         {
             return null;
         }
 
-        var placed = new FlybyBundleMesh(mesh, first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
-        if (Linear(look.LineColour) is { } one)
-        {
-            return (placed, FlatMaterial(LinesMaterialId, (one.R, one.G, one.B), materials));
-        }
-
-        var bands = look.DepthBands
-            .Select(band => (band.FromM, Colour: Linear(band.Colour)))
-            .Where(band => band.Colour is not null && double.IsFinite(band.FromM) && band.FromM >= 0)
-            .OrderBy(band => band.FromM)
-            .Select(band => (band.FromM, Colour: band.Colour!.Value))
-            .ToList();
-        if (bands.Count == 0)
-        {
-            return (placed, FlatMaterial(LinesMaterialId, GlbWriter.WallColor, materials));
-        }
+        var placed = Placed(whole);
 
         // The ramp runs over the heights this cave's lines stand at in the scene, so its top is the
         // cave's own highest leg and a colour means a depth below that — as the lines were drawn.
@@ -402,8 +591,74 @@ public static class FlybyBlenderBundle
             Low = Rounded(high - span),
             High = Rounded(high),
         });
-        return (placed, id);
+        return (placed, id, null);
     }
+
+    private static double Along(double from, double to, double share) => from + ((to - from) * share);
+
+    /// <summary>A colour written <c>#rrggbb</c> as the three bytes a mesh file carries a vertex's colour in.</summary>
+    private static CaveColor Bytes(string hex)
+    {
+        var rgb = int.Parse(hex.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        return new CaveColor((byte)((rgb >> 16) & 0xFF), (byte)((rgb >> 8) & 0xFF), (byte)(rgb & 0xFF));
+    }
+
+    // ---- what changes ----
+
+    /// <summary>
+    /// The relief at every frame: what the keys give, as a renderer playing them works it out —
+    /// held before the first key and after the last, and between two keys moved as the later one
+    /// says. With no key, the scene's one factor.
+    /// </summary>
+    private static double[] Reliefs(FlybyBundleScene scene)
+    {
+        var keys = scene.Changes.Relief;
+        var reliefs = new double[scene.Poses.Count];
+        var next = 0;
+        for (var i = 0; i < reliefs.Length; i++)
+        {
+            if (keys.Count == 0)
+            {
+                reliefs[i] = scene.Relief;
+                continue;
+            }
+
+            while (next < keys.Count && keys[next].Frame <= i)
+            {
+                next++;
+            }
+
+            if (next == 0 || next == keys.Count)
+            {
+                reliefs[i] = keys[Math.Max(next - 1, 0)].Value;
+                continue;
+            }
+
+            var (before, after) = (keys[next - 1], keys[next]);
+            var share = (i - before.Frame) / (double)(after.Frame - before.Frame);
+            reliefs[i] = after.Easing switch
+            {
+                FlybyBundleEasing.Constant => before.Value,
+                FlybyBundleEasing.Smooth => before.Value + ((after.Value - before.Value) * share * share * (3 - (2 * share))),
+                _ => before.Value + ((after.Value - before.Value) * share),
+            };
+        }
+
+        // To what the plan writes a stretch to, so the camera and the models read one number.
+        for (var i = 0; i < reliefs.Length; i++)
+        {
+            reliefs[i] = Rounded(reliefs[i]);
+        }
+
+        return reliefs;
+    }
+
+    private static PlanEasing Easing(FlybyBundleEasing easing) => easing switch
+    {
+        FlybyBundleEasing.Smooth => PlanEasing.Smooth,
+        FlybyBundleEasing.Constant => PlanEasing.Constant,
+        _ => PlanEasing.Linear,
+    };
 
     /// <summary>The id of a material of one plain colour, added to the list the first time it is asked for.</summary>
     private static string FlatMaterial(string prefix, (double R, double G, double B) colour, List<PlanMaterial> materials)

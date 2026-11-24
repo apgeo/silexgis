@@ -236,7 +236,16 @@ public static class FlybyBlenderBundleEndpoints
                         : new FlybyBundleLeg(s.FromLongitude, s.FromLatitude, flat, s.ToLongitude, s.ToLatitude, flat))
                     .ToList();
 
-                caves.Add(new FlybyBundleCave(walls, estimated, estimatedColor, legs, shift));
+                // A colour of this cave's own, where the flyby gives it one; and lines that are all
+                // there is of a cave — because its walls were wanted and are not there, or because
+                // the look draws no lines at all — are shown and hidden as the walls are.
+                var apart = request.Changes?.Caves?.FirstOrDefault(c => c.CaveId == cave.CaveId);
+                caves.Add(new FlybyBundleCave(walls, estimated, estimatedColor, legs, shift)
+                {
+                    WallsTint = apart?.Walls is { } wallsTint ? Tints(wallsTint) : null,
+                    LinesTint = apart?.Lines is { } linesTint ? Tints(linesTint) : null,
+                    LinesStandIn = walls is null && estimated is null && (wallsFellBack || !request.Look.Lines),
+                });
                 (walls is not null || estimated is not null ? withWalls : withLines).Add(cave.CaveId);
             }
 
@@ -284,7 +293,10 @@ public static class FlybyBlenderBundleEndpoints
                     request.Look.LineColour,
                     [.. (request.Look.DepthBands ?? []).Select(b => new FlybyBundleDepthBand(b.FromM, b.Colour))]),
                 Texts(request.Texts),
-                leftOut);
+                leftOut)
+            {
+                Changes = Changes(request.Changes),
+            };
 
             // Recorded before the bytes are handed over, in the same request, so there is no window
             // in which a file exists and the record of who took it does not. No position is in it:
@@ -358,6 +370,24 @@ public static class FlybyBlenderBundleEndpoints
             texts.FadeInS,
             texts.FadeOutS,
             texts.NorthArrow);
+
+    private static FlybyBundleChanges Changes(FlybyBundleChangesRequest? changes) => changes is null
+        ? FlybyBundleChanges.None
+        : new FlybyBundleChanges(
+            [.. (changes.Relief ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))],
+            [.. (changes.Sky ?? []).Select(k => new FlybyBundleColourKey(k.Frame, k.Colour, k.Easing ?? FlybyBundleEasing.Linear))],
+            Layer(changes.Walls),
+            Layer(changes.Lines));
+
+    private static FlybyBundleLayerChanges Layer(FlybyBundleLayerChangesRequest? layer) => layer is null
+        ? FlybyBundleLayerChanges.None
+        : new FlybyBundleLayerChanges(
+            [.. (layer.Shown ?? []).Select(k => new FlybyBundleShownKey(k.Frame, k.Shown))],
+            [.. (layer.Opacity ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))],
+            Tints(layer.Tint ?? []));
+
+    private static List<FlybyBundleTintKey> Tints(IReadOnlyList<FlybyBundleTintKeyRequest> keys) =>
+        [.. keys.Select(k => new FlybyBundleTintKey(k.Frame, k.Colour, k.Strength, k.Easing ?? FlybyBundleEasing.Linear))];
 
     private static string Count(int count) => count.ToString(CultureInfo.InvariantCulture);
 
