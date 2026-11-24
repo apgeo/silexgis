@@ -4,6 +4,14 @@ Copyright (c) 2014-2026 Silex Brașov speleo club and SilexGIS contributors
 This product is licensed under the GNU Affero General Public License v3.0 or later
 (AGPL-3.0-or-later). See the LICENSE file for the full text.
 
+One exception: the published-trip fold — the source files compiled into
+client/dist-trips/silexgis-trips.js by `npm run build:trips` (client/src/publictrips/
+and the files it imports, each marked "SPDX-License-Identifier: AGPL-3.0-or-later OR
+GPL-2.0-or-later") — is also offered under the GNU General Public License v2.0 or later,
+at the recipient's choice, so that the compiled file can ship inside GPL-2.0-or-later
+software such as a WordPress plugin. client/src/publictrips/bundle.test.ts fails when a
+file without that header is compiled into it.
+
 ================================================================================
 Bundled third-party components
 ================================================================================
