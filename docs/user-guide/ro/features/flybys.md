@@ -342,17 +342,36 @@ Ce intră în el:
   acordul pentru un set mare de pereți, panoul întreabă din nou — *Include pereții celor N peșteri
   care nu au fost descărcați în vizualizare*, cu mărimea lor. Bifat, ajung direct în pachet; în
   vizualizare nu se mai descarcă nimic.
-- **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N”, săgeata
-  nordului și estompările, desenate cu literele programului Blender.
-- Culoarea cerului și relieful primului cadru al survolului.
+- **Ce schimbă survolul în timp ce rulează**: un relief care crește sau se aplatizează —
+  peșterile sunt întinse și camera ridicată cu aceleași numere, cadru cu cadru —, culoarea de pe
+  pereți și fiecare peșteră colorată aparte (inclusiv *Luminează peștera vizitată*), drumuirile
+  într-o singură culoare sau după adâncime, pereții și drumuirile afișate, ascunse și estompate,
+  și culoarea cerului. Acolo unde două chei pot spune o schimbare, ea este scrisă în pachet ca
+  două chei între care Blender trece lin, la fel ca survolul, așa că le poți muta apoi în
+  Blender; o culoare care trece în alta este scrisă cadru cu cadru, în culorile de pe ecran.
+- **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N” pe măsură ce
+  se schimbă, săgeata nordului și estompările, desenate cu literele programului Blender.
 
 Ce nu intră: panoul le enumeră la **Nu sunt în pachet** înainte să faci fișierul, iar fișierul
 `README.txt` din pachet spune același lucru. Întotdeauna terenul și harta desenată pe el —
-peșterile stau în spațiu gol, sub un cer simplu — și, acolo unde survolul tău le are: schimbările
-de aspect din timpul lui (scena păstrează aspectul primului cadru), un relief care se schimbă,
-culorile de pe pereți, deschiderea tăiată în teren, marcajele intrărilor, fenomenele de
-suprafață, scanările, fotografiile, straturile suprapuse de hartă, hărțile georeferențiate și
+peșterile stau în spațiu gol, sub un cer simplu, iar un fundal care se schimbă merge cu terenul —
+și, acolo unde survolul tău le are: deschiderea tăiată în teren, marcajele intrărilor, fenomenele
+de suprafață, scanările, fotografiile, straturile suprapuse de hartă, hărțile georeferențiate și
 liniile fișierelor importate. Pachetul se face oricum.
+
+Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
+
+- O schimbare **începe și se termină pe un cadru** din cele 25 pe secundă ale pachetului, deci
+  poate porni cu cel mult o cincizecime de secundă față de momentul dat de survol.
+- **Pereții se estompează** în Blender așa cum cere survolul; vizualizarea 3D îi poate doar
+  afișa și ascunde. O peșteră pe jumătate estompată își lasă pereții din spate să se vadă prin
+  cei din față.
+- Acolo unde culoarea proprie a unei peșteri ia locul culorii tuturor peșterilor, sau i-l dă
+  înapoi, saltul cade cu **un cadru** față de vizualizarea 3D.
+- **Luminile nu se schimbă.** Lampa de pe cameră și soarele din Blender sunt aprinse de la primul
+  cadru până la ultimul, și când camera intră sub pământ.
+- Ciorna rapidă (`--draft`) nu desenează materiale: acolo o estompare este o tăietură, iar
+  culorile de pe pereți nu se văd. Randarea completă le arată.
 
 **Descarcă pachetul** pregătește survolul ca pentru un film făcut cu grijă, citește camera și
 cere serverului zip-ul, care este salvat ca `<numele survolului>-blender.zip`. Apoi panoul spune

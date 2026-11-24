@@ -332,16 +332,35 @@ What goes into it:
   set of walls, the panel asks again — *Include the walls of N caves that were not downloaded into
   the view*, with their size. Ticked, they go straight into the bundle; nothing more is downloaded
   into the view.
-- **The texts**: title, captions, end card, the corner line, "Relief ×N", the north arrow and
-  the fades, drawn in Blender's own lettering.
-- The sky colour and the relief of the flyby's first frame.
+- **What the flyby changes while it plays**: a relief that grows or flattens — the caves are
+  stretched and the camera lifted by the same numbers, frame for frame —, the colour over the
+  walls and each cave coloured apart (*Light the cave being visited* included), the survey lines
+  in one colour or by depth, the walls and the lines shown, hidden and faded, and the colour of
+  the sky. Where two keys can say a change, it is written into the bundle as two keys that Blender
+  eases between the way the flyby does, so you can move them in Blender afterwards; a colour
+  crossing into another is written frame by frame, in the colours the screen shows.
+- **The texts**: title, captions, end card, the corner line, "Relief ×N" as it changes, the north
+  arrow and the fades, drawn in Blender's own lettering.
 
 What does not: the panel lists it under **Not in the bundle** before you make the file, and the
 bundle's own `README.txt` says the same. Always the ground and the map drawn on it — the caves
-stand in empty space under a plain sky — and, where your flyby has them: changes of the look
-while it plays (the scene keeps the look of its first frame), a relief that changes, colours on
-the walls, the opening cut in the ground, entrance markers, surface features, scans, photographs,
-map overlays, georeferenced maps and the lines of imported files. The bundle is made anyway.
+stand in empty space under a plain sky, and a background that changes goes with the ground — and,
+where your flyby has them: the opening cut in the ground, entrance markers, surface features,
+scans, photographs, map overlays, georeferenced maps and the lines of imported files. The bundle
+is made anyway.
+
+A few things are carried a little differently from what the 3D view draws:
+
+- A change **begins and ends on a frame** of the bundle's 25 a second, so it can start up to a
+  fiftieth of a second off the moment the flyby gives it.
+- **Walls fade** in Blender as the flyby asks; the 3D view can only switch them on and off. A
+  cave that is half faded shows its far walls through its near ones.
+- Where a cave's own colour takes over from the colour of every cave, or hands back to it, the
+  jump stands **one frame** off where the 3D view has it.
+- **The lights do not change.** Blender's lamp on the camera and its sun are on from the first
+  frame to the last, also when the camera goes underground.
+- The quick draft (`--draft`) draws no materials: there a fade is a cut and colours over the
+  walls are not shown. The full render shows them.
 
 **Download the bundle** gets the flyby ready as for a careful movie, reads the camera and asks
 the server for the zip, which is saved as `<the flyby's name>-blender.zip`. Afterwards the panel
