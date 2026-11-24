@@ -7,11 +7,12 @@ interface with the CaveView.js runtime vendored under `../caveview/`. It is offe
 viewer on trial, in its own tab of the survey model window. Nothing else in the application
 depends on it.
 
-Vendored build: **`v2.3.0-slx.1`**, built from branch `modernized/silexgis` at commit `00dbf0f0`
+Vendored build: **`v2.5.15-slx.2`**, built from branch `modernized/silexgis` at commit `d874290e`
 of this project's fork, https://github.com/apgeo/CaveView.js. The fork keeps LochViewer's code on
-branches prefixed `modernized/`, apart from its CaveView.js branches: `modernized/dev` follows
-upstream's `dev` (here at `a7127cb1`, package version 2.3.0), each change sits on a branch of its own
-based on it so it can be offered upstream, and `modernized/silexgis` merges them:
+branches prefixed `modernized/`, apart from its CaveView.js branches: `modernized/main` follows
+upstream's `main`, where its releases are made (here at `96601a9f`, package version 2.5.15; upstream's
+`dev` stopped at 2.3.0), each change sits on a branch of its own based on it so it can be offered
+upstream, and `modernized/silexgis` merges them:
 
 - `modernized/fix-svx3d-reader` — Survex `.3d` files read item by item as the format defines them.
   The upstream reader lost its place in many real files (error-info, cross-section and anonymous
@@ -41,10 +42,17 @@ with `vite.silexgis.config.ts` (kept out of the fork's history):
 ```ts
 import { defineConfig, mergeConfig } from 'vite'
 import base from './vite.config'
-export default mergeConfig(base, defineConfig({ base: '/dankez-caveview/v2.3.0-slx.1/', publicDir: false }))
+export default mergeConfig(base, defineConfig({ base: '/dankez-caveview/v2.5.15-slx.2/', publicDir: false }))
 ```
 
 `publicDir: false` leaves out the ~98 MB of demo models, terrain rasters and screenshots the
 repository serves from its `public/`; the one texture the viewer loads at runtime is copied by hand.
 The `base` is baked into the build, so a new build goes into a new directory and
 `DANKEZ_CAVEVIEW_PAGE` in `src/caveview/dankezCaveView.ts` changes with it.
+
+## Which directories are kept
+
+The current build, and the one the last deployed release loads: a page served before an update
+still names that directory, and without it the frame would show this application's own page.
+`v2.3.0-slx.1` (built from `00dbf0f0`, upstream `dev` at `a7127cb1`) is kept for that reason and goes
+once the deployed installations run a release that loads `v2.5.15-slx.2`.
