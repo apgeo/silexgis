@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceEvent } from '../workspace/workspaceBus.ts';
+import { ROLL_CALL_MS } from './viewTargets.ts';
 
 /**
  * Two windows of the app, each with its own copy of the roster module, joined by a stand-in for
@@ -66,8 +67,19 @@ describe('the roster between two windows', () => {
       reads += 1;
       void reader.refreshRoster();
     });
-    const first = await reader.refreshRoster();
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // The roll call's wait and the channel's one-task delay run on a fake clock, so "the windows
+    // fell quiet" is said of an exact stretch, several roll calls long, and not of however much
+    // real time a loaded machine happened to give.
+    vi.useFakeTimers();
+    let first: Awaited<ReturnType<typeof reader.refreshRoster>>;
+    try {
+      const asked = reader.refreshRoster();
+      await vi.advanceTimersByTimeAsync(ROLL_CALL_MS);
+      first = await asked;
+      await vi.advanceTimersByTimeAsync(4 * ROLL_CALL_MS);
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(first.map((control) => control.address)).toEqual([mapWindow.addressOf({ id: 'map' })]);
     // One answer that changed nothing is not news: the panel is told once, when the map window

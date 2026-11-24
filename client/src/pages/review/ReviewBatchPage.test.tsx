@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { App as AntApp } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18next from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { HeldBatch, HeldFeature, HeldLine } from '../../api/hooks.ts';
 
@@ -397,6 +397,36 @@ describe('the batch view', () => {
     fireEvent.click(screen.getByTestId('review-line-reject'));
     await waitFor(() => expect(spies.rejectItem).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('review-reject-confirm')).toBeNull();
+  });
+
+  it('says why accepting the whole upload was refused, in the words for its code, and not that it was decided', async () => {
+    spies.acceptBatch.mockRejectedValueOnce(
+      new ApiError(403, 'review.own_batch', 'Uploads are decided by somebody else.'),
+    );
+    show([cave]);
+    fireEvent.click(screen.getByTestId('review-accept-all'));
+    expect(
+      await screen.findByText('Uploads are decided by somebody other than the account that sent them.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(i18next.t('review.decided'))).toBeNull();
+  });
+
+  it('says why rejecting the whole upload was refused, in the words for its code', async () => {
+    spies.rejectBatch.mockRejectedValueOnce(
+      new ApiError(404, 'review.batch_not_found', 'Not found.'),
+    );
+    show([cave]);
+    fireEvent.click(screen.getByTestId('review-reject-all'));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Reject all' })).at(-1)!);
+    expect(await screen.findByText('This upload is not waiting for review, or you may not see it.')).toBeTruthy();
+    expect(screen.queryByText(i18next.t('review.decided'))).toBeNull();
+  });
+
+  it("says a refused single line in the server's own words when there are none of ours for its code", async () => {
+    spies.rejectItem.mockRejectedValueOnce(new ApiError(422, 'review.some_new_rule', 'The server says no to this line.'));
+    show([edit]);
+    fireEvent.click(screen.getByTestId('review-line-reject'));
+    expect(await screen.findByText('The server says no to this line.')).toBeTruthy();
   });
 
   it('keeps the selection when a decision fails', async () => {

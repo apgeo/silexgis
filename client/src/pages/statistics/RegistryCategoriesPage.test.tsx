@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { App, ConfigProvider } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -168,5 +168,24 @@ describe('RegistryCategoriesPage answers', () => {
 
     const chart = chartSpy.mock.calls.at(-1)?.[0] as { categories: string[] };
     expect(chart.categories).toEqual(['Vertical']);
+  });
+});
+
+describe('a failed read of the registry figures', () => {
+  it('offers to read again after a dropped connection, and not after a refusal that would only repeat', async () => {
+    const refetch = vi.fn();
+    categoriesSpy.mockReturnValue({ data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch });
+    const first = renderPage();
+
+    expect(await screen.findByText(i18n.t('registryStats.categoriesFailed'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    categoriesSpy.mockReturnValue({ data: undefined, isError: true, error: new ApiError(400, 'validation.failed', 'Invented reason.'), refetch });
+    renderPage();
+
+    expect(await screen.findByText('Invented reason.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).toBeNull();
   });
 });

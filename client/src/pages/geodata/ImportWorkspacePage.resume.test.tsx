@@ -174,8 +174,9 @@ describe('reopening a review within the same browser visit', () => {
     const savesBefore = puts.length;
     show();
     await screen.findByText('de la Izbuc');
-    // Past the autosave's quiet period, so a save the reopened page makes has been sent.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    // A reopened page applies the saved review afresh and saves once the autosave's pause is over,
+    // so its own save is what is waited for: the save that would carry a first-read copy back.
+    await waitFor(() => expect(puts.length).toBeGreaterThan(savesBefore), { timeout: 3000 });
 
     for (const sent of puts.slice(savesBefore)) {
       expect(sent.decisions).toHaveProperty('3');

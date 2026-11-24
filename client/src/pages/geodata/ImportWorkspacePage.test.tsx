@@ -408,7 +408,7 @@ describe('ImportWorkspacePage', () => {
     show();
     await screen.findByText('Ursilor');
     // Past the first settled request, so what follows is only the typing.
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await waitFor(() => expect(previewCalls.some((call) => call.enabled)).toBe(true));
 
     const prefix = screen
       .getByText(i18n.t('vectorImport.namePrefix'))
@@ -418,14 +418,13 @@ describe('ImportWorkspacePage', () => {
     for (const typed of ['P', 'Pe', 'Pes', 'Pest']) {
       fireEvent.change(prefix, { target: { value: typed } });
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const asked = new Set(
-      previewCalls.filter((call) => call.enabled).map((call) => call.body.options.namePrefix ?? ''),
-    );
-    expect(asked.has('Pest')).toBe(true);
+    // The witness that the pause was waited out: the request for the whole value is made. Every
+    // keystroke before it was drawn synchronously, so one asked for on the way would be here first.
+    const asked = () =>
+      new Set(previewCalls.filter((call) => call.enabled).map((call) => call.body.options.namePrefix ?? ''));
+    await waitFor(() => expect(asked().has('Pest')).toBe(true));
     for (const partial of ['P', 'Pe', 'Pes']) {
-      expect(asked.has(partial)).toBe(false);
+      expect(asked().has(partial)).toBe(false);
     }
   });
 });

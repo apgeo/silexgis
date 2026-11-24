@@ -7,6 +7,7 @@ import '../../i18n';
 import type { CaveWrite } from '../../api/hooks.ts';
 import { ApiError } from '../../api/client.ts';
 import { noteVersionOfReading } from '../../api/readingVersion.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const updateCave = vi.fn();
 const createCave = vi.fn();
@@ -121,7 +122,7 @@ describe('editing a cave that has not been read', () => {
     caveOnScreen = undefined;
     render(page());
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
     expect(updateCave).not.toHaveBeenCalled();
   });

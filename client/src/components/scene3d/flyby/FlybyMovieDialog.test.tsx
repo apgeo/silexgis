@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../i18n';
+import i18n from '../../../i18n';
 import { DEFAULT_FLYBY_MOVIE_SETTINGS } from '../../../flyby/flybyMovie.ts';
 import type { MovieEncoder, MovieEncoderOptions, MovieFormatSupport } from '../../../movie/encode/movieEncoder.ts';
 import type { CaveInView3D } from '../../../scene3d/centerlines3d.ts';
@@ -481,5 +481,24 @@ describe('a flyby movie that cannot be made', () => {
     expect(scene.camera()).toEqual(HOME);
     expect(onActiveChange).toHaveBeenLastCalledWith(false);
     expect(screen.getByTestId('flyby-movie-export')).toBeEnabled();
+  });
+
+  it('says the scene is not ready when it has gone by the time the export starts, and writes nothing', async () => {
+    const scene = fakeScene();
+    const live = scene.engine;
+    let gone = false;
+    scene.engine = () => (gone ? null : live());
+    renderFlyby(scene);
+    await openMovie();
+
+    gone = true;
+    fireEvent.click(screen.getByTestId('flyby-movie-export'));
+    for (let tries = 0; tries < 100 && !screen.queryByTestId('flyby-movie-failed'); tries += 1) {
+      await pass(50);
+    }
+
+    expect(screen.getByTestId('flyby-movie-failed')).toHaveTextContent(i18n.t('flyby.movie.notReady'));
+    expect(encoding.opened).toHaveLength(0);
+    expect(saveBlob).not.toHaveBeenCalled();
   });
 });

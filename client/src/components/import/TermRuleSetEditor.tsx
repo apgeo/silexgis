@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import type { TFunction } from 'i18next';
 import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined } from '@ant-design/icons';
 import {
   App,
@@ -21,8 +20,7 @@ import {
 import Button from '../Button.tsx';
 import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
-import { TERM_RULE_REFUSALS } from './termRuleProblems.ts';
+import { termRuleSaveProblem } from './termRuleProblems.ts';
 import {
   useCaveTypes,
   useCreateTermRuleSet,
@@ -54,29 +52,6 @@ function blankRule(index: number): TermRule {
     target: 'surfaceFeature',
     strip: 'none',
   };
-}
-
-/**
- * Why a set could not be saved. The server checks the whole document — a pattern that cannot be
- * compiled, a rule naming a taxonomy its target does not use — and for that its own sentence is
- * the useful one, since it names the rule that is wrong; no wording here could. Other refusals
- * are worded by their code, and a failure that says nothing is a failed save.
- */
-function saveProblem(error: unknown, t: TFunction): string {
-  if (!(error instanceof ApiError)) {
-    return t('common.saveFailed');
-  }
-  const known = error.code ? TERM_RULE_REFUSALS[error.code] : undefined;
-  if (known) {
-    return t(known);
-  }
-  if (error.status === 403) {
-    return t('termRules.errors.forbidden');
-  }
-  if (error.status >= 400 && error.status < 500 && error.detail) {
-    return error.detail;
-  }
-  return t('common.saveFailed');
 }
 
 /**
@@ -190,7 +165,7 @@ export default function TermRuleSetEditor({ setId, creating, onClose }: Props) {
       setDirty(false);
       onClose();
     } catch (e) {
-      setError(saveProblem(e, t));
+      setError(termRuleSaveProblem(e, t, 'common.saveFailed'));
     }
   };
 

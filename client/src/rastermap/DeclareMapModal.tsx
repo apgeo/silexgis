@@ -114,7 +114,7 @@ export default function DeclareMapModal({ open, onClose, surveyModelId, editing 
       message.success(t('rastermap.mapRemoved'));
       onClose();
     } catch (error) {
-      message.error(resLinkProblemMessage(error, t));
+      message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
     }
   };
 

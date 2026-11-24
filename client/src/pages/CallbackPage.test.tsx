@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../i18n';
+import { afterRejectionsAreReported } from '../testEventLoop.ts';
 
 const signinRedirectCallback = vi.fn();
 vi.mock('../auth/auth.tsx', () => ({
@@ -63,8 +64,9 @@ describe('the return from signing in', () => {
 
     const failed = await screen.findByTestId('sign-in-return-failed');
     expect(failed.textContent).toContain(i18n.t('auth.callbackFailed'));
-    // Give a navigation the time it would take; neither the home page nor a new sign-in follows.
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // A navigation would follow from the same failed promise that drew the notice, so once every
+    // answer already set going has landed, neither the home page nor a new sign-in has followed.
+    await afterRejectionsAreReported();
     expect(screen.queryByTestId('home')).toBeNull();
     expect(signInAgain).not.toHaveBeenCalled();
   });

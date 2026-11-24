@@ -3,7 +3,8 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ResLink, ResLinkMember } from '../../api/hooks.ts';
 
 interface PanelPage {
@@ -16,6 +17,7 @@ interface PanelPage {
 let panel: PanelPage = { items: [], page: 1, pageSize: 50, totalItems: 0 };
 /** What the read of the links failed with, when a test makes it fail. */
 let linksFailure: unknown;
+const deleteLink = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   useResLinksForTarget: () =>
@@ -24,7 +26,7 @@ vi.mock('../../api/hooks.ts', () => ({
       : { data: undefined, isError: true, error: linksFailure, refetch: vi.fn() },
   useMe: () => ({ data: { id: 'me' } }),
   useMyPermissionGroups: () => ({ data: [] }),
-  useDeleteResLink: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteResLink: () => ({ mutateAsync: deleteLink, isPending: false }),
 }));
 
 // Imported after the mock so the section binds to the stubbed queries.
@@ -116,6 +118,7 @@ describe('LinksSection', () => {
   beforeEach(() => {
     panel = { items: [], page: 1, pageSize: 50, totalItems: 0 };
     linksFailure = undefined;
+    deleteLink.mockReset().mockResolvedValue(undefined);
   });
 
   // Renders are not torn down between cases here, and several of these assert on absence.
@@ -288,6 +291,27 @@ describe('LinksSection', () => {
     expect(screen.queryByText('Thing 4')).not.toBeInTheDocument();
     const overflow = screen.getByText('+2');
     expect(overflow.closest('a')).toHaveAttribute('href', '/links/Ab3xY9Zq');
+  });
+
+  it('says why removing a link was refused, and one that did not land as a failed removal', async () => {
+    deleteLink
+      .mockRejectedValueOnce(new ApiError(403, 'acl.forbidden', 'Forbidden.'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    show(1, [link({ id: 'l1', members: [member({ id: 'self-m', targetId: 'self' }), member()] })]);
+    const removeOnce = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Link actions' }));
+      const item = (await screen.findAllByText('Delete link')).find((el) => el.closest('.ant-dropdown-menu-item'));
+      fireEvent.click(item!);
+      const confirm = await screen.findAllByRole('button', { name: 'Delete link' });
+      fireEvent.click(confirm.at(-1)!);
+    };
+    await removeOnce();
+    expect(await screen.findByText(i18n.t('resLinks.problems.forbidden'))).toBeInTheDocument();
+    await removeOnce();
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeInTheDocument();
+    expect(deleteLink).toHaveBeenCalledTimes(2);
+    expect(deleteLink).toHaveBeenCalledWith('l1');
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).not.toBeInTheDocument();
   });
 
   it('offers a place a phone pinned removal, and never an edit as a link', async () => {

@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const state = vi.hoisted(() => ({
   setCover: vi.fn(),
@@ -115,7 +116,7 @@ describe('AlbumDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use as the cover' }));
 
     expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
   });
 });

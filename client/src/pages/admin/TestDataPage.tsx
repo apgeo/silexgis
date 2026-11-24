@@ -182,6 +182,25 @@ export default function TestDataPage() {
     }
   };
 
+  /**
+   * Why removing or cancelling a run was refused. The server says when the run has moved on since
+   * the list was read — finished before the cancel arrived, already removed or still going — and
+   * each of those is told as such rather than as a failure to try again.
+   */
+  const runRefusal = (error: unknown, fallbackKey: string) => {
+    const code = error instanceof ApiError ? error.code : undefined;
+    switch (code) {
+      case 'testdata.run_not_found':
+        return t('testData.runGone');
+      case 'testdata.run_not_removable':
+        return t('testData.notRemovable');
+      case 'testdata.run_not_cancellable':
+        return t('testData.notCancellable');
+      default:
+        return t(fallbackKey);
+    }
+  };
+
   const confirmRemove = (row: TestDataRun) => {
     modal.confirm({
       title: t('testData.removeTitle'),
@@ -192,8 +211,8 @@ export default function TestDataPage() {
       onOk: async () => {
         try {
           await remove.mutateAsync(row.id);
-        } catch {
-          message.error(t('testData.removeFailed'));
+        } catch (error) {
+          message.error(runRefusal(error, 'testData.removeFailed'));
         }
       },
     });
@@ -202,8 +221,8 @@ export default function TestDataPage() {
   const stop = async (row: TestDataRun) => {
     try {
       await cancel.mutateAsync(row.id);
-    } catch {
-      message.error(t('testData.cancelFailed'));
+    } catch (error) {
+      message.error(runRefusal(error, 'testData.cancelFailed'));
     }
   };
 

@@ -4,6 +4,7 @@ import { Alert, App, Card, Empty, Flex, Form, Input, Popconfirm, Select, Skeleto
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { ApiError } from '../../api/client.ts';
 import {
   accessKeyIsUsable,
@@ -49,7 +50,7 @@ export default function AccessKeysSettingsPage() {
   const when = (value: string | null) => (value ? new Date(value).toLocaleDateString(i18n.language) : null);
   const trimmed = name.trim();
 
-  const refusal = (error: unknown, fallback: string) =>
+  const refusal = <T,>(error: unknown, fallback: T) =>
     error instanceof ApiError && error.status === 403 ? t('accessKeys.signInRequired') : fallback;
 
   const makeKey = async () => {
@@ -117,12 +118,15 @@ export default function AccessKeysSettingsPage() {
     return <Skeleton active paragraph={{ rows: 4 }} />;
   }
   if (keys.isError) {
+    // A refused read is the server's answer, not a blip: no Retry that would only be refused again.
     return (
-      <Alert
-        type="error"
-        showIcon
-        title={refusal(keys.error, t('accessKeys.loadFailed'))}
-        action={<Button onClick={() => void keys.refetch()}>{t('common.retry')}</Button>}
+      <ReadFailedAlert
+        isError
+        error={keys.error}
+        held={false}
+        onRetry={() => keys.refetch()}
+        title={t('accessKeys.loadFailed')}
+        refusedTitle={refusal(keys.error, undefined)}
       />
     );
   }

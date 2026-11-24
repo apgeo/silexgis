@@ -238,9 +238,6 @@ describe('arranging from a dialog opened before the trip was read again', () => 
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(arrange).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(readTripAgain).toHaveBeenCalledWith('trip-1'));
-    // A message is drawn a moment after it is asked for; this is long enough for one to appear.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(screen.queryByText(/could not be saved|failed/i)).toBeNull();
 
     // Saved again, it carries the version of the read and the times that read found.
     arrange.mockReset().mockResolvedValue({});
@@ -248,5 +245,11 @@ describe('arranging from a dialog opened before the trip was read again', () => 
     await waitFor(() => expect(arrange).toHaveBeenCalledTimes(1));
     expect(arrange.mock.calls[0][0]).toMatchObject({ ifMatch: '"2"' });
     expect(arrange.mock.calls[0][0].calloutAlarmAt).toBe(theirAlarm.toISOString());
+
+    // Messages are drawn in the order they were asked for, so the second save's own word is the
+    // witness: once it is on screen, anything the refused save had said would be there too.
+    await screen.findByText('Saved — the callout is set.');
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
+    expect(screen.queryByText(/could not be saved|failed/i)).toBeNull();
   });
 });

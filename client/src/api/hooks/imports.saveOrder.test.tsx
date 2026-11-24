@@ -5,6 +5,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportSession, PhotoSession } from '../hooks.ts';
 import { queryKeys } from './queryKeys.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 // Two saves of one review overlap whenever the first is slower than the pause between two edits.
 // The network is stubbed so the test decides the order the answers come back in.
@@ -94,7 +95,8 @@ describe('saving a review that is still being saved', () => {
     await act(async () => waiting[1].answer());
     await act(async () => waiting[0].answer());
     await waitFor(() => expect(result.current.isPending).toBe(false));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    // Anything the older answer still had to write into the cache has landed by now.
+    await act(async () => afterRejectionsAreReported());
 
     const cached = client.getQueryData<ImportSession>(queryKeys.importSession('geo-1'));
     expect(cached?.decisions).toEqual(newer.decisions);
@@ -130,7 +132,8 @@ describe('saving a review that is still being saved', () => {
     await act(async () => waiting[1].answer());
     await act(async () => waiting[0].answer());
     await waitFor(() => expect(result.current.isPending).toBe(false));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    // Anything the older answer still had to write into the cache has landed by now.
+    await act(async () => afterRejectionsAreReported());
 
     expect(client.getQueryData<PhotoSession>(queryKeys.photoImportSession)?.fileIds).toEqual(['a', 'b', 'c']);
   });

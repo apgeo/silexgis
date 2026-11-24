@@ -28,6 +28,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   window.localStorage.clear();
   await i18n.changeLanguage('en');
 });
@@ -87,18 +88,24 @@ describe('a public page about something an account sent', () => {
     rememberChoice('ro');
     await i18n.changeLanguage('ro');
 
+    const changeLanguage = vi.spyOn(i18n, 'changeLanguage');
     renderHook(() => useSendersLanguage('en'));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The hook decides while it mounts: a switch it asked for would be a call made by now, and
+    // not something still to come after a pause.
+    expect(changeLanguage).not.toHaveBeenCalled();
     expect(i18n.resolvedLanguage).toBe('ro');
   });
 
   it('ignores a language the interface has no translation for', async () => {
     await i18n.changeLanguage('ro');
 
+    const changeLanguage = vi.spyOn(i18n, 'changeLanguage');
     renderHook(() => useSendersLanguage('xx'));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The hook decides while it mounts: a switch it asked for would be a call made by now, and
+    // not something still to come after a pause.
+    expect(changeLanguage).not.toHaveBeenCalled();
     expect(i18n.resolvedLanguage).toBe('ro');
   });
 });

@@ -33,24 +33,30 @@ function fakeMap(): Map & { pan: () => Promise<void> } {
     getView: () => view,
     on: vi.fn((type: string, handler: () => void) => type === 'moveend' && moveEnd.add(handler)),
     un: vi.fn((type: string, handler: () => void) => type === 'moveend' && moveEnd.delete(handler)),
-    // A pan, past the loaders' debounce.
+    // A pan, past the loaders' debounce on the fake clock the tests run on.
     pan: async () => {
       moveEnd.forEach((handler) => handler());
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.advanceTimersByTimeAsync(300);
     },
   } as unknown as Map & { pan: () => Promise<void> };
 }
 
 const sourceOf = (savedFilterId: string) =>
   (findOverlayLayer(filterLayerId(savedFilterId)) as VectorLayer).getSource() as VectorSource;
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Lets the loads already started answer: their promises settle, and nothing waits on real time. */
+const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('the layers drawn from saved filters', () => {
   beforeEach(() => {
+    // The loaders' debounce runs on a fake clock, so a pan is past it exactly, however loaded the machine.
+    vi.useFakeTimers();
     fetchEntranceFeatures.mockReset().mockResolvedValue(point('e1'));
     fetchMapFeatures.mockReset().mockResolvedValue(empty);
   });
-  afterEach(() => detachFilterLayers());
+  afterEach(() => {
+    detachFilterLayers();
+    vi.useRealTimers();
+  });
 
   it('asks both map routes with its own saved filter, and draws what they answer', async () => {
     const map = fakeMap();

@@ -1733,7 +1733,9 @@
     "albumNotFound": "Albumul nu există",
     "albumNotFoundDetail": "Acest album nu există sau a fost șters.",
     "albumPhotosLoadFailed": "Fotografiile din acest album nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
-    "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora."
+    "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora.",
+    "createForbidden": "Contul tău nu poate crea albume.",
+    "subjectGone": "Subiectul acestui album nu mai există sau nu îl poți vedea."
   },
   "geodata": {
     "refusals": {
@@ -5182,7 +5184,12 @@
           "running": "Se pregătește…",
           "ready": "Gata",
           "failed": "Eșuat"
-        }
+        },
+        "inProgress": "Un export se pregătește deja. Așteaptă să se termine.",
+        "expired": "Acest export a expirat. Pregătește unul nou.",
+        "gone": "Acest export nu mai este disponibil. Pregătește unul nou.",
+        "requestFailed": "Exportul nu a putut fi cerut. Încearcă din nou.",
+        "downloadFailed": "Exportul nu a putut fi descărcat. Încearcă din nou."
       },
       "calendarFeed": {
         "heading": "Flux de calendar",
@@ -5250,7 +5257,8 @@
         "securityAlerts": "Se trimit mereu — acestea te avertizează despre propriul cont.",
         "tripCallout": "Se trimit mereu și nu se amână pentru rezumatul zilnic — o echipă întârziată nu mai este o noutate a doua zi dimineața."
       },
-      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul."
+      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
+      "choiceRefused": "Una dintre aceste alegeri nu este permisă pe canalul ei, așa că nu s-a salvat nimic. Reîncarcă pagina ca să vezi ce se poate alege."
     },
     "filters": {
       "heading": "Filtre salvate",
@@ -10110,7 +10118,10 @@
       "geodata": "cu datele geografice, importurile și dispozitivele",
       "accounts": "cu exporturile de cont"
     },
-    "note": "Notă"
+    "note": "Notă",
+    "runGone": "Această rulare nu mai există. Lista arată ce a rămas.",
+    "notRemovable": "Doar o rulare terminată, eșuată sau anulată poate fi eliminată, și doar o dată.",
+    "notCancellable": "Această rulare s-a terminat deja, deci nu mai e nimic de anulat."
   },
   "flyby": {
     "title": "Survol",
@@ -10232,7 +10243,8 @@
       "shortestRoute": "Traseul cel mai scurt",
       "file": "Un fișier importat",
       "pickFile": "Fișierul de urmat",
-      "noFiles": "Niciun fișier importat nu este gata. Importă mai întâi un traseu GPX sau KML la Geodate."
+      "noFiles": "Niciun fișier importat nu este gata. Importă mai întâi un traseu GPX sau KML la Geodate.",
+      "filesLoadFailed": "Fișierele importate nu au putut fi citite acum, așa că niciunul nu poate fi ales."
     },
     "subject": {
       "all": "toate împreună",
@@ -10427,7 +10439,8 @@
       "endSubtitle": "Cartonul de final, al doilea rând",
       "fadeIn": "Apare din negru la început",
       "fadeOut": "Se stinge în negru la final",
-      "trouble": "Acest survol nu poate fi redat așa cum este: o schimbare sau o legendă numește o secțiune pe care nu o mai are, începe în afara secțiunii sale sau schimbă același lucru ca o altă schimbare, în același timp."
+      "trouble": "Acest survol nu poate fi redat așa cum este: o schimbare sau o legendă numește o secțiune pe care nu o mai are, începe în afara secțiunii sale sau schimbă același lucru ca o altă schimbare, în același timp.",
+      "listsLoadFailed": "Unele dintre listele din care acest panou ia numele straturilor, filtrelor și tipurilor de obiecte nu au putut fi citite acum, așa că un nume poate apărea ca necunoscut și o alegere poate lipsi."
     },
     "edit": {
       "open": "Modifică ce face {{section}}",
@@ -10558,7 +10571,8 @@
       "eachOf": "fiecare dintre {{name}}",
       "empty": "Filtrul salvat al acestui survol nu selectează nicio peșteră pe care o poți vedea sau nu mai poate fi rulat.",
       "search": "Adaugă o peșteră după nume",
-      "searchNone": "Nicio peșteră cu acest nume"
+      "searchNone": "Nicio peșteră cu acest nume",
+      "loadFailed": "Filtrele salvate nu au putut fi citite acum, așa că niciunul nu poate fi ales."
     },
     "features": {
       "title_one": "Obiecte arătate de survol ({{count}})",

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import type { SurveyModelInfo } from '../../api/hooks.ts';
 import DankezCaveViewPane from './DankezCaveViewPane.tsx';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const MODEL = {
   id: 'model-1',
@@ -69,12 +70,14 @@ describe('DankezCaveViewPane', () => {
     const { post, say } = show();
 
     say({ type: 'lochviewer:ready', protocol: 1 }, 'https://elsewhere.example');
-    // Give the file read every chance to land before concluding nothing was sent.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
+    // The witness is the frame saying the same from this origin: every answer waits on the one
+    // file read and is sent in the order it was asked for, so once the genuine one is sent, one
+    // for the stranger would have been sent before it.
+    say({ type: 'lochviewer:ready', protocol: 1 });
+    await waitFor(() => expect(post).toHaveBeenCalled());
 
-    expect(post).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post.mock.calls[0][1]).toBe(window.location.origin);
   });
 
   it('shows the viewer’s own error', () => {
@@ -94,9 +97,10 @@ describe('DankezCaveViewPane', () => {
 
     // Whatever lists the survey signs its address again every few minutes; the file is the same.
     showModel({ ...MODEL, modelUrl: 'http://files.local/model?token=resigned' } as SurveyModelInfo);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
+    // A read starts as the pane takes the new address, so by now it would have been asked for;
+    // the viewer asking again is answered from the read already in hand.
+    say({ type: 'lochviewer:ready', protocol: 1 });
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('dankez-caveview-status')).toHaveTextContent('Stations loaded: 393');
@@ -144,10 +148,17 @@ describe('DankezCaveViewPane', () => {
           source: stranger.contentWindow,
         }));
       });
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      // The pane's own frame saying the same is the witness: answers wait on the one file read
+      // and go out in the order they were asked for, so the stranger's would have gone first.
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', {
+          data: { type: 'lochviewer:ready', protocol: 1 },
+          origin: window.location.origin,
+          source: screen.getByTestId<HTMLIFrameElement>('dankez-caveview-frame').contentWindow,
+        }));
       });
-      expect(post).not.toHaveBeenCalled();
+      await waitFor(() => expect(post).toHaveBeenCalled());
+      expect(post).toHaveBeenCalledTimes(1);
       expect(strangerPost).not.toHaveBeenCalled();
     } finally {
       stranger.remove();
@@ -161,9 +172,8 @@ describe('DankezCaveViewPane', () => {
     }));
 
     say({ type: 'lochviewer:ready', protocol: 1 });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
+    // The file has not arrived, so there is nothing yet to send; what matters is that the
+    // readiness is not forgotten by the time it does.
     expect(post).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -181,9 +191,9 @@ describe('DankezCaveViewPane', () => {
     );
 
     say({ type: 'lochviewer:ready', protocol: 1 });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
+    // The answer waits on a read that has already failed, so all that is left of it is promise
+    // callbacks; they have all run once the event loop has had a turn.
+    await act(afterRejectionsAreReported);
     expect(post).not.toHaveBeenCalled();
   });
 

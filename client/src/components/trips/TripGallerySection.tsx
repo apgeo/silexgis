@@ -16,6 +16,7 @@ import {
 import Lightbox from '../gallery/Lightbox.tsx';
 import PhotoGrid from '../gallery/PhotoGrid.tsx';
 import { viewPhoto } from '../gallery/photoView.ts';
+import { albumCreateProblem } from '../../pages/gallery/albumProblems.ts';
 import { FONT_SIZE } from '../../theme.ts';
 
 /**
@@ -87,8 +88,8 @@ export default function TripGallerySection({
         subjectEntityId: tripId,
       });
       navigate(`/albums/${album.id}`);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(albumCreateProblem(error, t));
     }
   };
 

@@ -23,7 +23,7 @@ import {
 } from '../../api/hooks.ts';
 import { downloadFile } from '../../api/download.ts';
 import TermRuleSetEditor from '../../components/import/TermRuleSetEditor.tsx';
-import { termRuleProblem } from '../../components/import/termRuleProblems.ts';
+import { termRuleProblem, termRuleSaveProblem } from '../../components/import/termRuleProblems.ts';
 
 /**
  * The club's naming habits, configured once.
@@ -89,8 +89,10 @@ export default function TermRulesPage() {
       const created = await importSet.mutateAsync({ document, name: document.name ?? file.name });
       setEditing(created.set.id);
       message.success(t('termRules.imported'));
-    } catch {
-      message.error(t('termRules.importFailed'));
+    } catch (error) {
+      // A file that is not JSON never reaches the server; a document the server refused is said
+      // in its words, which name the rule that is wrong.
+      message.error(termRuleSaveProblem(error, t, 'termRules.importFailed'));
     }
   };
 

@@ -8,6 +8,7 @@ import '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { Entrance } from '../../api/hooks.ts';
 import { getWorkspaceMap } from '../../map/mapContext.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 // Every map the dialog builds, in order: a second one is the defect.
 const built = vi.hoisted(() => [] as OlMap[]);
@@ -108,7 +109,10 @@ describe('EntranceEditorModal', () => {
       await waitFor(() => expect(attached()).toHaveLength(1));
       fireEvent.change(screen.getByLabelText('Longitude'), { target: { value: '' } });
       fireEvent.click(screen.getByRole('button', { name: 'OK' }));
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // The field drawn as invalid marks the validation as over; a turn of the event loop then lets
+      // a rejection nobody handled be reported before it is looked for.
+      await waitFor(() => expect(document.querySelector('.ant-form-item-explain-error')).not.toBeNull());
+      await afterRejectionsAreReported();
       expect(createEntrance).not.toHaveBeenCalled();
       expect(unhandled).toEqual([]);
       // A new entrance has no version to hold.
@@ -170,9 +174,15 @@ describe('EntranceEditorModal', () => {
     await waitFor(() => expect(updateEntrance).toHaveBeenCalledTimes(1));
     // The refusal is one the save can meet: it named the version the form was opened at.
     expect(updateEntrance.mock.calls[0][0]).toMatchObject({ ifMatch: '"7"' });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too, whatever words it used.
+    updateEntrance.mockRejectedValue(new ApiError(403, 'entrance.location_forbidden'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText(/You may not choose the main entrance of a cave whose exact location/);
     // The shared mutation handler shows the reload-and-reapply prompt; a second, vaguer one here
     // would contradict it.
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
     expect(onClose).not.toHaveBeenCalled();
   });
