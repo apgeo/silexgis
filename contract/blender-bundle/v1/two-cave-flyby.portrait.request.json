@@ -68,6 +68,32 @@
   "leftOut": [
     "ground"
   ],
+  "changes": {
+    "relief": null,
+    "sky": null,
+    "walls": {
+      "shown": null,
+      "opacity": null,
+      "tint": [
+        { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null }
+      ]
+    },
+    "lines": null,
+    "caves": [
+      {
+        "caveId": "0193a5c0-0000-7000-8000-00000000000a",
+        "walls": [
+          { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
+          { "frame": 65, "colour": "#ffcc00", "strength": 0, "easing": "constant" },
+          { "frame": 90, "colour": "#ffcc00", "strength": 0.85, "easing": "smooth" }
+        ],
+        "lines": [
+          { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
+          { "frame": 65, "colour": "#ffcc00", "strength": 1, "easing": "constant" }
+        ]
+      }
+    ]
+  },
   "frames": [
     [9.7480313471,44.3461322382,263162.9669,20,-89.9,0,262523.367,60],
     [9.7481392135,44.3463441606,248778.811,20,-89.9,0,248139.189,60],

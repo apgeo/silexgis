@@ -10188,9 +10188,6 @@
       "leftOutHelp": "Pachetul se face oricum, iar fișierul README din el spune același lucru.",
       "leftOut": {
         "ground": "Terenul și harta desenată pe el: peșterile stau în spațiu gol, sub un cer simplu.",
-        "timedChanges": "Schimbările de aspect din timpul survolului — straturi, culori, fundaluri, cerul: scena păstrează aspectul primului cadru.",
-        "reliefChanges": "Schimbarea reliefului din timpul survolului: scena păstrează relieful primului cadru.",
-        "wallColours": "Culoarea cu care sunt nuanțați pereții: sunt desenați ca rocă simplă.",
         "surfaceOpening": "Deschiderea tăiată în teren deasupra unei peșteri.",
         "entrances": "Marcajele intrărilor.",
         "surfaceFeatures": "Fenomenele de suprafață și straturile de obiecte.",
@@ -10198,7 +10195,6 @@
         "photos": "Fotografiile din stații.",
         "mapLayers": "Straturile suprapuse de hartă și hărțile georeferențiate.",
         "tracks": "Liniile fișierelor importate.",
-        "layerOpacity": "Intensitatea cu care sunt desenate straturile: ce se vede este desenat complet.",
         "wallsNotDownloaded": "Pereții care nu au fost descărcați în vizualizare: acele peșteri sunt desenate prin drumuiri.",
         "moreCavesInView": "O parte din peșterile din vizualizare: un pachet ia doar un număr limitat."
       },

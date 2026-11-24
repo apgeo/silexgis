@@ -252,6 +252,31 @@ describe('a flyby as a bundle for Blender', () => {
     expect(screen.getByTestId('flyby-bundle-left-out')).toHaveTextContent('The bundle is made anyway, and its README says the same.');
   });
 
+  it('lists no change of the look as left out: a relief that grows while the flyby plays is sent as keys', async () => {
+    renderFlyby();
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    const factor = screen.getByRole('spinbutton', { name: 'The factor the relief rises to' });
+    fireEvent.change(factor, { target: { value: '3' } });
+    fireEvent.blur(factor);
+    fireEvent.click(screen.getByTestId('flyby-recipe-relief-add'));
+    await openBundle();
+
+    // Only the ground: what changes during the flyby goes into the bundle.
+    expect(leftOut()).toEqual(['ground']);
+
+    await download();
+    const { body } = server.asked[0];
+    expect(body.leftOut).toEqual(['ground']);
+    // Up to three times as tall and back, eased as the flyby eases: four keys after the first.
+    const relief = body.changes?.relief ?? [];
+    expect(relief.map((key) => key.value)).toEqual([1, 1, 3, 3, 1]);
+    expect(relief.map((key) => key.easing)).toEqual([null, null, 'smooth', null, 'smooth']);
+    expect(relief.every((key) => Number.isInteger(key.frame) && key.frame >= 0 && key.frame < body.frames.length)).toBe(true);
+    // The camera's heights stay true; the mark over the picture follows the ramp.
+    expect(body.relief).toBe(1);
+    expect(body.texts?.cornerCaptions?.length).toBeGreaterThan(10);
+  });
+
   it('sends the camera of every frame, the flyby\'s cave with its walls and the others in view by their lines', async () => {
     const scene = renderFlyby();
     fireEvent.change(screen.getByTestId('flyby-name'), { target: { value: 'Round the cave' } });

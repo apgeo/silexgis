@@ -4,10 +4,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { flybyBundleRequest, type FlybyBundleRequest } from './flybyBlenderBundle.ts';
+import { FLYBY_BUNDLE_NUMBER, FLYBY_BUNDLE_TINT, flybyBundleTrackAt, type FlybyBundleTrackKey } from './flybyBundleChanges.ts';
 import type { Camera3DEye } from '../scene3d/camera3d.ts';
 import { FLYBY_VERSION, flybyProblems, type FlybyDocument } from './flybyDocument.ts';
-import type { FlybyLookBase } from './flybyLook.ts';
-import { flybyFrameSchedule } from './flybyMovie.ts';
+import { flybyLookAt, flybyReliefAt, type FlybyLookBase } from './flybyLook.ts';
+import { flybyFrameSchedule, type FlybyFrameSchedule } from './flybyMovie.ts';
 import type { FlybyResolvedSubject } from './flybySubjects.ts';
 import { compileFlyby, flybyCameraAt } from './flybyTimeline.ts';
 
@@ -21,6 +22,11 @@ import { compileFlyby, flybyCameraAt } from './flybyTimeline.ts';
 // which way it points. The server's tests build the bundle from the same request and compare its
 // camera with these numbers; where a Blender is installed they build the scene in it and compare
 // that camera too.
+//
+// And the look, which changes while the flyby plays: the relief each frame is drawn at, the sky,
+// the walls and the lines shown and how much of them, and each cave's colours — read here, frame
+// by frame, from the function that puts a moment's look on the screen. The server's tests play
+// the bundle's keys and set them beside these; Blender is asked what each model has at a frame.
 //
 // Both files are committed under contract/blender-bundle/v1. A normal run compares against them and
 // fails on any difference; SILEXGIS_CONTRACT_RECORD=1 rewrites them, which is the only way they
@@ -39,7 +45,12 @@ const RECORD = process.env.SILEXGIS_CONTRACT_RECORD === '1';
 // camera's clearance above it is the same number on every machine. The flyby goes through every
 // way a section can move the camera: in from far away looking straight down, an approach, a whole
 // turn, a hop to the second cave, a descent along its survey and a flight along the track; its
-// lens narrows on the way and it is drawn at one and a half times its height.
+// lens narrows on the way and it is drawn at one and a half times its height — and at twice its
+// height by the end, the relief growing while the camera flies along the track.
+//
+// Its look changes as a flyby's does: every cave dimmed and each lit while the camera is with it,
+// the lines cut from their colours by depth to one colour and thinned to half, the sky darkening,
+// and the walls faded out before the end. Every change begins and ends on a frame of the clip.
 
 /** Where the invented scene stands. */
 const PARITY_ORIGIN: Camera3DEye = { lon: 9.75, lat: 44.35, height: 640 };
@@ -115,10 +126,20 @@ const PARITY_FLYBY: FlybyDocument = {
     { id: 'down', kind: 'descent', subject: 1, seconds: 3, to: { rangeM: 25, pitch: -18, clearance: null } },
     { id: 'along', kind: 'follow', subject: 2, seconds: 3, to: { rangeM: 120, pitch: -24, clearance: 20 } },
   ],
-  look: { sky: '#1b2a3a', lens: 60, relief: 1.5 },
+  look: { sky: '#1b2a3a', lens: 60, relief: 1.5, walls: { colour: '#3a3f4a', strength: 0.6 } },
   changes: [
     { id: 'zoom', kind: 'lens', degrees: 35, section: 'round', at: 0.5, seconds: 2 },
     { id: 'taller', kind: 'relief', factor: 2, section: 'along', at: 0, seconds: 2 },
+    // The first cave lit as the camera comes in, and dimmed again as it finishes its turn.
+    { id: 'lit-1', kind: 'cave', subject: 0, colour: '#ffcc00', strength: 0.85, section: 'in', at: 0, seconds: 1 },
+    { id: 'dim-1', kind: 'cave', subject: 0, colour: '#ffcc00', strength: 0, section: 'round', at: 3, seconds: 1 },
+    // The second, while the camera goes down it.
+    { id: 'lit-2', kind: 'cave', subject: 1, colour: '#ffcc00', strength: 0.85, section: 'over', at: 2, seconds: 1 },
+    { id: 'dim-2', kind: 'cave', subject: 1, colour: '#ffcc00', strength: 0, section: 'down', at: 2, seconds: 1 },
+    { id: 'one-colour', kind: 'lines', colour: '#5c6370', section: 'round', at: 0, seconds: 0 },
+    { id: 'thin', kind: 'layerOpacity', layer: 'centerlines', opacity: 0.5, section: 'over', at: 0, seconds: 1 },
+    { id: 'dusk', kind: 'sky', colour: '#0b1118', section: 'down', at: 0, seconds: 2 },
+    { id: 'walls-go', kind: 'layer', layer: 'walls', visible: false, section: 'along', at: 1, seconds: 1.6 },
   ],
   texts: {
     title: { text: 'Two invented caves', subtitle: 'A camera test', seconds: 2 },
@@ -172,16 +193,16 @@ const round = (value: number, decimals: number) => Math.round(value * 10 ** deci
 
 /**
  * What each frame's camera is, on the Earth: where the eye stands — at its height times the relief
- * the scene is drawn at —, the way it looks, where the top of its picture points, and the angle it
- * sees from left to right. Ten numbers a frame.
+ * that frame is drawn at —, the way it looks, where the top of its picture points, the angle it
+ * sees from left to right, and that relief. Eleven numbers a frame.
  */
-function expectedCameras(request: FlybyBundleRequest): number[][] {
+function expectedCameras(request: FlybyBundleRequest, reliefs: readonly number[]): number[][] {
   const { width, height } = request.output!;
-  return request.frames.map(([longitude, latitude, heightM, heading, pitch, , , lens]) => {
+  return request.frames.map(([longitude, latitude, heightM, heading, pitch, , , lens], index) => {
     const at = axes(longitude, latitude);
     const h = radians(heading);
     const p = radians(pitch);
-    const eye = ecef(longitude, latitude, heightM * request.relief);
+    const eye = ecef(longitude, latitude, heightM * reliefs[index]);
     const forward = combine(Math.sin(h) * Math.cos(p), Math.cos(h) * Math.cos(p), Math.sin(p), at);
     // With no roll the top of the picture is in the plane of the line of sight and the vertical.
     const up = combine(-Math.sin(h) * Math.sin(p), -Math.cos(h) * Math.sin(p), Math.cos(p), at);
@@ -191,17 +212,18 @@ function expectedCameras(request: FlybyBundleRequest): number[][] {
       ...forward.map((value) => round(value, 10)),
       ...up.map((value) => round(value, 10)),
       round(across, 6),
+      round(reliefs[index], 6),
     ];
   });
 }
 
-/** Twenty invented points about the two caves, on the Earth as the scene draws them. */
-function expectedPoints(relief: number): number[][] {
-  return Array.from({ length: 20 }, (_, i) =>
-    ecef(9.75 + 0.0016 * (((i * 7) % 11) - 3), 44.35 + 0.0011 * (((i * 5) % 9) - 2), (520 + 15 * i) * relief).map((value) =>
-      round(value, 4),
-    ),
-  );
+/** Twenty invented points about the two caves: longitude, latitude and true height, for whoever draws them at a frame's relief. */
+function expectedPoints(): number[][] {
+  return Array.from({ length: 20 }, (_, i) => [
+    round(9.75 + 0.0016 * (((i * 7) % 11) - 3), 6),
+    round(44.35 + 0.0011 * (((i * 5) % 9) - 2), 6),
+    520 + 15 * i,
+  ]);
 }
 
 // ---- the flyby, sampled as an export samples it ----
@@ -210,10 +232,11 @@ const viewer: FlybyLookBase = { backgroundOpacity: 1, surface: 'overlay', lens: 
 const timeline = compileFlyby(PARITY_FLYBY, PARITY_SUBJECTS, (about) => about.name);
 
 function ask(size: { width: number; height: number }, stretch?: { from: number; to: number }, holdEndS = 0) {
-  return flybyBundleRequest({
+  const schedule = flybyFrameSchedule(timeline.length, 25, stretch, holdEndS);
+  const made = flybyBundleRequest({
     name: PARITY_FLYBY.name,
     timeline,
-    schedule: flybyFrameSchedule(timeline.length, 25, stretch, holdEndS),
+    schedule,
     size,
     quality: 'low',
     groundHeight: parityGround,
@@ -230,13 +253,89 @@ function ask(size: { width: number; height: number }, stretch?: { from: number; 
     ],
     reliefWords: (factor) => `Relief ×${factor}`,
   });
+  return { ...made, schedule };
 }
 
 const CASES = [
   { name: 'two-cave-flyby.landscape', made: ask({ width: 1280, height: 720 }) },
-  // A stretch of it, upright, with the last moment held: the first second is still straight down.
+  // A stretch of it, upright, with the last moment held: the first second is still straight down,
+  // and the first cave is lit just as the stretch ends.
   { name: 'two-cave-flyby.portrait', made: ask({ width: 1080, height: 1920 }, { from: 0.4, to: 4 }, 0.2) },
 ] as const;
+
+// ---- the look, read from what puts it on the screen ----
+
+/** The relief each frame of a clip is drawn at. */
+function expectedReliefs(schedule: FlybyFrameSchedule): number[] {
+  return Array.from({ length: schedule.count }, (_, index) => flybyReliefAt(timeline.look, viewer.relief, schedule.at(index)));
+}
+
+type LookRow = [string, boolean, number, boolean, number, ...(string | number | null)[]];
+
+/**
+ * The look of each frame: the sky, whether the walls are shown and how much of them, the same of
+ * the lines, and for each cave the colour over its walls with its strength and the one colour of
+ * its lines (null: by depth). A cave's own colour stands over the colour of every cave while it
+ * has any strength, as the scene draws it.
+ */
+function expectedLook(schedule: FlybyFrameSchedule): LookRow[] {
+  return Array.from({ length: schedule.count }, (_, index) => {
+    const state = flybyLookAt(timeline.look, viewer, schedule.at(index));
+    const walls = state.layers.walls ?? { visible: true, opacity: 1 };
+    const lines = state.layers.centerlines ?? { visible: true, opacity: 1 };
+    const row: LookRow = [state.sky ?? '#000000', walls.visible, round(walls.opacity, 6), lines.visible, round(lines.opacity, 6)];
+    for (const caveId of PARITY_CAVES) {
+      const own = state.caves?.[caveId];
+      const tint = own && own.strength > 0 ? own : state.walls;
+      row.push(tint && tint.strength > 0 ? tint.colour : '#000000', round(tint?.strength ?? 0, 6));
+      row.push(own && own.strength > 0 ? own.colour : (state.lines ?? null));
+    }
+    return row;
+  });
+}
+
+const channels = (colour: string) => [1, 3, 5].map((at) => Number.parseInt(colour.slice(at, at + 2), 16));
+
+type TintKeys = readonly { frame: number; colour: string; strength: number; easing?: string | null }[];
+
+function played(keys: TintKeys): FlybyBundleTrackKey[] {
+  return keys.map((key) => ({
+    frame: key.frame,
+    value: [...channels(key.colour), key.strength],
+    ...(key.easing === 'smooth' || key.easing === 'constant' ? { easing: key.easing } : {}),
+  }));
+}
+
+/**
+ * The frames at which the request's keys say another colour for a cave than the screen shows: the
+ * frames a hand-over between a cave's own colour and the colour of every cave stands on. By cave,
+ * for its walls and for its lines.
+ */
+function handOvers(request: FlybyBundleRequest, look: readonly LookRow[]): { walls: number[]; lines: number[] }[] {
+  return PARITY_CAVES.map((caveId, cave) => {
+    const apart = request.changes?.caves?.find((entry) => entry.caveId === caveId);
+    const walls = played((apart?.walls ?? request.changes?.walls?.tint ?? []) as TintKeys);
+    const lines = played(
+      (apart?.lines ??
+        request.changes?.lines?.tint ??
+        (request.look?.lineColour ? [{ frame: 0, colour: request.look.lineColour, strength: 1 }] : [])) as TintKeys,
+    );
+    const off = { walls: [] as number[], lines: [] as number[] };
+    look.forEach((row, frame) => {
+      const [wallsColour, wallsStrength, linesColour] = row.slice(5 + cave * 3, 8 + cave * 3) as [string, number, string | null];
+      const none = [0, 0, 0, 0];
+      const wallsSaid = walls.length > 0 ? flybyBundleTrackAt(walls, frame, FLYBY_BUNDLE_TINT) : none;
+      if (!FLYBY_BUNDLE_TINT.same(wallsSaid, [...channels(wallsColour), wallsStrength])) {
+        off.walls.push(frame);
+      }
+      const linesSaid = lines.length > 0 ? flybyBundleTrackAt(lines, frame, FLYBY_BUNDLE_TINT) : none;
+      if (!FLYBY_BUNDLE_TINT.same(linesSaid, linesColour ? [...channels(linesColour), 1] : none)) {
+        off.lines.push(frame);
+      }
+    });
+    return off;
+  });
+}
 
 /**
  * How far a recomputed number may stand from the committed one: two of the last digit it is written
@@ -244,7 +343,7 @@ const CASES = [
  * their last bit — and anything more than that is a different camera.
  */
 const REQUEST_FRAME = [2e-10, 2e-10, 2e-4, 2e-7, 2e-7, 2e-7, 2e-3, 2e-5];
-const EXPECTED_FRAME = [2e-4, 2e-4, 2e-4, 2e-10, 2e-10, 2e-10, 2e-10, 2e-10, 2e-10, 2e-6];
+const EXPECTED_FRAME = [2e-4, 2e-4, 2e-4, 2e-10, 2e-10, 2e-10, 2e-10, 2e-10, 2e-10, 2e-6, 2e-6];
 
 function tolerance(path: string): number {
   const column = Number(/\[(\d+)\]$/.exec(path)?.[1] ?? 0);
@@ -254,8 +353,9 @@ function tolerance(path: string): number {
   if (path.startsWith('expected.frames[')) {
     return EXPECTED_FRAME[column];
   }
-  if (path.startsWith('expected.points[')) {
-    return 2e-4;
+  if (path.startsWith('expected.look[') || path.includes('.changes.')) {
+    // A strength or a factor, written to a millionth.
+    return 2e-6;
   }
   // Everything else is a setting or a time written to a ten-thousandth of a second.
   return 1e-9;
@@ -283,11 +383,16 @@ function near(actual: unknown, expected: unknown, path: string): void {
 }
 
 function compactJson(value: { frames: number[][] } & Record<string, unknown>): string {
-  // One frame a line, so a change to one frame is one line of a diff.
+  // One frame a line, so a change to one frame is one line of a diff; and one key a line.
   const { frames, ...rest } = value;
-  const head = JSON.stringify(rest, null, 2);
-  const lines = frames.map((frame) => `    ${JSON.stringify(frame)}`).join(',\n');
-  return `${head.slice(0, -2)},\n  "frames": [\n${lines}\n  ]\n}\n`;
+  const lookRows = Array.isArray(rest.look) ? (rest.look as unknown[][]) : undefined;
+  if (lookRows) {
+    delete rest.look;
+  }
+  const head = JSON.stringify(rest, null, 2).replace(/\{\n\s+"frame": [^{}]*?\}/g, (key) => key.replace(/\n\s*/g, ' '));
+  const rows = (list: unknown[][]) => list.map((row) => `    ${JSON.stringify(row)}`).join(',\n');
+  const looks = lookRows ? `,\n  "look": [\n${rows(lookRows)}\n  ]` : '';
+  return `${head.slice(0, -2)}${looks},\n  "frames": [\n${rows(frames)}\n  ]\n}\n`;
 }
 
 describe('the invented flyby the camera check is made on', () => {
@@ -301,8 +406,14 @@ describe('the invented flyby the camera check is made on', () => {
     expect(refusal).toBeNull();
     expect(request.frames).toHaveLength(450);
     expect(request.relief).toBe(1.5);
-    // The lens is carried frame by frame; the relief that changes later is said to be left out.
-    expect(omissions).toEqual(['ground', 'reliefChanges']);
+    // The lens is carried frame by frame and every change of the look by its keys: only the ground
+    // is left out.
+    expect(omissions).toEqual(['ground']);
+    expect(request.changes?.relief).toEqual([
+      { frame: 0, value: 1.5, easing: null },
+      { frame: 375, value: 1.5, easing: null },
+      { frame: 425, value: 2, easing: 'smooth' },
+    ]);
 
     const lenses = request.frames.map((frame) => frame[7]);
     expect(Math.max(...lenses)).toBe(60);
@@ -336,22 +447,100 @@ describe('the invented flyby the camera check is made on', () => {
     expect(request.texts?.title?.seconds).toBeCloseTo(1.6, 6);
     expect(request.texts?.end).toBeNull();
   });
+
+  it('changes its look in every way a bundle carries, each change on frames of the clip', () => {
+    const { request } = CASES[0].made;
+    const changes = request.changes!;
+    // The first cave: dimmed with the rest, lit over a second, dimmed again — two keys a fade.
+    expect(changes.walls?.tint).toEqual([{ frame: 0, colour: '#3a3f4a', strength: 0.6, easing: null }]);
+    expect(changes.caves?.[0].walls?.map((key) => [key.frame, key.strength, key.easing])).toEqual([
+      [0, 0.6, null],
+      [75, 0, 'constant'],
+      [100, 0.85, 'smooth'],
+      [200, 0.85, null],
+      [225, 0, 'smooth'],
+      [226, 0.6, 'constant'],
+    ]);
+    // The lines: by depth, then one colour; a cave's own while it is lit.
+    expect(changes.lines?.tint?.map((key) => [key.frame, key.strength, key.easing])).toEqual([
+      [0, 0, null],
+      [125, 1, 'constant'],
+    ]);
+    expect(changes.lines?.opacity).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: 225, value: 1, easing: null },
+      { frame: 250, value: 0.5, easing: 'smooth' },
+    ]);
+    // The walls fade out and are hidden from the frame they have gone at.
+    expect(changes.walls?.shown).toEqual([{ frame: 440, shown: false }]);
+    expect(changes.walls?.opacity?.at(-1)).toEqual({ frame: 440, value: 0, easing: 'smooth' });
+    // The sky crosses from one colour to another: a key a frame, as the screen mixes them.
+    expect(changes.sky?.[0]).toEqual({ frame: 0, colour: '#1b2a3a', easing: null });
+    expect(changes.sky?.at(-1)).toMatchObject({ frame: 350, colour: '#0b1118' });
+    expect(changes.sky!.length).toBeGreaterThan(40);
+    // "Relief ×N" for every tenth the ramp passes.
+    expect(request.texts?.cornerCaptions?.map((mark) => mark.text)).toEqual([
+      'Relief ×1.5',
+      'Relief ×1.6',
+      'Relief ×1.7',
+      'Relief ×1.8',
+      'Relief ×1.9',
+      'Relief ×2',
+    ]);
+  });
+
+  it('says of each cave\'s colours what the screen shows, but for the one frame a hand-over stands on', () => {
+    const { request, schedule } = CASES[0].made;
+    expect(handOvers(request, expectedLook(schedule))).toEqual([
+      // Lit from frame 75 and dimmed at 225: the screen changes hands just after and just at.
+      { walls: [75, 225], lines: [75] },
+      { walls: [275, 375], lines: [275] },
+    ]);
+    // The stretch ends as the first cave has just been lit, and holds that.
+    const portrait = CASES[1].made;
+    expect(handOvers(portrait.request, expectedLook(portrait.schedule))).toEqual([
+      { walls: [65], lines: [65] },
+      { walls: [], lines: [] },
+    ]);
+  });
+
+  it('draws each frame at the relief the request\'s own keys give', () => {
+    for (const { made } of CASES) {
+      const keys = (made.request.changes?.relief ?? [{ frame: 0, value: made.request.relief, easing: null }]).map(
+        (key): FlybyBundleTrackKey => ({
+          frame: key.frame,
+          value: [key.value],
+          ...(key.easing === 'smooth' || key.easing === 'constant' ? { easing: key.easing } : {}),
+        }),
+      );
+      expectedReliefs(made.schedule).forEach((relief, frame) => {
+        expect(flybyBundleTrackAt(keys, frame, FLYBY_BUNDLE_NUMBER)[0], `frame ${frame}`).toBeCloseTo(relief, 6);
+      });
+    }
+  });
 });
 
 describe.each(CASES)('$name', ({ name, made }) => {
   const requestPath = join(CONTRACT, `${name}.request.json`);
   const expectedPath = join(CONTRACT, `${name}.expected.json`);
+  const look = expectedLook(made.schedule);
   const expected = {
     about:
       'The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), ' +
-      'the unit direction it looks in, the unit direction of the top of its picture, and the degrees it sees from left to right. ' +
-      'Then twenty invented points, earth-centred, to project through it.',
-    relief: made.request.relief,
+      'the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, ' +
+      'and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, ' +
+      'each at its height times the frame\'s relief. The look of each frame: the sky, the walls shown and how much of them, ' +
+      'the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour\'s ' +
+      'strength, and the one colour of its lines (null: their colours by depth). And for each cave the frames at which a ' +
+      'bundle\'s keys may say another colour than the screen shows, because a hand-over between a cave\'s own colour and ' +
+      'the colour of every cave stands on them.',
     width: made.request.output!.width,
     height: made.request.output!.height,
     fps: made.request.output!.fps,
-    points: expectedPoints(made.request.relief),
-    frames: expectedCameras(made.request),
+    points: expectedPoints(),
+    handOvers: handOvers(made.request, look),
+    look,
+    frames: expectedCameras(made.request, expectedReliefs(made.schedule)),
   };
 
   it('is the request and the cameras that are committed', () => {

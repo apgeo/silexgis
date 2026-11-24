@@ -3,8 +3,8 @@ import { downloadFilePostWithHeaders } from '../../../api/download.ts';
 import {
   FLYBY_BUNDLE_MAX_FRAMES,
   flybyBundleOmissions,
-  flybyBundleOpeningLook,
   flybyBundleRequest,
+  flybyBundleShows,
   type FlybyBundleOmission,
   type FlybyBundleRefusal,
 } from '../../../flyby/flybyBlenderBundle.ts';
@@ -71,9 +71,9 @@ export function flybyBundlePreview(
   const plan = flybyLookPlan(document);
   const shown = layersShown(scene);
   const base = viewerLook(scene, plan.layers, shown);
-  const opening = flybyBundleOpeningLook(plan, base, schedule.from);
+  const shows = flybyBundleShows(plan, base, schedule);
   const omissions = flybyBundleOmissions(plan, base, schedule, shown);
-  if (wallsDeclined && opening.walls) {
+  if (wallsDeclined && shows.walls) {
     omissions.push('wallsNotDownloaded');
   }
   // A saved filter stands for caves that are only found when the flyby is prepared.
@@ -83,7 +83,7 @@ export function flybyBundlePreview(
       ? { kind: 'tooLong', frames: schedule.count, max: FLYBY_BUNDLE_MAX_FRAMES }
       : !aboutCaves
         ? { kind: 'noCaves' }
-        : !opening.walls && !opening.lines
+        : !shows.walls && !shows.lines
           ? { kind: 'nothingShown' }
           : null;
   return { omissions, refusal };

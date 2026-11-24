@@ -10175,9 +10175,6 @@
       "leftOutHelp": "The bundle is made anyway, and its README says the same.",
       "leftOut": {
         "ground": "The ground and the map drawn on it: the caves stand in empty space, under a plain sky.",
-        "timedChanges": "The changes of the look while the flyby plays — layers, colours, backgrounds, the sky: the scene keeps the look of its first frame.",
-        "reliefChanges": "The change of the relief while the flyby plays: the scene keeps the relief of its first frame.",
-        "wallColours": "The colour the walls are tinted with: they are drawn as plain rock.",
         "surfaceOpening": "The opening cut in the ground over a cave.",
         "entrances": "The entrance markers.",
         "surfaceFeatures": "The surface features and the layers of features.",
@@ -10185,7 +10182,6 @@
         "photos": "The station photographs.",
         "mapLayers": "The map overlays and the georeferenced maps.",
         "tracks": "The lines of imported files.",
-        "layerOpacity": "The strength layers are drawn at: what is shown is drawn in full.",
         "wallsNotDownloaded": "The walls that were not downloaded into the view: those caves are drawn by their survey lines.",
         "moreCavesInView": "Some of the caves in view: a bundle takes only so many."
       },

@@ -243,9 +243,6 @@ const uploadSources: Record<components['schemas']['UploadSource'], true> = {
  */
 const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'], true> = {
   ground: true,
-  timedChanges: true,
-  reliefChanges: true,
-  wallColours: true,
   surfaceOpening: true,
   entrances: true,
   surfaceFeatures: true,
@@ -253,7 +250,6 @@ const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'],
   photos: true,
   mapLayers: true,
   tracks: true,
-  layerOpacity: true,
   wallsNotDownloaded: true,
   moreCavesInView: true,
 };

@@ -13013,7 +13013,7 @@ export interface components {
             easing: null | components["schemas"]["FlybyBundleEasing"];
         };
         /** @enum {unknown} */
-        FlybyBundleOmission: "ground" | "timedChanges" | "reliefChanges" | "wallColours" | "surfaceOpening" | "entrances" | "surfaceFeatures" | "scans" | "photos" | "mapLayers" | "tracks" | "layerOpacity" | "wallsNotDownloaded" | "moreCavesInView";
+        FlybyBundleOmission: "ground" | "surfaceOpening" | "entrances" | "surfaceFeatures" | "scans" | "photos" | "mapLayers" | "tracks" | "wallsNotDownloaded" | "moreCavesInView";
         FlybyBundleOriginRequest: {
             /** Format: double */
             longitude: number;

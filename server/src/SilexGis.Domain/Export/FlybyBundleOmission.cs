@@ -6,7 +6,9 @@ namespace SilexGis.Domain.Export;
 ///
 /// <para>
 /// A bundle is made anyway and says what it leaves out — a flyby is not refused because part of
-/// its look has no counterpart yet. The list is closed: whoever asks for a bundle names what
+/// its look has no counterpart yet. What a flyby changes while it plays is not on the list: the
+/// relief, the colours of walls and lines, the layers a bundle draws shown, hidden and faded, and
+/// the sky are carried, change by change. The list is closed: whoever asks for a bundle names what
 /// applies to their flyby in these words, the page says it before the file is made and the file
 /// says it again in its own notes, so the two cannot drift into saying different things.
 /// </para>
@@ -16,44 +18,32 @@ public enum FlybyBundleOmission
     /// <summary>The ground and the map drawn on it. Always so: a bundle holds caves and no terrain.</summary>
     Ground = 0,
 
-    /// <summary>Changes of the look while the flyby plays.</summary>
-    TimedChanges = 1,
-
-    /// <summary>A relief that changes while the flyby plays.</summary>
-    ReliefChanges = 2,
-
-    /// <summary>A colour the walls, or one cave's walls, are tinted with.</summary>
-    WallColours = 3,
-
     /// <summary>The opening cut in the ground over a cave.</summary>
-    SurfaceOpening = 4,
+    SurfaceOpening = 1,
 
     /// <summary>Entrance markers.</summary>
-    Entrances = 5,
+    Entrances = 2,
 
     /// <summary>Surface features and layers of features.</summary>
-    SurfaceFeatures = 6,
+    SurfaceFeatures = 3,
 
     /// <summary>Point-cloud scans.</summary>
-    Scans = 7,
+    Scans = 4,
 
     /// <summary>Photograph markers.</summary>
-    Photos = 8,
+    Photos = 5,
 
     /// <summary>Tile overlays and georeferenced maps.</summary>
-    MapLayers = 9,
+    MapLayers = 6,
 
     /// <summary>The lines of imported files.</summary>
-    Tracks = 10,
-
-    /// <summary>The strength a layer is drawn at.</summary>
-    LayerOpacity = 11,
+    Tracks = 7,
 
     /// <summary>Walls the viewer chose not to download into the 3D view.</summary>
-    WallsNotDownloaded = 12,
+    WallsNotDownloaded = 8,
 
     /// <summary>Caves in view beyond the number a bundle takes.</summary>
-    MoreCavesInView = 13,
+    MoreCavesInView = 9,
 }
 
 /// <summary>What a bundle's own notes say about each thing it leaves out.</summary>
@@ -67,12 +57,6 @@ public static class FlybyBundleOmissions
     {
         FlybyBundleOmission.Ground =>
             "the ground and the map drawn on it (the caves stand in empty space, under a plain sky)",
-        FlybyBundleOmission.TimedChanges =>
-            "the changes of the look while the flyby plays — layers shown, hidden or faded, colours, backgrounds, the sky (the scene keeps the look of its first frame)",
-        FlybyBundleOmission.ReliefChanges =>
-            "the change of the relief while the flyby plays (the scene keeps the relief of its first frame)",
-        FlybyBundleOmission.WallColours =>
-            "the colour the walls are tinted with (they are drawn as plain rock)",
         FlybyBundleOmission.SurfaceOpening =>
             "the opening cut in the ground over a cave",
         FlybyBundleOmission.Entrances =>
@@ -87,8 +71,6 @@ public static class FlybyBundleOmissions
             "the map overlays and the georeferenced maps",
         FlybyBundleOmission.Tracks =>
             "the lines of imported files",
-        FlybyBundleOmission.LayerOpacity =>
-            "the strength layers are drawn at (what is shown is drawn in full)",
         FlybyBundleOmission.WallsNotDownloaded =>
             "the walls that were not downloaded into the 3D view (those caves are drawn by their survey lines)",
         FlybyBundleOmission.MoreCavesInView =>
