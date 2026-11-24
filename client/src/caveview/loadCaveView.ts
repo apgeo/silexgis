@@ -15,7 +15,7 @@ import { sendAsTheAccount } from '../api/client.ts';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.23/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.24/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;

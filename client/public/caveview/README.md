@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.23**, built from the fork's `silexgis`
-branch at commit `d5a593a2` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.24**, built from the fork's `silexgis`
+branch at commit `ba31839e` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -326,6 +326,29 @@ takes since slx.21. The fork's test went from 90 assertions to 101, all passing 
 Only the bundle differs from slx.21's; the four workers, the stylesheet, the logo and the catalogue
 are byte-identical.
 
+**What slx.24 adds over slx.23** — the crosshair ThIDE drew over a station on its own, moved into
+the viewer so every host has it. Nothing here calls it yet, so nothing this application does changes.
+
+- **`markStation( ref, { offset, label } )`** — a crosshair over a station, or over a splay's far end,
+  with a label beside it. It follows the station as the model turns, leaves the screen with it, takes
+  no pointer events, and goes with `clearStationMark()`, with a name the model does not have, and with
+  the next model loaded. `getStationMark()` says what is marked. Colours, font and stacking come from
+  `--cv-station-mark-*` custom properties; the crosshair closes in on the station as it is drawn,
+  except for a reader who prefers reduced motion.
+- **`showStation( ref, { closeUp, span, splay, label, popup } )`** — the one call behind a list of
+  places or a link: resolves the name, flies there (a close-up, or centred keeping the view) and marks
+  it; a survey section is framed with no mark. It answers what it did (`station`, `survey`, `none`,
+  `cancelled`) rather than rejecting.
+- **`resolveStationName( ref )`** — the name the model has for a station named against a parent or a
+  child survey (one level more or fewer), or null when none fits or more than one does.
+- **`matchStationSplay( ref, { length, compass, clino } )`** — the splay of a station that best matches
+  one measured from it, and whether it is within 25°.
+
+`CV2.STATION_MARK` says a build has all of it. The fork's test went from 101 assertions to 110. Only the
+bundle differs from slx.23's; the four workers, the stylesheet, the logo and the catalogue are
+byte-identical. One older check of the test, a host taking fullscreen after the viewer was refused it,
+fails under heavy machine load against slx.23's bundle as well as this one.
+
 Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
 write into a shared survey graph (stations shared by identity between legs, a tree with methods,
 CRS resolution through the host's `crsLookup` during the parse), so a worker would need a flat
@@ -343,11 +366,11 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.23/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.23/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.24/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.24/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.23/css/caveview.css`, `v2.9.0-slx.23/images/logo.svg` — runtime assets
-- `v2.9.0-slx.23/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
+- `v2.9.0-slx.24/css/caveview.css`, `v2.9.0-slx.24/images/logo.svg` — runtime assets
+- `v2.9.0-slx.24/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -367,9 +390,11 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.18/` is kept beside the current one under that rule: it is the build the club's
-expedition instance loads, which holds real users, so it is the one a browser there can still be
-holding when that instance is next updated. `v2.9.0-slx.21/` went with slx.23 on the same reasoning
+`v2.9.0-slx.23/` is kept beside the current one under that rule: both running installations, the
+club's expedition instance and the demonstration server, load it, so it is the one a browser there
+can still be holding when they are next updated. `v2.9.0-slx.18/` went with slx.24: it was kept
+while the expedition instance loaded it, and that instance has loaded slx.23 since its update of
+2026-11-23. `v2.9.0-slx.21/` went with slx.23 on the same reasoning
 that took slx.19 with slx.21: only two directories are kept, slx.18 is the one an installation with
 real users loads, and a tab still holding slx.21 across an update costs one reload. `v2.9.0-slx.19/` went with slx.21 although the
 demonstration server loads it: only two directories are kept, and a tab left open on the showcase
@@ -386,12 +411,12 @@ any further change to the fork — a fix found while vendoring included — is a
 version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
 `5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.23/js/CaveView2.min.js` (SHA-256
-`74be814f67c86a23cc93dee2f9e84939f60ffaf963b8ab0f35c1b41e34efcee9`) is byte-identical to a
-fresh `npm ci && npm run build` of commit `d5a593a2` in a clean clone of the fork, made
+**This build was verified to reproduce.** `v2.9.0-slx.24/js/CaveView2.min.js` (SHA-256
+`5640a15a4cd15eb10df8f88cfbe1031f4f1f9e1520083619673254f61b203793`) is byte-identical to a
+fresh `npm ci && npm run build` of commit `ba31839e` in a clean clone of the fork, made
 separately from the build it was copied from — as is every other file vendored here: the four
 workers, the stylesheet and the logo, and the catalogue, which is the fork's tracked file
-(slx.21's bundle, `8759117a…`, reproduced the same way from `fe653e15`, slx.19's, `64f683e2…`, reproduced the same way from `9baecd09`, slx.18's, `ca377414…`, reproduced the same way from `6b3ef586`, slx.16's, `c38f5f51…`,
+(slx.23's bundle, `74be814f…`, reproduced the same way from `d5a593a2`, slx.21's bundle, `8759117a…`, reproduced the same way from `fe653e15`, slx.19's, `64f683e2…`, reproduced the same way from `9baecd09`, slx.18's, `ca377414…`, reproduced the same way from `6b3ef586`, slx.16's, `c38f5f51…`,
 from `02abcae5`, slx.15's, `0baf1d80…`, reproduced the same way from `5647a5fd`, slx.14's, `7b6b4024…`,
 from `4ff3ecbd`, slx.13's, `31a2d6cd…`, from `f4c94bb2`, and slx.12's, `b12cb7da…`, from
 `5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
