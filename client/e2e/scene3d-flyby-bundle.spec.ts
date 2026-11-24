@@ -12,6 +12,10 @@ import { entranceToPick, login, openScene3dAt } from './helpers.ts';
 // makes of the real scene — its camera at every frame, the caves it draws, where it draws them — is
 // one the real server makes a bundle of. So the bundle is asked for here over the demonstration
 // data, and the zip that comes back is opened and read.
+//
+// The flyby grows the relief while it circles. A bundle carries that — the caves stretched by keys,
+// the camera lifted by the same keys — so it is not among what the panel says is left out, and
+// the plan in the zip has the keys.
 
 interface Camera {
   longitude: number;
@@ -62,7 +66,15 @@ function unzip(bytes: Buffer): Map<string, Buffer> {
   return files;
 }
 
-test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds its scene', async ({ page }) => {
+/** Picks an option of a drop-down list by its title, then closes it. */
+async function pickFrom(page: Page, select: string, title: string) {
+  await page.getByTestId(select).click();
+  const list = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
+  await list.getByTitle(title, { exact: true }).click();
+  await expect(list).toHaveCount(0);
+}
+
+test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds its scene and what changes in it', async ({ page }) => {
   test.setTimeout(600_000);
   await login(page);
   const entrance = await entranceToPick(page);
@@ -78,6 +90,14 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   await page.getByTestId('flyby-seconds-per-turn').blur();
   await page.getByTestId('flyby-load-route').uncheck();
   await page.getByTestId('flyby-name').fill('Demo round');
+  // The relief rises to three times true during the circle, and falls back.
+  await page.getByText('Ready-made changes').click();
+  await page.getByTestId('flyby-recipe-relief-factor').fill('3');
+  await page.getByTestId('flyby-recipe-relief-factor').blur();
+  await pickFrom(page, 'flyby-recipe-relief-section', 'In every circle');
+  await page.getByTestId('flyby-recipe-relief-add').click();
+  // A rise and a fall for each circle the flyby makes.
+  await expect(page.getByText(/^\d+ changes$/)).toBeVisible();
   const home = await camera(page);
 
   await page.getByTestId('flyby-movie').click();
@@ -95,33 +115,43 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   await expect(panel.getByTestId('flyby-movie-level')).toHaveCount(0);
   await expect(panel.getByTestId('flyby-movie-draft')).toHaveCount(0);
   // What it leaves out is said before it is made: the ground always, and here the entrance markers
-  // the demonstration view draws.
+  // the demonstration view draws. The relief that changes is not on the list: it is carried.
   await expect(panel.getByTestId('flyby-bundle-left-out-ground')).toBeVisible();
   await expect(panel.getByTestId('flyby-bundle-left-out')).toContainText('The bundle is made anyway');
+  await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText(/relief/i);
+  await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText('keeps the look of its first frame');
   await expect(panel.getByTestId('flyby-movie-privacy')).toContainText('It holds no coordinates, no terrain and no map.');
 
-  // The first two seconds alone: fifty frames.
-  await panel.getByText('A stretch of it').click();
-  const to = panel.getByTestId('flyby-movie-to');
-  await to.focus();
-  await page.keyboard.press('ControlOrMeta+A');
-  await page.keyboard.type('2');
-  await page.keyboard.press('Tab');
-  await expect(panel.getByTestId('flyby-movie-summary')).toContainText('50 frames of');
+  // The whole of it — the approaches and the quarter circles the relief rises in.
+  const summary = (await panel.getByTestId('flyby-movie-summary').textContent()) ?? '';
+  const frames = Number(/^([\d,.\s]+) frames of/.exec(summary)?.[1].replace(/\D/g, ''));
+  expect(frames, summary).toBeGreaterThan(25);
+  expect(frames, summary).toBeLessThan(5000);
 
   const download = page.waitForEvent('download', { timeout: 420_000 });
   const asked = page.waitForRequest((request) => request.url().includes('/api/v1/flybys/blender-bundle'), { timeout: 420_000 });
   await panel.getByTestId('flyby-movie-export').click();
-  const request = (await asked).postDataJSON() as { frames: number[][]; caves: { caveId: string; walls: boolean }[]; leftOut: string[] };
+  const request = (await asked).postDataJSON() as {
+    frames: number[][];
+    caves: { caveId: string; walls: boolean }[];
+    leftOut: string[];
+    relief: number;
+    changes?: { relief: { frame: number; value: number; easing: string | null }[] | null };
+  };
   const file = await download;
   expect(file.suggestedFilename()).toBe('demo-round-blender.zip');
   await expect(panel.getByTestId('flyby-bundle-report')).toBeVisible({ timeout: 60_000 });
   await expect(panel.getByTestId('flyby-movie-failed')).toHaveCount(0);
 
   // ---- what the page asked ----
-  expect(request.frames).toHaveLength(50);
+  expect(request.frames).toHaveLength(frames);
   expect(request.caves.length).toBeGreaterThan(0);
   expect(request.leftOut).toContain('ground');
+  // The relief as keys on the clip's frames: from the viewer's own up to three times true and back.
+  const relief = request.changes?.relief ?? [];
+  expect(Math.max(...relief.map((key) => key.value))).toBe(3);
+  expect(relief[0]).toMatchObject({ frame: 0, value: request.relief });
+  expect(relief.at(-1)!.frame).toBeLessThan(frames);
 
   // ---- the zip, read back ----
   const files = unzip(await readFile(await file.path()));
@@ -140,13 +170,21 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
     timeline: { fps: number; frameCount: number };
     models: { path: string }[];
     camera: { track: { orientation?: number[] }[] };
+    features: string[];
+    changes?: { target?: { id: string }; scale?: { t: number; value: number[]; easing?: string }[] }[];
   };
-  expect(plan.timeline).toEqual({ fps: 25, frameCount: 50 });
-  expect(plan.camera.track).toHaveLength(50);
+  expect(plan.timeline).toEqual({ fps: 25, frameCount: frames });
+  expect(plan.camera.track).toHaveLength(frames);
   expect(plan.camera.track.every((pose) => pose.orientation?.length === 4)).toBe(true);
   expect(plan.models.map((model) => `demo-round-blender/${model.path}`).sort()).toEqual([...meshes].sort());
   // Laid out about a point it does not name.
   expect(plan.frame.crs).toBeUndefined();
+  // Every model is stretched by the relief's keys, played by the player's module for changes.
+  expect(plan.features).toContain('changes');
+  const stretched = (plan.changes ?? []).filter((change) => change.scale);
+  expect(stretched.map((change) => `demo-round-blender/${change.target?.id}.ply`).sort()).toEqual([...meshes].sort());
+  expect(Math.max(...stretched[0].scale!.map((key) => key.value[2]))).toBe(3);
+  expect(stretched[0].scale!.some((key) => key.easing === 'smooth')).toBe(true);
 
   const readme = files.get('demo-round-blender/README.txt')!.toString('utf8');
   expect(readme).toContain('NOT IN THIS SCENE');
