@@ -15,7 +15,9 @@ import { entranceToPick, login, openScene3dAt } from './helpers.ts';
 //
 // The flyby grows the relief while it circles. A bundle carries that — the caves stretched by keys,
 // the camera lifted by the same keys — so it is not among what the panel says is left out, and
-// the plan in the zip has the keys.
+// the plan in the zip has the keys. The panel also says what a bundle does that the screen does
+// not — its sun and its sky go out while the camera is under the ground — and the zip's own notes
+// say how the scene is laid out and lit.
 
 interface Camera {
   longitude: number;
@@ -120,6 +122,9 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   await expect(panel.getByTestId('flyby-bundle-left-out')).toContainText('The bundle is made anyway');
   await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText(/relief/i);
   await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText('keeps the look of its first frame');
+  await expect(panel.getByTestId('flyby-bundle-daylight')).toContainText(
+    'the sun and the sky go out while the camera is under the ground',
+  );
   await expect(panel.getByTestId('flyby-movie-privacy')).toContainText('It holds no coordinates, no terrain and no map.');
 
   // The whole of it — the approaches and the quarter circles the relief rises in.
@@ -136,7 +141,11 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
     caves: { caveId: string; walls: boolean }[];
     leftOut: string[];
     relief: number;
-    changes?: { relief: { frame: number; value: number; easing: string | null }[] | null };
+    language?: string;
+    changes?: {
+      relief: { frame: number; value: number; easing: string | null }[] | null;
+      daylight?: { frame: number; value: number }[] | null;
+    };
   };
   const file = await download;
   expect(file.suggestedFilename()).toBe('demo-round-blender.zip');
@@ -151,7 +160,10 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   const relief = request.changes?.relief ?? [];
   expect(Math.max(...relief.map((key) => key.value))).toBe(3);
   expect(relief[0]).toMatchObject({ frame: 0, value: request.relief });
-  expect(relief.at(-1)!.frame).toBeLessThan(frames);
+  // The last fall ends as the flyby does: on the frame after the clip's last, or before it.
+  expect(relief.at(-1)!.frame).toBeLessThanOrEqual(frames);
+  // The notes are asked for in the language the page is read in.
+  expect(request.language).toMatch(/^en/);
 
   // ---- the zip, read back ----
   const files = unzip(await readFile(await file.path()));
@@ -170,8 +182,13 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
     timeline: { fps: number; frameCount: number };
     models: { path: string }[];
     camera: { track: { orientation?: number[] }[] };
+    look: { lights: { id: string; kind: string; energy: number }[] };
     features: string[];
-    changes?: { target?: { id: string }; scale?: { t: number; value: number[]; easing?: string }[] }[];
+    changes?: {
+      target?: { id: string };
+      scale?: { t: number; value: number[]; easing?: string }[];
+      energy?: { t: number; value: number }[];
+    }[];
   };
   expect(plan.timeline).toEqual({ fps: 25, frameCount: frames });
   expect(plan.camera.track).toHaveLength(frames);
@@ -186,7 +203,22 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   expect(Math.max(...stretched[0].scale!.map((key) => key.value[2]))).toBe(3);
   expect(stretched[0].scale!.some((key) => key.easing === 'smooth')).toBe(true);
 
+  // A lamp on the camera and a sun. Where the camera of this flyby went under the demonstration
+  // ground the page said so, and the sun's strength is keyed by exactly what it said; where it
+  // did not, nothing changes of the sun.
+  expect(plan.look.lights.map((light) => light.id).sort()).toEqual(['Headlamp', 'Sun']);
+  const sun = (plan.changes ?? []).filter((change) => change.target?.id === 'Sun');
+  const daylight = request.changes?.daylight ?? null;
+  expect(sun).toHaveLength(daylight ? 1 : 0);
+  if (daylight) {
+    const whole = plan.look.lights.find((light) => light.id === 'Sun')!.energy;
+    expect(sun[0].energy!.map((key) => key.value)).toEqual(daylight.map((key) => key.value * whole));
+  }
+
   const readme = files.get('demo-round-blender/README.txt')!.toString('utf8');
+  expect(readme).toContain('A flyby of caves made by SilexGIS for Blender');
+  expect(readme).toContain('HOW THE SCENE IS LAID OUT');
+  expect(readme).toContain('THE LIGHT');
   expect(readme).toContain('NOT IN THIS SCENE');
   expect(readme).toContain('the ground and the map drawn on it');
 
