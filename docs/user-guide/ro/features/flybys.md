@@ -328,8 +328,8 @@ Pe lângă MP4, WebM și GIF, rândul **Format** oferă **Pachet Blender (.zip)*
 este tot ce îi trebuie programului [Blender](https://www.blender.org/) ca să randeze el însuși
 survolul — traseul camerei, peșterile și un mic player — într-un singur zip. **Aici nu se
 randează nimic.** Dezarhivezi zip-ul pe calculatorul tău și îl randezi acolo cu Blender 4.2 sau
-mai nou; Blender luminează peștera cu o lampă pe cameră și îi desenează pereții ca rocă, lucru
-pe care vizualizarea 3D nu îl poate face.
+mai nou; Blender luminează peștera cu o lampă pe cameră și cu un soare și îi desenează pereții
+ca rocă, lucru pe care vizualizarea 3D nu îl poate face.
 
 Ce intră în el:
 
@@ -346,9 +346,10 @@ Ce intră în el:
   peșterile sunt întinse și camera ridicată cu aceleași numere, cadru cu cadru —, culoarea de pe
   pereți și fiecare peșteră colorată aparte (inclusiv *Luminează peștera vizitată*), drumuirile
   într-o singură culoare sau după adâncime, pereții și drumuirile afișate, ascunse și estompate,
-  și culoarea cerului. Acolo unde două chei pot spune o schimbare, ea este scrisă în pachet ca
-  două chei între care Blender trece lin, la fel ca survolul, așa că le poți muta apoi în
-  Blender; o culoare care trece în alta este scrisă cadru cu cadru, în culorile de pe ecran.
+  și culoarea cerului. O schimbare este scrisă în pachet ca două chei între care Blender trece
+  lin, la fel ca survolul, așa că le poți muta apoi în Blender — la fel și o culoare care trece în
+  alta, amestecată cum o amestecă ecranul, și o schimbare în mijlocul căreia se oprește clipul, a
+  cărei a doua cheie se află atunci după ultimul cadru.
 - **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N” pe măsură ce
   se schimbă, săgeata nordului și estompările, desenate cu literele programului Blender.
 
@@ -366,12 +367,21 @@ Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
 - **Pereții se estompează** în Blender așa cum cere survolul; vizualizarea 3D îi poate doar
   afișa și ascunde. O peșteră pe jumătate estompată își lasă pereții din spate să se vadă prin
   cei din față.
-- Acolo unde culoarea proprie a unei peșteri ia locul culorii tuturor peșterilor, sau i-l dă
-  înapoi, saltul cade cu **un cadru** față de vizualizarea 3D.
-- **Luminile nu se schimbă.** Lampa de pe cameră și soarele din Blender sunt aprinse de la primul
-  cadru până la ultimul, și când camera intră sub pământ.
-- Ciorna rapidă (`--draft`) nu desenează materiale: acolo o estompare este o tăietură, iar
-  culorile de pe pereți nu se văd. Randarea completă le arată.
+- **Soarele și cerul se sting sub pământ.** Vizualizarea 3D nu are nici soare, nici întuneric;
+  Blender le are pe amândouă. Lampa de pe cameră este mereu aprinsă. Soarele și cerul se sting în
+  decurs de o secundă din cadrul în care camera coboară **sub teren** — terenul pe care îl are
+  această vizualizare 3D în locul deasupra căruia se află camera, fie că survolul îl taie sau nu
+  deasupra unei peșteri — și sunt din nou aprinse în cadrul în care iese, după ce au crescut în
+  secunda dinainte. O coborâre sub teren mai scurtă de o secundă nu schimbă nimic; o ședere mai
+  scurtă de două este jumătate stingere și jumătate revenire. Așadar, în interiorul unui deal
+  imaginea este luminată doar de lampă, iar în spatele peșterii este negru în loc de cer. **Lampa
+  bate câțiva metri**: pereții apropiați de cameră sunt bine luminați, dar o peșteră privită de la
+  zeci de metri sub teren este slab luminată, iar de mai departe este întunecată. Ca să păstrezi
+  lumina zilei, șterge două piste din `scene-plan.json` din pachet; ca să luminezi mai departe,
+  mărește acolo puterea lămpii. `README.txt` le numește pe amândouă.
+- Ciorna rapidă (`--draft`) nu desenează materiale: arată o culoare de pe pereți în culorile ei
+  plate, iar o estompare prin mai puține fețe ale pereților. Randarea completă le arată așa cum
+  sunt.
 
 **Descarcă pachetul** pregătește survolul ca pentru un film făcut cu grijă, citește camera și
 cere serverului zip-ul, care este salvat ca `<numele survolului>-blender.zip`. Apoi panoul spune
@@ -381,7 +391,8 @@ topografie; panoul spune doar câte lipsesc.
 
 În dosarul dezarhivat, `README.txt` spune cum se randează: `sh render.sh` pe Linux și macOS,
 `render.cmd` pe Windows, iar cu `--draft` după oricare, o privire rapidă mai întâi. Filmul este
-scris în dosarul `out`.
+scris în dosarul `out`. README-ul este în română când ai SilexGIS în română și în engleză
+altfel, și spune și cum este așezată scena, cum este luminată și ce lasă deoparte.
 
 - **Pachetul conține formele acestor peșteri și cum sunt așezate una față de alta — fără
   coordonate, fără teren, fără hartă.** Trimite-l totuși doar celor care au voie să vadă aceste

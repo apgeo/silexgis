@@ -319,7 +319,7 @@ Beside MP4, WebM and GIF the **Format** row offers **Blender bundle (.zip)**. It
 it is everything [Blender](https://www.blender.org/) needs to render the flyby itself — the
 camera's path, the caves and a small player — in one zip. **Nothing is rendered here.** You unpack
 the zip on your own computer and render it there with Blender 4.2 or newer; Blender lights the
-cave with a lamp on the camera and draws its walls as rock, which the 3D view cannot do.
+cave with a lamp on the camera and a sun, and draws its walls as rock, which the 3D view cannot do.
 
 What goes into it:
 
@@ -336,9 +336,10 @@ What goes into it:
   stretched and the camera lifted by the same numbers, frame for frame —, the colour over the
   walls and each cave coloured apart (*Light the cave being visited* included), the survey lines
   in one colour or by depth, the walls and the lines shown, hidden and faded, and the colour of
-  the sky. Where two keys can say a change, it is written into the bundle as two keys that Blender
-  eases between the way the flyby does, so you can move them in Blender afterwards; a colour
-  crossing into another is written frame by frame, in the colours the screen shows.
+  the sky. A change is written into the bundle as two keys that Blender eases between the way the
+  flyby does, so you can move them in Blender afterwards — a colour crossing into another too,
+  mixed as the screen mixes it, and a change the clip stops in the middle of, whose second key
+  then lies after the last frame.
 - **The texts**: title, captions, end card, the corner line, "Relief ×N" as it changes, the north
   arrow and the fades, drawn in Blender's own lettering.
 
@@ -355,12 +356,19 @@ A few things are carried a little differently from what the 3D view draws:
   fiftieth of a second off the moment the flyby gives it.
 - **Walls fade** in Blender as the flyby asks; the 3D view can only switch them on and off. A
   cave that is half faded shows its far walls through its near ones.
-- Where a cave's own colour takes over from the colour of every cave, or hands back to it, the
-  jump stands **one frame** off where the 3D view has it.
-- **The lights do not change.** Blender's lamp on the camera and its sun are on from the first
-  frame to the last, also when the camera goes underground.
-- The quick draft (`--draft`) draws no materials: there a fade is a cut and colours over the
-  walls are not shown. The full render shows them.
+- **The sun and the sky go out underground.** The 3D view has neither a sun nor a dark; Blender
+  has both. The lamp on the camera is always on. The sun and the sky fade out over a second from
+  the frame the camera goes **under the ground** — the ground this 3D view has at the place the
+  camera is over, whether or not the flyby cuts it open above a cave — and are back on the frame
+  it comes out, having risen over the second before. A dip under the ground shorter than a second
+  changes nothing; a stay shorter than two is half fading and half coming back. So inside a hill
+  the picture is lit by the lamp alone, and what stands behind the cave is black instead of the
+  sky. **The lamp reaches a few metres**: walls close to the camera are lit well, but a cave the
+  camera looks at from tens of metres away under the ground is dim, and from farther it is dark.
+  To keep the daylight on, remove two tracks from the bundle's `scene-plan.json`; to light
+  farther, raise the lamp's strength there. Its `README.txt` names both.
+- The quick draft (`--draft`) draws no materials: it shows a colour over the walls in its own
+  flat colours, and a fade as fewer of the walls' faces. The full render shows them as they are.
 
 **Download the bundle** gets the flyby ready as for a careful movie, reads the camera and asks
 the server for the zip, which is saved as `<the flyby's name>-blender.zip`. Afterwards the panel
@@ -370,7 +378,8 @@ the panel says only how many are missing.
 
 In the unpacked folder, `README.txt` says how to render: `sh render.sh` on Linux and macOS,
 `render.cmd` on Windows, and `--draft` after either for a quick look first. The movie is written
-into the folder's `out`.
+into the folder's `out`. The README is in Romanian when you have SilexGIS in Romanian and in
+English otherwise, and also says how the scene is laid out, how it is lit and what it leaves out.
 
 - **The bundle holds the shapes of these caves and how they lie to one another — no coordinates,
   no terrain, no map.** It should still go only to people who may see these caves; the panel
