@@ -18,6 +18,11 @@ import { entranceToPick, login, openScene3dAt } from './helpers.ts';
 // the plan in the zip has the keys. The panel also says what a bundle does that the screen does
 // not — its sun and its sky go out while the camera is under the ground — and the zip's own notes
 // say how the scene is laid out and lit.
+//
+// And it points out what the view does: the entrances the demonstration view draws about its caves
+// are named to the server by id and come back as markers pinned to the caves' models, the name of
+// an entrance of the flyby's own cave beside it. Ticked in the panel, the caves appear part by
+// part: every mesh in the zip then carries a number on each vertex and its model a threshold.
 
 interface Camera {
   longitude: number;
@@ -116,9 +121,14 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   // Nothing is filmed, so nothing is asked about how a frame is taken.
   await expect(panel.getByTestId('flyby-movie-level')).toHaveCount(0);
   await expect(panel.getByTestId('flyby-movie-draft')).toHaveCount(0);
-  // What it leaves out is said before it is made: the ground always, and here the entrance markers
-  // the demonstration view draws. The relief that changes is not on the list: it is carried.
+  // What it leaves out is said before it is made: the ground always. The relief that changes is
+  // not on the list, and neither are the entrances the demonstration view draws: both are carried.
   await expect(panel.getByTestId('flyby-bundle-left-out-ground')).toBeVisible();
+  await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText(/entrance markers/i);
+  await expect(panel.getByTestId('flyby-bundle-pointed')).toContainText('the entrances and the features that are points go in as markers');
+  // The caves are to appear part by part.
+  await panel.getByTestId('flyby-bundle-reveal').check();
+  await expect(panel.getByTestId('flyby-bundle-reveal')).toBeChecked();
   await expect(panel.getByTestId('flyby-bundle-left-out')).toContainText('The bundle is made anyway');
   await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText(/relief/i);
   await expect(panel.getByTestId('flyby-bundle-left-out')).not.toContainText('keeps the look of its first frame');
@@ -146,6 +156,8 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
       relief: { frame: number; value: number; easing: string | null }[] | null;
       daylight?: { frame: number; value: number }[] | null;
     };
+    markers?: { kind: string; colour: string; markers: { featureId: string; groundM: number; named: boolean }[] }[];
+    reveal?: { by: string; startS: number; endS: number };
   };
   const file = await download;
   expect(file.suggestedFilename()).toBe('demo-round-blender.zip');
@@ -164,6 +176,16 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   expect(relief.at(-1)!.frame).toBeLessThanOrEqual(frames);
   // The notes are asked for in the language the page is read in.
   expect(request.language).toMatch(/^en/);
+  // The entrances about the caves, by id and the ground under each — and no place.
+  const entrances = request.markers?.find((layer) => layer.kind === 'entrances');
+  expect(entrances, JSON.stringify(request.markers ?? null)).toBeDefined();
+  expect(entrances!.markers.length).toBeGreaterThan(0);
+  expect(Object.keys(entrances!.markers[0]).sort()).toEqual(['featureId', 'groundM', 'named']);
+  // The reveal: by distance, ending before the clip does.
+  expect(request.reveal?.by).toBe('distance');
+  expect(request.reveal!.endS).toBeGreaterThan(request.reveal!.startS);
+  expect(request.reveal!.endS).toBeLessThan(frames / 25);
+  await expect(panel.getByTestId('flyby-bundle-report-markers')).toBeVisible();
 
   // ---- the zip, read back ----
   const files = unzip(await readFile(await file.path()));
@@ -184,10 +206,13 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
     camera: { track: { orientation?: number[] }[] };
     look: { lights: { id: string; kind: string; energy: number }[] };
     features: string[];
+    annotations?: { id: string; kind: string; role: string; model: string; at: number[]; radius?: number; text?: string }[];
     changes?: {
-      target?: { id: string };
+      target?: { id?: string; role?: string };
       scale?: { t: number; value: number[]; easing?: string }[];
       energy?: { t: number; value: number }[];
+      reveal?: { t: number; value: number }[];
+      revealFront?: { edge: number; glow?: { width: number } };
     }[];
   };
   expect(plan.timeline).toEqual({ fps: 25, frameCount: frames });
@@ -215,7 +240,47 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
     expect(sun[0].energy!.map((key) => key.value)).toEqual(daylight.map((key) => key.value * whole));
   }
 
+  // What the scene points out: every entrance the server could place as a ball pinned to a point
+  // of one of the plan's own models, played by the player's module for annotations; a name stands
+  // beside an entrance of the flyby's own caves.
+  expect(plan.features).toContain('annotations');
+  const markers = (plan.annotations ?? []).filter((annotation) => annotation.kind === 'marker');
+  const named = (request.markers ?? []).reduce((count, layer) => count + layer.markers.length, 0);
+  expect(markers.length).toBeGreaterThan(0);
+  expect(markers.length).toBeLessThanOrEqual(named);
+  const mouths = markers.filter((marker) => marker.role === 'entrance');
+  expect(mouths.length).toBeGreaterThan(0);
+  expect(mouths.length).toBeLessThanOrEqual(entrances!.markers.length);
+  const ids = plan.models.map((model) => model.path.replace(/\.ply$/, ''));
+  for (const marker of markers) {
+    // The entrances, and whatever other layer of features the demonstration view draws.
+    expect(marker.role).toMatch(/^(entrance|surface-feature|feature-layer-\d+)$/);
+    expect(ids).toContain(marker.model);
+    expect(marker.at).toHaveLength(3);
+    expect(marker.radius).toBeGreaterThan(0);
+  }
+  const written = (plan.annotations ?? []).filter((annotation) => annotation.kind === 'callout');
+  expect(written.every((name) => name.role === 'entrance-name' && (name.text ?? '').length > 0)).toBe(true);
+
+  // The reveal: a threshold on every model whose cave has a survey to measure along, rising over
+  // the seconds the page asked for, with a soft edge and a glow; and the number it rises over on
+  // every vertex of that model's mesh.
+  const revealed = (plan.changes ?? []).filter((change) => change.reveal);
+  expect(revealed.length).toBeGreaterThan(0);
+  for (const change of revealed) {
+    expect(change.reveal).toHaveLength(2);
+    expect(change.reveal![0].value).toBe(0);
+    expect(change.reveal![1].value).toBeGreaterThan(0);
+    expect(Math.abs(change.reveal![0].t - request.reveal!.startS)).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(change.reveal![1].t - request.reveal!.endS)).toBeLessThanOrEqual(0.02);
+    expect(change.revealFront!.edge).toBeGreaterThan(0);
+    const header = files.get(`demo-round-blender/${change.target!.id}.ply`)!.subarray(0, 400).toString('latin1');
+    expect(header).toContain('property float reveal');
+  }
+
   const readme = files.get('demo-round-blender/README.txt')!.toString('utf8');
+  expect(readme).toContain('WHAT IS POINTED OUT');
+  expect(readme).toContain('THE REVEAL');
   expect(readme).toContain('A flyby of caves made by SilexGIS for Blender');
   expect(readme).toContain('HOW THE SCENE IS LAID OUT');
   expect(readme).toContain('THE LIGHT');
