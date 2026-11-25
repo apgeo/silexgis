@@ -352,13 +352,29 @@ Ce intră în el:
   cărei a doua cheie se află atunci după ultimul cadru.
 - **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N” pe măsură ce
   se schimbă, săgeata nordului și estompările, desenate cu literele programului Blender.
+- **Ce semnalează vizualizarea**: **intrările** și **obiectele punctuale** — din straturile
+  *Intrări* și *Fenomene de suprafață*, din fiecare strat desenat dintr-un filtru salvat și din
+  fiecare strat de obiecte desenat de survol — ca marcaje luminoase, fiecare strat în culoarea
+  lui, acolo unde survolul afișează stratul într-un moment al clipului. Un strat apare, dispare
+  și se estompează în pachet la fel ca în survol. O intrare a uneia dintre peșterile survolului
+  are **numele** scris deasupra. Se ia ce conțin acele straturi în jurul peșterilor pe care le
+  desenează vizualizarea: în limitele lor lărgite cu jumătate din latura mai mare și cu cel
+  puțin un sfert de kilometru; cel mult 1.000 de marcaje.
+- **Fotografiile făcute în stații** ale peșterilor survolului — cele pe care stratul *Fotografii
+  din stații* le marchează pentru peștera selectată, aici pentru fiecare peșteră a survolului —
+  acolo unde survolul afișează acel strat. Fiecare intră **ca imaginea însăși**, stând deasupra
+  stației ei, cu o linie până la ea, și se vede **cât timp camera este aproape**. O fotografie
+  de stație (prima din cea mai nouă legătură), cel mult 40 într-un pachet — cele de care camera
+  trece cel mai aproape.
+- **Peșterile apărând parte cu parte**, dacă bifezi *Peșterile apar parte cu parte, de la intrări
+  spre interior* — vezi mai jos.
 
 Ce nu intră: panoul le enumeră la **Nu sunt în pachet** înainte să faci fișierul, iar fișierul
 `README.txt` din pachet spune același lucru. Întotdeauna terenul și harta desenată pe el —
 peșterile stau în spațiu gol, sub un cer simplu, iar un fundal care se schimbă merge cu terenul —
-și, acolo unde survolul tău le are: deschiderea tăiată în teren, marcajele intrărilor, fenomenele
-de suprafață, scanările, fotografiile, straturile suprapuse de hartă, hărțile georeferențiate și
-liniile fișierelor importate. Pachetul se face oricum.
+și, acolo unde survolul tău le are: deschiderea tăiată în teren, contururile fenomenelor de
+suprafață care sunt linii sau suprafețe, scanările, straturile suprapuse de hartă, hărțile
+georeferențiate și liniile fișierelor importate. Pachetul se face oricum.
 
 Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
 
@@ -379,15 +395,67 @@ Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
   zeci de metri sub teren este slab luminată, iar de mai departe este întunecată. Ca să păstrezi
   lumina zilei, șterge două piste din `scene-plan.json` din pachet; ca să luminezi mai departe,
   mărește acolo puterea lămpii. `README.txt` le numește pe amândouă.
+- **Un marcaj are o mărime în metri.** Vizualizarea 3D desenează o intrare ca o pictogramă de
+  aceeași mărime pe ecran, oricât de departe ar fi camera; o randare nu are așa ceva. Fiecare
+  marcaj este o sferă cât ar fi o pictogramă a vizualizării la **cea mai mică distanță la care
+  ajunge camera de el** (în diametru, ceva sub a cincizecea parte din acea distanță), deci se
+  vede bine în acel moment și este mai mic de mai departe. Literele unui nume au de două ori și
+  jumătate raza sferei. Un grup de intrări pe care vizualizarea îl numără într-un singur cerc de
+  departe este aici intrările lui, una câte una.
+- **Un marcaj stă acolo unde îl are terenul acestei vizualizări**, iar pachetul nu are teren: o
+  intrare plutește la înălțimea pe care o are terenul acolo, lângă peșteră. Unde terenul și
+  ridicarea nu se potrivesc asupra înălțimii intrării, marcajul nu este la gura peșterii cu acea
+  diferență — ca pe ecran.
+- **O fotografie este o imagine, nu o pictogramă.** Este lată cât o cincime din cea mai mică
+  distanță la care ajunge camera de stația ei, apare treptat când camera este la cel mult
+  douăsprezece lățimi și jumătate de ea (de două ori și jumătate acea distanță minimă) și
+  dispare când este mai departe. Acolo unde camera trece în zbor pe lângă o stație, fotografia
+  este făcută mai mare — pentru două cincimi din distanța la care este camera cu o secundă
+  înainte și după — astfel încât fiecare fotografie să se vadă **cel puțin două secunde**.
+  Așadar, într-un zbor în jurul unei peșteri, din afară, toate
+  fotografiile acelei peșteri pot fi afișate deodată, mari și suprapuse; într-un zbor de-a
+  lungul galeriilor fiecare apare când camera ajunge la ea. Stratul însuși este comutat dintr-o
+  dată, ca în vizualizare. Imaginile sunt în dosarul `photos` al pachetului, ca fișiere JPEG de
+  cel mult 2.000 de pixeli pe latură, făcute din redarea pe care o afișează SilexGIS — **fără
+  datele aparatului, inclusiv poziția** — și numite `photo-001.jpg` și așa mai departe: nici
+  titlul fotografiei, nici numele fișierului ei nu intră.
 - Ciorna rapidă (`--draft`) nu desenează materiale: arată o culoare de pe pereți în culorile ei
-  plate, iar o estompare prin mai puține fețe ale pereților. Randarea completă le arată așa cum
-  sunt.
+  plate, o estompare prin mai puține fețe ale pereților, o fotografie ca un mozaic al culorilor
+  ei și o apariție treptată ca o tăietură de-a lungul fețelor. Randarea completă le arată așa
+  cum sunt.
+
+#### Peșterile apărând parte cu parte
+
+Bifat, **fiecare peșteră a pachetului crește de la intrări spre interior** cât rulează clipul:
+ce este mai aproape de o intrare, măsurat **de-a lungul galeriilor**, apare primul, cu o margine
+moale, luminoasă. Pornește când titlul a dispărut (la primul cadru, dacă nu există titlu), iar
+peșterile sunt întregi când au trecut patru cincimi din zborul până la cartonul de final, astfel
+că ultima cincime le arată complete. Fiecare peșteră ia același timp, oricare i-ar fi lungimea.
+
+- Intrările sunt stațiile pe care **ridicarea însăși le marchează ca intrări**. O peșteră a
+  cărei ridicare nu marchează niciuna pornește de la prima stație a primei vize, iar o parte de
+  peșteră care nu este legată de nicio intrare, de la propria ei primă stație.
+- O peșteră care are pereți, dar nicio ridicare de-a lungul căreia să se măsoare, este prezentă
+  de la primul cadru.
+- **Nu există apariție după data ridicării, deci nici contor de ani.** Playerul din Blender
+  poate arăta o peșteră în ordinea în care a fost explorată, cu anul numărând peste imagine —
+  dar SilexGIS păstrează pe unde merg vizele unei ridicări și o singură dată pentru tot modelul,
+  nu ziua în care a fost măsurată fiecare viză. Până atunci, distanța este cea după care poate
+  apărea o peșteră.
+- Ca să vezi totuși peșterile întregi, șterge membrii `reveal` și `revealFront` din `changes`,
+  în `scene-plan.json` din pachet; README-ul o spune.
 
 **Descarcă pachetul** pregătește survolul ca pentru un film făcut cu grijă, citește camera și
 cere serverului zip-ul, care este salvat ca `<numele survolului>-blender.zip`. Apoi panoul spune
-câte peșteri au intrat cu pereții lor și câte prin drumuiri. O peșteră pe care nu ai voie să o
-vezi, sau căreia nu ai voie să îi vezi locul exact, nu este în pachet, și nici una fără
-topografie; panoul spune doar câte lipsesc.
+câte peșteri au intrat cu pereții lor și câte prin drumuiri, și câte marcaje și fotografii. O
+peșteră pe care nu ai voie să o vezi, sau căreia nu ai voie să îi vezi locul exact, nu este în
+pachet, și nici una fără topografie; panoul spune doar câte lipsesc. La fel pentru ce este
+semnalat: o intrare sau un obiect devine marcaj doar dacă ai voie să îl vezi **și să îi vezi
+locul exact** — unul pe care harta ți-l arată mutat pe grila de protecție este lăsat deoparte,
+fiindcă un marcaj stă la o distanță de peșteri și ar spune unde se află ele pe acea grilă — iar
+panoul dă un singur număr al celor care lipsesc, fără motiv. O fotografie intră doar dacă ai
+voie să o vezi și peștera ei este desenată; una pe care nu ai voie să o vezi nu este numărată
+și nici pomenită.
 
 În dosarul dezarhivat, `README.txt` spune cum se randează: `sh render.sh` pe Linux și macOS,
 `render.cmd` pe Windows, iar cu `--draft` după oricare, o privire rapidă mai întâi. Filmul este
@@ -395,8 +463,10 @@ scris în dosarul `out`. README-ul este în română când ai SilexGIS în româ
 altfel, și spune și cum este așezată scena, cum este luminată și ce lasă deoparte.
 
 - **Pachetul conține formele acestor peșteri și cum sunt așezate una față de alta — fără
-  coordonate, fără teren, fără hartă.** Trimite-l totuși doar celor care au voie să vadă aceste
-  peșteri; panoul o spune lângă buton, întotdeauna.
+  coordonate, fără teren, fără hartă.** Marcajele și fotografiile sunt prinse de puncte ale
+  modelelor peșterilor, deci adaugă cum sunt așezate intrările, obiectele și stațiile față de
+  peșteri, și nimic despre unde se află acestea. Trimite-l totuși doar celor care au voie să
+  vadă aceste peșteri — iar o fotografie arată ce arată; panoul o spune lângă buton, întotdeauna.
 - Dintr-un survol care nu este despre nicio peșteră — unul în jurul a „ce arată vizualizarea” sau
   de-a lungul unui fișier importat — nu se poate face un pachet, și nici dintr-unul al cărui
   aspect ascunde și pereții, și drumuirile. Un pachet are cel mult 20.000 de cadre (puțin peste
