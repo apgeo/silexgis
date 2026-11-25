@@ -445,10 +445,6 @@ public class DependencyRuleTests
         "Therion.CaveGeometry.CaveMesh",
         "Therion.CaveGeometry.Writers.PlyWriter",
 
-        // A vertex's colour as the three bytes a mesh file carries it in: a value and nothing else.
-        // Survey lines carry their colours by depth themselves in a scene whose relief changes.
-        "Therion.CaveGeometry.CaveColor",
-
         // The scene plan — the description of one render that the bundle carries as JSON — in the
         // records and enums it is made of: the frame, the clock, a model and its turn, the camera
         // and each of its poses with the pose's own orientation, the look with its materials,
@@ -465,6 +461,7 @@ public class DependencyRuleTests
         "Therion.Blender.Plan.PlanFrame",
         "Therion.Blender.Plan.PlanInterpolation",
         "Therion.Blender.Plan.PlanLight",
+        "Therion.Blender.Plan.PlanLightKind",
         "Therion.Blender.Plan.PlanLook",
         "Therion.Blender.Plan.PlanMaterial",
         "Therion.Blender.Plan.PlanMaterialKind",
@@ -474,68 +471,64 @@ public class DependencyRuleTests
         "Therion.Blender.Plan.PlanQuaternion",
         "Therion.Blender.Plan.PlanRotation",
         "Therion.Blender.Plan.PlanScreenItem",
-        "Therion.Blender.Plan.PlanScreenItemKind",
         "Therion.Blender.Plan.PlanScreenTexts",
         "Therion.Blender.Plan.PlanTimeline",
-        "Therion.Blender.Plan.PlanTurn",
         "Therion.Blender.Plan.PlanWorld",
         "Therion.Blender.Plan.PlanWorldKind",
         "Therion.Blender.Plan.ScenePlan",
 
         // What changes while the clip runs, in the plan's own records: a change names its target
         // and gives each property its keys — shown or hidden, how much of it is there, a colour
-        // laid over it, a model's stretch, the world's colour — each a time, a value and the word
-        // for how the value is reached. Immutable values and one enum; the player keys them in
-        // Blender, on the reader's machine, and nothing of that runs here.
+        // laid over it, a model's stretch, a light's strength, the world's colour and strength —
+        // each a time, a value and the word for how the value is reached, and for a colour the
+        // word for how it is mixed on the way. Immutable values and two enums; the player keys
+        // them in Blender, on the reader's machine, and nothing of that runs here.
         "Therion.Blender.Plan.PlanChange",
         "Therion.Blender.Plan.PlanChangeTarget",
         "Therion.Blender.Plan.PlanColorKey",
+        "Therion.Blender.Plan.PlanColorMix",
         "Therion.Blender.Plan.PlanEasing",
         "Therion.Blender.Plan.PlanNumberKey",
         "Therion.Blender.Plan.PlanTintKey",
         "Therion.Blender.Plan.PlanVectorKey",
         "Therion.Blender.Plan.PlanVisibleKey",
 
+        // Where a ramp of colours over height measures its heights — in the scene, or in the
+        // model's own mesh: one enum with two values.
+        "Therion.Blender.Plan.PlanRampSpace",
+
         // What works on a plan: the validator (a plan in, a list of what is wrong with it out),
-        // the serializer (a plan in, JSON text out) and the builder, asked for two things — the
-        // draft copy of a plan, and the library's own rock and lights, which it gives by lowering
-        // a scene description to a plan. All three compute and return; none opens a file.
+        // the serializer (a plan in, JSON text out) and the builder, asked for the draft copy of a
+        // plan, for the library's own rock and lights as plan records, for the list of player
+        // modules a plan's sections need, and to put laid-out texts into a plan. All three compute
+        // and return; none opens a file.
         "Therion.Blender.Plan.ScenePlanBuilder",
         "Therion.Blender.Plan.ScenePlanSerializer",
         "Therion.Blender.Plan.ScenePlanValidator",
 
         // The library's layout of the texts over a picture — where a title, a caption, a corner
-        // line and a north arrow stand and how large they are — and the description it lays out
-        // from: the scene description's records for overlays, captions and an end card, with the
-        // few neighbours a description cannot be built without (its source, materials, lighting,
-        // clock and output, and the camera poses and framing a layout is asked with). Plain
-        // records and enums, and two functions from records to records. The scene's metadata
-        // record is named only as the type of an argument that is left out.
+        // line and a north arrow stand and how large they are — asked with a plan that is there
+        // already, and what it is asked to lay out: the records for overlays, captions and an end
+        // card. And the two settings its rock and its lights are asked by, each a record with one
+        // enum. Plain records and enums, and functions from records to records.
         "Therion.Blender.Plan.ScreenTextPlanner",
         "Therion.Blender.Subtitles",
-        "Therion.Blender.AnimationSpec",
         "Therion.Blender.CaptionSpec",
         "Therion.Blender.EndCardSpec",
-        "Therion.Blender.LabelsSpec",
         "Therion.Blender.LightingRig",
         "Therion.Blender.LightingSpec",
         "Therion.Blender.MaterialsSpec",
-        "Therion.Blender.OutputKind",
-        "Therion.Blender.OutputSpec",
         "Therion.Blender.OverlaySpec",
         "Therion.Blender.RockMaterial",
-        "Therion.Blender.SceneMeta",
-        "Therion.Blender.SceneSpec",
-        "Therion.Blender.SourceSpec",
-        "Therion.Blender.Emit.CameraFraming",
-        "Therion.Blender.Emit.CameraPlan",
 
         // The bundle writer and what it is handed. It writes one zip into a stream it is given: the
-        // plan, the meshes read from the scratch files named, two run scripts, a licence, a notice
-        // and the player — Python the library carries as text and never runs. Read to its last
-        // line for this entry: it opens files to read them, writes to the one stream, and starts
-        // nothing; rendering is for whoever unpacks the zip.
+        // plan, each mesh from the stream that this application opens over the bytes it has just
+        // made — no file is named and none is read —, two run scripts, a licence, a notice, the
+        // notes with the sections this application adds to them, and the player — Python the
+        // library carries as text and never runs. Read to its last line for this entry: it writes
+        // to the one stream and starts nothing; rendering is for whoever unpacks the zip.
         "Therion.Blender.Player.RenderBundleContent",
+        "Therion.Blender.Player.RenderBundleReadmeSection",
         "Therion.Blender.Player.RenderBundleWriter",
 
         // Reading a survey file, and the refusal when it is not one.

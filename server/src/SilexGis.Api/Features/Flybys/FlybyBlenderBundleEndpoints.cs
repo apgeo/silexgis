@@ -256,24 +256,26 @@ public static class FlybyBlenderBundleEndpoints
                     "Nothing of the caves asked for is available to draw, so there is no scene to make a bundle of.");
             }
 
+            // The bundle's notes, in the asker's language where they exist in it.
+            var romanian = FlybyBundleNotes.IsRomanian(request.Language);
             var leftOut = (request.LeftOut ?? [])
                 .Distinct()
                 .Order()
-                .Select(FlybyBundleOmissions.Sentence)
+                .Select(omission => FlybyBundleOmissions.Sentence(omission, romanian))
                 .ToList();
             if (wallsUnavailable > 0)
             {
-                leftOut.Add(FlybyBundleOmissions.WallsNotAvailable(wallsUnavailable));
+                leftOut.Add(FlybyBundleOmissions.WallsNotAvailable(wallsUnavailable, romanian));
             }
 
             if (wallsOverBudget > 0)
             {
-                leftOut.Add(FlybyBundleOmissions.WallsOverBudget(wallsOverBudget));
+                leftOut.Add(FlybyBundleOmissions.WallsOverBudget(wallsOverBudget, romanian));
             }
 
             if (notDrawn > 0)
             {
-                leftOut.Add(FlybyBundleOmissions.CavesNotDrawn(notDrawn));
+                leftOut.Add(FlybyBundleOmissions.CavesNotDrawn(notDrawn, romanian));
             }
 
             var scene = new FlybyBundleScene(
@@ -296,6 +298,7 @@ public static class FlybyBlenderBundleEndpoints
                 leftOut)
             {
                 Changes = Changes(request.Changes),
+                Language = request.Language,
             };
 
             // Recorded before the bytes are handed over, in the same request, so there is no window
@@ -319,8 +322,7 @@ public static class FlybyBlenderBundleEndpoints
             await db.SaveChangesAsync(ct);
 
             using var zip = new MemoryStream();
-            var work = Path.Combine(Path.GetTempPath(), $"silexgis-blender-{Guid.NewGuid():N}");
-            var summary = FlybyBlenderBundle.Write(scene, work, zip);
+            var summary = FlybyBlenderBundle.Write(scene, zip);
 
             http.Response.Headers[WallsHeader] = Count(withWalls.Count);
             http.Response.Headers[LinesHeader] = Count(withLines.Count);
@@ -377,12 +379,15 @@ public static class FlybyBlenderBundleEndpoints
             [.. (changes.Relief ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))],
             [.. (changes.Sky ?? []).Select(k => new FlybyBundleColourKey(k.Frame, k.Colour, k.Easing ?? FlybyBundleEasing.Linear))],
             Layer(changes.Walls),
-            Layer(changes.Lines));
+            Layer(changes.Lines))
+        {
+            Daylight = [.. (changes.Daylight ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))],
+        };
 
     private static FlybyBundleLayerChanges Layer(FlybyBundleLayerChangesRequest? layer) => layer is null
         ? FlybyBundleLayerChanges.None
         : new FlybyBundleLayerChanges(
-            [.. (layer.Shown ?? []).Select(k => new FlybyBundleShownKey(k.Frame, k.Shown))],
+            [.. (layer.Shown ?? []).Select(k => new FlybyBundleShownKey(k.Frame, k.Shown, k.FadeFrames ?? 0))],
             [.. (layer.Opacity ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))],
             Tints(layer.Tint ?? []));
 

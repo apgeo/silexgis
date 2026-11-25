@@ -53,25 +53,41 @@ public sealed record FlybyBundleLookRequest(
     string? LineColour,
     IReadOnlyList<FlybyBundleDepthBandRequest>? DepthBands);
 
-/// <summary>A number at a frame of the clip, counted from 0.</summary>
+/// <summary>
+/// A number at a frame of the clip, counted from 0. A frame may lie after the clip's last — the
+/// clip then ends on the way to the key — and two keys may stand on one frame: the first is where
+/// the number was going, the second, which jumps, what it is from that frame on.
+/// </summary>
 /// <param name="Easing">How the number gets here from the key before; left out, evenly.</param>
 public sealed record FlybyBundleNumberKeyRequest(int Frame, double Value, FlybyBundleEasing? Easing);
 
-/// <summary>A colour, <c>#rrggbb</c>, at a frame of the clip.</summary>
+/// <summary>
+/// A colour, <c>#rrggbb</c>, at a frame of the clip. On the way from the key before it the colour
+/// is mixed as a screen mixes two colours.
+/// </summary>
 public sealed record FlybyBundleColourKeyRequest(int Frame, string Colour, FlybyBundleEasing? Easing);
 
 /// <summary>A colour laid over something by a strength from 0 to 1, at a frame of the clip.</summary>
 public sealed record FlybyBundleTintKeyRequest(int Frame, string Colour, double Strength, FlybyBundleEasing? Easing);
 
 /// <summary>From this frame on a layer is shown, or hidden. Each key says the opposite of the one before it.</summary>
-public sealed record FlybyBundleShownKeyRequest(int Frame, bool Shown);
+/// <param name="FadeFrames">
+/// How many frames, from this one on, the layer takes to appear, or to go before it is hidden,
+/// eased in and out; left out or 0, it is cut.
+/// </param>
+public sealed record FlybyBundleShownKeyRequest(int Frame, bool Shown, int? FadeFrames = null);
 
 /// <summary>
 /// What changes of one layer of the scene — the walls, or the survey lines — while the clip runs.
 /// A member left out does not change.
 /// </summary>
-/// <param name="Shown">When the layer is shown and hidden; before the first key it is the other way round.</param>
-/// <param name="Opacity">How much of it is there, from 0 to 1; one key is that much throughout.</param>
+/// <param name="Shown">
+/// When the layer is shown and hidden, and how long it takes to come and to go; before the first
+/// key it is the other way round.
+/// </param>
+/// <param name="Opacity">
+/// How much of it is there, from 0 to 1, besides its coming and going; one key is that much throughout.
+/// </param>
 /// <param name="Tint">
 /// For walls, the colour mixed into their own by its strength. For survey lines, the one colour
 /// they are drawn in (strength 1) or their colours by depth (strength 0).
@@ -100,12 +116,18 @@ public sealed record FlybyBundleCaveChangesRequest(
 /// what these keys give at each frame, and the caves are stretched by the same keys.
 /// </param>
 /// <param name="Sky">What stands behind everything; black for no sky.</param>
+/// <param name="Daylight">
+/// How much of the daylight is there, from 0 to 1: the sun and the sky of the render are that
+/// strong. The browser, which has the ground the flyby was played over, lets it go while the
+/// camera is under that ground; left out, all of it throughout.
+/// </param>
 public sealed record FlybyBundleChangesRequest(
     IReadOnlyList<FlybyBundleNumberKeyRequest>? Relief,
     IReadOnlyList<FlybyBundleColourKeyRequest>? Sky,
     FlybyBundleLayerChangesRequest? Walls,
     FlybyBundleLayerChangesRequest? Lines,
-    IReadOnlyList<FlybyBundleCaveChangesRequest>? Caves);
+    IReadOnlyList<FlybyBundleCaveChangesRequest>? Caves,
+    IReadOnlyList<FlybyBundleNumberKeyRequest>? Daylight = null);
 
 /// <summary>A card of words over the picture.</summary>
 /// <param name="Seconds">
@@ -152,6 +174,10 @@ public sealed record FlybyBundleTextsRequest(
 /// </param>
 /// <param name="LeftOut">What the flyby shows that a bundle cannot carry, by name.</param>
 /// <param name="Changes">What changes about the look while the clip runs; left out, nothing.</param>
+/// <param name="Language">
+/// The language the asker reads the application in, as a language tag ("ro", "en-GB"): the bundle's
+/// own notes are written in it where they exist in it — in Romanian — and in English otherwise.
+/// </param>
 public sealed record FlybyBlenderBundleRequest(
     string? Name,
     FlybyBundleOutputRequest? Output,
@@ -163,7 +189,8 @@ public sealed record FlybyBlenderBundleRequest(
     FlybyBundleLookRequest? Look,
     FlybyBundleTextsRequest? Texts,
     IReadOnlyList<FlybyBundleOmission>? LeftOut,
-    FlybyBundleChangesRequest? Changes = null);
+    FlybyBundleChangesRequest? Changes = null,
+    string? Language = null);
 
 public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidator<FlybyBlenderBundleRequest>
 {
@@ -187,6 +214,13 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     /// </summary>
     public const int MaxKeys = 400_000;
 
+    /// <summary>
+    /// How far after the clip's last frame a key may lie, and how long a layer may take to come or
+    /// to go, in frames: as long as the longest clip. A change that ends after the clip is said by
+    /// its real end, which the clip stops on the way to.
+    /// </summary>
+    public const int MaxFramesPastTheEnd = MaxFrames;
+
     private const int NumbersAFrame = 8;
     private const int MaxTextLength = 500;
     private const int MaxCaptions = 500;
@@ -194,6 +228,10 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     public FlybyBlenderBundleRequestValidator()
     {
         RuleFor(r => r.Name).MaximumLength(120);
+        RuleFor(r => r.Language!)
+            .Must(language => LanguageTag().IsMatch(language))
+            .When(r => r.Language is not null)
+            .WithMessage("A language is a tag such as \"ro\" or \"en-GB\".");
 
         RuleFor(r => r.Output).NotNull();
         When(r => r.Output is not null, () =>
@@ -277,22 +315,28 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
         {
             // A frame of the clip, when the clip's own length is known; else any frame a clip can have.
             static int Last(FlybyBlenderBundleRequest r) => r.Frames is { Count: > 0 and <= MaxFrames } frames ? frames.Count - 1 : MaxFrames - 1;
-            const string order = "Keys are in rising order of frame, each on a frame of its own, none after the clip's last.";
+            const string order =
+                "Keys are in rising order of frame, from the clip's first; two may stand on one frame, the second of them a jump.";
 
             RuleFor(r => r.Changes!)
                 .Must(changes => Keys(changes) <= MaxKeys)
                 .WithMessage($"The changes of one bundle hold at most {MaxKeys} keys.");
 
             RuleFor(r => r.Changes!.Relief!)
-                .Must((r, keys) => Rising(keys.Select(k => k?.Frame), Last(r))).WithMessage(order)
+                .Must((r, keys) => Ordered(keys.Select(k => (k?.Frame, k?.Easing)), Last(r))).WithMessage(order)
                 .Must(keys => keys.All(k => k is not null && k.Value is >= 0.5 and <= 5 && Eased(k.Easing)))
                 .WithMessage("A relief is a factor from 0.5 to 5.")
                 .When(r => r.Changes!.Relief is not null);
             RuleFor(r => r.Changes!.Sky!)
-                .Must((r, keys) => Rising(keys.Select(k => k?.Frame), Last(r))).WithMessage(order)
+                .Must((r, keys) => Ordered(keys.Select(k => (k?.Frame, k?.Easing)), Last(r))).WithMessage(order)
                 .Must(keys => keys.All(k => k is not null && Colour(k.Colour) && Eased(k.Easing)))
                 .WithMessage("A colour is written #rrggbb.")
                 .When(r => r.Changes!.Sky is not null);
+            RuleFor(r => r.Changes!.Daylight!)
+                .Must((r, keys) => Ordered(keys.Select(k => (k?.Frame, k?.Easing)), Last(r))).WithMessage(order)
+                .Must(keys => keys.All(k => k is not null && k.Value is >= 0 and <= 1 && Eased(k.Easing)))
+                .WithMessage("How much of the daylight is there is a number from 0 to 1.")
+                .When(r => r.Changes!.Daylight is not null);
 
             RuleFor(r => r.Changes!.Walls!).SetValidator(r => new LayerChangesValidator(Last(r))).When(r => r.Changes!.Walls is not null);
             RuleFor(r => r.Changes!.Lines!).SetValidator(r => new LayerChangesValidator(Last(r))).When(r => r.Changes!.Lines is not null);
@@ -337,17 +381,47 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
         return any;
     }
 
+    /// <summary>
+    /// Whether the keys of one track are in order: at least one, none before the clip's first frame
+    /// and none further past its last than a key may lie, never going back — and where two stand on
+    /// one frame, no third with them and the second a jump.
+    /// </summary>
+    private static bool Ordered(IEnumerable<(int? Frame, FlybyBundleEasing? Easing)> keys, int last)
+    {
+        var before = -1;
+        var onIt = 0;
+        var any = false;
+        foreach (var (frame, easing) in keys)
+        {
+            if (frame is not { } at || at < before || at < 0 || at > (long)last + MaxFramesPastTheEnd)
+            {
+                return false;
+            }
+
+            onIt = at == before ? onIt + 1 : 1;
+            if (onIt > 2 || (onIt == 2 && easing != FlybyBundleEasing.Constant))
+            {
+                return false;
+            }
+
+            before = at;
+            any = true;
+        }
+
+        return any;
+    }
+
     private static bool Eased(FlybyBundleEasing? easing) => easing is null || Enum.IsDefined(easing.Value);
 
     private static bool Tints(IReadOnlyList<FlybyBundleTintKeyRequest> keys, int last) =>
-        Rising(keys.Select(k => k?.Frame), last)
+        Ordered(keys.Select(k => (k?.Frame, k?.Easing)), last)
         && keys.All(k => k is not null && Colour(k.Colour) && k.Strength is >= 0 and <= 1 && Eased(k.Easing));
 
     private static int Keys(FlybyBundleChangesRequest changes)
     {
         static int Of(FlybyBundleLayerChangesRequest? layer) =>
             (layer?.Shown?.Count ?? 0) + (layer?.Opacity?.Count ?? 0) + (layer?.Tint?.Count ?? 0);
-        return (changes.Relief?.Count ?? 0) + (changes.Sky?.Count ?? 0) + Of(changes.Walls) + Of(changes.Lines)
+        return (changes.Relief?.Count ?? 0) + (changes.Sky?.Count ?? 0) + (changes.Daylight?.Count ?? 0) + Of(changes.Walls) + Of(changes.Lines)
                + (changes.Caves ?? []).Sum(c => (c?.Walls?.Count ?? 0) + (c?.Lines?.Count ?? 0));
     }
 
@@ -372,17 +446,23 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
     private static partial Regex ColourPattern();
 
+    [GeneratedRegex("^[A-Za-z]{2,3}([-_][A-Za-z0-9]{1,8}){0,3}$")]
+    private static partial Regex LanguageTag();
+
     private sealed class LayerChangesValidator : AbstractValidator<FlybyBundleLayerChangesRequest>
     {
         public LayerChangesValidator(int last)
         {
             RuleFor(l => l.Shown!)
                 .Must(keys => Rising(keys.Select(k => k?.Frame), last)
-                              && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown))
-                .WithMessage("A layer is shown and hidden at keys in rising order of frame, each saying the opposite of the one before it.")
+                              && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown)
+                              && keys.All(k => k.FadeFrames is null or (>= 0 and <= MaxFramesPastTheEnd)))
+                .WithMessage(
+                    "A layer is shown and hidden at keys on frames of the clip, in rising order, each saying the opposite of the one "
+                    + "before it and taking no fewer than no frames to do it.")
                 .When(l => l.Shown is not null);
             RuleFor(l => l.Opacity!)
-                .Must(keys => Rising(keys.Select(k => k?.Frame), last)
+                .Must(keys => Ordered(keys.Select(k => (k?.Frame, k?.Easing)), last)
                               && keys.All(k => k.Value is >= 0 and <= 1 && Eased(k.Easing)))
                 .WithMessage("How much of a layer is there is keys in rising order of frame, each from 0 to 1.")
                 .When(l => l.Opacity is not null);

@@ -74,9 +74,11 @@ public readonly record struct ScenePivotPlacement(SceneVector Translation, Scene
 /// <b>A relief that changes.</b> One frame is one factor. A scene whose factor changes over time is
 /// a frame for each factor (<see cref="WithRelief"/>), all about the same point of the globe drawn
 /// at that factor — so the frames differ by a lift of the whole scene along the origin's up, which
-/// no picture shows. A camera is placed in the frame of its moment. A model cannot move: it is
-/// placed once, about a point chosen so that stretching it there is the globe's stretching of it
-/// (<see cref="PlacementAbout"/>).
+/// no picture shows. A model cannot move: it is placed once, about a point chosen so that
+/// stretching it there is the globe's stretching of it (<see cref="PlacementAbout"/>) — exactly on
+/// the origin's vertical, and elsewhere but for the little the two verticals lean apart. A camera
+/// is raised by that same rule (<see cref="ViewAbout"/>), so what a model is off by its camera is
+/// off by too, and the picture has the model where the globe's picture has it.
 /// </para>
 ///
 /// <para>
@@ -157,6 +159,39 @@ public sealed class SceneTangentFrame
             PointAt(longitude, latitude, heightM),
             Carried(here, forward).Normalized(),
             Carried(here, up).Normalized());
+    }
+
+    /// <summary>
+    /// A camera of the globe in the scene while the relief is <paramref name="relief"/> and not this
+    /// frame's own, placed by the rule a model is stretched by (<see cref="PlacementAbout"/>): where
+    /// this frame has it, moved along its own up by the change of the factor times its height above
+    /// the level of the origin.
+    ///
+    /// <para>
+    /// The frame of that relief itself (<see cref="WithRelief"/>) would have the camera exactly
+    /// where the globe has it — and the models, which cannot follow the lean between their vertical
+    /// and the origin's, somewhere else by a hand's breadth: a camera a few metres from a cave a
+    /// kilometre and a half from the origin then sees that cave pixels off. Moved as the models are
+    /// moved, the camera and a cave near it are off by the same vector, which no picture shows; what
+    /// is left between a camera and a cave a distance apart is that distance times the change of
+    /// the factor times the origin's height over the Earth's radius — a few parts in a hundred
+    /// thousand of the distance, in every direction alike. And like the models' rule it says no
+    /// height above the ellipsoid: the camera's place is told as a height above the origin's level.
+    /// </para>
+    /// </summary>
+    /// <param name="relief">How many times taller than true every height is drawn at the camera's moment.</param>
+    public SceneView ViewAbout(
+        double longitude, double latitude, double heightM, double headingDeg, double pitchDeg, double rollDeg, double relief)
+    {
+        var view = ViewAt(longitude, latitude, heightM, headingDeg, pitchDeg, rollDeg);
+        if (relief == Relief)
+        {
+            return view;
+        }
+
+        var up = Carried(new LocalTangentFrame(longitude, latitude, heightM * Relief), new SceneVector(0, 0, 1));
+        var lift = heightM - (this.heightM * up.Z);
+        return view with { Eye = view.Eye + (up * (lift * (relief - Relief))) };
     }
 
     /// <summary>

@@ -506,6 +506,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         routeCaves: flyby.preparedCaves(),
         includeWalls,
         reliefWords: (factor) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
+        language: i18n.language,
         signal: controller.signal,
       });
       setBundleMade(made);
@@ -887,6 +888,9 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           </ul>
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
             {t('flyby.bundle.leftOutHelp')}
+          </Typography.Text>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-bundle-daylight">
+            {t('flyby.bundle.daylight')}
           </Typography.Text>
         </div>
       )}

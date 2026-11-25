@@ -111,62 +111,14 @@
     ],
     "sky": [
       { "frame": 0, "colour": "#1b2a3a", "easing": null },
-      { "frame": 303, "colour": "#1b2a3a", "easing": null },
-      { "frame": 304, "colour": "#1b2a39", "easing": null },
-      { "frame": 305, "colour": "#1b2939", "easing": null },
-      { "frame": 306, "colour": "#1a2939", "easing": null },
-      { "frame": 307, "colour": "#1a2938", "easing": null },
-      { "frame": 308, "colour": "#1a2838", "easing": null },
-      { "frame": 309, "colour": "#1a2837", "easing": null },
-      { "frame": 310, "colour": "#192736", "easing": null },
-      { "frame": 311, "colour": "#192736", "easing": null },
-      { "frame": 312, "colour": "#192635", "easing": null },
-      { "frame": 313, "colour": "#182634", "easing": null },
-      { "frame": 314, "colour": "#182533", "easing": null },
-      { "frame": 315, "colour": "#182533", "easing": null },
-      { "frame": 316, "colour": "#172432", "easing": null },
-      { "frame": 317, "colour": "#172331", "easing": null },
-      { "frame": 318, "colour": "#162330", "easing": null },
-      { "frame": 319, "colour": "#16222f", "easing": null },
-      { "frame": 320, "colour": "#15212e", "easing": null },
-      { "frame": 321, "colour": "#15202d", "easing": null },
-      { "frame": 322, "colour": "#14202c", "easing": null },
-      { "frame": 323, "colour": "#141f2b", "easing": null },
-      { "frame": 324, "colour": "#131e2a", "easing": null },
-      { "frame": 325, "colour": "#131e29", "easing": null },
-      { "frame": 326, "colour": "#131d28", "easing": null },
-      { "frame": 327, "colour": "#121c27", "easing": null },
-      { "frame": 328, "colour": "#121b26", "easing": null },
-      { "frame": 329, "colour": "#111b25", "easing": null },
-      { "frame": 330, "colour": "#111a24", "easing": null },
-      { "frame": 331, "colour": "#101923", "easing": null },
-      { "frame": 332, "colour": "#101822", "easing": null },
-      { "frame": 333, "colour": "#0f1821", "easing": null },
-      { "frame": 334, "colour": "#0f1720", "easing": null },
-      { "frame": 335, "colour": "#0e161f", "easing": null },
-      { "frame": 336, "colour": "#0e161f", "easing": null },
-      { "frame": 337, "colour": "#0e151e", "easing": null },
-      { "frame": 338, "colour": "#0d151d", "easing": null },
-      { "frame": 339, "colour": "#0d141c", "easing": null },
-      { "frame": 340, "colour": "#0d141c", "easing": null },
-      { "frame": 341, "colour": "#0c131b", "easing": null },
-      { "frame": 342, "colour": "#0c131a", "easing": null },
-      { "frame": 343, "colour": "#0c121a", "easing": null },
-      { "frame": 344, "colour": "#0c1219", "easing": null },
-      { "frame": 345, "colour": "#0b1219", "easing": null },
-      { "frame": 346, "colour": "#0b1119", "easing": null },
-      { "frame": 347, "colour": "#0b1118", "easing": null },
-      { "frame": 350, "colour": "#0b1118", "easing": null }
+      { "frame": 300, "colour": "#1b2a3a", "easing": null },
+      { "frame": 350, "colour": "#0b1118", "easing": "smooth" }
     ],
     "walls": {
       "shown": [
-        { "frame": 440, "shown": false }
+        { "frame": 410, "shown": false, "fadeFrames": 40 }
       ],
-      "opacity": [
-        { "frame": 0, "value": 1, "easing": null },
-        { "frame": 400, "value": 1, "easing": null },
-        { "frame": 440, "value": 0, "easing": "smooth" }
-      ],
+      "opacity": null,
       "tint": [
         { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null }
       ]
@@ -188,15 +140,38 @@
         "caveId": "0193a5c0-0000-7000-8000-00000000000a",
         "walls": [
           { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
-          { "frame": 75, "colour": "#ffcc00", "strength": 0, "easing": "constant" },
-          { "frame": 100, "colour": "#ffcc00", "strength": 0.85, "easing": "smooth" },
+          { "frame": 76, "colour": "#ffcc00", "strength": 0.003971, "easing": "constant" },
+          { "frame": 77, "colour": "#ffcc00", "strength": 0.01545, "easing": null },
+          { "frame": 78, "colour": "#ffcc00", "strength": 0.033782, "easing": null },
+          { "frame": 79, "colour": "#ffcc00", "strength": 0.058317, "easing": null },
+          { "frame": 80, "colour": "#ffcc00", "strength": 0.0884, "easing": null },
+          { "frame": 81, "colour": "#ffcc00", "strength": 0.123379, "easing": null },
+          { "frame": 82, "colour": "#ffcc00", "strength": 0.162602, "easing": null },
+          { "frame": 83, "colour": "#ffcc00", "strength": 0.205414, "easing": null },
+          { "frame": 84, "colour": "#ffcc00", "strength": 0.251165, "easing": null },
+          { "frame": 85, "colour": "#ffcc00", "strength": 0.2992, "easing": null },
+          { "frame": 86, "colour": "#ffcc00", "strength": 0.348867, "easing": null },
+          { "frame": 87, "colour": "#ffcc00", "strength": 0.399514, "easing": null },
+          { "frame": 88, "colour": "#ffcc00", "strength": 0.450486, "easing": null },
+          { "frame": 89, "colour": "#ffcc00", "strength": 0.501133, "easing": null },
+          { "frame": 90, "colour": "#ffcc00", "strength": 0.5508, "easing": null },
+          { "frame": 91, "colour": "#ffcc00", "strength": 0.598835, "easing": null },
+          { "frame": 92, "colour": "#ffcc00", "strength": 0.644586, "easing": null },
+          { "frame": 93, "colour": "#ffcc00", "strength": 0.687398, "easing": null },
+          { "frame": 94, "colour": "#ffcc00", "strength": 0.726621, "easing": null },
+          { "frame": 95, "colour": "#ffcc00", "strength": 0.7616, "easing": null },
+          { "frame": 96, "colour": "#ffcc00", "strength": 0.791683, "easing": null },
+          { "frame": 97, "colour": "#ffcc00", "strength": 0.816218, "easing": null },
+          { "frame": 98, "colour": "#ffcc00", "strength": 0.83455, "easing": null },
+          { "frame": 99, "colour": "#ffcc00", "strength": 0.846029, "easing": null },
+          { "frame": 100, "colour": "#ffcc00", "strength": 0.85, "easing": null },
           { "frame": 200, "colour": "#ffcc00", "strength": 0.85, "easing": null },
           { "frame": 225, "colour": "#ffcc00", "strength": 0, "easing": "smooth" },
-          { "frame": 226, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
+          { "frame": 225, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
         ],
         "lines": [
           { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
-          { "frame": 75, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
+          { "frame": 76, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
           { "frame": 225, "colour": "#5c6370", "strength": 1, "easing": "constant" }
         ]
       },
@@ -204,19 +179,48 @@
         "caveId": "0193a5c0-0000-7000-8000-00000000000b",
         "walls": [
           { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
-          { "frame": 275, "colour": "#ffcc00", "strength": 0, "easing": "constant" },
-          { "frame": 300, "colour": "#ffcc00", "strength": 0.85, "easing": "smooth" },
+          { "frame": 276, "colour": "#ffcc00", "strength": 0.003971, "easing": "constant" },
+          { "frame": 277, "colour": "#ffcc00", "strength": 0.01545, "easing": null },
+          { "frame": 278, "colour": "#ffcc00", "strength": 0.033782, "easing": null },
+          { "frame": 279, "colour": "#ffcc00", "strength": 0.058317, "easing": null },
+          { "frame": 280, "colour": "#ffcc00", "strength": 0.0884, "easing": null },
+          { "frame": 281, "colour": "#ffcc00", "strength": 0.123379, "easing": null },
+          { "frame": 282, "colour": "#ffcc00", "strength": 0.162602, "easing": null },
+          { "frame": 283, "colour": "#ffcc00", "strength": 0.205414, "easing": null },
+          { "frame": 284, "colour": "#ffcc00", "strength": 0.251165, "easing": null },
+          { "frame": 285, "colour": "#ffcc00", "strength": 0.2992, "easing": null },
+          { "frame": 286, "colour": "#ffcc00", "strength": 0.348867, "easing": null },
+          { "frame": 287, "colour": "#ffcc00", "strength": 0.399514, "easing": null },
+          { "frame": 288, "colour": "#ffcc00", "strength": 0.450486, "easing": null },
+          { "frame": 289, "colour": "#ffcc00", "strength": 0.501133, "easing": null },
+          { "frame": 290, "colour": "#ffcc00", "strength": 0.5508, "easing": null },
+          { "frame": 291, "colour": "#ffcc00", "strength": 0.598835, "easing": null },
+          { "frame": 292, "colour": "#ffcc00", "strength": 0.644586, "easing": null },
+          { "frame": 293, "colour": "#ffcc00", "strength": 0.687398, "easing": null },
+          { "frame": 294, "colour": "#ffcc00", "strength": 0.726621, "easing": null },
+          { "frame": 295, "colour": "#ffcc00", "strength": 0.7616, "easing": null },
+          { "frame": 296, "colour": "#ffcc00", "strength": 0.791683, "easing": null },
+          { "frame": 297, "colour": "#ffcc00", "strength": 0.816218, "easing": null },
+          { "frame": 298, "colour": "#ffcc00", "strength": 0.83455, "easing": null },
+          { "frame": 299, "colour": "#ffcc00", "strength": 0.846029, "easing": null },
+          { "frame": 300, "colour": "#ffcc00", "strength": 0.85, "easing": null },
           { "frame": 350, "colour": "#ffcc00", "strength": 0.85, "easing": null },
           { "frame": 375, "colour": "#ffcc00", "strength": 0, "easing": "smooth" },
-          { "frame": 376, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
+          { "frame": 375, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
         ],
         "lines": [
           { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
           { "frame": 125, "colour": "#5c6370", "strength": 1, "easing": "constant" },
-          { "frame": 275, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
+          { "frame": 276, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
           { "frame": 375, "colour": "#5c6370", "strength": 1, "easing": "constant" }
         ]
       }
+    ],
+    "daylight": [
+      { "frame": 0, "value": 1, "easing": null },
+      { "frame": 356, "value": 1, "easing": null },
+      { "frame": 372, "value": 0, "easing": "smooth" },
+      { "frame": 388, "value": 1, "easing": "smooth" }
     ]
   },
   "frames": [

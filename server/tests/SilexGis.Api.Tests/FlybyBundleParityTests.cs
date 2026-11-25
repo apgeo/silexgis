@@ -34,6 +34,20 @@ namespace SilexGis.Api.Tests;
 /// </para>
 ///
 /// <para>
+/// While the relief changes, the bundle's caves cannot follow the little their verticals lean away
+/// from the origin's, and its camera is moved by the same rule so that the two stay together. So
+/// the camera is held to the globe's but for that lean, stated here from the globe's arithmetic —
+/// and what a reader sees is checked for itself: points of the bundle's own models through the
+/// bundle's camera, against the same points of the globe through the browser's.
+/// </para>
+///
+/// <para>
+/// And what a bundle has that the screen has not: its sun and its sky go out while the camera is
+/// under the ground. The browser's tests commit the frames at which it is; the rule is restated
+/// here and the plan's keys are played against it.
+/// </para>
+///
+/// <para>
 /// The way back from the plan's frame to the Earth is written out in this file, and is not the
 /// function the exporter went the other way with — agreeing with the browser's numbers is then
 /// evidence about the exporter and not an echo of it.
@@ -64,6 +78,7 @@ public class FlybyBundleParityTests
         track.Count.ShouldBe(flown.Expected.Frames.Length);
 
         var earth = new Earth(flown.Request);
+        var lean = new Lean(flown);
         var sensor = camera.GetProperty("sensorWidth").GetDouble();
         var lens = camera.GetProperty("lens").GetDouble();
         for (var i = 0; i < track.Count; i++)
@@ -78,7 +93,7 @@ public class FlybyBundleParityTests
                 Rotated(turn, [0, 1, 0]),
                 track[i].TryGetProperty("lens", out var own) ? own.GetDouble() : lens,
                 sensor);
-            Compare(earth, flown.Expected, i, seen, eyeSlack: 0);
+            Compare(earth, flown.Expected, i, seen, eyeSlack: 0, lean.At(i));
 
             // What the camera focuses on lies along its line of sight, the distance the path keeps.
             var target = Numbers(track[i].GetProperty("target"));
@@ -107,7 +122,10 @@ public class FlybyBundleParityTests
         Keys? Track(string id, string property, string value = "value") =>
             Of(id) is { } change && change.TryGetProperty(property, out var keys) ? new Keys(keys, fps, value) : null;
 
-        var world = changes.Where(c => !c.TryGetProperty("target", out _)).Select(c => new Keys(c.GetProperty("worldColor"), fps)).SingleOrDefault();
+        var world = changes
+            .Where(c => !c.TryGetProperty("target", out _) && c.TryGetProperty("worldColor", out _))
+            .Select(c => new Keys(c.GetProperty("worldColor"), fps))
+            .SingleOrDefault();
         var sky = root.GetProperty("look").TryGetProperty("world", out var behind) ? Numbers(behind.GetProperty("color")) : [0, 0, 0];
 
         for (var i = 0; i < flown.Expected.Frames.Length; i++)
@@ -132,33 +150,26 @@ public class FlybyBundleParityTests
             // The walls and the lines: shown or not, and how much of them while they are.
             foreach (var (id, shownAt, opacityAt) in ((string, int, int)[])[("cave-01-walls", 1, 2), ("cave-01-lines", 3, 4), ("cave-02-lines", 3, 4)])
             {
-                var shown = Shown(Of(id), i, fps);
+                var (shown, fade) = Shown(Of(id), i, fps);
                 shown.ShouldBe(row[shownAt].GetBoolean(), $"frame {i}: {id} shown");
                 if (shown)
                 {
-                    (Track(id, "opacity")?.At(i)[0] ?? 1).ShouldBe(row[opacityAt].GetDouble(), 1e-5, $"frame {i}: how much of {id}");
+                    // How far it has come or gone, times its own strength: a renderer multiplies the two.
+                    ((Track(id, "opacity")?.At(i)[0] ?? 1) * fade).ShouldBe(row[opacityAt].GetDouble(), 1e-5, $"frame {i}: how much of {id}");
                 }
             }
 
-            // The colours of each cave, but for the frames a hand-over stands on.
-            if (!flown.Expected.HandOvers[0].Walls.Contains(i))
+            // The colours of each cave, at every frame: the frames it changes hands on among them.
+            var tint = Track("cave-01-walls", "tint", "color");
+            var tinted = Track("cave-01-walls", "tint", "strength");
+            (tinted?.At(i)[0] ?? 0).ShouldBe(row[6].GetDouble(), 2e-6, $"frame {i}: the strength of the colour on the first cave's walls");
+            if (row[6].GetDouble() > 0)
             {
-                var tint = Track("cave-01-walls", "tint", "color");
-                var strength = Track("cave-01-walls", "tint", "strength");
-                (strength?.At(i)[0] ?? 0).ShouldBe(row[6].GetDouble(), 2e-6, $"frame {i}: the strength of the colour on the first cave's walls");
-                if (row[6].GetDouble() > 0)
-                {
-                    Screen(tint!.At(i)).ShouldBe(Channels(row[5].GetString()!), 1.0, $"frame {i}: the colour on the first cave's walls");
-                }
+                Screen(tint!.At(i)).ShouldBe(Channels(row[5].GetString()!), 1.0, $"frame {i}: the colour on the first cave's walls");
             }
 
             foreach (var (id, cave) in ((string, int)[])[("cave-01-lines", 0), ("cave-02-lines", 1)])
             {
-                if (flown.Expected.HandOvers[cave].Lines.Contains(i))
-                {
-                    continue;
-                }
-
                 var want = row[7 + (cave * 3)];
                 var strength = Track(id, "tint", "strength")?.At(i)[0];
                 var material = materials[models[id].GetProperty("material").GetString()!];
@@ -181,6 +192,57 @@ public class FlybyBundleParityTests
         }
     }
 
+    /// <summary>
+    /// The sun and the sky of the bundle are as strong as the daylight its camera has: whole above
+    /// the ground, and gone under it — going over a second from the frame the camera goes under,
+    /// and back on the frame it comes out, having risen over the second before; half of each for a
+    /// stay of less than two seconds. The lamp on the camera has no part in it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void The_sun_and_the_sky_go_out_while_the_camera_is_under_the_ground(string name)
+    {
+        var flown = Load(name);
+        using var plan = JsonDocument.Parse(FlybyBlenderBundle.PlanJson(Scene(flown.Request)));
+        var root = plan.RootElement;
+        var fps = flown.Expected.Fps;
+        var look = root.GetProperty("look");
+        var lights = look.GetProperty("lights").EnumerateArray().ToDictionary(l => l.GetProperty("id").GetString()!);
+        lights.Keys.Order().ShouldBe(["Headlamp", "Sun"]);
+        var whole = lights["Sun"].GetProperty("energy").GetDouble();
+        whole.ShouldBeGreaterThan(0);
+        look.GetProperty("world").GetProperty("strength").GetDouble().ShouldBe(1);
+
+        var changes = root.TryGetProperty("changes", out var listed) ? listed.EnumerateArray().ToList() : [];
+        var ofTheSun = changes
+            .Where(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Sun")
+            .ToList();
+        var ofTheWorld = changes.Where(c => !c.TryGetProperty("target", out _) && c.TryGetProperty("worldStrength", out _)).ToList();
+        changes
+            .Where(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Headlamp")
+            .ShouldBeEmpty("the lamp on the camera is on throughout");
+
+        var daylight = Daylight(flown.Expected, fps);
+        if (flown.Expected.Underground.Length == 0)
+        {
+            ofTheSun.ShouldBeEmpty();
+            ofTheWorld.ShouldBeEmpty();
+            return;
+        }
+
+        var energy = new Keys(ofTheSun.ShouldHaveSingleItem().GetProperty("energy"), fps);
+        var strength = new Keys(ofTheWorld.ShouldHaveSingleItem().GetProperty("worldStrength"), fps);
+        for (var i = 0; i < daylight.Length; i++)
+        {
+            energy.At(i)[0].ShouldBe(whole * daylight[i], 2e-6, $"frame {i}: the sun");
+            strength.At(i)[0].ShouldBe(daylight[i], 2e-6, $"frame {i}: the sky");
+        }
+
+        // And the camera really is in the dark at some frame, and in full daylight at others.
+        daylight.Min().ShouldBe(0);
+        daylight.Max().ShouldBe(1);
+    }
+
     [Theory]
     [MemberData(nameof(Cases))]
     public void A_cave_stands_where_the_globe_draws_it_at_every_frames_relief(string name)
@@ -189,31 +251,13 @@ public class FlybyBundleParityTests
         var scene = Scene(flown.Request);
         var folder = Unpacked(scene, name + ".stands");
         using var plan = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "scene-plan.json")));
-        var root = plan.RootElement;
-        var fps = flown.Expected.Fps;
         var earth = new Earth(flown.Request);
-        var models = root.GetProperty("models").EnumerateArray().ToDictionary(m => m.GetProperty("id").GetString()!);
-        var changes = root.TryGetProperty("changes", out var listed) ? listed.EnumerateArray().ToList() : [];
+        var placed = new Placed(plan.RootElement, flown.Expected.Fps);
 
-        // A point of a model at a frame: the mesh's own point, stretched as the model is at that
-        // frame, turned and moved as the plan says, and set back on the Earth.
-        double[] Stands(string id, double[] own, int frame)
-        {
-            var model = models[id];
-            var keys = changes
-                .Where(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == id && c.TryGetProperty("scale", out _))
-                .Select(c => new Keys(c.GetProperty("scale"), fps))
-                .SingleOrDefault();
-            var scale = keys?.At(frame) ?? (model.TryGetProperty("scale", out var s) ? Numbers(s) : [1, 1, 1]);
-            double[] stretched = [own[0] * scale[0], own[1] * scale[1], own[2] * scale[2]];
-            if (model.TryGetProperty("rotation", out var rotation))
-            {
-                stretched = Turned(stretched, Unit(Numbers(rotation.GetProperty("axis"))), rotation.GetProperty("degrees").GetDouble());
-            }
-
-            var at = model.TryGetProperty("translation", out var t) ? Numbers(t) : [0, 0, 0];
-            return earth.OnTheEarth([at[0] + stretched[0], at[1] + stretched[1], at[2] + stretched[2]], flown.Expected.Frames[frame][10]);
-        }
+        // A point of a model at a frame, set back on the Earth: in the frame whose zero is the
+        // origin at that frame's relief.
+        double[] Stands(string id, double[] own, int frame) =>
+            earth.OnTheEarth(placed.At(id, own, frame), flown.Expected.Frames[frame][10]);
 
         // The first cave's box has its top at the cave's own zero, 60 m above the origin and on
         // its vertical. The second cave's lines start at a place a kilometre and a half away.
@@ -236,7 +280,9 @@ public class FlybyBundleParityTests
 
             // Away from the origin's vertical a model that is being stretched is off by the lean
             // between the two verticals: here at most a quarter of a factor from the middle of the
-            // ramp, 640 m of origin height and 1.56 km away — four centimetres.
+            // ramp, 640 m of origin height and 1.56 km away — four centimetres. Exactly there
+            // would take the origin's height above the ellipsoid, which the bundle does not say;
+            // the camera is moved by the same rule instead, so the picture does not show it.
             off.ShouldBeLessThan(changing ? 0.045 : 0.002, $"frame {i}: the start of the second cave's lines");
         }
 
@@ -245,6 +291,109 @@ public class FlybyBundleParityTests
             // And it is that lean, not nothing: the bound is the real size of the thing.
             worst.ShouldBeGreaterThan(0.03);
         }
+    }
+
+    /// <summary>
+    /// What a reader of the movie sees of a cave: its points, through the camera of each frame. The
+    /// globe's own arithmetic says where each stands and where the browser's camera puts it in the
+    /// picture; the bundle's models, stretched, turned and placed as its plan says, are put through
+    /// the bundle's camera. The two pictures are one, at every frame, whatever the relief is doing.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void What_is_drawn_of_a_cave_is_in_the_picture_where_the_globe_has_it(string name)
+    {
+        var flown = Load(name);
+        var folder = Unpacked(Scene(flown.Request), name + ".picture");
+        using var plan = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "scene-plan.json")));
+        var root = plan.RootElement;
+        var fps = flown.Expected.Fps;
+        var earth = new Earth(flown.Request);
+        var placed = new Placed(root, fps);
+        var camera = root.GetProperty("camera");
+        var track = camera.GetProperty("track").EnumerateArray().ToList();
+        var sensor = camera.GetProperty("sensorWidth").GetDouble();
+        var lens = camera.GetProperty("lens").GetDouble();
+        var marks = Marks(flown.Request, folder);
+        var height = 1920.0 * flown.Expected.Height / flown.Expected.Width;
+
+        var seen = 0;
+        var (worstPixels, worstMetres, worstNearMetres) = (0.0, 0.0, 0.0);
+        var (anchorPixels, anchorNearMetres) = (0.0, 0.0);
+        var where = string.Empty;
+        for (var i = 0; i < track.Count; i++)
+        {
+            var want = flown.Expected.Frames[i];
+            var relief = want[10];
+            double[] wantEye = [want[0], want[1], want[2]];
+            double[] wantForward = [want[3], want[4], want[5]];
+            double[] wantUp = [want[6], want[7], want[8]];
+
+            var eye = Numbers(track[i].GetProperty("eye"));
+            var turn = Numbers(track[i].GetProperty("orientation"));
+            var forward = earth.Direction(Rotated(turn, [0, 0, -1]));
+            var up = earth.Direction(Rotated(turn, [0, 1, 0]));
+            var focal = track[i].TryGetProperty("lens", out var own) ? own.GetDouble() : lens;
+            var across = 2 * Math.Atan(sensor / (2 * focal)) * 180 / Math.PI;
+
+            foreach (var mark in marks)
+            {
+                // From each camera to the point, in the Earth's axes: what the picture is made of.
+                var inPlan = placed.At(mark.Model, mark.Own, i);
+                var drawn = earth.Direction([inPlan[0] - eye[0], inPlan[1] - eye[1], inPlan[2] - eye[2]]);
+                var onGlobe = mark.OnGlobe(relief);
+                double[] real = [onGlobe[0] - wantEye[0], onGlobe[1] - wantEye[1], onGlobe[2] - wantEye[2]];
+
+                var onEarth = Projected(real, [0, 0, 0], wantForward, wantUp, want[9], 1920, height);
+                var inBundle = Projected(drawn, [0, 0, 0], forward, up, across, 1920, height);
+                if (onEarth is null || Math.Abs(onEarth.Value.X) > 960 || Math.Abs(onEarth.Value.Y) > height / 2)
+                {
+                    continue;
+                }
+
+                inBundle.ShouldNotBeNull($"frame {i}: {mark.Name} is before the browser's camera and behind the bundle's");
+                seen++;
+                var pixels = Math.Max(Math.Abs(onEarth.Value.X - inBundle.Value.X), Math.Abs(onEarth.Value.Y - inBundle.Value.Y));
+                var metres = Apart(drawn, real);
+                if (pixels > worstPixels)
+                {
+                    (worstPixels, where) = (pixels, $"frame {i}, {mark.Name}, {Length(real):0.#} m from the eye");
+                }
+
+                worstMetres = Math.Max(worstMetres, metres);
+                if (Length(real) < 200)
+                {
+                    worstNearMetres = Math.Max(worstNearMetres, metres);
+                }
+
+                if (mark.AtItsModelsZero)
+                {
+                    anchorPixels = Math.Max(anchorPixels, pixels);
+                    anchorNearMetres = Length(real) < 200 ? Math.Max(anchorNearMetres, metres) : anchorNearMetres;
+                }
+            }
+        }
+
+        // Kept beside the unpacked bundles, for whoever wants the numbers and not only the verdict.
+        File.WriteAllText(
+            Path.Combine(TestScratch.Root, "blender-bundle-parity", name + ".picture.json"),
+            JsonSerializer.Serialize(new { seen, worstPixels, where, worstMetres, worstNearMetres, anchorPixels, anchorNearMetres }));
+
+        // Every mark is in the picture at some frame, many times over.
+        seen.ShouldBeGreaterThan(track.Count);
+
+        // Where a model stands — the point it is placed by — is in the picture where the globe
+        // has it to a twentieth of a pixel, the cave a kilometre and a half from the origin
+        // included, and while the relief changes: a camera in the frame of each moment, beside
+        // models that cannot follow, had that point eight pixels off.
+        anchorPixels.ShouldBeLessThan(0.05);
+
+        // A point away from its model's own zero is off by what stretching a model along one
+        // vertical differs from raising each of its points along its own: its height above the
+        // ellipsoid, times the relief less one, times the lean between the two — a centimetre
+        // for a leg 200 m from where its lines start, with or without a change of relief.
+        worstPixels.ShouldBeLessThan(1, where);
+        worstNearMetres.ShouldBeLessThan(0.015);
     }
 
     [BlenderFact]
@@ -256,10 +405,16 @@ public class FlybyBundleParityTests
             var folder = Unpacked(Scene(flown.Request), name);
 
             // Every fifth frame and the last: enough to catch a camera that drifts, turns the
-            // other way or jumps at a join, at a cost of seconds. And the frames about each
-            // hand-over of a cave's colour, where a key a frame out would show.
-            var about = flown.Expected.HandOvers
-                .SelectMany(h => h.Walls.Concat(h.Lines))
+            // other way or jumps at a join, at a cost of seconds. And the frames about each jump
+            // of a cave's colour — where one changes hands, and a key a frame out would show —
+            // and about each turn of the daylight and of the walls.
+            var said = flown.Request.Changes;
+            var about = (said?.Caves ?? [])
+                .SelectMany(c => (c.Walls ?? []).Concat(c.Lines ?? []))
+                .Where(k => k.Easing == FlybyBundleEasing.Constant)
+                .Select(k => k.Frame)
+                .Concat((said?.Daylight ?? []).Select(k => k.Frame))
+                .Concat((said?.Walls?.Shown ?? []).SelectMany(k => (int[])[k.Frame, k.Frame + (k.FadeFrames ?? 0)]))
                 .SelectMany(f => (int[])[f - 2, f - 1, f, f + 1, f + 2])
                 .ToHashSet();
             var frames = Enumerable.Range(0, flown.Expected.Frames.Length)
@@ -282,6 +437,11 @@ public class FlybyBundleParityTests
             models.ShouldContain("cave-02-lines");
 
             var earth = new Earth(flown.Request);
+            var lean = new Lean(flown);
+            var daylight = Daylight(flown.Expected, flown.Expected.Fps);
+            var sun = report.GetProperty("objects").EnumerateArray()
+                .Single(o => o.GetProperty("name").GetString() == "Sun")
+                .GetProperty("energy").GetDouble();
             var sampled = report.GetProperty("frames").EnumerateArray().ToList();
             sampled.Count.ShouldBe(frames.Count);
             for (var k = 0; k < sampled.Count; k++)
@@ -298,7 +458,7 @@ public class FlybyBundleParityTests
                     held.GetProperty("sensorWidth").GetDouble());
 
                 // Blender keeps positions as 32-bit floats: seven digits, whatever the distance.
-                Compare(earth, flown.Expected, i, seen, eyeSlack: 2e-7);
+                Compare(earth, flown.Expected, i, seen, eyeSlack: 2e-7, lean.At(i));
 
                 // What each model has at this frame, as Blender worked it out from the keys.
                 var row = flown.Expected.Look[i];
@@ -321,21 +481,19 @@ public class FlybyBundleParityTests
                     }
                 }
 
-                if (!flown.Expected.HandOvers[0].Walls.Contains(i))
+                Number(things["cave-01-walls"], "tintStrength", 0)
+                    .ShouldBe(row[6].GetDouble(), 1e-4, $"{name} frame {i}: the strength of the colour on the first cave's walls in Blender");
+                if (row[6].GetDouble() > 0)
                 {
-                    Number(things["cave-01-walls"], "tintStrength", 0)
-                        .ShouldBe(row[6].GetDouble(), 1e-4, $"{name} frame {i}: the strength of the colour on the first cave's walls in Blender");
-                    if (row[6].GetDouble() > 0)
-                    {
-                        Screen(Numbers(things["cave-01-walls"].GetProperty("tint")))
-                            .ShouldBe(Channels(row[5].GetString()!), 1.0, $"{name} frame {i}: the colour on the first cave's walls in Blender");
-                    }
+                    Screen(Numbers(things["cave-01-walls"].GetProperty("tint")))
+                        .ShouldBe(Channels(row[5].GetString()!), 1.0, $"{name} frame {i}: the colour on the first cave's walls in Blender");
                 }
 
                 foreach (var (id, cave) in ((string, int)[])[("cave-01-lines", 0), ("cave-02-lines", 1)])
                 {
                     var want = row[7 + (cave * 3)];
-                    if (flown.Expected.HandOvers[cave].Lines.Contains(i) || !things[id].TryGetProperty("tintStrength", out _))
+                    _ = cave;
+                    if (!things[id].TryGetProperty("tintStrength", out _))
                     {
                         continue;
                     }
@@ -351,6 +509,15 @@ public class FlybyBundleParityTests
 
                 Screen(Numbers(sampled[k].GetProperty("world").GetProperty("color")))
                     .ShouldBe(Channels(row[0].GetString()!), 1.0, $"{name} frame {i}: the sky in Blender");
+
+                // The daylight: the sun and the sky as strong as the camera's place lets them be,
+                // and the lamp on the camera as it was built.
+                things["Sun"].GetProperty("energy").GetDouble()
+                    .ShouldBe(sun * daylight[i], 1e-4 * sun, $"{name} frame {i}: the sun in Blender");
+                sampled[k].GetProperty("world").GetProperty("strength").GetDouble()
+                    .ShouldBe(daylight[i], 1e-4, $"{name} frame {i}: the sky's strength in Blender");
+                things["Headlamp"].GetProperty("energy").GetDouble()
+                    .ShouldBe(Number(report.GetProperty("objects").EnumerateArray().Single(o => o.GetProperty("name").GetString() == "Headlamp"), "energy", -1), 1e-6);
             }
 
             // The models whose colours change read them through their materials, and the ones that
@@ -364,12 +531,167 @@ public class FlybyBundleParityTests
         }
     }
 
+    // ---- what is drawn, and where the globe has it ----
+
+    /// <summary>
+    /// A point of something the bundle draws: the model it is of, where it is in that model's own
+    /// file, and where the globe has it when every height is multiplied by a relief.
+    /// </summary>
+    /// <param name="AtItsModelsZero">Whether the point is the one its model is placed by, or within a few metres of it.</param>
+    private sealed record Mark(string Name, string Model, double[] Own, Func<double, double[]> OnGlobe, bool AtItsModelsZero);
+
+    /// <summary>
+    /// The corners of the first cave's walls and the ends of both caves' survey legs. Where each is
+    /// on the globe is worked out here from the invented scene — a mesh point stands east, north
+    /// and up of its anchor, its height above the ellipsoid multiplied by the relief — and where it
+    /// is in the bundle is read from the bundle's own files.
+    /// </summary>
+    private static List<Mark> Marks(FlybyBlenderBundleRequest request, string folder)
+    {
+        var origin = request.Origin!;
+        var marks = new List<Mark>();
+
+        var walls = BundlePly.Read(File.ReadAllBytes(Path.Combine(folder, "cave-01-walls.ply"))).Vertices;
+        walls.Count.ShouldBe(Box.Length / 3);
+        var anchor = (origin.Longitude, origin.Latitude, Height: origin.HeightM + 60);
+        for (var v = 0; v < walls.Count; v++)
+        {
+            double[] corner = [Box[v * 3], Box[(v * 3) + 1], Box[(v * 3) + 2]];
+            marks.Add(new Mark($"corner {v} of the first cave's walls", "cave-01-walls", walls[v], relief =>
+            {
+                var at = Earth.Point(anchor.Longitude, anchor.Latitude, (anchor.Height + corner[2]) * relief);
+                var (east, north, _) = Earth.Axes(anchor.Longitude, anchor.Latitude);
+                return [.. at.Select((value, axis) => value + (corner[0] * east[axis]) + (corner[1] * north[axis]))];
+            }, AtItsModelsZero: true));
+        }
+
+        foreach (var (model, legs) in ((string, FlybyBundleLeg[])[])[("cave-01-lines", FirstLegs(request)), ("cave-02-lines", SecondLegs)])
+        {
+            // Tubes in the order of the legs, four corners about each end: the first four stand
+            // about where the first leg starts, the last four about where the last one ends.
+            var tubes = BundlePly.Read(File.ReadAllBytes(Path.Combine(folder, model + ".ply"))).Vertices;
+            foreach (var (what, corners, longitude, latitude, altitude) in ((string, List<double[]>, double, double, double)[])
+                     [
+                         ("start", [.. tubes.Take(4)], legs[0].FromLongitude, legs[0].FromLatitude, legs[0].FromAltitudeM),
+                         ("end", [.. tubes.TakeLast(4)], legs[^1].ToLongitude, legs[^1].ToLatitude, legs[^1].ToAltitudeM),
+                     ])
+            {
+                double[] middle = [corners.Average(c => c[0]), corners.Average(c => c[1]), corners.Average(c => c[2])];
+                marks.Add(new Mark(
+                    $"the {what} of {model}", model, middle, relief => Earth.Point(longitude, latitude, altitude * relief), what == "start"));
+            }
+        }
+
+        return marks;
+    }
+
+    /// <summary>
+    /// The models of a plan, each point of which can be asked where it stands at a frame: stretched
+    /// as the model is at that frame, turned and placed as the plan says.
+    /// </summary>
+    private sealed class Placed(JsonElement root, int fps)
+    {
+        private readonly Dictionary<string, JsonElement> models =
+            root.GetProperty("models").EnumerateArray().ToDictionary(m => m.GetProperty("id").GetString()!);
+
+        private readonly List<JsonElement> changes =
+            root.TryGetProperty("changes", out var listed) ? [.. listed.EnumerateArray()] : [];
+
+        public double[] At(string id, double[] own, int frame)
+        {
+            var model = models[id];
+            var keys = changes
+                .Where(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == id && c.TryGetProperty("scale", out _))
+                .Select(c => new Keys(c.GetProperty("scale"), fps))
+                .SingleOrDefault();
+            var scale = keys?.At(frame) ?? (model.TryGetProperty("scale", out var s) ? Numbers(s) : [1, 1, 1]);
+            double[] stretched = [own[0] * scale[0], own[1] * scale[1], own[2] * scale[2]];
+            if (model.TryGetProperty("rotation", out var rotation))
+            {
+                stretched = Turned(stretched, Unit(Numbers(rotation.GetProperty("axis"))), rotation.GetProperty("degrees").GetDouble());
+            }
+
+            var at = model.TryGetProperty("translation", out var t) ? Numbers(t) : [0, 0, 0];
+            return [at[0] + stretched[0], at[1] + stretched[1], at[2] + stretched[2]];
+        }
+    }
+
+    // ---- the lean, and the daylight ----
+
+    /// <summary>
+    /// How far, at each frame, the bundle's camera stands from where the globe has it, in metres.
+    ///
+    /// <para>
+    /// The globe multiplies heights about the ellipsoid; a bundle that says no height above the
+    /// ellipsoid stretches about the level of its own zero instead. On the origin's vertical the two
+    /// are one. Away from it they differ by the change of the relief from the one the scene was laid
+    /// out at — the middle of the clip's range — times the origin's height, times the sine of the
+    /// angle between the place's vertical and the origin's. A model there is off by that, and so,
+    /// by the same rule, is a camera.
+    /// </para>
+    /// </summary>
+    private sealed class Lean
+    {
+        private readonly double[] metres;
+
+        public Lean(Flown flown)
+        {
+            var reliefs = flown.Expected.Frames.Select(f => f[10]).ToList();
+            var laidOutAt = (reliefs.Min() + reliefs.Max()) / 2;
+            var origin = flown.Request.Origin!;
+            var up = Earth.Axes(origin.Longitude, origin.Latitude).Up;
+            metres =
+            [
+                .. flown.Request.Frames!.Select((frame, i) =>
+                {
+                    var own = Earth.Axes(frame[0], frame[1]).Up;
+                    double[] cross =
+                    [
+                        (own[1] * up[2]) - (own[2] * up[1]),
+                        (own[2] * up[0]) - (own[0] * up[2]),
+                        (own[0] * up[1]) - (own[1] * up[0]),
+                    ];
+                    return Math.Abs(reliefs[i] - laidOutAt) * origin.HeightM * Length(cross);
+                }),
+            ];
+        }
+
+        public double At(int frame) => metres[frame];
+    }
+
+    /// <summary>
+    /// How much of the daylight each frame has, from the frames the camera is under the ground at:
+    /// all of it above the ground; under it, eased down over a second from the frame it goes under
+    /// and eased up over the second before the frame it comes out — or over half the stay, where
+    /// that is less. Written out here from the rule, not taken from what wrote the keys.
+    /// </summary>
+    private static double[] Daylight(Expected expected, int fps)
+    {
+        var daylight = Enumerable.Repeat(1.0, expected.Frames.Length).ToArray();
+        foreach (var run in expected.Underground)
+        {
+            var (goes, comes) = (run[0], run[1]);
+            (comes - goes).ShouldBeGreaterThanOrEqualTo(fps, "a dip of less than a second is no stay underground, and this check has none");
+            goes.ShouldBeGreaterThan(0);
+            comes.ShouldBeLessThan(expected.Frames.Length);
+            var takes = Math.Min(fps, (comes - goes) / 2);
+            for (var i = goes; i < comes; i++)
+            {
+                var share = Math.Min(1.0, Math.Min(i - goes, comes - i) / (double)takes);
+                daylight[i] = 1 - (share * share * (3 - (2 * share)));
+            }
+        }
+
+        return daylight;
+    }
+
     // ---- the comparison ----
 
     /// <summary>A camera in the plan's frame: eye, the way it looks, the top of its picture, its lens.</summary>
     private sealed record Seen(double[] Eye, double[] Forward, double[] Up, double Lens, double Sensor);
 
-    private static void Compare(Earth earth, Expected expected, int i, Seen seen, double eyeSlack)
+    /// <param name="lean">How far the bundle's camera stands from the globe's at this frame, by the rule its caves are stretched by.</param>
+    private static void Compare(Earth earth, Expected expected, int i, Seen seen, double eyeSlack, double lean)
     {
         var want = expected.Frames[i];
         double[] wantEye = [want[0], want[1], want[2]];
@@ -378,11 +700,15 @@ public class FlybyBundleParityTests
 
         // A millimetre, and for a renderer's own arithmetic a share of how far from the origin the
         // eye stands. Plus the rounding the plan is written to. The frame of each moment has its
-        // zero at the origin's height times the relief that moment is drawn at.
+        // zero at the origin's height times the relief that moment is drawn at. And the lean: the
+        // camera is where the globe has it but for that — and it is off by that, not by nothing,
+        // or the caves, which are, would be seen from the wrong place.
         var relief = want[10];
         var eye = earth.OnTheEarth(seen.Eye, relief);
         var apart = Length([eye[0] - wantEye[0], eye[1] - wantEye[1], eye[2] - wantEye[2]]);
-        apart.ShouldBeLessThan(0.001 + 2e-6 + (eyeSlack * Length(seen.Eye)), $"frame {i}: the eye");
+        var slack = 0.001 + 2e-6 + (eyeSlack * Length(seen.Eye));
+        apart.ShouldBeLessThan(slack + lean, $"frame {i}: the eye");
+        apart.ShouldBeGreaterThan(lean - slack, $"frame {i}: the eye is moved with the caves");
 
         Degrees(earth.Direction(seen.Forward), wantForward).ShouldBeLessThan(0.005, $"frame {i}: the way it looks");
         Degrees(earth.Direction(seen.Up), wantUp).ShouldBeLessThan(0.01, $"frame {i}: the top of the picture");
@@ -391,8 +717,11 @@ public class FlybyBundleParityTests
         across.ShouldBe(want[9], 1e-4, $"frame {i}: the angle it sees");
 
         // Twenty points through both cameras, on a picture 1920 wide: within half a pixel. A wrong
-        // axis or a wrong shape of frame shows here even when each number above looks right.
+        // axis or a wrong shape of frame shows here even when each number above looks right. The
+        // points are the globe's and the camera is the bundle's, so a point is off by what the
+        // lean is at its distance, and by no more.
         var height = 1920.0 * expected.Height / expected.Width;
+        var pixelsAMetre = 1920 / 2 / Math.Tan(want[9] * Math.PI / 360);
         foreach (var place in expected.Points)
         {
             // Drawn at this frame's relief, like everything else in it.
@@ -413,9 +742,10 @@ public class FlybyBundleParityTests
                 continue;
             }
 
-            var slack = 0.5 + (eyeSlack > 0 ? 0.5 : 0);
-            Math.Abs(onEarth.Value.X - inPlan.Value.X).ShouldBeLessThan(slack, $"frame {i}: a point, across");
-            Math.Abs(onEarth.Value.Y - inPlan.Value.Y).ShouldBeLessThan(slack, $"frame {i}: a point, down");
+            var depth = Dot([point[0] - wantEye[0], point[1] - wantEye[1], point[2] - wantEye[2]], wantForward);
+            var pixels = 0.5 + (eyeSlack > 0 ? 0.5 : 0) + (lean / depth * pixelsAMetre * 3);
+            Math.Abs(onEarth.Value.X - inPlan.Value.X).ShouldBeLessThan(pixels, $"frame {i}: a point, across");
+            Math.Abs(onEarth.Value.Y - inPlan.Value.Y).ShouldBeLessThan(pixels, $"frame {i}: a point, down");
         }
     }
 
@@ -483,6 +813,17 @@ public class FlybyBundleParityTests
             ];
         }
 
+        /// <summary>East, north and up at a place, each as a direction in earth-centred axes.</summary>
+        public static (double[] East, double[] North, double[] Up) Axes(double longitude, double latitude)
+        {
+            var lambda = longitude * Math.PI / 180;
+            var phi = latitude * Math.PI / 180;
+            return (
+                [-Math.Sin(lambda), Math.Cos(lambda), 0],
+                [-Math.Sin(phi) * Math.Cos(lambda), -Math.Sin(phi) * Math.Sin(lambda), Math.Cos(phi)],
+                [Math.Cos(phi) * Math.Cos(lambda), Math.Cos(phi) * Math.Sin(lambda), Math.Sin(phi)]);
+        }
+
         public double[] Direction(double[] v) =>
         [
             (v[0] * east[0]) + (v[1] * north[0]) + (v[2] * up[0]),
@@ -502,13 +843,15 @@ public class FlybyBundleParityTests
 
     /// <summary>
     /// One property's keys as the plan writes them, played as a renderer plays them: a key's time
-    /// falls on the frame nearest to it; before the first key its value, after the last its value;
-    /// between two, moved as the later one's easing says — evenly, along 3x² − 2x³, or not at all
-    /// until its frame.
+    /// falls on the frame nearest to it — which may be after the clip's last; before the first key
+    /// its value, after the last its value; between two, moved as the later one's easing says —
+    /// evenly, along 3x² − 2x³, or not at all until its frame. Of two keys on one frame the later is
+    /// the value from that frame on, and the earlier where the value before was going. A colour
+    /// whose key says so is mixed on its way as a screen mixes two colours, not as light.
     /// </summary>
     private sealed class Keys
     {
-        private readonly List<(int Frame, double[] Value, string Easing)> keys;
+        private readonly List<(int Frame, double[] Value, string Easing, bool AsAScreen)> keys;
 
         public Keys(JsonElement list, int fps, string value = "value")
         {
@@ -517,10 +860,22 @@ public class FlybyBundleParityTests
                 .. list.EnumerateArray().Select(k => (
                     (int)Math.Round(k.GetProperty("t").GetDouble() * fps),
                     k.GetProperty(value).ValueKind == JsonValueKind.Array ? Numbers(k.GetProperty(value)) : [k.GetProperty(value).GetDouble()],
-                    k.TryGetProperty("easing", out var easing) ? easing.GetString()! : "linear")),
+                    k.TryGetProperty("easing", out var easing) ? easing.GetString()! : "linear",
+                    k.GetProperty(value).ValueKind == JsonValueKind.Array && k.TryGetProperty("mix", out var mix) && mix.GetString() == "srgb")),
             ];
-            keys.Zip(keys.Skip(1)).ShouldAllBe(pair => pair.First.Frame < pair.Second.Frame);
+            for (var k = 1; k < keys.Count; k++)
+            {
+                keys[k].Frame.ShouldBeGreaterThanOrEqualTo(keys[k - 1].Frame);
+                if (keys[k].Frame == keys[k - 1].Frame)
+                {
+                    keys[k].Easing.ShouldBe("constant", "the second key on a frame is a jump");
+                    (k < 2 || keys[k - 2].Frame < keys[k].Frame).ShouldBeTrue("no more than two keys stand on one frame");
+                }
+            }
         }
+
+        /// <summary>How many keys the property has.</summary>
+        public int Count => keys.Count;
 
         public double[] At(int frame)
         {
@@ -538,33 +893,54 @@ public class FlybyBundleParityTests
                 "smooth" => share * share * (3 - (2 * share)),
                 _ => share,
             };
-            return [.. a.Value.Zip(b.Value, (from, to) => from + ((to - from) * eased))];
+            return b.AsAScreen
+                ? [.. a.Value.Zip(b.Value, (from, to) => FromScreen(ToScreen(from) + ((ToScreen(to) - ToScreen(from)) * eased)))]
+                : [.. a.Value.Zip(b.Value, (from, to) => from + ((to - from) * eased))];
         }
     }
 
     /// <summary>
-    /// Whether a model is shown at a frame: by its keys, each of which shows or hides it from its
-    /// frame on; before the first it is the other way round; with none it is shown.
+    /// Whether a model is shown at a frame, and how far it has come or gone: by its keys, each of
+    /// which shows it from its frame on, or hides it once the frames it takes to go have passed;
+    /// before the first it is the other way round; with none it is shown. A key with a fade takes
+    /// that long from its own frame, evenly or eased.
     /// </summary>
-    private static bool Shown(JsonElement? change, int frame, int fps)
+    private static (bool Shown, double Fade) Shown(JsonElement? change, int frame, int fps)
     {
         if (change is not { } has || !has.TryGetProperty("visible", out var keys))
         {
-            return true;
+            return (true, 1);
         }
 
         var list = keys.EnumerateArray().ToList();
         var shown = !list[0].GetProperty("value").GetBoolean();
+        var fade = 1.0;
         foreach (var key in list)
         {
-            if ((int)Math.Round(key.GetProperty("t").GetDouble() * fps) <= frame)
+            var t = key.GetProperty("t").GetDouble();
+            var at = (int)Math.Round(t * fps);
+            var takes = key.TryGetProperty("fade", out var length) ? (int)Math.Round((t + length.GetDouble()) * fps) - at : 0;
+            if (at > frame)
             {
-                shown = key.GetProperty("value").GetBoolean();
+                break;
             }
+
+            var share = takes == 0 ? 1 : Math.Min(1.0, (frame - at) / (double)takes);
+            if (takes > 0 && key.TryGetProperty("easing", out var easing) && easing.GetString() == "smooth")
+            {
+                share = share * share * (3 - (2 * share));
+            }
+
+            (shown, fade) = key.GetProperty("value").GetBoolean() ? (true, share) : (frame < at + takes, 1 - share);
         }
 
-        return shown;
+        return (shown, shown ? fade : 0);
     }
+
+    /// <summary>A share of light, 0–1, as the share of a screen's number that shows it; and back.</summary>
+    private static double ToScreen(double light) => light <= 0.0031308 ? light * 12.92 : (1.055 * Math.Pow(light, 1 / 2.4)) - 0.055;
+
+    private static double FromScreen(double screen) => screen <= 0.04045 ? screen / 12.92 : Math.Pow((screen + 0.055) / 1.055, 2.4);
 
     /// <summary>A colour written <c>#rrggbb</c> as the three numbers a screen is given, 0–255.</summary>
     private static double[] Channels(string hex) =>
@@ -639,13 +1015,11 @@ public class FlybyBundleParityTests
 
     // ---- the request, and an invented scene around it ----
 
-    /// <summary>The frames at which a cave's keys may say another colour than the screen showed.</summary>
-    private sealed record HandOver(int[] Walls, int[] Lines);
-
     /// <param name="Points">Invented places: longitude, latitude and true height.</param>
     /// <param name="Look">Per frame: sky, walls shown, how much; lines shown, how much; then per cave the colour on its walls, its strength and its lines' one colour.</param>
     /// <param name="Frames">Per frame: the eye, the way it looks, the top of its picture, the angle it sees and the relief it is drawn at.</param>
-    private sealed record Expected(int Width, int Height, int Fps, double[][] Points, HandOver[] HandOvers, JsonElement[][] Look, double[][] Frames);
+    /// <param name="Underground">The frames at which the camera is under the ground, as runs: a first frame, and the frame it is above the ground again.</param>
+    private sealed record Expected(int Width, int Height, int Fps, double[][] Points, int[][] Underground, JsonElement[][] Look, double[][] Frames);
 
     private sealed record Flown(FlybyBlenderBundleRequest Request, Expected Expected);
 
@@ -668,9 +1042,29 @@ public class FlybyBundleParityTests
         new FlybyBlenderBundleRequestValidator().Validate(request).Errors.ShouldBeEmpty();
         expected.Frames.Length.ShouldBe(request.Frames!.Count);
         expected.Look.Length.ShouldBe(expected.Frames.Length);
-        expected.HandOvers.Length.ShouldBe(request.Caves!.Count);
+        expected.Underground.ShouldAllBe(run => run.Length == 2 && run[0] < run[1]);
         return new Flown(request, expected);
     }
+
+    /// <summary>The first cave's walls: a box forty metres by sixteen, thirty deep, its top at the cave's own zero.</summary>
+    private static readonly double[] Box =
+        [-20, -8, -30, 20, -8, -30, 20, 8, -30, -20, 8, -30, -20, -8, 0, 20, -8, 0, 20, 8, 0, -20, 8, 0];
+
+    private static FlybyBundleLeg[] FirstLegs(FlybyBlenderBundleRequest request)
+    {
+        var origin = request.Origin!;
+        return
+        [
+            new FlybyBundleLeg(origin.Longitude - 0.0006, origin.Latitude + 0.0003, 710, origin.Longitude, origin.Latitude, 640),
+            new FlybyBundleLeg(origin.Longitude, origin.Latitude, 640, origin.Longitude + 0.0009, origin.Latitude - 0.0005, 570),
+        ];
+    }
+
+    private static readonly FlybyBundleLeg[] SecondLegs =
+    [
+        new(9.7648, 44.3592, 700, 9.7655, 44.3588, 590),
+        new(9.7655, 44.3588, 590, 9.7667, 44.3581, 480),
+    ];
 
     /// <summary>
     /// The request's camera, look and texts, about two invented caves: the first a box of walls and
@@ -680,7 +1074,7 @@ public class FlybyBundleParityTests
     {
         var origin = request.Origin!;
         var box = new IndexedMesh(
-            [-20, -8, -30, 20, -8, -30, 20, 8, -30, -20, 8, -30, -20, -8, 0, 20, -8, 0, 20, 8, 0, -20, 8, 0],
+            Box,
             [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0]);
         // What the request says of the look over the clip, as the route hands it on.
         var changes = request.Changes;
@@ -689,7 +1083,7 @@ public class FlybyBundleParityTests
         static List<FlybyBundleNumberKey> Numbered(IReadOnlyList<FlybyBundleNumberKeyRequest>? keys) =>
             [.. (keys ?? []).Select(k => new FlybyBundleNumberKey(k.Frame, k.Value, k.Easing ?? FlybyBundleEasing.Linear))];
         static FlybyBundleLayerChanges Layer(FlybyBundleLayerChangesRequest? layer) => new(
-            [.. (layer?.Shown ?? []).Select(k => new FlybyBundleShownKey(k.Frame, k.Shown))],
+            [.. (layer?.Shown ?? []).Select(k => new FlybyBundleShownKey(k.Frame, k.Shown, k.FadeFrames ?? 0))],
             Numbered(layer?.Opacity),
             Tints(layer?.Tint) ?? []);
         FlybyBundleCaveChangesRequest? Apart(int cave) => changes?.Caves?.FirstOrDefault(c => c.CaveId == request.Caves![cave].CaveId);
@@ -698,10 +1092,7 @@ public class FlybyBundleParityTests
             new FlybyBundleMesh(box, origin.Longitude, origin.Latitude, origin.HeightM + 60),
             null,
             null,
-            [
-                new FlybyBundleLeg(origin.Longitude - 0.0006, origin.Latitude + 0.0003, 710, origin.Longitude, origin.Latitude, 640),
-                new FlybyBundleLeg(origin.Longitude, origin.Latitude, 640, origin.Longitude + 0.0009, origin.Latitude - 0.0005, 570),
-            ],
+            FirstLegs(request),
             AltitudeShiftM: 0)
         {
             WallsTint = Tints(Apart(0)?.Walls),
@@ -711,10 +1102,7 @@ public class FlybyBundleParityTests
             null,
             null,
             null,
-            [
-                new FlybyBundleLeg(9.7648, 44.3592, 700, 9.7655, 44.3588, 590),
-                new FlybyBundleLeg(9.7655, 44.3588, 590, 9.7667, 44.3581, 480),
-            ],
+            SecondLegs,
             AltitudeShiftM: 0)
         {
             WallsTint = Tints(Apart(1)?.Walls),
@@ -753,7 +1141,10 @@ public class FlybyBundleParityTests
                 Numbered(changes?.Relief),
                 [.. (changes?.Sky ?? []).Select(k => new FlybyBundleColourKey(k.Frame, k.Colour, k.Easing ?? FlybyBundleEasing.Linear))],
                 Layer(changes?.Walls),
-                Layer(changes?.Lines)),
+                Layer(changes?.Lines))
+            {
+                Daylight = Numbered(changes?.Daylight),
+            },
         };
     }
 
@@ -770,7 +1161,7 @@ public class FlybyBundleParityTests
 
         Directory.CreateDirectory(root);
         using var zip = new MemoryStream();
-        var summary = FlybyBlenderBundle.Write(scene, Path.Combine(root, "work"), zip);
+        var summary = FlybyBlenderBundle.Write(scene, zip);
         zip.Position = 0;
         ZipFile.ExtractToDirectory(zip, root);
         return Path.Combine(root, summary.FolderName);

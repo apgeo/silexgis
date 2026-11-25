@@ -10173,6 +10173,7 @@
       "wallsHelp": "They go straight into the bundle; nothing more is downloaded into the view.",
       "leftOutTitle": "Not in the bundle",
       "leftOutHelp": "The bundle is made anyway, and its README says the same.",
+      "daylight": "In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera stays on; it lights a few metres.",
       "leftOut": {
         "ground": "The ground and the map drawn on it: the caves stand in empty space, under a plain sky.",
         "surfaceOpening": "The opening cut in the ground over a cave.",

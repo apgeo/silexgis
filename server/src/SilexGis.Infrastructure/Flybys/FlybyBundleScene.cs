@@ -86,7 +86,12 @@ public enum FlybyBundleEasing
     Constant = 2,
 }
 
-/// <summary>A number at a frame of the clip, counted from 0.</summary>
+/// <summary>
+/// A number at a frame of the clip, counted from 0. A frame may lie after the clip's last: the clip
+/// then ends on the way to the key. Two keys of one track may stand on one frame: the first is where
+/// the value was going, the second — <see cref="FlybyBundleEasing.Constant"/> — what it is from that
+/// frame on.
+/// </summary>
 public sealed record FlybyBundleNumberKey(int Frame, double Value, FlybyBundleEasing Easing = FlybyBundleEasing.Linear);
 
 /// <summary>A colour, <c>#rrggbb</c>, at a frame of the clip.</summary>
@@ -95,18 +100,30 @@ public sealed record FlybyBundleColourKey(int Frame, string Colour, FlybyBundleE
 /// <summary>A colour laid over something by a strength from 0 to 1, at a frame of the clip.</summary>
 public sealed record FlybyBundleTintKey(int Frame, string Colour, double Strength, FlybyBundleEasing Easing = FlybyBundleEasing.Linear);
 
-/// <summary>From this frame on something is shown, or hidden. Each key says the opposite of the one before it.</summary>
-public sealed record FlybyBundleShownKey(int Frame, bool Shown);
+/// <summary>
+/// From this frame on something is shown, or hidden. Each key says the opposite of the one before it.
+/// </summary>
+/// <param name="FadeFrames">
+/// How many frames, from this one on, the thing takes to appear, or to go before it is hidden —
+/// eased in and out; 0 is a cut.
+/// </param>
+public sealed record FlybyBundleShownKey(int Frame, bool Shown, int FadeFrames = 0);
 
 /// <summary>
 /// What changes of one layer of the scene — the walls, or the survey lines — while the clip runs.
 /// An empty list is a thing that does not change.
 /// </summary>
-/// <param name="Shown">When the layer is shown and hidden; before the first key it is the other way round.</param>
-/// <param name="Opacity">How much of it is there, from 0 to 1; one key is that much throughout.</param>
+/// <param name="Shown">
+/// When the layer is shown and hidden, and how long it takes to come and to go; before the first
+/// key it is the other way round.
+/// </param>
+/// <param name="Opacity">
+/// How much of it is there, from 0 to 1, besides its coming and going; one key is that much throughout.
+/// </param>
 /// <param name="Tint">
 /// For walls, the colour mixed into their own. For survey lines, the one colour they are drawn in
-/// (strength 1) or their colours by depth (strength 0).
+/// (strength 1) or their colours by depth (strength 0). A colour crosses into another as a screen
+/// mixes the two.
 /// </param>
 public sealed record FlybyBundleLayerChanges(
     IReadOnlyList<FlybyBundleShownKey> Shown,
@@ -132,6 +149,13 @@ public sealed record FlybyBundleChanges(
     FlybyBundleLayerChanges Lines)
 {
     public static FlybyBundleChanges None { get; } = new([], [], FlybyBundleLayerChanges.None, FlybyBundleLayerChanges.None);
+
+    /// <summary>
+    /// How much of the daylight is there, from 0 to 1: the sun and the sky are that strong. It goes
+    /// while the camera is under the ground of the scene the flyby was played in — which whoever
+    /// played it knows, and nobody here does. Empty: all of it throughout.
+    /// </summary>
+    public IReadOnlyList<FlybyBundleNumberKey> Daylight { get; init; } = [];
 }
 
 /// <summary>A card of words over the picture.</summary>
@@ -213,4 +237,10 @@ public sealed record FlybyBundleScene(
 {
     /// <summary>What changes about the look while the clip runs.</summary>
     public FlybyBundleChanges Changes { get; init; } = FlybyBundleChanges.None;
+
+    /// <summary>
+    /// The language the bundle's own notes are written in, as a language tag ("ro", "en-GB"). The
+    /// notes exist in English and in Romanian; any other language is given the English ones.
+    /// </summary>
+    public string? Language { get; init; }
 }

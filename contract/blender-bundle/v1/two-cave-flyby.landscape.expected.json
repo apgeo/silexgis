@@ -1,5 +1,5 @@
 {
-  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And for each cave the frames at which a bundle's keys may say another colour than the screen shows, because a hand-over between a cave's own colour and the colour of every cave stands on them.",
+  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under the ground, as runs from a first frame up to, and not including, the frame it is above the ground again.",
   "width": 1280,
   "height": 720,
   "fps": 25,
@@ -105,25 +105,11 @@
       805
     ]
   ],
-  "handOvers": [
-    {
-      "walls": [
-        75,
-        225
-      ],
-      "lines": [
-        75
-      ]
-    },
-    {
-      "walls": [
-        275,
-        375
-      ],
-      "lines": [
-        275
-      ]
-    }
+  "underground": [
+    [
+      356,
+      388
+    ]
   ],
   "look": [
     ["#1b2a3a",true,1,true,1,"#3a3f4a",0.6,null,"#3a3f4a",0.6,null],
@@ -527,6 +513,16 @@
     ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
+    ["#0b1118",true,1,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,0.998156,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,0.99275,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,0.983969,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
@@ -565,17 +561,7 @@
     ["#0b1118",true,0.028,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,0.016031,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
     ["#0b1118",true,0.00725,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",true,0.001844,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"],
-    ["#0b1118",false,0,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"]
+    ["#0b1118",true,0.001844,true,0.5,"#3a3f4a",0.6,"#5c6370","#3a3f4a",0.6,"#5c6370"]
   ],
   "frames": [
     [4873527.8803,837195.4102,4803207.0872,-0.7060517222,-0.1206828957,-0.6978012642,-0.7040141352,0.2260908513,0.6732362323,60,1.5],

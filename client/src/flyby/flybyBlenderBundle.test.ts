@@ -10,6 +10,7 @@ import {
   flybyBundleRequest,
   flybyBundleShows,
   flybyBundleTexts,
+  flybyBundleUnderground,
   type FlybyBundleAsk,
 } from './flybyBlenderBundle.ts';
 import { FLYBY_VERSION, type FlybyDocument, type FlybySection } from './flybyDocument.ts';
@@ -282,7 +283,7 @@ describe('what of a cave a bundle draws', () => {
     const { request, refusal } = flybyBundleRequest(ask(document, { base }));
     expect(refusal).toBeNull();
     expect(request.caves.slice(0, 2).map((entry) => entry.walls)).toEqual([true, true]);
-    expect(request.changes?.walls?.shown).toEqual([{ frame: 100, shown: true }]);
+    expect(request.changes?.walls?.shown).toEqual([{ frame: 100, shown: true, fadeFrames: 50 }]);
   });
 
   it('is nothing where walls and lines are both hidden from the first frame to the last', () => {
@@ -294,6 +295,59 @@ describe('what of a cave a bundle draws', () => {
       changes: [{ id: 'on', kind: 'layer', layer: 'centerlines', visible: true, section: 'round', at: 5, seconds: 0 }],
     });
     expect(flybyBundleRequest(ask(later, { base })).refusal).toBeNull();
+  });
+});
+
+describe('the daylight of a bundle', () => {
+  it('knows the camera is underground where its eye is below the scene\'s ground at its place', () => {
+    const hill = (longitude: number) => (longitude < 25 ? 1000 : 400);
+    expect(
+      flybyBundleUnderground(
+        [
+          [24.9, 45.5, 900, 0, 0, 0, 10, 60],
+          [24.9, 45.5, 1000.5, 0, 0, 0, 10, 60],
+          [25.1, 45.5, 900, 0, 0, 0, 10, 60],
+          [25.1, 45.5, 399.9, 0, 0, 0, 10, 60],
+        ],
+        hill,
+      ),
+    ).toEqual([true, false, false, true]);
+  });
+
+  it('is not spoken of where the camera stays above the ground', () => {
+    expect(flybyBundleRequest(ask(flyby())).request).not.toHaveProperty('changes');
+  });
+
+  it('is told as keys where the camera goes under it, though the flyby changes nothing of the look', () => {
+    // The whole flight under a ground higher than the camera ever is: dark from the first frame.
+    const buried = flybyBundleRequest(ask(flyby(), { groundHeight: () => 9000 })).request;
+    expect(buried.changes).toEqual({
+      relief: null,
+      sky: null,
+      walls: null,
+      lines: null,
+      caves: null,
+      daylight: [{ frame: 0, value: 0, easing: null }],
+    });
+    // The ground is asked where each frame's eye stands, with the heights the frames carry.
+    const frames = buried.frames;
+    const halfway = (frames[0][2] + frames[249][2]) / 2;
+    const sinking = flybyBundleRequest(ask(flyby(), { groundHeight: () => halfway })).request;
+    const under = flybyBundleUnderground(sinking.frames, () => halfway);
+    const first = under.indexOf(true);
+    expect(first).toBeGreaterThan(0);
+    expect(sinking.changes?.daylight?.slice(0, 3)).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: first, value: 1, easing: null },
+      { frame: first + 25, value: 0, easing: 'smooth' },
+    ]);
+  });
+});
+
+describe('the language of a bundle\'s notes', () => {
+  it('is the reader\'s, where the view says it, and is left out where it does not', () => {
+    expect(flybyBundleRequest(ask(flyby(), { language: 'ro' })).request.language).toBe('ro');
+    expect(flybyBundleRequest(ask(flyby())).request).not.toHaveProperty('language');
   });
 });
 
@@ -329,7 +383,7 @@ describe('the look a clip opens with and what changes of it', () => {
     expect(request.changes?.caves?.map((entry) => entry.caveId)).toEqual(['b']);
     expect(request.changes?.caves?.[0].walls).toEqual([
       { frame: 0, colour: '#000000', strength: 0, easing: null },
-      { frame: 50, colour: '#ffcc00', strength: 0, easing: null },
+      { frame: 50, colour: '#ffcc00', strength: 0, easing: 'constant' },
       { frame: 75, colour: '#ffcc00', strength: 0.8, easing: 'smooth' },
     ]);
   });

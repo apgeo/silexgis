@@ -12945,6 +12945,7 @@ export interface components {
             texts: null | components["schemas"]["FlybyBundleTextsRequest"];
             leftOut: null | components["schemas"]["FlybyBundleOmission"][];
             changes?: null | components["schemas"]["FlybyBundleChangesRequest"];
+            language?: null | string;
         };
         FlybyBundleCaptionRequest: {
             text: string;
@@ -12980,6 +12981,7 @@ export interface components {
             walls: null | components["schemas"]["FlybyBundleLayerChangesRequest"];
             lines: null | components["schemas"]["FlybyBundleLayerChangesRequest"];
             caves: null | components["schemas"]["FlybyBundleCaveChangesRequest"][];
+            daylight?: null | components["schemas"]["FlybyBundleNumberKeyRequest"][];
         };
         FlybyBundleColourKeyRequest: {
             /** Format: int32 */
@@ -13042,6 +13044,8 @@ export interface components {
             /** Format: int32 */
             frame: number;
             shown: boolean;
+            /** Format: int32 */
+            fadeFrames?: null | number;
         };
         FlybyBundleTextsRequest: {
             title: null | components["schemas"]["FlybyBundleCardRequest"];

@@ -28,6 +28,10 @@ import { compileFlyby, flybyCameraAt } from './flybyTimeline.ts';
 // by frame, from the function that puts a moment's look on the screen. The server's tests play
 // the bundle's keys and set them beside these; Blender is asked what each model has at a frame.
 //
+// And one thing the screen does not show and a bundle does: the frames at which the camera is
+// under the ground, worked out here from the camera's heights and the invented hill. A bundle's
+// sun and sky go out there.
+//
 // Both files are committed under contract/blender-bundle/v1. A normal run compares against them and
 // fails on any difference; SILEXGIS_CONTRACT_RECORD=1 rewrites them, which is the only way they
 // change, and a diff in them is a change to what a bundle is made from.
@@ -50,7 +54,8 @@ const RECORD = process.env.SILEXGIS_CONTRACT_RECORD === '1';
 //
 // Its look changes as a flyby's does: every cave dimmed and each lit while the camera is with it,
 // the lines cut from their colours by depth to one colour and thinned to half, the sky darkening,
-// and the walls faded out before the end. Every change begins and ends on a frame of the clip.
+// and the walls fading out as the flyby ends — gone at its very end, which is one frame past the
+// clip's last. Every change begins and ends on a frame of the clip.
 
 /** Where the invented scene stands. */
 const PARITY_ORIGIN: Camera3DEye = { lon: 9.75, lat: 44.35, height: 640 };
@@ -139,7 +144,7 @@ const PARITY_FLYBY: FlybyDocument = {
     { id: 'one-colour', kind: 'lines', colour: '#5c6370', section: 'round', at: 0, seconds: 0 },
     { id: 'thin', kind: 'layerOpacity', layer: 'centerlines', opacity: 0.5, section: 'over', at: 0, seconds: 1 },
     { id: 'dusk', kind: 'sky', colour: '#0b1118', section: 'down', at: 0, seconds: 2 },
-    { id: 'walls-go', kind: 'layer', layer: 'walls', visible: false, section: 'along', at: 1, seconds: 1.6 },
+    { id: 'walls-go', kind: 'layer', layer: 'walls', visible: false, section: 'along', at: 1.4, seconds: 1.6 },
   ],
   texts: {
     title: { text: 'Two invented caves', subtitle: 'A camera test', seconds: 2 },
@@ -307,9 +312,29 @@ function played(keys: TintKeys): FlybyBundleTrackKey[] {
 }
 
 /**
- * The frames at which the request's keys say another colour for a cave than the screen shows: the
- * frames a hand-over between a cave's own colour and the colour of every cave stands on. By cave,
- * for its walls and for its lines.
+ * The frames at which the camera is under the ground, as runs: each from its first frame up to, and
+ * not including, the frame it is above the ground again. From the heights the request carries and
+ * the invented hill — and nothing of the exporter's.
+ */
+function expectedUnderground(request: FlybyBundleRequest): [number, number][] {
+  const runs: [number, number][] = [];
+  request.frames.forEach(([longitude, latitude, height], frame) => {
+    if (height < parityGround(longitude, latitude)) {
+      const run = runs[runs.length - 1];
+      if (run && run[1] === frame) {
+        run[1] = frame + 1;
+      } else {
+        runs.push([frame, frame + 1]);
+      }
+    }
+  });
+  return runs;
+}
+
+/**
+ * The frames at which the request's keys say another colour for a cave than the screen shows. A
+ * hand-over between a cave's own colour and the colour of every cave used to stand a frame off;
+ * now there is none. By cave, for its walls and for its lines.
  */
 function handOvers(request: FlybyBundleRequest, look: readonly LookRow[]): { walls: number[]; lines: number[] }[] {
   return PARITY_CAVES.map((caveId, cave) => {
@@ -352,6 +377,9 @@ function tolerance(path: string): number {
   }
   if (path.startsWith('expected.frames[')) {
     return EXPECTED_FRAME[column];
+  }
+  if (path.startsWith('expected.underground')) {
+    return 0;
   }
   if (path.startsWith('expected.look[') || path.includes('.changes.')) {
     // A strength or a factor, written to a millionth.
@@ -451,15 +479,21 @@ describe('the invented flyby the camera check is made on', () => {
   it('changes its look in every way a bundle carries, each change on frames of the clip', () => {
     const { request } = CASES[0].made;
     const changes = request.changes!;
-    // The first cave: dimmed with the rest, lit over a second, dimmed again — two keys a fade.
+    // The first cave: dimmed with the rest; lit over a second, frame by frame from the frame after
+    // its change begins (frame 75 still shows the colour of every cave); dimmed again in two keys,
+    // with the colour of every cave beside the second of them, on frame 225.
     expect(changes.walls?.tint).toEqual([{ frame: 0, colour: '#3a3f4a', strength: 0.6, easing: null }]);
-    expect(changes.caves?.[0].walls?.map((key) => [key.frame, key.strength, key.easing])).toEqual([
+    const first = changes.caves?.[0].walls?.map((key) => [key.frame, key.strength, key.easing]) ?? [];
+    expect(first.slice(0, 2)).toEqual([
       [0, 0.6, null],
-      [75, 0, 'constant'],
-      [100, 0.85, 'smooth'],
+      [76, 0.003971, 'constant'],
+    ]);
+    expect(first.slice(1, 26).map((key) => key[0])).toEqual(Array.from({ length: 25 }, (_, k) => 76 + k));
+    expect(first.slice(25)).toEqual([
+      [100, 0.85, null],
       [200, 0.85, null],
       [225, 0, 'smooth'],
-      [226, 0.6, 'constant'],
+      [225, 0.6, 'constant'],
     ]);
     // The lines: by depth, then one colour; a cave's own while it is lit.
     expect(changes.lines?.tint?.map((key) => [key.frame, key.strength, key.easing])).toEqual([
@@ -471,13 +505,16 @@ describe('the invented flyby the camera check is made on', () => {
       { frame: 225, value: 1, easing: null },
       { frame: 250, value: 0.5, easing: 'smooth' },
     ]);
-    // The walls fade out and are hidden from the frame they have gone at.
-    expect(changes.walls?.shown).toEqual([{ frame: 440, shown: false }]);
-    expect(changes.walls?.opacity?.at(-1)).toEqual({ frame: 440, value: 0, easing: 'smooth' });
-    // The sky crosses from one colour to another: a key a frame, as the screen mixes them.
-    expect(changes.sky?.[0]).toEqual({ frame: 0, colour: '#1b2a3a', easing: null });
-    expect(changes.sky?.at(-1)).toMatchObject({ frame: 350, colour: '#0b1118' });
-    expect(changes.sky!.length).toBeGreaterThan(40);
+    // The walls fade out over forty frames from frame 410 and have gone at 450 — one frame past
+    // the clip's last, which ends on the way. How much of them there is does not change.
+    expect(changes.walls?.shown).toEqual([{ frame: 410, shown: false, fadeFrames: 40 }]);
+    expect(changes.walls?.opacity ?? null).toBeNull();
+    // The sky crosses from one colour to another in two keys, mixed as the screen mixes them.
+    expect(changes.sky).toEqual([
+      { frame: 0, colour: '#1b2a3a', easing: null },
+      { frame: 300, colour: '#1b2a3a', easing: null },
+      { frame: 350, colour: '#0b1118', easing: 'smooth' },
+    ]);
     // "Relief ×N" for every tenth the ramp passes.
     expect(request.texts?.cornerCaptions?.map((mark) => mark.text)).toEqual([
       'Relief ×1.5',
@@ -489,19 +526,36 @@ describe('the invented flyby the camera check is made on', () => {
     ]);
   });
 
-  it('says of each cave\'s colours what the screen shows, but for the one frame a hand-over stands on', () => {
+  it('says of each cave\'s colours what the screen shows at every frame, the frames it changes hands on among them', () => {
     const { request, schedule } = CASES[0].made;
     expect(handOvers(request, expectedLook(schedule))).toEqual([
       // Lit from frame 75 and dimmed at 225: the screen changes hands just after and just at.
-      { walls: [75, 225], lines: [75] },
-      { walls: [275, 375], lines: [275] },
+      { walls: [], lines: [] },
+      { walls: [], lines: [] },
     ]);
     // The stretch ends as the first cave has just been lit, and holds that.
     const portrait = CASES[1].made;
     expect(handOvers(portrait.request, expectedLook(portrait.schedule))).toEqual([
-      { walls: [65], lines: [65] },
+      { walls: [], lines: [] },
       { walls: [], lines: [] },
     ]);
+  });
+
+  it('puts the daylight out while the camera is under the invented hill', () => {
+    const { request } = CASES[0].made;
+    const under = expectedUnderground(request);
+    // Once: at the bottom of the second cave's survey, and out again as it turns to the track —
+    // a second and a quarter, so the daylight is half of that going and half of it coming back.
+    expect(under).toEqual([[356, 388]]);
+    expect(request.changes?.daylight).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: 356, value: 1, easing: null },
+      { frame: 372, value: 0, easing: 'smooth' },
+      { frame: 388, value: 1, easing: 'smooth' },
+    ]);
+    // The stretch never leaves the daylight, and says nothing of it.
+    expect(expectedUnderground(CASES[1].made.request)).toEqual([]);
+    expect(CASES[1].made.request.changes?.daylight ?? null).toBeNull();
   });
 
   it('draws each frame at the relief the request\'s own keys give', () => {
@@ -531,14 +585,13 @@ describe.each(CASES)('$name', ({ name, made }) => {
       'and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, ' +
       'each at its height times the frame\'s relief. The look of each frame: the sky, the walls shown and how much of them, ' +
       'the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour\'s ' +
-      'strength, and the one colour of its lines (null: their colours by depth). And for each cave the frames at which a ' +
-      'bundle\'s keys may say another colour than the screen shows, because a hand-over between a cave\'s own colour and ' +
-      'the colour of every cave stands on them.',
+      'strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under ' +
+      'the ground, as runs from a first frame up to, and not including, the frame it is above the ground again.',
     width: made.request.output!.width,
     height: made.request.output!.height,
     fps: made.request.output!.fps,
     points: expectedPoints(),
-    handOvers: handOvers(made.request, look),
+    underground: expectedUnderground(made.request),
     look,
     frames: expectedCameras(made.request, expectedReliefs(made.schedule)),
   };

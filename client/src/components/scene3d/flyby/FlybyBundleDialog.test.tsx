@@ -250,6 +250,10 @@ describe('a flyby as a bundle for Blender', () => {
       'The ground and the map drawn on it: the caves stand in empty space, under a plain sky.',
     );
     expect(screen.getByTestId('flyby-bundle-left-out')).toHaveTextContent('The bundle is made anyway, and its README says the same.');
+    // And what a bundle does that the screen does not: its daylight goes underground.
+    expect(screen.getByTestId('flyby-bundle-daylight')).toHaveTextContent(
+      'In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera stays on; it lights a few metres.',
+    );
   });
 
   it('lists no change of the look as left out: a relief that grows while the flyby plays is sent as keys', async () => {
@@ -301,6 +305,10 @@ describe('a flyby as a bundle for Blender', () => {
     expect(body.look?.lines).toBe(true);
     expect(body.look?.depthBands?.[0]).toMatchObject({ fromM: 0 });
     expect(body.leftOut).toEqual(['ground']);
+    // The bundle's own notes are asked for in the language the reader has the application in.
+    expect(body.language).toBe('en');
+    // The camera stays above this scene's ground, so nothing is said of the daylight.
+    expect(body.changes?.daylight ?? null).toBeNull();
 
     expect(screen.getByTestId('flyby-bundle-report')).toHaveTextContent('1 cave with its walls.');
     expect(screen.getByTestId('flyby-bundle-report')).toHaveTextContent('1 cave by its survey lines.');

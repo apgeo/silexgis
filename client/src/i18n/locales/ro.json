@@ -10186,6 +10186,7 @@
       "wallsHelp": "Ajung direct în pachet; nu se mai descarcă nimic în vizualizare.",
       "leftOutTitle": "Nu sunt în pachet",
       "leftOutHelp": "Pachetul se face oricum, iar fișierul README din el spune același lucru.",
+      "daylight": "În randare, soarele și cerul se sting cât timp camera este sub teren și revin când iese. Lampa de pe cameră rămâne aprinsă; luminează câțiva metri.",
       "leftOut": {
         "ground": "Terenul și harta desenată pe el: peșterile stau în spațiu gol, sub un cer simplu.",
         "surfaceOpening": "Deschiderea tăiată în teren deasupra unei peșteri.",

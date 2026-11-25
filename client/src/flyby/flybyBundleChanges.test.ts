@@ -4,6 +4,7 @@ import {
   FLYBY_BUNDLE_COLOUR,
   FLYBY_BUNDLE_NUMBER,
   FLYBY_BUNDLE_TINT,
+  flybyBundleDaylight,
   flybyBundleLookOnFrames,
   flybyBundleLookTracks,
   flybyBundleTrack,
@@ -21,6 +22,9 @@ import { lightTheVisited } from './flybyRecipes.ts';
 // can change. Everything is invented — two caves that are only ids, a clock of 25 frames a second.
 
 const number = (value: number) => [value];
+
+/** A number as a key writes it: to a millionth. */
+const rounded = (value: number) => Math.round(value * 1e6) / 1e6;
 
 /**
  * The keys of a value given as a function of the frame. Where the value jumps, `after` says what
@@ -84,43 +88,68 @@ describe('the keys of one value', () => {
     }
   });
 
-  it('put a jump that follows a frame on that frame: the value before it gives way one frame early', () => {
+  it('write a curve that starts a moment after a frame frame by frame: the frame itself keeps the value before', () => {
     // 0.6 up to and at frame 10; just after it the value is 0, and from there it eases up to 0.85.
     const taken = (frame: number) => (frame <= 10 ? 0.6 : frame >= 30 ? 0.85 : 0.85 * easeFlyby((frame - 10) / 20));
     const keys = keysOf(taken, [10, 30], 40, { 10: 0 });
-    expect(keys).toEqual([
-      { frame: 0, value: [0.6] },
-      { frame: 10, value: [0], easing: 'constant' },
-      { frame: 30, value: [0.85], easing: 'smooth' },
-    ]);
-    // Right at every frame but the one the jump stands on.
+    // The curve starts at frame 10 from a value frame 10 does not show: no two keys say that.
+    expect(keys.map((key) => key.frame)).toEqual([0, ...Array.from({ length: 20 }, (_, k) => 11 + k)]);
+    expect(keys[1]).toEqual({ frame: 11, value: [taken(11)], easing: 'constant' });
+    expect(keys.slice(2).every((key) => key.easing === undefined)).toBe(true);
+    // Right at every frame, the one the jump follows included.
     const off = Array.from({ length: 41 }, (_, frame) => frame).filter(
       (frame) => Math.abs(flybyBundleTrackAt(keys, frame, FLYBY_BUNDLE_NUMBER)[0] - taken(frame)) > 1e-6,
     );
-    expect(off).toEqual([10]);
+    expect(off).toEqual([]);
   });
 
-  it('put a jump that falls on the last frame of a curve one frame late: the curve keeps its end', () => {
+  it('put a jump a frame after the frame it follows, where the value then holds', () => {
+    const switched = (frame: number) => (frame <= 10 ? 0.6 : 1);
+    expect(keysOf(switched, [10], 40, { 10: 1 })).toEqual([
+      { frame: 0, value: [0.6] },
+      { frame: 11, value: [1], easing: 'constant' },
+    ]);
+  });
+
+  it('put a jump that falls on the last frame of a curve on that frame, beside the curve\'s end', () => {
     // Eases down to 0 at frame 30 — and at frame 30 itself the value is back at 0.6.
     const handed = (frame: number) => (frame <= 10 ? 0.85 : frame >= 30 ? 0.6 : 0.85 * (1 - easeFlyby((frame - 10) / 20)));
     const keys = keysOf(handed, [10, 30], 40, {}, { 30: 0 });
+    // Two keys on frame 30: where the curve was going, and what the frame shows.
     expect(keys).toEqual([
       { frame: 0, value: [0.85] },
       { frame: 10, value: [0.85] },
       { frame: 30, value: [0], easing: 'smooth' },
-      { frame: 31, value: [0.6], easing: 'constant' },
+      { frame: 30, value: [0.6], easing: 'constant' },
     ]);
     const off = Array.from({ length: 41 }, (_, frame) => frame).filter(
       (frame) => Math.abs(flybyBundleTrackAt(keys, frame, FLYBY_BUNDLE_NUMBER)[0] - handed(frame)) > 1e-6,
     );
-    expect(off).toEqual([30]);
+    expect(off).toEqual([]);
   });
 
-  it('write a curve the clip starts or stops in the middle of frame by frame, and are right at each', () => {
-    // Under way since before the first frame, and not over by the last.
+  it('give a curve the clip stops in the middle of its real end, after the clip\'s last frame', () => {
+    const late = (frame: number) => (frame <= 15 ? 1 : frame >= 35 ? 2 : 1 + easeFlyby((frame - 15) / 20));
+    const keys = keysOf(late, [15, 35], 20);
+    expect(keys).toEqual([
+      { frame: 0, value: [1] },
+      { frame: 15, value: [1] },
+      { frame: 35, value: [2], easing: 'smooth' },
+    ]);
+    for (let frame = 0; frame <= 20; frame += 1) {
+      expect(flybyBundleTrackAt(keys, frame, FLYBY_BUNDLE_NUMBER)[0]).toBeCloseTo(late(frame), 9);
+    }
+    // One frame past the last is enough: a change that ends as the flyby does.
+    const ending = (frame: number) => (frame <= 15 ? 1 : 1 + easeFlyby((frame - 15) / 6));
+    expect(keysOf(ending, [15, 21], 20).at(-1)).toEqual({ frame: 21, value: [2], easing: 'smooth' });
+  });
+
+  it('write a curve the clip starts in the middle of frame by frame, and are right at each', () => {
+    // Under way since before the first frame.
     const early = (frame: number) => (frame >= 8 ? 2 : 1 + easeFlyby((frame + 12) / 20));
     const started = keysOf(early, [8], 20);
     expect(started.map((key) => key.frame)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    // And one whose end nobody names — a clip held still before it — up to the last frame seen.
     const late = (frame: number) => (frame <= 15 ? 1 : 1 + easeFlyby((frame - 15) / 20));
     const stopped = keysOf(late, [15], 20);
     expect(stopped.map((key) => key.frame)).toEqual([0, 15, 16, 17, 18, 19, 20]);
@@ -165,10 +194,23 @@ describe('a track played back', () => {
     expect(flybyBundleTrackAt(keys, 40, FLYBY_BUNDLE_NUMBER)).toEqual([0]);
   });
 
-  it('mixes two colours as light, which is not how a screen\'s numbers mix', () => {
+  it('gives the later of two keys on one frame from that frame on, and moves towards the earlier before it', () => {
+    const paired: FlybyBundleTrackKey[] = [
+      { frame: 0, value: [1] },
+      { frame: 10, value: [0], easing: 'smooth' },
+      { frame: 10, value: [0.6], easing: 'constant' },
+      { frame: 20, value: [1] },
+    ];
+    expect(flybyBundleTrackAt(paired, 5, FLYBY_BUNDLE_NUMBER)[0]).toBeCloseTo(0.5, 12);
+    expect(flybyBundleTrackAt(paired, 9, FLYBY_BUNDLE_NUMBER)[0]).toBeCloseTo(1 - easeFlyby(0.9), 12);
+    expect(flybyBundleTrackAt(paired, 10, FLYBY_BUNDLE_NUMBER)).toEqual([0.6]);
+    expect(flybyBundleTrackAt(paired, 15, FLYBY_BUNDLE_NUMBER)[0]).toBeCloseTo(0.8, 12);
+  });
+
+  it('mixes two colours as a screen mixes them: straight between the numbers a screen is given', () => {
     const half = FLYBY_BUNDLE_COLOUR.mix([0, 0, 0], [255, 255, 255], 0.5);
-    // Half the light of white is a far lighter grey than 128.
-    expect(half[0]).toBeCloseTo(187.5, 0);
+    // The middle grey of a screen's own numbers, not the far lighter grey of half the light.
+    expect(half[0]).toBeCloseTo(127.5, 9);
     expect(FLYBY_BUNDLE_COLOUR.same([10, 20, 30], [11, 19, 30])).toBe(true);
     expect(FLYBY_BUNDLE_COLOUR.same([10, 20, 30], [12, 20, 30])).toBe(false);
   });
@@ -293,18 +335,24 @@ describe('a sky that changes', () => {
     });
   });
 
-  it('is written frame by frame where one colour crosses into another, as the screen mixes them', () => {
+  it('is two keys where one colour crosses into another: a renderer told to mixes them as the screen does', () => {
     const document = flyby([{ kind: 'sky', colour: '#ffffff', section: 'one', at: 4, seconds: 2 }], { sky: '#000000' });
     const sky = tracks(document).changes?.sky ?? [];
-    // Black still on the frame after the change begins: the first step is too small for a screen.
-    expect(sky.map((key) => key.frame)).toEqual([0, ...Array.from({ length: 50 }, (_, k) => 101 + k)]);
-    // Half-way the screen shows the middle grey of its own numbers, and so does the track.
-    expect(sky.find((key) => key.frame === 125)?.colour).toBe('#808080');
-    expect(sky.at(-1)).toEqual({ frame: 150, colour: '#ffffff' });
+    expect(sky).toEqual([
+      { frame: 0, colour: '#000000' },
+      { frame: 100, colour: '#000000' },
+      { frame: 150, colour: '#ffffff', easing: 'smooth' },
+    ]);
+    // Played back, every frame is the colour the screen shows, to the step a screen's channel has.
+    const played: FlybyBundleTrackKey[] = sky.map((key) => ({ frame: key.frame, value: channels(key.colour), ...(key.easing ? { easing: key.easing } : {}) }));
     const plan = flybyLookPlan(document);
-    for (const key of sky) {
-      expect(key.colour, `frame ${key.frame}`).toBe(flybyLookAt(plan, viewer(), key.frame / FPS).sky ?? '#000000');
+    for (let frame = 0; frame < 500; frame += 1) {
+      const shown = channels(flybyLookAt(plan, viewer(), frame / FPS).sky ?? '#000000');
+      const said = flybyBundleTrackAt(played, frame, FLYBY_BUNDLE_COLOUR);
+      expect(Math.max(...said.map((channel, i) => Math.abs(channel - shown[i]))), `frame ${frame}`).toBeLessThanOrEqual(0.5 + 1e-9);
     }
+    // Half-way the screen shows the middle grey of its own numbers.
+    expect(flybyBundleTrackAt(played, 125, FLYBY_BUNDLE_COLOUR)[0]).toBeCloseTo(127.5, 9);
   });
 
   it('is the one colour of a flyby that only names a sky', () => {
@@ -324,23 +372,29 @@ describe('the colour over the walls', () => {
     const made = tracks(flyby([{ kind: 'walls', colour: '#aa5500', strength: 0.5, section: 'one', at: 2, seconds: 2 }]));
     expect(made.changes?.walls?.tint).toEqual([
       { frame: 0, colour: '#000000', strength: 0 },
-      { frame: 50, colour: '#aa5500', strength: 0 },
+      // The colour is there before any of it shows: nothing crosses from black into it.
+      { frame: 50, colour: '#aa5500', strength: 0, easing: 'constant' },
       { frame: 100, colour: '#aa5500', strength: 0.5, easing: 'smooth' },
     ]);
   });
 
-  it('goes from one colour to another frame by frame, each the colour the screen shows', () => {
+  it('goes from one colour to another in two keys, every frame the colour the screen shows', () => {
     const document = flyby([{ kind: 'walls', colour: '#0000ff', strength: 0.9, section: 'one', at: 2, seconds: 1 }], {
       walls: { colour: '#ff0000', strength: 0.3 },
     });
     const tint = tracks(document).changes?.walls?.tint ?? [];
-    expect(tint.map((key) => key.frame)).toEqual([0, ...Array.from({ length: 26 }, (_, k) => 50 + k)]);
+    expect(tint).toEqual([
+      { frame: 0, colour: '#ff0000', strength: 0.3 },
+      { frame: 50, colour: '#ff0000', strength: 0.3 },
+      { frame: 75, colour: '#0000ff', strength: 0.9, easing: 'smooth' },
+    ]);
     const plan = flybyLookPlan(document);
-    for (const key of tint) {
-      const shown = flybyLookAt(plan, viewer(), key.frame / FPS).walls!;
-      expect(key.colour, `frame ${key.frame}`).toBe(shown.colour);
-      expect(key.strength, `frame ${key.frame}`).toBeCloseTo(shown.strength, 6);
-    }
+    expect(
+      framesOff(tint, (t) => {
+        const shown = flybyLookAt(plan, viewer(), t).walls!;
+        return [...channels(shown.colour), shown.strength];
+      }),
+    ).toEqual([]);
   });
 
   it('is nothing at all for walls in their own colours', () => {
@@ -381,13 +435,22 @@ describe('one cave in a colour of its own', () => {
     expect(made.lineColour).toBe('#3a3f4a');
     // Only the cave that is coloured apart is named.
     expect(made.changes?.caves?.map((cave) => cave.caveId)).toEqual(['cave-a']);
-    expect(made.changes?.caves?.[0].walls).toEqual([
+    const walls = made.changes?.caves?.[0].walls ?? [];
+    // Taking over: frame 50 still shows the colour of every cave, and the cave's own rises from
+    // the frame after — a curve whose start no frame shows, written frame by frame.
+    expect(walls.slice(0, 3)).toEqual([
       { frame: 0, colour: '#3a3f4a', strength: 0.6 },
-      { frame: 50, colour: '#ffcc00', strength: 0, easing: 'constant' },
-      { frame: 75, colour: '#ffcc00', strength: 0.85, easing: 'smooth' },
+      { frame: 51, colour: '#ffcc00', strength: rounded(0.85 * easeFlyby(1 / 25)), easing: 'constant' },
+      { frame: 52, colour: '#ffcc00', strength: rounded(0.85 * easeFlyby(2 / 25)) },
+    ]);
+    expect(walls.slice(1, 26).map((key) => key.frame)).toEqual(Array.from({ length: 25 }, (_, k) => 51 + k));
+    // Handing back: two keys on frame 225 — where the cave's own colour was going, and the
+    // colour of every cave, which is what that frame shows.
+    expect(walls.slice(25)).toEqual([
+      { frame: 75, colour: '#ffcc00', strength: 0.85 },
       { frame: 200, colour: '#ffcc00', strength: 0.85 },
       { frame: 225, colour: '#ffcc00', strength: 0, easing: 'smooth' },
-      { frame: 226, colour: '#3a3f4a', strength: 0.6, easing: 'constant' },
+      { frame: 225, colour: '#3a3f4a', strength: 0.6, easing: 'constant' },
     ]);
   });
 
@@ -395,12 +458,13 @@ describe('one cave in a colour of its own', () => {
     const made = tracks(flyby(lit, dimmed));
     expect(made.changes?.caves?.[0].lines).toEqual([
       { frame: 0, colour: '#3a3f4a', strength: 1 },
-      { frame: 50, colour: '#ffcc00', strength: 1, easing: 'constant' },
+      // From the first frame the walls have any of its colour: the frame after its change begins.
+      { frame: 51, colour: '#ffcc00', strength: 1, easing: 'constant' },
       { frame: 225, colour: '#3a3f4a', strength: 1, easing: 'constant' },
     ]);
   });
 
-  it('says what the flyby draws at every frame but the ones a hand-over stands on', () => {
+  it('says what the flyby draws at every frame, the frames it changes hands on among them', () => {
     const document = flyby(lit, dimmed);
     const plan = flybyLookPlan(document);
     const made = tracks(document);
@@ -416,9 +480,9 @@ describe('one cave in a colour of its own', () => {
       return [...channels(own && own.strength > 0 ? own.colour : state.lines!), 1];
     };
     // The screen goes from the common colour to the cave's own between frames 50 and 51, and back
-    // between 224 and 225; the track gives each jump a frame.
-    expect(framesOff(made.changes!.caves![0].walls!, walls)).toEqual([50, 225]);
-    expect(framesOff(made.changes!.caves![0].lines!, lines)).toEqual([50]);
+    // between 224 and 225 — and so do the keys.
+    expect(framesOff(made.changes!.caves![0].walls!, walls)).toEqual([]);
+    expect(framesOff(made.changes!.caves![0].lines!, lines)).toEqual([]);
   });
 
   it('is what the recipe that lights each cave in turn writes', () => {
@@ -426,27 +490,33 @@ describe('one cave in a colour of its own', () => {
     const document = { ...flyby([]), look: recipe.look, changes: recipe.changes };
     const made = tracks(document);
     expect(made.changes?.caves?.map((cave) => cave.caveId)).toEqual(CAVES);
-    // Each stop: up over a second and a half, down again over the last second and a half.
+    // The second cave: lit over a second and a half from frame 250, frame by frame from the frame
+    // after its change begins (37.5 frames, to the nearer frame) —
     const second = made.changes?.caves?.[1].walls ?? [];
-    expect(second.slice(0, 4).map((key) => [key.frame, key.strength, key.easing])).toEqual([
-      [0, 0.6, undefined],
-      [250, 0, 'constant'],
-      // 37.5 frames, to the nearer frame.
-      [288, 0.85, 'smooth'],
-      [463, 0.85, undefined],
+    expect(second.slice(0, 2).map((key) => [key.frame, key.strength > 0, key.easing])).toEqual([
+      [0, true, undefined],
+      [251, true, 'constant'],
     ]);
-    // The last cave dims as the flyby ends, and the clip has no frame at the very end of a flyby:
-    // a curve the clip stops short of is written frame by frame.
-    expect(second.slice(4).map((key) => key.frame)).toEqual(Array.from({ length: 36 }, (_, k) => 464 + k));
-    expect(second.at(-1)?.strength).toBeGreaterThan(0);
-    // The first cave is lit from the flyby's first moment, so the clip opens on its hand-over;
-    // it dims in full, and is given back to the common colour a frame after.
-    expect(made.changes?.caves?.[0].walls?.map((key) => [key.frame, key.colour, key.strength, key.easing])).toEqual([
-      [0, '#ffcc00', 0, undefined],
-      [38, '#ffcc00', 0.85, 'smooth'],
+    expect(second.slice(1, 39).map((key) => key.frame)).toEqual(Array.from({ length: 38 }, (_, k) => 251 + k));
+    // — and dimmed as the flyby ends, which is one frame past the clip's last: the real end of
+    // the change is its key, and the clip stops on the way to it.
+    expect(second.slice(38).map((key) => [key.frame, key.strength, key.easing])).toEqual([
+      [288, 0.85, undefined],
+      [463, 0.85, undefined],
+      [500, 0, 'smooth'],
+    ]);
+    // The first cave's change begins at the flyby's first moment, when it still has the colour of
+    // every cave; it dims in full, and frame 250 shows the common colour again.
+    const first = made.changes?.caves?.[0].walls ?? [];
+    expect(first.slice(0, 2).map((key) => [key.frame, key.colour, key.easing])).toEqual([
+      [0, '#3a3f4a', undefined],
+      [1, '#ffcc00', 'constant'],
+    ]);
+    expect(first.slice(-4).map((key) => [key.frame, key.colour, key.strength, key.easing])).toEqual([
+      [38, '#ffcc00', 0.85, undefined],
       [213, '#ffcc00', 0.85, undefined],
       [250, '#ffcc00', 0, 'smooth'],
-      [251, '#3a3f4a', 0.6, 'constant'],
+      [250, '#3a3f4a', 0.6, 'constant'],
     ]);
   });
 
@@ -455,9 +525,10 @@ describe('one cave in a colour of its own', () => {
     const alone = tracks(flyby(lit));
     expect(alone.changes?.walls).toBeUndefined();
     expect(alone.changes?.caves?.[0].walls?.map((key) => key.strength)).toEqual([0, 0, 0.85, 0.85, 0]);
+    expect(alone.changes?.caves?.[0].walls?.map((key) => key.frame)).toEqual([0, 50, 75, 200, 225]);
     expect(alone.changes?.caves?.[0].lines?.map((key) => [key.frame, key.strength])).toEqual([
       [0, 0],
-      [50, 1],
+      [51, 1],
       [225, 0],
     ]);
   });
@@ -491,7 +562,7 @@ describe('the colour of the lines', () => {
 });
 
 describe('a layer shown, hidden and faded', () => {
-  it('fades the lines out and is hidden when they have gone; fades them in from the frame they come', () => {
+  it('fades the lines out and in: a key on the frame the fade begins, with the frames it takes', () => {
     const made = tracks(
       flyby([
         { kind: 'layer', layer: 'centerlines', visible: false, section: 'one', at: 2, seconds: 2 },
@@ -499,18 +570,12 @@ describe('a layer shown, hidden and faded', () => {
       ]),
     );
     expect(made.lines).toBe(true);
+    // Nothing is said of how much of them there is: that does not change.
     expect(made.changes).toEqual({
       lines: {
         shown: [
-          { frame: 100, shown: false },
-          { frame: 250, shown: true },
-        ],
-        opacity: [
-          { frame: 0, value: 1 },
-          { frame: 50, value: 1 },
-          { frame: 100, value: 0, easing: 'smooth' },
-          { frame: 250, value: 0 },
-          { frame: 275, value: 1, easing: 'smooth' },
+          { frame: 50, shown: false, fadeFrames: 50 },
+          { frame: 250, shown: true, fadeFrames: 25 },
         ],
       },
     });
@@ -521,14 +586,7 @@ describe('a layer shown, hidden and faded', () => {
     base.layers.walls = { visible: false, opacity: 1 };
     const made = tracks(flyby([{ kind: 'layer', layer: 'walls', visible: true, section: 'one', at: 4, seconds: 2 }]), base);
     expect(made.walls).toBe(true);
-    expect(made.changes?.walls).toEqual({
-      shown: [{ frame: 100, shown: true }],
-      opacity: [
-        { frame: 0, value: 0 },
-        { frame: 100, value: 0 },
-        { frame: 150, value: 1, easing: 'smooth' },
-      ],
-    });
+    expect(made.changes?.walls).toEqual({ shown: [{ frame: 100, shown: true, fadeFrames: 50 }] });
   });
 
   it('cuts a layer without touching how much of it there is', () => {
@@ -563,18 +621,53 @@ describe('a layer shown, hidden and faded', () => {
     ]);
   });
 
-  it('writes a fade and a change of strength that run together frame by frame, and is right at each', () => {
+  it('keeps a fade and a change of strength that run together apart: the renderer multiplies them', () => {
     const document = flyby([
       { kind: 'layer', layer: 'centerlines', visible: false, section: 'one', at: 2, seconds: 2 },
       { kind: 'layerOpacity', layer: 'centerlines', opacity: 0.5, section: 'one', at: 3, seconds: 2 },
     ]);
-    const opacity = tracks(document).changes?.lines?.opacity ?? [];
+    expect(tracks(document).changes?.lines).toEqual({
+      shown: [{ frame: 50, shown: false, fadeFrames: 50 }],
+      opacity: [
+        { frame: 0, value: 1 },
+        { frame: 75, value: 1 },
+        { frame: 125, value: 0.5, easing: 'smooth' },
+      ],
+    });
+  });
+
+  it('gives a fade the clip ends in the middle of its whole length, past the clip\'s last frame', () => {
+    const document = flyby([{ kind: 'layer', layer: 'walls', visible: false, section: 'one', at: 2, seconds: 2 }]);
+    // Three seconds of it: the walls are half gone when the clip ends.
+    const made = tracks(document, viewer(), { from: 0, to: 3 });
+    expect(made.changes?.walls).toEqual({ shown: [{ frame: 50, shown: false, fadeFrames: 50 }] });
+  });
+
+  it('writes a fade the clip begins in the middle of into the strength, frame by frame', () => {
+    const document = flyby([{ kind: 'layer', layer: 'walls', visible: false, section: 'one', at: 2, seconds: 2 }]);
     const plan = flybyLookPlan(document);
-    // The fade alone for a second, then both: one curve cannot say the product of two.
-    expect(opacity.length).toBeGreaterThan(40);
-    for (const key of opacity.filter((key) => key.frame < 100)) {
-      expect(key.value, `frame ${key.frame}`).toBeCloseTo(flybyLookAt(plan, viewer(), key.frame / FPS).layers.centerlines.opacity, 6);
+    // From the third second: half gone at the first frame, gone at frame 25.
+    const made = tracks(document, viewer(), { from: 3, to: 8 });
+    expect(made.walls).toBe(true);
+    expect(made.changes?.walls?.shown).toEqual([{ frame: 25, shown: false }]);
+    const opacity = made.changes?.walls?.opacity ?? [];
+    expect(opacity.map((key) => key.frame)).toEqual(Array.from({ length: 26 }, (_, k) => k));
+    for (const key of opacity.slice(0, 25)) {
+      expect(key.value, `frame ${key.frame}`).toBeCloseTo(flybyLookAt(plan, viewer(), 3 + key.frame / FPS).layers.walls.opacity, 6);
     }
+    expect(opacity.at(-1)).toEqual({ frame: 25, value: 0 });
+  });
+
+  it('writes a fade the clip is held still in the middle of into the strength, and hides nothing', () => {
+    const document = flyby([{ kind: 'layer', layer: 'walls', visible: false, section: 'one', at: 2, seconds: 2 }]);
+    const plan = flybyLookPlan(document);
+    // Three seconds flown and one held: the walls stand half gone for the last second.
+    const made = tracks(document, viewer(), { from: 0, to: 3 }, 1);
+    expect(made.changes?.walls?.shown).toBeUndefined();
+    const opacity = made.changes?.walls?.opacity ?? [];
+    expect(opacity.map((key) => key.frame)).toEqual([0, ...Array.from({ length: 26 }, (_, k) => 50 + k)]);
+    expect(opacity.at(-1)?.value).toBeCloseTo(flybyLookAt(plan, viewer(), 3).layers.walls.opacity, 6);
+    expect(opacity.at(-1)?.value).toBeCloseTo(0.5, 6);
   });
 
   it('says that neither is ever shown where both are hidden throughout', () => {
@@ -601,6 +694,20 @@ describe('a clip of part of a flyby', () => {
     expect(relief.at(-1)).toEqual({ frame: 50, value: 3 });
   });
 
+  it('ends in the middle of a change on the way to that change\'s own end', () => {
+    // The first four seconds: half-way up the ramp at the last frame, the ramp's end fifty frames on.
+    const made = tracks(document, viewer(), { from: 0, to: 4 });
+    expect(made.changes?.relief).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 50, value: 1 },
+      { frame: 150, value: 3, easing: 'smooth' },
+    ]);
+    const plan = flybyLookPlan(document);
+    for (let frame = 0; frame < 100; frame += 1) {
+      expect(made.reliefAt(frame), `frame ${frame}`).toBeCloseTo(flybyReliefAt(plan, undefined, frame / FPS), 6);
+    }
+  });
+
   it('holds its last moment for the frames held at its end', () => {
     // Two seconds flown — stopping half-way up the ramp — and one held.
     const made = tracks(document, viewer(), { from: 2, to: 4 }, 1);
@@ -608,5 +715,71 @@ describe('a clip of part of a flyby', () => {
     expect(made.reliefAt(50)).toBe(2);
     expect(made.reliefAt(74)).toBe(2);
     expect(made.changes?.relief?.at(-1)?.frame).toBe(50);
+  });
+});
+
+describe('the daylight of a clip', () => {
+  /** A camera that is under the ground from frame `from` up to, and not on, frame `to`. */
+  const under = (count: number, ...stays: [number, number][]) =>
+    Array.from({ length: count }, (_, frame) => stays.some(([from, to]) => frame >= from && frame < to));
+
+  it('is whole, and says nothing, for a camera that never goes under the ground', () => {
+    expect(flybyBundleDaylight(under(100), FPS)).toBeUndefined();
+    expect(flybyBundleDaylight([], FPS)).toBeUndefined();
+  });
+
+  it('goes over a second from the frame the camera goes under, and is back on the frame it comes out', () => {
+    expect(flybyBundleDaylight(under(450, [100, 300]), FPS)).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 100, value: 1 },
+      { frame: 125, value: 0, easing: 'smooth' },
+      { frame: 275, value: 0 },
+      { frame: 300, value: 1, easing: 'smooth' },
+    ]);
+  });
+
+  it('begins dark for a clip that begins underground, and stays dark for one that ends there', () => {
+    expect(flybyBundleDaylight(under(200, [0, 80]), FPS)).toEqual([
+      { frame: 0, value: 0 },
+      { frame: 55, value: 0 },
+      { frame: 80, value: 1, easing: 'smooth' },
+    ]);
+    expect(flybyBundleDaylight(under(200, [120, 200]), FPS)).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 120, value: 1 },
+      { frame: 145, value: 0, easing: 'smooth' },
+    ]);
+    expect(flybyBundleDaylight(under(50, [0, 50]), FPS)).toEqual([{ frame: 0, value: 0 }]);
+  });
+
+  it('ends on the way to the dark where the clip ends less than a second after the camera goes under', () => {
+    // Ten frames under at the end: the fade's real end is past the clip's last frame.
+    expect(flybyBundleDaylight(under(100, [90, 100]), FPS)).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 90, value: 1 },
+      { frame: 115, value: 0, easing: 'smooth' },
+    ]);
+  });
+
+  it('is half going and half coming back for a stay shorter than two fades', () => {
+    expect(flybyBundleDaylight(under(200, [100, 130]), FPS)).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 100, value: 1 },
+      { frame: 115, value: 0, easing: 'smooth' },
+      { frame: 130, value: 1, easing: 'smooth' },
+    ]);
+  });
+
+  it('takes no notice of a dip, or of a rise, shorter than the fade', () => {
+    // A camera skimming a slope: under for ten frames.
+    expect(flybyBundleDaylight(under(200, [100, 110]), FPS)).toBeUndefined();
+    // Out for ten frames in the middle of a long stay underground: it stays dark.
+    expect(flybyBundleDaylight(under(300, [50, 150], [160, 250]), FPS)).toEqual([
+      { frame: 0, value: 1 },
+      { frame: 50, value: 1 },
+      { frame: 75, value: 0, easing: 'smooth' },
+      { frame: 225, value: 0 },
+      { frame: 250, value: 1, easing: 'smooth' },
+    ]);
   });
 });

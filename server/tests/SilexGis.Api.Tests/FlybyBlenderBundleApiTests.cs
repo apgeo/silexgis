@@ -131,6 +131,45 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         readme.ShouldContain("NOT IN THIS SCENE");
         readme.ShouldContain("the ground and the map drawn on it");
         readme.ShouldContain("the entrance markers");
+
+        // And they open as this application's, saying how the scene is laid out — not where.
+        readme.ShouldContain("A flyby of caves made by SilexGIS for Blender");
+        readme.ShouldContain("HOW THE SCENE IS LAID OUT");
+
+        // The lines' colours by depth are a ramp in each cave's own mesh.
+        var materials = bundle.Plan.GetProperty("look").GetProperty("materials").EnumerateArray()
+            .ToDictionary(m => m.GetProperty("id").GetString()!);
+        foreach (var id in (string[])["cave-01-lines", "cave-02-lines"])
+        {
+            var worn = materials[models[id].GetProperty("material").GetString()!];
+            worn.GetProperty("kind").GetString().ShouldBe("heightRamp");
+            worn.GetProperty("space").GetString().ShouldBe("model");
+        }
+    }
+
+    [Fact]
+    public async Task The_notes_of_a_bundle_are_in_Romanian_for_a_reader_who_has_the_application_in_Romanian()
+    {
+        var spot = Spot.Somewhere();
+        var cave = await CreateSurveyedCaveAsync(spot, heightM: 900);
+
+        var answer = await owner.PostAsJsonAsync(
+            Route, Request(spot, [Cave(cave, walls: true), Cave(Guid.NewGuid(), walls: true)], language: "ro-RO"));
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK, await answer.Content.ReadAsStringAsync());
+        var readme = Encoding.UTF8.GetString((await Bundle.ReadAsync(answer)).Entries["README.txt"]);
+
+        readme.ShouldContain("Un survol printre peșteri, făcut de SilexGIS pentru Blender");
+        readme.ShouldContain("CUM SE RANDEAZĂ");
+        readme.ShouldContain("CE LIPSEȘTE DIN ACEASTĂ SCENĂ");
+        // What the browser named, and what only the server knows, in the same language.
+        readme.ShouldContain("  - terenul și harta desenată pe el");
+        readme.ShouldContain("  - marcajele intrărilor");
+        readme.ShouldContain("  - 1 dintre peșterile cerute (nimic din ea nu este disponibil pentru desenare)");
+        readme.ShouldNotContain("the ground and the map");
+
+        // Any other language is given the English notes.
+        var german = await owner.PostAsJsonAsync(Route, Request(spot, [Cave(cave, walls: true)], language: "de"));
+        Encoding.UTF8.GetString((await Bundle.ReadAsync(german)).Entries["README.txt"]).ShouldContain("HOW TO RENDER");
     }
 
     [Fact]
@@ -218,18 +257,21 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
 
         // And when the flyby colours that cave apart: its colours go nowhere, whichever it is.
         var made = Guid.NewGuid();
+        // With the daylight going and the notes in Romanian, too: nothing of either tells them apart.
         object Lit(Guid caveId) => Changes(
             relief: [Number(0, 1), Number(9, 1.5, "smooth")],
-            caves: [new { caveId, walls = new[] { Tint(0, "#ffcc00", 0.85) }, lines = new[] { Tint(0, "#ffcc00", 1) } }]);
+            caves: [new { caveId, walls = new[] { Tint(0, "#ffcc00", 0.85) }, lines = new[] { Tint(0, "#ffcc00", 1) } }],
+            daylight: [Number(0, 1), Number(3, 1), Number(28, 0, "smooth")]);
         var withheldLit = await reader.PostAsJsonAsync(
-            Route, Request(spot, [Cave(shared, walls: true), Cave(hidden, walls: true)], changes: Lit(hidden)));
+            Route, Request(spot, [Cave(shared, walls: true), Cave(hidden, walls: true)], changes: Lit(hidden), language: "ro"));
         var inventedLit = await reader.PostAsJsonAsync(
-            Route, Request(spot, [Cave(shared, walls: true), Cave(made, walls: true)], changes: Lit(made)));
+            Route, Request(spot, [Cave(shared, walls: true), Cave(made, walls: true)], changes: Lit(made), language: "ro"));
         withheldLit.StatusCode.ShouldBe(HttpStatusCode.OK, await withheldLit.Content.ReadAsStringAsync());
         (await withheldLit.Content.ReadAsByteArrayAsync()).ShouldBe(await inventedLit.Content.ReadAsByteArrayAsync());
         var lit = await Bundle.ReadAsync(withheldLit);
         // A colour of a cave that is not drawn is on no model.
         lit.Plan.GetProperty("changes").EnumerateArray().Count(c => c.TryGetProperty("tint", out _)).ShouldBe(0);
+        Encoding.UTF8.GetString(lit.Entries["README.txt"]).ShouldContain("1 dintre peșterile cerute");
 
         // Asked for alone, there is no scene — again the same answer either way.
         var alone = await reader.PostAsJsonAsync(Route, Request(spot, [Cave(hidden, walls: true)]));
@@ -248,18 +290,21 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         var second = await CreateSurveyedCaveAsync(spot.East(0.01), heightM: 860);
 
         // Ten frames: the relief doubles over them, the sky is cut to another colour, every cave's
-        // walls are dimmed and hidden near the end, the first cave is lit, the lines are thinned.
+        // walls are dimmed and fade out from the fifth frame — gone on the frame after the clip's
+        // last —, the first cave is lit, the lines are thinned, and the camera goes under the
+        // ground on the fourth frame, so the daylight is on its way out when the clip ends.
         var changes = Changes(
             relief: [Number(0, 1), Number(9, 2, "smooth")],
             sky: [new { frame = 0, colour = "#102030", easing = (string?)null }, new { frame = 5, colour = "#000000", easing = "constant" }],
             walls: Layer(
-                shown: [new { frame = 8, shown = false }],
+                shown: [new { frame = 4, shown = false, fadeFrames = 6 }],
                 tint: [Tint(0, "#3a3f4a", 0.6)]),
             lines: Layer(opacity: [Number(0, 0.5)]),
             caves:
             [
                 new { caveId = first, walls = new[] { Tint(0, "#3a3f4a", 0.6), Tint(4, "#ffcc00", 0.85, "smooth") }, lines = (object[]?)null },
-            ]);
+            ],
+            daylight: [Number(0, 1), Number(3, 1), Number(28, 0, "smooth")]);
         var answer = await owner.PostAsJsonAsync(
             Route, Request(spot, [Cave(first, walls: true), Cave(second, walls: false)], changes: changes));
         var bundle = await Bundle.ReadAsync(answer);
@@ -272,6 +317,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         // Every model is stretched by the relief's keys, on the clip's own clock.
         foreach (var id in bundle.Models.Keys)
         {
+            // (A model: the plan's changes are of the models, of the sun and of the world.)
             var scale = Of(id).GetProperty("scale").EnumerateArray().ToList();
             scale.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.36]);
             scale[1].GetProperty("value")[2].GetDouble().ShouldBe(2);
@@ -285,26 +331,49 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         eyes[9].ShouldBe(1200, 0.05);
         eyes.Zip(eyes.Skip(1)).ShouldAllBe(pair => pair.Second > pair.First);
 
-        // The first cave's walls: hidden with every cave's, in its own colour and not the common one.
+        // The first cave's walls: going with every cave's — eased, over the frames the flyby takes —
+        // in its own colour and not the common one, which it crosses from as a screen mixes them.
         var walls = Of("cave-01-walls");
-        walls.GetProperty("visible").EnumerateArray().Single().GetProperty("value").GetBoolean().ShouldBeFalse();
-        walls.GetProperty("tint").EnumerateArray().Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0.6, 0.85]);
+        var going = walls.GetProperty("visible").EnumerateArray().Single();
+        going.GetProperty("value").GetBoolean().ShouldBeFalse();
+        going.GetProperty("t").GetDouble().ShouldBe(0.16);
+        going.GetProperty("fade").GetDouble().ShouldBe(0.24);
+        going.GetProperty("easing").GetString().ShouldBe("smooth");
+        var tint = walls.GetProperty("tint").EnumerateArray().ToList();
+        tint.Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0.6, 0.85]);
+        tint[1].GetProperty("mix").GetString().ShouldBe("srgb");
 
         // The lines go with the lines' layer: thinned, never hidden, in their colours by depth —
-        // carried by the lines themselves, since the relief changes.
+        // a ramp in each cave's own mesh, which the stretch of the relief does not move.
+        var materials = bundle.Plan.GetProperty("look").GetProperty("materials").EnumerateArray()
+            .ToDictionary(m => m.GetProperty("id").GetString()!);
         foreach (var id in (string[])["cave-01-lines", "cave-02-lines"])
         {
             Of(id).GetProperty("opacity").EnumerateArray().Single().GetProperty("value").GetDouble().ShouldBe(0.5);
             Of(id).TryGetProperty("visible", out _).ShouldBeFalse();
             Of(id).TryGetProperty("tint", out _).ShouldBeFalse();
-            bundle.Models[id].GetProperty("material").GetString().ShouldBe("lines-by-depth");
+            var worn = materials[bundle.Models[id].GetProperty("material").GetString()!];
+            worn.GetProperty("kind").GetString().ShouldBe("heightRamp");
+            worn.GetProperty("space").GetString().ShouldBe("model");
         }
 
-        // The sky: a world of one colour, cut to black on the sixth frame.
+        // The sky: a world of one colour, cut to black on the sixth frame — and as strong as the
+        // daylight, which is on its way out: its last key is after the clip's last frame.
         bundle.Plan.GetProperty("look").GetProperty("world").GetProperty("kind").GetString().ShouldBe("color");
-        var sky = tracks.Single(c => !c.TryGetProperty("target", out _)).GetProperty("worldColor").EnumerateArray().ToList();
+        var world = tracks.Single(c => !c.TryGetProperty("target", out _));
+        var sky = world.GetProperty("worldColor").EnumerateArray().ToList();
         sky[1].GetProperty("t").GetDouble().ShouldBe(0.2);
         sky[1].GetProperty("easing").GetString().ShouldBe("constant");
+        world.GetProperty("worldStrength").EnumerateArray().Select(k => k.GetProperty("value").GetDouble()).ShouldBe([1, 1, 0]);
+
+        // The sun goes with it, by the same keys; the lamp on the camera is left alone.
+        var lights = bundle.Plan.GetProperty("look").GetProperty("lights").EnumerateArray().ToDictionary(l => l.GetProperty("id").GetString()!);
+        var sun = Of("Sun").GetProperty("energy").EnumerateArray().ToList();
+        sun.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.12, 1.12]);
+        sun[0].GetProperty("value").GetDouble().ShouldBe(lights["Sun"].GetProperty("energy").GetDouble());
+        sun[2].GetProperty("value").GetDouble().ShouldBe(0);
+        tracks.Count(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Headlamp").ShouldBe(0);
+        Encoding.UTF8.GetString(bundle.Entries["README.txt"]).ShouldContain("The sun and the sky go out while the camera is under");
 
         // Still no place in it: with the relief changing, each model is stretched about the origin's
         // own level — its height above that, never its height above the sea, is all a file holds.
@@ -327,7 +396,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         var bare = await CreateSurveyedCaveAsync(spot, heightM: 900, measured: false);
 
         // Walls wanted, none there; the look draws no lines at all. The walls are hidden at frame 6.
-        var changes = Changes(walls: Layer(shown: [new { frame = 6, shown = false }]), lines: Layer(opacity: [Number(0, 0.25)]));
+        var changes = Changes(walls: Layer(shown: [new { frame = 6, shown = false, fadeFrames = (int?)null }]), lines: Layer(opacity: [Number(0, 0.25)]));
         var answer = await owner.PostAsJsonAsync(Route, Request(spot, [Cave(bare, walls: true)], lines: false, changes: changes));
         var bundle = await Bundle.ReadAsync(answer);
 
@@ -353,9 +422,21 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
             (await CodeAsync(answer)).ShouldBe(code, because);
         }
 
-        // The clip has ten frames, 0 to 9.
-        await Refused(Changes(relief: [Number(0, 1), Number(10, 2)]), "a key after the clip's last frame");
-        await Refused(Changes(relief: [Number(4, 1), Number(4, 2)]), "two keys on one frame");
+        // The clip has ten frames, 0 to 9. A key may lie after the last — the clip ends on the way
+        // to it — but no further than a clip is long.
+        await Refused(Changes(relief: [Number(0, 1), Number(9 + 20_001, 2)]), "a key further past the clip than a clip is long");
+        await Refused(Changes(relief: [Number(4, 1), Number(4, 2)]), "a second key on a frame that is no jump");
+        await Refused(
+            Changes(relief: [Number(4, 1), Number(4, 2, "constant"), Number(4, 3, "constant")]), "three keys on one frame");
+        await Refused(Changes(daylight: [Number(0, 1.5)]), "more daylight than all of it");
+        await Refused(Changes(daylight: [Number(3, 1), Number(1, 0)]), "daylight out of order");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = 2, shown = false, fadeFrames = -1 }])), "a fade of fewer than no frames");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = 12, shown = false, fadeFrames = 0 }])), "a layer hidden after the clip's last frame");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = 2, shown = false, fadeFrames = 0 }, new { frame = 2, shown = true, fadeFrames = 0 }])),
+            "a layer hidden and shown on one frame");
         await Refused(Changes(relief: [Number(5, 1), Number(2, 2)]), "keys out of order");
         await Refused(Changes(relief: []), "a track of no keys");
         await Refused(Changes(relief: [Number(0, 9)]), "a relief past the tallest the scene draws");
@@ -364,7 +445,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         await Refused(Changes(walls: Layer(opacity: [Number(0, 1.5)])), "more of a layer than all of it");
         await Refused(Changes(walls: Layer(tint: [Tint(0, "#3a3f4a", 2)])), "a colour stronger than whole");
         await Refused(
-            Changes(lines: Layer(shown: [new { frame = 2, shown = false }, new { frame = 5, shown = false }])),
+            Changes(lines: Layer(shown: [new { frame = 2, shown = false, fadeFrames = 0 }, new { frame = 5, shown = false, fadeFrames = 0 }])),
             "a layer hidden twice running");
         await Refused(
             Changes(caves: [new { caveId = Guid.NewGuid(), walls = new[] { Tint(0, "#ffcc00", 0.5) }, lines = (object[]?)null }]),
@@ -374,14 +455,28 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
             "a cave's colours out of order");
         await Refused(Changes(relief: [Number(0, 1), Number(9, 2, "bouncy")]), "an easing that has no name", "validation.invalid_enum");
 
-        // And the same keys, in order and in range, are taken: the cave is made up, so there is
-        // nothing to draw — which is a refusal of another kind, further on.
+        // A language that is no language tag.
+        var gibberish = await owner.PostAsJsonAsync(Route, Request(spot, [cave], language: "the one I speak"));
+        gibberish.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await CodeAsync(gibberish)).ShouldBe("validation.failed");
+
+        // And keys in order and in range are taken — a change that ends after the clip, a move
+        // that ends in a jump on its own last frame, a layer that takes frames to go, the
+        // daylight: the cave is made up, so there is nothing to draw — which is a refusal of
+        // another kind, further on.
         var taken = await owner.PostAsJsonAsync(
             Route,
-            Request(spot, [cave], changes: Changes(
-                relief: [Number(0, 1), Number(9, 2, "smooth")],
-                caves: [new { caveId = named, walls = new[] { Tint(1, "#ffcc00", 0.5) }, lines = (object[]?)null }])));
-        taken.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+            Request(spot, [cave], language: "ro-RO", changes: Changes(
+                relief: [Number(0, 1), Number(30, 2, "smooth")],
+                sky: [
+                    new { frame = 0, colour = "#102030", easing = (string?)null },
+                    new { frame = 5, colour = "#000000", easing = "smooth" },
+                    new { frame = 5, colour = "#203040", easing = "constant" },
+                ],
+                walls: Layer(shown: [new { frame = 9, shown = false, fadeFrames = 40 }]),
+                caves: [new { caveId = named, walls = new[] { Tint(1, "#ffcc00", 0.5), Tint(1, "#ffcc00", 0.2, "constant") }, lines = (object[]?)null }],
+                daylight: [Number(0, 1), Number(4, 0, "smooth"), Number(20_009, 1)])));
+        taken.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity, await taken.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -583,7 +678,8 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         string? sky = "#102030",
         double[][]? frames = null,
         string[]? leftOut = null,
-        object? changes = null) => new
+        object? changes = null,
+        string? language = null) => new
         {
             name = "An invented flyby",
             output = new { width, height = 720, fps, quality = "low" },
@@ -613,12 +709,18 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
             },
             leftOut = leftOut ?? ["ground", "entrances"],
             changes,
+            language,
         };
 
     /// <summary>What a flyby changes over the clip, as a request writes it; a member left out is said as null.</summary>
     private static object Changes(
-        object[]? relief = null, object[]? sky = null, object? walls = null, object? lines = null, object[]? caves = null) =>
-        new { relief, sky, walls, lines, caves };
+        object[]? relief = null,
+        object[]? sky = null,
+        object? walls = null,
+        object? lines = null,
+        object[]? caves = null,
+        object[]? daylight = null) =>
+        new { relief, sky, walls, lines, caves, daylight };
 
     private static object Layer(object[]? shown = null, object[]? opacity = null, object[]? tint = null) => new { shown, opacity, tint };
 

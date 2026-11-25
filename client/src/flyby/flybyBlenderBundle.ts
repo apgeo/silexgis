@@ -6,7 +6,7 @@ import type {
   FlybyBundleRequest,
   FlybyBundleTexts,
 } from '../api/hooks/flybyBundle.ts';
-import { flybyBundleLookTracks, type FlybyBundleChanges, type FlybyBundleEasing } from './flybyBundleChanges.ts';
+import { flybyBundleDaylight, flybyBundleLookTracks, type FlybyBundleChanges, type FlybyBundleEasing } from './flybyBundleChanges.ts';
 import type { FlybyLayerKey } from './flybyDocument.ts';
 import { flybyLookAt, flybyReliefAt, FLYBY_OWN_LENS, type FlybyLookBase, type FlybyLookPlan } from './flybyLook.ts';
 import type { FlybyFrameSchedule } from './flybyMovie.ts';
@@ -27,6 +27,10 @@ import { flybyCameraAt, flybyKnotAt, type FlybyTimeline } from './flybyTimeline.
 // Nothing here knows the scene or the server. The camera is sampled through the very function the
 // player and the movie recorder place it with, so frame `i` of a bundle is the camera frame `i` of
 // a movie had.
+//
+// One thing a bundle has that the screen has not: its sun and its sky go out while the camera is
+// under the ground. A bundle holds no ground, so nothing in it would shade a camera inside a hill;
+// the ground is this scene's, and so is the knowledge of when the camera is under it.
 
 export type { FlybyBundleCave, FlybyBundleLook, FlybyBundleOmission, FlybyBundleRequest, FlybyBundleTexts };
 
@@ -149,8 +153,9 @@ export function flybyBundleShows(plan: FlybyLookPlan, base: FlybyLookBase, sched
  *
  * What it changes while it plays is not here: the relief, the colours of walls and lines, the
  * walls and the lines shown, hidden and faded, and the sky all go into the bundle, change by
- * change. What is left is what a bundle has no place for at all — the ground first of all, and
- * with it every map drawn on the ground, so a background that changes is not said again.
+ * change — and the daylight, which the flyby does not change and a bundle does. What is left is
+ * what a bundle has no place for at all — the ground first of all, and with it every map drawn on
+ * the ground, so a background that changes is not said again.
  *
  * `shown` are the layers the viewer has switched on besides the ones the flyby names — the flyby
  * leaves those as it finds them, so they are in the picture and not in the bundle.
@@ -204,6 +209,17 @@ export function flybyBundleOmissions(
     }
   }
   return FLYBY_BUNDLE_OMISSIONS.filter((omission) => found.has(omission));
+}
+
+/**
+ * Whether the camera of each frame is under the ground: its eye below the scene's own ground at the
+ * place it stands over. Both are true heights, so the relief the frame is drawn at takes no part.
+ */
+export function flybyBundleUnderground(
+  frames: readonly (readonly number[])[],
+  groundHeight: (longitude: number, latitude: number) => number,
+): boolean[] {
+  return frames.map(([longitude, latitude, height]) => height < groundHeight(longitude, latitude));
 }
 
 /**
@@ -313,6 +329,8 @@ export interface FlybyBundleAsk {
   depthBands: readonly { fromMeters: number; color: string }[];
   /** The mark saying the relief is stretched, in the reader's words, for a factor rounded to a tenth. */
   reliefWords(factor: number): string;
+  /** The language the reader has the application in, for the bundle's own notes; left out, English. */
+  language?: string;
 }
 
 /** Why a bundle cannot be made of a flyby as it stands; null when it can. */
@@ -384,7 +402,13 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
         : null;
 
   const leftOut = FLYBY_BUNDLE_OMISSIONS.filter((omission) => omissions.has(omission));
-  const changes = tracks.changes ? changesRequest(tracks.changes, named) : null;
+  const frames = tooLong
+    ? []
+    : flybyBundleFrames(timeline, schedule, ask.groundHeight, (t) => flybyBundleLensAt(timeline.look, base, t));
+  // The daylight is the camera's, not the look's: it goes while the eye is under the ground.
+  const daylight = flybyBundleDaylight(flybyBundleUnderground(frames, ask.groundHeight), schedule.fps);
+  const said: FlybyBundleChanges | null = daylight ? { ...tracks.changes, daylight } : tracks.changes;
+  const changes = said ? changesRequest(said, named) : null;
   return {
     request: {
       name: ask.name,
@@ -396,9 +420,7 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
       },
       placement: { absolute: ask.placement.absolute, offsetM: ask.placement.offsetM },
       relief,
-      frames: tooLong
-        ? []
-        : flybyBundleFrames(timeline, schedule, ask.groundHeight, (t) => flybyBundleLensAt(timeline.look, base, t)),
+      frames,
       caves,
       look,
       texts: flybyBundleTexts(
@@ -408,6 +430,7 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
       ),
       leftOut,
       ...(changes ? { changes } : {}),
+      ...(ask.language ? { language: ask.language } : {}),
     },
     omissions: leftOut,
     refusal,
@@ -436,5 +459,6 @@ function changesRequest(changes: FlybyBundleChanges, named: ReadonlySet<string>)
     walls: layer(changes.walls),
     lines: layer(changes.lines),
     caves: caves.length > 0 ? caves : null,
+    ...(changes.daylight ? { daylight: eased(changes.daylight) } : {}),
   };
 }

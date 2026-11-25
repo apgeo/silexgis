@@ -22,27 +22,13 @@ public static class SurveyLineTubes
     /// <param name="radiusM">From a leg to each corner of its tube.</param>
     public static IndexedMesh Build(
         IEnumerable<((double East, double North, double Up) From, (double East, double North, double Up) To)> legs,
-        double radiusM) => Build(legs, radiusM, out _);
-
-    /// <param name="legs">Each leg's two ends, in metres east, north and up of one point.</param>
-    /// <param name="radiusM">From a leg to each corner of its tube.</param>
-    /// <param name="legOfVertex">
-    /// For each vertex of the mesh, which of <paramref name="legs"/> it belongs to, counted from 0
-    /// — for whoever colours the legs one by one. A leg too short to build is counted and has no vertex.
-    /// </param>
-    public static IndexedMesh Build(
-        IEnumerable<((double East, double North, double Up) From, (double East, double North, double Up) To)> legs,
-        double radiusM,
-        out int[] legOfVertex)
+        double radiusM)
     {
         var positions = new List<double>();
         var indices = new List<int>();
-        var owners = new List<int>();
-        var leg = -1;
 
         foreach (var (a, b) in legs)
         {
-            leg++;
             var dx = b.East - a.East;
             var dy = b.North - a.North;
             var dz = b.Up - a.Up;
@@ -81,7 +67,6 @@ public static class SurveyLineTubes
                     positions.Add(end.East + (radiusM * ((su * ux) + (sv * vx))));
                     positions.Add(end.North + (radiusM * ((su * uy) + (sv * vy))));
                     positions.Add(end.Up + (radiusM * ((su * uz) + (sv * vz))));
-                    owners.Add(leg);
                 }
             }
 
@@ -93,7 +78,6 @@ public static class SurveyLineTubes
             }
         }
 
-        legOfVertex = [.. owners];
         return new IndexedMesh([.. positions], [.. indices]);
     }
 }

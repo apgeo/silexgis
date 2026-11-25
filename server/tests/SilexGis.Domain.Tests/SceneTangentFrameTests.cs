@@ -273,6 +273,54 @@ public class SceneTangentFrameTests
         }
     }
 
+    [Fact]
+    public void A_camera_placed_by_the_models_rule_stands_with_the_model_beside_it_at_every_relief()
+    {
+        // The same place two kilometres north of the origin, and a camera forty metres south of
+        // it and thirty above, looking at it — as a flyby going down a cave far from its first
+        // subject has one.
+        var frame = new SceneTangentFrame(Lon, Lat, Height, 2);
+        var lat = Lat + (2000 / MetresPerDegree);
+        var cameraLat = lat - (40 / MetresPerDegree);
+        var placed = frame.PlacementAbout(Lon, lat, Height - 150);
+
+        foreach (var relief in (double[])[1, 1.5, 2, 2.5, 3])
+        {
+            var zero = placed.Translation + Turned(new SceneVector(0, 0, placed.LiftM * relief), placed.Axis, placed.Degrees);
+            var moment = frame.WithRelief(relief);
+            var onTheGlobe = moment.PointAt(Lon, lat, Height - 150) - moment.PointAt(Lon, cameraLat, Height - 120);
+
+            // A camera in the frame of its own moment sees the model off by the whole lean — two
+            // decimetres for a whole factor, from forty metres away.
+            var exact = moment.ViewAt(Lon, cameraLat, Height - 120, 0, -30, 0);
+            ((zero - exact.Eye) - onTheGlobe).Length.ShouldBe(Math.Abs(relief - 2) * 700 * 2000 / 6_371_000, 0.002);
+
+            // Placed by the rule the model is stretched by, it is off by the same vector, less
+            // what the forty metres between them lean: under five millimetres.
+            var beside = frame.ViewAbout(Lon, cameraLat, Height - 120, 0, -30, 0, relief);
+            ((zero - beside.Eye) - onTheGlobe).Length.ShouldBeLessThan(0.005);
+
+            // It looks the way it looked, and at the frame's own relief it is where the frame has it.
+            beside.Forward.ShouldBe(exact.Forward);
+            beside.Up.ShouldBe(exact.Up);
+        }
+
+        frame.ViewAbout(Lon, cameraLat, Height - 120, 0, -30, 0, 2).ShouldBe(frame.ViewAt(Lon, cameraLat, Height - 120, 0, -30, 0));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2.5)]
+    [InlineData(4)]
+    public void A_camera_on_the_origins_vertical_placed_by_the_models_rule_is_where_the_globe_has_it(double relief)
+    {
+        var frame = new SceneTangentFrame(Lon, Lat, Height, 2);
+
+        var view = frame.ViewAbout(Lon, Lat, Height + 5000, 40, -89, 0, relief);
+
+        Close(view.Eye, frame.WithRelief(relief).PointAt(Lon, Lat, Height + 5000), 1e-6);
+    }
+
     /// <summary>A vector turned about an axis, right-handed: Rodrigues' formula, written out here and not borrowed.</summary>
     private static SceneVector Turned(SceneVector v, SceneVector axis, double degrees)
     {

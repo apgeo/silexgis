@@ -119,6 +119,8 @@ export interface FlybyBundleAsked {
   /** Whether walls the view is waiting for a yes about go into the bundle all the same. */
   includeWalls: boolean;
   reliefWords(factor: number): string;
+  /** The language the reader has the application in: the bundle's own notes are written in it where they exist in it. */
+  language?: string;
   signal?: AbortSignal;
 }
 
@@ -162,6 +164,7 @@ export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<Flyb
     },
     depthBands: CENTERLINE_DEPTH_BANDS,
     reliefWords: asked.reliefWords,
+    language: asked.language,
   });
   if (refusal !== null) {
     throw new FlybyBundleRefused(refusal);

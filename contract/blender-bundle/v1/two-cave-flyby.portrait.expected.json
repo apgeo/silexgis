@@ -1,5 +1,5 @@
 {
-  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And for each cave the frames at which a bundle's keys may say another colour than the screen shows, because a hand-over between a cave's own colour and the colour of every cave stands on them.",
+  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under the ground, as runs from a first frame up to, and not including, the frame it is above the ground again.",
   "width": 1080,
   "height": 1920,
   "fps": 25,
@@ -105,20 +105,7 @@
       805
     ]
   ],
-  "handOvers": [
-    {
-      "walls": [
-        65
-      ],
-      "lines": [
-        65
-      ]
-    },
-    {
-      "walls": [],
-      "lines": []
-    }
-  ],
+  "underground": [],
   "look": [
     ["#1b2a3a",true,1,true,1,"#3a3f4a",0.6,null,"#3a3f4a",0.6,null],
     ["#1b2a3a",true,1,true,1,"#3a3f4a",0.6,null,"#3a3f4a",0.6,null],
