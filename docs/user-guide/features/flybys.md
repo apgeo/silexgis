@@ -338,8 +338,9 @@ What goes into it:
   in one colour or by depth, the walls and the lines shown, hidden and faded, and the colour of
   the sky. A change is written into the bundle as two keys that Blender eases between the way the
   flyby does, so you can move them in Blender afterwards — a colour crossing into another too,
-  mixed as the screen mixes it, and a change the clip stops in the middle of, whose second key
-  then lies after the last frame.
+  mixed as the screen mixes it; a change the clip stops in the middle of, whose second key then
+  lies after the last frame; and one a stretch begins in the middle of, whose first key lies
+  before the first frame, so the stretch opens part of the way through the change or the fade.
 - **The texts**: title, captions, end card, the corner line, "Relief ×N" as it changes, the north
   arrow and the fades, drawn in Blender's own lettering.
 - **What the view points out**: the **entrances** and the **features that are points** — of the
@@ -378,10 +379,17 @@ A few things are carried a little differently from what the 3D view draws:
   it comes out, having risen over the second before. A dip under the ground shorter than a second
   changes nothing; a stay shorter than two is half fading and half coming back. So inside a hill
   the picture is lit by the lamp alone, and what stands behind the cave is black instead of the
-  sky. **The lamp reaches a few metres**: walls close to the camera are lit well, but a cave the
-  camera looks at from tens of metres away under the ground is dim, and from farther it is dark.
-  To keep the daylight on, remove two tracks from the bundle's `scene-plan.json`; to light
-  farther, raise the lamp's strength there. Its `README.txt` names both.
+  sky — under the ground there is no sky to see. **The lamp reaches as far as the nearest wall**:
+  as the daylight goes, its strength is turned up by the square of the distance from the camera
+  to the nearest wall of the bundle, so walls the camera looks at from a hundred metres away
+  under the ground are lit as walls three metres from it are. Walls farther off than the nearest
+  are darker, as by any lamp, and in whole daylight the lamp is the small one it always was. To
+  keep the daylight on, remove three tracks from the bundle's `scene-plan.json`; its `README.txt`
+  names them.
+- **Survey lines need no light.** They are drawn in their own colours — one colour, or the
+  colours by depth in bands that change at once where a band begins — whatever the light: as
+  bright in the dark as under the sun, as the 3D view draws them, and without the shading a sun
+  would give them. A line does not light the walls beside it.
 - **A marker has a size in metres.** The 3D view draws an entrance as an icon of one size on the
   screen however far the camera is; a render has no such thing. Each marker is a ball as large as
   an icon of the view would be at **the nearest the camera comes to it** (across, a little under

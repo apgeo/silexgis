@@ -348,8 +348,10 @@ Ce intră în el:
   într-o singură culoare sau după adâncime, pereții și drumuirile afișate, ascunse și estompate,
   și culoarea cerului. O schimbare este scrisă în pachet ca două chei între care Blender trece
   lin, la fel ca survolul, așa că le poți muta apoi în Blender — la fel și o culoare care trece în
-  alta, amestecată cum o amestecă ecranul, și o schimbare în mijlocul căreia se oprește clipul, a
-  cărei a doua cheie se află atunci după ultimul cadru.
+  alta, amestecată cum o amestecă ecranul; o schimbare în mijlocul căreia se oprește clipul, a
+  cărei a doua cheie se află atunci după ultimul cadru; și una în mijlocul căreia începe o
+  porțiune, a cărei primă cheie se află înaintea primului cadru, astfel că porțiunea pornește cu
+  schimbarea sau estomparea deja în curs.
 - **Textele**: titlul, legendele, cartonul de final, rândul din colț, „Relief ×N” pe măsură ce
   se schimbă, săgeata nordului și estompările, desenate cu literele programului Blender.
 - **Ce semnalează vizualizarea**: **intrările** și **obiectele punctuale** — din straturile
@@ -390,11 +392,19 @@ Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
   deasupra unei peșteri — și sunt din nou aprinse în cadrul în care iese, după ce au crescut în
   secunda dinainte. O coborâre sub teren mai scurtă de o secundă nu schimbă nimic; o ședere mai
   scurtă de două este jumătate stingere și jumătate revenire. Așadar, în interiorul unui deal
-  imaginea este luminată doar de lampă, iar în spatele peșterii este negru în loc de cer. **Lampa
-  bate câțiva metri**: pereții apropiați de cameră sunt bine luminați, dar o peșteră privită de la
-  zeci de metri sub teren este slab luminată, iar de mai departe este întunecată. Ca să păstrezi
-  lumina zilei, șterge două piste din `scene-plan.json` din pachet; ca să luminezi mai departe,
-  mărește acolo puterea lămpii. `README.txt` le numește pe amândouă.
+  imaginea este luminată doar de lampă, iar în spatele peșterii este negru în loc de cer — sub
+  teren nu există cer de văzut. **Lampa bate până la cel mai apropiat perete**: pe măsură ce
+  lumina zilei scade, puterea ei crește cu pătratul distanței de la cameră la cel mai apropiat
+  perete din pachet, astfel că pereții priviți de la o sută de metri, sub teren, sunt luminați
+  ca pereții aflați la trei metri de ea. Pereții mai îndepărtați decât cel mai apropiat sunt mai
+  întunecați, ca la orice lampă, iar în plină lumină a zilei lampa este cea mică dintotdeauna.
+  Ca să păstrezi lumina zilei, șterge trei piste din `scene-plan.json` din pachet; `README.txt`
+  le numește.
+- **Drumuirile nu au nevoie de lumină.** Sunt desenate în culorile lor — o singură culoare sau
+  culorile după adâncime, în benzi care se schimbă dintr-odată acolo unde începe o bandă —
+  indiferent de lumină: la fel de vizibile în întuneric ca la soare, așa cum le desenează
+  vizualizarea 3D, și fără umbrirea pe care le-ar da-o un soare. O drumuire nu luminează pereții
+  de lângă ea.
 - **Un marcaj are o mărime în metri.** Vizualizarea 3D desenează o intrare ca o pictogramă de
   aceeași mărime pe ecran, oricât de departe ar fi camera; o randare nu are așa ceva. Fiecare
   marcaj este o sferă cât ar fi o pictogramă a vizualizării la **cea mai mică distanță la care
