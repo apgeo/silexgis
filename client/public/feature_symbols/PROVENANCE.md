@@ -19,7 +19,7 @@ SilexGIS / Silex Brașov project.
 > **Owner sign-off required (1.0 release gate):** confirm that all 19 icons are original works of
 > the club (or otherwise cleared for AGPL redistribution) with no third-party clip-art among them.
 > If any icon has a separate origin, record its source and license here and in the root `NOTICE`
-> file before tagging v3.0.0.
+> file before tagging v2.0.0.
 
 ## How the SVG files below were prepared
 
