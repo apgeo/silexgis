@@ -369,14 +369,32 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         sky[1].GetProperty("easing").GetString().ShouldBe("constant");
         world.GetProperty("worldStrength").EnumerateArray().Select(k => k.GetProperty("value").GetDouble()).ShouldBe([1, 1, 0]);
 
-        // The sun goes with it, by the same keys; the lamp on the camera is left alone.
+        // The sun goes with it, by the same keys; and as it goes the lamp on the camera is turned
+        // up towards what lights the first cave's walls from where the camera is — from the lamp
+        // as it is built, while the daylight is whole.
         var lights = bundle.Plan.GetProperty("look").GetProperty("lights").EnumerateArray().ToDictionary(l => l.GetProperty("id").GetString()!);
         var sun = Of("Sun").GetProperty("energy").EnumerateArray().ToList();
         sun.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.12, 1.12]);
         sun[0].GetProperty("value").GetDouble().ShouldBe(lights["Sun"].GetProperty("energy").GetDouble());
         sun[2].GetProperty("value").GetDouble().ShouldBe(0);
-        tracks.Count(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Headlamp").ShouldBe(0);
-        Encoding.UTF8.GetString(bundle.Entries["README.txt"]).ShouldContain("The sun and the sky go out while the camera is under");
+        var lamp = Of("Headlamp").GetProperty("energy").EnumerateArray().ToList();
+        var built = lights["Headlamp"].GetProperty("energy").GetDouble();
+        lamp[0].GetProperty("t").GetDouble().ShouldBe(0);
+        lamp[0].GetProperty("value").GetDouble().ShouldBe(built);
+        lamp[1].GetProperty("t").GetDouble().ShouldBe(0.12);
+        lamp[1].GetProperty("value").GetDouble().ShouldBe(built);
+        lamp[^1].GetProperty("t").GetDouble().ShouldBe(0.36);
+        lamp[^1].GetProperty("value").GetDouble().ShouldBeGreaterThan(built);
+        lamp.Select(k => k.GetProperty("value").GetDouble()).ShouldBe(lamp.Select(k => k.GetProperty("value").GetDouble()).Order());
+        var notes = Encoding.UTF8.GetString(bundle.Entries["README.txt"]);
+        notes.ShouldContain("The sun and the sky go out while the camera is under");
+        notes.ShouldContain("the lamp is turned up by the square of the distance");
+
+        // The lines of both caves wear a material no light changes.
+        foreach (var id in (string[])["cave-01-lines", "cave-02-lines"])
+        {
+            materials[bundle.Models[id].GetProperty("material").GetString()!].GetProperty("unlit").GetBoolean().ShouldBeTrue();
+        }
 
         // Still no place in it: with the relief changing, each model is stretched about the origin's
         // own level — its height above that, never its height above the sea, is all a file holds.
@@ -426,11 +444,16 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         }
 
         // The clip has ten frames, 0 to 9. A key may lie after the last — the clip ends on the way
-        // to it — but no further than a clip is long.
+        // to it — and before the first — it begins on the way from it —, but no further either
+        // way than a clip is long.
         await Refused(Changes(relief: [Number(0, 1), Number(9 + 20_001, 2)]), "a key further past the clip than a clip is long");
+        await Refused(Changes(relief: [Number(-20_001, 1), Number(9, 2)]), "a key further before the clip than a clip is long");
         await Refused(Changes(relief: [Number(4, 1), Number(4, 2)]), "a second key on a frame that is no jump");
         await Refused(
-            Changes(relief: [Number(4, 1), Number(4, 2, "constant"), Number(4, 3, "constant")]), "three keys on one frame");
+            Changes(relief: [Number(4, 1), Number(4, 2, "constant"), Number(4, 3)]), "a third key on a frame that is no jump");
+        await Refused(
+            Changes(relief: [Number(4, 1), Number(4, 2, "constant"), Number(4, 3, "constant"), Number(4, 4, "constant")]),
+            "four keys on one frame");
         await Refused(Changes(daylight: [Number(0, 1.5)]), "more daylight than all of it");
         await Refused(Changes(daylight: [Number(3, 1), Number(1, 0)]), "daylight out of order");
         await Refused(
@@ -443,7 +466,13 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         await Refused(Changes(relief: [Number(5, 1), Number(2, 2)]), "keys out of order");
         await Refused(Changes(relief: []), "a track of no keys");
         await Refused(Changes(relief: [Number(0, 9)]), "a relief past the tallest the scene draws");
-        await Refused(Changes(relief: [Number(-1, 1)]), "a key before the clip");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = -3, shown = false, fadeFrames = 0 }])), "a layer cut before the clip's first frame");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = -8, shown = false, fadeFrames = 8 }])), "a fade that was over by the clip's first frame");
+        await Refused(
+            Changes(walls: Layer(shown: [new { frame = -20_001, shown = false, fadeFrames = 20_000 }])),
+            "a fade that began further before the clip than a clip is long");
         await Refused(Changes(sky: [new { frame = 0, colour = "navy", easing = (string?)null }]), "a sky that is a word");
         await Refused(Changes(walls: Layer(opacity: [Number(0, 1.5)])), "more of a layer than all of it");
         await Refused(Changes(walls: Layer(tint: [Tint(0, "#3a3f4a", 2)])), "a colour stronger than whole");
@@ -463,10 +492,27 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         gibberish.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await CodeAsync(gibberish)).ShouldBe("validation.failed");
 
-        // And keys in order and in range are taken — a change that ends after the clip, a move
-        // that ends in a jump on its own last frame, a layer that takes frames to go, the
-        // daylight: the cave is made up, so there is nothing to draw — which is a refusal of
-        // another kind, further on.
+        // And keys in order and in range are taken — a change that ends after the clip and one
+        // that began before it, a move that ends in a jump on its own last frame, a third key on
+        // that frame for the next move to start from, a layer that takes frames to go and one
+        // that was going when the clip began, the daylight: the cave is made up, so there is
+        // nothing to draw — which is a refusal of another kind, further on.
+        var begun = await owner.PostAsJsonAsync(
+            Route,
+            Request(spot, [cave], changes: Changes(
+                relief: [Number(-20, 1), Number(30, 2, "smooth")],
+                walls: Layer(shown: [new { frame = -5, shown = false, fadeFrames = 12 }], opacity: [Number(-4, 1), Number(4, 0.5, "smooth")]),
+                caves:
+                [
+                    new
+                    {
+                        caveId = named,
+                        walls = new[] { Tint(0, "#3a3f4a", 0.6), Tint(3, "#3a3f4a", 0.6, "constant"), Tint(3, "#ffcc00", 0, "constant"), Tint(8, "#ffcc00", 0.85, "smooth") },
+                        lines = (object[]?)null,
+                    },
+                ])));
+        begun.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity, await begun.Content.ReadAsStringAsync());
+
         var taken = await owner.PostAsJsonAsync(
             Route,
             Request(spot, [cave], language: "ro-RO", changes: Changes(

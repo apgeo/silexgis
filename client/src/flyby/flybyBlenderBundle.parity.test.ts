@@ -320,6 +320,9 @@ const CASES = [
   // A stretch of it, upright, with the last moment held: the first second is still straight down,
   // and the first cave is lit just as the stretch ends.
   { name: 'two-cave-flyby.portrait', made: ask({ width: 1080, height: 1920 }, { from: 0.4, to: 4 }, 0.2) },
+  // A stretch cut out of its middle, which begins while the lines are thinning and the entrances
+  // are going, and ends under the ground with the relief on its way up.
+  { name: 'two-cave-flyby.cut', made: ask({ width: 1280, height: 720 }, { from: 9.4, to: 15.4 }) },
 ] as const;
 
 // ---- the look, read from what puts it on the screen ----
@@ -554,18 +557,18 @@ describe('the invented flyby the camera check is made on', () => {
   it('changes its look in every way a bundle carries, each change on frames of the clip', () => {
     const { request } = CASES[0].made;
     const changes = request.changes!;
-    // The first cave: dimmed with the rest; lit over a second, frame by frame from the frame after
-    // its change begins (frame 75 still shows the colour of every cave); dimmed again in two keys,
-    // with the colour of every cave beside the second of them, on frame 225.
+    // The first cave: dimmed with the rest; lit over a second from no strength of its own colour,
+    // which no frame shows — the third key of frame 75, which itself still shows the colour of
+    // every cave; dimmed again in two keys, with the colour of every cave beside the second of
+    // them, on frame 225.
     expect(changes.walls?.tint).toEqual([{ frame: 0, colour: '#3a3f4a', strength: 0.6, easing: null }]);
     const first = changes.caves?.[0].walls?.map((key) => [key.frame, key.strength, key.easing]) ?? [];
-    expect(first.slice(0, 2)).toEqual([
+    expect(first).toEqual([
       [0, 0.6, null],
-      [76, 0.003971, 'constant'],
-    ]);
-    expect(first.slice(1, 26).map((key) => key[0])).toEqual(Array.from({ length: 25 }, (_, k) => 76 + k));
-    expect(first.slice(25)).toEqual([
-      [100, 0.85, null],
+      [75, 0.6, null],
+      [75, 0.6, 'constant'],
+      [75, 0, 'constant'],
+      [100, 0.85, 'smooth'],
       [200, 0.85, null],
       [225, 0, 'smooth'],
       [225, 0.6, 'constant'],
@@ -598,6 +601,53 @@ describe('the invented flyby the camera check is made on', () => {
       'Relief ×1.8',
       'Relief ×1.9',
       'Relief ×2',
+    ]);
+  });
+
+  it('begins a stretch cut out of the middle on the way from keys before its first frame', () => {
+    const { request, schedule } = CASES[2].made;
+    expect(request.frames).toHaveLength(150);
+    const changes = request.changes!;
+    // The lines are thinning as the stretch begins: the thinning's own two keys, the first ten
+    // frames before the clip — and the first frame is part of the way down.
+    expect(changes.lines?.opacity).toEqual([
+      { frame: -10, value: 1, easing: null },
+      { frame: 15, value: 0.5, easing: 'smooth' },
+    ]);
+    expect(expectedLook(schedule)[0][4]).toBeGreaterThan(0.5);
+    expect(expectedLook(schedule)[0][4]).toBeLessThan(1);
+    // The entrances are going: a fade that began ten frames before the clip. They are cut back in later.
+    const entrances = request.markers?.find((layer) => layer.kind === 'entrances');
+    expect(entrances?.shown).toEqual([
+      { frame: -10, shown: false, fadeFrames: 25 },
+      { frame: 90, shown: true },
+    ]);
+    expect(entrances?.opacity ?? null).toBeNull();
+    // The second cave is lit a second and a half in: from no strength of its own colour, the
+    // third key of that frame.
+    const second = changes.caves?.find((cave) => cave.caveId === PARITY_CAVES[1])?.walls ?? [];
+    expect(second.filter((key) => key.frame === 40).map((key) => [key.strength, key.easing])).toEqual([
+      [0.6, null],
+      [0.6, 'constant'],
+      [0, 'constant'],
+    ]);
+    // It ends with the relief a fifth of the way through its two seconds, and under the ground:
+    // both changes have their real ends after the clip's last frame.
+    expect(changes.relief).toEqual([
+      { frame: 0, value: 1.5, easing: null },
+      { frame: 140, value: 1.5, easing: null },
+      { frame: 190, value: 2, easing: 'smooth' },
+    ]);
+    expect(expectedUnderground(request)).toEqual([[121, 150]]);
+    expect(changes.daylight).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: 121, value: 1, easing: null },
+      { frame: 146, value: 0, easing: 'smooth' },
+    ]);
+    // And every frame's colours are the screen's.
+    expect(handOvers(request, expectedLook(schedule))).toEqual([
+      { walls: [], lines: [] },
+      { walls: [], lines: [] },
     ]);
   });
 

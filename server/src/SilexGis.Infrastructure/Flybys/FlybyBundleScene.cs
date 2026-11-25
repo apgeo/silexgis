@@ -108,9 +108,11 @@ public enum FlybyBundleEasing
 
 /// <summary>
 /// A number at a frame of the clip, counted from 0. A frame may lie after the clip's last: the clip
-/// then ends on the way to the key. Two keys of one track may stand on one frame: the first is where
-/// the value was going, the second — <see cref="FlybyBundleEasing.Constant"/> — what it is from that
-/// frame on.
+/// then ends on the way to the key. And before its first, below 0: the clip then begins on the way
+/// from the key. Up to three keys of one track may stand on one frame: the first is where the value
+/// was going, the second — <see cref="FlybyBundleEasing.Constant"/> — what it is on that frame and
+/// from it on, and a third, constant too, the value the way to the next key starts from, which no
+/// frame shows.
 /// </summary>
 public sealed record FlybyBundleNumberKey(int Frame, double Value, FlybyBundleEasing Easing = FlybyBundleEasing.Linear);
 
@@ -122,6 +124,8 @@ public sealed record FlybyBundleTintKey(int Frame, string Colour, double Strengt
 
 /// <summary>
 /// From this frame on something is shown, or hidden. Each key says the opposite of the one before it.
+/// A key before the clip's first frame, below 0, is a coming or a going the clip begins part of
+/// the way through.
 /// </summary>
 /// <param name="FadeFrames">
 /// How many frames, from this one on, the thing takes to appear, or to go before it is hidden —

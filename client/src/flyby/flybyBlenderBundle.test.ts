@@ -376,6 +376,15 @@ describe('what a bundle points out', () => {
       ],
     });
 
+    // A stretch that begins while the layer is coming back: the view has switched it on already,
+    // so it is shown from the stretch's first frame, and no key says so — least of all one
+    // before that frame.
+    const timeline = compileFlyby(document, [cave, other]);
+    const begun = flybyBundleRequest(
+      ask(document, { base: viewer(['photos']), schedule: flybyFrameSchedule(timeline.length, FLYBY_BUNDLE_FPS, { from: 8.4, to: 10 }) }),
+    ).request;
+    expect(begun.photos).toEqual({ caves: ['a', 'b'], shown: null });
+
     // Not shown by anybody: not asked for.
     expect(flybyBundleRequest(ask(flyby())).request.photos ?? null).toBeNull();
   });

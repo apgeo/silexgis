@@ -10175,7 +10175,7 @@
       "revealHelp": "By the distance along the passages, over the flight between the title and the end card; the caves stand whole for its last fifth. A cave with no entrance marked in its survey starts at its first station. There is no reveal by survey date: no date is kept for each leg of a survey.",
       "leftOutTitle": "Not in the bundle",
       "leftOutHelp": "The bundle is made anyway, and its README says the same.",
-      "daylight": "In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera stays on; it lights a few metres.",
+      "daylight": "In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera then lights the walls from as far as the nearest of them is; survey lines keep their colours in any light.",
       "pointed": "Where the flyby shows their layers, the entrances and the features that are points go in as markers — an entrance of the flyby's own caves with its name — and the photographs taken at stations of those caves as pictures, each shown while the camera is near its station.",
       "leftOut": {
         "ground": "The ground and the map drawn on it: the caves stand in empty space, under a plain sky.",

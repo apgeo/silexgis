@@ -194,13 +194,14 @@ public static class FlybyBundleNotes
     /// The sections of the notes that are about this scene: how it is laid out, and how it is lit.
     /// </summary>
     /// <param name="daylightGoes">Whether the sun and the sky go out at some frame of the clip.</param>
+    /// <param name="lampReaches">Whether the lamp on the camera is turned up as they go: there are walls for it to light.</param>
     /// <param name="markers">How many markers stand in the scene.</param>
     /// <param name="photos">How many photographs it shows.</param>
     /// <param name="revealed">Whether the caves appear part by part.</param>
     public static IReadOnlyList<FlybyBundleNotesSection> Sections(
-        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, bool revealed = false) =>
+        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, bool revealed = false, bool lampReaches = false) =>
     [
-        .. LaidOutAndLit(romanian, daylightGoes),
+        .. LaidOutAndLit(romanian, daylightGoes, lampReaches),
         .. markers > 0 || photos > 0 ? [PointedOut(romanian, markers, photos)] : Array.Empty<FlybyBundleNotesSection>(),
         .. revealed ? [Reveal(romanian)] : Array.Empty<FlybyBundleNotesSection>(),
     ];
@@ -269,7 +270,7 @@ public static class FlybyBundleNotes
     private static string Both(string? first, string? second, string and) =>
         first is null ? second ?? string.Empty : second is null ? first : $"{first} {and} {second}";
 
-    private static IReadOnlyList<FlybyBundleNotesSection> LaidOutAndLit(bool romanian, bool daylightGoes) => romanian
+    private static IReadOnlyList<FlybyBundleNotesSection> LaidOutAndLit(bool romanian, bool daylightGoes, bool lampReaches) => romanian
         ?
         [
             new(
@@ -279,16 +280,24 @@ public static class FlybyBundleNotes
                 + "află pe hartă: nu conține coordonate, teren sau hartă."),
             new(
                 "LUMINA",
-                daylightGoes
+                (daylightGoes
                     ? "Lampa de pe cameră este aprinsă tot timpul. Soarele și cerul se sting cât timp camera se\n"
                       + "află sub terenul vizualizării 3D în care a fost redat survolul: scad în decurs de o secundă\n"
                       + "din clipa în care camera coboară sub teren și revin în secunda dinainte ca ea să iasă.\n"
-                      + "Sub teren luminează doar lampa, care bate câțiva metri: ce privește camera de mai departe\n"
-                      + "rămâne întunecat. Pentru a păstra lumina zilei, ștergeți din \"changes\", în\n"
-                      + "scene-plan.json, schimbarea cu cheile \"energy\" ale luminii \"Sun\" și cheile\n"
-                      + "\"worldStrength\"; pentru o lampă mai puternică, măriți \"energy\" la lumina \"Headlamp\"."
+                      + (lampReaches
+                          ? "Pe măsură ce se sting, puterea lămpii crește cu pătratul distanței de la cameră la cel mai\n"
+                            + "apropiat perete (cheile \"energy\" ale luminii \"Headlamp\" din \"changes\", în\n"
+                            + "scene-plan.json): pereții priviți de departe, sub teren, sunt luminați ca pereții aflați\n"
+                            + "la trei metri de lampă. Pereții mai îndepărtați decât cel mai apropiat sunt mai\n"
+                            + "întunecați, ca la orice lampă. Pentru a păstra lumina zilei, ștergeți din \"changes\"\n"
+                            + "schimbarea cu cheile \"energy\" ale luminii \"Sun\", cheile \"worldStrength\" și, odată cu\n"
+                            + "ele, schimbarea luminii \"Headlamp\".\n"
+                          : "Pentru a păstra lumina zilei, ștergeți din \"changes\", în scene-plan.json, schimbarea cu\n"
+                            + "cheile \"energy\" ale luminii \"Sun\" și cheile \"worldStrength\".\n")
                     : "Lampa de pe cameră și soarele sunt aprinse tot timpul: în acest survol camera nu coboară\n"
-                      + "sub terenul vizualizării 3D în care a fost redat."),
+                      + "sub terenul vizualizării 3D în care a fost redat.\n")
+                + "Drumuirile sunt desenate în culorile lor indiferent de lumină (\"unlit\" în materialele\n"
+                + "lor): se văd la fel în întuneric ca la soare și nu luminează nimic."),
         ]
         :
         [
@@ -299,15 +308,22 @@ public static class FlybyBundleNotes
                 + "holds no coordinates, no ground and no map."),
             new(
                 "THE LIGHT",
-                daylightGoes
+                (daylightGoes
                     ? "The lamp on the camera is on throughout. The sun and the sky go out while the camera is under\n"
                       + "the ground of the 3D view the flyby was played in: they fade over a second from the moment\n"
-                      + "the camera goes under, and come back over the second before it comes out. Under the ground\n"
-                      + "only the lamp lights the scene, and it reaches a few metres: what the camera looks at from\n"
-                      + "farther away stays dim. To keep the daylight, remove from \"changes\" in scene-plan.json the\n"
-                      + "change with the \"energy\" keys of the light \"Sun\", and the \"worldStrength\" keys; for a\n"
-                      + "stronger lamp, raise the \"energy\" of the light \"Headlamp\"."
+                      + "the camera goes under, and come back over the second before it comes out.\n"
+                      + (lampReaches
+                          ? "As they go, the lamp is turned up by the square of the distance from the camera to the\n"
+                            + "nearest wall (the \"energy\" keys of the light \"Headlamp\" in \"changes\" in\n"
+                            + "scene-plan.json): walls seen from far away under the ground are lit as walls three metres\n"
+                            + "from the lamp are. Walls farther off than the nearest are darker, as by any lamp. To keep\n"
+                            + "the daylight, remove from \"changes\" the change with the \"energy\" keys of the light\n"
+                            + "\"Sun\", the \"worldStrength\" keys and, with them, the change of the light \"Headlamp\".\n"
+                          : "To keep the daylight, remove from \"changes\" in scene-plan.json the change with the\n"
+                            + "\"energy\" keys of the light \"Sun\", and the \"worldStrength\" keys.\n")
                     : "The lamp on the camera and the sun are on throughout: in this flyby the camera does not go\n"
-                      + "under the ground of the 3D view it was played in."),
+                      + "under the ground of the 3D view it was played in.\n")
+                + "The survey lines are drawn in their own colours whatever the light (\"unlit\" in their\n"
+                + "materials): they read in the dark as they do under the sun, and light nothing."),
         ];
 }

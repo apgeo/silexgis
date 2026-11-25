@@ -283,7 +283,7 @@ describe('a flyby as a bundle for Blender', () => {
     );
     // And what a bundle does that the screen does not: its daylight goes underground.
     expect(screen.getByTestId('flyby-bundle-daylight')).toHaveTextContent(
-      'In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera stays on; it lights a few metres.',
+      'In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera then lights the walls from as far as the nearest of them is; survey lines keep their colours in any light.',
     );
   });
 

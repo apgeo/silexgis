@@ -22,18 +22,23 @@ import type { FlybyFrameSchedule } from './flybyMovie.ts';
 //
 // - A key may lie after the clip's last frame: the clip then ends on the way to it. So a change
 //   the clip stops in the middle of is still its two keys.
-// - Two keys may stand on one frame: the first is where the value was going, the second, which
-//   jumps, what it is from that frame on. So a move may end in a jump on the very frame the
-//   screen jumps on.
+// - A key may lie before the clip's first frame, at a frame below 0: the clip then begins on the
+//   way from it. So a change the clip begins in the middle of is its two keys as well, and a
+//   layer that is half faded on the first frame a fade that began before it.
+// - Up to three keys may stand on one frame: the first is where the value was going, the second,
+//   which jumps, what it is on that frame and from it on, and a third, a jump too, the value the
+//   way to the next key starts from, which no frame shows. So a move may end in a jump on the
+//   very frame the screen jumps on, and the next move may start from a value the screen never
+//   showed.
 // - A colour on its way to a key is mixed as a screen mixes two colours, which is how the flyby
 //   mixes them. So a colour crossing into another is its two keys too.
 // - A layer that is shown or hidden may take a while over it, eased; the renderer multiplies that
 //   by the layer's own strength. So a fade is one number on the key that shows or hides.
 //
 // What is left for a key a frame, joined by straight lines — right at every frame whatever the
-// curve was — is what begins part-way: a clip that starts in the middle of a change, a clip held
-// still on its last moment in the middle of one, and a value the screen jumps away from one frame
-// after the frame its change begins on (below).
+// curve was — is a move that is stopped part-way: a clip held still on its last moment in the
+// middle of a change. A renderer's curve can begin before the clip and end after it, but it
+// cannot be told to stand still half-way.
 //
 // Two things are decided here and nowhere else:
 //
@@ -44,9 +49,9 @@ import type { FlybyFrameSchedule } from './flybyMovie.ts';
 // - A frame shows what the screen shows at that frame's very moment. Where a cave's own colour
 //   takes over from the colour of every cave the screen jumps: at the moment the cave's change
 //   begins it still has the colour of every cave, and a moment later its own, at no strength yet.
-//   The keys say exactly that — the old colour on the frame of the change, the new one rising
-//   from the frame after — which is the one curve that has to be written frame by frame, because
-//   it starts on a frame that does not show its start.
+//   The keys say exactly that — on the frame of the change the old colour, and beside it, as
+//   the third key of that frame, the new colour at no strength, which the rise starts from and
+//   no frame shows.
 //
 // Nothing here knows the scene or the server: it is arithmetic on the flyby's look.
 
@@ -102,23 +107,34 @@ export const FLYBY_BUNDLE_TINT: FlybyBundleTrackSpace = {
 };
 
 /**
- * The value a track has at a frame: what a renderer playing its keys shows there. Of two keys on
- * one frame the later is the value from that frame on, and the earlier only where the value before
- * it was going.
+ * The value a track has at a frame: what a renderer playing its keys shows there. Before its first
+ * key a track has that key's value — a first key at a frame below 0 is one the clip begins on the
+ * way from. Of the keys on one frame the second is what that frame shows, and the last the value
+ * the way to the next key starts from: the second again, unless a third says otherwise.
  */
 export function flybyBundleTrackAt(keys: readonly FlybyBundleTrackKey[], frame: number, space: FlybyBundleTrackSpace): number[] {
-  let before = keys[0];
-  for (const key of keys) {
-    if (key.frame > frame) {
-      if (key.easing === 'constant' || before === key) {
-        return [...before.value];
-      }
-      const share = (frame - before.frame) / (key.frame - before.frame);
-      return space.mix(before.value, key.value, key.easing === 'smooth' ? smoothstep(share) : share);
-    }
-    before = key;
+  // The last key on the last frame that has any, at this frame or before it.
+  let last = -1;
+  while (last + 1 < keys.length && keys[last + 1].frame <= frame) {
+    last += 1;
   }
-  return [...before.value];
+  if (last < 0) {
+    return [...keys[0].value];
+  }
+  const before = keys[last];
+  if (before.frame === frame) {
+    let first = last;
+    while (first > 0 && keys[first - 1].frame === frame) {
+      first -= 1;
+    }
+    return [...keys[Math.min(first + 1, last)].value];
+  }
+  const key = keys[last + 1];
+  if (!key || key.easing === 'constant') {
+    return [...before.value];
+  }
+  const share = (frame - before.frame) / (key.frame - before.frame);
+  return space.mix(before.value, key.value, key.easing === 'smooth' ? smoothstep(share) : share);
 }
 
 /** The very same numbers: two values may draw one picture and still be two starts for a curve. */
@@ -131,8 +147,10 @@ const equal = (a: readonly number[], b: readonly number[]) => a.every((part, i) 
  * shows, or just before (`-1`) or just after it (`1`), which differ only where the value jumps.
  * `breaks` are the frames at which something that moves the value begins or ends; between two of
  * them the value holds or moves in one piece, and each piece is written with as few keys as say it
- * exactly. A break after `last` is where the piece the clip ends in really ends — `sample` is then
- * asked about that frame too — and is left out by whoever holds the clip still before it.
+ * exactly. A break after `last` is where the piece the clip ends in really ends, and one before 0
+ * where the piece it begins in really began — `sample` is then asked about those frames too. Either
+ * is left out by whoever does not want the piece said by its real ends: a clip held still before
+ * the end of a piece leaves that end out.
  */
 export function flybyBundleTrack(
   sample: (frame: number, side: -1 | 0 | 1) => number[],
@@ -142,6 +160,14 @@ export function flybyBundleTrack(
 ): FlybyBundleTrackKey[] {
   const keys: FlybyBundleTrackKey[] = [{ frame: 0, value: sample(0, 0) }];
   const standing = () => keys[keys.length - 1];
+  /** How many keys stand on the frame of the last one. */
+  const onStanding = () => {
+    let count = 1;
+    while (count < keys.length && keys[keys.length - 1 - count].frame === standing().frame) {
+      count += 1;
+    }
+    return count;
+  };
   const push = (frame: number, value: number[], easing?: FlybyBundleEasing) => {
     keys.push(easing ? { frame, value, easing } : { frame, value });
   };
@@ -164,9 +190,29 @@ export function flybyBundleTrack(
       jump(frame, value);
     }
   };
+  /**
+   * `frame` shows `shown`, and the way on starts from `origin`, which no frame shows: three keys
+   * on the frame — where the value was going, what the frame shows, and where the way on starts.
+   */
+  const startBeside = (frame: number, shown: number[], origin: number[]) => {
+    if (standing().frame < frame) {
+      push(frame, shown);
+    }
+    if (onStanding() === 1) {
+      push(frame, shown, 'constant');
+    }
+    if (onStanding() === 2) {
+      standing().value = shown;
+      push(frame, origin, 'constant');
+    } else {
+      standing().value = origin;
+    }
+  };
 
-  const whole = [...new Set(breaks.filter((frame) => Number.isInteger(frame) && frame > 0))].sort((a, b) => a - b);
-  const ends = [...new Set([0, last, ...whole.filter((frame) => frame < last)])].sort((a, b) => a - b);
+  const whole = [...new Set(breaks.filter((frame) => Number.isInteger(frame)))].sort((a, b) => a - b);
+  // Where the piece the clip begins in really began, when that is before the clip.
+  const began = whole.includes(0) ? undefined : whole.filter((frame) => frame < 0).pop();
+  const ends = [...new Set([0, last, ...whole.filter((frame) => frame > 0 && frame < last)])].sort((a, b) => a - b);
   // Where the piece the clip ends in really ends, when that is after the clip.
   const beyond = whole.includes(last) ? undefined : whole.find((frame) => frame > last);
   if (beyond !== undefined && last > 0) {
@@ -174,60 +220,86 @@ export function flybyBundleTrack(
   }
 
   for (let n = 0; n + 1 < ends.length; n += 1) {
-    const a = ends[n];
     const b = ends[n + 1];
-    const from = sample(a, 1);
-    const to = sample(b, -1);
-    // The frames of the piece that are seen: up to its end, or to the clip's.
-    const inner: number[][] = [];
-    for (let frame = a + 1; frame <= Math.min(b - 1, last); frame += 1) {
-      inner.push(sample(frame, 0));
-    }
-    const held = space.same(to, from) && inner.every((value) => space.same(value, from));
-    const share = (k: number) => (k + 1) / (b - a);
-
-    if (!space.same(sample(a, 0), from)) {
-      // The screen jumps a moment after this frame: the frame itself still shows what was, and
-      // what moves from here starts on a frame that does not show its start. Held, that is a
-      // jump on the next frame; moving, it is written frame by frame from there.
-      if (!held) {
-        inner.forEach((value, k) => (k === 0 ? jump(a + 1, value) : push(a + 1 + k, value)));
-      } else if (a + 1 <= last) {
-        jump(a + 1, from);
+    // The first piece from its real start, where that says it: tried first, and from the clip's
+    // first frame where it does not.
+    for (const a of n === 0 && began !== undefined ? [began, 0] : [ends[n]]) {
+      const from = sample(a, 1);
+      const to = sample(b, -1);
+      // The frames of the piece that are seen: from the clip's first, up to the piece's end or the clip's.
+      const seen: number[] = [];
+      for (let frame = Math.max(a + 1, 0); frame <= Math.min(b - 1, last); frame += 1) {
+        seen.push(frame);
       }
-    } else if (!held) {
-      startAt(a, from);
-      if (inner.length > 0 && inner.every((value, k) => space.same(value, space.mix(from, to, smoothstep(share(k)))))) {
-        push(b, to, 'smooth');
-      } else if (inner.every((value, k) => space.same(value, space.mix(from, to, share(k))))) {
-        push(b, to);
-      } else {
-        inner.forEach((value, k) => push(a + 1 + k, value));
-      }
-    }
+      const inner = seen.map((frame) => sample(frame, 0));
+      const held = space.same(to, from) && inner.every((value) => space.same(value, from));
+      const share = (k: number) => (seen[k] - a) / (b - a);
+      const smooth = inner.length > 0 && inner.every((value, k) => space.same(value, space.mix(from, to, smoothstep(share(k)))));
+      const even = inner.every((value, k) => space.same(value, space.mix(from, to, share(k))));
 
-    // The frame the piece ends on shows what the screen shows there. A curve's own end is where
-    // the value was going: what the frame shows instead stands beside it on that frame, as a jump.
-    if (b <= last) {
-      const shown = sample(b, 0);
-      if (!space.same(flybyBundleTrackAt(keys, b, space), shown)) {
-        if (!held && standing().frame === b - 1 && space.same(shown, to)) {
-          // The last straight piece of a curve written frame by frame.
+      if (a < 0) {
+        // A piece the clip begins in the middle of: its two keys, the first before the clip —
+        // where two keys say every frame of it that is seen.
+        if (held || !(smooth || even)) {
+          continue;
+        }
+        keys[0] = { frame: a, value: from };
+        push(b, to, smooth ? 'smooth' : undefined);
+      } else if (!space.same(sample(a, 0), from)) {
+        // The screen jumps a moment after this frame: the frame itself still shows what was, and
+        // what moves from here starts from a value the frame does not show. Held, that is a
+        // jump on the next frame; moving, the start stands beside what the frame shows, as the
+        // third key of the frame — or, where two keys cannot say the move or it is over in fewer
+        // frames than that takes keys, it is written frame by frame from the frame after.
+        if (held) {
+          if (a + 1 <= last) {
+            jump(a + 1, from);
+          }
+        } else if (inner.length > 3 && (smooth || even)) {
+          startBeside(a, sample(a, 0), from);
+          push(b, to, smooth ? 'smooth' : undefined);
+        } else {
+          inner.forEach((value, k) => (k === 0 ? jump(a + 1, value) : push(a + 1 + k, value)));
+        }
+      } else if (!held) {
+        startAt(a, from);
+        if (smooth) {
+          push(b, to, 'smooth');
+        } else if (even) {
           push(b, to);
         } else {
-          jump(b, shown);
+          inner.forEach((value, k) => push(a + 1 + k, value));
         }
       }
+
+      // The frame the piece ends on shows what the screen shows there. A curve's own end is where
+      // the value was going: what the frame shows instead stands beside it on that frame, as a jump.
+      if (b <= last) {
+        const shown = sample(b, 0);
+        if (!space.same(flybyBundleTrackAt(keys, b, space), shown)) {
+          if (!held && standing().frame === b - 1 && space.same(shown, to)) {
+            // The last straight piece of a curve written frame by frame.
+            push(b, to);
+          } else {
+            jump(b, shown);
+          }
+        }
+      }
+      break;
     }
   }
 
   // A key between two keys of the very value it has says nothing. The very value, and not one
   // that draws the same picture: a key that is a shade off its neighbours is where a slow change
-  // starts from.
+  // starts from. And not one of three on a frame: there each says something by where it stands.
+  const onFrame = new Map<number, number>();
+  for (const key of keys) {
+    onFrame.set(key.frame, (onFrame.get(key.frame) ?? 0) + 1);
+  }
   return keys.filter((key, index) => {
     const before = keys[index - 1];
     const after = keys[index + 1];
-    return !before || !after || !equal(before.value, key.value) || !equal(key.value, after.value);
+    return !before || !after || (onFrame.get(key.frame) ?? 0) > 2 || !equal(before.value, key.value) || !equal(key.value, after.value);
   });
 }
 
@@ -448,14 +520,15 @@ export function flybyBundleLookTracks(
   const frameOf = (t: number) => Math.round((t - schedule.from) * schedule.fps);
   // Where a value can start or stop moving: at the ends of the changes that move it, and at the
   // frame the flight stops on, after which every frame is held. A change the clip ends in the
-  // middle of ends after the clip — unless the clip is held still before that.
+  // middle of ends after the clip — unless the clip is held still before that — and one it
+  // begins in the middle of began before it.
   const breaksOf = (...members: string[]) =>
     [
       ...plan.changes
         .filter((timed) => members.includes(flybyChangeMember(timed.change)))
         .flatMap((timed) => [frameOf(timed.start), frameOf(timed.end)]),
       ...(schedule.held > 0 ? [schedule.moving] : []),
-    ].filter((frame) => frame > 0 && frame <= stops);
+    ].filter((frame) => frame <= stops);
 
   // ---- relief ----
   const reliefKeys = relief
@@ -477,9 +550,10 @@ export function flybyBundleLookTracks(
 
     // Each change that shows the layer or hides it, as the renderer is told it: a key on the
     // frame it begins on, with the frames it takes — the renderer fades and eases it, and hides
-    // a layer that goes when it has gone. That says a fade the clip has whole, or ends in the
-    // middle of. One the clip begins in the middle of, or is held still in the middle of, is
-    // `folded`: its key is a cut, and how far it has got is multiplied into the layer's strength.
+    // a layer that goes when it has gone. That says a fade the clip has whole, ends in the
+    // middle of, or begins in the middle of: its key is then on a frame before the clip's first.
+    // One the clip is held still in the middle of is `folded`: its key is a cut, and how far it
+    // has got is multiplied into the layer's strength.
     const shown: FlybyBundleShownKey[] = [];
     const folded = new Set<FlybyChange>();
     let on = flybyLayerPartsAt(plan, base, key, Number.NEGATIVE_INFINITY).visible;
@@ -494,7 +568,7 @@ export function flybyBundleLookTracks(
         // Over by the clip's first frame, or not begun by the last moment it shows: not of this clip.
         continue;
       }
-      if (start < 0 || (end > start && end > stops)) {
+      if (end > start && end > stops) {
         folded.add(timed.change);
         if (on && start >= 0) {
           shown.push({ frame: start, shown: true });
@@ -594,14 +668,22 @@ export function flybyBundleLookTracks(
     ...(apart.length > 0 ? { caves: apart } : {}),
   };
 
-  const sky = hex(skyKeys[0].value);
+  // What the first frame shows: a first key before the clip is where the value was, not what it is.
+  const sky = hex(flybyBundleTrackAt(skyKeys, 0, FLYBY_BUNDLE_COLOUR));
+  const linesFirst = linesTint
+    ? flybyBundleTrackAt(
+        linesTint.map((key) => ({ frame: key.frame, value: [...channelsOf(key.colour), key.strength], easing: key.easing })),
+        0,
+        FLYBY_BUNDLE_TINT,
+      )
+    : undefined;
   return {
     walls: walls.ever,
     lines: lines.ever,
     layers: Object.fromEntries([...new Set(others)].map((key) => [key, layer(key)])),
     reliefAt: (frame) => rounded(flybyBundleTrackAt(reliefKeys, Math.min(Math.max(frame, 0), last), FLYBY_BUNDLE_NUMBER)[0]),
     ...(sky !== BLACK ? { sky } : {}),
-    ...(linesTint && linesTint[0].strength > 0 ? { lineColour: linesTint[0].colour } : {}),
+    ...(linesFirst && linesFirst[3] > 0 ? { lineColour: hex(linesFirst) } : {}),
     changes: Object.keys(changes).length > 0 ? changes : null,
   };
 }

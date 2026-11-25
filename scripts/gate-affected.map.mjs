@@ -532,6 +532,8 @@ export const groups = {
     'FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'FlybyBundleParityTests',
     // What a bundle points out — markers, names, photographs — and how its caves appear part by part.
     'FlybyBundlePointedTests',
+    // The lamp on a bundle's camera where its sun does not reach, and lines no light changes.
+    'FlybyBundleLampTests',
   ],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],

@@ -539,7 +539,8 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
 /**
  * A layer's keys for a layer that is switched at once: shown from the frame a change that shows it
  * begins on, hidden from the frame one that hides it has gone by. A key past the clip's last frame
- * says nothing the clip shows, and one that repeats the key before it nothing at all.
+ * or before its first says nothing the clip shows, and one that repeats the key before it nothing
+ * at all.
  */
 function switchedAtOnce(
   keys: readonly { frame: number; shown: boolean; fadeFrames?: number }[],
@@ -549,7 +550,8 @@ function switchedAtOnce(
   for (const key of keys) {
     const frame = key.shown ? key.frame : key.frame + (key.fadeFrames ?? 0);
     const before = switched[switched.length - 1];
-    if (frame > last || (before && (before.shown === key.shown || before.frame >= frame))) {
+    // Shown before the clip's first frame: shown from the start, which no key has to say.
+    if (frame < 0 || frame > last || (before && (before.shown === key.shown || before.frame >= frame))) {
       continue;
     }
     switched.push({ frame, shown: key.shown });

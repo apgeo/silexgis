@@ -523,6 +523,12 @@ public class DependencyRuleTests
         "Therion.Blender.Plan.AnnotationPlanner",
         "Therion.Blender.Plan.PlanWindow",
 
+        // The lamp on the camera turned up by distances it is given: arithmetic on numbers and on
+        // a plan's records — an energy by the square of a distance, the keys a straight line
+        // between their neighbours stands in for left out — returning a plan with those keys
+        // on its lamp. Read to its last line: it opens nothing and starts nothing.
+        "Therion.Blender.Plan.LampReach",
+
         // How soft the edge of a reveal is and what colour it glows in, as the library's own
         // defaults: a record made with `new` and read, so the numbers stay the library's.
         "Therion.Blender.RevealSpec",

@@ -77,5 +77,34 @@ public static class BundlePly
         return values;
     }
 
+    /// <summary>The triangles of the file, each as the numbers of its three vertices.</summary>
+    public static List<int[]> Triangles(byte[] file)
+    {
+        var end = Encoding.ASCII.GetBytes("end_header\n");
+        var at = file.AsSpan().IndexOf(end) + end.Length;
+        var header = Encoding.ASCII.GetString(file, 0, at).Split('\n');
+        var vertices = int.Parse(
+            header.Single(l => l.StartsWith("element vertex ", StringComparison.Ordinal))[15..], CultureInfo.InvariantCulture);
+        var faces = int.Parse(
+            header.Single(l => l.StartsWith("element face ", StringComparison.Ordinal))[13..], CultureInfo.InvariantCulture);
+        header.ShouldContain("property list uchar int vertex_indices");
+        var stride = header
+            .SkipWhile(l => !l.StartsWith("element vertex ", StringComparison.Ordinal)).Skip(1)
+            .TakeWhile(l => l.StartsWith("property ", StringComparison.Ordinal))
+            .Select(l => l.Split(' '))
+            .Sum(Size);
+
+        var from = at + (vertices * stride);
+        var triangles = new List<int[]>(faces);
+        for (var f = 0; f < faces; f++)
+        {
+            file[from].ShouldBe((byte)3, "a bundle's meshes are triangles");
+            triangles.Add([BitConverter.ToInt32(file, from + 1), BitConverter.ToInt32(file, from + 5), BitConverter.ToInt32(file, from + 9)]);
+            from += 13;
+        }
+
+        return triangles;
+    }
+
     private static int Size(string[] property) => property[1] == "uchar" ? 1 : 4;
 }

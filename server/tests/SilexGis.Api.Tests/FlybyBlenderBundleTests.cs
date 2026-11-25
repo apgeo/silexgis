@@ -214,9 +214,16 @@ public class FlybyBlenderBundleTests
         ramp.GetProperty("space").GetString().ShouldBe("model");
         ramp.GetProperty("high").GetDouble().ShouldBe(0, 1e-6);
         ramp.GetProperty("low").GetDouble().ShouldBe(-120, 1e-6);
+        // In bands: one stop a band, its colour holding from the stop up to the next.
+        ramp.GetProperty("banded").GetBoolean().ShouldBeTrue();
         var stops = ramp.GetProperty("stops").EnumerateArray().Select(s => s.GetProperty("at").GetDouble()).ToList();
-        stops.ShouldBe(stops.Order().ToList());
-        stops.ShouldContain(at => Math.Abs(at - (1 - (50.0 / 120.0))) < 1e-3);
+        stops.ShouldBe([0, 1 - (50.0 / 120.0)], 1e-6);
+
+        // Lines are a drawing: no light changes them, in a ramp or in one colour. The rock and the
+        // passages of a size nobody measured are things in the cave, and are lit.
+        ramp.GetProperty("unlit").GetBoolean().ShouldBeTrue();
+        materials["rock"].TryGetProperty("unlit", out _).ShouldBeFalse();
+        materials["estimated"].TryGetProperty("unlit", out _).ShouldBeFalse();
 
         look.GetProperty("world").GetProperty("kind").GetString().ShouldBe("color");
         look.GetProperty("samples").GetInt32().ShouldBe(96);
@@ -224,8 +231,9 @@ public class FlybyBlenderBundleTests
         // One colour for every line, when the flyby says so.
         var plainLines = Bundle(Scene() with { Look = new FlybyBundleLook(null, "#ff8800", []) }).Plan.GetProperty("look");
         plainLines.TryGetProperty("world", out _).ShouldBeFalse();
-        plainLines.GetProperty("materials").EnumerateArray()
-            .Single(m => m.GetProperty("id").GetString() == "lines").GetProperty("kind").GetString().ShouldBe("flat");
+        var plain = plainLines.GetProperty("materials").EnumerateArray().Single(m => m.GetProperty("id").GetString() == "lines");
+        plain.GetProperty("kind").GetString().ShouldBe("flat");
+        plain.GetProperty("unlit").GetBoolean().ShouldBeTrue();
     }
 
     [Fact]
@@ -333,12 +341,31 @@ public class FlybyBlenderBundleTests
         var darkNotes = Encoding.UTF8.GetString(dark.Entries["two-caves-blender/README.txt"]);
         darkNotes.ShouldContain("The sun and the sky go out while the camera is under");
         darkNotes.ShouldContain("\"worldStrength\"");
-        darkNotes.ShouldContain("it reaches a few metres");
+        darkNotes.ShouldContain("the lamp is turned up by the square of the distance from the camera to the\nnearest wall");
+        darkNotes.ShouldContain("the change of the light \"Headlamp\"");
+        darkNotes.ShouldNotContain("a few metres");
+        darkNotes.ShouldNotContain("stays dim");
+
+        // And that the lines need no light, whether or not the daylight goes.
+        readme.ShouldContain("The survey lines are drawn in their own colours whatever the light");
+        darkNotes.ShouldContain("The survey lines are drawn in their own colours whatever the light");
+
+        // A scene with no walls has no lamp to speak of: its lines are all there is, and they are unlit.
+        var linesOnly = Scene();
+        linesOnly = linesOnly with
+        {
+            Caves = [.. linesOnly.Caves.Select(cave => cave with { Walls = null, Estimated = null })],
+            Changes = FlybyBundleChanges.None with { Daylight = [new(0, 1), new(10, 1), new(35, 0, FlybyBundleEasing.Smooth)] },
+        };
+        var linesOnlyNotes = Encoding.UTF8.GetString(Bundle(linesOnly).Entries["two-caves-blender/README.txt"]);
+        linesOnlyNotes.ShouldContain("\"worldStrength\"");
+        linesOnlyNotes.ShouldNotContain("Headlamp");
 
         // The lines this application writes are no longer than the notes' own.
         foreach (var language in (bool[])[false, true])
         {
             var own = SilexGis.Domain.Export.FlybyBundleNotes.Sections(language, daylightGoes: true)
+                .Concat(SilexGis.Domain.Export.FlybyBundleNotes.Sections(language, daylightGoes: true, lampReaches: true))
                 .Concat(SilexGis.Domain.Export.FlybyBundleNotes.Sections(language, daylightGoes: false))
                 .SelectMany(section => section.Text.Split('\n'))
                 .Concat(SilexGis.Domain.Export.FlybyBundleNotes.Intro(language).Split('\n'));
@@ -524,14 +551,14 @@ public class FlybyBlenderBundleTests
             colours.ShouldBeNull();
 
             // The second colour begins 50 m below the top: at that share of the way up the ramp
-            // the colour changes at once, from the second band's to the first's.
+            // the colour changes at once, from the second band's to the first's — a ramp in
+            // bands, one stop a band, each where its band begins from below.
+            ramp.GetProperty("banded").GetBoolean().ShouldBeTrue();
             var stops = ramp.GetProperty("stops").EnumerateArray()
                 .Select(stop => (At: stop.GetProperty("at").GetDouble(), Red: stop.GetProperty("color")[0].GetDouble()))
                 .ToList();
-            stops.Select(stop => stop.At).ShouldBe([0, (70.0 / 120) - 1e-4, 70.0 / 120, 1], 1e-6);
-            stops[1].Red.ShouldBe(stops[0].Red);
-            stops[2].Red.ShouldBe(stops[3].Red);
-            stops[2].Red.ShouldNotBe(stops[1].Red);
+            stops.Select(stop => stop.At).ShouldBe([0, 70.0 / 120], 1e-6);
+            stops[1].Red.ShouldNotBe(stops[0].Red);
         }
 
         // The stops are the same shares in both: the relief has no part in where a colour begins.
@@ -721,7 +748,96 @@ public class FlybyBlenderBundleTests
     }
 
     [Fact]
-    public void The_sun_and_the_sky_are_as_strong_as_the_daylight_and_the_lamp_is_left_alone()
+    public void A_change_may_begin_before_the_clip_and_start_from_a_value_no_frame_shows()
+    {
+        // Fifty frames. The relief has been growing since twenty frames before the first and is
+        // done twenty frames in. The walls were switched off ten frames before the clip and take
+        // thirty to go. The first cave's colour comes to one value on frame 10, shows another
+        // there, and goes on from a third that no frame shows.
+        var scene = Scene();
+        scene = scene with
+        {
+            Caves =
+            [
+                scene.Caves[0] with
+                {
+                    WallsTint =
+                    [
+                        new(0, "#3a3f4a", 0.6),
+                        new(10, "#3a3f4a", 0.2),
+                        new(10, "#3a3f4a", 0.6, FlybyBundleEasing.Constant),
+                        new(10, "#ffcc00", 0, FlybyBundleEasing.Constant),
+                        new(30, "#ffcc00", 0.8, FlybyBundleEasing.Smooth),
+                    ],
+                },
+                scene.Caves[1],
+            ],
+            Changes = FlybyBundleChanges.None with
+            {
+                Relief = [new(-20, 1), new(20, 2, FlybyBundleEasing.Smooth)],
+                Walls = new FlybyBundleLayerChanges([new(-10, false, 30)], [], []),
+            },
+        };
+        var (_, plan) = Bundle(scene);
+        var walls = Changes(plan)["cave-01-walls"];
+
+        // The stretch keeps its two keys, the first before the clip — and the camera reads the
+        // same keys: half-way up on the first frame, done on frame 20.
+        var stretch = walls.GetProperty("scale").EnumerateArray().ToList();
+        stretch.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([-0.8, 0.8]);
+        stretch[1].GetProperty("easing").GetString().ShouldBe("smooth");
+        Eye(plan, 0)[2].ShouldBe(120 * 1.5, 0.01);
+        Eye(plan, 10)[2].ShouldBe(120 * (1 + ((3 * 0.75 * 0.75) - (2 * 0.75 * 0.75 * 0.75))), 0.01);
+        Eye(plan, 20)[2].ShouldBe(240, 0.01);
+        plan.GetProperty("models").EnumerateArray().First().GetProperty("scale")[2].GetDouble().ShouldBe(1.5, 1e-6);
+
+        // The fade began before the clip: the renderer has the walls a third gone on its first frame.
+        var shown = walls.GetProperty("visible").EnumerateArray().Single();
+        shown.GetProperty("t").GetDouble().ShouldBe(-0.4);
+        shown.GetProperty("value").GetBoolean().ShouldBeFalse();
+        shown.GetProperty("fade").GetDouble().ShouldBe(1.2);
+
+        // Three keys on one frame, the second and the third of them jumps.
+        var tint = walls.GetProperty("tint").EnumerateArray().ToList();
+        tint.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.4, 0.4, 0.4, 1.2]);
+        tint.Select(k => k.TryGetProperty("easing", out var e) ? e.GetString() : null).ShouldBe([null, null, "constant", "constant", "smooth"]);
+        tint.Select(k => k.GetProperty("strength").GetDouble()).ShouldBe([0.6, 0.2, 0.6, 0, 0.8]);
+
+        // The rise is from the cave's own colour at no strength to the same colour: nothing to
+        // mix as a screen mixes.
+        tint[4].TryGetProperty("mix", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_camera_reads_three_keys_on_a_frame_as_the_renderer_plays_them()
+    {
+        // The relief comes to 1.5 on frame 10, which shows 1.2, and goes on from 2 — which no
+        // frame shows — to 3 on frame 30.
+        var relief = new FlybyBundleNumberKey[]
+        {
+            new(0, 1),
+            new(10, 1.5),
+            new(10, 1.2, FlybyBundleEasing.Constant),
+            new(10, 2, FlybyBundleEasing.Constant),
+            new(30, 3),
+        };
+        var (_, plan) = Bundle(Scene() with { Changes = FlybyBundleChanges.None with { Relief = relief } });
+
+        // The models are stretched by the keys as they are given.
+        var stretch = Changes(plan)["cave-01-walls"].GetProperty("scale").EnumerateArray().ToList();
+        stretch.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.4, 0.4, 0.4, 1.2]);
+        stretch.Select(k => k.GetProperty("value")[2].GetDouble()).ShouldBe([1, 1.5, 1.2, 2, 3]);
+
+        // And the camera, 120 m up, is raised by what a renderer makes of them: on the way to the
+        // first of the three, at the second on their frame, and from the third a frame later.
+        Eye(plan, 9)[2].ShouldBe(120 * 1.45, 0.01);
+        Eye(plan, 10)[2].ShouldBe(120 * 1.2, 0.01);
+        Eye(plan, 11)[2].ShouldBe(120 * 2.05, 0.01);
+        Eye(plan, 30)[2].ShouldBe(360, 0.01);
+    }
+
+    [Fact]
+    public void The_sun_and_the_sky_are_as_strong_as_the_daylight_and_the_lamp_takes_over_as_it_goes()
     {
         var daylight = new FlybyBundleNumberKey[] { new(0, 1), new(10, 1), new(35, 0, FlybyBundleEasing.Smooth), new(60, 0) };
         var (_, plan) = Bundle(Scene() with { Changes = FlybyBundleChanges.None with { Daylight = daylight } });
@@ -733,7 +849,7 @@ public class FlybyBlenderBundleTests
 
         // The sun: its own strength times the daylight, at the daylight's keys and with its easing.
         var changes = plan.GetProperty("changes").EnumerateArray().ToList();
-        changes.Count.ShouldBe(2);
+        changes.Count.ShouldBe(3);
         var sun = changes.Single(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Sun");
         var energy = sun.GetProperty("energy").EnumerateArray().ToList();
         energy.Select(k => k.GetProperty("t").GetDouble()).ShouldBe([0, 0.4, 1.4, 2.4]);
@@ -745,9 +861,22 @@ public class FlybyBlenderBundleTests
         world.GetProperty("worldStrength").EnumerateArray().Select(k => k.GetProperty("value").GetDouble()).ShouldBe([1, 1, 0, 0]);
         world.TryGetProperty("worldColor", out _).ShouldBeFalse();
 
+        // The lamp on the camera: as it is built while the daylight is whole, and turned up as it
+        // goes — by the square of how far the nearest wall is, here some three hundred metres.
+        var built = lights["Headlamp"].GetProperty("energy").GetDouble();
+        var lamp = changes.Single(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetString() == "Headlamp")
+            .GetProperty("energy").EnumerateArray().ToList();
+        lamp[0].GetProperty("t").GetDouble().ShouldBe(0);
+        lamp[0].GetProperty("value").GetDouble().ShouldBe(built);
+        lamp[1].GetProperty("t").GetDouble().ShouldBe(0.4);
+        lamp[1].GetProperty("value").GetDouble().ShouldBe(built);
+        lamp.Select(k => k.GetProperty("value").GetDouble()).ShouldBe(lamp.Select(k => k.GetProperty("value").GetDouble()).Order());
+        lamp[^1].GetProperty("t").GetDouble().ShouldBe(1.96, 1e-6);
+        (lamp[^1].GetProperty("value").GetDouble() / built).ShouldBeInRange(8_000, 12_000);
+
         // A scene with no sky has no world to turn down; its sun still goes out.
         var noSky = Bundle(Scene() with { Look = new FlybyBundleLook(null, null, []), Changes = FlybyBundleChanges.None with { Daylight = daylight } }).Plan;
-        noSky.GetProperty("changes").EnumerateArray().Single().GetProperty("target").GetProperty("id").GetString().ShouldBe("Sun");
+        noSky.GetProperty("changes").EnumerateArray().Select(c => c.GetProperty("target").GetProperty("id").GetString()).ShouldBe(["Sun", "Headlamp"]);
 
         // And where the sky changes its colour too, the two are said in one change of the world.
         var both = Bundle(Scene() with

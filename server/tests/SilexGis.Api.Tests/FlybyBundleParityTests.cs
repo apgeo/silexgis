@@ -44,7 +44,14 @@ namespace SilexGis.Api.Tests;
 /// <para>
 /// And what a bundle has that the screen has not: its sun and its sky go out while the camera is
 /// under the ground. The browser's tests commit the frames at which it is; the rule is restated
-/// here and the plan's keys are played against it.
+/// here and the plan's keys are played against it. As they go, the lamp on the camera is turned up
+/// by how far the nearest wall is — restated from the unpacked bundle's own files.
+/// </para>
+///
+/// <para>
+/// The third clip is cut out of the middle of the flyby: it begins part of the way through a
+/// thinning of the lines and a fade of the entrances, which the plan says by keys before its first
+/// frame, and ends under the ground with the relief on its way up.
 /// </para>
 ///
 /// <para>
@@ -60,7 +67,7 @@ public class FlybyBundleParityTests
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    public static TheoryData<string> Cases => ["two-cave-flyby.landscape", "two-cave-flyby.portrait"];
+    public static TheoryData<string> Cases => ["two-cave-flyby.landscape", "two-cave-flyby.portrait", "two-cave-flyby.cut"];
 
     [Theory]
     [MemberData(nameof(Cases))]
@@ -196,7 +203,8 @@ public class FlybyBundleParityTests
     /// The sun and the sky of the bundle are as strong as the daylight its camera has: whole above
     /// the ground, and gone under it — going over a second from the frame the camera goes under,
     /// and back on the frame it comes out, having risen over the second before; half of each for a
-    /// stay of less than two seconds. The lamp on the camera has no part in it.
+    /// stay of less than two seconds; a clip that ends under the ground ends on the way to the
+    /// dark, or in it.
     /// </summary>
     [Theory]
     [MemberData(nameof(Cases))]
@@ -218,15 +226,16 @@ public class FlybyBundleParityTests
             .Where(c => c.TryGetProperty("target", out var target) && target.TryGetProperty("id", out var named) && named.GetString() == "Sun")
             .ToList();
         var ofTheWorld = changes.Where(c => !c.TryGetProperty("target", out _) && c.TryGetProperty("worldStrength", out _)).ToList();
-        changes
+        var ofTheLamp = changes
             .Where(c => c.TryGetProperty("target", out var target) && target.TryGetProperty("id", out var named) && named.GetString() == "Headlamp")
-            .ShouldBeEmpty("the lamp on the camera is on throughout");
+            .ToList();
 
         var daylight = Daylight(flown.Expected, fps);
         if (flown.Expected.Underground.Length == 0)
         {
             ofTheSun.ShouldBeEmpty();
             ofTheWorld.ShouldBeEmpty();
+            ofTheLamp.ShouldBeEmpty("in whole daylight the lamp on the camera is as it is built");
             return;
         }
 
@@ -239,8 +248,66 @@ public class FlybyBundleParityTests
         }
 
         // And the camera really is in the dark at some frame, and in full daylight at others.
-        daylight.Min().ShouldBe(0);
+        daylight.Min().ShouldBeLessThan(0.05);
         daylight.Max().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// As the daylight goes, the lamp on the camera is turned up by the square of the distance to
+    /// the nearest wall, by the share of the daylight that is gone — and where the daylight is
+    /// whole it is the lamp the survey library builds. The distance and the daylight are read
+    /// from the unpacked bundle: its camera, its meshes as its plan places and stretches them,
+    /// and its sun. So the lamp's keys say nothing those files do not say already.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void The_lamp_reaches_the_nearest_wall_as_the_daylight_goes(string name)
+    {
+        var flown = Load(name);
+        var folder = Unpacked(Scene(flown), name + ".lamp");
+        var rule = BundleLampRule.Frames(folder);
+        var said = BundleLampRule.Said(folder);
+        using var plan = JsonDocument.Parse(File.ReadAllText(Path.Combine(folder, "scene-plan.json")));
+        var built = BundleLampRule.Built(plan.RootElement);
+        var daylight = Daylight(flown.Expected, flown.Expected.Fps);
+
+        var most = 0.0;
+        for (var i = 0; i < said.Length; i++)
+        {
+            // The share of the daylight that is gone, as the plan's sun says it and as the rule
+            // of the ground does.
+            rule[i].Gone.ShouldBe(1 - daylight[i], 2e-6, $"frame {i}");
+            said[i].ShouldBe(rule[i].Energy, (0.0201 * rule[i].Energy) + 1e-3, $"frame {i}: the lamp");
+            if (daylight[i] >= 1)
+            {
+                said[i].ShouldBe(built, 1e-9, $"frame {i}: the lamp in whole daylight");
+            }
+
+            most = Math.Max(most, said[i] / built);
+        }
+
+        var dark = Enumerable.Range(0, said.Length).Where(i => daylight[i] < 1).ToList();
+        if (dark.Count > 0)
+        {
+            // The only walls of the invented scene are the first cave's, and the camera goes under
+            // the ground at the second, a kilometre and a half away: the lamp is turned up a long way.
+            most.ShouldBeGreaterThan(1000);
+        }
+
+        File.WriteAllText(
+            Path.Combine(TestScratch.Root, "blender-bundle-parity", name + ".lamp.json"),
+            JsonSerializer.Serialize(new
+            {
+                framesShortOfDaylight = dark.Count,
+                nearestWallMetres = dark.Count > 0 ? new[] { dark.Min(i => rule[i].Nearest), dark.Max(i => rule[i].Nearest) } : null,
+                lampTimesBuilt = most,
+                keys = plan.RootElement.TryGetProperty("changes", out var listed)
+                    ? listed.EnumerateArray()
+                        .Where(c => c.TryGetProperty("target", out var target) && target.TryGetProperty("id", out var named) && named.GetString() == "Headlamp")
+                        .Sum(c => c.GetProperty("energy").GetArrayLength())
+                    : 0,
+                worstShareOff = Enumerable.Range(0, said.Length).Max(i => Math.Abs(said[i] - rule[i].Energy) / rule[i].Energy),
+            }));
     }
 
     [Theory]
@@ -268,6 +335,11 @@ public class FlybyBundleParityTests
 
         var reliefs = flown.Expected.Frames.Select(f => f[10]).ToList();
         var changing = reliefs.Max() > reliefs.Min();
+
+        // What the lean comes to at most: half the range of the relief — the scene is laid out at
+        // its middle —, times 640 m of origin height, times the angle between two verticals
+        // 1.56 km apart.
+        var lean = (reliefs.Max() - reliefs.Min()) / 2 * 640 * 1560 / 6_371_000;
         var worst = 0.0;
         for (var i = 0; i < reliefs.Count; i++)
         {
@@ -279,17 +351,22 @@ public class FlybyBundleParityTests
             worst = Math.Max(worst, off);
 
             // Away from the origin's vertical a model that is being stretched is off by the lean
-            // between the two verticals: here at most a quarter of a factor from the middle of the
-            // ramp, 640 m of origin height and 1.56 km away — four centimetres. Exactly there
-            // would take the origin's height above the ellipsoid, which the bundle does not say;
-            // the camera is moved by the same rule instead, so the picture does not show it.
-            off.ShouldBeLessThan(changing ? 0.045 : 0.002, $"frame {i}: the start of the second cave's lines");
+            // between the two verticals: for the whole flyby at most a quarter of a factor from
+            // the middle of the ramp, 640 m of origin height and 1.56 km away — four centimetres
+            // —, and for a clip that ends early in the ramp a tenth of that. Exactly there would
+            // take the origin's height above the ellipsoid, which the bundle does not say; the
+            // camera is moved by the same rule instead, so the picture does not show it.
+            off.ShouldBeLessThan((1.15 * lean) + 0.002, $"frame {i}: the start of the second cave's lines");
         }
 
         if (changing)
         {
             // And it is that lean, not nothing: the bound is the real size of the thing.
-            worst.ShouldBeGreaterThan(0.03);
+            worst.ShouldBeGreaterThan(0.75 * lean);
+            if (name.EndsWith(".landscape", StringComparison.Ordinal))
+            {
+                worst.ShouldBeInRange(0.03, 0.045);
+            }
         }
     }
 
@@ -813,6 +890,7 @@ public class FlybyBundleParityTests
             var earth = new Earth(flown.Request);
             var lean = new Lean(flown);
             var daylight = Daylight(flown.Expected, flown.Expected.Fps);
+            var lamp = BundleLampRule.Said(folder);
 
             // What the scene points out, as the plan says it — and what Blender made of it.
             var planned = written.RootElement;
@@ -894,7 +972,11 @@ public class FlybyBundleParityTests
                 {
                     var want = row[7 + (cave * 3)];
                     _ = cave;
-                    if (!things[id].TryGetProperty("tintStrength", out _))
+
+                    // A model with no track of its own shows its material's colour: one colour for
+                    // the clip, which the plan's own check has set beside the screen's.
+                    if (!things[id].TryGetProperty("tintStrength", out _)
+                        || !(ChangeOf("id", id) is { } changed && changed.TryGetProperty("tint", out _)))
                     {
                         continue;
                     }
@@ -964,8 +1046,9 @@ public class FlybyBundleParityTests
                     }
                 }
 
+                // The lamp: turned up as the daylight goes, by the plan's own keys.
                 things["Headlamp"].GetProperty("energy").GetDouble()
-                    .ShouldBe(Number(report.GetProperty("objects").EnumerateArray().Single(o => o.GetProperty("name").GetString() == "Headlamp"), "energy", -1), 1e-6);
+                    .ShouldBe(lamp[i], (1e-4 * lamp[i]) + 1e-3, $"{name} frame {i}: the lamp in Blender");
             }
 
             // The models whose colours change read them through their materials, and the ones that
@@ -1178,7 +1261,18 @@ public class FlybyBundleParityTests
             var (goes, comes) = (run[0], run[1]);
             (comes - goes).ShouldBeGreaterThanOrEqualTo(fps, "a dip of less than a second is no stay underground, and this check has none");
             goes.ShouldBeGreaterThan(0);
-            comes.ShouldBeLessThan(expected.Frames.Length);
+            if (comes == expected.Frames.Length)
+            {
+                // The clip ends under the ground: the daylight goes over its second and does not come back.
+                for (var i = goes; i < comes; i++)
+                {
+                    var gone = Math.Min(1.0, (i - goes) / (double)fps);
+                    daylight[i] = 1 - (gone * gone * (3 - (2 * gone)));
+                }
+
+                continue;
+            }
+
             var takes = Math.Min(fps, (comes - goes) / 2);
             for (var i = goes; i < comes; i++)
             {
@@ -1373,8 +1467,8 @@ public class FlybyBundleParityTests
                 keys[k].Frame.ShouldBeGreaterThanOrEqualTo(keys[k - 1].Frame);
                 if (keys[k].Frame == keys[k - 1].Frame)
                 {
-                    keys[k].Easing.ShouldBe("constant", "the second key on a frame is a jump");
-                    (k < 2 || keys[k - 2].Frame < keys[k].Frame).ShouldBeTrue("no more than two keys stand on one frame");
+                    keys[k].Easing.ShouldBe("constant", "a later key on a frame is a jump");
+                    (k < 3 || keys[k - 3].Frame < keys[k].Frame).ShouldBeTrue("no more than three keys stand on one frame");
                 }
             }
         }
@@ -1382,8 +1476,19 @@ public class FlybyBundleParityTests
         /// <summary>How many keys the property has.</summary>
         public int Count => keys.Count;
 
+        /// <summary>
+        /// The value at a frame. Before the first key, its value — a key before the clip's first
+        /// frame is one the clip begins on the way from. Of the keys on one frame the second is
+        /// what that frame shows, and the last where the way to the next key starts from.
+        /// </summary>
         public double[] At(int frame)
         {
+            var on = keys.Where(k => k.Frame == frame).ToList();
+            if (on.Count > 0)
+            {
+                return on[Math.Min(1, on.Count - 1)].Value;
+            }
+
             var after = keys.FindIndex(k => k.Frame > frame);
             if (after <= 0)
             {

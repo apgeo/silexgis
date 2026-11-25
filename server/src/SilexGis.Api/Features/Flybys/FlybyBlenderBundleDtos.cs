@@ -55,8 +55,11 @@ public sealed record FlybyBundleLookRequest(
 
 /// <summary>
 /// A number at a frame of the clip, counted from 0. A frame may lie after the clip's last — the
-/// clip then ends on the way to the key — and two keys may stand on one frame: the first is where
-/// the number was going, the second, which jumps, what it is from that frame on.
+/// clip then ends on the way to the key — and before its first, below 0: the clip then begins on
+/// the way from the key, part of the way through a move. Up to three keys may stand on one frame:
+/// the first is where the number was going, the second, which jumps, what it is on that frame and
+/// from it on, and a third, a jump too, the number the way to the next key starts from, which no
+/// frame shows.
 /// </summary>
 /// <param name="Easing">How the number gets here from the key before; left out, evenly.</param>
 public sealed record FlybyBundleNumberKeyRequest(int Frame, double Value, FlybyBundleEasing? Easing);
@@ -70,7 +73,11 @@ public sealed record FlybyBundleColourKeyRequest(int Frame, string Colour, Flyby
 /// <summary>A colour laid over something by a strength from 0 to 1, at a frame of the clip.</summary>
 public sealed record FlybyBundleTintKeyRequest(int Frame, string Colour, double Strength, FlybyBundleEasing? Easing);
 
-/// <summary>From this frame on a layer is shown, or hidden. Each key says the opposite of the one before it.</summary>
+/// <summary>
+/// From this frame on a layer is shown, or hidden. Each key says the opposite of the one before it.
+/// A layer that fades may have a key before the clip's first frame, below 0, whose fade reaches
+/// into the clip: the clip then begins part of the way through it.
+/// </summary>
 /// <param name="FadeFrames">
 /// How many frames, from this one on, the layer takes to appear, or to go before it is hidden,
 /// eased in and out; left out or 0, it is cut.
@@ -277,6 +284,13 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     public const int MaxFramesPastTheEnd = MaxFrames;
 
     /// <summary>
+    /// How far before the clip's first frame a key may lie, in frames: as long as the longest
+    /// clip. A change the clip begins in the middle of is said by its real start, which the clip
+    /// begins on the way from.
+    /// </summary>
+    public const int MaxFramesBeforeTheStart = MaxFrames;
+
+    /// <summary>
     /// How many layers of markers one bundle names: the entrances, the features of the surface, and
     /// as many layers of chosen features as a view and a flyby hold between them.
     /// </summary>
@@ -380,7 +394,7 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
             // A frame of the clip, when the clip's own length is known; else any frame a clip can have.
             static int Last(FlybyBlenderBundleRequest r) => r.Frames is { Count: > 0 and <= MaxFrames } frames ? frames.Count - 1 : MaxFrames - 1;
             const string order =
-                "Keys are in rising order of frame, from the clip's first; two may stand on one frame, the second of them a jump.";
+                "Keys are in rising order of frame; up to three may stand on one frame, each after the first of them a jump.";
 
             RuleFor(r => r.Changes!)
                 .Must(changes => Keys(changes) <= MaxKeys)
@@ -454,7 +468,8 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
                                 && layer.Opacity.All(k => k.Value is >= 0 and <= 1 && Eased(k.Easing))))))
                 .WithMessage(
                     "A layer of markers is shown and hidden at keys on frames of the clip, in rising order, each the opposite of the one "
-                    + "before it, and is there by keys in rising order of frame, each from 0 to 1.");
+                    + "before it — one before the clip's first frame fading into the clip —, and is there by keys in rising order of frame, "
+                    + "each from 0 to 1.");
         });
 
         When(r => r.Photos is not null, () =>
@@ -489,10 +504,10 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
 
     private static bool Even(int pixels) => pixels % 2 == 0;
 
-    /// <summary>Whether frames rise, each on its own, from the clip's first to its last; at least one.</summary>
-    private static bool Rising(IEnumerable<int?> frames, int last)
+    /// <summary>Whether frames rise, each on its own, from <paramref name="first"/> to the clip's last; at least one.</summary>
+    private static bool Rising(IEnumerable<int?> frames, int last, int first = 0)
     {
-        var before = -1;
+        var before = (long)first - 1;
         var any = false;
         foreach (var frame in frames)
         {
@@ -511,33 +526,35 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     /// <summary>
     /// Whether a layer's keys switch it in order: on frames of the clip, rising, each saying the
     /// opposite of the one before it, and taking no fewer than no frames to do it — none at all
-    /// where the layer does not fade.
+    /// where the layer does not fade. A layer that fades may be switched before the clip's first
+    /// frame, by a key whose fade is still going on that frame.
     /// </summary>
     private static bool Switched(IReadOnlyList<FlybyBundleShownKeyRequest> keys, int last, bool fades) =>
         keys.All(k => k is not null)
-        && Rising(keys.Select(k => (int?)k.Frame), last)
+        && Rising(keys.Select(k => (int?)k.Frame), last, fades ? -MaxFramesBeforeTheStart : 0)
         && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown)
-        && keys.All(k => k.FadeFrames is null or 0 || (fades && k.FadeFrames is > 0 and <= MaxFramesPastTheEnd));
+        && keys.All(k => k.FadeFrames is null or 0 || (fades && k.FadeFrames is > 0 and <= MaxFramesPastTheEnd))
+        && keys.All(k => k.Frame >= 0 || (long)k.Frame + (k.FadeFrames ?? 0) > 0);
 
     /// <summary>
-    /// Whether the keys of one track are in order: at least one, none before the clip's first frame
-    /// and none further past its last than a key may lie, never going back — and where two stand on
-    /// one frame, no third with them and the second a jump.
+    /// Whether the keys of one track are in order: at least one, none further before the clip's
+    /// first frame or past its last than a key may lie, never going back — and where several stand
+    /// on one frame, no more than three, each after the first a jump.
     /// </summary>
     private static bool Ordered(IEnumerable<(int? Frame, FlybyBundleEasing? Easing)> keys, int last)
     {
-        var before = -1;
+        var before = int.MinValue;
         var onIt = 0;
         var any = false;
         foreach (var (frame, easing) in keys)
         {
-            if (frame is not { } at || at < before || at < 0 || at > (long)last + MaxFramesPastTheEnd)
+            if (frame is not { } at || at < before || at < -MaxFramesBeforeTheStart || at > (long)last + MaxFramesPastTheEnd)
             {
                 return false;
             }
 
             onIt = at == before ? onIt + 1 : 1;
-            if (onIt > 2 || (onIt == 2 && easing != FlybyBundleEasing.Constant))
+            if (onIt > 3 || (onIt > 1 && easing != FlybyBundleEasing.Constant))
             {
                 return false;
             }
@@ -592,12 +609,10 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
         public LayerChangesValidator(int last)
         {
             RuleFor(l => l.Shown!)
-                .Must(keys => Rising(keys.Select(k => k?.Frame), last)
-                              && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown)
-                              && keys.All(k => k.FadeFrames is null or (>= 0 and <= MaxFramesPastTheEnd)))
+                .Must(keys => Switched(keys, last, fades: true))
                 .WithMessage(
                     "A layer is shown and hidden at keys on frames of the clip, in rising order, each saying the opposite of the one "
-                    + "before it and taking no fewer than no frames to do it.")
+                    + "before it and taking no fewer than no frames to do it; one before the clip's first frame fades into the clip.")
                 .When(l => l.Shown is not null);
             RuleFor(l => l.Opacity!)
                 .Must(keys => Ordered(keys.Select(k => (k?.Frame, k?.Easing)), last)
