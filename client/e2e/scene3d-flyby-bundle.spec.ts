@@ -135,6 +135,7 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   await expect(panel.getByTestId('flyby-bundle-daylight')).toContainText(
     'the sun and the sky go out while the camera is under the ground',
   );
+  await expect(panel.getByTestId('flyby-bundle-daylight')).toContainText('survey lines keep their colours in any light');
   await expect(panel.getByTestId('flyby-movie-privacy')).toContainText('It holds no coordinates, no terrain and no map.');
 
   // The whole of it — the approaches and the quarter circles the relief rises in.
@@ -202,9 +203,12 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   const plan = JSON.parse(files.get('demo-round-blender/scene-plan.json')!.toString('utf8')) as {
     frame: { crs?: string };
     timeline: { fps: number; frameCount: number };
-    models: { path: string }[];
+    models: { path: string; role?: string; material?: string }[];
     camera: { track: { orientation?: number[] }[] };
-    look: { lights: { id: string; kind: string; energy: number }[] };
+    look: {
+      lights: { id: string; kind: string; energy: number }[];
+      materials: { id: string; kind: string; unlit?: boolean; banded?: boolean; stops?: { at: number }[] }[];
+    };
     features: string[];
     annotations?: { id: string; kind: string; role: string; model: string; at: number[]; radius?: number; text?: string }[];
     changes?: {
@@ -238,6 +242,36 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   if (daylight) {
     const whole = plan.look.lights.find((light) => light.id === 'Sun')!.energy;
     expect(sun[0].energy!.map((key) => key.value)).toEqual(daylight.map((key) => key.value * whole));
+  }
+  // The lamp is turned up only where the daylight goes and there are walls for it to light: its
+  // keys never go below the lamp as it is built, and begin at it where the clip begins in daylight.
+  const built = plan.look.lights.find((light) => light.id === 'Headlamp')!.energy;
+  const lamp = (plan.changes ?? []).filter((change) => change.target?.id === 'Headlamp');
+  expect(lamp.length).toBeLessThanOrEqual(daylight ? 1 : 0);
+  for (const key of lamp[0]?.energy ?? []) {
+    expect(key.value).toBeGreaterThanOrEqual(built);
+  }
+  if (lamp.length > 0 && daylight![0].value === 1) {
+    expect(lamp[0].energy![0].value).toBe(built);
+  }
+
+  // Survey lines wear a material no light changes, whichever way they are coloured; by depth
+  // it is a ramp in bands, a stop a band. Walls are lit.
+  const worn = (role: string) =>
+    [...new Set(plan.models.filter((model) => model.role === role).map((model) => model.material))].map(
+      (id) => plan.look.materials.find((material) => material.id === id)!,
+    );
+  expect(worn('survey-lines').length).toBeGreaterThan(0);
+  for (const material of worn('survey-lines')) {
+    expect(material.unlit).toBe(true);
+    if (material.kind === 'heightRamp') {
+      expect(material.banded).toBe(true);
+      const at = material.stops!.map((stop) => stop.at);
+      expect(at.every((value, index) => index === 0 || value - at[index - 1] > 0.001)).toBe(true);
+    }
+  }
+  for (const material of worn('walls')) {
+    expect(material.unlit ?? false).toBe(false);
   }
 
   // What the scene points out: every entrance the server could place as a ball pinned to a point
@@ -284,6 +318,8 @@ test('a flyby round a cave is downloaded as a Blender bundle, and the zip holds 
   expect(readme).toContain('A flyby of caves made by SilexGIS for Blender');
   expect(readme).toContain('HOW THE SCENE IS LAID OUT');
   expect(readme).toContain('THE LIGHT');
+  expect(readme).toContain('The survey lines are drawn in their own colours whatever the light');
+  expect(readme).not.toContain('a few metres');
   expect(readme).toContain('NOT IN THIS SCENE');
   expect(readme).toContain('the ground and the map drawn on it');
 
