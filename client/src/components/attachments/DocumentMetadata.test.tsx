@@ -242,9 +242,9 @@ describe('DocumentMetadata', () => {
 
   it('keeps an unsaved title when filing refetches the document as a new object', async () => {
     const { rerender } = render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
     fireEvent.change(await screen.findByDisplayValue('Ridicare topografică'), {
@@ -254,9 +254,9 @@ describe('DocumentMetadata', () => {
     // Filing invalidates the document; its answer comes back equal but as a new object.
     served.document = { ...document, cabinetIds: ['cab-2'] };
     rerender(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     expect(screen.getByDisplayValue('Ridicare 2024')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Ridicare topografică')).not.toBeInTheDocument();
@@ -266,9 +266,9 @@ describe('DocumentMetadata', () => {
     served.document = { ...document, title: 'Cached title' };
     served.fetching = true;
     const { rerender } = render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
     expect(await screen.findByDisplayValue('Cached title')).toBeInTheDocument();
@@ -276,9 +276,9 @@ describe('DocumentMetadata', () => {
     served.document = { ...document };
     served.fetching = false;
     rerender(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     expect(await screen.findByDisplayValue('Ridicare topografică')).toBeInTheDocument();
   });
@@ -330,9 +330,9 @@ describe('DocumentMetadata', () => {
 describe('closing the metadata popover with typed work', () => {
   function show() {
     render(
-      <App>
+      <MemoryRouter><App>
         <DocumentMetadata documentId="doc-1" />
-      </App>,
+      </App></MemoryRouter>,
     );
     fireEvent.click(screen.getByRole('button'));
   }
