@@ -1,111 +1,45 @@
 {
-  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under the ground, as runs from a first frame up to, and not including, the frame it is above the ground again.",
+  "about": "The camera of each frame of the request beside this file, on the Earth: eye x y z in metres (earth-centred, WGS 84), the unit direction it looks in, the unit direction of the top of its picture, the degrees it sees from left to right, and the relief the frame is drawn at. Twenty invented points (longitude, latitude, true height) to project through it, each at its height times the frame's relief. The look of each frame: the sky, the walls shown and how much of them, the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour's strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under the ground, as runs from a first frame up to, and not including, the frame it is above the ground again. What the scene points out: the invented place of each marker the request names (its layer counted from 0, its id, longitude, latitude and the true height of the ground there), the invented stations with a photograph (the cave counted from 0, longitude, latitude, surveyed altitude), and for each frame whether the first layer of markers is shown and how much of it, the same of the second, and whether the photographs are shown.",
   "width": 1080,
   "height": 1920,
   "fps": 25,
   "points": [
-    [
-      9.7452,
-      44.3478,
-      520
-    ],
-    [
-      9.7564,
-      44.3533,
-      535
-    ],
-    [
-      9.75,
-      44.3489,
-      550
-    ],
-    [
-      9.7612,
-      44.3544,
-      565
-    ],
-    [
-      9.7548,
-      44.35,
-      580
-    ],
-    [
-      9.7484,
-      44.3555,
-      595
-    ],
-    [
-      9.7596,
-      44.3511,
-      610
-    ],
-    [
-      9.7532,
-      44.3566,
-      625
-    ],
-    [
-      9.7468,
-      44.3522,
-      640
-    ],
-    [
-      9.758,
-      44.3478,
-      655
-    ],
-    [
-      9.7516,
-      44.3533,
-      670
-    ],
-    [
-      9.7452,
-      44.3489,
-      685
-    ],
-    [
-      9.7564,
-      44.3544,
-      700
-    ],
-    [
-      9.75,
-      44.35,
-      715
-    ],
-    [
-      9.7612,
-      44.3555,
-      730
-    ],
-    [
-      9.7548,
-      44.3511,
-      745
-    ],
-    [
-      9.7484,
-      44.3566,
-      760
-    ],
-    [
-      9.7596,
-      44.3522,
-      775
-    ],
-    [
-      9.7532,
-      44.3478,
-      790
-    ],
-    [
-      9.7468,
-      44.3533,
-      805
-    ]
+    [9.7452, 44.3478, 520],
+    [9.7564, 44.3533, 535],
+    [9.75, 44.3489, 550],
+    [9.7612, 44.3544, 565],
+    [9.7548, 44.35, 580],
+    [9.7484, 44.3555, 595],
+    [9.7596, 44.3511, 610],
+    [9.7532, 44.3566, 625],
+    [9.7468, 44.3522, 640],
+    [9.758, 44.3478, 655],
+    [9.7516, 44.3533, 670],
+    [9.7452, 44.3489, 685],
+    [9.7564, 44.3544, 700],
+    [9.75, 44.35, 715],
+    [9.7612, 44.3555, 730],
+    [9.7548, 44.3511, 745],
+    [9.7484, 44.3566, 760],
+    [9.7596, 44.3522, 775],
+    [9.7532, 44.3478, 790],
+    [9.7468, 44.3533, 805]
   ],
   "underground": [],
+  "markers": [
+    [0, "0193a5c0-0000-7000-8000-0000000000e1", 9.7494, 44.3503, 547.385],
+    [0, "0193a5c0-0000-7000-8000-0000000000e2", 9.7509, 44.3495, 552.034],
+    [0, "0193a5c0-0000-7000-8000-0000000000e3", 9.7648, 44.3592, 587.729],
+    [1, "0193a5c0-0000-7000-8000-0000000000d1", 9.7521, 44.3512, 550.951],
+    [1, "0193a5c0-0000-7000-8000-0000000000d2", 9.7631, 44.3571, 580.511],
+    [1, "0193a5c0-0000-7000-8000-0000000000d3", 9.7702, 44.3611, 611.645]
+  ],
+  "photos": [
+    [0, 9.7501, 44.3499, 640],
+    [1, 9.7652, 44.359, 660],
+    [1, 9.7659, 44.3586, 590],
+    [1, 9.7665, 44.3582, 500]
+  ],
   "look": [
     ["#1b2a3a",true,1,true,1,"#3a3f4a",0.6,null,"#3a3f4a",0.6,null],
     ["#1b2a3a",true,1,true,1,"#3a3f4a",0.6,null,"#3a3f4a",0.6,null],
@@ -202,6 +136,103 @@
     ["#1b2a3a",true,1,true,1,"#ffcc00",0.85,"#ffcc00","#3a3f4a",0.6,null],
     ["#1b2a3a",true,1,true,1,"#ffcc00",0.85,"#ffcc00","#3a3f4a",0.6,null],
     ["#1b2a3a",true,1,true,1,"#ffcc00",0.85,"#ffcc00","#3a3f4a",0.6,null]
+  ],
+  "pointed": [
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true],
+    [true,1,true,1,true]
   ],
   "frames": [
     [4780930.6732,821345.0196,4711599.993,-0.7060348707,-0.1206883217,-0.697817376,-0.7040316484,0.2260802269,0.6732214858,35.983398,1.5],

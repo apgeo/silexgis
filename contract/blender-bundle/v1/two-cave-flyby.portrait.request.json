@@ -65,9 +65,7 @@
     "fadeOutS": 0,
     "northArrow": true
   },
-  "leftOut": [
-    "ground"
-  ],
+  "leftOut": ["ground", "featureOutlines"],
   "changes": {
     "relief": null,
     "sky": null,
@@ -116,6 +114,34 @@
         ]
       }
     ]
+  },
+  "markers": [
+    {
+      "kind": "entrances",
+      "colour": "#146262",
+      "markers": [
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e1", "groundM": 547.385, "named": true },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e2", "groundM": 552.034, "named": true },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e3", "groundM": 587.729, "named": true }
+      ],
+      "shown": null,
+      "opacity": null
+    },
+    {
+      "kind": "features",
+      "colour": "#722ed1",
+      "markers": [
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d1", "groundM": 550.951, "named": false },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d2", "groundM": 580.511, "named": false },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d3", "groundM": 611.645, "named": false }
+      ],
+      "shown": null,
+      "opacity": null
+    }
+  ],
+  "photos": {
+    "caves": ["0193a5c0-0000-7000-8000-00000000000a", "0193a5c0-0000-7000-8000-00000000000b"],
+    "shown": null
   },
   "frames": [
     [9.7480313471,44.3461322382,263162.9669,20,-89.9,0,262523.367,60],

@@ -244,14 +244,13 @@ const uploadSources: Record<components['schemas']['UploadSource'], true> = {
 const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'], true> = {
   ground: true,
   surfaceOpening: true,
-  entrances: true,
-  surfaceFeatures: true,
+  featureOutlines: true,
   scans: true,
-  photos: true,
   mapLayers: true,
   tracks: true,
   wallsNotDownloaded: true,
   moreCavesInView: true,
+  moreMarkers: true,
 };
 
 const accessScopeKinds: Record<AccessScopeKind, true> = {

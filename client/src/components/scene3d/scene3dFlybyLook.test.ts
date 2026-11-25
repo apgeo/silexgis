@@ -240,6 +240,27 @@ describe('the listed layers the viewer has switched on', () => {
   });
 });
 
+describe('the layers of entrances and features the viewer has', () => {
+  it('are named with what each is asked of the server with and the colour it is drawn in', () => {
+    const { target, viewer } = world();
+    Object.assign(viewer, {
+      filterLayers: [
+        { savedFilterId: 'f1', color: 'violet', symbol: 'circle', visible: true },
+        // One the viewer may no longer read is no layer at all.
+        { savedFilterId: 'f2', color: 'gold', symbol: 'square', visible: true },
+      ],
+      unreadableFilterLayers: ['F2'],
+    });
+    const sources = target.markerSources?.() ?? [];
+    expect(sources.map((source) => [source.layer, source.kind, source.colour])).toEqual([
+      ['entrances', 'entrances', '#146262'],
+      ['surface-features', 'surfaceFeatures', '#7a5c1e'],
+      ['filter:f1', 'features', '#722ed1'],
+    ]);
+    expect(sources[2].params).toEqual({ savedFilterId: 'f1' });
+  });
+});
+
 describe('one cave in a colour of its own', () => {
   it('tints the walls loaded for that cave and colours its survey lines, and hands both back', () => {
     const { state, target } = world();

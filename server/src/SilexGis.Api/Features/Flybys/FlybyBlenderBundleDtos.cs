@@ -140,6 +140,55 @@ public sealed record FlybyBundleCardRequest(string Text, string? Subtitle, doubl
 public sealed record FlybyBundleCaptionRequest(string Text, double StartS, double EndS);
 
 /// <summary>
+/// One entrance or feature the scene points out, by id and nothing else: where it is, what it is
+/// called and whether the asker may have either are read by the route.
+/// </summary>
+/// <param name="GroundM">
+/// The true height of the ground the scene drew it on. A height and nothing else: it moves the
+/// marker up or down and cannot place it.
+/// </param>
+/// <param name="Named">Whether its name is written beside it.</param>
+public sealed record FlybyBundleMarkerRequest(Guid FeatureId, double GroundM, bool Named = false);
+
+/// <summary>
+/// The markers of one layer of the 3D view: its colour, what it holds, and when the flyby shows it.
+/// </summary>
+/// <param name="Kind">Which layer it is; what its markers are called in the plan follows from it.</param>
+/// <param name="Colour">The colour its markers are drawn in, <c>#rrggbb</c>.</param>
+/// <param name="Shown">
+/// When the layer is shown and hidden, and how long it takes to come and to go; before the first
+/// key it is the other way round. Left out, it is shown throughout.
+/// </param>
+/// <param name="Opacity">How much of it is there, from 0 to 1, besides its coming and going.</param>
+public sealed record FlybyBundleMarkerLayerRequest(
+    FlybyBundleMarkerKind? Kind,
+    string Colour,
+    IReadOnlyList<FlybyBundleMarkerRequest>? Markers,
+    IReadOnlyList<FlybyBundleShownKeyRequest>? Shown = null,
+    IReadOnlyList<FlybyBundleNumberKeyRequest>? Opacity = null);
+
+/// <summary>
+/// The photographs taken at stations of caves, asked for by cave: which photographs there are,
+/// where their stations lie and whether the asker may see them are read by the route.
+/// </summary>
+/// <param name="Caves">The caves whose photographs are wanted, each one of the caves the request names.</param>
+/// <param name="Shown">
+/// When the layer of photographs is shown and hidden — at once; before the first key it is the
+/// other way round. Left out, it is shown throughout.
+/// </param>
+public sealed record FlybyBundlePhotosRequest(
+    IReadOnlyList<Guid>? Caves,
+    IReadOnlyList<FlybyBundleShownKeyRequest>? Shown = null);
+
+/// <summary>
+/// The caves appear part by part while the clip runs, from their entrances inwards.
+/// </summary>
+/// <param name="By">What they appear by. Only the distance along the passages: no leg of a stored survey has a date.</param>
+/// <param name="StartS">When the first of each cave appears, in seconds from the clip's first frame.</param>
+/// <param name="EndS">When all of every cave is there.</param>
+public sealed record FlybyBundleRevealRequest(FlybyBundleRevealBy? By, double StartS, double EndS);
+
+/// <summary>
 /// What the flyby writes over its picture, already in words and already on the clip's own clock.
 /// </summary>
 public sealed record FlybyBundleTextsRequest(
@@ -178,6 +227,9 @@ public sealed record FlybyBundleTextsRequest(
 /// The language the asker reads the application in, as a language tag ("ro", "en-GB"): the bundle's
 /// own notes are written in it where they exist in it — in Romanian — and in English otherwise.
 /// </param>
+/// <param name="Markers">The entrances and features the scene points out, layer by layer; left out, none.</param>
+/// <param name="Photos">The photographs taken at stations of the caves named; left out, none.</param>
+/// <param name="Reveal">How the caves appear part by part; left out, they are there from the first frame.</param>
 public sealed record FlybyBlenderBundleRequest(
     string? Name,
     FlybyBundleOutputRequest? Output,
@@ -190,7 +242,10 @@ public sealed record FlybyBlenderBundleRequest(
     FlybyBundleTextsRequest? Texts,
     IReadOnlyList<FlybyBundleOmission>? LeftOut,
     FlybyBundleChangesRequest? Changes = null,
-    string? Language = null);
+    string? Language = null,
+    IReadOnlyList<FlybyBundleMarkerLayerRequest>? Markers = null,
+    FlybyBundlePhotosRequest? Photos = null,
+    FlybyBundleRevealRequest? Reveal = null);
 
 public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidator<FlybyBlenderBundleRequest>
 {
@@ -220,6 +275,15 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
     /// its real end, which the clip stops on the way to.
     /// </summary>
     public const int MaxFramesPastTheEnd = MaxFrames;
+
+    /// <summary>
+    /// How many layers of markers one bundle names: the entrances, the features of the surface, and
+    /// as many layers of chosen features as a view and a flyby hold between them.
+    /// </summary>
+    public const int MaxMarkerLayers = 26;
+
+    /// <summary>How many markers one bundle names, all its layers together.</summary>
+    public const int MaxMarkers = 1_000;
 
     private const int NumbersAFrame = 8;
     private const int MaxTextLength = 500;
@@ -356,6 +420,69 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
                 .When(r => r.Changes!.Caves is not null);
         });
 
+        When(r => r.Markers is not null, () =>
+        {
+            static int Last(FlybyBlenderBundleRequest r) => r.Frames is { Count: > 0 and <= MaxFrames } frames ? frames.Count - 1 : MaxFrames - 1;
+
+            RuleFor(r => r.Markers!.Count).LessThanOrEqualTo(MaxMarkerLayers);
+            RuleFor(r => r.Markers!)
+                .Must(layers => layers.All(l => l is not null)
+                                && layers.Sum(l => l.Markers?.Count ?? 0) <= MaxMarkers
+                                && layers.Count(l => l.Kind == FlybyBundleMarkerKind.Entrances) <= 1
+                                && layers.Count(l => l.Kind == FlybyBundleMarkerKind.SurfaceFeatures) <= 1)
+                .WithMessage(
+                    $"A bundle holds at most {MaxMarkers} markers, in one layer of entrances, one of surface features and layers of chosen features.");
+            RuleForEach(r => r.Markers!).ChildRules(layer =>
+            {
+                layer.RuleFor(l => l.Kind).NotNull().IsInEnum();
+                layer.RuleFor(l => l.Colour).NotNull().Must(Colour).WithMessage("A colour is written #rrggbb.");
+                layer.RuleFor(l => l.Markers).NotNull();
+                layer.RuleFor(l => l.Markers!)
+                    .Must(markers => markers.All(m => m is not null
+                                                      && m.FeatureId != Guid.Empty
+                                                      && double.IsFinite(m.GroundM)
+                                                      && m.GroundM is >= -12_000 and <= 20_000)
+                                     && markers.Select(m => m.FeatureId).Distinct().Count() == markers.Count)
+                    .WithMessage("A marker is an entrance or a feature named once in its layer, with the height of the ground it stands on.")
+                    .When(l => l.Markers is not null);
+            }).When(r => r.Markers!.All(l => l is not null));
+            RuleForEach(r => r.Markers!)
+                .Must((r, layer) => layer is null
+                    || ((layer.Shown is null || Switched(layer.Shown, Last(r), fades: true))
+                        && (layer.Opacity is null
+                            || (Ordered(layer.Opacity.Select(k => (k?.Frame, k?.Easing)), Last(r))
+                                && layer.Opacity.All(k => k.Value is >= 0 and <= 1 && Eased(k.Easing))))))
+                .WithMessage(
+                    "A layer of markers is shown and hidden at keys on frames of the clip, in rising order, each the opposite of the one "
+                    + "before it, and is there by keys in rising order of frame, each from 0 to 1.");
+        });
+
+        When(r => r.Photos is not null, () =>
+        {
+            RuleFor(r => r.Photos!.Caves).NotNull();
+            RuleFor(r => r.Photos!.Caves!)
+                .Must((r, caves) => caves.Distinct().Count() == caves.Count
+                                    && caves.All(id => (r.Caves ?? []).Any(named => named is not null && named.CaveId == id)))
+                .WithMessage("The caves whose photographs are wanted are caves the request names, each once.")
+                .When(r => r.Photos!.Caves is not null);
+            RuleFor(r => r.Photos!.Shown!)
+                .Must((r, keys) => Switched(keys, r.Frames is { Count: > 0 and <= MaxFrames } frames ? frames.Count - 1 : MaxFrames - 1, fades: false))
+                .WithMessage(
+                    "The photographs are shown and hidden at keys on frames of the clip, in rising order, each the opposite of the one "
+                    + "before it, at once.")
+                .When(r => r.Photos!.Shown is not null);
+        });
+
+        When(r => r.Reveal is not null, () =>
+        {
+            RuleFor(r => r.Reveal!.By).NotNull().IsInEnum();
+            RuleFor(r => r.Reveal!.StartS).InclusiveBetween(0, 86_400);
+            RuleFor(r => r.Reveal!.EndS)
+                .InclusiveBetween(0, 86_400)
+                .GreaterThan(r => r.Reveal!.StartS)
+                .WithMessage("A reveal ends after it starts.");
+        });
+
         RuleFor(r => r.LeftOut!.Count).LessThanOrEqualTo(32).When(r => r.LeftOut is not null);
         RuleForEach(r => r.LeftOut!).IsInEnum().When(r => r.LeftOut is not null);
     }
@@ -380,6 +507,17 @@ public sealed partial class FlybyBlenderBundleRequestValidator : AbstractValidat
 
         return any;
     }
+
+    /// <summary>
+    /// Whether a layer's keys switch it in order: on frames of the clip, rising, each saying the
+    /// opposite of the one before it, and taking no fewer than no frames to do it — none at all
+    /// where the layer does not fade.
+    /// </summary>
+    private static bool Switched(IReadOnlyList<FlybyBundleShownKeyRequest> keys, int last, bool fades) =>
+        keys.All(k => k is not null)
+        && Rising(keys.Select(k => (int?)k.Frame), last)
+        && keys.Zip(keys.Skip(1)).All(pair => pair.First.Shown != pair.Second.Shown)
+        && keys.All(k => k.FadeFrames is null or 0 || (fades && k.FadeFrames is > 0 and <= MaxFramesPastTheEnd));
 
     /// <summary>
     /// Whether the keys of one track are in order: at least one, none before the clip's first frame

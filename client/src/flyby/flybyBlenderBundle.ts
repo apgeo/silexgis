@@ -6,7 +6,13 @@ import type {
   FlybyBundleRequest,
   FlybyBundleTexts,
 } from '../api/hooks/flybyBundle.ts';
-import { flybyBundleDaylight, flybyBundleLookTracks, type FlybyBundleChanges, type FlybyBundleEasing } from './flybyBundleChanges.ts';
+import {
+  flybyBundleDaylight,
+  flybyBundleLookTracks,
+  type FlybyBundleChanges,
+  type FlybyBundleEasing,
+  type FlybyBundleLayerShown,
+} from './flybyBundleChanges.ts';
 import type { FlybyLayerKey } from './flybyDocument.ts';
 import { flybyLookAt, flybyReliefAt, FLYBY_OWN_LENS, type FlybyLookBase, type FlybyLookPlan } from './flybyLook.ts';
 import type { FlybyFrameSchedule } from './flybyMovie.ts';
@@ -53,15 +59,48 @@ export const FLYBY_BUNDLE_MIN_BLENDER = '4.2';
 export const FLYBY_BUNDLE_OMISSIONS: readonly FlybyBundleOmission[] = [
   'ground',
   'surfaceOpening',
-  'entrances',
-  'surfaceFeatures',
+  'featureOutlines',
   'scans',
-  'photos',
   'mapLayers',
   'tracks',
   'wallsNotDownloaded',
   'moreCavesInView',
+  'moreMarkers',
 ];
+
+/** The most markers one bundle names, all its layers together; the server refuses more. */
+export const FLYBY_BUNDLE_MAX_MARKERS = 1000;
+
+/** The layer of the photographs taken at stations of the selected cave's survey. */
+export const FLYBY_BUNDLE_PHOTOS_LAYER: FlybyLayerKey = 'photos';
+
+/**
+ * The share of the flight a reveal takes: the caves have all appeared when four fifths of it are
+ * over, and stand whole for the rest.
+ */
+export const FLYBY_BUNDLE_REVEAL_SHARE = 0.8;
+
+/** What a bundle's caves can appear part by part by. */
+export type FlybyBundleRevealBy = 'distance';
+
+/** One entrance or feature a layer of the view draws, as a bundle names it. */
+export interface FlybyBundleMarkerAsk {
+  featureId: string;
+  /** The true height of the ground the view draws it on. */
+  groundM: number;
+  /** Whether its name is written beside it. */
+  named?: boolean;
+}
+
+/** The entrances or features one layer of the view draws, for a bundle to hold as markers. */
+export interface FlybyBundleMarkerLayerAsk {
+  /** The layer, by the key the flyby shows and hides it by. */
+  layer: FlybyLayerKey;
+  kind: 'entrances' | 'surfaceFeatures' | 'features';
+  /** The colour its markers are drawn in, `#rrggbb`. */
+  colour: string;
+  markers: readonly FlybyBundleMarkerAsk[];
+}
 
 function rounded(value: number, decimals: number): number {
   const scale = 10 ** decimals;
@@ -153,7 +192,9 @@ export function flybyBundleShows(plan: FlybyLookPlan, base: FlybyLookBase, sched
  *
  * What it changes while it plays is not here: the relief, the colours of walls and lines, the
  * walls and the lines shown, hidden and faded, and the sky all go into the bundle, change by
- * change — and the daylight, which the flyby does not change and a bundle does. What is left is
+ * change — and the daylight, which the flyby does not change and a bundle does. Nor is what it
+ * points out: entrances, features that are points and the photographs taken at stations go in as
+ * markers, names and pictures. What is left is
  * what a bundle has no place for at all — the ground first of all, and with it every map drawn on
  * the ground, so a background that changes is not said again.
  *
@@ -182,19 +223,15 @@ export function flybyBundleOmissions(
       }
       const kind = key.includes(':') ? key.slice(0, key.indexOf(':')) : key;
       switch (kind) {
-        case 'entrances':
-          found.add('entrances');
-          break;
         case 'surface-features':
         case 'filter':
         case 'features':
-          found.add('surfaceFeatures');
+          // The features that are points go in as markers; a line or an area is drawn on the
+          // ground, which a bundle has none of.
+          found.add('featureOutlines');
           break;
         case 'scans':
           found.add('scans');
-          break;
-        case 'photos':
-          found.add('photos');
           break;
         case 'overlay':
         case 'raster':
@@ -331,6 +368,13 @@ export interface FlybyBundleAsk {
   reliefWords(factor: number): string;
   /** The language the reader has the application in, for the bundle's own notes; left out, English. */
   language?: string;
+  /**
+   * The entrances and features the view draws about the flyby's caves, layer by layer. A layer the
+   * flyby never shows in the clip is left out of the bundle, and so is one with nothing in it.
+   */
+  markers?: readonly FlybyBundleMarkerLayerAsk[];
+  /** How the caves appear part by part while the clip runs; left out, they are there from its first frame. */
+  reveal?: FlybyBundleRevealBy | null;
 }
 
 /** Why a bundle cannot be made of a flyby as it stands; null when it can. */
@@ -361,8 +405,18 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
   const tooLong = schedule.count > FLYBY_BUNDLE_MAX_FRAMES;
   const tracks = tooLong
     ? // Nothing is worked out frame by frame for a clip no bundle will be made of.
-      { ...flybyBundleShows(timeline.look, base, schedule), reliefAt: () => openingRelief(ask), sky: undefined, lineColour: undefined, changes: null }
-    : flybyBundleLookTracks(timeline.look, base, schedule, [...own, ...ask.cavesInView], ask.flybyRelief);
+      {
+        ...flybyBundleShows(timeline.look, base, schedule),
+        reliefAt: () => openingRelief(ask),
+        sky: undefined,
+        lineColour: undefined,
+        changes: null,
+        layers: {} as Record<FlybyLayerKey, FlybyBundleLayerShown>,
+      }
+    : flybyBundleLookTracks(timeline.look, base, schedule, [...own, ...ask.cavesInView], ask.flybyRelief, [
+        FLYBY_BUNDLE_PHOTOS_LAYER,
+        ...(ask.markers ?? []).map((layer) => layer.layer),
+      ]);
   const relief = tracks.reliefAt(0);
 
   // The flyby's own caves first; others in view only where lines are drawn at all, since lines
@@ -401,7 +455,12 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
         ? { kind: 'nothingShown' }
         : null;
 
-  const leftOut = FLYBY_BUNDLE_OMISSIONS.filter((omission) => omissions.has(omission));
+  const texts = () =>
+    flybyBundleTexts(
+      timeline.texts,
+      schedule,
+      timeline.texts.reliefMark && !tooLong ? flybyBundleReliefMarks(schedule, tracks.reliefAt, ask.reliefWords) : [],
+    );
   const frames = tooLong
     ? []
     : flybyBundleFrames(timeline, schedule, ask.groundHeight, (t) => flybyBundleLensAt(timeline.look, base, t));
@@ -409,6 +468,47 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
   const daylight = flybyBundleDaylight(flybyBundleUnderground(frames, ask.groundHeight), schedule.fps);
   const said: FlybyBundleChanges | null = daylight ? { ...tracks.changes, daylight } : tracks.changes;
   const changes = said ? changesRequest(said, named) : null;
+
+  // ---- what the scene points out ----
+  // A layer's markers, where the flyby shows the layer at any frame of the clip; a bundle takes
+  // only so many, in the order the layers are given.
+  const last = Math.max(0, schedule.count - 1);
+  let room = FLYBY_BUNDLE_MAX_MARKERS;
+  const markers: NonNullable<FlybyBundleRequest['markers']> = [];
+  for (const layer of tooLong ? [] : (ask.markers ?? [])) {
+    const shown = tracks.layers[layer.layer];
+    if (!shown?.ever || layer.markers.length === 0) {
+      continue;
+    }
+    if (layer.markers.length > room) {
+      omissions.add('moreMarkers');
+    }
+    const taken = layer.markers.slice(0, room);
+    room -= taken.length;
+    if (taken.length === 0) {
+      continue;
+    }
+    markers.push({
+      kind: layer.kind,
+      colour: layer.colour,
+      markers: taken.map((marker) => ({ featureId: marker.featureId, groundM: rounded(marker.groundM, 3), named: marker.named === true })),
+      shown: shown.shown.length > 0 ? shown.shown : null,
+      opacity: shown.opacity ? shown.opacity.map((key) => ({ ...key, easing: key.easing ?? null })) : null,
+    });
+  }
+  // The photographs taken at stations of the flyby's own caves, where the flyby shows their layer.
+  // The view switches that layer at once — when a change that shows it begins, and when one that
+  // hides it has run its course — and so does a bundle.
+  const pictures = tracks.layers[FLYBY_BUNDLE_PHOTOS_LAYER];
+  const photoCaves = own.filter((caveId) => named.has(caveId));
+  const photos: FlybyBundleRequest['photos'] =
+    pictures?.ever && photoCaves.length > 0
+      ? {
+          caves: photoCaves,
+          shown: switchedAtOnce(pictures.shown, last),
+        }
+      : null;
+  const reveal = ask.reveal && !tooLong ? revealOver(ask.reveal, texts(), schedule) : null;
   return {
     request: {
       name: ask.name,
@@ -423,18 +523,59 @@ export function flybyBundleRequest(ask: FlybyBundleAsk): {
       frames,
       caves,
       look,
-      texts: flybyBundleTexts(
-        timeline.texts,
-        schedule,
-        timeline.texts.reliefMark && !tooLong ? flybyBundleReliefMarks(schedule, tracks.reliefAt, ask.reliefWords) : [],
-      ),
-      leftOut,
+      texts: texts(),
+      leftOut: FLYBY_BUNDLE_OMISSIONS.filter((omission) => omissions.has(omission)),
       ...(changes ? { changes } : {}),
       ...(ask.language ? { language: ask.language } : {}),
+      ...(markers.length > 0 ? { markers } : {}),
+      ...(photos ? { photos } : {}),
+      ...(reveal ? { reveal } : {}),
     },
-    omissions: leftOut,
+    omissions: FLYBY_BUNDLE_OMISSIONS.filter((omission) => omissions.has(omission)),
     refusal,
   };
+}
+
+/**
+ * A layer's keys for a layer that is switched at once: shown from the frame a change that shows it
+ * begins on, hidden from the frame one that hides it has gone by. A key past the clip's last frame
+ * says nothing the clip shows, and one that repeats the key before it nothing at all.
+ */
+function switchedAtOnce(
+  keys: readonly { frame: number; shown: boolean; fadeFrames?: number }[],
+  last: number,
+): { frame: number; shown: boolean }[] | null {
+  const switched: { frame: number; shown: boolean }[] = [];
+  for (const key of keys) {
+    const frame = key.shown ? key.frame : key.frame + (key.fadeFrames ?? 0);
+    const before = switched[switched.length - 1];
+    if (frame > last || (before && (before.shown === key.shown || before.frame >= frame))) {
+      continue;
+    }
+    switched.push({ frame, shown: key.shown });
+  }
+  return switched.length > 0 ? switched : null;
+}
+
+/**
+ * When a reveal runs: from the moment the title has gone — the clip's first frame without one — to
+ * four fifths of the way from there to the end card, or to the clip's last frame without one. So
+ * the caves grow under the flight and stand whole for its last fifth.
+ */
+function revealOver(
+  by: FlybyBundleRevealBy,
+  texts: FlybyBundleTexts,
+  schedule: Pick<FlybyFrameSchedule, 'count' | 'fps'>,
+): NonNullable<FlybyBundleRequest['reveal']> {
+  const clip = schedule.count / schedule.fps;
+  let from = texts.title?.seconds ?? 0;
+  let to = texts.end ? clip - texts.end.seconds : clip;
+  if (to - from < 1) {
+    // Cards that leave no flight between them: the reveal takes the clip.
+    [from, to] = [0, clip];
+  }
+  const startS = rounded(from, 4);
+  return { by, startS, endS: Math.max(rounded(from + (to - from) * FLYBY_BUNDLE_REVEAL_SHARE, 4), rounded(startS + 1 / schedule.fps, 4)) };
 }
 
 /** The relief a clip opens at: the flyby's where the view lets a flyby stretch it, else the viewer's own. */

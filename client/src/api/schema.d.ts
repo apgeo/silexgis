@@ -932,7 +932,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** A flyby of the 3D scene as a render bundle (.zip) for Blender: the camera at every frame as sent, and the walls or survey lines of the caves named, read for the caller. A cave the caller may not read or may not place exactly is not drawn, and neither is one with no survey; the answer counts them together. */
+        /** A flyby of the 3D scene as a render bundle (.zip) for Blender: the camera at every frame as sent, and the walls or survey lines of the caves named, read for the caller. A cave the caller may not read or may not place exactly is not drawn, and neither is one with no survey; the answer counts them together. Entrances and features named by id become markers under the same two rules, and the photographs linked to stations of the caves drawn go in where the caller may see them. */
         post: operations["flybyBlenderBundleDownload"];
         delete?: never;
         options?: never;
@@ -12946,6 +12946,9 @@ export interface components {
             leftOut: null | components["schemas"]["FlybyBundleOmission"][];
             changes?: null | components["schemas"]["FlybyBundleChangesRequest"];
             language?: null | string;
+            markers?: null | components["schemas"]["FlybyBundleMarkerLayerRequest"][];
+            photos?: null | components["schemas"]["FlybyBundlePhotosRequest"];
+            reveal?: null | components["schemas"]["FlybyBundleRevealRequest"];
         };
         FlybyBundleCaptionRequest: {
             text: string;
@@ -13007,6 +13010,23 @@ export interface components {
             lineColour: null | string;
             depthBands: null | components["schemas"]["FlybyBundleDepthBandRequest"][];
         };
+        /** @enum {unknown} */
+        FlybyBundleMarkerKind: "entrances" | "surfaceFeatures" | "features";
+        FlybyBundleMarkerLayerRequest: {
+            kind: null | components["schemas"]["FlybyBundleMarkerKind"];
+            colour: string;
+            markers: null | components["schemas"]["FlybyBundleMarkerRequest"][];
+            shown?: null | components["schemas"]["FlybyBundleShownKeyRequest"][];
+            opacity?: null | components["schemas"]["FlybyBundleNumberKeyRequest"][];
+        };
+        FlybyBundleMarkerRequest: {
+            /** Format: uuid */
+            featureId: string;
+            /** Format: double */
+            groundM: number;
+            /** @default false */
+            named: boolean;
+        };
         FlybyBundleNumberKeyRequest: {
             /** Format: int32 */
             frame: number;
@@ -13015,7 +13035,7 @@ export interface components {
             easing: null | components["schemas"]["FlybyBundleEasing"];
         };
         /** @enum {unknown} */
-        FlybyBundleOmission: "ground" | "surfaceOpening" | "entrances" | "surfaceFeatures" | "scans" | "photos" | "mapLayers" | "tracks" | "wallsNotDownloaded" | "moreCavesInView";
+        FlybyBundleOmission: "ground" | "surfaceOpening" | "featureOutlines" | "scans" | "mapLayers" | "tracks" | "wallsNotDownloaded" | "moreCavesInView" | "moreMarkers";
         FlybyBundleOriginRequest: {
             /** Format: double */
             longitude: number;
@@ -13033,6 +13053,10 @@ export interface components {
             fps: number;
             quality: null | components["schemas"]["FlybyBundleQuality"];
         };
+        FlybyBundlePhotosRequest: {
+            caves: null | string[];
+            shown?: null | components["schemas"]["FlybyBundleShownKeyRequest"][];
+        };
         FlybyBundlePlacementRequest: {
             absolute: boolean;
             /** Format: double */
@@ -13040,6 +13064,15 @@ export interface components {
         };
         /** @enum {unknown} */
         FlybyBundleQuality: "low" | "medium" | "high";
+        /** @enum {unknown} */
+        FlybyBundleRevealBy: "distance";
+        FlybyBundleRevealRequest: {
+            by: null | components["schemas"]["FlybyBundleRevealBy"];
+            /** Format: double */
+            startS: number;
+            /** Format: double */
+            endS: number;
+        };
         FlybyBundleShownKeyRequest: {
             /** Format: int32 */
             frame: number;

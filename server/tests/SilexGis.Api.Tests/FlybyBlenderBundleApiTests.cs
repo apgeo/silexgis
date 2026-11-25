@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -12,6 +13,8 @@ using SilexGis.Api.Features.Flybys;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
+using SilexGis.Infrastructure.Flybys;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 using Therion.Cave3D;
@@ -130,7 +133,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         var readme = Encoding.UTF8.GetString(bundle.Entries["README.txt"]);
         readme.ShouldContain("NOT IN THIS SCENE");
         readme.ShouldContain("the ground and the map drawn on it");
-        readme.ShouldContain("the entrance markers");
+        readme.ShouldContain("the point-cloud scans");
 
         // And they open as this application's, saying how the scene is laid out — not where.
         readme.ShouldContain("A flyby of caves made by SilexGIS for Blender");
@@ -163,7 +166,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         readme.ShouldContain("CE LIPSEȘTE DIN ACEASTĂ SCENĂ");
         // What the browser named, and what only the server knows, in the same language.
         readme.ShouldContain("  - terenul și harta desenată pe el");
-        readme.ShouldContain("  - marcajele intrărilor");
+        readme.ShouldContain("  - scanările");
         readme.ShouldContain("  - 1 dintre peșterile cerute (nimic din ea nu este disponibil pentru desenare)");
         readme.ShouldNotContain("the ground and the map");
 
@@ -650,6 +653,493 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
     // ---- helpers ----
 
     /// <summary>The middle of one test's scene: a point on open ocean nobody else is using.</summary>
+    // ---- what a bundle points out, and for whom ----
+    //
+    // Entrances and features as markers, the photographs somebody linked to stations of a cave's
+    // survey, and the caves appearing part by part. Every entrance, feature and photograph below
+    // is invented — the pictures are bands of colour made in the test, one of them stamped with a
+    // made-up position on open ocean so that there is something for a bundle to be shown not to
+    // carry.
+    [Fact]
+    public async Task Entrances_and_features_named_by_id_come_back_as_markers_and_what_cannot_be_drawn_as_one_count()
+    {
+        var spot = Spot.Somewhere();
+        var cave = await CreateSurveyedCaveAsync(spot, heightM: 900);
+        var named = await CreateEntranceAsync(cave, spot.East(0.0002), "Lower mouth");
+        var nameless = await CreateEntranceAsync(cave, spot.East(-0.0002), name: null);
+        var sinkhole = await CreateFeatureAsync(Point(spot.East(0.001)));
+        var outline = await CreateFeatureAsync(new
+        {
+            type = "Polygon",
+            coordinates = new[]
+            {
+                new[]
+                {
+                    new[] { spot.Longitude, spot.Latitude }, new[] { spot.Longitude + 0.001, spot.Latitude },
+                    new[] { spot.Longitude + 0.001, spot.Latitude + 0.001 }, new[] { spot.Longitude, spot.Latitude },
+                },
+            },
+        });
+
+        var answer = await owner.PostAsJsonAsync(Route, Request(
+            spot,
+            [Cave(cave, walls: true)],
+            markers:
+            [
+                MarkerLayer("entrances", "#146262", [Marker(named, 905, named: true), Marker(nameless, 903, named: true), Marker(Guid.NewGuid(), 900)]),
+                MarkerLayer("features", "#722ed1", [Marker(sinkhole, 910), Marker(outline, 910)], shown: [new { frame = 4, shown = false, fadeFrames = 2 }]),
+            ]));
+
+        answer.StatusCode.ShouldBe(HttpStatusCode.OK, await answer.Content.ReadAsStringAsync());
+        Header(answer, FlybyBlenderBundleEndpoints.MarkersHeader).ShouldBe(3);
+        // One made up and one that is no point: one number, and no word about which is which.
+        Header(answer, FlybyBlenderBundleEndpoints.MarkersNotDrawnHeader).ShouldBe(2);
+        Header(answer, FlybyBlenderBundleEndpoints.PhotosHeader).ShouldBe(0);
+
+        var bundle = await Bundle.ReadAsync(answer);
+        var said = bundle.Plan.GetProperty("annotations").EnumerateArray().ToDictionary(a => a.GetProperty("id").GetString()!);
+        said.Keys.ShouldBe(["entrance-001", "entrance-001-name", "entrance-002", "entrance-002-name", "feature-layer-1-001"], ignoreOrder: true);
+        said["entrance-001-name"].GetProperty("text").GetString().ShouldBe("Lower mouth");
+        // An entrance with no name of its own goes by its cave's.
+        said["entrance-002-name"].GetProperty("text").GetString().ShouldStartWith("Bundle Cave ");
+
+        // Each rides the cave's walls, at the place the route read for it: metres east of the
+        // cave's own zero, and as far above it as the ground the request gave is above the origin
+        // the survey was placed at.
+        var at = said["entrance-001"].GetProperty("at").EnumerateArray().Select(n => n.GetDouble()).ToArray();
+        said["entrance-001"].GetProperty("model").GetString().ShouldBe("cave-01-walls");
+        at[0].ShouldBeInRange(5, 25);
+        at[1].ShouldBe(0, 0.05);
+        at[2].ShouldBe(5, 0.05);
+        said["feature-layer-1-001"].GetProperty("role").GetString().ShouldBe("feature-layer-1");
+
+        // The layer the request hides is hidden by one change for its role.
+        var hidden = bundle.Plan.GetProperty("changes").EnumerateArray()
+            .Single(c => c.TryGetProperty("target", out var target) && target.TryGetProperty("role", out var role) && role.GetString() == "feature-layer-1");
+        hidden.GetProperty("visible")[0].GetProperty("value").GetBoolean().ShouldBeFalse();
+
+        var readme = Encoding.UTF8.GetString(bundle.Entries["README.txt"]);
+        readme.ShouldContain("2 of the entrances and features asked for (nothing of them is available to draw)");
+        readme.ShouldContain("The scene has 3 markers,");
+        readme.ShouldNotContain(spot.Longitude.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture));
+
+        // And it is on record which markers went in — by id, with no position.
+        var record = await LastRecordAsync(cave);
+        record.GetProperty("markerFeatureIds").EnumerateArray().Select(id => id.GetGuid()).ShouldBe([named, nameless, sinkhole], ignoreOrder: true);
+        record.GetProperty("markersNotDrawnCount").GetInt32().ShouldBe(2);
+        record.GetRawText().ShouldNotContain("coordinates");
+    }
+
+    [Fact]
+    public async Task A_marker_the_caller_may_not_read_or_may_not_place_exactly_looks_exactly_like_one_that_does_not_exist()
+    {
+        var spot = Spot.Somewhere();
+        var cave = await CreateSurveyedCaveAsync(spot, heightM: 900);
+        var open = await CreateFeatureAsync(Point(spot.East(0.001)));
+        var unread = await CreateFeatureAsync(Point(spot.East(0.002)), visibility: "private");
+        var guarded = await CreateFeatureAsync(Point(spot.East(0.003)), locationProtected: true);
+
+        // An entrance of a cave whose place is protected: readable, shown on a map moved to the
+        // grid, and so no marker — a marker stands at a distance from the caves, and one put on
+        // the grid would say where the caves lie on it.
+        var protectedCave = await CreateCaveAsync(locationProtected: true);
+        var itsMouth = await CreateEntranceAsync(protectedCave, spot.East(0.004), "A mouth kept from the map");
+
+        object Asked(Guid id) => Request(
+            spot, [Cave(cave, walls: true)], markers: [MarkerLayer("features", "#722ed1", [Marker(open, 900), Marker(id, 900)])]);
+
+        // The positive half first: their owner gets every one of them.
+        foreach (var id in (Guid[])[unread, guarded, itsMouth])
+        {
+            var mine = await owner.PostAsJsonAsync(Route, Asked(id));
+            Header(mine, FlybyBlenderBundleEndpoints.MarkersHeader).ShouldBe(2);
+            Header(mine, FlybyBlenderBundleEndpoints.MarkersNotDrawnHeader).ShouldBe(0);
+        }
+
+        var invented = await reader.PostAsJsonAsync(Route, Asked(Guid.NewGuid()));
+        Header(invented, FlybyBlenderBundleEndpoints.MarkersHeader).ShouldBe(1);
+        Header(invented, FlybyBlenderBundleEndpoints.MarkersNotDrawnHeader).ShouldBe(1);
+        var none = await invented.Content.ReadAsByteArrayAsync();
+        foreach (var id in (Guid[])[unread, guarded, itsMouth])
+        {
+            // Byte for byte the file a made-up id gets: not a count, not a sentence, not a marker
+            // tells one kept back from one that is not there.
+            var withheld = await reader.PostAsJsonAsync(Route, Asked(id));
+            withheld.StatusCode.ShouldBe(HttpStatusCode.OK, await withheld.Content.ReadAsStringAsync());
+            (await withheld.Content.ReadAsByteArrayAsync()).ShouldBe(none);
+        }
+
+        // Granted its exact place, the reader gets the marker.
+        await GrantExactViewAsync(guarded);
+        Header(await reader.PostAsJsonAsync(Route, Asked(guarded)), FlybyBlenderBundleEndpoints.MarkersHeader).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Photographs_linked_to_stations_go_in_as_renderings_and_one_the_caller_may_not_read_is_not_there_at_all()
+    {
+        var spot = Spot.Somewhere();
+        var cave = await CreateSurveyedCaveAsync(spot, heightM: 900);
+        var modelId = await LinePlotOfAsync(cave);
+
+        // Two invented pictures: a large one stamped with a made-up position, shared with every
+        // signed-in reader; and one in a format a renderer does not read, left private.
+        var (sharedDocument, _) = await UploadPictureAsync("shared.jpg", StampedPicture(2600, 1300), "image/jpeg");
+        await ShareDocumentAsync(sharedDocument);
+        var (privateDocument, _) = await UploadPictureAsync("private.webp", PlainPicture(300, 400, MagickFormat.WebP), "image/webp");
+        await LinkToStationAsync(modelId, "A", sharedDocument);
+        await LinkToStationAsync(modelId, "C", privateDocument);
+
+        var asked = Request(spot, [Cave(cave, walls: true)], photos: new { caves = new[] { cave }, shown = (object?)null });
+
+        // Their owner gets both, each a JPEG a renderer reads, no longer than two thousand pixels
+        // on a side, turned as the application shows it, and with nothing of the camera's in it.
+        var mine = await Bundle.ReadAsync(await owner.PostAsJsonAsync(Route, asked));
+        mine.Files.Where(f => f.StartsWith("photos/", StringComparison.Ordinal)).ShouldBe(["photos/photo-001.jpg", "photos/photo-002.jpg"]);
+        var sizes = new List<(uint Width, uint Height)>();
+        foreach (var name in (string[])["photos/photo-001.jpg", "photos/photo-002.jpg"])
+        {
+            using var picture = new MagickImage(mine.Entries[name]);
+            picture.Format.ShouldBe(MagickFormat.Jpeg);
+            picture.GetExifProfile().ShouldBeNull($"{name} carries nothing the camera wrote");
+            picture.GetXmpProfile().ShouldBeNull();
+            Math.Max(picture.Width, picture.Height).ShouldBeLessThanOrEqualTo((uint)FlybyBlenderBundleEndpoints.PhotoLongestSidePx);
+            sizes.Add((picture.Width, picture.Height));
+        }
+
+        sizes.ShouldBe([(2000u, 1000u), (300u, 400u)], ignoreOrder: true);
+
+        // Each stands at the station it was linked to: a point of the cave's walls, where the
+        // survey has that station — its zero, and twenty metres east and thirty down.
+        var places = mine.Plan.GetProperty("annotations").EnumerateArray()
+            .Where(a => a.GetProperty("kind").GetString() == "photo")
+            .Select(a => a.GetProperty("at").EnumerateArray().Select(n => n.GetDouble()).ToArray())
+            .OrderBy(at => at[2])
+            .ToList();
+        places.Count.ShouldBe(2);
+        places[1].ShouldBe([0, 0, 0], 0.05);
+        places[0][0].ShouldBe(20, 0.05);
+        places[0][2].ShouldBe(-30, 0.05);
+        mine.Plan.GetProperty("annotations").EnumerateArray()
+            .ShouldAllBe(a => a.GetProperty("model").GetString() == "cave-01-walls" && a.GetProperty("role").GetString() == FlybyBlenderBundle.PhotoRole);
+
+        // No file of the bundle says where the stamped picture was taken, or what it was called.
+        foreach (var (name, bytes) in mine.Entries)
+        {
+            var text = Encoding.Latin1.GetString(bytes);
+            text.ShouldNotContain("shared.jpg", Case.Insensitive, name);
+            text.ShouldNotContain("GPSLatitude", Case.Insensitive, name);
+        }
+
+        // The reader may read one of the two documents, and gets that one. Nothing of the other:
+        // not its file, not a count of what is missing, not a line in the notes or on record.
+        var answer = await reader.PostAsJsonAsync(Route, asked);
+        Header(answer, FlybyBlenderBundleEndpoints.PhotosHeader).ShouldBe(1);
+        var theirs = await Bundle.ReadAsync(answer);
+        theirs.Files.Where(f => f.StartsWith("photos/", StringComparison.Ordinal)).ShouldBe(["photos/photo-001.jpg"]);
+        using (var only = new MagickImage(theirs.Entries["photos/photo-001.jpg"]))
+        {
+            (only.Width, only.Height).ShouldBe((2000u, 1000u));
+        }
+
+        Encoding.UTF8.GetString(theirs.Entries["README.txt"]).ShouldNotContain("taken at station");
+        var record = await LastRecordAsync(cave);
+        record.GetProperty("photoDocumentIds").EnumerateArray().Select(id => id.GetGuid()).ShouldBe([sharedDocument]);
+
+        // A second photograph at a station that shows one: counted, and said in the notes.
+        var (third, _) = await UploadPictureAsync("third.png", PlainPicture(120, 90, MagickFormat.Png), "image/png");
+        await LinkToStationAsync(modelId, "A", third);
+        var again = await Bundle.ReadAsync(await owner.PostAsJsonAsync(Route, asked));
+        again.Files.Count(f => f.StartsWith("photos/", StringComparison.Ordinal)).ShouldBe(2);
+        Encoding.UTF8.GetString(again.Entries["README.txt"]).ShouldContain("  - 1 photograph taken at a station");
+
+        // Not asked for, none goes in; and a layer hidden throughout shows none either.
+        (await Bundle.ReadAsync(await owner.PostAsJsonAsync(Route, Request(spot, [Cave(cave, walls: true)]))))
+            .Files.ShouldAllBe(f => !f.StartsWith("photos/", StringComparison.Ordinal));
+        var off = await owner.PostAsJsonAsync(Route, Request(
+            spot, [Cave(cave, walls: true)], photos: new { caves = new[] { cave }, shown = new[] { new { frame = 0, shown = false } } }));
+        Header(off, FlybyBlenderBundleEndpoints.PhotosHeader).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_photograph_of_a_cave_the_caller_may_not_place_never_enters_the_bundle()
+    {
+        var spot = Spot.Somewhere();
+        var open = await CreateSurveyedCaveAsync(spot, heightM: 900);
+        var guarded = await CreateSurveyedCaveAsync(spot.East(0.01), heightM: 900, locationProtected: true);
+        var (document, _) = await UploadPictureAsync("in-a-kept-cave.jpg", PlainPicture(200, 100, MagickFormat.Jpeg), "image/jpeg");
+        await ShareDocumentAsync(document);
+        await LinkToStationAsync(await LinePlotOfAsync(guarded), "B", document);
+
+        var asked = Request(
+            spot, [Cave(open, walls: true), Cave(guarded, walls: true)], photos: new { caves = new[] { open, guarded }, shown = (object?)null });
+
+        // The reader may read the photograph itself — and may not be told where that cave is, so
+        // the cave is not drawn and nothing linked to its stations is looked for.
+        var withheld = await reader.PostAsJsonAsync(Route, asked);
+        Header(withheld, FlybyBlenderBundleEndpoints.PhotosHeader).ShouldBe(0);
+        Header(withheld, FlybyBlenderBundleEndpoints.NotDrawnHeader).ShouldBe(1);
+        (await Bundle.ReadAsync(withheld)).Files.ShouldAllBe(f => !f.StartsWith("photos/", StringComparison.Ordinal));
+
+        // Granted the cave's exact place, they get the photograph at its station.
+        await GrantExactViewAsync(guarded);
+        var granted = await reader.PostAsJsonAsync(Route, asked);
+        Header(granted, FlybyBlenderBundleEndpoints.PhotosHeader).ShouldBe(1);
+        (await Bundle.ReadAsync(granted)).Plan.GetProperty("annotations")[0].GetProperty("model").GetString().ShouldBe("cave-02-walls");
+    }
+
+    [Fact]
+    public async Task A_bundle_that_reveals_its_caves_measures_each_from_the_entrance_its_survey_flags()
+    {
+        var spot = Spot.Somewhere();
+        var flagged = await CreateSurveyedCaveAsync(spot, heightM: 900, entranceAtTheBottom: true);
+        var unflagged = await CreateSurveyedCaveAsync(spot.East(0.01), heightM: 900);
+
+        // The lines hidden by the look: a cave is measured along its survey all the same.
+        var answer = await owner.PostAsJsonAsync(Route, Request(
+            spot,
+            [Cave(flagged, walls: true), Cave(unflagged, walls: false)],
+            reveal: new { by = "distance", startS = 0.04, endS = 0.32 }));
+        var bundle = await Bundle.ReadAsync(answer);
+
+        // The invented survey: A — B — C — D, 13.3 m, 28.2 m and 36.0 m of passage.
+        const double whole = 13.342 + 28.160 + 35.958;
+        var changes = bundle.Plan.GetProperty("changes").EnumerateArray()
+            .Where(c => c.TryGetProperty("reveal", out _))
+            .ToDictionary(c => c.GetProperty("target").GetProperty("id").GetString()!);
+        changes.Keys.ShouldBe(["cave-01-walls", "cave-01-lines", "cave-02-lines"], ignoreOrder: true);
+        foreach (var change in changes.Values)
+        {
+            var keys = change.GetProperty("reveal");
+            keys[0].GetProperty("t").GetDouble().ShouldBe(0.04, 1e-9);
+            keys[1].GetProperty("t").GetDouble().ShouldBe(0.32, 1e-9);
+            keys[0].GetProperty("value").GetDouble().ShouldBe(0, 1e-6);
+            keys[1].GetProperty("value").GetDouble().ShouldBe(whole * 1.041, 0.1);
+        }
+
+        // The first cave from D, the station its survey flags as an entrance: the tubes of its
+        // legs run A → B → C → D, so its last four corners are at nothing and its first at all.
+        var from = BundlePly.Reveal(bundle.Entries["cave-01-lines.ply"]).ShouldNotBeNull();
+        from.Count.ShouldBe(24);
+        from.TakeLast(4).ShouldAllBe(value => value == 0);
+        from.Take(4).ShouldAllBe(value => Math.Abs(value - whole) < 0.05);
+        // The second, which flags none, from the first station of its first leg.
+        var plain = BundlePly.Reveal(bundle.Entries["cave-02-lines.ply"]).ShouldNotBeNull();
+        plain.Take(4).ShouldAllBe(value => value == 0);
+        plain.TakeLast(4).ShouldAllBe(value => Math.Abs(value - whole) < 0.05);
+        // The walls, built about the first leg, by the nearest place on the centreline.
+        var walls = BundlePly.Reveal(bundle.Entries["cave-01-walls.ply"]).ShouldNotBeNull();
+        walls.Min().ShouldBeGreaterThan(whole - 13.342 - 1.5);
+        walls.Max().ShouldBeLessThanOrEqualTo(whole + 0.05);
+
+        Encoding.UTF8.GetString(bundle.Entries["README.txt"]).ShouldContain("THE REVEAL");
+        (await LastRecordAsync(flagged)).GetProperty("reveal").GetString().ShouldBe("distance");
+
+        // Without one, no mesh carries a number.
+        var whole2 = await Bundle.ReadAsync(await owner.PostAsJsonAsync(Route, Request(spot, [Cave(flagged, walls: true)])));
+        BundlePly.Reveal(whole2.Entries["cave-01-walls.ply"]).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Markers_photographs_and_a_reveal_that_are_not_what_a_request_may_say_are_refused()
+    {
+        var spot = Spot.Somewhere();
+        var cave = Cave(Guid.NewGuid(), walls: true);
+        var caveId = Guid.NewGuid();
+        async Task Refused(object request, string what, string code = "validation.failed")
+        {
+            var answer = await owner.PostAsJsonAsync(Route, request);
+            answer.StatusCode.ShouldBe(HttpStatusCode.BadRequest, what);
+            (await CodeAsync(answer)).ShouldBe(code, what);
+        }
+
+        var one = Guid.NewGuid();
+        await Refused(Request(spot, [cave], markers: [MarkerLayer("entrances", "teal", [Marker(one, 1)])]), "a colour that is a word");
+        await Refused(Request(spot, [cave], markers: [MarkerLayer("entrances", "#146262", [Marker(one, 1), Marker(one, 2)])]), "a marker named twice in a layer");
+        await Refused(Request(spot, [cave], markers: [MarkerLayer("entrances", "#146262", [Marker(one, 90_000)])]), "ground far above any");
+        await Refused(
+            Request(spot, [cave], markers: [MarkerLayer("entrances", "#146262", [Marker(one, 1)]), MarkerLayer("entrances", "#146262", [Marker(Guid.NewGuid(), 1)])]),
+            "two layers of entrances");
+        await Refused(
+            Request(spot, [cave], markers: [MarkerLayer("entrances", "#146262", [.. Enumerable.Range(0, 1001).Select(_ => Marker(Guid.NewGuid(), 1))])]),
+            "more markers than a bundle holds");
+        await Refused(
+            Request(spot, [cave], markers: [MarkerLayer("entrances", "#146262", [Marker(one, 1)], shown: [new { frame = 3, shown = true, fadeFrames = 0 }, new { frame = 2, shown = false, fadeFrames = 0 }])]),
+            "a layer switched in falling order");
+        await Refused(Request(spot, [cave], markers: [MarkerLayer("everything", "#146262", [Marker(one, 1)])]), "a layer of no kind", "validation.invalid_enum");
+
+        await Refused(Request(spot, [Cave(caveId, walls: true)], photos: new { caves = new[] { Guid.NewGuid() }, shown = (object?)null }), "photographs of a cave the request does not name");
+        await Refused(Request(spot, [Cave(caveId, walls: true)], photos: new { caves = new[] { caveId, caveId }, shown = (object?)null }), "a cave named twice");
+        await Refused(
+            Request(spot, [Cave(caveId, walls: true)], photos: new { caves = new[] { caveId }, shown = new[] { new { frame = 2, shown = false, fadeFrames = 3 } } }),
+            "photographs that fade");
+
+        await Refused(Request(spot, [cave], reveal: new { by = "distance", startS = 0.3, endS = 0.1 }), "a reveal that ends before it starts");
+        await Refused(Request(spot, [cave], reveal: new { by = (string?)null, startS = 0d, endS = 0.2 }), "a reveal by nothing");
+        await Refused(Request(spot, [cave], reveal: new { by = "date", startS = 0d, endS = 0.2 }), "a reveal by a date no leg has", "validation.invalid_enum");
+    }
+
+    // ---- what the tests above stand up ----
+
+    private static object Point(Spot at) => new { type = "Point", coordinates = new[] { at.Longitude, at.Latitude } };
+
+    private static object Marker(Guid featureId, double groundM, bool named = false) => new { featureId, groundM, named };
+
+    private static object MarkerLayer(string kind, string colour, object[] markers, object[]? shown = null, object[]? opacity = null) =>
+        new { kind, colour, markers, shown, opacity };
+
+    private async Task<Guid> CreateEntranceAsync(Guid caveId, Spot at, string? name)
+    {
+        long entranceTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            entranceTypeId = await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().EntranceTypes.Select(t => t.Id).FirstAsync();
+        }
+
+        var response = await owner.PostAsJsonAsync($"/api/v1/caves/{caveId}/entrances", new
+        {
+            name,
+            entranceTypeId,
+            isMain = false,
+            geom = Point(at),
+            positionQuality = "Gps",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>An invented sinkhole: a kind of feature that may be a point or an outline.</summary>
+    private async Task<Guid> CreateFeatureAsync(object geometry, string visibility = "authenticated", bool locationProtected = false)
+    {
+        long typeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            typeId = await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>()
+                .FeatureTypes.Where(t => t.Code == FeatureTypeSeeds.Sinkhole).Select(t => t.Id).SingleAsync();
+        }
+
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"Invented hollow {Guid.NewGuid():N}"[..30],
+            featureTypeId = typeId,
+            geometry,
+            description = (string?)null,
+            locationProtected,
+            visibility,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> LinePlotOfAsync(Guid caveId)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>()
+            .SurveyModels.Where(m => m.CaveFeatureId == caveId).Select(m => m.Id).SingleAsync();
+    }
+
+    private async Task<(Guid DocumentId, Guid FileId)> UploadPictureAsync(string fileName, byte[] bytes, string contentType)
+    {
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new(contentType);
+        using var form = new MultipartFormDataContent { { content, "file", fileName } };
+        var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var fileId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId);
+        var version = await db.DocumentVersions.AsNoTracking().FirstAsync(v => v.Id == file.DocumentVersionId);
+        return (version.DocumentId, fileId);
+    }
+
+    /// <summary>Widens a born-private document to every signed-in reader, through the document's own write surface.</summary>
+    private async Task ShareDocumentAsync(Guid documentId)
+    {
+        var current = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/documents/{documentId}");
+        var updated = await owner.PutAsJsonAsync($"/api/v1/documents/{documentId}", new
+        {
+            title = current.GetProperty("title").GetString(),
+            documentTypeId = current.GetProperty("documentTypeId").ValueKind == JsonValueKind.Number
+                ? current.GetProperty("documentTypeId").GetInt64()
+                : (long?)null,
+            metadata = (object?)null,
+            visibility = "authenticated",
+            cavingGroupId = (Guid?)null,
+        });
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Says a photograph was taken at a station: a link naming the station of the model and the document.</summary>
+    private async Task LinkToStationAsync(Guid modelId, string station, Guid documentId)
+    {
+        object Member(string targetType, Guid targetId, int sortOrder, string anchorKind, object? anchor) => new
+        {
+            targetType,
+            targetId,
+            isMain = false,
+            sortOrder,
+            note = (string?)null,
+            anchorKind,
+            anchor,
+            anchorFileId = (Guid?)null,
+        };
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)null,
+            description = (string?)null,
+            members = new[]
+            {
+                Member("surveyModel", modelId, 0, "modelStation", new { station }),
+                Member("document", documentId, 1, "whole", null),
+            },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The newest record of a bundle that drew this cave.</summary>
+    private async Task<JsonElement> LastRecordAsync(Guid caveId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var entries = await db.AuditEntries.AsNoTracking()
+            .Where(e => e.Action == AuditActions.Exported && e.EntityType == FlybyBlenderBundleEndpoints.AuditEntityType)
+            .OrderByDescending(e => e.Id)
+            .Select(e => e.Changes)
+            .ToListAsync();
+        return entries
+            .Select(changes => JsonDocument.Parse(changes!).RootElement.Clone())
+            .First(c => c.GetProperty("wallsCaveIds").EnumerateArray().Concat(c.GetProperty("linesCaveIds").EnumerateArray())
+                .Any(id => id.GetString() == caveId.ToString()));
+    }
+
+    /// <summary>A picture of nothing: bands of colour, in the format asked for.</summary>
+    private static byte[] PlainPicture(uint width, uint height, MagickFormat format)
+    {
+        using var image = new MagickImage(new MagickColor(40, 110, 170), width, height);
+        using var band = new MagickImage(new MagickColor(235, 205, 70), width, Math.Max(1, height / 4));
+        image.Composite(band, 0, (int)(height / 2));
+        return image.ToByteArray(format);
+    }
+
+    /// <summary>
+    /// The same, as a JPEG stamped the way a camera stamps one — with a position, made up, on
+    /// open ocean — so that a bundle can be shown to carry none of it.
+    /// </summary>
+    private static byte[] StampedPicture(uint width, uint height)
+    {
+        using var image = new MagickImage(PlainPicture(width, height, MagickFormat.Png));
+        var exif = new ExifProfile();
+        exif.SetValue(ExifTag.GPSLatitudeRef, "S");
+        exif.SetValue(ExifTag.GPSLatitude, [new Rational(48), new Rational(30), new Rational(0)]);
+        exif.SetValue(ExifTag.GPSLongitudeRef, "W");
+        exif.SetValue(ExifTag.GPSLongitude, [new Rational(151), new Rational(15), new Rational(0)]);
+        exif.SetValue(ExifTag.Model, "Invented camera");
+        image.SetProfile(exif);
+        return image.ToByteArray(MagickFormat.Jpeg);
+    }
+
     private sealed record Spot(double Longitude, double Latitude)
     {
         public static Spot Somewhere() => new(
@@ -679,7 +1169,10 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         double[][]? frames = null,
         string[]? leftOut = null,
         object? changes = null,
-        string? language = null) => new
+        string? language = null,
+        object[]? markers = null,
+        object? photos = null,
+        object? reveal = null) => new
         {
             name = "An invented flyby",
             output = new { width, height = 720, fps, quality = "low" },
@@ -707,9 +1200,12 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
                 fadeOutS = 0d,
                 northArrow = true,
             },
-            leftOut = leftOut ?? ["ground", "entrances"],
+            leftOut = leftOut ?? ["ground", "scans"],
             changes,
             language,
+            markers,
+            photos,
+            reveal,
         };
 
     /// <summary>What a flyby changes over the clip, as a request writes it; a member left out is said as null.</summary>
@@ -795,11 +1291,12 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         string visibility = "authenticated",
         bool locationProtected = false,
         Guid? parentId = null,
-        bool measured = true)
+        bool measured = true,
+        bool entranceAtTheBottom = false)
     {
         var caveId = await CreateCaveAsync(visibility, locationProtected, parentId);
 
-        var content = new ByteArrayContent(Survey(measured));
+        var content = new ByteArrayContent(Survey(measured, entranceAtTheBottom));
         content.Headers.ContentType = new("application/octet-stream");
         using var form = new MultipartFormDataContent
         {
@@ -825,7 +1322,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
     }
 
     /// <summary>Four stations going down and east from the file's zero; walls measured along the first leg, or nowhere.</summary>
-    private static byte[] Survey(bool measured)
+    private static byte[] Survey(bool measured, bool entranceAtTheBottom = false)
     {
         CaveLrud? atA = measured ? new CaveLrud(Left: 1.5, Right: 0.5, Up: 2, Down: 0.3) : null;
         CaveLrud? atB = measured ? new CaveLrud(Left: 0.8, Right: 1.2, Up: 1, Down: 1) : null;
@@ -846,7 +1343,14 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
                 new CaveStation { Id = 1, Name = "A", Position = new CaveVector3(0, 0, 0) },
                 new CaveStation { Id = 2, Name = "B", Position = new CaveVector3(12, 5, -3) },
                 new CaveStation { Id = 3, Name = "C", Position = new CaveVector3(20, 5, -30) },
-                new CaveStation { Id = 4, Name = "D", Position = new CaveVector3(31, 9, -64) },
+                new CaveStation
+                {
+                    Id = 4,
+                    Name = "D",
+                    Position = new CaveVector3(31, 9, -64),
+                    // The format's own bit for an entrance: the writer writes a station's flags as the file has them.
+                    RawFlags = entranceAtTheBottom ? 2u : 0u,
+                },
             ],
             Shots = [Shot(1, 2, atA, atB), Shot(2, 3, null, null), Shot(3, 4, null, null)],
         });

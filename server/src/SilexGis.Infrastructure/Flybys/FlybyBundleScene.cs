@@ -35,7 +35,17 @@ public sealed record FlybyBundleLeg(
     double FromAltitudeM,
     double ToLongitude,
     double ToLatitude,
-    double ToAltitudeM);
+    double ToAltitudeM)
+{
+    /// <summary>
+    /// The station the leg starts at, as the survey names it, where it is known: two legs that
+    /// name one station meet there, whatever the last digit of their coordinates says.
+    /// </summary>
+    public string? FromStation { get; init; }
+
+    /// <summary>The station the leg ends at.</summary>
+    public string? ToStation { get; init; }
+}
 
 /// <summary>
 /// What is drawn of one cave.
@@ -71,6 +81,16 @@ public sealed record FlybyBundleCave(
     /// faded as the walls are, since they are all there is to see of it.
     /// </summary>
     public bool LinesStandIn { get; init; }
+
+    /// <summary>
+    /// The cave's survey legs for working out in what order it appears where the scene reveals it
+    /// — every passage leg, whether or not the cave's lines are drawn. Empty for a cave that is
+    /// not revealed, or has no survey: it is then there from the first frame.
+    /// </summary>
+    public IReadOnlyList<FlybyBundleLeg> SurveyLegs { get; init; } = [];
+
+    /// <summary>The stations of the survey that are entrances, by name: a reveal starts from them.</summary>
+    public IReadOnlyList<string> EntranceStations { get; init; } = [];
 }
 
 /// <summary>How a value gets to a key from the key before it.</summary>
@@ -158,6 +178,79 @@ public sealed record FlybyBundleChanges(
     public IReadOnlyList<FlybyBundleNumberKey> Daylight { get; init; } = [];
 }
 
+/// <summary>
+/// Something pointed out on the ground of the scene the flyby was played in: an entrance, or a
+/// feature of the surface.
+/// </summary>
+/// <param name="HeightM">
+/// The true height of the ground the scene drew it on. A bundle has no ground: the marker stands
+/// where the scene's ground had it.
+/// </param>
+/// <param name="Name">What is written beside it; null for a marker alone.</param>
+public sealed record FlybyBundleMarker(double Longitude, double Latitude, double HeightM, string? Name);
+
+/// <summary>
+/// The markers of one layer of the scene: one colour, one name to find them by, shown and hidden
+/// together.
+/// </summary>
+/// <param name="Role">
+/// What every marker of the layer is called in the plan, lower-case words joined by hyphens; the
+/// names written beside them are called the same with "-name" after it.
+/// </param>
+/// <param name="Colour">The colour the markers glow in, <c>#rrggbb</c>.</param>
+/// <param name="Shown">When the layer is shown and hidden; before its first key it is the other way round.</param>
+/// <param name="Opacity">How much of it is there, from 0 to 1, besides its coming and going.</param>
+public sealed record FlybyBundleMarkerLayer(
+    string Role,
+    string Colour,
+    IReadOnlyList<FlybyBundleMarker> Markers,
+    IReadOnlyList<FlybyBundleShownKey> Shown,
+    IReadOnlyList<FlybyBundleNumberKey> Opacity);
+
+/// <summary>
+/// A photograph taken at a station of a cave's survey: the station's place, and the picture as
+/// the bytes of a JPEG file.
+/// </summary>
+/// <param name="Cave">Which cave of the scene it belongs to, counted from 0 in the order the scene lists them.</param>
+/// <param name="AltitudeM">The station's surveyed altitude; the cave's own shift puts it where the scene drew the cave.</param>
+/// <param name="WidthPx">How wide the picture is, in pixels; with <paramref name="HeightPx"/>, its shape.</param>
+public sealed record FlybyBundlePhoto(
+    int Cave,
+    double Longitude,
+    double Latitude,
+    double AltitudeM,
+    byte[] Jpeg,
+    int WidthPx,
+    int HeightPx);
+
+/// <summary>The photographs of a scene, and when their layer is shown.</summary>
+/// <param name="Shown">
+/// When the layer of photographs is shown and hidden — at once, as the scene switches it; before
+/// its first key it is the other way round. A photograph is in the picture while its layer is
+/// shown and the camera is near it.
+/// </param>
+public sealed record FlybyBundlePhotos(
+    IReadOnlyList<FlybyBundlePhoto> Photos,
+    IReadOnlyList<FlybyBundleShownKey> Shown)
+{
+    public static FlybyBundlePhotos None { get; } = new([], []);
+
+    /// <summary>
+    /// How many photographs there are at the stations of the caves drawn, in all — more than
+    /// <see cref="Photos"/> where a station has several or a bundle would hold too many. What the
+    /// bundle does not show of them is said in its notes, as a count.
+    /// </summary>
+    public int Found { get; init; }
+}
+
+/// <summary>
+/// The caves appear part by part while the clip runs: each from its entrances inwards, along its
+/// passages, by the distance from them.
+/// </summary>
+/// <param name="StartS">When the first of each cave appears, in seconds from the clip's first frame.</param>
+/// <param name="EndS">When all of every cave is there.</param>
+public sealed record FlybyBundleReveal(double StartS, double EndS);
+
 /// <summary>A card of words over the picture.</summary>
 /// <param name="Seconds">
 /// For a title, how long after the first frame it has gone; for an end card, how long before the
@@ -195,6 +288,26 @@ public sealed record FlybyBundleLook(
     string? SkyColour,
     string? LineColour,
     IReadOnlyList<FlybyBundleDepthBand> DepthBands);
+
+/// <summary>Which layer of the 3D view a layer of markers is.</summary>
+public enum FlybyBundleMarkerKind
+{
+    /// <summary>The entrances of caves.</summary>
+    Entrances = 0,
+
+    /// <summary>The features of the surface, every kind together.</summary>
+    SurfaceFeatures = 1,
+
+    /// <summary>A layer of features chosen by a filter or by their types, in a colour of its own.</summary>
+    Features = 2,
+}
+
+/// <summary>What caves appear part by part by.</summary>
+public enum FlybyBundleRevealBy
+{
+    /// <summary>The distance along the passages from the entrances.</summary>
+    Distance = 0,
+}
 
 /// <summary>How long a render may take a frame: the more samples, the cleaner the picture.</summary>
 public enum FlybyBundleQuality
@@ -243,4 +356,13 @@ public sealed record FlybyBundleScene(
     /// notes exist in English and in Romanian; any other language is given the English ones.
     /// </summary>
     public string? Language { get; init; }
+
+    /// <summary>The entrances and the features of the surface the scene points out, layer by layer.</summary>
+    public IReadOnlyList<FlybyBundleMarkerLayer> MarkerLayers { get; init; } = [];
+
+    /// <summary>The photographs taken at stations of the caves drawn.</summary>
+    public FlybyBundlePhotos Photos { get; init; } = FlybyBundlePhotos.None;
+
+    /// <summary>How the caves appear part by part; null for caves that are there from the first frame.</summary>
+    public FlybyBundleReveal? Reveal { get; init; }
 }

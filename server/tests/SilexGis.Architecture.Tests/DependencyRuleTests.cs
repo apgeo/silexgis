@@ -445,6 +445,15 @@ public class DependencyRuleTests
         "Therion.CaveGeometry.CaveMesh",
         "Therion.CaveGeometry.Writers.PlyWriter",
 
+        // The order a cave appears in: the library measures the distance along the passages from
+        // the entrances over a model's legs (shortest paths over a graph in memory) and gives each
+        // vertex of a wall the number of the nearest place on the centreline (a search tree in
+        // memory). A model in, numbers out; nothing is read and nothing is started.
+        "Therion.CaveGeometry.RevealField",
+        "Therion.CaveGeometry.RevealLeg",
+        "Therion.CaveGeometry.RevealOptions",
+        "Therion.CaveGeometry.RevealSource",
+
         // The scene plan — the description of one render that the bundle carries as JSON — in the
         // records and enums it is made of: the frame, the clock, a model and its turn, the camera
         // and each of its poses with the pose's own orientation, the look with its materials,
@@ -496,6 +505,27 @@ public class DependencyRuleTests
         // Where a ramp of colours over height measures its heights — in the scene, or in the
         // model's own mesh: one enum with two values.
         "Therion.Blender.Plan.PlanRampSpace",
+
+        // What a plan points out — a marker, a name with a line to what it names, a picture at a
+        // point of a model — and how a model appears part by part: records and an enum, read by
+        // the validator and written out by the serializer. A picture is named by a path inside the
+        // bundle, which this application fills from bytes it holds; no record opens anything.
+        "Therion.Blender.Plan.PlanAnnotation",
+        "Therion.Blender.Plan.PlanAnnotationKind",
+        "Therion.Blender.Plan.PlanPhotoFrame",
+        "Therion.Blender.Plan.PlanRevealFront",
+        "Therion.Blender.Plan.PlanRevealGlow",
+
+        // From spans of a clip to the keys that show a thing in them: a span is two numbers, and
+        // the one method called (`Shown`) is arithmetic on frames. Read to its last line for this
+        // entry: the planner's other methods lower a scene description and spell file names, and
+        // none of it opens a file either — this application calls none of those.
+        "Therion.Blender.Plan.AnnotationPlanner",
+        "Therion.Blender.Plan.PlanWindow",
+
+        // How soft the edge of a reveal is and what colour it glows in, as the library's own
+        // defaults: a record made with `new` and read, so the numbers stay the library's.
+        "Therion.Blender.RevealSpec",
 
         // What works on a plan: the validator (a plan in, a list of what is wrong with it out),
         // the serializer (a plan in, JSON text out) and the builder, asked for the draft copy of a

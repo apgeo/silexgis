@@ -25,6 +25,16 @@ export interface FlybyBackgroundShown extends FlybyBackgroundState {
   opacity?: number;
 }
 
+/** One layer of entrances or features a view draws: its key, what it is, how it is asked for and its colour. */
+export interface FlybyMarkerSource {
+  layer: FlybyLayerKey;
+  kind: 'entrances' | 'surfaceFeatures' | 'features';
+  /** The filter the layer is asked of the server with — a saved filter's id, a filter document, or none. */
+  params: { filter?: string; savedFilterId?: string };
+  /** `#rrggbb`. */
+  colour: string;
+}
+
 /**
  * What the view a flyby plays in does to its scene. Each member puts one thing in the state given;
  * undefined hands that thing back to the viewer's own setting.
@@ -39,6 +49,12 @@ export interface FlybyLookTarget {
    * a view that lists no such layers.
    */
   viewerLayers?(): FlybyLayerKey[];
+  /**
+   * The layers of entrances and features the viewer has, by their keys: what each is asked of the
+   * server with and the colour it is drawn in. For whoever makes something of the scene that has
+   * to hold what those layers point out. Left out by a view that draws none.
+   */
+  markerSources?(): FlybyMarkerSource[];
   showBackground(shown: FlybyBackgroundShown | undefined): void;
   showLayer(key: FlybyLayerKey, state: FlybyLayerState | undefined): void;
   /**

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { flybyChangeMember, type FlybyChange, type FlybyColour } from './flybyDocument.ts';
+import { flybyChangeMember, type FlybyChange, type FlybyColour, type FlybyLayerKey } from './flybyDocument.ts';
 import {
   flybyLayerPartsAt,
   flybyLookAt,
@@ -313,6 +313,18 @@ export interface FlybyBundleLookTracks {
   lineColour?: FlybyColour;
   /** Null where nothing changes and nothing stands other than a bare scene has it. */
   changes: FlybyBundleChanges | null;
+  /**
+   * The other layers asked about, by key: whether each is shown at any frame of the clip, when it
+   * is shown and hidden, and how much of it is there besides — left out where that is all of it.
+   */
+  layers: Record<FlybyLayerKey, FlybyBundleLayerShown>;
+}
+
+/** How one layer of the scene comes and goes over a clip. */
+export interface FlybyBundleLayerShown {
+  ever: boolean;
+  shown: FlybyBundleShownKey[];
+  opacity?: FlybyBundleNumberKey[];
 }
 
 /**
@@ -400,7 +412,9 @@ function beside(plan: FlybyLookPlan, t: number, side: -1 | 1): FlybyLookPlan {
  *
  * `caves` are the caves the bundle names; one of them has tracks of its own only where the flyby
  * colours it apart. `relief` is false where the view does not let a flyby stretch the relief: the
- * viewer's own factor then stands throughout.
+ * viewer's own factor then stands throughout. `others` are layers of the scene besides the walls and
+ * the lines — the entrances, a layer of features, the photographs — whose coming and going is
+ * wanted as keys too.
  */
 export function flybyBundleLookTracks(
   look: FlybyLookPlan,
@@ -408,6 +422,7 @@ export function flybyBundleLookTracks(
   schedule: FlybyFrameSchedule,
   caves: readonly string[],
   relief = true,
+  others: readonly FlybyLayerKey[] = [],
 ): FlybyBundleLookTracks {
   const plan = flybyBundleLookOnFrames(look, schedule);
   const last = Math.max(0, schedule.count - 1);
@@ -455,8 +470,8 @@ export function flybyBundleLookTracks(
   // ---- sky ----
   const skyKeys = flybyBundleTrack((frame, side) => channelsOf(stateAt(frame, side).sky ?? BLACK), breaksOf('sky'), last, FLYBY_BUNDLE_COLOUR);
 
-  // ---- the two layers a bundle draws ----
-  const layer = (key: 'walls' | 'centerlines') => {
+  // ---- the layers a bundle draws: the walls, the lines, and whatever else is asked about ----
+  const layer = (key: FlybyLayerKey): FlybyBundleLayerShown => {
     const member = `layer:${key}`;
     const first = flybyLayerPartsAt(plan, base, key, momentOf(0)).visible;
 
@@ -583,6 +598,7 @@ export function flybyBundleLookTracks(
   return {
     walls: walls.ever,
     lines: lines.ever,
+    layers: Object.fromEntries([...new Set(others)].map((key) => [key, layer(key)])),
     reliefAt: (frame) => rounded(flybyBundleTrackAt(reliefKeys, Math.min(Math.max(frame, 0), last), FLYBY_BUNDLE_NUMBER)[0]),
     ...(sky !== BLACK ? { sky } : {}),
     ...(linesTint && linesTint[0].strength > 0 ? { lineColour: linesTint[0].colour } : {}),

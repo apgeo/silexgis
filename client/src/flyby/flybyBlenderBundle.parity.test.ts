@@ -32,6 +32,13 @@ import { compileFlyby, flybyCameraAt } from './flybyTimeline.ts';
 // under the ground, worked out here from the camera's heights and the invented hill. A bundle's
 // sun and sky go out there.
 //
+// And what the scene points out: entrances and features as markers, and photographs at stations.
+// A request names a marker by id and says nothing of a photograph but whose cave it is of, so the
+// invented places of both are written beside the cameras — with whether each layer is shown, and
+// how much of it, at every frame. The server's tests stand the bundle's markers and photographs
+// beside those places, frame by frame, and their coming and going beside these rows. The first of
+// the two clips also lets its caves appear part by part.
+//
 // Both files are committed under contract/blender-bundle/v1. A normal run compares against them and
 // fails on any difference; SILEXGIS_CONTRACT_RECORD=1 rewrites them, which is the only way they
 // change, and a diff in them is a change to what a bundle is made from.
@@ -64,6 +71,33 @@ const PARITY_ORIGIN: Camera3DEye = { lon: 9.75, lat: 44.35, height: 640 };
 const PARITY_CAVES = ['0193a5c0-0000-7000-8000-00000000000a', '0193a5c0-0000-7000-8000-00000000000b'] as const;
 
 const second: Camera3DEye = { lon: 9.7655, lat: 44.3588, height: 590 };
+
+/** A layer the viewer draws from a saved filter, by the key a flyby shows and hides it by. */
+const PARITY_FEATURES = 'filter:0193a5c0-0000-7000-8000-0000000000f1';
+
+/**
+ * Invented entrances and features: an id as a request names it, and the place the server's test
+ * gives it. Two entrances of the first cave, one of the second, and three springs beside them.
+ */
+const PARITY_MARKERS: { layer: string; kind: 'entrances' | 'features'; id: string; lon: number; lat: number; named?: boolean }[] = [
+  { layer: 'entrances', kind: 'entrances', id: '0193a5c0-0000-7000-8000-0000000000e1', lon: 9.7494, lat: 44.3503, named: true },
+  { layer: 'entrances', kind: 'entrances', id: '0193a5c0-0000-7000-8000-0000000000e2', lon: 9.7509, lat: 44.3495, named: true },
+  { layer: 'entrances', kind: 'entrances', id: '0193a5c0-0000-7000-8000-0000000000e3', lon: 9.7648, lat: 44.3592, named: true },
+  { layer: PARITY_FEATURES, kind: 'features', id: '0193a5c0-0000-7000-8000-0000000000d1', lon: 9.7521, lat: 44.3512 },
+  { layer: PARITY_FEATURES, kind: 'features', id: '0193a5c0-0000-7000-8000-0000000000d2', lon: 9.7631, lat: 44.3571 },
+  { layer: PARITY_FEATURES, kind: 'features', id: '0193a5c0-0000-7000-8000-0000000000d3', lon: 9.7702, lat: 44.3611 },
+];
+
+/**
+ * Invented stations with a photograph each: the cave, counted from 0, and the station's place and
+ * surveyed altitude. One in the first cave; three down the second, which the camera descends.
+ */
+const PARITY_PHOTOS: [number, number, number, number][] = [
+  [0, 9.7501, 44.3499, 640],
+  [1, 9.7652, 44.359, 660],
+  [1, 9.7659, 44.3586, 590],
+  [1, 9.7665, 44.3582, 500],
+];
 
 /** A line of places from one to another, bowed a little to one side, `count` of them. */
 function line(from: Camera3DEye, to: Camera3DEye, count: number, bow: number): Camera3DEye[] {
@@ -145,6 +179,12 @@ const PARITY_FLYBY: FlybyDocument = {
     { id: 'thin', kind: 'layerOpacity', layer: 'centerlines', opacity: 0.5, section: 'over', at: 0, seconds: 1 },
     { id: 'dusk', kind: 'sky', colour: '#0b1118', section: 'down', at: 0, seconds: 2 },
     { id: 'walls-go', kind: 'layer', layer: 'walls', visible: false, section: 'along', at: 1.4, seconds: 1.6 },
+    // The entrances fade out as the camera leaves for the second cave and are cut back in while it
+    // goes down; a layer of features is thinned; the photographs are switched off for the track.
+    { id: 'pins-go', kind: 'layer', layer: 'entrances', visible: false, section: 'over', at: 0, seconds: 1 },
+    { id: 'pins-back', kind: 'layer', layer: 'entrances', visible: true, section: 'down', at: 1, seconds: 0 },
+    { id: 'springs-thin', kind: 'layerOpacity', layer: PARITY_FEATURES, opacity: 0.4, section: 'round', at: 1, seconds: 2 },
+    { id: 'photos-go', kind: 'layer', layer: 'photos', visible: false, section: 'along', at: 0.4, seconds: 0 },
   ],
   texts: {
     title: { text: 'Two invented caves', subtitle: 'A camera test', seconds: 2 },
@@ -236,7 +276,9 @@ function expectedPoints(): number[][] {
 const viewer: FlybyLookBase = { backgroundOpacity: 1, surface: 'overlay', lens: 60, relief: 1, layers: {} };
 const timeline = compileFlyby(PARITY_FLYBY, PARITY_SUBJECTS, (about) => about.name);
 
-function ask(size: { width: number; height: number }, stretch?: { from: number; to: number }, holdEndS = 0) {
+const PARITY_LAYER_COLOURS: Record<string, string> = { entrances: '#146262', [PARITY_FEATURES]: '#722ed1' };
+
+function ask(size: { width: number; height: number }, stretch?: { from: number; to: number }, holdEndS = 0, reveal = false) {
   const schedule = flybyFrameSchedule(timeline.length, 25, stretch, holdEndS);
   const made = flybyBundleRequest({
     name: PARITY_FLYBY.name,
@@ -257,12 +299,24 @@ function ask(size: { width: number; height: number }, stretch?: { from: number; 
       { fromMeters: 50, color: '#8c2f6b' },
     ],
     reliefWords: (factor) => `Relief ×${factor}`,
+    markers: ['entrances', PARITY_FEATURES].map((layer) => ({
+      layer,
+      kind: layer === 'entrances' ? ('entrances' as const) : ('features' as const),
+      colour: PARITY_LAYER_COLOURS[layer],
+      markers: PARITY_MARKERS.filter((marker) => marker.layer === layer).map((marker) => ({
+        featureId: marker.id,
+        groundM: parityGround(marker.lon, marker.lat),
+        ...(marker.named ? { named: true } : {}),
+      })),
+    })),
+    reveal: reveal ? 'distance' : null,
   });
   return { ...made, schedule };
 }
 
 const CASES = [
-  { name: 'two-cave-flyby.landscape', made: ask({ width: 1280, height: 720 }) },
+  // The whole of it, its caves appearing part by part.
+  { name: 'two-cave-flyby.landscape', made: ask({ width: 1280, height: 720 }, undefined, 0, true) },
   // A stretch of it, upright, with the last moment held: the first second is still straight down,
   // and the first cave is lit just as the stretch ends.
   { name: 'two-cave-flyby.portrait', made: ask({ width: 1080, height: 1920 }, { from: 0.4, to: 4 }, 0.2) },
@@ -296,6 +350,23 @@ function expectedLook(schedule: FlybyFrameSchedule): LookRow[] {
       row.push(own && own.strength > 0 ? own.colour : (state.lines ?? null));
     }
     return row;
+  });
+}
+
+type PointedRow = [boolean, number, boolean, number, boolean];
+
+/**
+ * What the scene points out at each frame: whether the entrances are shown and how much of them,
+ * the same of the layer of features, and whether the photographs are — which the view switches at
+ * once: on while their layer is, off when a change that hides it has run.
+ */
+function expectedPointed(schedule: FlybyFrameSchedule): PointedRow[] {
+  return Array.from({ length: schedule.count }, (_, index) => {
+    const state = flybyLookAt(timeline.look, viewer, schedule.at(index));
+    const of = (key: string) => state.layers[key] ?? { visible: true, opacity: 1 };
+    const entrances = of('entrances');
+    const features = of(PARITY_FEATURES);
+    return [entrances.visible, round(entrances.opacity, 6), features.visible, round(features.opacity, 6), of('photos').visible];
   });
 }
 
@@ -381,7 +452,7 @@ function tolerance(path: string): number {
   if (path.startsWith('expected.underground')) {
     return 0;
   }
-  if (path.startsWith('expected.look[') || path.includes('.changes.')) {
+  if (path.startsWith('expected.look[') || path.startsWith('expected.pointed[') || path.includes('.changes.') || path.includes('.opacity[')) {
     // A strength or a factor, written to a millionth.
     return 2e-6;
   }
@@ -413,14 +484,18 @@ function near(actual: unknown, expected: unknown, path: string): void {
 function compactJson(value: { frames: number[][] } & Record<string, unknown>): string {
   // One frame a line, so a change to one frame is one line of a diff; and one key a line.
   const { frames, ...rest } = value;
-  const lookRows = Array.isArray(rest.look) ? (rest.look as unknown[][]) : undefined;
-  if (lookRows) {
-    delete rest.look;
-  }
-  const head = JSON.stringify(rest, null, 2).replace(/\{\n\s+"frame": [^{}]*?\}/g, (key) => key.replace(/\n\s*/g, ' '));
   const rows = (list: unknown[][]) => list.map((row) => `    ${JSON.stringify(row)}`).join(',\n');
-  const looks = lookRows ? `,\n  "look": [\n${rows(lookRows)}\n  ]` : '';
-  return `${head.slice(0, -2)}${looks},\n  "frames": [\n${rows(frames)}\n  ]\n}\n`;
+  let tables = '';
+  for (const name of ['look', 'pointed']) {
+    if (Array.isArray(rest[name])) {
+      tables += `,\n  "${name}": [\n${rows(rest[name] as unknown[][])}\n  ]`;
+      delete rest[name];
+    }
+  }
+  const head = JSON.stringify(rest, null, 2)
+    .replace(/\{\n\s+"(?:frame|featureId)": [^{}]*?\}/g, (key) => key.replace(/\n\s*/g, ' '))
+    .replace(/\[\n\s+(?:-?[\d.]+|"[^"]*"),\n[^[\]{}]*?\]/g, (list) => list.replace(/\n\s*/g, ' ').replace('[ ', '[').replace(' ]', ']'));
+  return `${head.slice(0, -2)}${tables},\n  "frames": [\n${rows(frames)}\n  ]\n}\n`;
 }
 
 describe('the invented flyby the camera check is made on', () => {
@@ -434,9 +509,9 @@ describe('the invented flyby the camera check is made on', () => {
     expect(refusal).toBeNull();
     expect(request.frames).toHaveLength(450);
     expect(request.relief).toBe(1.5);
-    // The lens is carried frame by frame and every change of the look by its keys: only the ground
-    // is left out.
-    expect(omissions).toEqual(['ground']);
+    // The lens is carried frame by frame, every change of the look by its keys and what the scene
+    // points out as markers: only the ground is left out, and the outlines a layer of features may hold.
+    expect(omissions).toEqual(['ground', 'featureOutlines']);
     expect(request.changes?.relief).toEqual([
       { frame: 0, value: 1.5, easing: null },
       { frame: 375, value: 1.5, easing: null },
@@ -558,6 +633,68 @@ describe('the invented flyby the camera check is made on', () => {
     expect(CASES[1].made.request.changes?.daylight ?? null).toBeNull();
   });
 
+  it('points out its entrances, a layer of features and the photographs of its caves, each layer coming and going on frames', () => {
+    const { request } = CASES[0].made;
+    expect(request.markers?.map((layer) => [layer.kind, layer.colour, layer.markers?.length])).toEqual([
+      ['entrances', '#146262', 3],
+      ['features', '#722ed1', 3],
+    ]);
+    // The entrances go over a second as the hop begins (frame 225) and are cut back in a second
+    // into the descent (325).
+    expect(request.markers?.[0].shown).toEqual([
+      { frame: 225, shown: false, fadeFrames: 25 },
+      { frame: 325, shown: true },
+    ]);
+    expect(request.markers?.[0].opacity ?? null).toBeNull();
+    // The features are there throughout, thinned over two seconds of the turn.
+    expect(request.markers?.[1].shown ?? null).toBeNull();
+    expect(request.markers?.[1].opacity).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: 150, value: 1, easing: null },
+      { frame: 200, value: 0.4, easing: 'smooth' },
+    ]);
+    // The photographs of both caves, switched off at once as the track begins.
+    expect(request.photos).toEqual({ caves: [...PARITY_CAVES], shown: [{ frame: 385, shown: false }] });
+    // The caves appear from the moment the title has gone to four fifths of the way to the end card.
+    expect(request.reveal).toEqual({ by: 'distance', startS: 2, endS: 13.6 });
+    expect(CASES[1].made.request.reveal ?? null).toBeNull();
+  });
+
+  it('says of each layer of markers what the screen shows at every frame', () => {
+    for (const { made } of CASES) {
+      const rows = expectedPointed(made.schedule);
+      (made.request.markers ?? []).forEach((layer, at) => {
+        let on = layer.shown && layer.shown.length > 0 ? !layer.shown[0].shown : true;
+        const keys = (layer.opacity ?? [{ frame: 0, value: 1, easing: null }]).map(
+          (key): FlybyBundleTrackKey => ({
+            frame: key.frame,
+            value: [key.value],
+            ...(key.easing === 'smooth' || key.easing === 'constant' ? { easing: key.easing } : {}),
+          }),
+        );
+        rows.forEach((row, frame) => {
+          // Shown from the frame a key shows it on; one that hides it hides it once its fade has run.
+          let fade = 1;
+          for (const key of layer.shown ?? []) {
+            const takes = key.fadeFrames ?? 0;
+            if (key.frame > frame) {
+              break;
+            }
+            const x = takes > 0 ? Math.min(1, (frame - key.frame) / takes) : 1;
+            const eased = x * x * (3 - 2 * x);
+            on = key.shown || x < 1;
+            fade = key.shown ? eased : 1 - eased;
+          }
+          const [visible, opacity] = [row[at * 2] as boolean, row[at * 2 + 1] as number];
+          expect(on, `layer ${at} frame ${frame}`).toBe(visible);
+          if (visible) {
+            expect(flybyBundleTrackAt(keys, frame, FLYBY_BUNDLE_NUMBER)[0] * fade, `layer ${at} frame ${frame}`).toBeCloseTo(opacity, 5);
+          }
+        });
+      });
+    }
+  });
+
   it('draws each frame at the relief the request\'s own keys give', () => {
     for (const { made } of CASES) {
       const keys = (made.request.changes?.relief ?? [{ frame: 0, value: made.request.relief, easing: null }]).map(
@@ -586,13 +723,26 @@ describe.each(CASES)('$name', ({ name, made }) => {
       'each at its height times the frame\'s relief. The look of each frame: the sky, the walls shown and how much of them, ' +
       'the lines shown and how much of them, then for each cave of the request the colour over its walls, that colour\'s ' +
       'strength, and the one colour of its lines (null: their colours by depth). And the frames at which the camera is under ' +
-      'the ground, as runs from a first frame up to, and not including, the frame it is above the ground again.',
+      'the ground, as runs from a first frame up to, and not including, the frame it is above the ground again. What the scene ' +
+      'points out: the invented place of each marker the request names (its layer counted from 0, its id, longitude, latitude ' +
+      'and the true height of the ground there), the invented stations with a photograph (the cave counted from 0, longitude, ' +
+      'latitude, surveyed altitude), and for each frame whether the first layer of markers is shown and how much of it, the ' +
+      'same of the second, and whether the photographs are shown.',
     width: made.request.output!.width,
     height: made.request.output!.height,
     fps: made.request.output!.fps,
     points: expectedPoints(),
     underground: expectedUnderground(made.request),
+    markers: PARITY_MARKERS.map((marker) => [
+      marker.layer === 'entrances' ? 0 : 1,
+      marker.id,
+      marker.lon,
+      marker.lat,
+      round(parityGround(marker.lon, marker.lat), 3),
+    ]),
+    photos: PARITY_PHOTOS,
     look,
+    pointed: expectedPointed(made.schedule),
     frames: expectedCameras(made.request, expectedReliefs(made.schedule)),
   };
 

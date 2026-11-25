@@ -44,5 +44,38 @@ public static class BundlePly
         return (vertices, colours);
     }
 
+    /// <summary>
+    /// The number each vertex of the file carries for a reveal — the float property <c>reveal</c> —
+    /// or null for a file whose vertices carry none.
+    /// </summary>
+    public static List<double>? Reveal(byte[] file)
+    {
+        var end = Encoding.ASCII.GetBytes("end_header\n");
+        var at = file.AsSpan().IndexOf(end) + end.Length;
+        var header = Encoding.ASCII.GetString(file, 0, at).Split('\n');
+        var count = int.Parse(
+            header.Single(l => l.StartsWith("element vertex ", StringComparison.Ordinal))[15..], CultureInfo.InvariantCulture);
+        var properties = header
+            .SkipWhile(l => !l.StartsWith("element vertex ", StringComparison.Ordinal)).Skip(1)
+            .TakeWhile(l => l.StartsWith("property ", StringComparison.Ordinal))
+            .Select(l => l.Split(' '))
+            .ToList();
+        if (!properties.Any(p => p[2] == "reveal"))
+        {
+            return null;
+        }
+
+        properties.Single(p => p[2] == "reveal")[1].ShouldBe("float");
+        var stride = properties.Sum(Size);
+        var before = properties.TakeWhile(p => p[2] != "reveal").Sum(Size);
+        var values = new List<double>(count);
+        for (var v = 0; v < count; v++)
+        {
+            values.Add(BitConverter.ToSingle(file, at + (v * stride) + before));
+        }
+
+        return values;
+    }
+
     private static int Size(string[] property) => property[1] == "uchar" ? 1 : 4;
 }

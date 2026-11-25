@@ -8,7 +8,9 @@ namespace SilexGis.Domain.Export;
 /// A bundle is made anyway and says what it leaves out — a flyby is not refused because part of
 /// its look has no counterpart yet. What a flyby changes while it plays is not on the list: the
 /// relief, the colours of walls and lines, the layers a bundle draws shown, hidden and faded, and
-/// the sky are carried, change by change. The list is closed: whoever asks for a bundle names what
+/// the sky are carried, change by change. Neither is what it points out: entrances, the features
+/// of the surface that are points, and the photographs taken at stations go in as markers, names
+/// and pictures. The list is closed: whoever asks for a bundle names what
 /// applies to their flyby in these words, the page says it before the file is made and the file
 /// says it again in its own notes, so the two cannot drift into saying different things.
 /// </para>
@@ -21,29 +23,29 @@ public enum FlybyBundleOmission
     /// <summary>The opening cut in the ground over a cave.</summary>
     SurfaceOpening = 1,
 
-    /// <summary>Entrance markers.</summary>
-    Entrances = 2,
-
-    /// <summary>Surface features and layers of features.</summary>
-    SurfaceFeatures = 3,
+    /// <summary>
+    /// The outlines of surface features that are lines or areas: they are drawn on the ground, and
+    /// a bundle has none. The features that are points go in as markers.
+    /// </summary>
+    FeatureOutlines = 2,
 
     /// <summary>Point-cloud scans.</summary>
-    Scans = 4,
-
-    /// <summary>Photograph markers.</summary>
-    Photos = 5,
+    Scans = 3,
 
     /// <summary>Tile overlays and georeferenced maps.</summary>
-    MapLayers = 6,
+    MapLayers = 4,
 
     /// <summary>The lines of imported files.</summary>
-    Tracks = 7,
+    Tracks = 5,
 
     /// <summary>Walls the viewer chose not to download into the 3D view.</summary>
-    WallsNotDownloaded = 8,
+    WallsNotDownloaded = 6,
 
     /// <summary>Caves in view beyond the number a bundle takes.</summary>
-    MoreCavesInView = 9,
+    MoreCavesInView = 7,
+
+    /// <summary>Entrances and features beyond the number of markers a bundle takes.</summary>
+    MoreMarkers = 8,
 }
 
 /// <summary>
@@ -63,18 +65,12 @@ public static class FlybyBundleOmissions
         FlybyBundleOmission.SurfaceOpening => romanian
             ? "deschiderea tăiată în teren deasupra unei peșteri"
             : "the opening cut in the ground over a cave",
-        FlybyBundleOmission.Entrances => romanian
-            ? "marcajele intrărilor"
-            : "the entrance markers",
-        FlybyBundleOmission.SurfaceFeatures => romanian
-            ? "fenomenele de suprafață și straturile de obiecte"
-            : "the surface features and the layers of features",
+        FlybyBundleOmission.FeatureOutlines => romanian
+            ? "contururile fenomenelor de suprafață care sunt linii sau suprafețe (cele punctuale sunt marcaje)"
+            : "the outlines of surface features that are lines or areas (those that are points are markers)",
         FlybyBundleOmission.Scans => romanian
             ? "scanările"
             : "the point-cloud scans",
-        FlybyBundleOmission.Photos => romanian
-            ? "marcajele fotografiilor"
-            : "the photograph markers",
         FlybyBundleOmission.MapLayers => romanian
             ? "straturile suprapuse de hartă și hărțile georeferențiate"
             : "the map overlays and the georeferenced maps",
@@ -87,6 +83,9 @@ public static class FlybyBundleOmissions
         FlybyBundleOmission.MoreCavesInView => romanian
             ? "o parte din peșterile din vizualizare (un pachet ia doar un număr limitat)"
             : "some of the caves that were in view (a bundle takes only so many)",
+        FlybyBundleOmission.MoreMarkers => romanian
+            ? "o parte din intrările și obiectele din vizualizare (un pachet ia doar un număr limitat de marcaje)"
+            : "some of the entrances and features that were in view (a bundle takes only so many markers)",
         _ => throw new ArgumentOutOfRangeException(nameof(omission), omission, "Not something a bundle leaves out."),
     };
 
@@ -124,6 +123,35 @@ public static class FlybyBundleOmissions
             "pereții unei peșteri, care ar duce pachetul peste dimensiunea permisă de această instalare (este desenată prin drumuiri)",
         (true, false) =>
             $"pereții a {Counted(count)} peșteri, care ar duce pachetul peste dimensiunea permisă de această instalare (sunt desenate prin drumuiri)",
+    };
+
+    /// <summary>
+    /// Entrances and features that were asked for and are not drawn. One count and no reason, as
+    /// for caves: one that does not exist, one the asker may not read, one whose exact place they
+    /// may not have and one that is not a point are the same sentence.
+    /// </summary>
+    public static string MarkersNotDrawn(int count, bool romanian = false) => (romanian, count == 1) switch
+    {
+        (false, true) => "1 of the entrances and features asked for (nothing of it is available to draw)",
+        (false, false) => $"{count} of the entrances and features asked for (nothing of them is available to draw)",
+        (true, true) => "1 dintre intrările și obiectele cerute (nimic din el nu este disponibil pentru desenare)",
+        (true, false) => $"{count} dintre intrările și obiectele cerute (nimic din ele nu este disponibil pentru desenare)",
+    };
+
+    /// <summary>
+    /// Photographs taken at stations of the caves drawn that the bundle does not show: a station
+    /// shows one photograph, a bundle only so many, and one the camera never comes near none.
+    /// </summary>
+    public static string PhotosNotShown(int count, bool romanian = false) => (romanian, count == 1) switch
+    {
+        (false, true) =>
+            "1 photograph taken at a station (a station shows one, a bundle only so many, and none the camera stays far from)",
+        (false, false) =>
+            $"{count} photographs taken at stations (a station shows one, a bundle only so many, and none the camera stays far from)",
+        (true, true) =>
+            "1 fotografie făcută la o stație (o stație arată una, un pachet doar un număr limitat și niciuna de care camera rămâne departe)",
+        (true, false) =>
+            $"{Counted(count)} fotografii făcute la stații (o stație arată una, un pachet doar un număr limitat și niciuna de care camera rămâne departe)",
     };
 
     /// <summary>
@@ -166,7 +194,82 @@ public static class FlybyBundleNotes
     /// The sections of the notes that are about this scene: how it is laid out, and how it is lit.
     /// </summary>
     /// <param name="daylightGoes">Whether the sun and the sky go out at some frame of the clip.</param>
-    public static IReadOnlyList<FlybyBundleNotesSection> Sections(bool romanian, bool daylightGoes) => romanian
+    /// <param name="markers">How many markers stand in the scene.</param>
+    /// <param name="photos">How many photographs it shows.</param>
+    /// <param name="revealed">Whether the caves appear part by part.</param>
+    public static IReadOnlyList<FlybyBundleNotesSection> Sections(
+        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, bool revealed = false) =>
+    [
+        .. LaidOutAndLit(romanian, daylightGoes),
+        .. markers > 0 || photos > 0 ? [PointedOut(romanian, markers, photos)] : Array.Empty<FlybyBundleNotesSection>(),
+        .. revealed ? [Reveal(romanian)] : Array.Empty<FlybyBundleNotesSection>(),
+    ];
+
+    private static FlybyBundleNotesSection PointedOut(bool romanian, int markers, int photos) => romanian
+        ? new(
+            "CE ESTE SEMNALAT",
+            $"Scena are {Both(Of(markers, "marcaj", "marcaje", true), Of(photos, "fotografie", "fotografii", true), "și")},\n"
+            + "în \"annotations\" din scene-plan.json. Fiecare este prins de un punct al modelului unei\n"
+            + "peșteri și merge cu el când relieful întinde peștera. Un marcaj este o sferă luminoasă,\n"
+            + "atât de mare cât să se vadă de la cea mai mică distanță la care ajunge camera; numele\n"
+            + "unei intrări stă deasupra lui. O fotografie făcută la o stație a unei ridicări stă\n"
+            + "deasupra stației, lată cât o cincime din cea mai mică distanță la care ajunge camera —\n"
+            + "mai lată acolo unde camera trece în zbor, ca să se vadă două secunde — și se vede cât\n"
+            + "timp camera este la cel mult douăsprezece lățimi și jumătate de ea. Fiecare strat are un\n"
+            + "rol (\"entrance\", \"surface-feature\", \"feature-layer-1\", \"station-photo\"; numele: rolul\n"
+            + "urmat de \"-name\"): pentru a ascunde unul, ștergeți-i adnotările. Fotografiile sunt\n"
+            + "fișierele din photos/; nu conțin poziție și nici datele aparatului.")
+        : new(
+            "WHAT IS POINTED OUT",
+            $"The scene has {Both(Of(markers, "marker", "markers", false), Of(photos, "photograph", "photographs", false), "and")},\n"
+            + "in \"annotations\" in scene-plan.json. Each is pinned to a point of a cave's model and\n"
+            + "goes with it when the relief stretches the cave. A marker is a glowing ball, as large as\n"
+            + "reads from the nearest the camera comes to it; the name of an entrance stands above it.\n"
+            + "A photograph taken at a station of a survey stands above that station, as wide as a\n"
+            + "fifth of the nearest the camera comes to it — wider where the camera flies past, so\n"
+            + "that it is up for two seconds — and is shown while the camera is within twelve and a\n"
+            + "half of its widths. Every layer has a role (\"entrance\", \"surface-feature\",\n"
+            + "\"feature-layer-1\", \"station-photo\"; its names: the role followed by \"-name\"): to hide\n"
+            + "one, delete its annotations. The photographs are the files in photos/; they hold no\n"
+            + "position and none of the camera's own data.");
+
+    private static FlybyBundleNotesSection Reveal(bool romanian) => romanian
+        ? new(
+            "APARIȚIA TREPTATĂ",
+            "Fiecare peșteră apare parte cu parte, de la intrări spre interior, după distanța de-a\n"
+            + "lungul galeriilor: fiecare vârf are acea distanță în metri (atributul \"reveal\" al\n"
+            + "fiecărui .ply), iar cheile \"reveal\" din \"changes\" ridică un prag peste ele. O peșteră\n"
+            + "fără nicio intrare marcată în ridicare pornește de la prima stație a primei vize. Pentru\n"
+            + "a vedea peșterile întregi de la început, ștergeți din \"changes\" membrii \"reveal\" și\n"
+            + "\"revealFront\". Nu există apariție după data ridicării: SilexGIS nu păstrează o dată\n"
+            + "pentru fiecare viză a unei ridicări.")
+        : new(
+            "THE REVEAL",
+            "Each cave appears part by part, from its entrances inwards, by the distance along its\n"
+            + "passages: every vertex has that distance in metres (the attribute \"reveal\" of each\n"
+            + ".ply), and the \"reveal\" keys in \"changes\" raise a threshold over them. A cave with no\n"
+            + "entrance marked in its survey starts at the first station of its first leg. To see the\n"
+            + "caves whole from the start, remove the \"reveal\" and \"revealFront\" members from\n"
+            + "\"changes\". There is no reveal by survey date: SilexGIS keeps no date for each leg of a\n"
+            + "survey.");
+
+    /// <summary>A count with its noun, in the number the count asks for; nothing for none.</summary>
+    private static string? Of(int count, string one, string many, bool romanian)
+    {
+        var number = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return count switch
+        {
+            <= 0 => null,
+            1 => $"{number} {one}",
+            _ => romanian && count % 100 is not (>= 1 and <= 19) ? $"{number} de {many}" : $"{number} {many}",
+        };
+    }
+
+    /// <summary>One thing, or two joined by a word.</summary>
+    private static string Both(string? first, string? second, string and) =>
+        first is null ? second ?? string.Empty : second is null ? first : $"{first} {and} {second}";
+
+    private static IReadOnlyList<FlybyBundleNotesSection> LaidOutAndLit(bool romanian, bool daylightGoes) => romanian
         ?
         [
             new(
