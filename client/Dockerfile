@@ -6,7 +6,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# The bundle only, not `npm run build`: that script type-checks first, and the type-check alone needs
+# more than Node's default 2 GB heap on a small server, where it ran out of memory while the API
+# images were being built beside it. The image needs the bundle, not the verdict — every change is
+# type-checked before it lands, by the continuous integration run and the local checks.
+RUN npx vite build
 
 FROM nginx:alpine
 
@@ -30,6 +34,10 @@ ENV SILEXGIS__Web__FrameAncestors=""
 # today's value so an installation that sets nothing behaves exactly as before; it has to stay above
 # every upload cap the application is configured with, since this limit answers first.
 ENV SILEXGIS__Web__MaxBodySize="1024m"
+# Where the proxy finds the API, as host:port. The Compose service name is right unless this
+# container shares a network with another project that also has a service called `api`; then the
+# API's unique container name is (see the upstream block in the configuration).
+ENV SILEXGIS__Web__ApiUpstream="api:8080"
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

@@ -34,6 +34,9 @@ function build(overrides: Partial<TerrainBuild>): TerrainBuild {
 
 let builds: TerrainBuild[] = [];
 
+// What the server says it can compute; undefined is the moment before it has answered.
+let kinds: { derivative: string; available: boolean; unavailableReason: string | null }[] | undefined;
+
 vi.mock('../../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../../api/hooks.ts')>(
     '../../../api/hooks.ts',
@@ -46,6 +49,7 @@ vi.mock('../../../api/hooks.ts', async () => {
       isLoading: false,
     }),
     useRequestTerrainDerivative: () => ({ mutateAsync: requestMutate, isPending: false }),
+    useTerrainDerivativeKinds: () => ({ data: kinds }),
   };
 });
 
@@ -65,8 +69,9 @@ async function chooseKind(label: string) {
   await act(async () => {
     fireEvent.mouseDown(picker);
   });
+  const option = await screen.findByTitle(label);
   await act(async () => {
-    fireEvent.click(await screen.findByTitle(label));
+    fireEvent.click(option);
   });
 }
 
@@ -77,6 +82,7 @@ function sent(): TerrainDerivativeCreate {
 
 beforeEach(() => {
   requestMutate.mockReset().mockResolvedValue({});
+  kinds = undefined;
   builds = [build({ id: 'older' }), build({ id: 'drawn', isActive: true })];
 });
 
@@ -158,6 +164,44 @@ describe('TerrainDerivativeForm', () => {
     await chooseKind('Ruggedness');
     expect(screen.queryByLabelText('Slope arithmetic')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ruggedness definition')).toBeInTheDocument();
+  });
+
+  // Landform classes need the separate analysis program: where the server says it does not run,
+  // the kind stays in the list, marked, with the reason under the field and nothing to send.
+  it('marks landform classes unavailable with the server’s reason, and sends nothing for them', async () => {
+    kinds = [
+      { derivative: 'slope', available: true, unavailableReason: null },
+      { derivative: 'geomorphons', available: false, unavailableReason: 'analysis.sandbox_missing' },
+    ];
+    show();
+
+    await chooseKind('Landform classes (not available here)');
+    expect(screen.getByTestId('terrain-derivative-kind-unavailable')).toHaveTextContent(/bubblewrap/);
+    expect(screen.getByTestId('terrain-derivative-submit')).toBeDisabled();
+
+    await chooseKind('Steepness');
+    expect(screen.queryByTestId('terrain-derivative-kind-unavailable')).not.toBeInTheDocument();
+    expect(screen.getByTestId('terrain-derivative-submit')).toBeEnabled();
+  });
+
+  it('sends landform classes with their three settings where the program runs', async () => {
+    kinds = [{ derivative: 'geomorphons', available: true, unavailableReason: null }];
+    show();
+
+    await chooseKind('Landform classes');
+    expect(screen.queryByTestId('terrain-derivative-edges')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search distance (m)'), { target: { value: '800' } });
+    fireEvent.click(screen.getByTestId('terrain-derivative-submit'));
+
+    await waitFor(() => expect(requestMutate).toHaveBeenCalledTimes(1));
+    expect(sent()).toMatchObject({
+      derivative: 'geomorphons',
+      name: 'Landform classes',
+      computeEdges: null,
+      geomorphonSearchMetres: 800,
+      geomorphonSkipMetres: 0,
+      geomorphonFlatnessDegrees: 1,
+    });
   });
 
   it('keeps a name somebody typed when the kind changes, and follows the kind otherwise', async () => {

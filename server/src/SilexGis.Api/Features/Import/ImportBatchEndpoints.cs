@@ -80,7 +80,7 @@ public static class ImportBatchEndpoints
         var rows = await query
             .OrderByDescending(b => b.CreatedAt)
             .ThenByDescending(b => b.Id)
-            .Skip((p - 1) * size)
+            .Skip(Paging.Offset(p, size))
             .Take(size)
             .ToListAsync(ct);
 

@@ -184,6 +184,30 @@ public sealed class DocumentDeletionTests : IAsyncLifetime, IDisposable, IClassF
         (await ReadJsonAsync(hidden)).GetProperty("code").GetString().ShouldBe("cabinet.holds_deleted_documents");
     }
 
+    /// <summary>
+    /// The deleted list is paged in memory, so an offset that wrapped negative skipped nothing and
+    /// a page far past the end answered the first page again. 4,294,969 × 500 is the first such
+    /// offset past the largest whole number.
+    /// </summary>
+    [Theory]
+    [InlineData(4_294_969, 500)]
+    [InlineData(int.MaxValue, 500)]
+    public async Task A_page_of_the_deleted_list_far_past_the_end_is_empty_and_never_the_first_page_again(int page, int pageSize)
+    {
+        var (_, documentId) = await UploadAsync($"Paged away. {nonce}");
+        (await owner.DeleteAsync($"/api/v1/documents/{documentId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await DeletedAsync(owner)).ShouldContain(i => i.GetProperty("id").GetGuid() == documentId);
+
+        using var response = await owner.GetAsync($"/api/v1/documents/deleted?page={page}&pageSize={pageSize}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/documents/deleted?page={page}&pageSize={pageSize}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task An_unfiled_document_leaves_the_inbox_and_the_deleted_list_offers_it_back()
     {

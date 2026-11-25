@@ -211,8 +211,9 @@ public static class ProcessingJobKinds
 
     /// <summary>
     /// Delete rasters sent for a terrain build that no build names and that have waited longer than
-    /// the installation keeps them. Scheduled. On the general lane: it is a directory listing and a
-    /// handful of deletions, and it never touches a raster any build — running or not — names.
+    /// the installation keeps them, and the folders of cave-potential runs whose row no longer
+    /// exists. Scheduled. On the general lane: it is a directory listing and a handful of deletions,
+    /// and it never touches a raster any build — running or not — names, or a run that has a row.
     /// </summary>
     public const string TerrainUploadSweep = "terrain-upload-sweep";
 
@@ -225,6 +226,16 @@ public static class ProcessingJobKinds
     /// turn and each one is a whole-file pass: minutes for a small area, longer for a real one.
     /// </remarks>
     public const string TerrainDerivative = "terrain-derivative";
+
+    /// <summary>
+    /// Run one cave-potential model over one area: make each of its evidence layers on the run's
+    /// grid, weigh them, and write the favourability map beside the row that asked for it.
+    /// </summary>
+    /// <remarks>
+    /// On the terrain lane, because it reads the surfaces computed from a build's rasters and
+    /// writes a raster of its own with a library that is safe on one thread at a time.
+    /// </remarks>
+    public const string CavePotentialRun = "cave-potential-run";
 
     /// <summary>
     /// Download a region of a planet build of OpenStreetMap vector tiles as the installation's own
@@ -269,6 +280,19 @@ public static class ProcessingJobKinds
     public const string StorageReport = "storage-report";
 
     /// <summary>
+    /// Generates a test-data run: invented caves, people, trips, documents and files, written
+    /// through the ordinary write services and listed against the run. Payload:
+    /// <c>{"runId":"…"}</c>.
+    /// </summary>
+    public const string TestDataGenerate = "testdata-generate";
+
+    /// <summary>
+    /// Removes everything a test-data run listed, in the reverse of the order it was written.
+    /// Payload: <c>{"runId":"…"}</c>.
+    /// </summary>
+    public const string TestDataRemove = "testdata-remove";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -300,8 +324,17 @@ public static class ProcessingJobKinds
     /// A point cloud's run is here for the first reason as well: it waits on a worker that takes
     /// minutes to hours over one cloud.
     /// </para>
+    /// <para>
+    /// A test-data run and its removal are here for the first reason, and for one of their own:
+    /// a run queues hundreds of ordinary jobs (readings, conversions) that must be able to run on
+    /// the general lane while it is still generating, instead of waiting behind it.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline];
+    public static readonly IReadOnlyList<string> TerrainLane =
+        [
+            TerrainBuild, TerrainDerivative, BasemapExtract, PointCloudPipeline, TestDataGenerate,
+            TestDataRemove, CavePotentialRun,
+        ];
 
     /// <summary>
     /// The kinds nobody is waiting on, which a worker takes only when no other job of its lane is

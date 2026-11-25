@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, pickCaveType } from './helpers.ts';
 import { bearerToken } from './rastermapApi.ts';
+import { differingPixels, settledPicture } from './settled.ts';
 
 // A cave surveyed twice, and the two surveys looked at together. What this shows that the unit
 // tests cannot: that the real viewer bundle reads two files into one model under a name each, that
@@ -33,8 +34,7 @@ test.afterEach(async ({ page }) => {
 async function createCave(page: Page, name: string): Promise<string> {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
@@ -101,6 +101,31 @@ test('two surveys of a cave are laid over one another and set side by side, thei
   await expect(viewer.getByTestId('caveview-container')).toBeHidden();
   await expect(viewer.getByTestId('caveview-compare-overlay')).toBeVisible();
 
+  /**
+   * What a drawing shows at rest, with the pointer off it: the checkboxes are this application's
+   * own, and only the drawing says whether the viewer behind them hid the part. A pointer left
+   * over a model is over a station, and the viewer says so on the drawing.
+   */
+  const drawn = async (testId: string) => {
+    await viewer.locator('.ant-modal-title').hover();
+    return settledPicture(viewer.getByTestId(testId), { stillFor: 1_500 });
+  };
+  /**
+   * How many pixels have to change for a part to have been shown or hidden, measured here rather
+   * than fixed: the drawing is pictured twice with nothing changed in between, and a part has to
+   * move several times what that moved. The part hidden here is a few short passages, a hundred
+   * or two pixels in a model a few hundred pixels tall, and the side-by-side viewers draw it
+   * smaller still — so a fixed count large enough to be safe from a redraw sits right at the size
+   * of the part itself. The floor keeps a redraw that happens to come back pixel-identical from
+   * letting a handful of pixels pass for a part.
+   */
+  const partDrawnIn = async (testId: string, picture: Buffer) => {
+    const sameDrawing = await differingPixels(page, picture, await drawn(testId));
+    return Math.max(4 * sameDrawing, 40);
+  };
+  const overlaidWhole = await drawn('caveview-compare-overlay');
+  const partDrawn = await partDrawnIn('caveview-compare-overlay', overlaidWhole);
+
   // ---- One part of the survey, hidden in both at once ----
   const inEarlier = viewer.getByTestId('caveview-compare-survey-primary-p8.bens_dig');
   const inLater = viewer.getByTestId('caveview-compare-survey-other-p8.bens_dig');
@@ -114,6 +139,12 @@ test('two surveys of a cave are laid over one another and set side by side, thei
   await expect(inLater).not.toBeChecked();
   // The rest of both is as it was.
   await expect(viewer.getByTestId('caveview-compare-survey-other-p8.christmas_aven')).toBeChecked();
+  // And the drawing lost the part.
+  const overlaidHidden = await drawn('caveview-compare-overlay');
+  expect(
+    await differingPixels(page, overlaidWhole, overlaidHidden),
+    'hiding the part took it out of the drawing',
+  ).toBeGreaterThan(partDrawn);
 
   // ---- And shown again in one of them only ----
   await viewer.getByTestId('caveview-compare-sync').click();
@@ -123,6 +154,10 @@ test('two surveys of a cave are laid over one another and set side by side, thei
 
   await expect(inEarlier).toBeChecked();
   await expect(inLater).not.toBeChecked();
+  expect(
+    await differingPixels(page, overlaidHidden, await drawn('caveview-compare-overlay')),
+    'showing the part in one survey drew it again',
+  ).toBeGreaterThan(partDrawn);
 
   // ---- Side by side: a viewer for each, under its name ----
   await viewer.getByTestId('caveview-compare-mode').getByText('Side by side').click();
@@ -139,6 +174,22 @@ test('two surveys of a cave are laid over one another and set side by side, thei
   // What was hidden stays hidden across the change of arrangement.
   await expect(inEarlier).toBeChecked();
   await expect(inLater).not.toBeChecked();
+
+  // In the second viewer's drawing too, which is a viewer built after the part was hidden: shown
+  // there, the drawing changes; hidden again, it is the drawing it was.
+  const apartHidden = await drawn('caveview-compare-other');
+  const partDrawnApart = await partDrawnIn('caveview-compare-other', apartHidden);
+  await inLater.check();
+  await expect(inLater).toBeChecked();
+  const apartShown = await drawn('caveview-compare-other');
+  const shownDiffers = await differingPixels(page, apartHidden, apartShown);
+  expect(shownDiffers, 'showing the part drew it in the second viewer').toBeGreaterThan(partDrawnApart);
+  await inLater.uncheck();
+  await expect(inLater).not.toBeChecked();
+  expect(
+    await differingPixels(page, apartHidden, await drawn('caveview-compare-other')),
+    'hiding it again took it back out of the second viewer',
+  ).toBeLessThan(shownDiffers / 5);
 
   // ---- And back to the one survey ----
   await viewer.getByTestId('caveview-compare-stop').click();

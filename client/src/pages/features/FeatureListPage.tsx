@@ -5,6 +5,8 @@ import { Alert, App, Dropdown, Flex, Input, Popconfirm, Select, Table, Tag, Tool
 import Button from '../../components/Button.tsx';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadFile, featureExportUrl } from '../../api/download.ts';
 import {
@@ -37,6 +39,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
+import { isFilterRefusal } from '../../filters/refusal.ts';
 import { RowLink } from '../../components/RowOpeners.tsx';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
@@ -124,7 +127,7 @@ export default function FeatureListPage() {
     // the old text back over a step somebody just went back from.
   }, [search]);
 
-  const { data, isFetching, error } = useFeatures({
+  const { data, isFetching, error, refetch } = useFeatures({
     page: address.page,
     pageSize: address.pageSize,
     filter: token,
@@ -163,8 +166,10 @@ export default function FeatureListPage() {
       await deleteFeature.mutateAsync(id);
       surfaceFeaturesChanged();
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 
@@ -182,11 +187,11 @@ export default function FeatureListPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('features.title')}
         </Typography.Title>
-        <Flex gap={8} align="center">
+        <Flex gap={8} wrap align="center">
           {/* The vocabularies this page reads by, reached from the page they govern rather than
               only from the configuration group in the rail. */}
           <ConfigureLink
@@ -315,7 +320,9 @@ export default function FeatureListPage() {
         onForget={() => go(() => ({ savedFilterId: undefined }))}
         onRelease={() => go(() => ({ controls: {}, extra: [], savedFilterId: undefined, page: 1 }))}
       />
-      {error && token !== undefined && (
+      {/* Only the server's refusal of the filter is worded as one; any other failure says the
+          list could not be read and offers to ask again, so it is never read as an empty list. */}
+      {error && token !== undefined && isFilterRefusal(error) ? (
         <Alert
           type="error"
           showIcon
@@ -323,7 +330,20 @@ export default function FeatureListPage() {
           data-testid="feature-list-filter-refused"
           title={t('featureList.filterRefused')}
         />
-      )}
+      ) : error ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          data-testid="feature-list-load-failed"
+          title={t('featureList.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : null}
       <Table<FeatureListItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"

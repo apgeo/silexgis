@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Card, Empty, Flex, Spin, Typography } from 'antd';
+import { Alert, App, Card, Empty, Flex, Spin, Typography, theme } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -15,6 +16,8 @@ import {
 import Lightbox from '../gallery/Lightbox.tsx';
 import PhotoGrid from '../gallery/PhotoGrid.tsx';
 import { viewPhoto } from '../gallery/photoView.ts';
+import { albumCreateProblem } from '../../pages/gallery/albumProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * How many of the trip's photographs are drawn here.
@@ -54,6 +57,7 @@ export default function TripGallerySection({
   tripTitle: string;
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { data: capabilities } = useCapabilities();
@@ -84,8 +88,8 @@ export default function TripGallerySection({
         subjectEntityId: tripId,
       });
       navigate(`/albums/${album.id}`);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(albumCreateProblem(error, t));
     }
   };
 
@@ -114,6 +118,14 @@ export default function TripGallerySection({
         </Flex>
       }
     >
+      <ReadFailedAlert
+        isError={albumsQuery.isError}
+        error={albumsQuery.error}
+        held={albumsQuery.data !== undefined}
+        onRetry={albumsQuery.refetch}
+        title={t('trips.albumsLoadFailed')}
+        testId="trip-albums-load-failed"
+      />
       {albums.length > 0 && (
         <Flex wrap gap={12} style={{ marginBottom: 12 }} data-testid="trip-albums">
           {albums.map((album) => (
@@ -133,9 +145,9 @@ export default function TripGallerySection({
                   <Flex
                     align="center"
                     justify="center"
-                    style={{ height: 100, background: 'rgba(0,0,0,0.04)' }}
+                    style={{ height: 100, background: token.colorFillQuaternary }}
                   >
-                    <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
+                    <PictureOutlined style={{ fontSize: FONT_SIZE.heading3, opacity: 0.4 }} />
                   </Flex>
                 )
               }
@@ -153,7 +165,16 @@ export default function TripGallerySection({
         </Flex>
       )}
 
-      {photosQuery.isPending ? (
+      <ReadFailedAlert
+        isError={photosQuery.isError}
+        error={photosQuery.error}
+        held={photosQuery.data !== undefined}
+        onRetry={photosQuery.refetch}
+        title={t('trips.photographsLoadFailed')}
+        testId="trip-photographs-load-failed"
+      />
+      {/* "No photographs" only after a read that answered: a failed one says so above. */}
+      {photosQuery.isError && photosQuery.data === undefined ? null : photosQuery.isPending ? (
         <Spin />
       ) : photos.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('trips.noPhotographs')} />

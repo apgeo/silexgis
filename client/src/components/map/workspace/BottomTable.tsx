@@ -5,6 +5,7 @@ import { Empty, Flex, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../../Button.tsx';
 import { RowButton } from '../../RowOpeners.tsx';
+import ReadFailedAlert from '../../ReadFailedAlert.tsx';
 import FeatureListPanel from '../FeatureListPanel.tsx';
 import { getFeatureTypeNameByCode } from '../../../map/featureLayer.ts';
 import { useSelectionSummary } from '../../../api/hooks/workingSet.ts';
@@ -87,7 +88,7 @@ function PickedTable() {
   const selectionSet = useWorkspaceStore((s) => s.selectionSet);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   const ids = selectionSet.map((ref) => ref.id);
-  const { data, isFetching } = useSelectionSummary(ids);
+  const { data, isFetching, isError, error, refetch } = useSelectionSummary(ids);
   // A set somebody emptied answers with the last page until the query notices; nothing picked is
   // nothing to list, whatever the cache still holds.
   const items = ids.length === 0 ? [] : (data?.items ?? []);
@@ -100,8 +101,25 @@ function PickedTable() {
     );
   }
 
+  const readFailed = (
+    <ReadFailedAlert
+      isError={isError}
+      error={error}
+      held={data !== undefined}
+      onRetry={refetch}
+      title={t('panel.multiLoadFailed')}
+      testId="picked-table-load-failed"
+    />
+  );
+
+  // A failed read is not an empty working set: the table is left out rather than drawn as "no data".
+  if (isError && data === undefined) {
+    return <div style={{ padding: 8 }}>{readFailed}</div>;
+  }
+
   return (
     <div style={{ padding: 8, height: '100%', overflow: 'auto' }}>
+      {readFailed}
       <Table<FeatureListItem>
         size="small"
         rowKey="id"
@@ -134,7 +152,7 @@ function PickedTable() {
       {/* What the set asked about and what came back can differ — an object the reader may not see
           is simply not listed — and the count above is of the set, so the gap is not explained in
           a way that would itself say something about the missing objects. */}
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('panel.multiHint')}
       </Typography.Text>
     </div>

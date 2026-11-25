@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { EMPTY_SCANS_IN_VIEW_3D_STATE } from '../../scene3d/scansInView3d.ts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
@@ -16,6 +16,8 @@ import {
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import type { TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
 import Scene3DLayerPanel, { type Scene3DLayerPanelProps } from './Scene3DLayerPanel.tsx';
+import { stepsFor } from '../../presenter/pointer.ts';
+import type { ScenarioItem } from '../../presenter/scenario.ts';
 
 const layers = [
   {
@@ -120,6 +122,8 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
       cutawayAvailable: true,
       hasFootprint: true,
     },
+    exaggeration: 1,
+    onExaggerationChange: vi.fn(),
     ...overrides,
   };
   // Inside a router, as it always is in the application: the walls row links to a settings page.
@@ -157,6 +161,41 @@ describe('Scene3DLayerPanel', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Cave centerlines' }));
 
     expect(props.onOverlayVisibleChange).toHaveBeenCalledWith('centerlines', false);
+  });
+
+  describe('the relief', () => {
+    const relief = () => screen.getByRole('slider', { name: 'Vertical exaggeration' });
+    const reset = () => screen.getByRole('button', { name: 'True height' });
+
+    it('offers a named factor at true height, with nothing to reset', () => {
+      renderPanel();
+
+      expect(relief()).toHaveAttribute('aria-valuenow', '1');
+      expect(relief()).toHaveAttribute('aria-valuemin', '0.5');
+      expect(relief()).toHaveAttribute('aria-valuemax', '5');
+      // Read out as the factor rather than as a bare number.
+      expect(relief()).toHaveAttribute('aria-valuetext', '×1');
+      expect(screen.getByTestId('scene3d-relief-value')).toHaveTextContent('×1');
+      expect(reset()).toBeDisabled();
+    });
+
+    it('reports a step of the slider as the factor it reaches', () => {
+      const props = renderPanel();
+
+      fireEvent.keyDown(relief(), { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 });
+
+      expect(props.onExaggerationChange).toHaveBeenCalledWith(1.1);
+    });
+
+    it('says the factor in force and goes back to true height when asked', () => {
+      const props = renderPanel({ exaggeration: 2.5 });
+
+      expect(screen.getByTestId('scene3d-relief-value')).toHaveTextContent('×2.5');
+      expect(relief()).toHaveAttribute('aria-valuetext', '×2.5');
+      fireEvent.click(reset());
+
+      expect(props.onExaggerationChange).toHaveBeenCalledWith(1);
+    });
   });
 
   it('shows the fade of a hidden layer as unusable rather than as something that still acts', () => {
@@ -746,5 +785,118 @@ describe('catalogue layers the scene draws itself', () => {
   it('says nothing under a layer that draws', () => {
     renderPanel({ layers: catalogue, imageryStatus: { 41: { state: 'ready' } } });
     expect(screen.queryByTestId('scene3d-layer-note-41')).not.toBeInTheDocument();
+  });
+});
+
+describe('the scans row', () => {
+  const ready = { ...EMPTY_SCANS_IN_VIEW_3D_STATE, status: 'ready' as const };
+  const limits = { minZoom: 14, maxCaves: 3, maxBytes: 200 * 1024 * 1024 };
+  const status = () => screen.getByTestId('scene3d-scans-status').textContent;
+
+  it.each([
+    ['off', { ...EMPTY_SCANS_IN_VIEW_3D_STATE, status: 'off' as const }, /are not loaded, and hold no graphics memory/],
+    ['zoomIn', { ...EMPTY_SCANS_IN_VIEW_3D_STATE, status: 'zoomIn' as const }, /^Zoom in to see the scans/],
+    ['looking', { ...EMPTY_SCANS_IN_VIEW_3D_STATE, status: 'looking' as const }, /^Looking for placed scans/],
+    ['failed', { ...EMPTY_SCANS_IN_VIEW_3D_STATE, status: 'failed' as const }, /could not be listed/],
+    ['ready with none', ready, /^No cave in view has a placed scan/],
+    ['ready and shown', { ...ready, inView: 2, shown: 2, heldBytes: 1024 * 1024 }, /^Scans of 2 of 2 caves in view — /],
+    ['over the byte limit', { ...ready, inView: 5, shown: 2, limitedBy: 'bytes' as const, limits }, /the rest would exceed/],
+    ['over the count limit', { ...ready, inView: 5, shown: 3, limitedBy: 'count' as const, limits }, /beyond the 3 drawn at once/],
+  ])('says what the scene holds when %s', (_name, state, said) => {
+    renderPanel({ scansInViewState: state });
+    expect(status()).toMatch(said);
+  });
+
+  it('adds the scans still on their way and the ones that could not be read', () => {
+    renderPanel({ scansInViewState: { ...ready, inView: 3, shown: 3, loading: 1, failed: 1, heldBytes: 1024 } });
+    expect(status()).toMatch(/^Scans of 3 of 3 caves in view — .+\. .+\. .+/);
+  });
+
+  it('reports the switch, and offers the limits link only while scans are shown', () => {
+    const props = renderPanel({ scansVisible: true });
+    expect(screen.getByTestId('scene3d-scans-limits-link')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('scene3d-scans-toggle'));
+    expect(props.onScansVisibleChange).toHaveBeenCalledWith(false);
+
+    cleanup();
+    const hidden = renderPanel({ scansVisible: false });
+    expect(screen.queryByTestId('scene3d-scans-limits-link')).toBeNull();
+    fireEvent.click(screen.getByTestId('scene3d-scans-toggle'));
+    expect(hidden.onScansVisibleChange).toHaveBeenCalledWith(true);
+  });
+});
+
+/**
+ * The presenter drives this panel the way a hand would, finding its rows by the component
+ * library's own markup. Run here against the real panel, so a change to that markup — or an
+ * upgrade of the library — fails this file rather than the next movie somebody records.
+ */
+describe('the presenter\'s hand on the real panel', () => {
+  const grouped = [
+    ...layers,
+    { ...layers[0], id: 2, name: 'Orthophoto 2024', isDefault: false, sortOrder: 1, groupName: 'Romania' },
+  ] as unknown as MapLayerInfo[];
+
+  /** Plays an action's steps as the runner does, minus the travelling of the pointer. */
+  async function play(action: ScenarioItem) {
+    const done: string[] = [];
+    for (const step of stepsFor(action)) {
+      switch (step.kind) {
+        case 'move':
+          step.target();
+          break;
+        case 'click':
+          fireEvent.click(step.target());
+          break;
+        case 'wait':
+          await waitFor(() => expect(step.ready()).toBe(true));
+          break;
+        case 'drag':
+          step.handle();
+          step.rail();
+          break;
+        case 'pause':
+          break;
+      }
+      done.push(step.kind);
+    }
+    return done;
+  }
+
+  beforeEach(() => {
+    // The presenter only reaches for what is on screen, which needs a size the test document does
+    // not lay out.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON: () => ({}),
+    } as DOMRect);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('finds a layer\'s box by its label and presses it only when it has to change', async () => {
+    const props = renderPanel({ scansVisible: true });
+
+    await play({ kind: 'layer', label: 'Scans', on: true, at: 0 });
+    expect(props.onScansVisibleChange).not.toHaveBeenCalled();
+
+    await play({ kind: 'layer', label: 'Scans', on: false, at: 0 });
+    expect(props.onScansVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it('opens a closed group of basemaps and picks the one asked for', async () => {
+    const props = renderPanel({ layers: grouped });
+    expect(screen.queryByRole('radio', { name: 'Orthophoto 2024' })).toBeNull();
+
+    const done = await play({ kind: 'basemap', name: 'Orthophoto 2024', group: 'Romania', at: 0 });
+
+    expect(done).toContain('wait');
+    expect(props.onBaseChange).toHaveBeenCalledWith(2);
+  });
+
+  it('finds the chosen basemap\'s opacity slider to drag', async () => {
+    renderPanel();
+    const done = await play({ kind: 'basemapOpacity', values: [100, 40], at: 0 });
+    expect(done).toEqual(['move', 'drag']);
   });
 });

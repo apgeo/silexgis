@@ -122,6 +122,7 @@ const fakeSurvey = (name: string, ...children: FakeNode[]): FakeNode => ({
 let surveyTree: FakeNode = fakeSurvey('');
 const setSectionVisible = vi.fn((_ref: unknown, _visible: boolean) => true);
 const toolbarDispose = vi.fn();
+const uiDispose = vi.fn();
 let lastToolbar: { container: unknown; options: unknown } | undefined;
 /** What the fake survey holds for enumeration; null fakes a build without the method. */
 let enumerableStations: string[] | null = [];
@@ -187,7 +188,7 @@ class FakeViewer {
 
 class FakeUi {
   loadCave = loadCave;
-  dispose() {}
+  dispose = uiDispose;
 }
 
 class FakeToolbar {
@@ -269,7 +270,7 @@ async function renderReady(props: Partial<Parameters<typeof CaveViewPanel>[0]> =
     />,
   );
   await waitFor(() => expect(listeners.get('newCave')?.length ?? 0).toBeGreaterThan(attached));
-  act(() => emit('newCave', {}));
+  act(() => emit('newCave', { survey: {} }));
   await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
   return view;
 }
@@ -512,7 +513,7 @@ describe('CaveViewPanel', () => {
     expect(onPick).not.toHaveBeenCalled();
 
     expect(screen.getByTestId('caveview-loading')).toBeInTheDocument();
-    emit('newCave', {});
+    emit('newCave', { survey: {} });
     await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
   });
 
@@ -589,7 +590,7 @@ describe('CaveViewPanel', () => {
         />,
       );
       await waitFor(() => expect(listeners.get('newCave')?.length ?? 0).toBeGreaterThan(attached));
-      act(() => emit('newCave', {}));
+      act(() => emit('newCave', { survey: {} }));
       await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
 
       expect(focusStation).toHaveBeenCalledTimes(1);
@@ -1540,7 +1541,7 @@ describe('CaveViewPanel', () => {
         />,
       );
       await waitFor(() => expect(viewers).toHaveLength(2));
-      act(() => emit('newCave', {}));
+      act(() => emit('newCave', { survey: {} }));
 
       await waitFor(() => expect(viewers.at(-1)!.liveMarkerLabels).toBe(false));
       expect(screen.getByTestId('caveview-tracking-labels')).not.toBeChecked();
@@ -2024,6 +2025,29 @@ describe('CaveViewPanel', () => {
         expect(surface.contains(await screen.findByTestId('lightbox'))).toBe(true);
       });
 
+      it('keeps the name-size control reachable while the model covers the screen', async () => {
+        await renderReady({ toolbar: { placement: 'bottom' } });
+        const surface = screen.getByTestId('caveview-container');
+        expect(surface.contains(screen.getByTestId('caveview-label-scale'))).toBe(false);
+
+        // Pinned over the screen by the viewer's class (or put in the top layer): anything outside
+        // the surface is not drawn, so a reader who has just turned station names on in fullscreen
+        // could not size them.
+        act(() => {
+          surface.classList.add('toggle-fullscreen');
+        });
+
+        await waitFor(() => expect(surface.contains(screen.getByTestId('caveview-label-scale'))).toBe(true));
+        fireEvent.click(screen.getByTestId('caveview-label-scale'));
+        const menu = await screen.findByRole('menu');
+        expect(surface.contains(menu)).toBe(true);
+
+        act(() => {
+          surface.classList.remove('toggle-fullscreen');
+        });
+        await waitFor(() => expect(surface.contains(screen.getByTestId('caveview-label-scale'))).toBe(false));
+      });
+
       it('leaves it in the panel while the model is one card among others', async () => {
         await renderReady({ stationMedia: stripMedia() });
         const surface = screen.getByTestId('caveview-container');
@@ -2117,5 +2141,133 @@ describe('CaveViewPanel, notes about the cave', () => {
     ]);
     // And the party's own block is exactly what it is with no note standing there.
     expect(clusterLabel('a', 'b')).toEqual(['Team A', 'Ana', 'Bogdan']);
+  });
+});
+
+describe('CaveViewPanel, the viewer’s own lifecycle', () => {
+  beforeEach(() => {
+    forgetSurveyFiles();
+  });
+
+  it('says a survey the viewer could not read failed, rather than spinning for ever, and offers to try again', async () => {
+    render(<CaveViewPanel fileUrl="http://files.local/unreadable" fileName="broken.3d" />);
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
+    // A survey the viewer cannot parse ends in its own `clearView()`, which says `clear` and never
+    // `newCave` — the only sign the panel is given that the load is over.
+    act(() => emit('clear', {}));
+
+    await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
+    const failure = screen.getByTestId('caveview-error');
+    expect(failure).toHaveTextContent(i18n.t('caveview.loadFailed.unreadable'));
+    fireEvent.click(within(failure).getByRole('button'));
+    // Trying again builds another viewer and asks it for the model again.
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('caveview-loading')).toBeInTheDocument();
+  });
+
+  it('does not take a `newCave` that carries no survey for the model having loaded', async () => {
+    render(<CaveViewPanel fileUrl="http://files.local/survey-less" fileName="demo.lox" />);
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
+    // What the viewer says, with no survey, when a key switches how its controls behave.
+    act(() => emit('newCave', {}));
+    expect(screen.getByTestId('caveview-loading')).toBeInTheDocument();
+    act(() => emit('newCave', { survey: {} }));
+    await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
+  });
+
+  it('gives the viewer’s drawing context back when it closes', async () => {
+    const loseContext = vi.fn();
+    const { unmount } = render(<CaveViewPanel fileUrl="http://files.local/context" fileName="demo.lox" />);
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
+    // The viewer draws on a canvas it puts into the surface; this one answers as WebGL would.
+    const canvas = document.createElement('canvas');
+    canvas.getContext = vi.fn(() => ({ getExtension: () => ({ loseContext }) })) as never;
+    screen.getByTestId('caveview-container').appendChild(canvas);
+    act(() => emit('newCave', { survey: {} }));
+
+    unmount();
+    expect(loseContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops reading the survey file when it closes before the file has arrived', async () => {
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        return new Promise<Response>(() => {});
+      }),
+    );
+    const { unmount } = render(<CaveViewPanel fileUrl="http://files.local/slow" fileName="demo.lox" />);
+    await waitFor(() => expect(signal).toBeDefined());
+
+    unmount();
+    expect(signal!.aborted).toBe(true);
+  });
+});
+
+describe('CaveViewPanel, building and ending a viewer', () => {
+  beforeEach(() => {
+    forgetSurveyFiles();
+  });
+
+  /** A canvas the viewer would have put into the surface, answering as WebGL would. */
+  function viewerCanvas(loseContext: () => void) {
+    const canvas = document.createElement('canvas');
+    canvas.getContext = vi.fn(() => ({ getExtension: () => ({ loseContext }) })) as never;
+    screen.getByTestId('caveview-container').appendChild(canvas);
+    return canvas;
+  }
+
+  it('disposes the viewer exactly once when it closes', async () => {
+    const { unmount } = await renderReady();
+    expect(uiDispose).not.toHaveBeenCalled();
+
+    unmount();
+    expect(uiDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends the first viewer, context and all, before building one for another file', async () => {
+    const loseFirst = vi.fn();
+    const { rerender } = await renderReady({ fileUrl: 'http://files.local/files/a/content' });
+    viewerCanvas(loseFirst);
+
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/b/content" fileName="demo.lox" surveyModelId={MODEL} />,
+    );
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(2));
+
+    expect(uiDispose).toHaveBeenCalledTimes(1);
+    expect(loseFirst).toHaveBeenCalledTimes(1);
+    // The first viewer was let go of before the second was handed its file.
+    expect(uiDispose.mock.invocationCallOrder[0]).toBeLessThan(loadCave.mock.invocationCallOrder[1]);
+  });
+
+  it('says a refused file in words, builds no viewer, and reads it again at the newest address when asked', async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.includes('token=lapsed') ? new Response('', { status: 403 }) : new Response(new Blob(['survey'])),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { rerender } = render(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=lapsed" fileName="demo.lox" />,
+    );
+
+    const failure = await screen.findByTestId('caveview-error');
+    expect(failure).toHaveTextContent(i18n.t('caveview.loadFailed.refused'));
+    expect(failure).not.toHaveTextContent('403');
+    expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument();
+    expect(viewers).toHaveLength(0);
+
+    // What lists the survey has signed the address again meanwhile — the same file, which alone
+    // does not start another load.
+    rerender(<CaveViewPanel fileUrl="http://files.local/files/a/content?token=fresh" fileName="demo.lox" />);
+    expect(screen.getByTestId('caveview-error')).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByTestId('caveview-error')).getByRole('button'));
+    await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenLastCalledWith('http://files.local/files/a/content?token=fresh', expect.anything());
+    act(() => emit('newCave', { survey: {} }));
+    await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('caveview-error')).not.toBeInTheDocument();
   });
 });

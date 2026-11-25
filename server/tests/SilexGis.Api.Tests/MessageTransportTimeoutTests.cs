@@ -8,6 +8,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Sms;
 
@@ -39,6 +40,33 @@ public sealed class MessageTransportTimeoutTests(PostgresFixture postgres) : ICl
         result.Sent.ShouldBeFalse();
         result.Permanent.ShouldBeFalse("a gateway that is slow today may answer tomorrow");
         result.Error.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void The_gateway_connection_goes_direct_so_the_internal_address_check_sees_the_gateway()
+    {
+        // The check that refuses a private gateway address runs on the connection the handler
+        // opens. Through a proxy that connection is to the proxy, so a public proxy would carry a
+        // send to 169.254.169.254 past it; the handler therefore never uses one, whatever the
+        // process environment says.
+        var services = new ServiceCollection();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddLogging();
+        services.AddSilexGisMessaging();
+        using var provider = services.BuildServiceProvider();
+
+        HttpMessageHandler? handler = provider.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(HttpSmsSender.HttpClientName);
+        while (handler is DelegatingHandler delegating)
+        {
+            handler = delegating.InnerHandler;
+        }
+
+        var sockets = handler.ShouldBeOfType<SocketsHttpHandler>();
+        sockets.UseProxy.ShouldBeFalse();
+        sockets.AllowAutoRedirect.ShouldBeFalse();
+        sockets.ConnectCallback.ShouldNotBeNull("internal addresses are refused unless allowed");
     }
 
     [Fact]
@@ -120,6 +148,9 @@ public sealed class MessageTransportTimeoutTests(PostgresFixture postgres) : ICl
         result.Permanent.ShouldBeFalse();
         result.Error.ShouldNotBeNull();
         result.Error.ShouldContain(((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // What the gateway wrote back is not repeated: the administrator's test-send shows this
+        // error, and the address it was sent to is the administrator's to choose.
+        result.Error.ShouldNotContain("gateway says no");
     }
 
     [Theory]

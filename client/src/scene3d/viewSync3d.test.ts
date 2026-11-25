@@ -40,6 +40,10 @@ function fakeScene(camera: Scene3DCameraState) {
       return this.bounds;
     },
     getPseudoZoom: () => 12.4,
+    ground: 0,
+    groundHeight(this: { ground: number }) {
+      return this.ground;
+    },
     cameraHeightForZoom: (zoom: number, latitude: number) =>
       cameraHeightForZoom(zoom, {
         latitudeDegrees: latitude,
@@ -99,6 +103,22 @@ describe('the scene following the flat map', () => {
     // because that is the side a camera facing 137° stands on.
     expect(scene.current.latitude).toBeGreaterThan(45.7);
     expect(scene.current.longitude).toBeLessThan(25.3);
+
+    sync.detach();
+    map.detach();
+  });
+
+  it('follows the map from above the ground it is drawn over, not from inside it', () => {
+    const scene = fakeScene({ longitude: 20, latitude: 40, height: 3000, heading: 0, pitch: -90, roll: 0 });
+    scene.ground = 1100;
+    const sync = attachViewSync3d(scene, selectionPort());
+    const map = attachViewSync('map2d', {});
+
+    map.publishExtent(romania, 17);
+
+    // A zoom of 17 is a few hundred metres over the ground; over a 1,100 m hill that is well
+    // above sea level, and anything less puts the camera underground.
+    expect(scene.current.height).toBeCloseTo(1100 + scene.cameraHeightForZoom(17, 45.7), -1);
 
     sync.detach();
     map.detach();

@@ -65,7 +65,7 @@ export default function CaveExternalIdsSection({
 
   return (
     <Card title={t('externalIds.title')} style={{ marginTop: 16 }} data-testid="cave-external-ids">
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Paragraph type="secondary" className="hint-text">
         {t('externalIds.explanation')}
       </Typography.Paragraph>
 

@@ -21,6 +21,8 @@ import {
   useTripTypes,
   useUpdateFeature,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { useFeatureRights } from '../../api/hooks/objectRights.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import OtherFormats from '../coordinates/OtherFormats.tsx';
@@ -38,14 +40,17 @@ import {
 } from '../../stores/workspaceStore.ts';
 import { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import { featureProblemMessage } from '../features/featureProblems.ts';
 import TripStateTag from '../trips/TripStateTag.tsx';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import PanelDock from './PanelDock.tsx';
 import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import type { PanelScope } from '../../stores/panelPrefs.ts';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
+import { typedFieldLabel, typedValueText } from '../geology/lithology.ts';
 
 /**
  * The panel beside the map: what is selected, in the sections this person arranged.
@@ -105,12 +110,44 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
   );
 }
 
+/**
+ * What a card draws when its own read failed and it holds nothing. Only the pending read spins: a
+ * read that failed would otherwise leave the dock spinning for good. A settled refusal is the
+ * server saying the thing is gone or not this reader's, which is worded as such and not retried.
+ */
+function SelectionReadFailed({
+  error,
+  onRetry,
+  title,
+  testId,
+}: {
+  error: unknown;
+  onRetry: () => unknown;
+  title: string;
+  testId: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div style={{ padding: 12 }}>
+      <ReadFailedAlert
+        isError
+        error={error}
+        held={false}
+        onRetry={onRetry}
+        title={title}
+        refusedTitle={t('map.selectionRefused')}
+        testId={testId}
+      />
+    </div>
+  );
+}
+
 /** A clicked low-zoom cluster: list its member entrances without moving the camera. */
 function ClusterCard({ selection }: { selection: ClusterSelection }) {
   const { t } = useTranslation();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
   // A filter layer's cluster lists that filter's members; the main layer's, the map filter's.
-  const { data, isPending } = useClusterEntrances(
+  const { data, isPending, isError, error, refetch } = useClusterEntrances(
     selection.cell,
     selection.savedFilterId ? { savedFilterId: selection.savedFilterId } : mapFilterParams(),
   );
@@ -138,6 +175,19 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
       <Flex align="center" justify="center" style={{ height: '100%' }}>
         <Spin />
       </Flex>
+    );
+  }
+
+  // A failed read is not a cluster of nobody: "0 entrances in this area" would be a claim about
+  // the ground the server never made.
+  if (isError && !data) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.clusterLoadFailed')}
+        testId="cluster-load-failed"
+      />
     );
   }
 
@@ -190,8 +240,19 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
 function TripCard({ selection }: { selection: TripSelection }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: trip, isPending } = useTripLog(selection.tripId);
+  const { data: trip, isPending, isError, error, refetch } = useTripLog(selection.tripId);
   const { data: tripTypes } = useTripTypes();
+
+  if (isError && !trip) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="trip-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !trip) {
     return (
@@ -243,11 +304,22 @@ function CaveCard({
   const { t } = useTranslation();
   const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
-  const { data: cave, isPending } = useCave(selection.caveId);
+  const { data: cave, isPending, isError, error, refetch } = useCave(selection.caveId);
   const { data: entrances } = useEntrances(selection.caveId);
   const { data: caveTypes } = useCaveTypes();
   // Shares its cache entry with the cave page, so moving between the two costs nothing.
   const { data: summary } = useCaveSummary(selection.caveId);
+
+  if (isError && !cave) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="cave-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !cave) {
     return (
@@ -356,7 +428,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   const { t } = useTranslation();
   const { message } = App.useApp();
   const setSelection = useWorkspaceStore((s) => s.setSelection);
-  const { data: envelope, isPending } = useFeature(selection.featureId);
+  const { data: envelope, isPending, isError, error, refetch } = useFeature(selection.featureId);
   const { data: featureTypes } = useFeatureTypes();
   // The rights held on this feature, not installation-wide: a member may write the one feature
   // they were given and nothing else, or everything but a feature held back from them.
@@ -364,6 +436,16 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
   const updateFeatureM = useUpdateFeature();
   const deleteFeatureM = useDeleteFeature();
   const [editing, setEditing] = useState(false);
+  // The version of the feature the edit dialog was filled from, taken when it opens: the version
+  // the cached reading was answered at, not the newest one filed for the feature. A read made
+  // elsewhere, or a save whose re-read has not landed, files a newer one while the dialog is filled
+  // from the older copy; a save that carried it would present that change as already seen and
+  // write the older values over it.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+  const startEditing = () => {
+    openedAtVersion.current = versionReadWith(envelope);
+    setEditing(true);
+  };
   // The editor is removed the moment it closes (see below), which takes antd's return of focus
   // with it; the button that opened it is focused again by hand, so a keyboard user carries on
   // from where they were rather than from the top of the page.
@@ -381,15 +463,30 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     if (!feature || typeof feature.properties !== 'object' || feature.properties === null) {
       return [];
     }
+    const typeCode = featureType?.code;
     const labels = new Map(
-      parsePropertiesSchema(featureType?.propertiesSchema).map((f) => [f.key, f.label]),
+      parsePropertiesSchema(featureType?.propertiesSchema).map((f) => [
+        f.key,
+        typedFieldLabel(t, typeCode, f.key, f.label),
+      ]),
     );
     return Object.entries(feature.properties as Record<string, unknown>).map(([key, value]) => ({
       key,
       label: labels.get(key) ?? key,
-      value: typeof value === 'boolean' ? (value ? '✓' : '✗') : String(value),
+      value: typedValueText(t, typeCode, key, value),
     }));
-  }, [feature, featureType]);
+  }, [feature, featureType, t]);
+
+  if (isError && !envelope) {
+    return (
+      <SelectionReadFailed
+        error={error}
+        onRetry={refetch}
+        title={t('map.selectionLoadFailed')}
+        testId="feature-selection-load-failed"
+      />
+    );
+  }
 
   if (isPending || !envelope || !feature) {
     return (
@@ -436,6 +533,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
     try {
       await updateFeatureM.mutateAsync({
         id: feature.id,
+        ifMatch: openedAtVersion.current,
         body: {
           name: values.name,
           featureTypeId: values.featureTypeId,
@@ -450,8 +548,12 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       surfaceFeaturesChanged();
       stopEditing();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -461,8 +563,11 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
       surfaceFeaturesChanged();
       setSelection(null);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
     }
   };
 
@@ -521,7 +626,7 @@ function FeatureCard({ selection, scope }: { selection: FeatureSelection; scope:
             icon={<EditOutlined />}
             size="small"
             disabled={!rights.settled}
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
           >
             {t('features.edit')}
           </Button>

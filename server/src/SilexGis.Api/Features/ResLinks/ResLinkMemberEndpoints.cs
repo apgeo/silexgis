@@ -53,6 +53,16 @@ public static partial class ResLinkEndpoints
         // and the insert — is one transaction, opened by taking the link's row lock so the
         // snapshot every rule below runs against cannot be moved by a concurrent writer.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // A new point is a feature creation, and its derivation takes the hierarchy lock. Taken
+        // here, before the link's row, so this transaction never holds a row while it waits for
+        // the hierarchy lock — the order every hierarchy writer keeps, which is what stops two of
+        // them from each holding what the other waits for.
+        if (request.NewGeoPoint is not null)
+        {
+            await featureWriter.HoldHierarchyAsync(ct);
+        }
+
         await LockForMemberWriteAsync(db, link.Id, ct);
 
         // Inside the lock, for the reason the update handler above spells out: the rule

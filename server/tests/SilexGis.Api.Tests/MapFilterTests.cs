@@ -29,8 +29,8 @@ namespace SilexGis.Api.Tests;
 /// members of one club, so a filter the author shares with the club can be run by the clubmate.
 /// </para>
 /// <para>
-/// Every filter here names this class's run (a name condition), because the suite shares one
-/// database and the cluster branch counts every entrance in its window.
+/// Every filter here names this test's run (a name condition), because the tests of this class
+/// share one database and the cluster branch counts every entrance in its window.
 /// </para>
 /// </remarks>
 public sealed class MapFilterTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

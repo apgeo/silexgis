@@ -23,9 +23,12 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import List from '../../components/List.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { rosterWriteProblem } from '../../components/cavers/rosterProblems.ts';
+import { announcementProblem } from '../../components/cavingGroups/cavingGroupProblems.ts';
+import { cavingGroupCreateProblem } from '../../components/cavingGroups/cavingGroupProblems.ts';
 import { useTranslation } from 'react-i18next';
 import {
   useAnnounceToCavingGroup,
@@ -44,7 +47,11 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members } = useCavingGroupMembers(group.id);
+  const membersRead = useCavingGroupMembers(group.id);
+  const { data: members } = membersRead;
+  // Until the roster has been read, adding somebody "as a member" could quietly change the role of
+  // a person already on it, so nobody is added while it is unknown.
+  const rosterUnknown = members === undefined;
   const upsert = useUpsertCavingGroupMember(group.id);
   const remove = useRemoveCavingGroupMember(group.id);
   const [caverQuery, setCaverQuery] = useState('');
@@ -89,13 +96,23 @@ function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () 
           }))}
           notFoundContent={null}
         />
-        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedCaver}>
+        <Button icon={<PlusOutlined />} onClick={() => void add()} disabled={!selectedCaver || rosterUnknown}>
           {t('cavingGroups.addMember')}
         </Button>
       </Flex>
+      <ReadFailedAlert
+        isError={membersRead.isError}
+        error={membersRead.error}
+        held={members !== undefined}
+        onRetry={membersRead.refetch}
+        title={t('cavingGroups.membersLoadFailed')}
+        testId="caving-group-members-load-failed"
+      />
       <List
         size="small"
         dataSource={members}
+        // A roster that could not be read says so above; "no data" here would be a false answer.
+        locale={membersRead.isError && !members ? { emptyText: <span /> } : undefined}
         renderItem={(member) => (
           <List.Item
             actions={[
@@ -156,23 +173,24 @@ const MAX_ANNOUNCEMENT_LENGTH = 200;
  */
 function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
-  const { data: audience, isPending: counting } = useCavingGroupAnnouncementAudience(group.id);
+  const audienceRead = useCavingGroupAnnouncementAudience(group.id);
+  const { data: audience, isPending: counting } = audienceRead;
   const announce = useAnnounceToCavingGroup(group.id);
   const [message, setMessage] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [sent, setSent] = useState<{ recipients: number; queued: boolean } | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const written = message.trim();
   const recipients = audience?.recipients ?? 0;
 
   const send = async () => {
-    setFailed(false);
+    setFailed(null);
     try {
       const result = await announce.mutateAsync({ message: written });
       setSent({ recipients: result.recipients, queued: result.queued });
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(announcementProblem(error, t));
     }
   };
 
@@ -229,7 +247,18 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
           {/* The count first, and before anything is typed: it is the fact that decides whether
               this should be written at all, and putting it under the box would show it after the
               decision had already been made. */}
-          {counting ? (
+          {audienceRead.isError && !audience ? (
+            // A count that never arrived is not "nobody to tell"; with it unknown the
+            // announcement cannot go on, because the count is what it is weighed by.
+            <ReadFailedAlert
+              isError
+              error={audienceRead.error}
+              held={false}
+              onRetry={audienceRead.refetch}
+              title={t('cavingGroups.announce.audienceFailed')}
+              testId="announcement-audience-failed"
+            />
+          ) : counting ? (
             <Skeleton.Input active size="small" style={{ marginBottom: 12 }} />
           ) : (
             <Alert
@@ -273,7 +302,7 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
               type="error"
               showIcon
               style={{ marginTop: 12 }}
-              title={t('cavingGroups.announce.failed')}
+              title={failed}
             />
           )}
         </>
@@ -286,7 +315,7 @@ function AnnounceDialog({ group, onClose }: { group: CavingGroupInfo; onClose: (
 export default function CavingGroupsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: cavingGroups, isFetching } = useCavingGroups();
+  const { data: cavingGroups, isFetching, isError, error, refetch } = useCavingGroups();
   const createCavingGroup = useCreateCavingGroup();
   const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState<CavingGroupInfo | null>(null);
@@ -302,7 +331,12 @@ export default function CavingGroupsPage() {
   const canCreate = useCan('cavingGroups', 'create');
 
   const onCreate = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       await createCavingGroup.mutateAsync({
         name: values.name,
@@ -313,8 +347,8 @@ export default function CavingGroupsPage() {
       setCreating(false);
       form.resetFields();
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(cavingGroupCreateProblem(error, t));
     }
   };
 
@@ -331,11 +365,20 @@ export default function CavingGroupsPage() {
         )}
       </Flex>
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={cavingGroups !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="caving-groups-load-failed"
+      />
       <Table<CavingGroupInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !cavingGroups}
+        locale={isError && !cavingGroups ? { emptyText: <span /> } : undefined}
         dataSource={cavingGroups}
         pagination={false}
         columns={[
@@ -397,7 +440,7 @@ export default function CavingGroupsPage() {
       >
         <Form form={form} layout="vertical" initialValues={{ type: 'cavingClub' }}>
           <Form.Item name="name" label={t('cavingGroups.name')} rules={[{ required: true }]}>
-            <Input maxLength={120} />
+            <Input maxLength={100} />
           </Form.Item>
           <Form.Item name="type" label={t('cavingGroups.type')} rules={[{ required: true }]}>
             <Select
@@ -408,7 +451,7 @@ export default function CavingGroupsPage() {
             />
           </Form.Item>
           <Form.Item name="description" label={t('features.description')}>
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={2} maxLength={2000} />
           </Form.Item>
           <Form.Item name="website" label={t('caves.fields.website')}>
             <Input maxLength={255} />

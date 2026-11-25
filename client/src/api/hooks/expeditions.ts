@@ -4,11 +4,14 @@ import { api, ApiError, lastReadETag } from '../client.ts';
 import type { components } from '../schema';
 import {
   invalidateAfterDelete,
+  invalidateDatedRows,
   unwrap,
+  unwrapVersioned,
   unwrapVoid,
   useInvalidateAttachments,
   useInvalidateHistory,
 } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { ActivityState, ExpeditionListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -38,7 +41,9 @@ export function useExpeditions(params: ExpeditionListParams = {}) {
 export function useExpedition(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.expedition(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    queryFn: () =>
+      unwrapVersioned(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id,
     // A refusal here is a settled answer about the caller, not a transient failure: retrying it
     // three times only delays the page saying so.
@@ -50,7 +55,10 @@ export type ExpeditionWrite = components['schemas']['ExpeditionWriteRequest'];
 
 function useInvalidateExpeditions() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'expeditions');
+    return queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
 }
 
 /**
@@ -63,7 +71,10 @@ function useInvalidateExpeditions() {
  */
 function useReadExpeditionsBack() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'expeditions');
+    return queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
 }
 
 export function useCreateExpedition() {
@@ -78,8 +89,17 @@ export function useUpdateExpedition() {
   const readBack = useReadExpeditionsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: ExpeditionWrite }) =>
-      unwrap(api.PUT('/api/v1/expeditions/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` names the version the caller's values were read at — the edit form's, taken when
+    // it opened — so a change saved by somebody else meanwhile is refused instead of overwritten.
+    // Left out, the save carries the newest version read.
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: ExpeditionWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/expeditions/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: () => {
       invalidateHistory();
       return readBack();
@@ -90,9 +110,20 @@ export function useUpdateExpedition() {
 export function useDeleteExpedition() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
-    onSuccess: (_, id) => invalidateAfterDelete(queryClient, ['expeditions'], id),
+    // `ifMatch` names the version of the camp the page is showing, so a camp changed by somebody
+    // else since it was opened is refused instead of deleted unseen. Left out, the delete carries
+    // the newest version read.
+    mutationFn: ({ id, ifMatch }: { id: string; ifMatch?: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+        }),
+      ),
+    onSuccess: (_, { id }) => {
+      void invalidateDatedRows(queryClient, 'expeditions');
+      return invalidateAfterDelete(queryClient, ['expeditions'], id);
+    },
   });
 }
 

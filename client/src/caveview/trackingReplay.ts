@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later
 import type { ResLink, ResLinkMember, TrackingEvent, TrackingState } from '../api/hooks.ts';
 import type { CaveViewMediaEntry } from './loadCaveView.ts';
 import { placeOnModel } from './drawableOn.ts';

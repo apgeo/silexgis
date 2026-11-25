@@ -113,12 +113,90 @@ public class DependencyRuleTests
         // straight from a parser must be translated into this project's own types before any
         // rule sees it — otherwise the shape of somebody else's file format becomes the shape of
         // the domain.
-        var result = Types.InAssembly(typeof(Visibility).Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("Therion")
-            .GetResult();
+        //
+        // One module of that library is let in, by name, and no other: the orientation
+        // statistics (azimuth folding, poles, the equal-area net, Kamb density, Watson's U²). It
+        // knows no file format and references nothing but the base class library — the rule after
+        // this one holds it to that — so the domain taking it takes arithmetic, not a format.
+        // Written as an allow-list of one assembly, not as a list of the modules that are
+        // forbidden: a module the library adds next year is forbidden here without anybody having
+        // to remember to name it.
+        var domain = typeof(Visibility).Assembly;
 
-        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+        var therionAssemblies = domain.GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .Where(IsTherionName)
+            .Where(name => !string.Equals(name, OrientationModule, StringComparison.Ordinal))
+            .ToArray();
+        therionAssemblies.ShouldBeEmpty(
+            "Domain references survey-library assemblies other than the orientation statistics: "
+            + string.Join(", ", therionAssemblies));
+
+        // The positive half, so the check above cannot pass by reading nothing: the domain does
+        // name the module's types today. When it stops, the exception has no reason left to exist
+        // and this rule should go back to forbidding the whole library.
+        var reached = TherionTypesReferencedBy(domain);
+        reached.ShouldContain(full => full.StartsWith(OrientationModule + ".", StringComparison.Ordinal));
+
+        var therionTypes = reached
+            .Where(full => !full.StartsWith(OrientationModule + ".", StringComparison.Ordinal))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        therionTypes.ShouldBeEmpty(
+            "Domain names survey-library types outside the orientation statistics: "
+            + string.Join(", ", therionTypes));
+    }
+
+    [Fact]
+    public void The_orientation_statistics_module_references_only_the_base_class_library()
+    {
+        // The domain may reach the orientation statistics only because that module brings nothing
+        // with it. If it ever gained a reference — another module of the survey library, a
+        // package — the domain would inherit it through the one door the rule above leaves open,
+        // with every other test still green. So the module's own references are closed too: the
+        // runtime's assemblies, and those only as the runtime ships them (Microsoft's signing keys),
+        // so a package that merely calls itself "System.Something" does not pass.
+        var module = typeof(Therion.Orientation.Azimuth).Assembly;
+        module.GetName().Name.ShouldBe(OrientationModule);
+
+        var references = module.GetReferencedAssemblies();
+        references.ShouldNotBeEmpty();
+
+        var foreign = references
+            .Where(a => !IsRuntimeAssembly(a))
+            .Select(a => a.FullName)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        foreign.ShouldBeEmpty(
+            $"{OrientationModule} references assemblies outside the base class library: "
+            + string.Join(", ", foreign)
+            + ". The domain is allowed to depend on this module only while it depends on nothing.");
+    }
+
+    /// <summary>The one survey-library module the domain may reach.</summary>
+    private const string OrientationModule = "Therion.Orientation";
+
+    /// <summary>The public-key tokens the .NET runtime's own assemblies are signed with.</summary>
+    private static readonly HashSet<string> RuntimePublicKeyTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "b03f5f7f11d50a3a",
+        "b77a5c561934e089",
+        "cc7b13ffcd2ddd51",
+        "7cec85d7bea7798e",
+    };
+
+    private static bool IsTherionName(string name) =>
+        name is "Therion" || name.StartsWith("Therion.", StringComparison.Ordinal);
+
+    private static bool IsRuntimeAssembly(AssemblyName assembly)
+    {
+        var name = assembly.Name ?? string.Empty;
+        var named = name is "System" or "mscorlib" or "netstandard"
+            || name.StartsWith("System.", StringComparison.Ordinal);
+        var token = assembly.GetPublicKeyToken();
+        var signed = token is { Length: > 0 } && RuntimePublicKeyTokens.Contains(Convert.ToHexString(token));
+        return named && signed;
     }
 
     [Fact]
@@ -142,11 +220,14 @@ public class DependencyRuleTests
         // it locates an executable on the host and runs it. Nothing here wants that, and a web
         // application that can be talked into starting a local process from an uploaded file is
         // a different kind of program than this one. Reading the parsers does not require it, so
-        // assert the rest stays unreachable rather than trusting that nobody calls it.
+        // assert the rest stays unreachable rather than trusting that nobody calls it. (The library
+        // has since moved its Blender runner into an assembly of its own, and the rule after this
+        // one keeps that assembly out of the build altogether; this list still judges every type
+        // of every module that is taken, the compiler's among them.)
         //
         // One process is let through, deliberately and by name: the Therion compiler, which turns a
         // survey uploaded from a field device into its models and drawings. It is started only
-        // inside a sandbox, and the rule after this one confines the types that start it to the
+        // inside a sandbox, and a rule further down confines the types that start it to the
         // single class that applies the sandbox — the allow-list says which types, that rule says
         // from where.
         //
@@ -180,6 +261,8 @@ public class DependencyRuleTests
                      // The compiler service compiles through the same runner, and is held to the
                      // same rules as the application: it names no Therion type of its own.
                      typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+                     // So is the analysis service, which shares the infrastructure layer.
+                     typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly,
                  })
         {
             var reached = TherionTypesReferencedBy(assembly);
@@ -193,6 +276,109 @@ public class DependencyRuleTests
                 + "locates an executable, starts a process or opens a shell, it does not belong in "
                 + "a web application and the call is the thing to remove.");
         }
+    }
+
+    [Fact]
+    public void Nothing_here_references_the_survey_library_module_that_runs_Blender()
+    {
+        // The survey library keeps everything that finds a Blender executable and starts it in an
+        // assembly of its own, and its readers and geometry do not reference that assembly. So the
+        // rule above has a coarser twin that does not depend on anybody reading a type list: the
+        // assembly is in nothing this application builds. The type allow-list still stands — it
+        // judges every type that is used; this judges the assembly before any type of it is.
+        //
+        // Two readings, because each sees what the other cannot. The compiled references, followed
+        // through every survey-library assembly they lead to, are what the running program loads,
+        // whichever module brings it in. But the compiler leaves out a reference no code uses, so a
+        // project reference added and not yet called is invisible there; the build's dependency
+        // manifest lists every project the build pulled in, used or not, and closes that gap.
+        var loaded = TherionAssembliesReachedFrom(
+            typeof(Visibility).Assembly,
+            typeof(InfrastructureMarker).Assembly,
+            typeof(Program).Assembly,
+            typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+            typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly);
+
+        // The positive half, so the walk cannot pass by finding nothing: the readers are reached.
+        loaded.ShouldContain(SurveyModelModule);
+        loaded.ShouldNotContain(
+            BlenderExecutionModule,
+            "A SilexGIS assembly reaches the survey library's Blender runner, through: "
+            + string.Join(", ", loaded.OrderBy(n => n, StringComparer.Ordinal))
+            + ". Nothing in a web application may start Blender; remove whatever brought it in.");
+
+        var built = ProjectsInBuildManifest();
+        built.ShouldContain(SurveyModelModule);
+        built.ShouldNotContain(
+            BlenderExecutionModule,
+            "The build pulls in the survey library's Blender runner. No project here may reference "
+            + $"{BlenderExecutionModule}, directly or through another module of the library.");
+    }
+
+    /// <summary>The survey library's model records and readers, which the application does use.</summary>
+    private const string SurveyModelModule = "Therion.Cave3D";
+
+    /// <summary>The survey library's assembly that finds Blender and starts it.</summary>
+    private const string BlenderExecutionModule = "Therion.Blender.Execution";
+
+    /// <summary>
+    /// The survey-library assemblies the given assemblies reference, followed transitively through
+    /// each survey-library assembly's own references, read from the files next to this test without
+    /// loading them.
+    /// </summary>
+    private static HashSet<string> TherionAssembliesReachedFrom(params Assembly[] roots)
+    {
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var name in root.GetReferencedAssemblies().Select(a => a.Name ?? string.Empty))
+            {
+                if (IsTherionName(name) && reached.Add(name))
+                {
+                    pending.Enqueue(name);
+                }
+            }
+        }
+
+        while (pending.TryDequeue(out var current))
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, current + ".dll");
+            File.Exists(path).ShouldBeTrue($"{current} is referenced but not in the build output at {path}.");
+
+            using var stream = File.OpenRead(path);
+            using var pe = new PEReader(stream);
+            var metadata = pe.GetMetadataReader();
+            foreach (var handle in metadata.AssemblyReferences)
+            {
+                var name = metadata.GetString(metadata.GetAssemblyReference(handle).Name);
+                if (IsTherionName(name) && reached.Add(name))
+                {
+                    pending.Enqueue(name);
+                }
+            }
+        }
+
+        return reached;
+    }
+
+    /// <summary>
+    /// The names of the projects this test's build pulled in, read from its dependency manifest:
+    /// every SilexGIS project it references and everything those reference in turn.
+    /// </summary>
+    private static HashSet<string> ProjectsInBuildManifest()
+    {
+        var manifest = Path.Combine(
+            AppContext.BaseDirectory,
+            typeof(DependencyRuleTests).Assembly.GetName().Name + ".deps.json");
+        File.Exists(manifest).ShouldBeTrue($"No dependency manifest at {manifest}.");
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest));
+        return document.RootElement.GetProperty("libraries").EnumerateObject()
+            .Where(library => library.Value.GetProperty("type").GetString() == "project")
+            .Select(library => library.Name.Split('/')[0])
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -210,17 +396,17 @@ public class DependencyRuleTests
     private static readonly HashSet<string> AllowedTherionTypes = new(StringComparer.Ordinal)
     {
         // The parsed cave model and the shapes hanging off it.
-        "Therion.Blender.CaveLrud",
-        "Therion.Blender.CaveModel",
-        "Therion.Blender.CavePassage",
-        "Therion.Blender.CavePassageStation",
-        "Therion.Blender.CaveShot",
-        "Therion.Blender.CaveShotFlags",
-        "Therion.Blender.CaveShotSection",
-        "Therion.Blender.CaveStation",
-        "Therion.Blender.CaveStationFlags",
-        "Therion.Blender.CaveSurvey",
-        "Therion.Blender.CaveVector3",
+        "Therion.Cave3D.CaveLrud",
+        "Therion.Cave3D.CaveModel",
+        "Therion.Cave3D.CavePassage",
+        "Therion.Cave3D.CavePassageStation",
+        "Therion.Cave3D.CaveShot",
+        "Therion.Cave3D.CaveShotFlags",
+        "Therion.Cave3D.CaveShotSection",
+        "Therion.Cave3D.CaveStation",
+        "Therion.Cave3D.CaveStationFlags",
+        "Therion.Cave3D.CaveSurvey",
+        "Therion.Cave3D.CaveVector3",
 
         // The rest of what hangs off a parsed model, reachable since the reading began marking a
         // file's wall shots for itself: that produces a model with the legs changed and everything
@@ -229,31 +415,136 @@ public class DependencyRuleTests
         // describing wall meshes, a terrain height grid, its texture and a loop-closure error, and
         // an enum naming which of the two formats a model was read from. Not one of them reads a
         // file, locates anything or starts anything; they are shapes a reader hands back.
-        "Therion.Blender.CaveScrap",
-        "Therion.Blender.CaveSourceFormat",
-        "Therion.Blender.CaveSurfaceBitmap",
-        "Therion.Blender.CaveSurfaceGrid",
-        "Therion.Blender.CaveTraverseError",
+        "Therion.Cave3D.CaveScrap",
+        "Therion.Cave3D.CaveSourceFormat",
+        "Therion.Cave3D.CaveSurfaceBitmap",
+        "Therion.Cave3D.CaveSurfaceGrid",
+        "Therion.Cave3D.CaveTraverseError",
 
         // One face of a wall surface the compiler modelled: three positions in the point list of
         // the record above, and nothing else. Reached since those surfaces are drawn as walls, and
         // a value with three numbers in it is as far from starting a process as a type can be.
-        "Therion.Blender.CaveTriangle",
+        "Therion.Cave3D.CaveTriangle",
 
         // The centreline graph derived from a model.
-        "Therion.Blender.Geometry.CenterlineBranch",
-        "Therion.Blender.Geometry.CenterlineComponent",
-        "Therion.Blender.Geometry.CenterlineEdgeGeometry",
-        "Therion.Blender.Geometry.CenterlineGraph",
-        "Therion.Blender.Geometry.CenterlineReducedGraph",
+        "Therion.CaveGeometry.CenterlineBranch",
+        "Therion.CaveGeometry.CenterlineComponent",
+        "Therion.CaveGeometry.CenterlineEdgeGeometry",
+        "Therion.CaveGeometry.CenterlineGraph",
+        "Therion.CaveGeometry.CenterlineReducedGraph",
+
+        // A flyby handed over as a render bundle: a zip somebody unpacks and renders with Blender
+        // on a machine of their own. Everything below is the half of the library's Blender code
+        // that writes data, read type by type when the first of them was used; the half that finds
+        // a Blender and starts it is another assembly, which the rule after this one keeps out of
+        // the build whatever this list says.
+        //
+        // A mesh as the library's writer takes one, and the writer: vertices and triangles in,
+        // the bytes of a binary PLY file out. And a box of two corners.
+        "Therion.CaveGeometry.BoundingBox",
+        "Therion.CaveGeometry.CaveMesh",
+        "Therion.CaveGeometry.Writers.PlyWriter",
+
+        // The scene plan — the description of one render that the bundle carries as JSON — in the
+        // records and enums it is made of: the frame, the clock, a model and its turn, the camera
+        // and each of its poses with the pose's own orientation, the look with its materials,
+        // lights and background, what is written over the picture, and where the render writes.
+        // Immutable values every one; the quaternion and the validator's error carry arithmetic
+        // and a sentence, and nothing else here carries any behaviour at all.
+        "Therion.Blender.ColorRgb",
+        "Therion.Blender.SpecError",
+        "Therion.Blender.Plan.PlanCamera",
+        "Therion.Blender.Plan.PlanCameraKey",
+        "Therion.Blender.Plan.PlanColorStop",
+        "Therion.Blender.Plan.PlanContainer",
+        "Therion.Blender.Plan.PlanEngine",
+        "Therion.Blender.Plan.PlanFrame",
+        "Therion.Blender.Plan.PlanInterpolation",
+        "Therion.Blender.Plan.PlanLight",
+        "Therion.Blender.Plan.PlanLook",
+        "Therion.Blender.Plan.PlanMaterial",
+        "Therion.Blender.Plan.PlanMaterialKind",
+        "Therion.Blender.Plan.PlanModel",
+        "Therion.Blender.Plan.PlanOutput",
+        "Therion.Blender.Plan.PlanOutputKind",
+        "Therion.Blender.Plan.PlanQuaternion",
+        "Therion.Blender.Plan.PlanRotation",
+        "Therion.Blender.Plan.PlanScreenItem",
+        "Therion.Blender.Plan.PlanScreenItemKind",
+        "Therion.Blender.Plan.PlanScreenTexts",
+        "Therion.Blender.Plan.PlanTimeline",
+        "Therion.Blender.Plan.PlanTurn",
+        "Therion.Blender.Plan.PlanWorld",
+        "Therion.Blender.Plan.PlanWorldKind",
+        "Therion.Blender.Plan.ScenePlan",
+
+        // What works on a plan: the validator (a plan in, a list of what is wrong with it out),
+        // the serializer (a plan in, JSON text out) and the builder, asked for two things — the
+        // draft copy of a plan, and the library's own rock and lights, which it gives by lowering
+        // a scene description to a plan. All three compute and return; none opens a file.
+        "Therion.Blender.Plan.ScenePlanBuilder",
+        "Therion.Blender.Plan.ScenePlanSerializer",
+        "Therion.Blender.Plan.ScenePlanValidator",
+
+        // The library's layout of the texts over a picture — where a title, a caption, a corner
+        // line and a north arrow stand and how large they are — and the description it lays out
+        // from: the scene description's records for overlays, captions and an end card, with the
+        // few neighbours a description cannot be built without (its source, materials, lighting,
+        // clock and output, and the camera poses and framing a layout is asked with). Plain
+        // records and enums, and two functions from records to records. The scene's metadata
+        // record is named only as the type of an argument that is left out.
+        "Therion.Blender.Plan.ScreenTextPlanner",
+        "Therion.Blender.Subtitles",
+        "Therion.Blender.AnimationSpec",
+        "Therion.Blender.CaptionSpec",
+        "Therion.Blender.EndCardSpec",
+        "Therion.Blender.LabelsSpec",
+        "Therion.Blender.LightingRig",
+        "Therion.Blender.LightingSpec",
+        "Therion.Blender.MaterialsSpec",
+        "Therion.Blender.OutputKind",
+        "Therion.Blender.OutputSpec",
+        "Therion.Blender.OverlaySpec",
+        "Therion.Blender.RockMaterial",
+        "Therion.Blender.SceneMeta",
+        "Therion.Blender.SceneSpec",
+        "Therion.Blender.SourceSpec",
+        "Therion.Blender.Emit.CameraFraming",
+        "Therion.Blender.Emit.CameraPlan",
+
+        // The bundle writer and what it is handed. It writes one zip into a stream it is given: the
+        // plan, the meshes read from the scratch files named, two run scripts, a licence, a notice
+        // and the player — Python the library carries as text and never runs. Read to its last
+        // line for this entry: it opens files to read them, writes to the one stream, and starts
+        // nothing; rendering is for whoever unpacks the zip.
+        "Therion.Blender.Player.RenderBundleContent",
+        "Therion.Blender.Player.RenderBundleWriter",
 
         // Reading a survey file, and the refusal when it is not one.
-        "Therion.Blender.Parsing.CaveFileFormatException",
-        "Therion.Blender.Parsing.CaveModelReader",
+        "Therion.Cave3D.Parsing.CaveFileFormatException",
+        "Therion.Cave3D.Parsing.CaveModelReader",
 
         // Writing an invented survey in the compiled Therion format for the development data: a
         // model in, bytes in memory out. It reads nothing, locates nothing and starts nothing.
-        "Therion.Blender.Parsing.LoxWriter",
+        "Therion.Cave3D.Parsing.LoxWriter",
+
+        // The orientation statistics, which the domain reaches (and only the domain should need):
+        // azimuth folding, the plane and line records with the pole of a plane, the equal-area
+        // net's projection and its point, Kamb's density and its grid, and Watson's U² with its
+        // result. Pure arithmetic over numbers in a module that references nothing but the base
+        // class library — it reads no file, locates nothing and starts nothing.
+        "Therion.Orientation.AxialMean",
+        "Therion.Orientation.AxialStatistics",
+        "Therion.Orientation.Azimuth",
+        "Therion.Orientation.EqualAreaNet",
+        "Therion.Orientation.KambDensity",
+        "Therion.Orientation.KambDensityGrid",
+        "Therion.Orientation.LineOrientation",
+        "Therion.Orientation.NetPoint",
+        "Therion.Orientation.PlaneOrientation",
+        "Therion.Orientation.Planes",
+        "Therion.Orientation.WatsonU2",
+        "Therion.Orientation.WatsonU2Result",
 
         // Reading what a compilation printed. Text in, records out — this starts no compiler.
         "Therion.Build.TherionLogDeclination",
@@ -348,6 +639,8 @@ public class DependencyRuleTests
                      // The compiler service compiles through the same runner, and is held to the
                      // same rules as the application: it names no Therion type of its own.
                      typeof(SilexGis.TherionService.TherionServiceHost).Assembly,
+                     // So is the analysis service, which shares the infrastructure layer.
+                     typeof(SilexGis.WhiteboxService.WhiteboxServiceHost).Assembly,
                  })
         {
             var result = Types.InAssembly(assembly)

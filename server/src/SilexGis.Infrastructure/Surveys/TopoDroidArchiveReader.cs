@@ -55,14 +55,19 @@ public static class TopoDroidArchiveReader
 
         try
         {
+            // Counted from the archive's own records before the runtime builds an object for
+            // every one of them, which is the cost a many-entry archive is built to impose.
+            if (ZipEntryCount.Exceeds(archive, maxEntries))
+            {
+                throw TooManyEntries(maxEntries);
+            }
+
             using var zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
             var entries = zip.Entries;
 
             if (entries.Count > maxEntries)
             {
-                throw new SurveyPipelineException(
-                    SurveyPipelineFailures.ArchiveTooLarge,
-                    $"The survey archive holds more than {maxEntries} entries.");
+                throw TooManyEntries(maxEntries);
             }
 
             if (entries.Count == 0 || !entries.Any(e => e.FullName == TopoDroidArchive.ManifestEntry))
@@ -160,6 +165,9 @@ public static class TopoDroidArchiveReader
 
     private static SurveyPipelineException Invalid(string message) =>
         new(SurveyPipelineFailures.ArchiveInvalid, message);
+
+    private static SurveyPipelineException TooManyEntries(int maxEntries) =>
+        new(SurveyPipelineFailures.ArchiveTooLarge, $"The survey archive holds more than {maxEntries} entries.");
 
     private static SurveyPipelineException TooLarge() =>
         new(SurveyPipelineFailures.ArchiveTooLarge, "The survey archive unpacks to more than this server accepts.");

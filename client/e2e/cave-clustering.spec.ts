@@ -130,3 +130,36 @@ test('a grouping whose groups are as wide as the gaps between them says it is we
   // of what it was offered.
   await expect(page.getByTestId('cave-cluster-excluded')).toContainText('2600');
 });
+
+test('the principal-axes mode asks over more than two measures and answers with a picture or says why not', async ({
+  page,
+}) => {
+  await login(page);
+  await openLengthDepth(page);
+  await expect(page.getByTestId('cave-cluster-population')).toBeVisible({ timeout: 30_000 });
+
+  const asked = page.waitForRequest(
+    (request) => request.url().includes('/stats/registry/clustering') && request.url().includes('projectedExtension'),
+  );
+  await page.getByTestId('scatter-mode').getByText('Principal axes').click();
+  const url = new URL((await asked).url());
+  expect(url.searchParams.get('measures')?.split(',').length).toBeGreaterThan(2);
+
+  // The account of who was left out stays above whatever is drawn, in this mode as in the other.
+  await expect(page.getByTestId('cave-cluster-population')).toBeVisible({ timeout: 30_000 });
+
+  // Whatever this registry holds, one of the two honest outcomes is on screen: the axes, titled
+  // with the share of the variation each carries, or the sentence saying none could be drawn. A
+  // third state — nothing at all — is the failure this guards.
+  const drawn = page.getByTestId('principal-axes-note');
+  const none = page.getByTestId('principal-axes-none');
+  await expect(drawn.or(none)).toBeVisible({ timeout: 30_000 });
+  if (await drawn.isVisible()) {
+    await expect(page.getByTestId('principal-axes-first')).toContainText('%');
+    await expect(page.getByTestId('chart-principal-axes')).toBeVisible();
+  }
+
+  // And back: the two-measure scatter is still one click away and is not disturbed.
+  await page.getByTestId('scatter-mode').getByText('Chosen measures').click();
+  await expect(page.getByTestId('chart-correlation')).toBeVisible();
+});

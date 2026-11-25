@@ -38,9 +38,8 @@ public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable, IClassFi
     private HttpClient anonymous = null!;
     private Guid holderId;
 
-    // Nothing here queues work, so this host runs none of the job drains. Every test class shares
-    // one PostGIS container and the queue lives in it, so a drain started here would claim work
-    // queued by another class and fail it against storage this class does not have.
+    // Nothing here queues work, so this host runs none of the job drains: there is nothing for one
+    // to do but race the tests.
     public TerrainBuildApiTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,

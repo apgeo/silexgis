@@ -2,13 +2,19 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ActivityState, Visibility } from '../../api/hooks.ts';
 
 const move = vi.fn();
+/** What the move hook says about a move already on its way; nothing by default. */
+let inFlight: { isPending: boolean; variables: { state: ActivityState } | undefined } = {
+  isPending: false,
+  variables: undefined,
+};
 
 vi.mock('../../api/hooks.ts', () => ({
-  useMoveTripLog: () => ({ mutateAsync: move, isPending: false, variables: undefined }),
+  useMoveTripLog: () => ({ mutateAsync: move, ...inFlight }),
 }));
 
 const { default: TripStateControl } = await import('./TripStateControl.tsx');
@@ -33,6 +39,7 @@ const newDateButton = () => screen.queryByRole('button', { name: 'Settle a new d
 
 beforeEach(() => {
   move.mockReset().mockResolvedValue({});
+  inFlight = { isPending: false, variables: undefined };
 });
 
 afterEach(cleanup);
@@ -140,6 +147,17 @@ describe('TripStateControl', () => {
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'planned' }));
   });
 
+  // The server refuses a move the trip's present state does not allow, which here means somebody
+  // moved it meanwhile; "the save failed, try again" would fail the same way every time.
+  it('says a refused move is not possible from where the trip now stands', async () => {
+    move.mockRejectedValue(new ApiError(409, 'trip_log.state_transition_invalid'));
+    show('delayed');
+
+    fireEvent.click(newDateButton()!);
+    expect(await screen.findByText(i18n.t('trips.stateTransitionInvalid'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
   it('offers nothing for a value the trip table says nothing about', () => {
     // The enum is shared with activities that are not trips, so a value the trip's table says
     // nothing about can still be handed to this control.
@@ -218,5 +236,44 @@ describe('TripStateControl', () => {
     await vi.waitFor(() =>
       expect(screen.getByText('The operation failed. Please try again.')).toBeInTheDocument(),
     );
+  });
+
+  // A move refused because the trip changed since the page read it is worded once, by the
+  // application's own conflict warning; "the operation failed" beside it would contradict it.
+  it('leaves a stale-version refusal to the conflict warning', async () => {
+    const { ApiError } = await import('../../api/client.ts');
+    move.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    show('published');
+
+    fireEvent.click(draftButton()!);
+
+    await vi.waitFor(() => expect(move).toHaveBeenCalledTimes(1));
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, a sentence the stale refusal had asked for
+    // would be there too — no waiting on the clock for something that should not appear.
+    move.mockRejectedValue(new ApiError(409, 'trip_log.state_transition_invalid'));
+    fireEvent.click(draftButton()!);
+
+    await screen.findByText(i18n.t('trips.stateTransitionInvalid'));
+    // The witness is the only message on screen: the stale refusal asked for none, in any words.
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
+    expect(document.querySelector('.ant-message-success')).toBeNull();
+  });
+
+  it('holds every move while one is on its way, and marks the one being made', () => {
+    // A second press while the first is still answering would send a second move from a state the
+    // trip may no longer be in.
+    inFlight = { isPending: true, variables: { state: 'published' } };
+    show('draft');
+
+    // A spinning button is named with its spinner too, so it is found by the words it carries.
+    const publishing = screen.getByRole('button', { name: /Publish$/ });
+    expect(publishing).toHaveClass('ant-btn-loading');
+    expect(doneButton()).not.toHaveClass('ant-btn-loading');
+    for (const button of [publishing, doneButton(), callOffButton()]) {
+      expect(button).toBeDisabled();
+    }
+    fireEvent.click(doneButton()!);
+    expect(move).not.toHaveBeenCalled();
   });
 });

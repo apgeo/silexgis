@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Card, Flex, Spin, Typography } from 'antd';
+import { Alert, Card, Flex, Spin, Typography, theme } from 'antd';
 import Button from '../components/Button.tsx';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -9,9 +9,12 @@ import type Point from 'ol/geom/Point';
 import { fromLonLat, transformExtent } from 'ol/proj';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { isSettledRefusal } from '../api/client.ts';
 import { fetchSharedView } from '../api/hooks.ts';
 import { backgroundLayerFor } from '../map/baseLayers.ts';
 import { createSharedViewLayers } from '../map/sharedViewLayers.ts';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
+import { FONT_SIZE } from '../theme.ts';
 
 /** What a click on the shared map shows: a public name. */
 interface Picked {
@@ -31,15 +34,25 @@ interface Picked {
  */
 export default function SharedViewPage() {
   const { t, i18n } = useTranslation();
+  const { token: colors } = theme.useToken();
   // A vector background's labels follow the language the page is read in.
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const { token } = useParams<{ token: string }>();
   const mapTarget = useRef<HTMLDivElement>(null);
   const [name, setName] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  // `refused` is the server's settled answer that the link is no good — wrong, revoked or expired,
+  // which it does not tell apart and neither does this page. `failed` is everything else: no
+  // answer, a server error, a request refused for coming too often, or a map that could not be
+  // drawn from what came back. None of those says anything about the link, so it is offered again.
+  const [outcome, setOutcome] = useState<'ok' | 'refused' | 'failed'>('ok');
+  const [attempt, setAttempt] = useState(0);
   const [noBackground, setNoBackground] = useState(false);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [cluster, setCluster] = useState<number | null>(null);
+  // A read of the link's caves or features that failed after the page was up. What was drawn
+  // stays, and so must a word that it may be incomplete — a pale map reads as "no caves here".
+  const [dataReadFailed, setDataReadFailed] = useState(false);
+  const reloadData = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
     let disposed = false;
@@ -47,15 +60,30 @@ export default function SharedViewPage() {
     let detach: (() => void) | undefined;
 
     const boot = async () => {
+      let shared: Awaited<ReturnType<typeof fetchSharedView>>;
       try {
-        const shared = await fetchSharedView(token!);
-        if (disposed) {
-          return;
+        shared = await fetchSharedView(token!);
+      } catch (error) {
+        if (!disposed) {
+          setOutcome(isSettledRefusal(error) ? 'refused' : 'failed');
         }
+        return;
+      }
+      if (disposed) {
+        return;
+      }
+      try {
         setName(shared.name);
         const camera = shared.camera;
         const reach = shared.reach;
-        const data = createSharedViewLayers(token!, shared.overlays);
+        // Before the layers exist, so their first frame already draws the installation's symbol.
+        setEntranceSymbols(shared.overlays);
+        const data = createSharedViewLayers(token!, shared.overlays, (failed) => {
+          if (!disposed) {
+            setDataReadFailed(failed);
+          }
+        });
+        reloadData.current = data.reload;
         const dataLayers = new Set<unknown>(data.layers);
         const base = shared.background
           ? backgroundLayerFor({ ...shared.background, isBase: true }, 0, language)
@@ -109,7 +137,7 @@ export default function SharedViewPage() {
         });
       } catch {
         if (!disposed) {
-          setFailed(true);
+          setOutcome('failed');
         }
       }
     };
@@ -120,19 +148,45 @@ export default function SharedViewPage() {
       detach?.();
       map?.setTarget(undefined);
     };
-  }, [token, language]);
+  }, [token, language, attempt]);
 
-  if (failed) {
+  if (outcome === 'refused') {
     return (
       <Flex align="center" justify="center" style={{ height: '100vh' }}>
-        <Alert type="warning" showIcon title={t('views.sharedNotFound')} />
+        <Alert type="warning" showIcon data-testid="shared-view-not-found" title={t('views.sharedNotFound')} />
+      </Flex>
+    );
+  }
+
+  if (outcome === 'failed') {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100vh' }}>
+        <Alert
+          type="error"
+          showIcon
+          data-testid="shared-view-load-failed"
+          title={t('common.loadFailed')}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                // Back to the page first, in the same render, so the map's container exists by the
+                // time the next attempt's answer builds a map into it.
+                setOutcome('ok');
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          }
+        />
       </Flex>
     );
   }
 
   return (
     <Flex vertical style={{ height: '100vh' }}>
-      <Flex align="center" style={{ padding: '8px 16px', borderBottom: '1px solid rgba(128,128,128,0.25)' }}>
+      <Flex align="center" style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.colorBorderSecondary}` }}>
         <Typography.Title level={5} style={{ margin: 0, flex: 1 }}>
           {name ?? <Spin size="small" />}
         </Typography.Title>
@@ -142,12 +196,27 @@ export default function SharedViewPage() {
           would itself tell the reader that something protected lies in view. */}
       <Typography.Text
         type="secondary"
-        style={{ padding: '4px 16px', fontSize: 12, borderBottom: '1px solid rgba(128,128,128,0.25)' }}
+        style={{ padding: '4px 16px', fontSize: FONT_SIZE.sm, borderBottom: `1px solid ${colors.colorBorderSecondary}` }}
         data-testid="shared-view-protection-note"
       >
         {t('views.sharedProtectedNote')}
       </Typography.Text>
       {noBackground && <Alert type="info" showIcon banner title={t('views.sharedNoBackground')} />}
+      {dataReadFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          closable={{ onClose: () => setDataReadFailed(false) }}
+          data-testid="shared-view-data-failed"
+          title={t('views.sharedDataFailed')}
+          action={
+            <Button size="small" onClick={() => reloadData.current?.()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <div style={{ flex: 1, position: 'relative' }}>
         <div ref={mapTarget} style={{ position: 'absolute', inset: 0 }} data-testid="shared-view-map" />
         {(picked || cluster !== null) && (

@@ -263,7 +263,34 @@ public sealed class TripImportOptionsValidator : AbstractValidator<TripImportOpt
         RuleFor(x => x.TripTypeNames)
             .Must(names => names is null || names.Values.All(n => n is null || n.Length <= 120))
             .WithMessage("A trip type's name is at most 120 characters.");
+
+        // The options travel with every save of the review and are stored with it. A choice is
+        // keyed by a value read from the sheet, so there are never more of them than the sheet has
+        // rows, and none longer than a cell the reader keeps.
+        RuleFor(x => x.SlashSeparatedFields)
+            .Must(fields => fields is null || (fields.Count <= FieldCount && fields.All(f => Enum.IsDefined(f))))
+            .WithMessage("The fields read as slash-separated are among the sheet's defined fields.");
+        RuleFor(x => x.Columns)
+            .Must(columns => columns is null
+                || columns.All(c => Enum.IsDefined(c.Key) && (c.Value is null || c.Value.Length <= MaxKeyLength)))
+            .WithMessage($"Each column is a defined field, named in at most {MaxKeyLength} characters.");
+        RuleFor(x => x.TripTypeChoices).Must(BoundedKeys).WithMessage(ChoicesMessage);
+        RuleFor(x => x.TripTypeNames).Must(BoundedKeys).WithMessage(ChoicesMessage);
+        RuleFor(x => x.CaverChoices).Must(BoundedKeys).WithMessage(ChoicesMessage);
+        RuleFor(x => x.FeatureChoices).Must(BoundedKeys).WithMessage(ChoicesMessage);
     }
+
+    /// <summary>The longest value from the sheet a choice may be keyed by.</summary>
+    public const int MaxKeyLength = 500;
+
+    private static readonly int FieldCount = Enum.GetValues<TripCsvField>().Length;
+
+    private static readonly string ChoicesMessage =
+        $"At most {TripImportReviewRules.MaxEntries} choices, each keyed by at most {MaxKeyLength} characters.";
+
+    private static bool BoundedKeys<TValue>(IReadOnlyDictionary<string, TValue>? choices) =>
+        choices is null
+        || (choices.Count <= TripImportReviewRules.MaxEntries && choices.Keys.All(k => k.Length <= MaxKeyLength));
 }
 
 public sealed class TripImportSessionWriteRequestValidator : AbstractValidator<TripImportSessionWriteRequest>
@@ -272,6 +299,32 @@ public sealed class TripImportSessionWriteRequestValidator : AbstractValidator<T
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new TripImportOptionsValidator()!);
         RuleFor(x => x.Decisions).NotNull();
+        TripImportReviewRules.Apply(this, x => x.Decisions);
+    }
+}
+
+/// <summary>How much one trip review may carry, and how each decision in it is held.</summary>
+internal static class TripImportReviewRules
+{
+    /// <summary>
+    /// The most decisions, and the most lines chosen, one review may carry: a row each of a sheet
+    /// far longer than any club's trip history. The review is stored and read back whole on every
+    /// save, so an unbounded one would make every later save of it unbounded too.
+    /// </summary>
+    public const int MaxEntries = 200_000;
+
+    public static void Apply<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<KeyValuePair<string, TripImportDecision>>?>> decisions)
+    {
+        validator.RuleFor(decisions)
+            .Must(d => d is null || d.Count() <= MaxEntries)
+            .WithMessage($"A review holds at most {MaxEntries} decisions.");
+        validator.RuleForEach(decisions).ChildRules(entry =>
+        {
+            entry.RuleFor(e => e.Key).MaximumLength(40);
+            entry.RuleFor(e => e.Value.Action).IsInEnum().When(e => e.Value is not null);
+        });
     }
 }
 
@@ -280,7 +333,11 @@ public sealed class TripImportPreviewRequestValidator : AbstractValidator<TripIm
     public TripImportPreviewRequestValidator()
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new TripImportOptionsValidator()!);
+        RuleFor(x => x.Search).MaximumLength(MaxSearchLength);
     }
+
+    /// <summary>The same ceiling every other search box of the application keeps.</summary>
+    public const int MaxSearchLength = 200;
 }
 
 public sealed class TripImportCommitRequestValidator : AbstractValidator<TripImportCommitRequest>
@@ -290,5 +347,9 @@ public sealed class TripImportCommitRequestValidator : AbstractValidator<TripImp
         RuleFor(x => x.Options).NotNull().SetValidator(new TripImportOptionsValidator()!);
         RuleFor(x => x.Lines).NotNull().Must(l => l is null || l.Count > 0)
             .WithMessage("Choose at least one row to record.");
+        RuleFor(x => x.Lines)
+            .Must(l => l is null || l.Count <= TripImportReviewRules.MaxEntries)
+            .WithMessage($"A confirmation chooses at most {TripImportReviewRules.MaxEntries} rows.");
+        TripImportReviewRules.Apply(this, x => x.Decisions);
     }
 }

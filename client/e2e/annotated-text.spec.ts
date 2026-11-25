@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { confirmOk, login } from './helpers.ts';
+import { tryAsPerson } from './arrange.ts';
 
 /**
  * Reading a link-annotated text, and following a passage of it into the views that are open.
@@ -144,20 +145,29 @@ test.describe('link-annotated text', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
     await dialog.getByPlaceholder(/two letters|două litere/i).fill('Falia');
     await dialog.getByText('Falia Demo').first().click();
+    const stored = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/v1/reslinks',
+    );
     await dialog.getByRole('button', { name: /^OK$/ }).click();
+    // The passage is on the seeded text every run reads, and the first test of this file counts
+    // that text's passages exactly. So the new one is removed on the way out whatever happens
+    // here; the page's own delete below is what is under test, this is only the net under it.
+    const linkId = ((await (await stored).json()) as { id: string }).id;
+    try {
+      await expect(page.getByTestId('tl-passage')).toHaveCount(before + 1, { timeout: 20_000 });
+      const marked = page.getByTestId('tl-passage').filter({ hasText: 'boulder choke' }).first();
+      await expect(marked).toBeVisible();
 
-    await expect(page.getByTestId('tl-passage')).toHaveCount(before + 1, { timeout: 20_000 });
-    const marked = page.getByTestId('tl-passage').filter({ hasText: 'boulder choke' }).first();
-    await expect(marked).toBeVisible();
+      // Taken down through the card that offers it, which is the only cover the delete has.
+      await marked.hover();
+      const card = page.locator('.ant-popover').filter({ hasText: 'Falia Demo' }).first();
+      await expect(card).toBeVisible({ timeout: 15_000 });
+      await card.getByRole('button', { name: /Delete link|Șterge legătura/i }).click();
+      await confirmOk(page, { scope: page.locator('.ant-modal-confirm'), exact: true });
 
-    // Taken down through the card that offers it, which is both the cleanup and the only cover
-    // the delete has.
-    await marked.hover();
-    const card = page.locator('.ant-popover').filter({ hasText: 'Falia Demo' }).first();
-    await expect(card).toBeVisible({ timeout: 15_000 });
-    await card.getByRole('button', { name: /Delete link|Șterge legătura/i }).click();
-    await page.getByRole('button', { name: /^OK$/ }).last().click();
-
-    await expect(page.getByTestId('tl-passage')).toHaveCount(before, { timeout: 20_000 });
+      await expect(page.getByTestId('tl-passage')).toHaveCount(before, { timeout: 20_000 });
+    } finally {
+      await tryAsPerson(page, 'DELETE', `/api/v1/reslinks/${linkId}`);
+    }
   });
 });

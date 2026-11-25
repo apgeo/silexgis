@@ -33,7 +33,9 @@ public sealed class ClientErrorBatchValidator : AbstractValidator<ClientErrorBat
 
     public ClientErrorBatchValidator()
     {
-        RuleFor(x => x.Errors).NotEmpty().Must(e => e.Count <= MaxErrors)
+        // Stopped at the first failure: a body without the list binds it as null, and the count
+        // would otherwise be read off nothing.
+        RuleFor(x => x.Errors).Cascade(CascadeMode.Stop).NotEmpty().Must(e => e.Count <= MaxErrors)
             .WithMessage($"At most {MaxErrors} errors are taken at once.");
         // A null item binds from `[null]` and the child rules skip it, so it is refused here rather
         // than dereferenced by the handler.

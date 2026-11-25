@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -176,6 +178,18 @@ describe('the current step', () => {
 });
 
 describe('the wording for errors', () => {
+  // The run's codes are declared once, on the server; a code added there and not here reaches
+  // the upload's page as a run that failed for no stated reason.
+  it('has wording for every code a processing run can end with', () => {
+    const declared = readFileSync(
+      path.resolve(process.cwd(), '../server/src/SilexGis.Domain/Surveys/SurveyPipeline.cs'),
+      'utf8',
+    );
+    const codes = [...declared.matchAll(/"(survey_pipeline\.[a-z_]+)"/g)].map((match) => match[1]);
+    expect(codes.length).toBeGreaterThan(10);
+    expect(codes.filter((code) => !(code in SURVEY_UPLOAD_RUN_ERROR_KEYS))).toEqual([]);
+  });
+
   it('has an English and a Romanian sentence for every code it names', () => {
     const lookup = (tree: unknown, path: string) =>
       path.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], tree);

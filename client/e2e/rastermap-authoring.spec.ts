@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, pickCaveType } from './helpers.ts';
 import {
   bearerToken,
   expectPinCount,
@@ -66,8 +66,7 @@ test('a pin is authored, moved, deleted and re-placed, and every write lands as 
   // A cave of this run's own, with the committed survey fixture on it (never real data).
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 

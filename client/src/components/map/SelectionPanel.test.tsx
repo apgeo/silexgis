@@ -8,6 +8,7 @@ import { useWorkspaceStore, type WorkspaceSelection } from '../../stores/workspa
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera, type ViewCameraTarget } from '../../workspace/viewCamera.ts';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import SelectionPanel from './SelectionPanel.tsx';
 
 // What this panel does to the rest of the application, rather than what it renders.
@@ -50,7 +51,7 @@ const entrances = [
 
 const featureGeometry = { type: 'LineString', coordinates: [[25.1, 45.2], [25.2, 45.3]] };
 
-const featureEnvelope = {
+const aFeatureEnvelope = {
   kind: 'generic',
   feature: {
     id: 'feature-1',
@@ -68,6 +69,16 @@ const featureEnvelope = {
   },
 };
 
+/** The feature as the panel's read of it answers at this moment; reassigned to stand for a re-read. */
+let featureEnvelope: typeof aFeatureEnvelope = aFeatureEnvelope;
+
+/** The feature as a read answered at `version` carried it. */
+function aFeatureAt(version: string) {
+  const envelope = { ...aFeatureEnvelope, feature: { ...aFeatureEnvelope.feature } };
+  noteVersionOfReading(envelope, new Response(null, { headers: { ETag: version } }));
+  return envelope;
+}
+
 const deleteFeature = vi.fn().mockResolvedValue(undefined);
 const updateFeature = vi.fn().mockResolvedValue(undefined);
 
@@ -76,13 +87,24 @@ let caveSummary: { headlinePicture: { thumbnailUrl: string; caption: string | nu
   headlinePicture: null,
 };
 
+/** What a card's own read answered, when a test stands it in for a failure; undefined reads fine. */
+let failedRead: { kind: 'cave' | 'cluster' | 'feature' | 'trip'; error: unknown } | undefined;
+const refetchFailed = vi.fn();
+function readOf<T>(kind: 'cave' | 'cluster' | 'feature' | 'trip', data: T) {
+  return failedRead?.kind === kind
+    ? { data: undefined, isPending: false, isError: true, error: failedRead.error, refetch: refetchFailed }
+    : { data, isPending: false, isError: false, error: null, refetch: refetchFailed };
+}
+
 vi.mock('../../api/hooks.ts', () => ({
-  useCave: () => ({ data: cave, isPending: false }),
+  useCave: () => readOf('cave', cave),
+  useTripLog: () => readOf('trip', undefined),
+  useTripTypes: () => ({ data: [] }),
   useCaveSummary: () => ({ data: caveSummary }),
   useCaveTypes: () => ({ data: [] }),
-  useClusterEntrances: () => ({ data: clusterEntrances, isPending: false }),
+  useClusterEntrances: () => readOf('cluster', clusterEntrances),
   useEntrances: () => ({ data: entrances }),
-  useFeature: () => ({ data: featureEnvelope, isPending: false }),
+  useFeature: () => readOf('feature', featureEnvelope),
   useFeatureTypes: () => ({
     data: [{ id: 1, code: 'fracture', name: 'Fracture', propertiesSchema: null }],
   }),
@@ -122,7 +144,34 @@ vi.mock('../../api/hooks/access.ts', async () => {
 // composes its sections from a registry now, so the sections it can draw are mocked at their own
 // modules rather than by mocking every hook they happen to call.
 vi.mock('../history/HistoryPanel.tsx', () => ({ default: () => null }));
-vi.mock('../features/FeatureEditModal.tsx', () => ({ default: () => null }));
+// The edit dialog is drawn only as the one act these tests need of it: handing its values back.
+vi.mock('../features/FeatureEditModal.tsx', () => ({
+  default: (props: { open: boolean; onSubmit: (values: Record<string, unknown>) => void }) =>
+    props.open ? (
+      <button
+        type="button"
+        data-testid="feature-edit-submit"
+        onClick={() =>
+          props.onSubmit({
+            name: 'Fracture',
+            featureTypeId: 1,
+            description: null,
+            properties: {},
+            locationProtected: false,
+            visibility: 'public',
+          })
+        }
+      />
+    ) : null,
+}));
+
+// The newest version the transport has filed for a resource at this moment. It can be ahead of the
+// copy the panel holds: a save, or a read made elsewhere, files one before the panel's re-read lands.
+const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+}));
 vi.mock('../tags/TagChips.tsx', () => ({
   default: (props: { canEdit: boolean }) => <div data-testid="tag-chips" data-can-edit={String(props.canEdit)} />,
 }));
@@ -163,11 +212,16 @@ beforeEach(() => {
   camera = recorder();
   detachCamera = setActiveViewCamera(camera);
   deleteFeature.mockClear();
+  updateFeature.mockReset().mockResolvedValue(undefined);
+  versionOnFile.mockReset().mockReturnValue(undefined);
+  featureEnvelope = aFeatureEnvelope;
   linksMounted.mockReset();
   caveSummary = { headlinePicture: null };
   installationWide = true;
   objectActions = 'read, write, delete, share';
   objectError = undefined;
+  failedRead = undefined;
+  refetchFailed.mockReset();
 });
 
 afterEach(() => {
@@ -238,6 +292,25 @@ describe('the shared detail panel', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Zoom to/ }));
 
     expect(camera.flyTo).toHaveBeenCalledWith(25.11, 45.21, 16);
+  });
+
+  it.each([
+    ['refused for want of the right', new ApiError(403, 'forbidden'), 'You are not allowed to make that change.'],
+    ['cut off by a lost connection', new TypeError('Failed to fetch'), 'The deletion failed. Please try again.'],
+  ])('names a delete %s and keeps the feature selected and drawn', async (_label, failure, words) => {
+    deleteFeature.mockRejectedValueOnce(failure);
+    const heard = vi.fn();
+    const stopListening = onSurfaceFeaturesChanged(heard);
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(words)).toBeTruthy();
+    expect(heard).not.toHaveBeenCalled();
+    expect(useWorkspaceStore.getState().selection).toEqual({ kind: 'feature', featureId: 'feature-1' });
+    expect(screen.queryByText('Deleted.')).toBeNull();
+    stopListening();
   });
 
   it('frames a feature geometry in it rather than in a map that may not be showing', () => {
@@ -354,5 +427,109 @@ describe('the edit affordances of a selected feature', () => {
 
     await screen.findByText('Fracture', { selector: 'h5' });
     expect(editAffordances()).toMatchObject({ edit: false, delete: false, tags: 'false' });
+  });
+});
+
+/**
+ * The edit dialog is filled when it opens, while the panel behind it goes on reading the feature —
+ * a return to the browser tab is a read — and every read files a newer version. A save carrying
+ * that one would present somebody else's rename as already seen and write the older values over it.
+ */
+describe('editing a feature from a dialog opened before it was read again', () => {
+  const path = '/api/v1/features/feature-1';
+
+  it('saves against the version the dialog opened with', async () => {
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    featureEnvelope = aFeatureAt('"1"');
+    const view = renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    featureEnvelope = aFeatureAt('"2"');
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SelectionPanel />
+        </App>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    expect(updateFeature.mock.calls[0][0]).toMatchObject({ id: 'feature-1', ifMatch: '"1"' });
+  });
+
+  // The panel can hold an older copy than the newest version filed: re-clicking a feature on the
+  // map reads it outside the panel's cache, and a save files its version before its re-read lands.
+  // The dialog is filled from the copy the panel holds, so the save names that copy's version.
+  it('saves under the version of the copy it was filled from, though a newer one is on file', async () => {
+    featureEnvelope = aFeatureAt('"1"');
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    expect(updateFeature.mock.calls[0][0]).toMatchObject({ id: 'feature-1', ifMatch: '"1"' });
+  });
+
+  it('leaves a stale-version refusal to the one conflict warning', async () => {
+    updateFeature.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    renderPanel({ kind: 'feature', featureId: 'feature-1' });
+    await screen.findByText('Fracture', { selector: 'h5' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(await screen.findByTestId('feature-edit-submit'));
+
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    // A second press refused for another reason draws its own sentence. Messages are drawn in the
+    // order they were asked for, so once that one is on screen anything the stale refusal had asked
+    // for would be too — no wait on the clock is needed to see that it asked for nothing.
+    updateFeature.mockRejectedValue(new ApiError(403, 'forbidden'));
+    fireEvent.click(screen.getByTestId('feature-edit-submit'));
+    expect(await screen.findByText('You are not allowed to make that change.')).toBeTruthy();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(screen.queryByText(/Someone else changed this since you loaded it/)).toBeNull();
+    // Still open, holding what was typed.
+    expect(screen.getByTestId('feature-edit-submit')).toBeTruthy();
+  });
+});
+
+describe('a card whose own read failed', () => {
+  const cluster = { kind: 'cluster', lon: 25.1, lat: 45.2, count: 7, zoom: 8, cell: [24.9, 45.3, 25.6, 45.7] } as const;
+
+  it('says the cluster could not be read, rather than calling it a cluster of nobody', () => {
+    failedRead = { kind: 'cluster', error: new TypeError('Failed to fetch') };
+    renderPanel(cluster);
+
+    expect(screen.queryByText('0 entrances in this area')).toBeNull();
+    expect(screen.getByText('The entrances in this area could not be read.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetchFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['cave', { kind: 'cave', caveId: 'cave-1' }, 'cave-selection-load-failed'],
+    ['trip', { kind: 'trip', tripId: 'trip-1' }, 'trip-selection-load-failed'],
+    ['feature', { kind: 'feature', featureId: 'feature-1' }, 'feature-selection-load-failed'],
+  ] as const)('stops spinning when the %s read fails, and offers to read it again', (kind, selection, testId) => {
+    failedRead = { kind, error: new ApiError(503) };
+    renderPanel(selection as WorkspaceSelection);
+
+    expect(screen.getByTestId(testId)).toBeTruthy();
+    expect(screen.getByText('What was picked on the map could not be read.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('words a refusal as gone or not yours, with no Retry to be refused again', () => {
+    failedRead = { kind: 'cave', error: new ApiError(404, 'not_found') };
+    renderPanel({ kind: 'cave', caveId: 'cave-1' });
+
+    expect(screen.getByText('This is no longer there, or is not yours to read.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 });

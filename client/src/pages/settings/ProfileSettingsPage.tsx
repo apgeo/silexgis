@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Alert, Card, Flex, Form, Input, Spin, Typography } from 'antd';
+import { App, Card, Flex, Form, Input, Spin, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
@@ -14,6 +15,7 @@ import CavingGroupPicker from '../../components/cavingGroups/CavingGroupPicker.t
 import AddressList from '../../components/settings/AddressList.tsx';
 import AvatarPicker from '../../components/settings/AvatarPicker.tsx';
 import FieldVisibilityToggle from '../../components/settings/FieldVisibilityToggle.tsx';
+import { meProblemMessage } from './meProblems.ts';
 
 interface FormValues {
   firstName?: string;
@@ -36,7 +38,7 @@ export default function ProfileSettingsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
-  const { data: me, isPending, isError, refetch } = useMe();
+  const { data: me, isPending, isError, error, refetch } = useMe();
   const update = useUpdateProfile();
 
   // Filled once per account, not on every refetch. Adding an address invalidates the profile
@@ -58,15 +60,10 @@ export default function ProfileSettingsPage() {
     }
   }, [me, form]);
 
-  if (isError) {
-    return (
-      <Alert
-        type="error"
-        showIcon
-        title={t('common.loadFailed')}
-        action={<Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
-      />
-    );
+  // Only a failed first read replaces the form. A failed re-read behind an open form leaves it,
+  // and whatever was typed into it, where it is, with a note that it may be out of date.
+  if (isError && !me) {
+    return <ReadFailedAlert isError error={error} held={false} onRetry={() => refetch()} />;
   }
 
   if (isPending || !me) {
@@ -84,8 +81,8 @@ export default function ProfileSettingsPage() {
         visibility: values.visibility,
       });
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(meProblemMessage(error, t));
     }
   };
 
@@ -102,6 +99,7 @@ export default function ProfileSettingsPage() {
   return (
     <Form form={form} layout="vertical" onFinish={(v) => void onFinish(v)}>
       <Flex vertical gap={16}>
+        <ReadFailedAlert isError={isError} error={error} held onRetry={() => refetch()} style={{ marginBottom: 0 }} />
         <Typography.Text type="secondary">{t('settings.visibility.legend')}</Typography.Text>
 
         <Card size="small" title={t('settings.profile.identity')}>

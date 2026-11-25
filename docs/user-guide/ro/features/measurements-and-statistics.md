@@ -153,6 +153,23 @@ interval egal, niciodată mai apropiate de 2 m și niciodată mai mult de 400.
 Ai nevoie de dreptul de a citi datele de elevație, pe lângă dreptul de a vedea exact unde este
 peștera. Cere-l unui administrator dacă panoul nu apare.
 
+**Cea mai subțire acoperire de rocă.** Lângă cifre, panoul numește locul unde peștera se apropie
+cel mai mult de suprafață — cea mai subțire dintre citiri, cu distanța de-a lungul galeriei — iar
+**Arată pe hartă** îl marchează pe hartă și în vederea 3D. Este cea mai subțire dintre citirile
+făcute, nu minimul real dintre două citiri. Este o poziție a peșterii, așa că cine nu are voie să
+vadă exact unde este peștera nu primește deloc panoul, și nu există o listă a acestora pentru toate
+peșterile.
+
+### Galerii sub o dolină
+
+O dolină, un sorb sau orice contur desenat are pe pagina lui un card **Galerii sub această
+trăsătură**. Acesta listează peșterile cu galerii la o rază aleasă de tine (50 m la început, până
+la 500 m), de la cea mai apropiată, cu distanța în plan până la cea mai apropiată galerie și roca
+de deasupra în acel loc. Deschis pe un contur, cu raza 0, răspunde invers: ce galerii trec pe sub
+acest poligon. Sunt luate în calcul doar peșterile și trăsăturile pe care le poți localiza exact, iar
+lista are cel mult 25 de peșteri. Ai nevoie de dreptul de a citi datele de elevație, ca pentru
+panoul de mai sus.
+
 ---
 
 ## Adâncime și înălțime între intrări
@@ -246,6 +263,18 @@ Orientarea se numără doar unde panta este de cel puțin 2°, pentru că terenu
 nicăieri. Terenul zonei este eșantionat într-o grilă regulată peste contur, deci ponderile sunt
 estimări, bune până la aproximativ un procent.
 
+O a patra măsurătoare, **forma de relief**, pune aceleași intrări și doline față de cele zece forme
+ale terenului — plan, vârf, creastă, umăr, pinten, versant, scobitură, bază de versant, vale și
+depresiune — citite din cea mai nouă imagine a formelor de relief calculată pentru generarea
+activă, ca bare perechi și un tabel, la fel ca celelalte. Distanța de căutare la care a fost
+desenată imaginea stabilește scara formelor ei (același versant este pantă la 100 m și umăr la
+1 km), așa că un câmp de doline citit la 500 m și la 2 km poate spune două povești diferite;
+setările imaginii se văd în registrul din pagina de relief. Terenul pe care imaginea l-a lăsat
+neclasificat, cum sunt celulele de la marginea unui rastru, nu se numără. Imaginile formelor de
+relief sunt desenate de un program de analiză separat, pe care o instalare poate să nu îl ruleze:
+unde nu îl rulează și nu a fost desenată niciuna mai devreme, măsurătoarea spune asta, nu că nicio
+imagine nu a fost calculată încă.
+
 Se numără doar intrările și dolinele pe care le poți localiza, deci cifrele nu se schimbă când se
 adaugă una protejată. Cere dreptul de a citi datele de elevație. Nimic de aici nu se publică și nu
 se exportă.
@@ -256,12 +285,17 @@ se exportă.
 
 Peste peșterile de pe o pagină de listă: **Distribuții**.
 
+Pentru statisticile unei zone, densitatea și spațierea intrărilor, adâncimea unui sistem, rețeaua de
+galerii a unei peșteri și ce sugerează forma ei, vezi [Analize carstice](karst-analyses.md).
+
 | Vedere | |
 |---|---|
 | **Lungime** | Histogramă a lungimii cartate |
 | **Lungime față de adâncime** | Nor de puncte, cu o ajustare care raportează panta și R² |
 | **Rang–mărime** | Cu ajustare de tip lege de putere și exponentul ei |
 | **Pe tipuri** | Numărători |
+
+La **Lungime față de adâncime** un comutator alege pe ce se desenează norul de puncte. **Măsuri alese** este graficul de mai sus, colorat după gruparea peșterilor care se aseamănă. **Axe principale** grupează peșterile după patru măsuri deodată — lungimea cartografiată, adâncimea, extensia proiectată și indicele de ramificare — și desenează fiecare peșteră grupată pe cele două direcții în care aceste peșteri diferă cel mai mult. Titlul fiecărei axe spune cât din variație cuprinde (*„Axa 1 (62 % din variație)”*), iar nota de sub grafic arată din ce este alcătuită fiecare axă: o măsură cu cifră mare și același semn ca alta se mișcă odată cu ea, una cu semn opus se mișcă invers. Semnul întregii axe nu înseamnă nimic — poate fi citită în oricare sens. O măsură pe care toate peșterile grupate o înregistrează identic nu are ce aduce și este numită ca lăsată deoparte. Axele există numai acolo unde gruparea însăși a rulat; când prea puține peșteri înregistrează toate cele patru măsuri, pagina spune asta în loc să le deseneze.
 
 Nota despre domeniu este partea importantă: *„Calculat din cele n din m peșteri de pe această
 pagină care au o lungime măsurată. **Peșterile fără lungime lipsesc, nu sunt numărate ca zero.**"*

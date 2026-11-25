@@ -9,6 +9,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
 using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -60,15 +61,39 @@ public static class DemoSeeder
         // versions and puts back a row that was lost. A block that stops at the first sign of
         // itself never repairs a partial loss, and on a page the loss reads as the feature being
         // empty rather than as the seed being stale.
-        var demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
+        Guid demoCaveId;
 
-        await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId, ct);
-        await db.SaveChangesAsync(ct);
+        // The sections that create features save in transactions that take the hierarchy lock
+        // first and hold it to the commit, so a protection somebody switches on above a seeded
+        // row while the seed runs waits for it, or commits first and is seen. Held only for the
+        // statement that took it, the lock would let a row be stored unprotected under a
+        // protected area.
+        await using (var hierarchy = await writer.BeginHierarchyWriteAsync(ct))
+        {
+            demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
 
-        // Every kind of thing the selector offers needs something to find, or its button looks
-        // broken rather than empty. Trips and saved views had nothing at all until now.
-        await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+            await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId, ct);
+            await db.SaveChangesAsync(ct);
+
+            // Every kind of thing the selector offers needs something to find, or its button looks
+            // broken rather than empty. Trips and saved views had nothing at all until now.
+            await SeedMoreCavesAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+
+            // The shapes the measuring features need before they can show anything: an outlined
+            // doline for the morphometry, and drawn passages for two caves that come near each other
+            // for the closest-approach table. After the caves, because the passages belong to them.
+            await SeedKarstShapesAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+
+            // Two mapped rock classes over the demonstration area and a bedding reading on the
+            // limestone, so the area's lithology split, the lithology map style and the stereonet
+            // have something to show. After the area and the caves they are laid over, and appended
+            // here rather than placed among the sections above so nothing already seeded moves.
+            await SeedGeologyAsync(db, writer, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+            await hierarchy.CommitAsync(ct);
+        }
 
         await SeedTripLogsAsync(db, ownerUserId, ct);
         await SeedExpeditionsAsync(db, ownerUserId, ct);
@@ -85,9 +110,13 @@ public static class DemoSeeder
         await db.SaveChangesAsync(ct);
 
         // After the camp's trips are joined, because a lead reaches the camp's board through them.
-        await SeedContinuationsAsync(db, writer, ownerUserId, ct);
-        await SeedEventsAsync(db, ownerUserId, ct);
-        await db.SaveChangesAsync(ct);
+        await using (var hierarchy = await writer.BeginHierarchyWriteAsync(ct))
+        {
+            await SeedContinuationsAsync(db, writer, ownerUserId, ct);
+            await SeedEventsAsync(db, ownerUserId, ct);
+            await db.SaveChangesAsync(ct);
+            await hierarchy.CommitAsync(ct);
+        }
 
         if (documents is not null && fileStore is not null)
         {
@@ -268,15 +297,18 @@ public static class DemoSeeder
         var report = await (from version in db.DocumentVersions.AsNoTracking()
                             join reported in db.Documents.AsNoTracking() on version.DocumentId equals reported.Id
                             join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
-                            where version.IsCurrent && reported.Title.EndsWith("1987 survey report")
+                            where version.IsCurrent && reported.Title == "Peștera Demo Mare — 1987 survey report"
                             select new { reported.Id, FileId = file.Id }).FirstOrDefaultAsync(ct);
         if (report is null)
         {
             return;
         }
 
-        var cabinetId = await db.Cabinets.AsNoTracking()
-            .Where(c => c.Name == "Survey reports")
+        // The demo's own shelf — under the demo archive — not any cabinet that happens to share its name.
+        var cabinetId = await (from reports in db.Cabinets.AsNoTracking()
+                               join archive in db.Cabinets.AsNoTracking() on reports.ParentId equals (Guid?)archive.Id
+                               where reports.Name == "Survey reports" && archive.Name == "Demo archive" && archive.ParentId == null
+                               select reports)
             .Select(c => (Guid?)c.Id)
             .FirstOrDefaultAsync(ct);
 
@@ -745,6 +777,192 @@ public static class DemoSeeder
     }
 
     /// <summary>
+    /// One outlined doline and a drawn passage for each of two demo caves whose passages come
+    /// within a couple of hundred metres of each other, so the shape measurements and the
+    /// closest-approach table have something to answer on a demo installation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every figure here is invented. The outline is a turned ellipse a few tens of metres
+    /// across over the first cave's gallery, joined to the demonstration karst area so the area's
+    /// statistics count it. Each passage is three stations with altitudes — the table leaves out
+    /// line work with none — descending from the cave's own entrance, and the two end about a
+    /// hundred metres apart in plan and a few tens of metres apart in height.
+    /// </para>
+    /// <para>
+    /// Each row is on a guard of its own, like the rest of the dataset, so a lost outline or
+    /// passage comes back on the next run. A cave that already has line work — from a survey the
+    /// demo trip was followed on, say — keeps it and gets nothing here, so a cave never carries
+    /// two competing default centerlines.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedKarstShapesAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync(ct);
+        var areaId = await db.Features
+            .Where(f => f.Name == "Platoul Demo").Select(f => (Guid?)f.Id).FirstOrDefaultAsync(ct);
+
+        if (!await db.Features.AnyAsync(f => f.Name == "Dolina Mare Demo", ct))
+        {
+            const double centreLongitude = 25.4448;
+            const double centreLatitude = 45.5292;
+            const double semiMajorDegrees = 0.0004; // about 31 m of longitude at this latitude
+            const double semiMinorDegrees = 0.0002; // about 22 m of latitude
+            const double turnRadians = 0.5;
+            const int vertices = 16;
+
+            var ring = new Coordinate[vertices + 1];
+            for (var i = 0; i < vertices; i++)
+            {
+                var angle = 2 * Math.PI * i / vertices;
+                var u = semiMajorDegrees * Math.Cos(angle);
+                var v = semiMinorDegrees * Math.Sin(angle);
+                ring[i] = new Coordinate(
+                    centreLongitude + u * Math.Cos(turnRadians) - v * Math.Sin(turnRadians),
+                    centreLatitude + u * Math.Sin(turnRadians) + v * Math.Cos(turnRadians));
+            }
+
+            ring[vertices] = ring[0].Copy();
+
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = "Dolina Mare Demo",
+                    FeatureTypeId = sinkholeTypeId,
+                    Geom = new Polygon(new LinearRing(ring)) { SRID = 4326 },
+                    Description = "Demo sinkhole drawn as an outline, over the first demo cave's gallery.",
+                    Properties = """{"depth_m": 18, "diameter_m": 62}""",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: areaId is null ? [] : [new ParentSpec(areaId.Value, IsPrimary: true)], ct);
+        }
+
+        (string Code, (double Lon, double Lat, double Alt)[] Stations)[] passages =
+        [
+            ("DEMO-0001",
+                [(25.4472, 45.5312, 952), (25.4455, 45.5298, 905), (25.4435, 45.5284, 860)]),
+            ("DEMO-0003",
+                [(25.4390, 45.5265, 880), (25.4408, 45.5273, 850), (25.4422, 45.5280, 835)]),
+        ];
+
+        foreach (var (code, stations) in passages)
+        {
+            var caveId = await db.Caves
+                .Where(c => c.IdentificationCode == code)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (caveId is null || await db.Centerlines.AnyAsync(c => c.CaveFeatureId == caveId, ct))
+            {
+                continue;
+            }
+
+            var geometry = new MultiLineString(
+            [
+                new LineString([.. stations.Select(s => (Coordinate)new CoordinateZ(s.Lon, s.Lat, s.Alt))]),
+            ])
+            { SRID = 4326 };
+
+            // Built the way an uploaded centerline is, so the stored skeleton and length are the
+            // ones every other reader of this cave's line work expects.
+            var skeleton = CenterlineSkeleton.Build(geometry);
+            var storeSkeleton = CenterlineSkeleton.IsWorthStoring(geometry, skeleton);
+            var pathCount = CenterlineSkeleton.PathCount(geometry);
+
+            await writer.CreateCenterlineAsync(
+                new Feature { Name = "Demo passage", Geom = geometry },
+                new Centerline
+                {
+                    CaveFeatureId = caveId.Value,
+                    Skeleton = storeSkeleton ? skeleton : null,
+                    PathCount = pathCount,
+                    SkeletonPathCount = storeSkeleton ? CenterlineSkeleton.PathCount(skeleton) : pathCount,
+                    LengthM = await CenterlineSql.GeodesicLengthMetersAsync(
+                        db, CenterlineSkeleton.Build3D(geometry), ct),
+                },
+                ct: ct);
+        }
+    }
+
+    /// <summary>
+    /// One karstifiable and one non-karstifiable geological unit laid over the demonstration area,
+    /// and a bedding reading on the karstifiable one.
+    /// </summary>
+    /// <remarks>
+    /// Every outline and angle is invented. The limestone covers the western and central part of
+    /// the area, including the first demo cave's entrance, and the sandstone takes the strip along
+    /// its eastern side, so the area's split has two classes, a karstifiable share, and an
+    /// unmapped remainder. The names are chosen so that none is a prefix of another seeded name
+    /// and none has one as a prefix: lists and loose selectors match by the start of a name, and
+    /// a name that begins another would match both.
+    /// </remarks>
+    private static async Task SeedGeologyAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        var unitTypeId = await db.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.GeologicalUnit).Select(t => t.Id).SingleAsync(ct);
+        var readingTypeId = await db.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.StructuralMeasurement).Select(t => t.Id).SingleAsync(ct);
+
+        (string Name, string Description, string Properties, double West, double East)[] units =
+        [
+            ("Calcar Demo",
+                "Demo limestone outcrop, the karstifiable ground of the demonstration area.",
+                """{"lithology": "limestone", "formation": "Demo limestone", "age": "Jurassic", "source": "invented demo data"}""",
+                25.425, 25.452),
+            ("Gresie Demo",
+                "Demo sandstone strip along the eastern side of the demonstration area.",
+                """{"lithology": "sandstone", "formation": "Demo sandstone", "age": "Cretaceous", "source": "invented demo data"}""",
+                25.452, 25.458),
+        ];
+
+        foreach (var (name, description, properties, west, east) in units)
+        {
+            if (await db.Features.AnyAsync(f => f.Name == name, ct))
+            {
+                continue;
+            }
+
+            var ring = new[]
+            {
+                new Coordinate(west, 45.515), new Coordinate(east, 45.515),
+                new Coordinate(east, 45.536), new Coordinate(west, 45.536),
+                new Coordinate(west, 45.515),
+            };
+
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = name,
+                    FeatureTypeId = unitTypeId,
+                    Geom = new Polygon(new LinearRing(ring)) { SRID = 4326 },
+                    Description = description,
+                    Properties = properties,
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
+        }
+
+        if (!await db.Features.AnyAsync(f => f.Name == "Stratificatie Demo", ct))
+        {
+            await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = "Stratificatie Demo",
+                    FeatureTypeId = readingTypeId,
+                    Geom = new Point(25.4440, 45.5285) { SRID = 4326 },
+                    Description = "Demo bedding reading on the limestone, dipping south-east.",
+                    Properties = """{"measurement_type": "bedding", "dip_direction": 135, "dip": 32, "note": "invented demo reading"}""",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
+        }
+    }
+
+    /// <summary>
     /// A handful more caves, so a list is a list rather than two rows.
     /// </summary>
     /// <remarks>
@@ -857,7 +1075,11 @@ public static class DemoSeeder
 
         await db.SaveChangesAsync(ct);
 
+        // The demo's own caves only, found by the code the dataset gives them. Seeded alongside a
+        // real register, "the first four caves by code" would be real ones — a code like 1000/1
+        // sorts before DEMO- — and the demo's trips would be tied to them.
         var caveIds = await db.Caves
+            .Where(c => c.IdentificationCode != null && c.IdentificationCode.StartsWith("DEMO-"))
             .OrderBy(c => c.IdentificationCode)
             .Select(c => c.Id)
             .Take(4)

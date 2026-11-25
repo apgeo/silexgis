@@ -13,10 +13,12 @@ namespace SilexGis.Domain.Documents;
 /// that the stated size is a small fraction of the real one.
 /// </param>
 /// <param name="MaxCompressionRatio">
-/// How much larger than its compressed form a single entry may expand to. A scanned TIFF
-/// compresses perhaps five to one and a text file perhaps ten; a thousand to one is not a
-/// document. Checked while the entry is being read rather than from the header, because the
-/// header is written by whoever made the archive.
+/// How much larger than its compressed form a single entry may declare itself to be, for the
+/// readers that judge an archive from its directory before reading any of it (a survey device's
+/// archive, an office document's parts). A scanned TIFF compresses perhaps five to one and a
+/// text file perhaps ten; a thousand to one is not a document. The archive expansion into filed
+/// documents does not use it: there, an entry is cut off the moment it expands past its own
+/// declared length, and an honest entry that merely compresses well is a document to file.
 /// </param>
 public sealed record ArchiveLimits(
     int MaxEntries = 5000,
@@ -101,7 +103,7 @@ public static class ArchiveExpansionRules
     {
         ArgumentNullException.ThrowIfNull(limits);
 
-        if (totalUncompressedBytes > limits.MaxTotalUncompressedBytes)
+        if (TotalExceeded(limits, totalUncompressedBytes))
         {
             return TooLargeCode;
         }
@@ -118,6 +120,17 @@ public static class ArchiveExpansionRules
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether what an archive has expanded to so far, every entry read included, has passed
+    /// the whole archive's budget. The one statement of that budget for every reader of an
+    /// uploaded archive, whether or not it also judges entries by their compression ratio.
+    /// </summary>
+    public static bool TotalExceeded(ArchiveLimits limits, long totalUncompressedBytes)
+    {
+        ArgumentNullException.ThrowIfNull(limits);
+        return totalUncompressedBytes > limits.MaxTotalUncompressedBytes;
     }
 
     /// <summary>Whether the entry about to be read would pass the count cap.</summary>

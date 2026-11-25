@@ -7,11 +7,14 @@ import '../../i18n';
 import type { ResLink } from '../../api/hooks.ts';
 
 let items: ResLink[] = [];
+/** What the read of the trip's links failed with, when a test makes it fail. */
+let readFailure: unknown;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useResLinksForTarget: () => ({
-    data: { items, page: 1, pageSize: 200, totalItems: items.length },
-  }),
+  useResLinksForTarget: () =>
+    readFailure === undefined
+      ? { data: { items, page: 1, pageSize: 200, totalItems: items.length }, isError: false, error: null, refetch: vi.fn() }
+      : { data: undefined, isError: true, error: readFailure, refetch: vi.fn() },
 }));
 
 // The field itself is tested where it lives. What this file is about is which of the ten
@@ -62,6 +65,15 @@ function show(canEdit: boolean) {
 describe('TripRoleFields', () => {
   beforeEach(() => {
     items = [];
+    readFailure = undefined;
+  });
+
+  it('says the roles could not be read to a reader, rather than hiding the section as if none were recorded', () => {
+    readFailure = new TypeError('Failed to fetch');
+    show(false);
+
+    expect(screen.getByTestId('trip-roles-load-failed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
   });
 
   afterEach(cleanup);

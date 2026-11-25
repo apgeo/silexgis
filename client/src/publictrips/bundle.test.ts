@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createContext, runInContext } from 'node:vm';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -156,7 +157,11 @@ const unnamed = (ordinal: number) => `Caver ${ordinal}`;
 interface LoadedBundle {
   code: string;
   api: Record<string, unknown>;
+  /** Every module the bundler put into the chunk, by its id (a file path for a source file). */
+  modules: string[];
 }
+
+type BuildOutput = { output: { type: string; code: string; modules?: Record<string, unknown> }[] };
 
 async function buildBundle(format: 'iife' | 'es'): Promise<LoadedBundle> {
   // `build()` is typed as returning a union covering watch mode, which this call cannot be in.
@@ -182,15 +187,16 @@ async function buildBundle(format: 'iife' | 'es'): Promise<LoadedBundle> {
       },
       rollupOptions: { external: [] },
     },
-  })) as unknown as { output: { type: string; code: string }[] } | { output: { type: string; code: string }[] }[];
+  })) as unknown as BuildOutput | BuildOutput[];
 
   const outputs = (Array.isArray(result) ? result : [result]).flatMap((one) => one.output);
   const chunks = outputs.filter((entry) => entry.type === 'chunk');
   expect(chunks, 'the library build emits exactly one chunk').toHaveLength(1);
   const code = chunks[0].code;
+  const modules = Object.keys(chunks[0].modules ?? {});
 
   if (format === 'es') {
-    return { code, api: {} };
+    return { code, api: {}, modules };
   }
 
   // Evaluated the way the page will evaluate it: as a script, in a context holding nothing. A
@@ -199,7 +205,7 @@ async function buildBundle(format: 'iife' | 'es'): Promise<LoadedBundle> {
   const context: Record<string, unknown> = {};
   createContext(context);
   runInContext(code, context);
-  return { code, api: context.SilexGisTrips as Record<string, unknown> };
+  return { code, api: context.SilexGisTrips as Record<string, unknown>, modules };
 }
 
 describe('the build that produces it', () => {
@@ -216,6 +222,20 @@ describe('the build that produces it', () => {
     expect(loaded.default.build?.rollupOptions?.external, 'nothing may be left unbundled').toEqual(
       [],
     );
+  });
+
+  it('is made only of files that are also offered under GPL-2.0-or-later', async () => {
+    // The standalone file is shipped inside a GPL-2.0-or-later WordPress plugin, which is only
+    // possible because every source file compiled into it is licensed "AGPL-3.0-or-later OR
+    // GPL-2.0-or-later". A new import into the fold from a file that is AGPL alone would quietly
+    // make the shipped file AGPL alone; this is where that shows. Each such file is relicensed
+    // deliberately, by its header, or the import is not made.
+    const { modules } = await buildBundle('es');
+    const sources = modules.filter((id) => !id.startsWith('\0') && existsSync(id));
+    expect(sources.length, 'the bundler reports the files it compiled').toBeGreaterThan(5);
+    const dual = '// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later';
+    const otherwise = sources.filter((id) => readFileSync(id, 'utf8').split('\n', 1)[0].trim() !== dual);
+    expect(otherwise, 'files compiled into the fold without the dual licence header').toEqual([]);
   });
 });
 

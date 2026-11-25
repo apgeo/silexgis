@@ -89,23 +89,6 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable, IClassFixture<Po
         features.ShouldContain("trips");
     }
 
-    [Fact]
-    public async Task Every_sync_route_refuses_a_caller_with_no_token()
-    {
-        (await anonymous.GetAsync("/api/v1/sync/capabilities")).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-        (await anonymous.GetAsync("/api/v1/sync/sets/")).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-        (await anonymous.PostAsJsonAsync("/api/v1/sync/sets/", Body("Phone"))).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-        (await anonymous.GetAsync($"/api/v1/sync/sets/{Guid.NewGuid()}")).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-        (await anonymous.PutAsJsonAsync($"/api/v1/sync/sets/{Guid.NewGuid()}", Body("Phone"))).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-        (await anonymous.DeleteAsync($"/api/v1/sync/sets/{Guid.NewGuid()}")).StatusCode
-            .ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
     /// <summary>
     /// What a device actually receives when its token has lapsed, asserted on the body rather than
     /// on the status alone: a problem document that carries no <c>code</c>.

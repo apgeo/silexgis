@@ -52,6 +52,11 @@ public static class UploadReviewHold
         SilexGisDbContext db, IEnumerable<Guid> batchIds, Guid? reviewerId, DateTimeOffset now, CancellationToken ct)
     {
         var ids = batchIds.Distinct().ToList();
+
+        // Held before its lines are read, so a decision on another line of the same batch that
+        // commits meanwhile is seen rather than read as still waiting. A reviewer's decision holds
+        // its batches from its start already; this takes them for a phone's resend.
+        await ImportBatchLockSql.LockAsync(db, ids, ct);
         var batches = await db.ImportBatches.Where(b => ids.Contains(b.Id)).ToListAsync(ct);
         var decisions = await db.ImportBatchItems.AsNoTracking()
             .Where(i => ids.Contains(i.ImportBatchId) && i.ReviewDecision != null)

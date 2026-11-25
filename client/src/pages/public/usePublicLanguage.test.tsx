@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTranslation } from 'react-i18next';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import i18n from '../../i18n';
@@ -302,5 +302,41 @@ describe('the button that changes a published trip’s language', () => {
       fireEvent.click(screen.getByTestId('public-trip-language'));
       expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
     });
+  });
+});
+
+describe('a published trip in a browser that refuses storage', () => {
+  // Private windows and blocked site data throw on every touch of storage rather than answer
+  // nothing — the ordinary state of many visitors of a public page.
+  beforeEach(() => {
+    const refuse = () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    };
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('still opens in the language the address names', () => {
+    open('/shared/trips/tok?lang=en');
+
+    expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+  });
+
+  it('still opens in the installation\'s language when the address names none', () => {
+    open('/shared/trips/tok');
+
+    expect(screen.getByTestId('said')).toHaveTextContent(IN_ROMANIAN);
+  });
+
+  it('still changes language and writes it into the address when the button is pressed', () => {
+    open('/shared/trips/tok?past=abc');
+
+    fireEvent.click(screen.getByTestId('public-trip-language'));
+
+    expect(screen.getByTestId('said')).toHaveTextContent(IN_ENGLISH);
+    expect(screen.getByTestId('address')).toHaveTextContent('?past=abc&lang=en');
   });
 });

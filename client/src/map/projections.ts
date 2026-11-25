@@ -2,7 +2,7 @@
 import proj4 from 'proj4';
 import { get as getProjection, getTransformFromProjections } from 'ol/proj';
 import { register } from 'ol/proj/proj4';
-import { userManager } from '../auth/auth.tsx';
+import { sendAsTheAccount } from '../api/client.ts';
 
 /*
  * The coordinate systems the map can place a raster in, beyond the two OpenLayers knows itself
@@ -75,10 +75,7 @@ export async function installationDefinition(code: string): Promise<string | nul
     return null;
   }
   try {
-    const user = await userManager.getUser();
-    const response = await fetch(`/api/v1/crs/${match[1]}.proj4`, {
-      headers: user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : undefined,
-    });
+    const response = await sendAsTheAccount(`/api/v1/crs/${match[1]}.proj4`);
     return response.ok ? await response.text() : null;
   } catch {
     return null;

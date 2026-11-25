@@ -18,17 +18,24 @@ namespace SilexGis.Api.Features.Caves;
 /// and the rock.
 /// </para>
 /// <para>
-/// <b>What this cannot be compared against.</b> Only mapped structural <i>lines</i> — traces
-/// somebody drew on a map — are read here. Bedding and joint measurements taken at a station with a
-/// compass and clinometer are a different kind of record and this installation stores none, so a
-/// comparison against them is not offered rather than offered and empty.
+/// <b>Two kinds of structure.</b> Mapped structural <i>lines</i> — traces somebody drew on a map —
+/// are compared rose against rose by length. Readings taken at a point with a compass and
+/// clinometer — bedding, joints, fault planes — are compared by their strikes in
+/// <see cref="MeasuredStrikes"/>, with Watson's U² test, because a reading has no length to weight a
+/// rose by and the question asked of it is the statistician's one: could the passage trends and
+/// the strikes have come from one distribution.
 /// </para>
 /// </remarks>
 /// <param name="CaveId">The cave.</param>
 /// <param name="Basis">Which body of line work the passage rose came from.</param>
 /// <param name="IsApproximation">True when the passage rose came from the shape-based reduction.</param>
 /// <param name="SurveyModelId">Which uploaded survey file was measured, when one was.</param>
-/// <param name="RadiusMetres">How far around the cave structure was gathered from.</param>
+/// <param name="RadiusMetres">How far around the cave structure was gathered from; null when an
+/// area was named, because then the area was the reach and no radius was used.</param>
+/// <param name="AreaId">The area the structure was gathered under, when one was named.</param>
+/// <param name="StructureTruncated">True when more traces qualified than one answer takes: the
+/// rose is built from the nearest ones to the cave (by id under a named area), and
+/// <paramref name="StructureFeatureCount"/> is a count of those, not of everything in reach.</param>
 /// <param name="StructureFeatureCount">
 /// How many mapped traces contributed — which is how many the caller may both read and place. A
 /// trace whose position is closed to them is in no rose and in no count here.
@@ -42,16 +49,54 @@ namespace SilexGis.Api.Features.Caves;
 /// How far apart the two roses are by length, or null when either is empty. Zero means the passage
 /// runs along the structure; one means it runs across it.
 /// </param>
+/// <param name="MeasuredStrikes">The passage trends against the strikes of the readings in the
+/// same reach.</param>
 public sealed record CaveStructureComparisonDto(
     Guid CaveId,
     SurveySegmentBasis Basis,
     bool IsApproximation,
     Guid? SurveyModelId,
-    double RadiusMetres,
+    double? RadiusMetres,
+    Guid? AreaId,
     int StructureFeatureCount,
+    bool StructureTruncated,
     OrientationSummary? Passage,
     OrientationSummary? Structure,
-    RoseDivergence? Divergence);
+    RoseDivergence? Divergence,
+    MeasuredStrikeComparisonDto MeasuredStrikes);
+
+/// <summary>
+/// A cave's passage trends against the strikes of the structural readings around it, by Watson's
+/// two-sample U² test on axes.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Each leg counts once and each reading counts once.</b> The test counts observations, so
+/// neither side is weighted by length. Legs along one passage are not independent of one another —
+/// a surveyor's stations follow the passage — so a small probability here says less than its
+/// number suggests, and the panel says so.
+/// </para>
+/// <para>
+/// A reading lying flat has no strike, and is left out of the strikes rather than given the
+/// arbitrary one its dip direction would imply.
+/// </para>
+/// </remarks>
+/// <param name="MeasurementType">The kind of plane compared, or null for every kind.</param>
+/// <param name="ReadingCount">Readings with a strike that took part — only readings the caller
+/// may both read and place exactly.</param>
+/// <param name="PassageLegCount">Survey legs with a trend that took part.</param>
+/// <param name="Strikes">The rose of those strikes, each reading counted once, or null when there
+/// is none.</param>
+/// <param name="Watson">The test, or null when either side has fewer than
+/// <paramref name="MinimumSampleSize"/> observations.</param>
+/// <param name="MinimumSampleSize">The smallest sample on either side the test is run on.</param>
+public sealed record MeasuredStrikeComparisonDto(
+    string? MeasurementType,
+    int ReadingCount,
+    int PassageLegCount,
+    OrientationSummary? Strikes,
+    WatsonU2Result? Watson,
+    int MinimumSampleSize);
 
 /// <summary>What a caller asks when comparing a cave against the structure around it.</summary>
 /// <param name="Id">The cave.</param>
@@ -65,7 +110,13 @@ public sealed record CaveStructureComparisonDto(
 /// follow the faults of this massif" is a different question from "of whatever is within a
 /// kilometre" whenever the massif is not roughly circular. Optional; without it the buffer answers.
 /// </param>
-public sealed record CaveStructureComparisonRequest(Guid Id, double? RadiusMetres, Guid? AreaId);
+/// <param name="MeasurementType">
+/// Which kind of structural reading to compare the passage against — bedding, joint, fault and so
+/// on, by code. Optional; without it every reading in reach is compared, which mixes planes that
+/// mean different things and is the caller's choice to make.
+/// </param>
+public sealed record CaveStructureComparisonRequest(
+    Guid Id, double? RadiusMetres, Guid? AreaId, string? MeasurementType);
 
 /// <summary>
 /// An area's doline alignments set against the trends of the structure mapped in the same area.
@@ -95,7 +146,13 @@ public sealed record CaveStructureComparisonRequest(Guid Id, double? RadiusMetre
 /// <param name="AreaId">The area both roses were gathered under.</param>
 /// <param name="DolineCount">How many outlines contributed — which is how many the caller may both
 /// read and place, and which is deliberately not a count of the outlines in the area.</param>
+/// <param name="UnmeasuredDolineCount">How many outlines, on the same footing, could not be
+/// measured at all — an invalid ring, or one whose points are collinear and so have no rectangle
+/// round them. Reported so an area whose depressions could not be read is not mistaken for an area
+/// with none.</param>
 /// <param name="StructureFeatureCount">How many mapped traces contributed, on the same footing.</param>
+/// <param name="StructureTruncated">True when the area holds more traces than one answer takes,
+/// so the rose was built from the first of them by id.</param>
 /// <param name="Dolines">The doline rose, or null when no outline in the area has a usable
 /// alignment.</param>
 /// <param name="Structure">The length-weighted structure rose, or null when the area holds no
@@ -105,7 +162,9 @@ public sealed record CaveStructureComparisonRequest(Guid Id, double? RadiusMetre
 public sealed record AreaStructureComparisonDto(
     Guid AreaId,
     int DolineCount,
+    int UnmeasuredDolineCount,
     int StructureFeatureCount,
+    bool StructureTruncated,
     OrientationSummary? Dolines,
     OrientationSummary? Structure,
     RoseDivergence? Divergence);
@@ -170,6 +229,12 @@ public static class CaveStructureComparisonLimits
 
     /// <inheritdoc cref="MaxDolines"/>
     public const int MaxDolineCandidates = 5_000;
+
+    /// <summary>
+    /// How many structural readings at most are gathered for one answer, ordered by id so the same
+    /// request cuts at the same place every time.
+    /// </summary>
+    public const int MaxReadings = 2_000;
 }
 
 /// <summary>
@@ -198,5 +263,8 @@ public sealed class CaveStructureComparisonRequestValidator
             .WithMessage(
                 $"The reach must be between {CaveStructureComparisonLimits.MinRadiusMetres} and "
                 + $"{CaveStructureComparisonLimits.MaxRadiusMetres} metres.");
+        RuleFor(x => x.MeasurementType)
+            .Must(t => t is null || StructuralMeasurement.Types.Contains(t))
+            .WithMessage($"The measurement type must be one of: {string.Join(", ", StructuralMeasurement.Types)}.");
     }
 }

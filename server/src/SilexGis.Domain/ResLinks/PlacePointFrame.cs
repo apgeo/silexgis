@@ -198,8 +198,10 @@ public static class PlacePointAnchor
                 return null;
             }
 
-            double? fx = root.TryGetProperty("x", out var ex) && ex.ValueKind == JsonValueKind.Number ? ex.GetDouble() : null;
-            double? fy = root.TryGetProperty("y", out var ey) && ey.ValueKind == JsonValueKind.Number ? ey.GetDouble() : null;
+            // A number beyond the double range is valid JSON that reads as infinity (or, on older
+            // runtimes, throws); either way it is no fraction of a picture.
+            double? fx = root.TryGetProperty("x", out var ex) && ex.ValueKind == JsonValueKind.Number && ex.TryGetDouble(out var vx) && double.IsFinite(vx) ? vx : null;
+            double? fy = root.TryGetProperty("y", out var ey) && ey.ValueKind == JsonValueKind.Number && ey.TryGetDouble(out var vy) && double.IsFinite(vy) ? vy : null;
             return new Parsed(x, y, fx, fy);
         }
         catch (JsonException)

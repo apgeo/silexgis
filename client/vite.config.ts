@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { UnitConsoleErrorReport } from './scripts/unitConsoleErrorReport.ts';
 
 // Dev server proxies API + OIDC endpoints to the local API so the SPA is same-origin
 // (matching the production nginx topology).
@@ -363,9 +364,23 @@ function framingPolicy(): Plugin {
   };
 }
 
+// The summary of every console error the unit tests provoked (report only: it never changes the
+// verdict), printed after whatever reporters the run already has. It is appended once Vitest has
+// settled its own reporter list — the defaults it chooses when the configuration names none, or the
+// ones given with `--reporter` — rather than named in the configuration, which would replace them.
+function unitConsoleErrorSummary(): Plugin {
+  return {
+    name: 'silexgis-unit-console-error-summary',
+    configureVitest({ vitest }) {
+      vitest.config.reporters.push(new UnitConsoleErrorReport());
+    },
+  };
+}
+
 export default defineConfig({
   cacheDir: dependencyCacheDir,
   plugins: [
+    unitConsoleErrorSummary(),
     react(),
     framingPolicy(),
     clientErrorSink(),
@@ -439,6 +454,10 @@ export default defineConfig({
     hookTimeout: 20_000,
     // e2e/ belongs to Playwright, not Vitest.
     include: ['src/**/*.test.{ts,tsx}'],
+    // No `reporters` here on purpose: the summary of console errors is added by the plugin below.
+    // Naming reporters here would switch off the ones Vitest picks for itself when none are named
+    // (the compact one when an agent runs the suite, and the inline annotations under GitHub
+    // Actions).
     server: {
       deps: {
         // react-geo ships extensionless CJS-style imports (lodash/has) that

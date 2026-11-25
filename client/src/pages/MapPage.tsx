@@ -2,7 +2,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { Drawer, Tabs } from 'antd';
+import { App, Drawer, Tabs } from 'antd';
+import { useUnsavedEditsGuard } from '../components/map/useUnsavedEditsGuard.ts';
 import { useSelectionInUrl } from '../components/map/useSelectionInUrl.ts';
 import { useFeatureRights } from '../api/hooks/objectRights.ts';
 import type BaseLayer from 'ol/layer/Base';
@@ -13,16 +14,16 @@ import { useSearchParams } from 'react-router-dom';
 import {
   useCan,
   useFeatureTypes,
-  useGeofiles,
   useMapConfig,
   useMapLayers,
   useMapViews,
   usePhotoLibraries,
-  useRasterMaps,
   useTerrainDerivatives,
+  useCavePotentialResults,
   useSurveyModel,
-  type SurveyModelInfo,
 } from '../api/hooks.ts';
+import { useGeofileLayers, useRasterMapLayers } from '../api/hooks/mapLayers.ts';
+import MapLayerReadsNotice from '../components/map/MapLayerReadsNotice.tsx';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useEditScope } from '../components/map/useEditScope.ts';
 import { useOverviewMap } from '../components/map/useOverviewMap.ts';
@@ -33,6 +34,7 @@ import SelectionPanel from '../components/map/SelectionPanel.tsx';
 import { setActiveBaseLayer } from '../map/baseLayers.ts';
 import { CENTERLINE_LAYER_ID } from '../map/centerlineLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../map/entranceLayer.ts';
+import { setEntranceSymbols } from '../map/entranceSymbols.ts';
 import {
   SURFACE_FEATURE_LAYER_ID,
   setFeatureTypeSymbols,
@@ -45,6 +47,7 @@ import {
   type KarstDensityMode,
 } from '../map/karstDensityLayer.ts';
 import { KARST_INDEX_LAYER_ID, setKarstIndexSelected } from '../map/karstIndexLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID } from '../map/passageDepthLayer.ts';
 import { GEOFILE_LAYER_PREFIX } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID } from '../map/photoLayer.ts';
 import { TRIP_LAYER_ID, type TripLayerFilter } from '../map/tripLayer.ts';
@@ -60,8 +63,9 @@ import {
   updateFilterLayer,
 } from '../map/filterLayerList.ts';
 import { useCompareOffer } from '../caveview/useCompareOffer.ts';
+import { useOpenedSurveyModel } from '../components/caveview/useOpenedSurveyModel.ts';
 import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
-import { applyViewCamera3d } from '../workspace/viewCamera.ts';
+import { applyViewCamera3d, applyViewExaggeration3d } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX } from '../map/rasterLayers.ts';
 import { hasMapHash } from '../map/urlHash.ts';
@@ -73,7 +77,8 @@ import {
   setDesiredOverlayOrder,
 } from '../map/mapContext.ts';
 import ShortcutHelpDialog from '../components/ShortcutHelpDialog.tsx';
-import { geometryFor, isGeographic } from '../viewlinks/geoTargets.ts';
+import { isGeographic } from '../viewlinks/geoTargets.ts';
+import { followReveal } from '../viewlinks/reveal.ts';
 import { useViewControl } from '../viewlinks/useViewControl.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspacePanesStore } from '../stores/workspacePanesStore.ts';
@@ -94,6 +99,7 @@ import { useFilterLayers } from '../components/map/useFilterLayers.ts';
 import { useWorkspaceDocks } from '../components/map/workspace/useWorkspaceDocks.tsx';
 import { useWorkspaceRow } from '../components/map/workspace/useWorkspaceRow.tsx';
 import { useMapUrlRequests } from '../components/map/useMapUrlRequests.ts';
+import { claimHomeView } from '../components/map/homeViewClaim.ts';
 import { useMapShortcuts } from '../components/map/useMapShortcuts.ts';
 import './MapPage.css';
 
@@ -110,6 +116,7 @@ const LibraryPhotoFeatureModal = lazy(
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   // A vector background's labels follow the language the interface is read in.
   const language = (i18n.resolvedLanguage ?? i18n.language ?? 'ro').slice(0, 2);
   const isMobile = useIsMobile();
@@ -197,9 +204,18 @@ export default function MapPage() {
     [],
   );
   /** The same model over the whole window, escalated from the pane. */
-  const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
-  const { data: layers } = useMapLayers();
+  const { model: caveViewOverlay, open: setCaveViewOverlay, close: closeCaveViewOverlay } =
+    useOpenedSurveyModel();
+  const layersRead = useMapLayers();
+  const layers = layersRead.data;
   const { data: mapConfig } = useMapConfig();
+  // The installation's entrance symbols arrive with the map's configuration; the layer restyles
+  // itself when they change.
+  useEffect(() => {
+    if (mapConfig) {
+      setEntranceSymbols(mapConfig);
+    }
+  }, [mapConfig]);
   // Asked of the photo-library slice itself rather than of the map config: most of that
   // slice's routes are not map routes, and keeping the question out of the map endpoints is
   // what keeps the whole feature removable by deleting its directories.
@@ -215,6 +231,7 @@ export default function MapPage() {
   const [karstDensityMode, setKarstDensityModeState] = useState<KarstDensityMode>('density');
   const [karstDensityBands, setKarstDensityBandsState] = useState<KarstDensityBands>('relative');
   const [karstIndexVisible, setKarstIndexVisible] = useState(false);
+  const [passageDepthVisible, setPassageDepthVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
   const [tripsVisible, setTripsVisible] = useState(false);
   // What the trip overlay is asking for. Held here rather than only in the layer module so a
@@ -241,7 +258,7 @@ export default function MapPage() {
     labelKey: 'viewLinks.controls.map2d',
     canReveal: isGeographic,
     reveal: (ref) => {
-      void geometryFor(queryClient, ref).then((target) => {
+      followReveal(queryClient, ref, (target) => {
         // Protection has two outcomes and this used to answer only one. A shape whose position is
         // withheld comes back with nothing, and not moving is the honest answer. A point comes
         // back SNAPPED — present, and wrong by up to the grid — so the comment that stood here,
@@ -252,16 +269,15 @@ export default function MapPage() {
         if (target !== null) {
           fitGeoJsonGeometry(target.geometry, target.approximate ? APPROXIMATE_MAX_ZOOM : undefined);
         }
-      });
+      }, (problem) => void message.warning(t(problem)));
     },
   });
   const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
   const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
-  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
-  const importedGeofiles = useMemo(
-    () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
-    [geofilePage],
-  );
+  // Every imported file, not a first page: the server narrows to them before it counts.
+  const geofilesRead = useGeofileLayers();
+  const geofileLayers = geofilesRead.data;
+  const importedGeofiles = useMemo(() => geofileLayers ?? [], [geofileLayers]);
   const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
   const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
   const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
@@ -272,6 +288,8 @@ export default function MapPage() {
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const visibleTerrainDerivativeIds = useWorkspaceStore((s) => s.visibleTerrainDerivativeIds);
   const setTerrainDerivativeVisible = useWorkspaceStore((s) => s.setTerrainDerivativeVisible);
+  const visibleCavePotentialIds = useWorkspaceStore((s) => s.visibleCavePotentialIds);
+  const setCavePotentialVisible = useWorkspaceStore((s) => s.setCavePotentialVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
   const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
   const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
@@ -279,11 +297,10 @@ export default function MapPage() {
   const baseOpacity = useWorkspaceStore((s) => s.baseOpacity);
   const setBaseOpacity = useWorkspaceStore((s) => s.setBaseOpacity);
   const resetBaseOpacity = useWorkspaceStore((s) => s.resetBaseOpacity);
-  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
-  const readyRasters = useMemo(
-    () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
-    [rasterPage],
-  );
+  // Every map ready to draw, not a first page: the server narrows to them before it counts.
+  const rastersRead = useRasterMapLayers();
+  const rasterLayers = rastersRead.data;
+  const readyRasters = useMemo(() => rasterLayers ?? [], [rasterLayers]);
   // Every computed picture of the ground, finished or not: the panel lists the unfinished ones
   // too, because a picture somebody asked for and cannot see anywhere reads as a lost request.
   //
@@ -292,8 +309,13 @@ export default function MapPage() {
   // nobody reads, arriving forever, and it fills the browser's own error trail with something no
   // reader can act on.
   const mayReadTerrain = useCan('terrain', 'read');
-  const { data: terrainDerivatives } = useTerrainDerivatives(mayReadTerrain);
+  const terrainDerivativesRead = useTerrainDerivatives(mayReadTerrain);
+  const terrainDerivatives = terrainDerivativesRead.data;
   const derivativeLayers = useMemo(() => terrainDerivatives ?? [], [terrainDerivatives]);
+  // The cave-potential maps this reader may read. Asked for only with the terrain right, which
+  // the route requires of everybody: without it the request is a refusal every few minutes.
+  const { data: cavePotential } = useCavePotentialResults(mayReadTerrain);
+  const cavePotentialResults = useMemo(() => cavePotential ?? [], [cavePotential]);
 
   // The toolbar mixes drawing new features with modifying existing ones, so either
   // domain-level right shows it — and so does the right to change the one feature selected, which
@@ -314,6 +336,7 @@ export default function MapPage() {
   // can warn even while the edit toolbar is hidden with the rest of the chrome.
   const [editDirty, setEditDirty] = useState(0);
   useEffect(() => editController?.subscribe((s) => setEditDirty(s.dirty)), [editController]);
+  useUnsavedEditsGuard(editDirty);
 
   const { canEdit, toolbarShown, mayReshapeSaved, rightsPending } = useEditScope({
     controller: editController,
@@ -345,10 +368,12 @@ export default function MapPage() {
     importedGeofiles,
     readyRasters,
     derivativeLayers,
+    cavePotentialResults,
     visibleGeofileIds,
     visibleTileOverlayIds,
     visibleRasterIds,
     visibleTerrainDerivativeIds,
+    visibleCavePotentialIds,
     overlayOpacity,
     tileOverlayOpacity,
     rasterOpacity,
@@ -417,10 +442,9 @@ export default function MapPage() {
   // of the views whichever path runs, so that a requested view or a shared position can never
   // be overwritten by the home view later in the session.
   useEffect(() => {
-    if (!savedViews || sessionStorage.getItem('silexgis.homeApplied')) {
+    if (!savedViews || !claimHomeView()) {
       return;
     }
-    sessionStorage.setItem('silexgis.homeApplied', '1');
     // An explicit view request and a shareable position in the URL both outrank the home view.
     // A 3D position counts: arriving on a shared 3D link and then opening the map must not have
     // the home view quietly take the position the link was sent for.
@@ -468,6 +492,7 @@ export default function MapPage() {
     karstDensityMode,
     karstDensityBands,
     karstIndexVisible,
+    passageDepthVisible,
     photosVisible,
     tripsVisible,
     tripFilter,
@@ -494,6 +519,8 @@ export default function MapPage() {
       setKarstDensityVisible(visible);
     } else if (id === KARST_INDEX_LAYER_ID) {
       setKarstIndexVisible(visible);
+    } else if (id === PASSAGE_DEPTH_LAYER_ID) {
+      setPassageDepthVisible(visible);
     } else if (id === PHOTO_LAYER_ID) {
       setPhotosVisible(visible);
     } else if (id === TRIP_LAYER_ID) {
@@ -524,6 +551,7 @@ export default function MapPage() {
       karstDensityMode,
       karstDensityBands,
       karstIndexVisible,
+      passageDepthVisible,
       photosVisible,
       tripsVisible,
       tripsFrom: tripFilter.from,
@@ -589,6 +617,7 @@ export default function MapPage() {
     setKarstDensityModeState(ui.karstDensityMode);
     setKarstDensityBandsState(ui.karstDensityBands);
     setKarstIndexVisible(ui.karstIndexVisible);
+    setPassageDepthVisible(ui.passageDepthVisible);
     setPhotosVisible(ui.photosVisible);
     setTripsVisible(ui.tripsVisible);
     // Only the window is restored, and deliberately not the facet narrowings: those are carried
@@ -626,7 +655,9 @@ export default function MapPage() {
     // A view saved from a session that had the scene open remembers where its camera stood. It
     // goes to whichever view is on screen, which is nothing at all when no scene is mounted — the
     // camera then stays in the document for the next time one is, rather than being staged for a
-    // scene the viewer has not opened.
+    // scene the viewer has not opened. The factor the scene was drawn at goes first: a plan view's
+    // width is a distance on the screen, and is put back at the factor it was measured at.
+    applyViewExaggeration3d(ui.exaggeration3d);
     applyViewCamera3d(ui.camera3d);
     // A refusal remembered from before is about this session's filters, not the view's; each layer
     // the view brings asks the server afresh.
@@ -662,6 +693,9 @@ export default function MapPage() {
       terrainDerivatives={derivativeLayers}
       visibleTerrainDerivativeIds={visibleTerrainDerivativeIds}
       onTerrainDerivativeVisibleChange={setTerrainDerivativeVisible}
+      cavePotentialResults={cavePotentialResults}
+      visibleCavePotentialIds={visibleCavePotentialIds}
+      onCavePotentialVisibleChange={setCavePotentialVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
       suspendedPhotoLibraries={suspendedPhotoLibraries}
@@ -695,6 +729,7 @@ export default function MapPage() {
       karstDensityBands={karstDensityBands}
       onKarstDensityBandsChange={setKarstDensityBandsState}
       karstIndexVisible={karstIndexVisible}
+      passageDepthVisible={passageDepthVisible}
       tripFilter={tripFilter}
       onTripFilterChange={setTripFilter}
       unappliedTripFilters={unappliedTripFilters}
@@ -703,6 +738,7 @@ export default function MapPage() {
       centerlineMaxPaths={centerlineMaxPaths}
       onCenterlineLimitsChange={setCenterlinePrefs}
       footer={<ViewsPanel onCapture={captureCurrentView} onApply={applyView} />}
+      notice={<MapLayerReadsNotice reads={[layersRead, geofilesRead, rastersRead, terrainDerivativesRead]} />}
     />
   );
 
@@ -817,7 +853,7 @@ export default function MapPage() {
         page, because a reader who arrived at the map from a link has no cave page open. */}
     <ShortcutHelpDialog open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
     <Suspense fallback={null}>
-      <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
+      <SurveyModelViewerModal model={caveViewOverlay} onClose={closeCaveViewOverlay} />
     </Suspense>
     <Suspense fallback={null}>
       <LibraryPhotoFeatureModal

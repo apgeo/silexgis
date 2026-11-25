@@ -2,7 +2,7 @@
 import { readCamera3D, toSceneCamera, type Camera3DReader } from './camera3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
 import { cameraFramingBounds } from './viewBounds3d.ts';
-import type { Scene3DCamera } from './scene3dEngine.ts';
+import type { Scene3DCamera, Scene3DTerrain } from './scene3dEngine.ts';
 import type { WorkspaceSelection } from '../stores/workspaceStore.ts';
 import {
   attachViewSync,
@@ -38,7 +38,8 @@ export type ViewSync3dEngine = Camera3DReader &
   Pick<
     Scene3DCamera,
     'setCamera' | 'getVisibleBounds' | 'getPseudoZoom' | 'onViewChanged' | 'cameraHeightForZoom'
-  >;
+  > &
+  Pick<Scene3DTerrain, 'groundHeight'>;
 
 export interface ViewSync3dHandle {
   /** Announces where the scene is looking right now — used when it opens beside an existing view. */
@@ -86,8 +87,12 @@ export function attachViewSync3d(
     currentSelection: () => selection.current(),
     currentExtent: here,
     onExtent: (bounds, zoom) => {
-      const next = cameraFramingBounds(bounds, zoom, readCamera3D(engine), (forZoom, latitude) =>
-        engine.cameraHeightForZoom(forZoom, latitude),
+      const next = cameraFramingBounds(
+        bounds,
+        zoom,
+        readCamera3D(engine),
+        (forZoom, latitude) => engine.cameraHeightForZoom(forZoom, latitude),
+        (longitude, latitude) => engine.groundHeight(longitude, latitude),
       );
       if (next) {
         engine.setCamera(toSceneCamera(next), { animate: false });

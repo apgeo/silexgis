@@ -139,12 +139,12 @@ export default function DocumentContent({
             />
           )}
           {!file.mayDownloadOriginal && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('attachments.originalWithheld')}
             </Typography.Text>
           )}
           {file.locationRemoved && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('attachments.locationRemovedHint')}
             </Typography.Text>
           )}

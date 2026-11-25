@@ -176,6 +176,11 @@ public class TripSoftDeleteGuardTests
     private static readonly IReadOnlyDictionary<string, (int Statements, string Reason)> ReadsPastTheFilter =
         new Dictionary<string, (int, string)>
         {
+            ["server/src/SilexGis.Api/Auth/RealDataGuard.cs"] =
+                (2, "a deleted trip is still somebody's record, so the check for data the demo content did not "
+                    + "create counts it too; hiding it would let the command run over a real instance"),
+            ["server/src/SilexGis.Infrastructure/TestData/TestDataRemoval.cs"] =
+                (1, "a cave a deleted trip's tracking still points at is in use: removing a generated run keeps it"),
             ["server/src/SilexGis.Api/Features/TripLogs/TripLogDeletionEndpoints.cs"] =
                 (2, "the list of deleted trips, and finding the one being put back"),
             ["server/src/SilexGis.Api/Features/Import/ImportBatchEndpoints.cs"] =
@@ -208,6 +213,9 @@ public class TripSoftDeleteGuardTests
                     + "the decision being looked at again. Its one statement reads past the filter because a "
                     + "deleted trip can be put back with the file still on it, and a report since taken off "
                     + "the log, which the same filter hides, may be in a file made before it was"),
+            ["server/src/SilexGis.Infrastructure/TestData/TestDataService.cs"] =
+                (1, "counting the trips no test-data run created, before a run beside them is confirmed: a "
+                    + "deleted trip is still somebody's data the database holds"),
             ["server/src/SilexGis.Infrastructure/Jobs/TripPurgeHandler.cs"] =
                 (3, "the pass that removes deleted trips: selecting them, claiming one, loading it"),
             ["server/src/SilexGis.Infrastructure/Import/ImportCommitService.cs"] =

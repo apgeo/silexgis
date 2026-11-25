@@ -23,6 +23,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -118,7 +119,7 @@ export default function CaversPage() {
   const debounced = useDebouncedValue(search);
   // The previous rows stay while a changed search is answered: an emptied table takes with it
   // whatever stood open on a row — a delete confirmation somebody was about to answer.
-  const { data: cavers, isFetching } = useCavers(debounced || undefined, undefined, {
+  const { data: cavers, isFetching, isError, error, refetch } = useCavers(debounced || undefined, undefined, {
     keepRows: true,
   });
   const createCaver = useCreateCaver();
@@ -155,7 +156,12 @@ export default function CaversPage() {
   ];
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body = {
       fullName: values.fullName,
       // Sent on every save, an empty one included: the server writes what it is given, so a
@@ -172,21 +178,30 @@ export default function CaversPage() {
       const chosen = values.cavingGroupIds ?? groupsBefore;
       const join = chosen.filter((id) => !groupsBefore.includes(id));
       const leave = groupsBefore.filter((id) => !chosen.includes(id));
-      const { refused } =
+      const { refused, problems } =
         join.length + leave.length > 0
           ? await changeCavingGroups.mutateAsync({ caverId: saved.id, join, leave })
-          : { refused: [] as string[] };
+          : { refused: [] as string[], problems: [] as ApiError[] };
       setCreating(false);
       setEditing(null);
       form.resetFields();
       if (refused.length > 0) {
         const names = refused.map((id) => groupOptions.find((option) => option.value === id)?.label ?? id);
         message.warning(t('cavers.cavingGroupsRefused', { names: names.join(', ') }), 8);
+        // A refusal with words of its own says why, once per distinct reason.
+        const reasons = new Set(
+          problems.map((problem) => rosterWriteProblem(problem, t)).filter((words) => words !== t('common.saveFailed')),
+        );
+        for (const words of reasons) {
+          message.error(words, 8);
+        }
       } else {
         message.success(t('common.saved'));
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A roster change can be refused for a reason the person can act on (taking away the last
+      // full administrator, granting more than one holds): name it rather than a bare failure.
+      message.error(rosterWriteProblem(error, t));
     }
   };
 
@@ -231,11 +246,20 @@ export default function CaversPage() {
         </Flex>
       </Flex>
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={cavers !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="cavers-load-failed"
+      />
       <Table<CaverInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !cavers}
+        locale={isError && !cavers ? { emptyText: <span /> } : undefined}
         dataSource={cavers}
         pagination={false}
         columns={[

@@ -6,7 +6,7 @@
 
 ---
 
-## In one paragraph
+## About SilexGIS
 
 SilexGIS is a web application for storing, viewing and editing cave and karst data. A caving
 club, a small exploration team or an individual installs it on a server they control, creates accounts
@@ -33,10 +33,10 @@ is opened by a deliberate act:
 
 An installation that publishes nothing shows a visitor the sign-in page and nothing more.
 
-## Why so careful about locations
+## Confidentiality of entrance points
 
-Caves get vandalised, looted, and killed by traffic. In a lot of places the position of an
-entrance is genuinely dangerous information. So the application treats **where a cave is** as
+For various reasons a user may consider the position of an entrance to be confidential
+information. So the application treats **where a cave is** as
 a separate thing from **that a cave exists**, and it can hand out the second without the
 first.
 
@@ -83,7 +83,7 @@ A rough inventory of the kinds of thing that live in an installation:
 - **Not offline-first in the browser.** The web client expects a connection. Offline is what
   the companion phone app is for — see [Mobile and offline sync](features/mobile-sync.md).
 - **Not pixel-perfect on mobile.** It works on a phone, genuinely, including drawing
-  geometry with a finger. But it is designed for a large screen and it shows.
+  the geometry of surface geographic features with a finger. But it is designed for a large screen and it shows.
 
 ## Who does what
 
@@ -106,10 +106,10 @@ Those are conventions, not built-in roles. See [Permissions explained](admin/per
 | Version | Years | State |
 |---|---|---|
 | v1 | ~2014–2022 | PHP/MySQL, the club's original working tool, still live |
-| v2 | 2022 | A partial React/Laravel rebuild, abandoned |
-| **v3** | 2026– | This one: a full rebuild, the version this guide describes |
+| v1.2 | 2022 | A partial React/Laravel rebuild, abandoned |
+| **v2** | 2026– | This one: a full rebuild, the version this guide describes |
 
-v3 is a fresh implementation. Where it does something differently from v1, that is usually a
+v2 is a fresh implementation. Where it does something differently from v1, that is usually a
 decision rather than an omission.
 
 ---

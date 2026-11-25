@@ -5,7 +5,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import AppLayout from './AppLayout.tsx';
-import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { sectionFor } from './navSections.ts';
 import { routes } from '../App.tsx';
 import type { UnreadNotificationCount } from '../api/hooks.ts';
@@ -60,20 +59,16 @@ vi.mock('../api/hooks.ts', () => ({
 // account that never set a display name it is a generated pseudonym, not a name or an address.
 // Keeps the account's preferences in step with the server; not what these tests are about.
 vi.mock('./AccountPrefsGate.tsx', () => ({ default: ({ children }: { children: ReactNode }) => children }));
-const signOut = vi.fn(() => Promise.resolve());
 vi.mock('../auth/auth.tsx', () => ({
   useAuth: () => ({
     user: { profile: { preferred_username: 'user-4f2b8c1d', email: 'caver@example.org' } },
-    signOut,
   }),
 }));
-// What a sign-out does with the account's preferences this browser holds, in the order it does it.
-const signOutSteps: string[] = [];
-vi.mock('../api/hooks/accountPrefs.ts', () => ({
-  flushAccountPreferences: () => {
-    signOutSteps.push(`written while held by ${useUiPrefsStore.getState().accountId ?? 'nobody'}`);
-    return Promise.resolve();
-  },
+// The sequence a sign-out follows (write what is waiting, release this browser's copy, end the
+// session) has one home and its order is tested there; the shell only has to ask for it.
+const signOutOfThisBrowser = vi.fn((_destination?: string) => Promise.resolve());
+vi.mock('../auth/signOut.ts', () => ({
+  signOutOfThisBrowser: (destination?: string) => signOutOfThisBrowser(destination),
 }));
 
 function renderShell(at = '/map') {
@@ -218,6 +213,7 @@ describe('AppLayout selected destination', () => {
       tripLogCreate: true,
       photoLibrary: true,
       isFullAdmin: true,
+      testDataGenerator: true,
     });
     const leaves = items.flatMap((entry) =>
       isNavGroup(entry) ? entry.children.map((child) => String(child.key)) : [String(entry.key)],
@@ -277,14 +273,12 @@ describe('AppLayout collapsed rail', () => {
     // because the pointer arrives first — which is exactly what this reproduces, and why the
     // reader reports it as a click that does nothing.
     fireEvent.mouseEnter(screen.getByText('Activity'));
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    });
 
     // On the marked-open class for the same reason the sibling test gives: jsdom draws no
     // flyout, so the popup itself cannot be asserted on either way. This class is what antd
-    // sets from the open state, and with the defect present it stays off.
-    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1);
+    // sets from the open state, and with the defect present it stays off. antd opens a hovered
+    // group after a short delay, so the class is waited for rather than slept towards.
+    await waitFor(() => expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1));
   });
 
   it('closes an open group when the rail narrows under it', () => {
@@ -412,6 +406,7 @@ describe('AppLayout nav destinations', () => {
     tripLogCreate: true,
     photoLibrary: true,
     isFullAdmin: true,
+    testDataGenerator: true,
   };
 
   /** Every key the rail can offer, groups flattened into the destinations they hold. */
@@ -469,6 +464,7 @@ describe('AppLayout nav destinations', () => {
       tripLogCreate: false,
       photoLibrary: false,
       isFullAdmin: false,
+      testDataGenerator: false,
     });
     const keys = items.map((item) => item.key);
 
@@ -521,6 +517,17 @@ describe('AppLayout nav destinations', () => {
     // The control: this installation's own gallery is still offered, so what disappeared is the
     // neighbouring library and not the group around it.
     expect(libraryOf(without)).toContain('gallery');
+  });
+
+  it('offers the test-data generator only when the server says this account may use it', () => {
+    // The server's answer already folds in the rank and both halves of the switch, so the rail
+    // follows it alone: a full administrator on a deployment that does not offer the generator is
+    // not sent to a page that would answer "not here".
+    const adminKeys = (gates: Parameters<typeof buildNavItems>[1]) =>
+      buildNavItems(i18n.t, gates).flatMap((item) => (isNavGroup(item) ? item.children.map((c) => c.key) : [item.key]));
+
+    expect(adminKeys(everything)).toContain('admin/test-data');
+    expect(adminKeys({ ...everything, testDataGenerator: false })).not.toContain('admin/test-data');
   });
 
   it('offers the page of everything published to full administrators and to nobody else', () => {
@@ -609,21 +616,14 @@ describe('AppLayout account menu', () => {
     }
   });
 
-  it('writes what is waiting to the account before releasing this browser’s copy and signing out', async () => {
-    useUiPrefsStore.getState().adoptAccount('account-a');
-    signOutSteps.length = 0;
-    signOut.mockImplementation(() => {
-      signOutSteps.push(`signed out, held by ${useUiPrefsStore.getState().accountId ?? 'nobody'}`);
-      return Promise.resolve();
-    });
+  it('signs out through the one sign-out every caller uses, back to the home page', async () => {
+    signOutOfThisBrowser.mockClear();
     renderShell();
 
     fireEvent.click(screen.getByTestId('account-menu'));
     fireEvent.click(await screen.findByText('Sign out'));
 
-    await waitFor(() =>
-      expect(signOutSteps).toEqual(['written while held by account-a', 'signed out, held by nobody']),
-    );
+    await waitFor(() => expect(signOutOfThisBrowser).toHaveBeenCalledWith('/'));
   });
 });
 

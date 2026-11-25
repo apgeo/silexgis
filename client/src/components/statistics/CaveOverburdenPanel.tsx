@@ -3,11 +3,17 @@ import { Card, Descriptions, Empty, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ApiError } from '../../api/client.ts';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 import { useCaveOverburden, type CaveOverburdenSample } from '../../api/hooks.ts';
+import Button from '../Button.tsx';
 import { setOverburdenHighlight } from '../../workspace/overburdenHighlight.ts';
 import { EnvelopeChart } from './DistributionCharts.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
 import { overburdenGapReason, overburdenSeries } from './overburdenSeries.ts';
+
+/** The refusal for a survey whose heights are relative to its own zero point only. */
+const ALTITUDES_RELATIVE_CODE = 'cave.altitudes_relative';
 
 /**
  * How much rock is over your head along one cave's passages.
@@ -44,7 +50,8 @@ import { overburdenGapReason, overburdenSeries } from './overburdenSeries.ts';
  */
 export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCaveOverburden(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveOverburden(caveId);
+  const altitudesRelative = error instanceof ApiError && error.code === ALTITUDES_RELATIVE_CODE;
   /** Which reading is being pointed at, by index into the profile's own list. */
   const [picked, setPicked] = useState<number | null>(null);
 
@@ -107,6 +114,22 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
     [samples, caveId, metres, t],
   );
 
+  // The place where this cave comes nearest the surface. Marked like a pressed reading — one mark
+  // at a time, on the one channel — but named for what it is, so a reader who pressed it does not
+  // mistake it for a point they chose.
+  const markLeastCover = useCallback(() => {
+    const least = data?.leastCover;
+    if (!least) return;
+    setPicked(samples.findIndex((s) => s.distanceAlongM === least.distanceAlongM));
+    setOverburdenHighlight({
+      caveId,
+      longitude: least.longitude,
+      latitude: least.latitude,
+      altitudeM: least.passageAltitudeM,
+      label: t('overburden.leastCoverMark', { value: metres(least.overburdenM) }),
+    });
+  }, [data, samples, caveId, metres, t]);
+
   const clearPick = useCallback(() => {
     setPicked(null);
     setOverburdenHighlight(null);
@@ -125,9 +148,27 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
     setOverburdenHighlight(null);
   }, [caveId, data]);
 
-  if (isError) return null;
+  if (isError && !altitudesRelative) {
+    return (
+      <StatisticsCardReadFailed title={t('overburden.title')} error={error} onRetry={refetch} testId="cave-overburden-read-failed" />
+    );
+  }
 
   const body = () => {
+    // Refused by the server, with its reason: the survey's heights are about its own zero point,
+    // and the terrain's are about sea level, so their difference would be the missing altitude of
+    // that point rather than rock. Said here so the reader knows what would make it measurable.
+    if (altitudesRelative) {
+      return (
+        <div data-testid="overburden-altitudes-relative">
+          <Empty description={t('overburden.altitudesRelativeTitle')} />
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            {t('overburden.altitudesRelativeReason')}
+          </Typography.Paragraph>
+        </div>
+      );
+    }
+
     if (isLoading || !data) return <Empty description={t('overburden.loading')} />;
 
     // No line work at all is a different statement from line work that carries no heights.
@@ -209,6 +250,25 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
           style={{ marginTop: 16 }}
           items={[
             { key: 'min', label: t('overburden.thinnest'), children: metres(data.minOverburdenM) },
+            ...(data.leastCover
+              ? [
+                  {
+                    key: 'least',
+                    label: t('overburden.leastCover'),
+                    children: (
+                      <span data-testid="overburden-least-cover">
+                        {t('overburden.leastCoverAt', {
+                          value: metres(data.leastCover.overburdenM),
+                          distance: metres(data.leastCover.distanceAlongM),
+                        })}{' '}
+                        <Button size="small" type="link" onClick={markLeastCover}>
+                          {t('overburden.showLeastCover')}
+                        </Button>
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
             { key: 'max', label: t('overburden.thickest'), children: metres(data.maxOverburdenM) },
             { key: 'mean', label: t('overburden.mean'), children: metres(data.meanOverburdenM) },
             {
@@ -229,6 +289,10 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
 
         <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
           {t('overburden.distanceNote')}
+        </Typography.Paragraph>
+
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+          {t('overburden.leastCoverNote')}
         </Typography.Paragraph>
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

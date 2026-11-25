@@ -32,14 +32,21 @@ public sealed class PhotoFrameReadingTests : IDisposable
         }
     }
 
+    /// <remarks>
+    /// The orientation is also pinned to a stated answer per format, not only to what the decode
+    /// says: were the writer or the decoder to drop the code, both would report 1 and agreeing
+    /// with each other would prove nothing about the header reader. JPEG, PNG and TIFF keep the
+    /// code written. An AVIF decoder turns the pixels itself and reports the result as upright,
+    /// so for it the answer is 1 whatever was written.
+    /// </remarks>
     [Theory]
-    [InlineData(MagickFormat.Avif, "avif", 6)]
-    [InlineData(MagickFormat.Avif, "avif", 3)]
-    [InlineData(MagickFormat.Jpeg, "jpg", 6)]
-    [InlineData(MagickFormat.Png, "png", 8)]
-    [InlineData(MagickFormat.Tiff, "tif", 6)]
+    [InlineData(MagickFormat.Avif, "avif", 6, 1)]
+    [InlineData(MagickFormat.Avif, "avif", 3, 1)]
+    [InlineData(MagickFormat.Jpeg, "jpg", 6, 6)]
+    [InlineData(MagickFormat.Png, "png", 8, 8)]
+    [InlineData(MagickFormat.Tiff, "tif", 6, 6)]
     public void The_frame_read_from_the_header_is_the_frame_a_decode_reports(
-        MagickFormat format, string extension, int code)
+        MagickFormat format, string extension, int code, int expected)
     {
         using var image = new MagickImage(MagickColors.White, 64, 48);
         var exif = new ExifProfile();
@@ -56,5 +63,6 @@ public sealed class PhotoFrameReadingTests : IDisposable
         read.WidthPixels.ShouldBe((int)decoded.Width);
         read.HeightPixels.ShouldBe((int)decoded.Height);
         read.Orientation.ShouldBe((int)decoded.Orientation is var o and >= 1 and <= 8 ? o : 1);
+        read.Orientation.ShouldBe(expected);
     }
 }

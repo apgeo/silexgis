@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fetchEntranceFeatures, fetchMapFeatures } from '../api/hooks.ts';
+import { fetchEntranceFeatures, fetchMapFeatures, type MapFilterParams } from '../api/hooks.ts';
 import { clusterCellOf } from '../geo/cluster.ts';
 import { entranceLabel, surfaceFeatureLabel } from '../map/featureLabels.ts';
 import { filterLayerId, type FilterLayerSpec } from '../map/filterLayerList.ts';
@@ -41,6 +41,33 @@ export interface FilterLayers3DEngine
   extends Pick<Scene3DCamera, 'getVisibleBounds' | 'getPseudoZoom' | 'onViewChanged'>,
     Pick<Scene3DVectorSources, 'createMarkerSource' | 'createPolylineSource'> {}
 
+/**
+ * A layer as this loader draws it: the filter it asks the routes with — a saved filter by id, or a
+ * filter document of its own —, its colour, its symbol, and how it is shown.
+ */
+export interface FilterLayer3DSpec {
+  /** Unique among one loader's layers, and the scene source the layer is drawn into. */
+  id: string;
+  params: MapFilterParams;
+  color: FilterLayerSpec['color'];
+  symbol: FilterLayerSpec['symbol'];
+  visible: boolean;
+  opacity: number;
+  /** The saved filter whose members a cluster of this layer lists; a layer drawn from a document has none. */
+  savedFilterId?: string;
+}
+
+/** What the layers' loading came to, for the chrome that says when something could not be read. */
+export interface FilterLayers3DState {
+  /**
+   * True when the latest request of a shown, readable layer failed. What the layer drew stays
+   * drawn, so without this a layer that never arrived would look like a filter nothing matches.
+   */
+  loadFailed: boolean;
+}
+
+export const EMPTY_FILTER_LAYERS_3D_STATE: FilterLayers3DState = { loadFailed: false };
+
 export interface FilterLayers3DHandle {
   /**
    * Draws exactly these layers: one is added, removed, restyled, switched on or off, faded or
@@ -51,10 +78,18 @@ export interface FilterLayers3DHandle {
     unreadable: ReadonlySet<string>,
     opacity: ReadonlyMap<string, number>,
   ): void;
+  /**
+   * Draws exactly these layers, each asked for with its own parameters: for layers that are not in
+   * the viewer's list — a flyby's own — and so are never known to be unreadable before they are asked.
+   */
+  setDrawnLayers(specs: readonly FilterLayer3DSpec[]): void;
   /** Loads every drawn layer for the current view now. */
   reload(): void;
   /** The payload now drawn for the same thing, if one of these layers still draws it. */
   currentPick(payload: Scene3DPickPayload): Scene3DPickPayload | undefined;
+  getState(): FilterLayers3DState;
+  /** Calls `listener` whenever the state changes; returns the unsubscribe. */
+  subscribe(listener: (state: FilterLayers3DState) => void): () => void;
   detach(): void;
 }
 
@@ -64,21 +99,38 @@ const SETTLE_MILLISECONDS = 250;
 const LINE_WIDTH_PIXELS = 3;
 
 interface Drawn {
-  spec: FilterLayerSpec;
+  spec: FilterLayer3DSpec;
   markers: Scene3DVectorSource<Scene3DMarker>;
   lines: Scene3DVectorSource<Scene3DPolyline>;
   drawnMarkers: readonly Scene3DMarker[];
   drawnLines: readonly Scene3DPolyline[];
   requestSeq: number;
   blocked: boolean;
+  /** Whether the latest request for this layer failed for a reason other than a refusal. */
+  failed: boolean;
 }
 
 export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers3DHandle {
   const layers = new Map<string, Drawn>();
   let settleTimer: number | undefined;
   let detached = false;
+  let state: FilterLayers3DState = { ...EMPTY_FILTER_LAYERS_3D_STATE };
+  const listeners = new Set<(next: FilterLayers3DState) => void>();
 
-  const key = (savedFilterId: string) => savedFilterId.toLowerCase();
+  // Only a layer that is shown and may be run counts: a hidden one is not being looked at, and an
+  // unreadable one is said to be so by the flat map's copy of the layer.
+  const publish = () => {
+    const loadFailed = [...layers.values()].some(
+      (layer) => layer.failed && layer.spec.visible && !layer.blocked,
+    );
+    if (detached || loadFailed === state.loadFailed) {
+      return;
+    }
+    state = { loadFailed };
+    for (const listener of [...listeners]) {
+      listener(state);
+    }
+  };
 
   const empty = (layer: Drawn) => {
     layer.drawnMarkers = [];
@@ -92,23 +144,31 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       return;
     }
     const seq = ++layer.requestSeq;
-    const params = { savedFilterId: layer.spec.savedFilterId };
+    const { params } = layer.spec;
     const [entrances, features] = await Promise.allSettled([
       fetchEntranceFeatures(bbox, zoom, params),
       fetchMapFeatures(bbox, params),
     ]);
-    if (detached || seq !== layer.requestSeq || layers.get(key(layer.spec.savedFilterId)) !== layer) {
+    if (detached || seq !== layer.requestSeq || layers.get(layer.spec.id) !== layer) {
       return;
     }
     if ([entrances, features].some((answer) => answer.status === 'rejected' && isMapFilterRefusal(answer.reason))) {
       // Never the unfiltered layer under the filter's name, and never what it drew before. The
       // flat map's copy of the layer is what says so; this one only stops drawing.
       empty(layer);
+      layer.failed = false;
+      publish();
       return;
     }
     if (entrances.status !== 'fulfilled' || features.status !== 'fulfilled') {
-      return; // a dropped request keeps what was drawn; the next move asks again
+      // A dropped request keeps what was drawn and the next move asks again; it is still said,
+      // because a layer that never arrived draws nothing at all.
+      layer.failed = true;
+      publish();
+      return;
     }
+    layer.failed = false;
+    publish();
     const { color, symbol, savedFilterId } = layer.spec;
     layer.drawnMarkers = [
       ...filterLayerEntranceMarkers(entrances.value, zoom, color, symbol, savedFilterId),
@@ -149,58 +209,87 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
     }
   };
 
+  /** Draws exactly these layers; `blockedIds` names those whose filter this reader may not run. */
+  const draw = (specs: readonly FilterLayer3DSpec[], blockedIds: ReadonlySet<string>) => {
+    if (detached) {
+      return;
+    }
+    const wanted = new Set(specs.map((spec) => spec.id));
+    for (const id of [...layers.keys()]) {
+      if (!wanted.has(id)) {
+        remove(id);
+      }
+    }
+    const toLoad: Drawn[] = [];
+    for (const spec of specs) {
+      const { id } = spec;
+      const blocked = blockedIds.has(id);
+      let layer = layers.get(id);
+      if (!layer) {
+        // Lines first so a layer's markers are added on top of its own lines.
+        const lines = engine.createPolylineSource(`${id}:lines`);
+        const markers = engine.createMarkerSource(id);
+        layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked, failed: false };
+        layers.set(id, layer);
+        toLoad.push(layer);
+      }
+      const previous = layer.spec;
+      layer.spec = spec;
+      const restyled =
+        previous.color !== spec.color ||
+        previous.symbol !== spec.symbol ||
+        previous.params.savedFilterId !== spec.params.savedFilterId ||
+        previous.params.filter !== spec.params.filter;
+      const unblocked = layer.blocked && !blocked;
+      layer.blocked = blocked;
+      layer.markers.setVisible(spec.visible);
+      layer.lines.setVisible(spec.visible);
+      layer.markers.setOpacity(spec.opacity);
+      layer.lines.setOpacity(spec.opacity);
+      if (blocked) {
+        layer.requestSeq++;
+        layer.failed = false;
+        empty(layer);
+      } else if ((restyled || unblocked || (spec.visible && !previous.visible)) && !toLoad.includes(layer)) {
+        toLoad.push(layer);
+      }
+    }
+    if (toLoad.length > 0) {
+      const bounds = engine.getVisibleBounds();
+      if (bounds) {
+        const bbox = boundsToBbox(bounds);
+        const zoom = mapZoomFor(engine.getPseudoZoom());
+        for (const layer of toLoad) {
+          void loadOne(layer, bbox, zoom);
+        }
+      }
+    }
+    publish();
+  };
+
   return {
     setLayers(specs, unreadable, opacity) {
-      if (detached) {
-        return;
-      }
-      const wanted = new Set(specs.map((spec) => key(spec.savedFilterId)));
-      for (const id of [...layers.keys()]) {
-        if (!wanted.has(id)) {
-          remove(id);
+      // A layer of the viewer's list is known by its saved filter, written in small letters.
+      const blocked = new Set<string>();
+      const drawn = specs.map((spec): FilterLayer3DSpec => {
+        const id = filterLayerId(spec.savedFilterId.toLowerCase());
+        if (unreadable.has(spec.savedFilterId.toLowerCase())) {
+          blocked.add(id);
         }
-      }
-      const toLoad: Drawn[] = [];
-      for (const spec of specs) {
-        const id = key(spec.savedFilterId);
-        const blocked = unreadable.has(id);
-        let layer = layers.get(id);
-        if (!layer) {
-          // Lines first so a layer's markers are added on top of its own lines.
-          const sourceId = filterLayerId(id);
-          const lines = engine.createPolylineSource(`${sourceId}:lines`);
-          const markers = engine.createMarkerSource(sourceId);
-          layer = { spec, markers, lines, drawnMarkers: [], drawnLines: [], requestSeq: 0, blocked };
-          layers.set(id, layer);
-          toLoad.push(layer);
-        }
-        const previous = layer.spec;
-        layer.spec = spec;
-        const restyled = previous.color !== spec.color || previous.symbol !== spec.symbol;
-        const unblocked = layer.blocked && !blocked;
-        layer.blocked = blocked;
-        layer.markers.setVisible(spec.visible);
-        layer.lines.setVisible(spec.visible);
-        const fade = opacity.get(filterLayerId(spec.savedFilterId)) ?? 1;
-        layer.markers.setOpacity(fade);
-        layer.lines.setOpacity(fade);
-        if (blocked) {
-          layer.requestSeq++;
-          empty(layer);
-        } else if ((restyled || unblocked || (spec.visible && !previous.visible)) && !toLoad.includes(layer)) {
-          toLoad.push(layer);
-        }
-      }
-      if (toLoad.length > 0) {
-        const bounds = engine.getVisibleBounds();
-        if (bounds) {
-          const bbox = boundsToBbox(bounds);
-          const zoom = mapZoomFor(engine.getPseudoZoom());
-          for (const layer of toLoad) {
-            void loadOne(layer, bbox, zoom);
-          }
-        }
-      }
+        return {
+          id,
+          params: { savedFilterId: spec.savedFilterId },
+          color: spec.color,
+          symbol: spec.symbol,
+          visible: spec.visible,
+          opacity: opacity.get(filterLayerId(spec.savedFilterId)) ?? 1,
+          savedFilterId: spec.savedFilterId,
+        };
+      });
+      draw(drawn, blocked);
+    },
+    setDrawnLayers(specs) {
+      draw(specs, new Set());
     },
     reload: load,
     currentPick(payload) {
@@ -214,8 +303,18 @@ export function attachFilterLayers3d(engine: FilterLayers3DEngine): FilterLayers
       }
       return undefined;
     },
+    getState() {
+      return state;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     detach() {
       detached = true;
+      listeners.clear();
       window.clearTimeout(settleTimer);
       unsubscribeView();
       for (const id of [...layers.keys()]) {
@@ -239,7 +338,7 @@ export function filterLayerEntranceMarkers(
   zoom: number,
   color: FilterLayerSpec['color'],
   symbol: FilterLayerSpec['symbol'],
-  savedFilterId: string,
+  savedFilterId?: string,
 ): Scene3DMarker[] {
   const fill = filterLayerPalette[color];
   const markers: Scene3DMarker[] = [];
@@ -261,7 +360,7 @@ export function filterLayerEntranceMarkers(
           count,
           zoom,
           cell,
-          savedFilterId,
+          ...(savedFilterId !== undefined ? { savedFilterId } : {}),
           anchor: onTheGround(position),
         };
         markers.push({ position, clampToGround: true, image: icon.image, scale: icon.scale, id });

@@ -2,15 +2,35 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import dayjs from 'dayjs';
 import '../../i18n';
 import type { EventDefaults, EventInfo } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import EventFormModal from './EventFormModal.tsx';
 
-const { defaultsSpy, createSpy, updateSpy, followingSpy } = vi.hoisted(() => ({
-  defaultsSpy: vi.fn(),
-  createSpy: vi.fn(),
-  updateSpy: vi.fn(),
-  followingSpy: vi.fn(),
+const { defaultsSpy, createSpy, updateSpy, followingSpy, versionOnFile, runVersionOnFile } =
+  vi.hoisted(() => ({
+    defaultsSpy: vi.fn(),
+    createSpy: vi.fn(),
+    updateSpy: vi.fn(),
+    followingSpy: vi.fn(),
+    // The versions on file for the event and for its run, as the transport would answer them now.
+    versionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
+    runVersionOnFile: vi.fn<(path: string) => string | undefined>(() => undefined),
+  }));
+
+
+/** `reading` as a read answered at `version` hands it over: the version is kept with the values. */
+function readAt<T extends object>(reading: T, version: string): T {
+  noteVersionOfReading(reading, new Response(null, { headers: { ETag: version } }));
+  return reading;
+}
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+  lastReadRunVersion: (path: string) => runVersionOnFile(path),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -22,6 +42,8 @@ vi.mock('../../api/hooks.ts', () => ({
 }));
 
 const answered: EventDefaults = { visibility: 'cavingGroup', cavingGroupId: 'club-1' };
+
+const SAVE_FAILED = 'The operation failed. Please try again.';
 
 function show(event?: EventInfo) {
   return render(
@@ -59,6 +81,8 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   defaultsSpy.mockReturnValue({ data: undefined });
+  versionOnFile.mockReturnValue(undefined);
+  runVersionOnFile.mockReturnValue(undefined);
 });
 
 describe('writing an event down', () => {
@@ -211,5 +235,189 @@ describe('an event that comes round again', () => {
     await waitFor(() => expect(followingSpy).toHaveBeenCalled());
     const changed = followingSpy.mock.calls[0][0] as { body: { seriesFrequency?: string } };
     expect(changed.body.seriesFrequency).toBe('fortnightly');
+  });
+});
+
+/**
+ * The page behind the dialog goes on reading the event — on a return to the browser tab, after
+ * anything that refreshes events — and every read files a newer version. A save that carried that
+ * one with the values the form was filled from would present somebody else's change as already
+ * seen and write over it; the save has to carry the version the dialog opened with.
+ */
+describe('a save from a dialog opened before the event was read again', () => {
+  const path = `/api/v1/events/${anOccurrence().id}`;
+
+  function reopenAfterARead() {
+    // A read made outside the cache has filed an event version newer than either copy holds.
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"3"' : undefined));
+    runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-1"' : undefined));
+    const view = show(readAt(anOccurrence(), '"1"'));
+    runVersionOnFile.mockImplementation((asked) => (asked === path ? '"run-2"' : undefined));
+    view.rerender(
+      <App>
+        <EventFormModal
+          open
+          event={readAt(anOccurrence({ title: 'Renamed by somebody else' }), '"2"')}
+          onClose={() => {}}
+        />
+      </App>,
+    );
+  }
+
+  it('sends the version of the occurrence the dialog opened with', async () => {
+    updateSpy.mockResolvedValue(anOccurrence());
+    reopenAfterARead();
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalled());
+    const sent = updateSpy.mock.calls[0][0] as { ifMatch?: string; body: { title: string } };
+    expect(sent.ifMatch).toBe('"1"');
+    expect(sent.body.title).toBe('Committee night');
+  });
+
+  it('sends the version of the run the dialog opened with when the rest of the run is edited', async () => {
+    followingSpy.mockResolvedValue({ seriesId: 'series-1', changed: 2, anchor: anOccurrence() });
+    reopenAfterARead();
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('event-scope-following'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(followingSpy).toHaveBeenCalled());
+    expect((followingSpy.mock.calls[0][0] as { runVersion?: string }).runVersion).toBe('"run-1"');
+  });
+
+  it('leaves a stale-version refusal to the one conflict warning', async () => {
+    updateSpy.mockRejectedValueOnce(new ApiError(412, 'concurrency.version_mismatch'));
+    show(anOccurrence());
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+
+    // A second press refused for a reason of its own draws its own sentence. Messages are drawn
+    // in the order they are asked for, so once it is on screen anything the stale refusal had
+    // asked for would be too: only then does the absence of "save failed" prove anything.
+    updateSpy.mockRejectedValueOnce(new ApiError(409, 'event.recurrence_overlapping'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/Each occurrence would still be running/)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+  });
+
+  it.each([
+    ['a refusal it has words for', new ApiError(409, 'event.recurrence_overlapping'), /Each occurrence would still be running/],
+    ['a failed server', new ApiError(500, undefined), SAVE_FAILED],
+  ])('says why a save was refused for %s, and stays open', async (_, error, sentence) => {
+    updateSpy.mockRejectedValueOnce(error);
+    show(anOccurrence());
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    expect(screen.getByTestId('event-title')).toHaveValue('Committee night');
+  });
+});
+
+describe('leaving the event dialog with typed work', () => {
+  afterEach(cleanup);
+
+  function showClosable() {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <EventFormModal open onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Committee night' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click beside it', () => {
+    const onClose = showClosable();
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('creating an event', () => {
+  // A day of the month the calendar opens on, so no paging through months is needed.
+  const DAY = dayjs().date(15).format('YYYY-MM-DD');
+
+  /** Picks one day of this month in the range's calendar, as a person would: start and end alike. */
+  async function pickDay(day: string) {
+    const [first] = Array.from(document.querySelectorAll<HTMLInputElement>('.ant-picker-range input'));
+    fireEvent.mouseDown(first);
+    fireEvent.click(first);
+    const cell = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(`td[title="${day}"]`);
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    fireEvent.click(cell);
+    fireEvent.click(document.querySelector<HTMLElement>(`td[title="${day}"]`)!);
+  }
+
+  it('sends a plain one-day event with its day and the audience it was given', async () => {
+    createSpy.mockResolvedValue({ id: 'event-1' });
+    defaultsSpy.mockReturnValue({ data: answered });
+    show();
+
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Club night' } });
+    await pickDay(DAY);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy.mock.calls[0][0]).toMatchObject({
+      title: 'Club night',
+      startDate: DAY,
+      endDate: null,
+      startTime: null,
+      endTime: null,
+      visibility: 'cavingGroup',
+      cavingGroupId: 'club-1',
+    });
+    expect(createSpy.mock.calls[0][0]).not.toHaveProperty('recurrence');
+  });
+
+  it('sends a repetition that stops after a number of occurrences', async () => {
+    createSpy.mockResolvedValue({ id: 'event-1' });
+    defaultsSpy.mockReturnValue({ data: answered });
+    show();
+
+    fireEvent.change(screen.getByTestId('event-title'), { target: { value: 'Club night' } });
+    await pickDay(DAY);
+    fireEvent.click(screen.getByTestId('event-repeats'));
+    await waitFor(() => expect(screen.getByTestId('event-repeat-rule')).toBeTruthy());
+    fireEvent.change(screen.getByTestId('event-repeat-rule'), { target: { value: 'every Tuesday' } });
+    fireEvent.change(screen.getByTestId('event-repeat-count'), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    expect(createSpy.mock.calls[0][0]).toMatchObject({
+      title: 'Club night',
+      startDate: DAY,
+      recurrence: { frequency: 'weekly', rule: 'every Tuesday', count: 6, until: null },
+    });
   });
 });

@@ -16,20 +16,41 @@ const { queryCalls, resolved } = vi.hoisted(() => ({
 const hit = (id: string, title: string, subtitle: string) =>
   ({ world: 'feature', id, title, subtitle, symbol: null, placeable: false });
 
-const featureType = (id: string, name: string, requiresParent: boolean) => ({
-  id, name, requiresParent,
+const featureType = (
+  id: string,
+  name: string,
+  requiresParent: boolean,
+  code: string | null = null,
+  propertiesSchema: string | null = null,
+) => ({
+  id, name, requiresParent, code,
   acceptedGeometryClasses: ['point'],
-  propertiesSchema: null,
+  propertiesSchema,
   propertiesSchemaVersion: 0,
 });
 
+// The shipped structural-reading schema, as the server seeds it.
+const READING_SCHEMA = JSON.stringify({
+  type: 'object',
+  required: ['measurement_type', 'dip_direction', 'dip'],
+  properties: {
+    measurement_type: { type: 'string', title: 'Measured plane', enum: ['bedding', 'joint', 'fault', 'cleavage', 'fracture', 'other'] },
+    dip_direction: { type: 'number', title: 'Dip direction (°)', minimum: 0, exclusiveMaximum: 360 },
+    dip: { type: 'number', title: 'Dip (°)', minimum: 0, maximum: 90 },
+    note: { type: 'string', title: 'Note' },
+    measured_on: { type: 'string', title: 'Measured on', format: 'date' },
+  },
+});
+const TYPES = [
+  featureType('1', 'Spring', false),
+  featureType('2', 'Passage marker', true),
+  featureType('3', 'Structural measurement', false, 'structural_measurement', READING_SCHEMA),
+  featureType('4', 'Shaft', false, null, JSON.stringify({ type: 'object', properties: { depth: { type: 'number', title: 'Depth (m)' } } })),
+];
+
 vi.mock('../../api/hooks.ts', () => ({
-  useFeatureTypes: () => ({
-    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', true)],
-  }),
-  useGenericFeatureTypes: () => ({
-    data: [featureType('1', 'Spring', false), featureType('2', 'Passage marker', true)],
-  }),
+  useFeatureTypes: () => ({ data: TYPES }),
+  useGenericFeatureTypes: () => ({ data: TYPES }),
   useFilterVocabulary: () => ({ data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] } }),
   useFilterQuery: (body: unknown, enabled: boolean) => {
     queryCalls.push({ body, enabled });
@@ -148,5 +169,106 @@ describe('the feature form parent picker', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ primaryParentId: AREA });
+  });
+});
+
+describe('the structural reading form', () => {
+  it('offers strike entry, and sends a typed strike for the server to convert', async () => {
+    const onSubmit = show({
+      featureTypeId: 3,
+      properties: { measurement_type: 'bedding', dip_direction: 200, dip: 40 },
+    });
+
+    // The plane kind is offered in words, and the fields carry the reader-language labels.
+    await screen.findByText('Bedding');
+    expect(screen.getByText('Dip direction (°)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Strike and dip (right-hand rule)'));
+    const strike = await screen.findByLabelText(/^Strike \(°/);
+    // Switching the convention clears the number typed for the other one.
+    expect(strike).toHaveValue('');
+    fireEvent.change(strike, { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const { properties } = onSubmit.mock.calls[0][0] as FeatureAttributeValues;
+    expect(properties).toMatchObject({ measurement_type: 'bedding', strike: 30, dip: 40 });
+    expect(properties).not.toHaveProperty('dip_direction');
+  });
+});
+
+describe('FeatureEditModal leaving with typed work', () => {
+  function showClosable() {
+    const onCancel = vi.fn();
+    render(
+      <AntApp>
+        <FeatureEditModal
+          open
+          title="Edit feature"
+          geometryType="Point"
+          initial={{ visibility: 'private', name: 'Izbuc', description: 'Saved text' }}
+          withParent={false}
+          onCancel={onCancel}
+          onSubmit={vi.fn()}
+        />
+      </AntApp>,
+    );
+    return onCancel;
+  }
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed into a filled form', () => {
+    const onCancel = showClosable();
+    cancel();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing a typed description away', async () => {
+    const onCancel = showClosable();
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'A long description' } });
+    cancel();
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('what the feature dialog submits', () => {
+  it('trims the texts, keeps properties the schema does not know, and drops one that was emptied', async () => {
+    const onSubmit = show({
+      featureTypeId: 4,
+      name: '  Shaft head ',
+      description: '   ',
+      visibility: 'private',
+      locationProtected: true,
+      properties: { legacy: 1, depth: 5 },
+    });
+
+    const depth = await screen.findByLabelText('Depth (m)');
+    expect(depth).toHaveValue('5');
+    fireEvent.change(depth, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^(OK|Save)$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Shaft head',
+      featureTypeId: 4,
+      description: null,
+      visibility: 'private',
+      locationProtected: true,
+      primaryParentId: null,
+      // A key written by an earlier schema, or by another client, survives a save from this one.
+      properties: { legacy: 1 },
+    });
+  });
+
+  it('sends a changed property value over the one it opened with', async () => {
+    const onSubmit = show({ featureTypeId: 4, name: 'Shaft', properties: { legacy: 'kept', depth: 5 } });
+
+    fireEvent.change(await screen.findByLabelText('Depth (m)'), { target: { value: '42' } });
+    fireEvent.click(screen.getByRole('button', { name: /^(OK|Save)$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ name: 'Shaft', properties: { legacy: 'kept', depth: 42 } });
   });
 });

@@ -17,6 +17,7 @@ import {
   type MapLayerInfo,
   type RasterMapInfo,
   type TerrainDerivativeLayerInfo,
+  type CavePotentialResultInfo,
 } from '../../api/hooks.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
@@ -53,6 +54,9 @@ import { KARST_DENSITY_LAYER_ID, type KarstDensityBands, type KarstDensityMode }
 import KarstDensityControls from './KarstDensityControls.tsx';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
 import KarstIndexControls from './KarstIndexControls.tsx';
+import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
+import PassageDepthControls from './PassageDepthControls.tsx';
+import LithologyLegend from '../geology/LithologyLegend.tsx';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
 import {
   TRIP_LAYER_ID,
@@ -66,6 +70,9 @@ import { filterLayerSavedIdOf, MAX_FILTER_LAYERS, type FilterLayerSymbol } from 
 import type { FilterLayerColor } from '../../map/markerPalette.ts';
 import { FilterLayerRowTitle, type FilterLayerRowInfo } from './FilterLayerRow.tsx';
 import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
+import LandformLegend from './LandformLegend.tsx';
+import CavePotentialLegend from './CavePotentialLegend.tsx';
+import { cavePotentialFailureText } from './cavePotentialFailure.ts';
 
 /**
  * The refusal a library gives when it will not accept the credential this installation is
@@ -117,6 +124,10 @@ interface LayerPanelProps {
   terrainDerivatives: TerrainDerivativeLayerInfo[];
   visibleTerrainDerivativeIds: string[];
   onTerrainDerivativeVisibleChange: (id: string, visible: boolean) => void;
+  /** The cave-potential results this reader may read. Optional: a panel shown without them lists none. */
+  cavePotentialResults?: CavePotentialResultInfo[];
+  visibleCavePotentialIds?: string[];
+  onCavePotentialVisibleChange?: (id: string, visible: boolean) => void;
   /** Fired when a layer's checkbox in the composer tree is toggled. */
   onOverlayVisibilityChanged: (layer: OlLayerBase, visible: boolean) => void;
   /** The photo libraries this installation is pointed at, as this account may see them; empty when none. */
@@ -166,6 +177,7 @@ interface LayerPanelProps {
   onKarstDensityBandsChange: (bands: KarstDensityBands) => void;
   /** True while the karstification-index choropleth is on — its legend is hidden otherwise. */
   karstIndexVisible: boolean;
+  passageDepthVisible: boolean;
   /** What the trip overlay is currently asking for. */
   tripFilter: TripLayerFilter;
   onTripFilterChange: (filter: TripLayerFilter) => void;
@@ -182,6 +194,8 @@ interface LayerPanelProps {
   centerlineMaxPaths?: number;
   onCenterlineLimitsChange: (limits: { detailZoom?: number; maxPaths?: number }) => void;
   footer?: ReactNode;
+  /** Said above everything else, such as that some of what is listed could not be read. */
+  notice?: ReactNode;
 }
 
 export default function LayerPanel({
@@ -205,6 +219,9 @@ export default function LayerPanel({
   terrainDerivatives,
   visibleTerrainDerivativeIds,
   onTerrainDerivativeVisibleChange,
+  cavePotentialResults = [],
+  visibleCavePotentialIds = [],
+  onCavePotentialVisibleChange,
   onOverlayVisibilityChanged,
   photoLibraries,
   unconfiguredPhotoLibraries,
@@ -226,6 +243,7 @@ export default function LayerPanel({
   karstDensityBands,
   onKarstDensityBandsChange,
   karstIndexVisible,
+  passageDepthVisible,
   tripFilter,
   onTripFilterChange,
   unappliedTripFilters,
@@ -234,6 +252,7 @@ export default function LayerPanel({
   centerlineMaxPaths,
   onCenterlineLimitsChange,
   footer,
+  notice,
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const { data: tags } = useTags('');
@@ -416,6 +435,8 @@ export default function LayerPanel({
         return t('map.karstDensity.layer');
       case KARST_INDEX_LAYER_ID:
         return t('map.karstIndex.layer');
+      case PASSAGE_DEPTH_LAYER_ID:
+        return t('map.passageDepth.layer');
       case PHOTO_LAYER_ID:
         return t('map.photos');
       case TRIP_LAYER_ID:
@@ -472,6 +493,7 @@ export default function LayerPanel({
 
   return (
     <div style={{ padding: 12, overflow: 'auto', height: '100%' }}>
+      {notice}
       <Typography.Text strong>{t('map.baseLayers')}</Typography.Text>
       {/* Each base keeps its own opacity slider (like overlays); only the active base
           is visible, so switching to a dimmed base restores its opacity. */}
@@ -536,7 +558,7 @@ export default function LayerPanel({
         >
           {t('map.declutterLabels')}
         </Checkbox>
-        <Typography.Paragraph type="secondary" style={{ margin: '2px 0 0 24px', fontSize: 12 }}>
+        <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0 24px' }}>
           {t('map.declutterLabelsHint')}
         </Typography.Paragraph>
       </div>
@@ -596,6 +618,9 @@ export default function LayerPanel({
         />
       )}
       {karstIndexVisible && <KarstIndexControls />}
+      {passageDepthVisible && <PassageDepthControls />}
+      {/* Draws nothing unless geological units are loaded on the map. */}
+      <LithologyLegend />
       {/* Draws nothing unless the photo overlay is on and its last answer held back photographs. */}
       <PhotoCutShortNotice />
       {/* The map-corner notice about withheld lines opens the panel here and moves focus to this
@@ -617,7 +642,7 @@ export default function LayerPanel({
               title={t('map.centerlinesWithheld', { count: centerlineLoad.withheldCount })}
             />
           )}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {centerlineLoad.detail ? t('map.centerlineDetailOn') : t('map.centerlineSkeletonOn')}
           </Typography.Text>
           {/* Personal limits: the installation's values are the placeholders, so leaving a field
@@ -659,7 +684,7 @@ export default function LayerPanel({
               />
             </label>
           </div>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('map.centerlineLimitsHint')}
           </Typography.Text>
         </div>
@@ -671,7 +696,7 @@ export default function LayerPanel({
           {tripLoad.status === 'error' ? (
             <Alert type="warning" showIcon style={{ marginBottom: 8 }} title={t('map.tripsFailed')} />
           ) : (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-trip-count">
+            <Typography.Text type="secondary" className="hint-text" data-testid="map-trip-count">
               {tripLoad.status === 'loading'
                 ? t('map.tripsLoading')
                 : t('map.tripsShown', { count: tripLoad.shownTripCount })}
@@ -740,7 +765,7 @@ export default function LayerPanel({
             onChange={(values: string[]) => onTripFilterChange({ ...tripFilter, types: values })}
             data-testid="map-trips-types"
           />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('map.tripsFilterHint')}
           </Typography.Text>
         </div>
@@ -815,7 +840,7 @@ export default function LayerPanel({
               style={{ marginTop: 8 }}
               data-testid={`library-photos-status-${library.source}`}
             >
-              <Typography.Text strong style={{ fontSize: 12 }}>
+              <Typography.Text strong className="hint-text">
                 {library.name}
               </Typography.Text>
               {/* The library's own state comes first, because when it is wrong most of what can be
@@ -842,7 +867,7 @@ export default function LayerPanel({
                 )
               ) : (
                 viewport && (
-                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                  <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0' }}>
                     {viewport}
                   </Typography.Paragraph>
                 )
@@ -866,7 +891,7 @@ export default function LayerPanel({
                   library answering a picture request without a picture. Said out loud because the
                   map simply stops showing photographs, and the way back is the button below. */}
               {health && !health.picturesAvailable && (
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0' }}>
                   {t('libraryPhotos.health.picturesStopped')}
                 </Typography.Paragraph>
               )}
@@ -874,7 +899,7 @@ export default function LayerPanel({
                   restarted a container is asking exactly this, and a health line that describes a
                   minute ago while looking like now is what the moment prevents. */}
               {health?.probedAt && (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {health.version
                     ? t('libraryPhotos.health.versionChecked', {
                         version: health.version,
@@ -892,7 +917,7 @@ export default function LayerPanel({
                   other. While a library is not answering, the pins are the last positions it gave,
                   which is exactly when this line earns its space. */}
               {state?.readAt && (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t('libraryPhotos.readAt', {
                     when: new Date(state.readAt).toLocaleString(i18n.resolvedLanguage),
                   })}
@@ -906,13 +931,13 @@ export default function LayerPanel({
                   checked={state?.pictures ?? false}
                   onChange={(e) => setLibraryPhotoPictures(library.source, e.target.checked)}
                 >
-                  <span style={{ fontSize: 12 }}>{t('libraryPhotos.asPictures')}</span>
+                  <span className="hint-text">{t('libraryPhotos.asPictures')}</span>
                 </Checkbox>
                 {/* Said out loud rather than left looking broken. A switch that silently does
                     nothing is worse than no switch, and this one stops working exactly when the map
                     is busiest — which is when somebody is most likely to assume it failed. */}
                 {state?.picturesSuppressed && (
-                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                  <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0' }}>
                     {t('libraryPhotos.picturesSuppressed')}
                   </Typography.Paragraph>
                 )}
@@ -935,7 +960,7 @@ export default function LayerPanel({
                   nowhere in them, and an operator watching a health line stay exactly as it was is
                   watching a button that did nothing. Said here instead. */}
               {recheck.isError && recheck.variables === library.source && (
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0' }}>
                   {/* A library that answered promptly and refused the credential is not a library
                       that did not answer, and telling an operator it is down sends them to the
                       container while the thing to fix is on the library's own settings screen. */}
@@ -956,10 +981,10 @@ export default function LayerPanel({
           style={{ marginTop: 8 }}
           data-testid={`library-photos-suspended-${library.source}`}
         >
-          <Typography.Text strong style={{ fontSize: 12 }}>
+          <Typography.Text strong className="hint-text">
             {library.name}
           </Typography.Text>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+          <Typography.Paragraph type="secondary" className="hint-text" style={{ margin: '2px 0 0' }}>
             {t('libraryPhotos.health.suspended')}
           </Typography.Paragraph>
         </div>
@@ -972,7 +997,8 @@ export default function LayerPanel({
         <Typography.Paragraph
           key={library.source}
           type="secondary"
-          style={{ fontSize: 12, margin: '8px 0 0' }}
+          className="hint-text"
+          style={{ margin: '8px 0 0' }}
           data-testid={`library-photos-absent-${library.source}`}
         >
           {t('libraryPhotos.notConnected', { library: library.name })}
@@ -1005,14 +1031,14 @@ export default function LayerPanel({
               operator asking for several reliefs and coloured maps per build has no other way to
               watch that volume fill. */}
           <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('terrain.derivatives.hint')}
             </Typography.Text>
           </div>
           <div>
             <Typography.Text
               type="secondary"
-              style={{ fontSize: 12 }}
+              className="hint-text"
               data-testid="terrain-derivative-total-size"
             >
               {t('terrain.derivatives.totalSize', {
@@ -1028,7 +1054,7 @@ export default function LayerPanel({
               <div
                 key={derivative.id}
                 data-testid={`terrain-derivative-${derivative.id}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
               >
                 <Checkbox
                   disabled={derivative.status !== 'ready'}
@@ -1040,7 +1066,7 @@ export default function LayerPanel({
                 {/* What the picture actually is, said by the application rather than left to
                     whatever somebody typed as its name: a steepness map named "north ridge" is
                     indistinguishable from a facing map named the same. */}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t(`terrain.derivatives.kinds.${derivative.derivative}`)}
                   {derivative.sizeBytes > 0 ? ` \u00b7 ${formatSize(derivative.sizeBytes)}` : ''}
                 </Typography.Text>
@@ -1061,6 +1087,66 @@ export default function LayerPanel({
                   <Tag data-testid="terrain-derivative-status">
                     {t(`terrain.derivatives.statuses.${derivative.status}`)}
                   </Tag>
+                )}
+                {derivative.derivative === 'geomorphons' &&
+                  visibleTerrainDerivativeIds.includes(derivative.id) && <LandformLegend />}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {cavePotentialResults.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('cavePotential.layers.title')}</Typography.Text>
+          <div>
+            <Typography.Text type="secondary" className="hint-text">
+              {t('cavePotential.layers.hint')}
+            </Typography.Text>
+          </div>
+          <div
+            data-testid="cave-potential-list"
+            style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}
+          >
+            {cavePotentialResults.map((result) => (
+              <div
+                key={result.id}
+                data-testid={`cave-potential-${result.id}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
+              >
+                <Checkbox
+                  disabled={result.status !== 'ready'}
+                  checked={visibleCavePotentialIds.includes(result.id)}
+                  onChange={(e) => onCavePotentialVisibleChange?.(result.id, e.target.checked)}
+                >
+                  {result.modelName ?? t('cavePotential.page.modelHidden')}
+                </Checkbox>
+                {/* A result is known by where it was run and when: the same model run twice over
+                    one area gives two rows that only the date tells apart. */}
+                <Typography.Text type="secondary" className="hint-text">
+                  {[
+                    result.areaName,
+                    t('cavePotential.layers.cell', { meters: result.cellMeters }),
+                    result.computedAt ? new Date(result.computedAt).toLocaleDateString(i18n.resolvedLanguage) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' \u00b7 ')}
+                </Typography.Text>
+                {result.status !== 'ready' && (
+                  <Tooltip title={result.status === 'failed' ? cavePotentialFailureText(t, result) : undefined}>
+                    <Tag
+                      color={result.status === 'failed' ? 'error' : undefined}
+                      data-testid="cave-potential-status"
+                    >
+                      {t(`cavePotential.statuses.${result.status}`)}
+                    </Tag>
+                  </Tooltip>
+                )}
+                {result.status === 'ready' && visibleCavePotentialIds.includes(result.id) && (
+                  <CavePotentialLegend
+                    usesPositions={result.usesPositions}
+                    relative={Boolean(result.summary?.training)}
+                  />
                 )}
               </div>
             ))}

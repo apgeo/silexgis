@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import type { PhotoQueryParams } from '../../api/hooks.ts';
 
 const { photosSpy, canRead } = vi.hoisted(() => ({ photosSpy: vi.fn(), canRead: { value: true } }));
@@ -74,5 +75,20 @@ describe('the camp photographs tab', () => {
     expect(screen.queryByTestId('expedition-photos-tab')).toBeNull();
     // Not even the request: the server would refuse it.
     expect(photosSpy.mock.calls[0][1]).toBe(false);
+  });
+});
+
+describe("a camp's photographs that could not be read", () => {
+  it('says the photographs could not be read, offers to ask again, and never says there are none', () => {
+    const refetch = vi.fn();
+    photosSpy.mockReturnValue({ data: undefined, isPending: false, isError: true, refetch });
+    show();
+
+    expect(screen.getByTestId('expedition-photos-unavailable').textContent).toContain(
+      i18n.t('expeditions.photosUnavailable'),
+    );
+    expect(screen.queryByText(i18n.t('expeditions.noPhotographs'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

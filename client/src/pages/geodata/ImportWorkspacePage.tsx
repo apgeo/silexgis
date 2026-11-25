@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { App, Alert, Card, Flex, Space, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
@@ -23,9 +23,14 @@ import CandidateMap from '../../components/import/CandidateMap.tsx';
 import CandidateTable from '../../components/import/CandidateTable.tsx';
 import ImportOptionsPanel from '../../components/import/ImportOptionsPanel.tsx';
 import ImportResultModal from '../../components/import/ImportResultModal.tsx';
+import LithologyMappingCard from '../../components/import/LithologyMappingCard.tsx';
 import RuleHitList from '../../components/import/RuleHitList.tsx';
 import SelectionToolbar, { type CandidateFilters } from '../../components/import/SelectionToolbar.tsx';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
+import { refusalText } from '../../components/geodata/refusalText.ts';
+import { ApiError } from '../../api/client.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { useSavedReview } from './useSavedReview.ts';
 
 /** What the review starts from before the server's session has arrived. */
 const BLANK_OPTIONS: ImportOptions = {
@@ -72,26 +77,28 @@ export default function ImportWorkspacePage() {
   const job = useProcessingJob(queuedCommit?.jobId);
   const committedBatch = useImportBatch(
     job.data && job.data.status === 'succeeded' ? queuedCommit?.batchId : undefined);
-  const loaded = useRef(false);
 
-  // The saved review arrives once and then the browser owns it: refetching over the top would
-  // undo whatever the reviewer typed while the request was in flight.
-  useEffect(() => {
-    if (session.data && !loaded.current) {
-      loaded.current = true;
-      setOptions(session.data.options);
-      setDecisions({ ...session.data.decisions });
-    }
-  }, [session.data]);
+  const review = useSavedReview({
+    saved: session.data,
+    apply: (saved) => {
+      setOptions(saved.options);
+      setDecisions({ ...saved.decisions });
+    },
+    body: useMemo(() => ({ options, decisions }), [options, decisions]),
+    save: (body) => {
+      if (geofileId) {
+        saveSession.mutate({ geofileId, body });
+      }
+    },
+  });
 
   // A set with no rules chosen starts from the one this account's imports start from.
   useEffect(() => {
-    if (loaded.current && !options.termRuleSetId && effective.data?.set) {
+    if (review.loaded && !options.termRuleSetId && effective.data?.set) {
       setOptions((current) => ({ ...current, termRuleSetId: effective.data!.set!.set.id }));
     }
-  }, [effective.data, options.termRuleSetId]);
+  }, [review.loaded, effective.data, options.termRuleSetId]);
 
-  const search = useDebouncedValue(filters.search ?? '');
   const previewRequest = useMemo<ImportPreviewRequest>(
     () => ({
       options,
@@ -100,30 +107,54 @@ export default function ImportWorkspacePage() {
       rule: filters.rule ?? null,
       kind: filters.kind ?? null,
       geometry: filters.geometry ?? null,
-      search: search || null,
+      search: filters.search || null,
       hasDuplicate: filters.hasDuplicate ?? null,
     }),
-    [options, page, pageSize, filters.rule, filters.kind, filters.geometry, filters.hasDuplicate, search],
+    [options, page, pageSize, filters.rule, filters.kind, filters.geometry, filters.hasDuplicate, filters.search],
   );
-  const preview = useImportPreview(geofileId, previewRequest, loaded.current);
+  // The dry run reads the whole file, so it is asked for once the reviewer pauses — not on every
+  // letter of a name prefix or every step of the radius slider. The application count travels
+  // with it, so nothing is asked for until the saved review is in hand.
+  const settled = useDebouncedValue(
+    useMemo(() => ({ hydration: review.hydration, request: previewRequest }), [review.hydration, previewRequest]),
+  );
+  const preview = useImportPreview(
+    geofileId,
+    settled.request,
+    review.loaded && settled.hydration === review.hydration,
+  );
 
   const geofile = useGeofile(geofileId).data;
 
-  // Autosave. Debounced through the same value the search box uses, so a reviewer ticking
-  // through twenty rows sends one request rather than twenty.
-  const pending = useDebouncedValue(JSON.stringify({ options, decisions }), 800);
+  // What the table shows is the answer for the settings on screen or nothing: a refused dry run
+  // must not leave the previous one's rows, counts and selection looking current.
+  const answer = preview.isError ? undefined : preview.data;
+  const items: ImportCandidate[] = answer?.items ?? [];
+  const filteredIds = answer?.filteredSourceIds ?? [];
+
+  // A row the settings no longer let anything be made of drops out of the selection, so the
+  // button counts what would be sent. Only rows the current filter covers are judged: one ticked
+  // under another filter is not in this answer at all, and that says nothing about it.
   useEffect(() => {
-    if (!geofileId || !loaded.current) {
+    if (!answer || preview.isPlaceholderData) {
       return;
     }
-    const body = JSON.parse(pending) as { options: ImportOptions; decisions: Record<string, ImportDecision> };
-    saveSession.mutate({ geofileId, body });
-    // saveSession is a stable mutation object; including it would resend on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, geofileId]);
-
-  const items: ImportCandidate[] = preview.data?.items ?? [];
-  const filteredIds = preview.data?.filteredSourceIds ?? [];
+    const selectable = new Set(answer.selectableSourceIds);
+    const stale = answer.filteredSourceIds.filter((id) => !selectable.has(id));
+    if (stale.length === 0) {
+      return;
+    }
+    setSelected((current) => {
+      if (!stale.some((id) => current.has(id))) {
+        return current;
+      }
+      const next = new Set(current);
+      for (const id of stale) {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, [answer, preview.isPlaceholderData]);
 
   const setDecision = (sourceId: number, decision: ImportDecision | null) =>
     setDecisions((current) => {
@@ -159,22 +190,35 @@ export default function ImportWorkspacePage() {
       }
       setSelected(new Set());
       setDecisions({});
-      loaded.current = false;
-    } catch {
-      message.error(t('vectorImport.commitFailed'));
+      review.restart();
+    } catch (error) {
+      message.error(refusalText(error, t, 'vectorImport.commitFailed'));
     }
   };
 
   if (session.isError) {
+    const gone = session.error instanceof ApiError && session.error.status === 404;
     return (
       <div style={{ padding: 24 }}>
-        <Alert type="error" showIcon title={t('vectorImport.fileNotFound')} />
+        <Alert
+          type="error"
+          showIcon
+          title={gone ? t('vectorImport.fileNotFound') : refusalText(session.error, t, 'vectorImport.sessionFailed')}
+          action={
+            gone ? undefined : (
+              <Button size="small" onClick={() => void session.refetch()}>
+                {t('common.retry')}
+              </Button>
+            )
+          }
+          data-testid="import-session-error"
+        />
       </div>
     );
   }
 
   const selectable = items.length > 0;
-  const truncated = preview.data?.truncated ?? false;
+  const truncated = answer?.truncated ?? false;
 
   return (
     <div style={{ padding: 24 }}>
@@ -192,6 +236,7 @@ export default function ImportWorkspacePage() {
           {session.data?.allowCreateWithoutReview && (
             <Button
               onClick={() => void onCommit(true)}
+              disabled={saveSession.isError}
               loading={commit.isPending}
               data-testid="import-commit-all"
             >
@@ -200,7 +245,7 @@ export default function ImportWorkspacePage() {
           )}
           <Button
             type="primary"
-            disabled={selected.size === 0}
+            disabled={selected.size === 0 || preview.isError || saveSession.isError}
             loading={commit.isPending}
             onClick={() => void onCommit(false)}
             data-testid="import-commit"
@@ -210,6 +255,28 @@ export default function ImportWorkspacePage() {
         </Space>
       </Flex>
 
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
+
+      {preview.isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('vectorImport.previewFailed')}
+          description={refusalText(preview.error, t, 'vectorImport.previewFailed')}
+          action={
+            <Button size="small" onClick={() => void preview.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+          data-testid="import-preview-error"
+        />
+      )}
+
       {truncated && (
         <Alert
           type="warning"
@@ -217,8 +284,8 @@ export default function ImportWorkspacePage() {
           style={{ marginBottom: 16 }}
           title={t('vectorImport.truncatedTitle')}
           description={t('vectorImport.truncated', {
-            scanned: preview.data?.scannedRowCount ?? 0,
-            total: preview.data?.fileRowCount ?? 0,
+            scanned: answer?.scannedRowCount ?? 0,
+            total: answer?.fileRowCount ?? 0,
           })}
         />
       )}
@@ -232,40 +299,48 @@ export default function ImportWorkspacePage() {
             isDelimited={geofile?.format === 'csv'}
           />
 
+          <LithologyMappingCard
+            values={preview.data?.lithologyValues ?? []}
+            mapping={options.mapping?.lithologyValues ?? {}}
+            onChange={(lithologyValues) => setOptions({ ...options, mapping: { ...options.mapping, lithologyValues } })}
+          />
+
           <SelectionToolbar
             filters={filters}
             onFiltersChange={(next) => {
               setFilters(next);
               setPage(1);
             }}
-            ruleHits={preview.data?.ruleHits ?? []}
+            ruleHits={answer?.ruleHits ?? []}
             selected={selected}
             onSelectedChange={setSelected}
             filteredIds={filteredIds}
-            selectableIds={preview.data?.selectableSourceIds ?? []}
+            selectableIds={answer?.selectableSourceIds ?? []}
             disabled={!selectable}
             counts={{
-              candidates: preview.data?.candidateCount ?? 0,
-              matched: preview.data?.matchedCount ?? 0,
-              unmatched: preview.data?.unmatchedCount ?? 0,
-              tracks: preview.data?.trackCount ?? 0,
-              areas: preview.data?.areaCount ?? 0,
+              candidates: answer?.candidateCount ?? 0,
+              matched: answer?.matchedCount ?? 0,
+              unmatched: answer?.unmatchedCount ?? 0,
+              tracks: answer?.trackCount ?? 0,
+              areas: answer?.areaCount ?? 0,
             }}
           />
 
-          <Spin spinning={preview.isFetching && !preview.data}>
+          {/* Over the table while the answer for the settings on screen is on its way, including
+              while the previous answer is still standing in for it. */}
+          <Spin spinning={preview.isFetching && (!preview.data || preview.isPlaceholderData)}>
             <CandidateTable
               items={items}
               elevationPolicy={options.elevation ?? 'keep'}
               decisions={decisions}
               selected={selected}
               onSelectedChange={setSelected}
-              selectableIds={preview.data?.selectableSourceIds ?? []}
+              selectableIds={answer?.selectableSourceIds ?? []}
               onDecision={setDecision}
               onFocus={setFocused}
-              page={preview.data?.page ?? 1}
-              pageSize={preview.data?.pageSize ?? pageSize}
-              total={preview.data?.totalItems ?? 0}
+              page={answer?.page ?? 1}
+              pageSize={answer?.pageSize ?? pageSize}
+              total={answer?.totalItems ?? 0}
               onPageChange={(nextPage, nextSize) => {
                 setPage(nextPage);
                 setPageSize(nextSize);
@@ -284,8 +359,8 @@ export default function ImportWorkspacePage() {
             />
           </Card>
           <RuleHitList
-            hits={preview.data?.ruleHits ?? []}
-            unmatched={preview.data?.unmatchedCount ?? 0}
+            hits={answer?.ruleHits ?? []}
+            unmatched={answer?.unmatchedCount ?? 0}
             activeRule={filters.rule}
             onPick={(rule) => {
               setFilters((current) => ({ ...current, rule: current.rule === rule ? undefined : rule }));

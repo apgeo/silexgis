@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
@@ -296,6 +298,12 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
         fits!["refusalCode"].ShouldBeNull();
         fits["freeBytes"]!.GetValue<long>().ShouldBeGreaterThan(0);
 
+        // A region that would fit only by leaving the disk without the room the download itself
+        // needs is refused here too, not accepted and failed later by the download for the disk.
+        extractor.Estimate = fits["freeBytes"]!.GetValue<long>() - (100L * 1024 * 1024);
+        var tight = await (await admin.PostAsJsonAsync("/api/v1/admin/basemap/estimate", Apuseni())).Content.ReadFromJsonAsync<JsonNode>();
+        tight!["refusalCode"]!.GetValue<string>().ShouldBe(SelfHostedBasemap.Codes.DiskFull);
+
         extractor.Estimate = exabytes;
         var weighed = await (await admin.PostAsJsonAsync("/api/v1/admin/basemap/estimate", Apuseni())).Content.ReadFromJsonAsync<JsonNode>();
         weighed!["bytes"]!.GetValue<long>().ShouldBe(exabytes);
@@ -558,6 +566,32 @@ public sealed class BasemapDownloadTests : IAsyncLifetime, IDisposable, IClassFi
 
         await RestartAsync(selfHosted: true, initialRegion: "apuseni");
         (await Downloads()).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Replicas starting together each run the first-download check; between them they queue the
+    /// region once, not once each.
+    /// </summary>
+    [Fact]
+    public async Task Starts_racing_each_other_queue_the_first_region_once()
+    {
+        await RestartAsync(selfHosted: true, initialRegion: "apuseni");
+        using (var scope = factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().ProcessingJobs
+                .Where(j => j.Kind == ProcessingJobKinds.BasemapExtract)
+                .ExecuteDeleteAsync();
+        }
+
+        var starts = Enumerable.Range(0, 8)
+            .Select(_ => new BasemapFirstDownload(
+                factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                factory.Services.GetRequiredService<IOptions<BasemapOptions>>(),
+                NullLogger<BasemapFirstDownload>.Instance))
+            .Select(start => Task.Run(() => start.StartAsync(TestContext.Current.CancellationToken)));
+        await Task.WhenAll(starts);
+
+        (await Downloads()).Count.ShouldBe(1);
     }
 
     // ---- fixtures

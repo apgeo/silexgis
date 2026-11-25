@@ -20,6 +20,7 @@ import {
   Upload,
 } from 'antd';
 import Button from '../Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
@@ -384,6 +385,11 @@ export default function TrackingCsvImportDialog({
     onClose();
   };
 
+  // The user's own way out asks first once a sheet is in the dialog: pasted text exists nowhere
+  // else, and a chosen file comes with the columns and options set against it.
+  const requestDiscard = useDiscardGuard();
+  const leave = () => requestDiscard(pasted.trim() !== '' || bytes !== null, close);
+
   const look = async ({ afterChange = false }: { afterChange?: boolean } = {}) => {
     try {
       const page = await read.mutateAsync({ tripLogId, text, options });
@@ -536,7 +542,7 @@ export default function TrackingCsvImportDialog({
           of what a reviewer is checking: "Ion" matching one person is right until the day two
           people on a trip answer to it. */}
       {row.caverWritten !== row.caverMatched && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('trips.tracking.csvImport.writtenAs', { written: row.caverWritten })}
         </Typography.Text>
       )}
@@ -742,7 +748,8 @@ export default function TrackingCsvImportDialog({
   return (
     <Modal
       open={open}
-      onCancel={close}
+      onCancel={leave}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       // Left to the library on a phone, where it already caps a dialog to the screen; a fixed
       // nine hundred is what a desk has room for.
       width={narrow ? undefined : 900}
@@ -765,7 +772,7 @@ export default function TrackingCsvImportDialog({
             {t('trips.tracking.csvImport.template')}
           </Button>
           <Flex gap={8}>
-            <Button onClick={close}>{t('common.cancel')}</Button>
+            <Button onClick={leave}>{t('common.cancel')}</Button>
             <Button
               onClick={() => void look()}
               loading={read.isPending}

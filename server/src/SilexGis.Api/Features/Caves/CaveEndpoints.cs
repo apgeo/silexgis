@@ -215,7 +215,7 @@ public static class CaveEndpoints
         // caller could see, not only those that happened to fall on the page being fetched.
         var listableQuery = query.Where(f => f.Cave != null);
         var total = await listableQuery.CountAsync(ct);
-        var rows = await listableQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var rows = await listableQuery.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         ReportSubtypeless(loggers, await subtypelessQuery.ToListAsync(ct));
 
@@ -464,6 +464,9 @@ public static class CaveEndpoints
         feature.Cave = cave;
         request.Apply(feature, cave);
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         try
         {
             // Stamps the cave type and checks the property document against its schema.
@@ -475,6 +478,7 @@ public static class CaveEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
         var parentDtos = await ParentsAsync(db, ctx, feature.Id, ct);
         // The creator owns the row, so the mapping is exact by construction.
         return TypedResults.Created(
@@ -509,7 +513,9 @@ public static class CaveEndpoints
                 : ApiProblems.NotFound("cave.not_found");
         }
 
-        await using var hold = await Concurrency.HoldIfMatchAsync(http, db, VersionedTable.Features, feature.Id, ct, required: true);
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, feature.Id, ct, required: true,
+            hierarchy: request.LocationProtected != feature.LocationProtected);
         if (hold.Refusal is { } stale)
         {
             return stale;

@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Alert, Modal, Spin, Typography } from 'antd';
 import Button from '../../Button.tsx';
 import { useTranslation } from 'react-i18next';
 import ErrorBoundary from '../../ErrorBoundary.tsx';
+import { isCodeDownloadFailure, lazyRetrying } from '../../../codeLoading.ts';
 import type { TrackingMovieDialogProps } from './TrackingMovieDialog.tsx';
 
-const TrackingMovieDialog = lazy(() => import('./TrackingMovieDialog.tsx'));
-
-/**
- * The words a browser uses when a page asks for a part of the application that is no longer there:
- * the installation was updated after the page was opened, and the page still names the files of the
- * version it was opened on. Chromium, Firefox and Safari each word it their own way.
- */
-const STALE_PAGE = /dynamically imported module|Importing a module script failed|Unable to preload CSS/i;
+const TrackingMovieDialog = lazyRetrying(() => import('./TrackingMovieDialog.tsx'));
 
 /**
  * The movie dialog, fetched the first time somebody opens it.
@@ -72,7 +66,7 @@ function MovieDialogOpening({ open, onClose }: { open: boolean; onClose: () => v
 
 function MovieDialogFailed({ open, detail, onClose }: { open: boolean; detail: string; onClose: () => void }) {
   const { t } = useTranslation();
-  const stale = STALE_PAGE.test(detail);
+  const stale = isCodeDownloadFailure(detail);
   return (
     <Modal
       open={open}

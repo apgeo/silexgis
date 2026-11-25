@@ -46,6 +46,8 @@ function mapConfig(
     meshAskAboveBytes: 50 * 1024 * 1024,
     selectionMax: 200,
     densityFixedBands: [1, 5, 20],
+    entranceSymbol: 'shape:cave',
+    approximateEntranceSymbol: 'shape:cave:d46b08',
   };
 }
 
@@ -63,6 +65,8 @@ vi.mock('../../api/hooks.ts', async () => {
     // the thing doing the splitting is the one that ships.
     hasAccessAction: actual.hasAccessAction,
     terrainBuildUnsettled: actual.terrainBuildUnsettled,
+    // The area picker draws over the catalogue's background; this installation names none.
+    useMapLayers: () => ({ isPending: false, data: [] }),
     useCapabilities: () => ({ data: capabilities }),
     useSubmitTerrainBuild: () => ({ mutateAsync: submitMutate, isPending: false }),
     useUploadTerrainRaster: () => ({ mutateAsync: uploadMutate, isPending: false }),
@@ -83,10 +87,12 @@ vi.mock('../../api/hooks.ts', async () => {
     useDeleteTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useCancelTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useRetryTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useSetTerrainBuildAccuracy: () => ({ mutateAsync: vi.fn(), isPending: false }),
     // The pictures drawn from a build sit under the list and have tests of their own; here they
     // only have to render empty, and to show that the page hands them the right they are held under.
     useTerrainDerivatives: () => ({ data: [], isLoading: false }),
     useRequestTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useTerrainDerivativeKinds: () => ({ data: undefined }),
     useDeleteTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useMapConfig: () => ({ data: config }),
   };

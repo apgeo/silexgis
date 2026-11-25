@@ -6,6 +6,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +22,8 @@ import {
   type FeatureSetInfo,
   type FeatureKind,
 } from '../../api/hooks.ts';
-import { ApiError } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit } from '../../filters/types.ts';
@@ -51,7 +53,11 @@ interface DraftMember {
 function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => void }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: members, isPending } = useFeatureSetMembers(set.id);
+  const { data: members, isPending, isError, error: readError, refetch } = useFeatureSetMembers(set.id);
+  // Save replaces the whole membership with the list on screen, and membership moves access:
+  // until the stored members have been read, that list is empty only because nothing arrived,
+  // so neither adding nor saving is offered.
+  const loaded = members !== undefined;
   const replaceMembers = useReplaceFeatureSetMembers(set.id);
   const { data: featureTypes } = useFeatureTypes();
   const [drafts, setDrafts] = useState<DraftMember[]>([]);
@@ -92,6 +98,9 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
   };
 
   const onSave = async () => {
+    if (!loaded) {
+      return;
+    }
     try {
       await replaceMembers.mutateAsync(drafts.map((draft) => draft.id));
       message.success(t('common.saved'));
@@ -111,7 +120,12 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
       footer={
         <Flex justify="flex-end" gap={8}>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="primary" onClick={() => void onSave()} loading={replaceMembers.isPending}>
+          <Button
+            type="primary"
+            onClick={() => void onSave()}
+            loading={replaceMembers.isPending}
+            disabled={!loaded}
+          >
             {t('common.save')}
           </Button>
         </Flex>
@@ -119,6 +133,15 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
     >
       <Flex vertical gap={12}>
         <Alert type="info" showIcon title={t('featureSets.membershipMovesAccess')} />
+        <ReadFailedAlert
+          error={readError}
+          isError={isError}
+          held={loaded}
+          onRetry={refetch}
+          title={t('featureSets.membersLoadFailed')}
+          testId="feature-set-members-load-failed"
+          style={{ marginBottom: 0 }}
+        />
         <Flex gap={8} align="flex-start">
           <div style={{ flex: 1, minWidth: 0 }}>
             <ObjectSelector
@@ -134,7 +157,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
               data-testid="feature-set-member-picker"
             />
           </div>
-          <Button icon={<PlusOutlined />} onClick={addPicked} disabled={!picked}>
+          <Button icon={<PlusOutlined />} onClick={addPicked} disabled={!picked || !loaded}>
             {t('featureSets.addFeature')}
           </Button>
         </Flex>
@@ -142,7 +165,7 @@ function MembersDrawer({ set, onClose }: { set: FeatureSetInfo; onClose: () => v
           size="small"
           loading={isPending}
           dataSource={drafts}
-          locale={{ emptyText: t('featureSets.noMembers') }}
+          locale={{ emptyText: members === undefined && isError ? ' ' : t('featureSets.noMembers') }}
           renderItem={(draft) => (
             <List.Item
               actions={[
@@ -182,7 +205,7 @@ export default function FeatureSetsPage() {
   const canCreate = hasAccessAction(capabilities?.domains.featureSets, 'create');
   const canWrite = hasAccessAction(capabilities?.domains.featureSets, 'write');
   const canDelete = hasAccessAction(capabilities?.domains.featureSets, 'delete');
-  const { data: sets, isPending } = useFeatureSets(canRead);
+  const { data: sets, isPending, isError, error: readError, refetch } = useFeatureSets(canRead);
   const createSet = useCreateFeatureSet();
   const deleteSet = useDeleteFeatureSet();
   const [creating, setCreating] = useState(false);
@@ -199,7 +222,12 @@ export default function FeatureSetsPage() {
   }
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body = { name: values.name, description: values.description ?? null };
     try {
       if (renaming) {
@@ -212,11 +240,10 @@ export default function FeatureSetsPage() {
       form.resetFields();
       message.success(t('common.saved'));
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'feature_set.name_taken'
-          ? t('featureSets.nameTaken')
-          : t('common.saveFailed'),
-      );
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -225,11 +252,10 @@ export default function FeatureSetsPage() {
       await deleteSet.mutateAsync(set.id);
       message.success(t('common.deleted'));
     } catch (error) {
-      message.error(
-        error instanceof ApiError && error.code === 'feature_set.in_use'
-          ? t('featureSets.inUse')
-          : t('common.saveFailed'),
-      );
+      // A stale version is answered by the application's conflict warning alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -247,6 +273,14 @@ export default function FeatureSetsPage() {
       </Flex>
       <Typography.Paragraph type="secondary">{t('featureSets.intro')}</Typography.Paragraph>
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={sets !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="feature-sets-load-failed"
+      />
       <Table<FeatureSetInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"

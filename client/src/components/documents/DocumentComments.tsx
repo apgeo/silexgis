@@ -122,7 +122,7 @@ export default function DocumentComments({ documentId }: { documentId: string })
 
   const body = (comment: DocumentComment) => (
     <div key={comment.id} style={{ marginBottom: 12 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {line(comment)}
       </Typography.Text>
       {editing === comment.id ? (
@@ -136,7 +136,15 @@ export default function DocumentComments({ documentId }: { documentId: string })
             aria-label={t('documents.comments.body')}
           />
           <Space style={{ marginTop: 8 }}>
-            <Button size="small" type="primary" onClick={() => void save(comment.id)}>
+            {/* Loading while the first save is out, so a second press cannot send it twice;
+                an emptied remark has nothing to save (deleting is its own button). */}
+            <Button
+              size="small"
+              type="primary"
+              loading={update.isPending}
+              disabled={!editDraft.trim()}
+              onClick={() => void save(comment.id)}
+            >
               {t('common.save')}
             </Button>
             <Button size="small" onClick={() => setEditing(null)}>
@@ -185,7 +193,9 @@ export default function DocumentComments({ documentId }: { documentId: string })
               <Popconfirm
                 title={t('documents.comments.deleteConfirm')}
                 okButtonProps={{ danger: true }}
-                onConfirm={() => void drop(comment.id)}
+                // Handing back the request keeps the confirmation open, its button spinning,
+                // until the server has answered — a second press has nothing to land on.
+                onConfirm={() => drop(comment.id)}
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                   {t('documents.comments.delete')}
@@ -225,6 +235,7 @@ export default function DocumentComments({ documentId }: { documentId: string })
                       size="small"
                       type="primary"
                       onClick={() => void post(replyDraft, root.id)}
+                      loading={create.isPending}
                       disabled={!replyDraft.trim()}
                     >
                       {t('documents.comments.post')}

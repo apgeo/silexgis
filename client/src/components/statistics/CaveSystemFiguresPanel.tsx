@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useCaveSystemFigures } from '../../api/hooks/entranceAltitudes.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * A cave's depth and height taken across all its entrances and its survey: highest and lowest
@@ -18,9 +19,13 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  */
 export default function CaveSystemFiguresPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCaveSystemFigures(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveSystemFigures(caveId);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('systemFigures.title')} error={error} onRetry={refetch} testId="cave-system-figures-read-failed" />
+    );
+  }
 
   const dash = t('systemFigures.notMeasured');
   const metres = (value: number | null | undefined) =>
@@ -71,6 +76,15 @@ export default function CaveSystemFiguresPanel({ caveId }: { caveId: string }) {
         {!data.hasAltitudes && (
           <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
             {t('systemFigures.noSurveyAltitudes')}
+          </Typography.Paragraph>
+        )}
+        {data.hasAltitudes && data.altitudesRelative && (
+          <Typography.Paragraph
+            type="secondary"
+            style={{ marginTop: 12, marginBottom: 0 }}
+            data-testid="system-figures-altitudes-relative"
+          >
+            {t('systemFigures.altitudesRelative')}
           </Typography.Paragraph>
         )}
         <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>

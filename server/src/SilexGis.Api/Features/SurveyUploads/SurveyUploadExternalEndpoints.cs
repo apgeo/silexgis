@@ -226,7 +226,7 @@ public static partial class SurveyUploadEndpoints
                 VersionInfoOf(schema.DumpedDefaults),
                 [
                     "HDMapping odometry parameters for one recording, written by SilexGIS.",
-                    $"Written for HDMapping {schema.ToolVersion ?? "(version not recorded)"}.",
+                    $"Written for HDMapping {(schema.ToolVersion is { } version ? OneLineOf(version) : "(version not recorded)")}.",
                 ]);
             return ("parameters.toml", text);
         }
@@ -265,7 +265,7 @@ public static partial class SurveyUploadEndpoints
         text.Append("Tool: ").Append(waiting.Definition.Tool);
         if (!string.IsNullOrEmpty(schema.ToolVersion))
         {
-            text.Append(", version ").Append(schema.ToolVersion).Append(" on the server");
+            text.Append(", version ").Append(OneLineOf(schema.ToolVersion)).Append(" on the server");
         }
 
         text.Append("\n\n");
@@ -389,6 +389,16 @@ public static partial class SurveyUploadEndpoints
         {
             await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
             return TooLarge(cap);
+        }
+
+        // Asked again of what actually arrived: a body sent in chunks announces no length, and the
+        // check above never saw it. The file is in the store but not yet recorded, so the figures
+        // do not count it, and it is judged exactly as an announced one would have been.
+        var roomNow = await storage.ForAsync(ctx.UserId, ct: ct);
+        if (StorageRules.Shortfall(roomNow.Limits(scan: true), content.SizeBytes) is { } afterIntake)
+        {
+            await fileStore.DeleteAsync(content.StoragePath, CancellationToken.None);
+            return StorageProblems.Insufficient(afterIntake);
         }
 
         if (await PointCloudProcessing.ExternalOutputProblemAsync(kind, fileStore.GetAbsolutePath(content.StoragePath), ct) is { } problem)

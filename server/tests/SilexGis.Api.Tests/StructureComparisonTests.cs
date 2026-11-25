@@ -9,7 +9,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Features;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -337,10 +339,17 @@ public sealed class StructureComparisonTests : IAsyncLifetime, IDisposable, ICla
 
         var buffered = await ReadAsync(owner, cave);
         buffered.GetProperty("structureFeatureCount").GetInt32().ShouldBe(1);
+        buffered.GetProperty("radiusMetres").GetDouble().ShouldBe(1000d);
+        buffered.GetProperty("areaId").ValueKind.ShouldBe(JsonValueKind.Null);
+        buffered.GetProperty("structureTruncated").GetBoolean().ShouldBeFalse();
 
         var scoped = await ReadJsonAsync(
             owner, $"/api/v1/caves/{cave}/structure-comparison?areaId={area}");
         scoped.GetProperty("structureFeatureCount").GetInt32().ShouldBe(1);
+
+        // The area was the reach, so no radius is claimed for it.
+        scoped.GetProperty("radiusMetres").ValueKind.ShouldBe(JsonValueKind.Null);
+        scoped.GetProperty("areaId").GetGuid().ShouldBe(area);
         scoped.GetProperty("divergence").GetProperty("meanAxisSeparationDegrees")
             .GetDouble().ShouldBeLessThan(2d);
 
@@ -387,6 +396,68 @@ public sealed class StructureComparisonTests : IAsyncLifetime, IDisposable, ICla
             .GetDouble().ShouldBeInRange(40d, 50d);
         disagreeing.GetProperty("divergence").GetProperty("normalized")
             .GetDouble().ShouldBeGreaterThan(0.4);
+    }
+
+    /// <summary>
+    /// Over the ceiling, the traces kept are the nearest to the cave and the answer says it was
+    /// cut. The farther trace is created first so that it has the lower id: a cut by id would keep
+    /// it and drop the near one.
+    /// </summary>
+    [Fact]
+    public async Task Over_the_ceiling_the_nearest_traces_are_kept_and_the_cut_is_reported()
+    {
+        const double latitude = 46.30;
+        var cave = await CaveWithPassageAsync(latitude);
+        var far = await FaultAsync(latitude + 0.008, PassageBearing);
+        var near = await FaultAsync(latitude + 0.003, PassageBearing);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var admin = new AccessContext(Guid.NewGuid(), isFullAdmin: true, [], []);
+
+        var cut = await StructureLineSql.NearCaveAsync(
+            db, admin, cave, fractureTypeId, 1500, maxFeatures: 1, CancellationToken.None);
+        cut.Select(r => r.FeatureId).Distinct().ShouldBe([near]);
+        cut.ShouldAllBe(r => r.Truncated);
+
+        var whole = await StructureLineSql.NearCaveAsync(
+            db, admin, cave, fractureTypeId, 1500, maxFeatures: 2, CancellationToken.None);
+        whole.Select(r => r.FeatureId).Distinct().ShouldBe([far, near], ignoreOrder: true);
+        whole.ShouldAllBe(r => !r.Truncated);
+    }
+
+    /// <summary>
+    /// An outline that has no rectangle round it — here a ring that crosses itself — is counted as
+    /// not measured rather than vanishing, beside a measured one in the same area.
+    /// </summary>
+    [Fact]
+    public async Task A_depression_outline_that_cannot_be_measured_is_counted_as_such()
+    {
+        const double latitude = 46.40;
+        var area = await AreaAsync(latitude, latitude + 0.02);
+        await DolineAsync(area, latitude + 0.004, PassageBearing);
+        var broken = await DolineAsync(area, latitude + 0.008, PassageBearing);
+        await FaultAsync(latitude + 0.012, PassageBearing, parentId: area);
+
+        var before = await ReadAreaAsync(owner, area);
+        before.GetProperty("dolineCount").GetInt32().ShouldBe(2);
+        before.GetProperty("unmeasuredDolineCount").GetInt32().ShouldBe(0);
+
+        // A bow-tie: the API refuses to store one, so it is written underneath it, the way an old
+        // import or a hand edit of the database could leave it.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE features
+                SET geom = ST_GeomFromText('POLYGON((25.30 46.408, 25.302 46.409, 25.302 46.408, 25.30 46.409, 25.30 46.408))', 4326)
+                WHERE id = {broken}");
+        }
+
+        var after = await ReadAreaAsync(owner, area);
+        after.GetProperty("dolineCount").GetInt32().ShouldBe(1);
+        after.GetProperty("unmeasuredDolineCount").GetInt32().ShouldBe(1);
+        after.GetProperty("structureTruncated").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]

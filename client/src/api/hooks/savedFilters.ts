@@ -40,11 +40,18 @@ const savedFilterKeys = {
   list: ['saved-filters', 'list'] as const,
 };
 
+/** The saved filters this account may read, as a query object for code outside React's render. */
+export function savedFiltersQuery() {
+  return {
+    queryKey: savedFilterKeys.list,
+    queryFn: () => unwrap(api.GET('/api/v1/saved-filters')),
+  };
+}
+
 /** The saved filters this account may read, each with what it reads as to them. */
 export function useSavedFilters(enabled = true) {
   return useQuery({
-    queryKey: savedFilterKeys.list,
-    queryFn: () => unwrap(api.GET('/api/v1/saved-filters')),
+    ...savedFiltersQuery(),
     enabled,
     staleTime: 60_000,
   });

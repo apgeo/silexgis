@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Map;
 using SilexGis.Infrastructure.Features;
 
 namespace SilexGis.Api.Features.Taxonomies;
@@ -39,12 +40,13 @@ public sealed class FeatureTypeRequestValidator : AbstractValidator<FeatureTypeR
         // A kind that accepts no shape could never hold a feature.
         RuleFor(x => x.AcceptedGeometryClasses).NotNull().NotEmpty();
         RuleForEach(x => x.AcceptedGeometryClasses).IsInEnum();
-        // A file name inside the bundled symbol set, never a path or an address: the browser
-        // loads it from beside the application, and a path would let a kind point it elsewhere.
-        RuleFor(x => x.SymbolFile).MaximumLength(100)
-            .Matches(@"^[a-z0-9_\-]+\.(png|svg)$")
+        // A file name inside the bundled symbol set or a shape the client draws, never a path or an
+        // address: the browser loads a file from beside the application, and a path would let a
+        // kind point it elsewhere.
+        RuleFor(x => x.SymbolFile)
+            .Must(MapSymbol.IsValid)
             .When(x => !string.IsNullOrWhiteSpace(x.SymbolFile))
-            .WithMessage("The symbol is a file name from the bundled set, such as pit.png.");
+            .WithMessage("The symbol is a file name from the bundled set, such as pit.png, or a drawn shape, such as shape:triangle or shape:cave:d46b08.");
         // Whether the texts are a usable style and schema is decided on the write path; this only
         // keeps an unbounded blob out of a jsonb column.
         RuleFor(x => x.Style).MaximumLength(8_000);

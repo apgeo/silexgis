@@ -2,11 +2,15 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+
+// A read of the sync sets that did not land, switched on by the test that needs it.
+const setsRead = vi.hoisted(() => ({ failed: false, refetch: vi.fn() }));
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { SyncSet } from '../../api/hooks.ts';
 
 const createMutate = vi.fn();
+const deleteMutate = vi.fn();
 const updateSpy: { current: ReturnType<typeof vi.fn> } = { current: vi.fn() };
 
 let sets: SyncSet[] = [];
@@ -25,7 +29,10 @@ vi.mock('../../api/hooks.ts', async () => {
   return {
     ...actual,
     useSyncCapabilities: () => ({ data: undefined }),
-    useSyncSets: () => ({ data: sets, isPending: false }),
+    useSyncSets: () =>
+      setsRead.failed
+        ? { data: undefined, isPending: false, isError: true, error: new TypeError('offline'), refetch: setsRead.refetch }
+        : { data: sets, isPending: false },
     useCavingGroups: () => ({ data: [] }),
     useFilterVocabulary: () => ({
       data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
@@ -50,7 +57,7 @@ vi.mock('../../api/hooks.ts', async () => {
     },
     useCreateSyncSet: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateSyncSet: () => ({ mutateAsync: updateSpy.current, isPending: false }),
-    useDeleteSyncSet: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeleteSyncSet: () => ({ mutateAsync: deleteMutate, isPending: false }),
   };
 });
 
@@ -161,5 +168,51 @@ describe('the caves a phone carries', () => {
         'You are not a member of that caving group, so a device cannot create records for it.',
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('a failed read of the sync sets', () => {
+  it('says the read failed instead of saying there are no sets, and offers Retry', () => {
+    setsRead.failed = true;
+    try {
+      renderPage();
+      expect(screen.getByTestId('sync-sets-load-failed')).toBeTruthy();
+      expect(screen.queryByText(i18n.t('settings.sync.noSets'))).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(setsRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      setsRead.failed = false;
+      setsRead.refetch.mockReset();
+    }
+  });
+});
+
+describe('withdrawing a set from the phones', () => {
+  async function revokeAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('settings.sync.revoke') }));
+    const confirm = await screen.findAllByRole('button', { name: i18n.t('settings.sync.revoke') });
+    fireEvent.click(confirm[confirm.length - 1]);
+  }
+
+  it('deletes the set the confirmation was for and says so', async () => {
+    deleteMutate.mockReset().mockResolvedValue(undefined);
+    sets = [setOf([])];
+    renderPage();
+
+    await revokeAndConfirm();
+
+    await waitFor(() => expect(deleteMutate).toHaveBeenCalledWith('set-1'));
+    expect(await screen.findByText(i18n.t('settings.sync.revoked'))).toBeInTheDocument();
+  });
+
+  it('says a withdrawal failed and does not report the set withdrawn', async () => {
+    deleteMutate.mockReset().mockRejectedValue(new TypeError('Failed to fetch'));
+    sets = [setOf([])];
+    renderPage();
+
+    await revokeAndConfirm();
+
+    expect(await screen.findByText(i18n.t('common.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('settings.sync.revoked'))).toBeNull();
   });
 });

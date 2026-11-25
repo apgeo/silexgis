@@ -441,8 +441,11 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         (await db.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline).ToListAsync())
             .Count(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
             .ShouldBe(1);
+        // The installation and the account both leave result links on, so the completion mints
+        // one: exactly one, however many completions arrived together.
+        (await db.SurveyUploads.AsNoTracking().SingleAsync(u => u.Id == id)).PublicLinkRefusal.ShouldBeNull();
         (await db.SurveyUploadPublicLinks.AsNoTracking().CountAsync(l => l.SurveyUploadId == id && l.RevokedAt == null))
-            .ShouldBeLessThanOrEqualTo(1);
+            .ShouldBe(1);
     }
 
     [Fact]
@@ -474,33 +477,49 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         await ShouldBeQueuedOnceAsync(id);
     }
 
+    /// <remarks>
+    /// The completion decides "expired" on the application's clock and the sweep on the system
+    /// clock, so the host here runs on a clock that stands still: the session ends a millisecond
+    /// after that clock's moment, which the completion never reaches and the sweep has already
+    /// passed. No wall-clock wait, so a slow machine cannot turn the completion itself into an
+    /// expired one.
+    /// </remarks>
     [Fact]
     public async Task The_expiry_sweep_leaves_alone_an_upload_a_completion_queued_while_it_ran()
     {
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        using var host = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            Settings(filesRoot),
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.AddSingleton<TimeProvider>(clock);
+            });
+        await AuthHelper.CreateUserAsync(host, GlobalRoles.Editor, $"supipe-expiry-{suffix}@t.local");
+        using var client = await AuthHelper.BearerClientAsync(host, $"supipe-expiry-{suffix}@t.local");
+
         (string, byte[])[] files = [("pestera_inventata.zip", InventedArchive())];
-        var id = await OpenAsync(owner, $"Expiry race {suffix}", "pestera_inventata", files);
-        (await PutAsync(owner, id, "pestera_inventata.zip", files[0].Item2)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(5);
-        await using (var scope = factory.Services.CreateAsyncScope())
+        var id = await OpenAsync(client, $"Expiry race {suffix}", "pestera_inventata", files);
+        (await PutAsync(client, id, "pestera_inventata.zip", files[0].Item2)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var expiresAt = clock.GetUtcNow().AddMilliseconds(1);
+        await using (var scope = host.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            await db.SurveyUploads.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.ExpiresAt, expiresAt));
+            (await db.SurveyUploads.Where(u => u.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.ExpiresAt, expiresAt))).ShouldBe(1);
         }
+
+        DateTimeOffset.UtcNow.ShouldBeGreaterThan(expiresAt, "the sweep must read the session as run out");
 
         // The device completes just before the session runs out; the sweep that passes just after
         // it ran out still reads the upload as receiving.
         HttpResponseMessage completed;
-        await using (var stall = await RowStall.HoldAsync(factory, "survey_uploads", id))
+        await using (var stall = await RowStall.HoldAsync(host, "survey_uploads", id))
         {
-            var completing = owner.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
+            var completing = client.PostAsync($"/api/v1/survey-uploads/{id}/complete", null);
             await stall.WaitForWaitersAsync(1, completing);
-            var left = expiresAt - DateTimeOffset.UtcNow;
-            if (left > TimeSpan.Zero)
-            {
-                await Task.Delay(left + TimeSpan.FromMilliseconds(200));
-            }
-
-            var sweeping = SweepAsync(factory);
+            var sweeping = SweepAsync(host);
             var both = Task.WhenAll(completing, sweeping);
             await stall.WaitForWaitersAsync(2, both);
             await stall.ReleaseAsync();
@@ -509,7 +528,13 @@ public sealed class SurveyUploadPipelineTests : IAsyncLifetime, IDisposable, ICl
         }
 
         completed.StatusCode.ShouldBe(HttpStatusCode.Accepted, await completed.Content.ReadAsStringAsync());
-        await ShouldBeQueuedOnceAsync(id);
+        (await client.GetFromJsonAsync<JsonElement>($"/api/v1/survey-uploads/{id}"))
+            .GetProperty("status").GetString().ShouldBe("queued");
+        await using var check = host.Services.CreateAsyncScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await read.ProcessingJobs.AsNoTracking().Where(j => j.Kind == ProcessingJobKinds.SurveyUploadPipeline).ToListAsync())
+            .Count(j => JsonSerializer.Deserialize<SurveyUploadPipelinePayload>(j.Payload, JsonSerializerOptions.Web)!.SurveyUploadId == id)
+            .ShouldBe(1);
     }
 
     /// <summary>The upload is queued, as the completion left it, with the one run it queued.</summary>

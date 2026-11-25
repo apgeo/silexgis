@@ -22,6 +22,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   karstDensityMode: 'hotSpot',
   karstDensityBands: 'fixed',
   karstIndexVisible: true,
+  passageDepthVisible: true,
   photosVisible: false,
   tripsVisible: true,
   tripsFrom: '2019-01-01',
@@ -195,6 +196,47 @@ describe('the 3D camera a saved view can carry', () => {
     expect(written).not.toMatch(/"[xyz]":/);
     expect(Math.abs(captureViewConfig(baseUi).camera3d!.heading)).toBeGreaterThan(Math.PI * 2);
   });
+
+  describe('and the vertical exaggeration it was drawn at', () => {
+    function mountSceneAt(factor: number) {
+      detachCamera = setActiveViewCamera({
+        flyTo: () => {},
+        fitGeometry: () => {},
+        getCamera3D: () => camera3d,
+        getExaggeration3D: () => factor,
+      });
+    }
+
+    it('carries the factor beside the camera, and gives it back for the session', () => {
+      mountSceneAt(2.5);
+      const stored = JSON.parse(JSON.stringify(captureViewConfig(baseUi))) as { exaggeration3d?: number };
+      expect(stored.exaggeration3d).toBe(2.5);
+      expect(applyViewConfig(stored)?.exaggeration3d).toBe(2.5);
+      // The camera block is the same at every factor: its heights are true metres.
+      expect(applyViewConfig(stored)?.camera3d).toEqual(camera3d);
+    });
+
+    it('writes nothing at true height, and reads a camera with no factor as true height', () => {
+      // Every view saved before the setting existed is one of these, and was drawn at true height.
+      mountSceneAt(1);
+      const stored = captureViewConfig(baseUi);
+      expect('exaggeration3d' in stored).toBe(false);
+      expect(applyViewConfig(stored)?.exaggeration3d).toBe(1);
+    });
+
+    it('says nothing about the factor in a view that says nothing about the scene', () => {
+      expect(applyViewConfig(legacy)?.exaggeration3d).toBeUndefined();
+      // Nor in one whose camera block is unusable, which is a view without a camera.
+      expect(
+        applyViewConfig({ ...legacy, exaggeration3d: 3, camera3d: { eye: { lon: 25 } } })?.exaggeration3d,
+      ).toBeUndefined();
+    });
+
+    it('reads a hand-edited factor the way the setting reads any stored one', () => {
+      expect(applyViewConfig({ ...legacy, camera3d, exaggeration3d: 40 })?.exaggeration3d).toBe(5);
+      expect(applyViewConfig({ ...legacy, camera3d, exaggeration3d: 'tall' })?.exaggeration3d).toBe(1);
+    });
+  });
 });
 
 describe('viewConfig trip overlay', () => {
@@ -259,6 +301,18 @@ describe('viewConfig cave-density grid', () => {
     expect(config.configVersion).toBe(1);
     expect(applyViewConfig(config)?.karstIndexVisible).toBe(true);
     expect(applyViewConfig(captureViewConfig({ ...baseUi, karstIndexVisible: false }))?.karstIndexVisible).toBe(false);
+  });
+
+  it('round-trips the depth-coloured passage overlay, and reads an older view as off', () => {
+    const config = captureViewConfig(baseUi);
+    expect(config.passageDepthVisible).toBe(true);
+    expect(config.configVersion).toBe(1);
+    expect(applyViewConfig(config)?.passageDepthVisible).toBe(true);
+    expect(applyViewConfig(captureViewConfig({ ...baseUi, passageDepthVisible: false }))?.passageDepthVisible).toBe(
+      false,
+    );
+    const { passageDepthVisible: _omitted, ...older } = config;
+    expect(applyViewConfig(older)?.passageDepthVisible).toBe(false);
   });
 
   it('treats an older view as off with the plain reading, and an unknown reading as the plain one', () => {

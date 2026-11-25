@@ -4,10 +4,11 @@
 // Cross-platform (Node 24, tested on 24 only, no shell-isms). Four commands; `fetch` and `prepare` are two ways of
 // arriving at the same place, and one of them is enough:
 //
-//   node deploy/terrain.mjs fetch --bbox 22,45,26,48 --out ./dem
+//   node deploy/terrain.mjs fetch --bbox 22,45,26,48 --out ./dem [--yes]
 //       Downloads the Copernicus GLO-30 tiles covering a longitude/latitude box from the AWS
 //       open-data bucket. No account, no key, no signature. One 1°x1° tile is about 44 MB.
-//       It knows this one source and nothing else.
+//       It knows this one source and nothing else. A box of more than 100 tiles needs --yes,
+//       and one whose download would not fit in the free space is refused.
 //
 //   node deploy/terrain.mjs prepare --in ./rasters --out ./dem [--pixel-size 30m]
 //       Turns elevation rasters you already have — a national LiDAR set, an aerial survey, a
@@ -43,6 +44,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  statfsSync,
   writeFileSync,
 } from 'node:fs';
 import { open } from 'node:fs/promises';
@@ -211,6 +213,47 @@ export function copernicusCells(west, south, east, north) {
   return cells;
 }
 
+/** Above this many cells a fetch needs --yes: a country is a few dozen, a typo can be thousands. */
+export const FETCH_CELLS_WITHOUT_YES = 100;
+
+/** The most a single cell is, with room to spare (they run to about 45 MB). */
+const CELL_BYTES_AT_MOST = 60e6;
+
+/** How long one cell's download may take before it is called stalled. */
+export const CELL_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+
+/** Free bytes where `dir` lives, or undefined where the platform cannot say. */
+function freeBytes(dir) {
+  try {
+    const stats = statfsSync(dir);
+    return stats.bavail * stats.bsize;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Why a fetch of `cellCount` cells should not start, or null. A box typed with a digit wrong — a
+ * longitude of 260 for 26 — covers thousands of cells and would fill the disk the data directory
+ * is on; such a box is refused unless --yes says it is meant, and any box whose download would not
+ * fit in the free space is refused outright.
+ */
+export function fetchRefusal(cellCount, free, yes) {
+  if (cellCount > FETCH_CELLS_WITHOUT_YES && !yes) {
+    return {
+      message: `That box covers ${cellCount} cells (about ${Math.round(cellCount * 44.5 / 1000)} GB).`,
+      hint: `  Check the --bbox; if it really is meant, repeat with --yes. Up to ${FETCH_CELLS_WITHOUT_YES} cells need no --yes.`,
+    };
+  }
+  if (free !== undefined && cellCount * CELL_BYTES_AT_MOST > free) {
+    return {
+      message: `That box needs up to ${Math.round(cellCount * CELL_BYTES_AT_MOST / 1e9)} GB and ${Math.round(free / 1e9)} GB is free there.`,
+      hint: '  Free some space, or fetch a smaller box at a time into a directory on a larger disk.',
+    };
+  }
+  return null;
+}
+
 /** The download URL for one named cell. */
 export function copernicusUrl(cell) {
   const name = `Copernicus_DSM_COG_10_${cell}_DEM`;
@@ -232,7 +275,7 @@ function parseBbox(value) {
 async function fetchCommand(options) {
   if (!options.bbox || !options.out) {
     fail(
-      'Usage: node deploy/terrain.mjs fetch --bbox west,south,east,north --out <directory>',
+      'Usage: node deploy/terrain.mjs fetch --bbox west,south,east,north --out <directory> [--yes]',
       'Example (the Apuseni): node deploy/terrain.mjs fetch --bbox 22,46,23,47 --out ./dem',
     );
   }
@@ -244,6 +287,8 @@ async function fetchCommand(options) {
   console.log(
     `${cells.length} tile(s) of 1°x1° cover that box — roughly ${Math.round(cells.length * 44.5)} MB.`,
   );
+  const refusal = fetchRefusal(cells.length, freeBytes(outDir), options.yes === true);
+  if (refusal) fail(refusal.message, refusal.hint);
 
   let downloaded = 0;
   let skipped = 0;
@@ -380,9 +425,11 @@ export function readSourceCredit(dir) {
  *
  * `fetchImpl` is a parameter so this can be exercised against a local server; callers pass nothing.
  */
-export async function downloadCell(url, target, fetchImpl = fetch) {
+export async function downloadCell(url, target, fetchImpl = fetch, timeoutMs = CELL_DOWNLOAD_TIMEOUT_MS) {
   const partial = `${target}${PARTIAL_SUFFIX}`;
-  const response = await fetchImpl(url);
+  // A stalled connection otherwise holds the fetch for ever with nothing on screen. The signal
+  // covers the body as well as the headers, so a transfer that stops part way ends too.
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) });
   if (response.status === 404) {
     return undefined;
   }
@@ -436,6 +483,22 @@ export function pixelSizeDegrees(value) {
 export function preparedName(relativePath) {
   const withoutExtension = relativePath.split(sep).join('/').replace(/\.[^./]+$/, '');
   return `${withoutExtension.replace(/[^A-Za-z0-9._-]+/g, '_')}.tif`;
+}
+
+/**
+ * Inputs that would be prepared under one name, as `[name, [sources…]]`. Folding the path into
+ * the name and dropping the extension can still meet: `a/b.tif` and `a_b.tif`, or `x.tif` and
+ * `x.hgt`, both become one file. The second would then be skipped as "already prepared" and the
+ * bake would silently lack it. Compared without regard to case, because on Windows and macOS two
+ * names that differ only in case are one file.
+ */
+export function preparedNameCollisions(relativePaths) {
+  const byName = new Map();
+  for (const relativePath of relativePaths) {
+    const name = preparedName(relativePath).toLowerCase();
+    byName.set(name, [...(byName.get(name) ?? []), relativePath.split(sep).join('/')]);
+  }
+  return [...byName].filter(([, sources]) => sources.length > 1);
 }
 
 function isRasterName(name) {
@@ -509,6 +572,16 @@ async function prepareCommand(options) {
     fail(
       `No elevation rasters under ${inDir}.`,
       `  Looked for ${RASTER_EXTENSIONS.join(' ')} at any depth below it.`,
+    );
+  }
+
+  const collisions = preparedNameCollisions(rasters.map((raster) => relative(inDir, raster)));
+  if (collisions.length > 0) {
+    fail(
+      'Some input rasters would be prepared under the same name, and all but one would be lost:',
+      `${collisions.map(([name, sources]) => `  ${sources.join(' and ')} → ${name}`).join('\n')}\n`
+      + '  Rename or move one of each pair (the name is the path below the input directory, with\n'
+      + '  separators and other characters turned into underscores and the extension dropped).',
     );
   }
 
@@ -938,13 +1011,25 @@ export function pyramidVersion(digestHex) {
   return `1.1.0-${digestHex.slice(0, 12)}`;
 }
 
+/**
+ * The tiles of a pyramid in the order its digest reads them: by their path inside the pyramid,
+ * written with `/`. The path is normalised before sorting, not after — sorted as native paths,
+ * level 1's tiles come before level 10's under `/` and after them under `\`, and the same pyramid
+ * got a different version on each platform.
+ */
+export function tileOrder(dir, files, pathApi = { relative, sep }) {
+  return files
+    .map((tile) => ({ tile, key: pathApi.relative(dir, tile).split(pathApi.sep).join('/') }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
 /** A digest over every tile in a pyramid: its path and its bytes, in a fixed order. */
 function pyramidDigest(dir) {
   const hash = createHash('sha256');
-  // Sorted, and with the path folded in, so the answer depends only on what the pyramid contains
-  // and not on the order a directory happened to be read in or the platform's separator.
-  for (const tile of terrainFiles(dir).sort()) {
-    hash.update(relative(dir, tile).split(sep).join('/'));
+  // With the path folded in, so the answer depends only on what the pyramid contains and not on
+  // the order a directory happened to be read in or the platform's separator.
+  for (const { tile, key } of tileOrder(dir, terrainFiles(dir))) {
+    hash.update(key);
     hash.update(readFileSync(tile));
   }
   return hash.digest('hex');

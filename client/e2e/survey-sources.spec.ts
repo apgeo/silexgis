@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, pickCaveType } from './helpers.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -15,8 +15,7 @@ function archive(page: Page) {
 async function createCave(page: Page, name: string) {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
 }
@@ -56,7 +55,7 @@ test('bytes that are not the format the name claims are refused, in words', asyn
   // browser logs every 400 to the console, so the one asked for on purpose is declared here
   // rather than left to read as a defect.
   consoleErrors.allow(
-    /Failed to load resource.*400/,
+    /\/api\/v1\/caves\/[^/?:\s]+\/survey-sources(\?|:|$)/,
     'the content-mismatch refusal this test asks for on purpose',
   );
 

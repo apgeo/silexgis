@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later
 
 /** The rendering widths the server will produce; asking for anything else is refused. */
 export const thumbnailSizes = [160, 480, 1200, 2400] as const;

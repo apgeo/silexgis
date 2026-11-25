@@ -9,7 +9,7 @@ vi.mock('react-router-dom', async () => ({
   ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
   useNavigate: () => navigate,
 }));
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import { surveyModelPollInterval } from '../../api/hooks.ts';
 import type { CaveSummary, SurveyModelInfo } from '../../api/hooks.ts';
@@ -84,6 +84,9 @@ function summaryWith(exact: boolean): CaveSummary {
 }
 
 let models: SurveyModelInfo[] = [];
+/** A read of the list that did not land, switched on by the test that needs it. */
+const failedRead = vi.hoisted(() => ({ on: false, refetch: vi.fn() }));
+const failedAnswer = () => ({ data: undefined, isError: true, isFetching: false, refetch: failedRead.refetch });
 /** Undefined while the summary request is still in the air, which is a state of its own. */
 let summary: CaveSummary | undefined = summaryWith(true);
 
@@ -95,7 +98,7 @@ vi.mock('../../api/hooks.ts', async () => {
     surveyModelUnsettled: actual.surveyModelUnsettled,
     surveyModelWorkOutstanding: actual.surveyModelWorkOutstanding,
     surveyModelReadableByViewer: actual.surveyModelReadableByViewer,
-    useSurveyModels: () => ({ data: models }),
+    useSurveyModels: () => (failedRead.on ? failedAnswer() : { data: models }),
     useCaveSummary: () => ({ data: summary }),
     useUploadSurveyModel: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -148,6 +151,20 @@ vi.mock('../../components/caveview/movie/LazyTrackingMovieDialog.tsx', () => ({
   },
 }));
 
+// The survey viewer brings a WebGL engine with it. What this list owes it is the model to show,
+// as the list now has it — so the stand-in records the model it was last handed.
+let viewerModel: SurveyModelInfo | null | undefined;
+/** Read through a call, for the same reason as the movie dialog's. */
+const viewerShows = (): SurveyModelInfo | null | undefined => viewerModel;
+vi.mock('../../components/caveview/SurveyModelViewerModal.tsx', () => ({
+  default: (props: { model: SurveyModelInfo | null; onClose: () => void }) => {
+    viewerModel = props.model;
+    return props.model === null ? null : (
+      <button data-testid="fake-viewer-close" onClick={props.onClose} />
+    );
+  },
+}));
+
 const { default: SurveyModelSection } = await import('./SurveyModelSection.tsx');
 
 /** Where the two new buttons send the reader, recorded rather than followed. */
@@ -186,6 +203,7 @@ beforeEach(() => {
   readAgainMutate.mockReset().mockResolvedValue(model({ status: 'ready', readingAgain: true }));
   placementMutate.mockReset().mockResolvedValue(model({ status: 'pending' }));
   models = [];
+  viewerModel = undefined;
   summary = summaryWith(true);
   navigate.mockClear();
   opened = [];
@@ -437,6 +455,37 @@ describe('the survey model list', () => {
     // timed out under a full-suite run while passing on its own.
     expect(screen.getAllByLabelText('Open beside the map')).toHaveLength(1);
     expect(screen.getAllByLabelText('Open in another window')).toHaveLength(1);
+  });
+
+  it('hands the open viewer the address the list signed last, not the one it was opened with', async () => {
+    // The list asks again every few minutes because the address it carries is signed for ten.
+    // A viewer left open past that, whose second tab reads the file only when it is chosen, must
+    // be holding the newest address — the one it was opened with has lapsed by then.
+    models = [model({ id: 'plot', format: 'lox', name: 'Grind plot', modelUrl: '/f?token=first' })];
+    const view = show();
+    fireEvent.click(await screen.findByRole('button', { name: /View in 3D/ }));
+    expect(viewerShows()?.modelUrl).toBe('/f?token=first');
+
+    models = [model({ id: 'plot', format: 'lox', name: 'Grind plot', modelUrl: '/f?token=second' })];
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SurveyModelSection caveId="c1" canEdit />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(viewerShows()?.modelUrl).toBe('/f?token=second');
+
+    // A model removed while it was open closes the viewer rather than showing what is gone.
+    models = [];
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <SurveyModelSection caveId="c1" canEdit />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(viewerShows()).toBeNull();
   });
 
   it('sends the map the model that was asked for, not the cave', async () => {
@@ -817,6 +866,22 @@ describe('uploading a survey model', () => {
     expect(uploadMutate).not.toHaveBeenCalled();
   });
 
+  it('nudges for the zero level altitude of a Survex plot given none, without demanding it', async () => {
+    // Accepted without it, but then its heights are relative to its own zero point and the
+    // analyses that compare them with sea level refuse, so the form says so while it is empty.
+    show();
+    await openUpload('cave.3d');
+
+    expect(screen.getByText(/overburden, spring levels and the vertical gap/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Altitude of the file's zero level (m)"), {
+      target: { value: '1200' },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText(/overburden, spring levels and the vertical gap/)).toBeNull(),
+    );
+  });
+
   it('offers a Survex plot the same questions and demands none of them', async () => {
     // A .3d states its own coordinate system only when the survey was compiled with one, and which
     // it is cannot be told from out here. So the fields are there for the export that says nothing,
@@ -954,5 +1019,27 @@ describe('uploading a survey model', () => {
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText('Upload failed')).toBeInTheDocument();
+  });
+});
+
+describe('a read of the list that did not land', () => {
+  afterEach(() => {
+    failedRead.on = false;
+    failedRead.refetch.mockReset();
+  });
+
+  it('says the read failed and offers Retry, rather than saying there is nothing', () => {
+    failedRead.on = true;
+    show();
+    expect(screen.getByTestId('survey-models-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('surveyModels.empty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no upload under a list that was never read', () => {
+    failedRead.on = true;
+    show(true);
+    expect(screen.queryByText(i18n.t('surveyModels.upload'))).toBeNull();
   });
 });

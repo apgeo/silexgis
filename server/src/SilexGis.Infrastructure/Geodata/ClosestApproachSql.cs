@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Data.Common;
 using Dapper;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Geodata;
 
@@ -25,6 +30,12 @@ namespace SilexGis.Infrastructure.Geodata;
 /// measuring between two of those would report a vertical separation of nothing and a distance
 /// that is really a plan distance — a confident answer to a question the data cannot answer. So
 /// when this is false every measurement below is null, and the caller says why.
+/// </param>
+/// <param name="AltitudesRelative">
+/// True when either cave's line work was read from a survey whose heights are relative to its own
+/// zero point, because no altitude was declared for it. Its heights are then about that point, not
+/// about sea level, and the vertical gap to another cave would be the missing declaration rather
+/// than rock; every measurement below is null in this case too.
 /// </param>
 /// <param name="DistanceM">The shortest distance in three dimensions.</param>
 /// <param name="HorizontalDistanceM">
@@ -49,6 +60,7 @@ public sealed record ClosestApproachRow(
     Guid CaveBId,
     string? CaveBName,
     bool HasAltitudes,
+    bool AltitudesRelative,
     double? DistanceM,
     double? HorizontalDistanceM,
     double? VerticalDistanceM,
@@ -100,6 +112,11 @@ public sealed record ClosestApproachRow(
 /// inside the narrowing CTE, in the same way the map layers cap the rows they will draw. Above
 /// that ceiling the table is built from the first caves in id order rather than from the whole
 /// box: a bounded answer to an unreasonable question, rather than a request that never returns.
+/// It is never a silent one, though: <see cref="BuildAreaCoverage"/> counts the same pool one
+/// past the ceiling, so the answer can say how many caves were paired and that the box held
+/// more. Both are counted after the access gate — on the cave as well as on its line work — so
+/// the cut and the count only ever concern caves the caller may place, and neither says that a
+/// cave in the box is being kept from them.
 /// </para>
 /// <para>
 /// <b>Nothing on the pairing path casts a whole survey to the geography type.</b> A survey is a
@@ -107,8 +124,11 @@ public sealed record ClosestApproachRow(
 /// costs a detoast and a full traversal each, and the pairing evaluates its predicate once per
 /// pair with no index able to help it. So the pre-filter is a bounding-box overlap between the
 /// two projected geometries, expanded by the threshold — a header read, no traversal — and the
-/// metre-accurate test that follows it runs in the working system on the rows that survived.
-/// A plan test can only over-include, the shortest plan distance between two bodies of line work
+/// metre-accurate test that follows it runs in the working system, leg against leg, inside the
+/// pruning of each surviving pair (see <see cref="ShortestLine"/>), with the threshold as its
+/// bound: a plan distance between two whole surveys is itself a comparison of every leg with
+/// every other, and took over a minute for two of thirty thousand legs. A plan test can only
+/// over-include, the shortest plan distance between two bodies of line work
 /// never being larger than the shortest distance in three dimensions, so nothing inside the
 /// threshold is lost by pre-filtering in two.
 /// </para>
@@ -116,6 +136,53 @@ public sealed record ClosestApproachRow(
 public static class ClosestApproachSql
 {
     private const string SridParameter = "workingSrid";
+
+    /// <summary>
+    /// How long one closest-approach statement may run, in milliseconds. The shortest line between
+    /// two whole surveys is a traversal of both, and two neighbouring systems of tens of thousands
+    /// of legs each can take longer than any reader will wait; past this the statement is stopped
+    /// by the database and the caller is told the question was too large, rather than holding a
+    /// connection until the command timeout ends it as a bare server error.
+    /// </summary>
+    public const int StatementBudgetMs = 20_000;
+
+    /// <summary>
+    /// Runs <paramref name="run"/> in a read-only transaction whose statements the database stops
+    /// after <paramref name="budgetMs"/>, and answers <c>TooCostly</c> when it did. A cancellation
+    /// by the caller is not a budget being spent and is left to propagate as one.
+    /// </summary>
+    public static async Task<(bool TooCostly, T? Value)> WithinBudgetAsync<T>(
+        SilexGisDbContext db,
+        int budgetMs,
+        Func<DbConnection, DbTransaction, Task<T>> run,
+        CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var connection = db.Database.GetDbConnection();
+        var dbTransaction = transaction.GetDbTransaction();
+
+        // SET cannot take a bind parameter; the value is an int this class chose, never input.
+        await connection.ExecuteAsync(new CommandDefinition(
+            $"SET LOCAL statement_timeout = {budgetMs:D}",
+            transaction: dbTransaction,
+            cancellationToken: ct));
+
+        try
+        {
+            var value = await run(connection, dbTransaction);
+            await transaction.CommitAsync(ct);
+            return (false, value);
+        }
+        catch (PostgresException e)
+            when (e.SqlState == PostgresErrorCodes.QueryCanceled && !ct.IsCancellationRequested)
+        {
+            return (true, default);
+        }
+    }
+
+    // The overlap operator is answered from the geometry index alone.
+    private const string AreaNarrowing =
+        "AND f.geom && ST_MakeEnvelope(@ca_west, @ca_south, @ca_east, @ca_north, 4326)";
 
     /// <summary>
     /// The closest approach of two named caves, or no row when either side is missing from the
@@ -168,14 +235,152 @@ public static class ClosestApproachSql
         parameters.Add(SridParameter, workingSrid);
 
         return (
-            Build(
-                forArea: true,
-                // The overlap operator is answered from the geometry index alone.
-                "AND f.geom && ST_MakeEnvelope(@ca_west, @ca_south, @ca_east, @ca_north, 4326)",
-                visibleSql,
-                exactSql),
+            Build(forArea: true, AreaNarrowing, visibleSql, exactSql),
             parameters);
     }
+
+    /// <summary>
+    /// How many caves the area table's pairing may draw on, counted up to one past
+    /// <paramref name="maxCaves"/> and no further — enough to say whether the ceiling cut the
+    /// pool, without counting a box that may hold the whole country. One row, one column
+    /// <c>Admitted</c>.
+    /// </summary>
+    public static (string Sql, DynamicParameters Parameters) BuildAreaCoverage(
+        AccessContext ctx, double west, double south, double east, double north, int maxCaves)
+    {
+        var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
+        parameters.Add("ca_west", west);
+        parameters.Add("ca_south", south);
+        parameters.Add("ca_east", east);
+        parameters.Add("ca_north", north);
+        parameters.Add("ca_candidates_seen", maxCaves + 1);
+
+        return ($"""
+            SELECT count(*)::int AS "Admitted"
+            FROM (
+                SELECT 1
+                {Pool(AreaNarrowing, visibleSql, exactSql)}
+                ORDER BY c.cave_feature_id
+                LIMIT @ca_candidates_seen
+            ) admitted
+            """, parameters);
+    }
+
+    /// <summary>
+    /// The default line work of every cave the caller may place, narrowed as the caller asks. The
+    /// cave row is gated here as well as the line work, ahead of any ceiling, so a cut taken on
+    /// this pool never spends a place on a cave that would be dropped afterwards.
+    /// </summary>
+    private static string Pool(string shapeNarrowing, string visibleSql, string exactSql) => $"""
+                FROM centerlines c
+                JOIN features f ON f.id = c.id
+                LEFT JOIN survey_models m ON m.id = c.survey_model_id
+                WHERE c.is_default
+                  AND f.deleted_at IS NULL
+                  AND f.geom IS NOT NULL
+                  AND NOT ST_IsEmpty(f.geom)
+                  {shapeNarrowing}
+                  AND {visibleSql}
+                  AND {exactSql}
+                  AND EXISTS (
+                      -- The cave this line work belongs to, held to the same two tests under
+                      -- the same alias, which this subquery's own row shadows.
+                      SELECT 1 FROM features f
+                      WHERE f.id = c.cave_feature_id
+                        AND f.kind = {(short)FeatureKind.Cave}
+                        AND f.deleted_at IS NULL
+                        AND {visibleSql}
+                        AND {exactSql})
+        """;
+
+    /// <summary>How many consecutive legs of a survey share one box in the pruning below.</summary>
+    private const int LegsPerChunk = 64;
+
+    /// <summary>
+    /// The shortest line in three dimensions between the line work of two placed rows, or no row
+    /// when either lacks real or absolute altitudes — the same line a whole-survey comparison
+    /// gives, found without comparing every leg of one survey with every leg of the other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Compared whole, two neighbouring systems of tens of thousands of legs each are hundreds of
+    /// millions of leg pairs, and the statement runs out of its budget on a question that has an
+    /// answer. Almost all of those pairs cannot be the nearest, and the pruning proves which:
+    /// </para>
+    /// <list type="number">
+    /// <item>An upper bound. From a few legs of each survey nearest the other's box, walk to the
+    /// nearest point of the other survey and back again; each walk ends at a real pair of points,
+    /// so the shortest of them is a distance the answer can be no longer than.</item>
+    /// <item>Boxes. The legs are taken in their stored order, which follows the survey, in runs of
+    /// a few dozen, and each run is boxed. Plan distance never exceeds distance in three
+    /// dimensions, so two runs whose boxes lie further apart in plan than the bound hold no pair
+    /// that could be nearer than it, and are never compared.</item>
+    /// <item>The exact distance in three dimensions, over the legs of the runs that are left,
+    /// and the shortest line of the nearest pair.</item>
+    /// </list>
+    /// <para>
+    /// Every step can only keep a pair the answer might come from, so the line is the one the
+    /// whole comparison would give — only its tie between two equally near pairs may fall the
+    /// other way, at the same distance. The envelopes are taken once: read per leg, the whole
+    /// survey would be read again for every leg.
+    /// </para>
+    /// </remarks>
+    /// <param name="a">The alias of the first placed row.</param>
+    /// <param name="b">The alias of the second placed row.</param>
+    /// <param name="threshold">
+    /// For the table, the furthest a reported pair may be apart: a bound known before anything is
+    /// measured, so legs further apart in plan than it are never compared, and a pair with none
+    /// nearer gives no line at all.
+    /// </param>
+    private static string ShortestLine(string a, string b, string? threshold) => $"""
+                    WITH env AS MATERIALIZED (
+                        SELECT ST_Envelope({a}.g) AS ea, ST_Envelope({b}.g) AS eb
+                    ),
+                    la AS MATERIALIZED (
+                        SELECT d.geom AS g, d.n, (d.n - 1) / {LegsPerChunk} AS chunk
+                        FROM ST_DumpSegments({a}.g) WITH ORDINALITY AS d(path, geom, n)
+                    ),
+                    lb AS MATERIALIZED (
+                        SELECT d.geom AS g, d.n, (d.n - 1) / {LegsPerChunk} AS chunk
+                        FROM ST_DumpSegments({b}.g) WITH ORDINALITY AS d(path, geom, n)
+                    ),
+                    seed AS MATERIALIZED (
+                        SELECT ST_StartPoint(s.g) AS p
+                        FROM ((SELECT lb.g FROM lb, env ORDER BY lb.g <#> env.ea, lb.n LIMIT 4)
+                              UNION ALL
+                              (SELECT la.g FROM la, env ORDER BY la.g <#> env.eb, la.n LIMIT 4)) s
+                    ),
+                    bound AS MATERIALIZED (
+                        SELECT {(threshold is null ? "" : "LEAST(" + threshold + ", ")}min(ST_3DDistance(ST_3DClosestPoint({a}.g, w.pb), w.pb)){(threshold is null ? "" : ")")} AS u
+                        FROM (SELECT ST_3DClosestPoint({b}.g, ST_3DClosestPoint({a}.g, seed.p)) AS pb
+                              FROM seed) w
+                    ),
+                    ka AS MATERIALIZED (
+                        SELECT chunk, ST_Extent(g)::geometry AS box FROM la GROUP BY chunk
+                    ),
+                    kb AS MATERIALIZED (
+                        SELECT chunk, ST_Extent(g)::geometry AS box FROM lb GROUP BY chunk
+                    ),
+                    near AS MATERIALIZED (
+                        SELECT ka.chunk AS a_chunk, kb.chunk AS b_chunk
+                        FROM ka CROSS JOIN kb CROSS JOIN bound
+                        WHERE ka.box <#> kb.box <= bound.u
+                    ),
+                    leg AS (
+                        SELECT la.g AS ga, lb.g AS gb, la.n AS na, lb.n AS nb,
+                               ST_3DDistance(la.g, lb.g) AS d
+                        FROM near
+                        JOIN la ON la.chunk = near.a_chunk
+                        JOIN lb ON lb.chunk = near.b_chunk
+                        CROSS JOIN bound
+                        WHERE ST_DWithin(la.g, lb.g, bound.u)
+                    )
+                    SELECT ST_3DShortestLine(leg.ga, leg.gb) AS ln
+                    FROM leg
+                    WHERE {a}.has_z AND {b}.has_z AND NOT ({a}.relative OR {b}.relative)
+                    ORDER BY leg.d, leg.na, leg.nb
+                    LIMIT 1
+        """;
 
     private static string Build(bool forArea, string shapeNarrowing, string visibleSql, string exactSql)
     {
@@ -195,18 +400,27 @@ public static class ClosestApproachSql
         // The bounding boxes first, then the metric test on what survives — the class note says
         // why neither of them is a spheroid cast of a whole survey.
         var pairNarrowing = forArea
-            ? "AND ST_Expand(a.g, @ca_max_metres) && b.g\n"
-                + "                       AND ST_DWithin(a.g, b.g, @ca_max_metres)"
+            ? "AND ST_Expand(a.g, @ca_max_metres) && b.g"
             : string.Empty;
 
         // A table of nearest pairs carries no room to say why a row is missing, so a pair
         // whose line work has no altitudes is left out of it rather than listed with nothing in
         // it. The per-pair question is asked about two named caves and can say so, which is why
         // it keeps such a pair and reports the reason instead.
-        var altitudeFilter = forArea ? "AND a.has_z AND b.has_z" : string.Empty;
+        // A pair one of whose surveys has relative heights only is left out for the same reason.
+        var altitudeFilter = forArea
+            ? "AND a.has_z AND b.has_z AND NOT a.relative AND NOT b.relative"
+            : string.Empty;
 
         var ordering = forArea
             ? "ORDER BY dist ASC NULLS LAST, a_id, b_id\n                LIMIT @ca_limit"
+            : string.Empty;
+
+        // The cut above picks the rows; the order they are returned in has to be asked for again,
+        // because a CTE's ORDER BY decides which rows survive its LIMIT and promises nothing about
+        // the order the query that reads it emits them in.
+        var finalOrder = forArea
+            ? "\n            ORDER BY e.dist ASC NULLS LAST, e.a_id, e.b_id"
             : string.Empty;
 
         // The threshold is stated in the same metres as every figure on the answer — the 3-D
@@ -222,22 +436,18 @@ public static class ClosestApproachSql
             WITH shape AS MATERIALIZED (
                 SELECT c.cave_feature_id AS cave_id,
                        f.geom AS geom,
-                       {hasAltitudes} AS has_z
-                FROM centerlines c
-                JOIN features f ON f.id = c.id
-                WHERE c.is_default
-                  AND f.deleted_at IS NULL
-                  AND f.geom IS NOT NULL
-                  AND NOT ST_IsEmpty(f.geom)
-                  {shapeNarrowing}
-                  AND {visibleSql}
-                  AND {exactSql}{candidateCap}
+                       {hasAltitudes} AS has_z,
+                       -- A centerline written from an uploaded survey carries that survey's
+                       -- heights; a drawn one belongs to no survey and is judged as before.
+                       COALESCE(m.altitudes_relative, false) AS relative
+                {Pool(shapeNarrowing, visibleSql, exactSql)}{candidateCap}
             ),
             placed AS MATERIALIZED (
                 -- The cave itself, reached by primary key from the line work that was narrowed
-                -- above, and held to the same two tests. A cave failing either drops out with
-                -- its shape, so it is never one end of a measurement.
-                SELECT s.cave_id, f.name, s.has_z, {projected} AS g
+                -- above for its name, and held to the same two tests once more so this step does
+                -- not depend on the pool having applied them. A cave failing either drops out
+                -- with its shape, so it is never one end of a measurement.
+                SELECT s.cave_id, f.name, s.has_z, s.relative, {projected} AS g
                 FROM shape s
                 JOIN features f ON f.id = s.cave_id AND f.kind = {(short)FeatureKind.Cave}
                 WHERE f.deleted_at IS NULL
@@ -247,11 +457,15 @@ public static class ClosestApproachSql
             pair AS MATERIALIZED (
                 SELECT a.cave_id AS a_id, a.name AS a_name, b.cave_id AS b_id, b.name AS b_name,
                        a.has_z AND b.has_z AS has_z,
-                       CASE WHEN a.has_z AND b.has_z THEN ST_3DShortestLine(a.g, b.g) END AS ln
+                       a.relative OR b.relative AS relative,
+                       sl.ln
                 FROM placed a
                 JOIN placed b ON a.cave_id < b.cave_id
                        {pairNarrowing}
                        {altitudeFilter}
+                LEFT JOIN LATERAL (
+            {ShortestLine("a", "b", forArea ? "@ca_max_metres" : null)}
+                ) sl ON true
             ),
             ends AS (
                 -- The shortest line is two points; everything reported is read off them. It is
@@ -277,6 +491,7 @@ public static class ClosestApproachSql
                    e.b_id AS "CaveBId",
                    e.b_name AS "CaveBName",
                    e.has_z AS "HasAltitudes",
+                   e.relative AS "AltitudesRelative",
                    e.dist AS "DistanceM",
                    ST_Distance(e.pa, e.pb) AS "HorizontalDistanceM",
                    abs(ST_Z(e.pb) - ST_Z(e.pa)) AS "VerticalDistanceM",
@@ -293,7 +508,7 @@ public static class ClosestApproachSql
                    ST_X(ST_Transform(e.pb, 4326)) AS "ToLongitude",
                    ST_Y(ST_Transform(e.pb, 4326)) AS "ToLatitude",
                    ST_Z(e.pb) AS "ToAltitude"
-            FROM ranked e
+            FROM ranked e{finalOrder}
             """;
     }
 }

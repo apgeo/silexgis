@@ -471,9 +471,8 @@ public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable, IClass
 
     /// <summary>
     /// The trips this caller may read that this class made, each with whatever readiness figure it
-    /// carries — null where there is none. Narrowed by the suffix because the fixture shares one
-    /// database with every other suite, so an unnarrowed reading would be a reading of the
-    /// afternoon's other tests.
+    /// carries — null where there is none. Narrowed by the suffix because the tests of this class
+    /// share one database, so an unnarrowed reading would be a reading of the other tests too.
     /// </summary>
     private async Task<Dictionary<Guid, (int Ticked, int Total)?>> ListedTripsAsync(HttpClient client)
     {

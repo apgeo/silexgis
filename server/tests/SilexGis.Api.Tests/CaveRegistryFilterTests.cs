@@ -286,7 +286,7 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
         string region, string[] expected)
     {
         await SeedAsync();
-        // The search narrows to this class's caves (the suite shares one database) through the
+        // The search narrows to this test's caves (the class's tests share one database) through the
         // same parameter on every route, so it is checked alongside.
         var query = $"region={Uri.EscapeDataString(region)}&search={tag}";
         var wanted = expected.Select(Name).ToList();
@@ -604,7 +604,7 @@ public sealed class CaveRegistryFilterTests : IAsyncLifetime, IDisposable, IClas
                 new ConditionNode(FeatureFilterFields.Tag, FilterOp.Equals, [new IdValue(TagSlug)]),
                 // "At least", as the registry's length box writes it.
                 new ConditionNode(FeatureFilterFields.SurveyedLength, lengthOp, [new NumberValue(300)]),
-                // Scoped to this class's caves; the suite shares one database.
+                // Scoped to this test's caves; the class's tests share one database.
                 new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]),
             ])),
         ],

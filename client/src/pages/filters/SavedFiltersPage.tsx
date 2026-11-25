@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, PushpinFilled, PushpinOutlined, SearchOutlined } from '@ant-design/icons';
 import { App, Flex, Form, Input, Modal, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import { useNavigate } from 'react-router-dom';
 import { useCaveTypes, useCavingGroups, useTags } from '../../api/hooks.ts';
 import {
@@ -77,7 +79,7 @@ export default function SavedFiltersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
-  const { data: filters, isLoading } = useSavedFilters();
+  const { data: filters, isLoading, isError, error, refetch } = useSavedFilters();
   const { data: caveTypes } = useCaveTypes();
   const { data: tags } = useTags('');
   // Every club, to name the group a listed filter is shared with. The share control offers the
@@ -125,7 +127,12 @@ export default function SavedFiltersPage() {
 
   const saveEdit = async () => {
     if (!editing) return;
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       await update.mutateAsync({
         id: editing.id,
@@ -169,20 +176,28 @@ export default function SavedFiltersPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+      <Flex justify="space-between" align="center" gap={8} wrap style={{ marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('savedFilters.title')}
         </Typography.Title>
         <Button onClick={() => navigate('/caves')}>{t('savedFilters.toRegistry')}</Button>
       </Flex>
       <Typography.Paragraph type="secondary">{t('savedFilters.intro')}</Typography.Paragraph>
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={filters !== undefined}
+        onRetry={refetch}
+        title={t('savedFilters.loadFailed')}
+        testId="saved-filters-load-failed"
+      />
       <Table<SavedFilter>
         rowKey="id"
         size="middle"
         loading={isLoading}
         dataSource={filters}
         data-testid="saved-filters-table"
-        locale={{ emptyText: t('savedFilters.empty') }}
+        locale={{ emptyText: isError && !filters ? <span /> : t('savedFilters.empty') }}
         columns={[
           {
             title: t('savedFilters.name'),
@@ -303,7 +318,11 @@ export default function SavedFiltersPage() {
                       title={t('savedFilters.deleteConfirm')}
                       okText={t('savedFilters.delete')}
                       onConfirm={() =>
-                        remove.mutateAsync(filter.id).catch(() => message.error(t('common.saveFailed')))}
+                        remove.mutateAsync(filter.id).catch((error: unknown) => {
+                          if (!isConcurrencyConflict(error)) {
+                            message.error(t('common.deleteFailed'));
+                          }
+                        })}
                     >
                       <Button
                         size="small"

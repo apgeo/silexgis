@@ -49,10 +49,8 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable, ICl
         // one left in a shared directory would be a fact about the machine rather than the test.
         publishRoot = buildRoot + "-published";
 
-        // This class queues terrain work, so it runs none of the drains itself: every test class
-        // shares one PostGIS container and the queue lives in it, so a drain started here would
-        // claim work another class queued and fail it against storage this class does not have.
-        // What this class queues is deleted again when it finishes, for the mirror-image reason.
+        // This class queues terrain work and runs it by hand, so it runs none of the drains: one
+        // would claim the same jobs on its own schedule, a second writer beside the test.
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?>
@@ -612,9 +610,9 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
-    /// Everything this class queued, taken out of the shared queue again. Left there, the next test
-    /// class's terrain worker would claim these and run them against a host with no steps and no
-    /// directories of theirs — work belonging to a class that has already gone.
+    /// Everything this test queued, taken out of the queue again. xUnit builds one instance per
+    /// test and the tests of this class share one database, so a build or a job left behind would
+    /// be found by the next test's run and claimed alongside its own.
     /// </summary>
     public async ValueTask DisposeAsync()
     {

@@ -8,6 +8,7 @@ import {
   BarChartOutlined,
   BlockOutlined,
   BoxPlotOutlined,
+  HeatMapOutlined,
   BorderOuterOutlined,
   CalculatorOutlined,
   CalendarOutlined,
@@ -23,6 +24,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  ExperimentOutlined,
   FieldTimeOutlined,
   FileTextOutlined,
   FileWordOutlined,
@@ -93,6 +95,12 @@ export type NavGates = {
    */
   photoLibrary: boolean;
   isFullAdmin: boolean;
+  /**
+   * Whether the test-data generator is offered: the caller is a full administrator and both halves
+   * of its switch are on. The server states it whole, so the rail never offers a page that would
+   * answer "not here".
+   */
+  testDataGenerator: boolean;
 };
 
 export function isNavGroup(entry: NavEntry): entry is NavGroup {
@@ -186,6 +194,9 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     ...(gates.isFullAdmin
       ? [{ key: 'admin/published-trips', icon: <ShareAltOutlined />, label: t('nav.publishedTrips') }]
       : []),
+    ...(gates.testDataGenerator
+      ? [{ key: 'admin/test-data', icon: <ExperimentOutlined />, label: t('nav.testData') }]
+      : []),
   ];
 
   // The vocabularies every other page reads its wording from. Gathered because they are edited
@@ -261,6 +272,10 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       { key: 'statistics/correlation', icon: <LineChartOutlined />, label: t('nav.registryCorrelation') },
       { key: 'statistics/regions', icon: <PieChartOutlined />, label: t('nav.registryRegions') },
       { key: 'statistics/categories', icon: <BoxPlotOutlined />, label: t('nav.registryCategories') },
+      // Weighing evidence into a map of where caves may be. A model is saved workspace that every
+      // signed-in reader may write; running one and reading its maps need the terrain right, which
+      // the page itself says to a reader who lacks it.
+      { key: 'cave-potential', icon: <HeatMapOutlined />, label: t('nav.cavePotential') },
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.

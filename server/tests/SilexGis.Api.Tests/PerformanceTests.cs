@@ -9,8 +9,11 @@ using System.Text.Json.Nodes;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using SilexGis.Api.Common;
+using SilexGis.Api.Features.Caves;
+using SilexGis.Api.Features.Features;
 using SilexGis.Api.Features.Map;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
@@ -46,6 +49,28 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     private const int AreaColumns = 10;
     private const int AreaRows = 5;
     private const int DepressionsPerArea = 100;
+
+    /// <summary>
+    /// The band of its own that the doline-morphometry and closest-approach pins measure, inside
+    /// the seeded box but clear of the focused viewport above and of the latitudes the
+    /// closest-approach integration tests build their own caves at. Invented outlines and line
+    /// work only: sinkhole polygons scattered across the whole band, and a grid of caves in its
+    /// south-western corner whose line work reaches the neighbours' within the default threshold.
+    /// </summary>
+    private const double BandWest = 21.0;
+    private const double BandEast = 21.5;
+    private const double BandSouth = 44.0;
+    private const double BandNorth = 44.2;
+
+    /// <summary>
+    /// More outlines than the morphometry table will measure and more caves than the closest-
+    /// approach table will pair, so both pins run against the ceiling that bounds each query
+    /// rather than against a set small enough to be fast whatever the plan.
+    /// </summary>
+    private const int BandDolines = 6000;
+    private const int BandCaveColumns = 28;
+    private const int BandCaveRows = 25; // 700 caves, above the 500 the pairing admits
+    private const double BandCaveSpacing = 0.002; // about 150 m — neighbours' line work overlaps
 
     /// <summary>
     /// The load per core under which this machine counts as quiet enough to measure on, how long
@@ -127,7 +152,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var grantedCave = await db.Features.AsNoTracking()
-            .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId)
+            .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId
+                && EF.Functions.Like(f.Name!, "Perf Cave %"))
             .OrderBy(f => f.Id)
             .Select(f => f.Id)
             .FirstAsync();
@@ -166,7 +192,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var caves = await db.Features.AsNoTracking()
-                .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId)
+                .Where(f => f.Kind == FeatureKind.Cave && f.OwnerUserId == seededOwnerId
+                    && EF.Functions.Like(f.Name!, "Perf Cave %"))
                 .OrderBy(f => f.Id)
                 .Select(f => f.Id)
                 .Take(Grants)
@@ -299,6 +326,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         await AssertUnnarrowedFeatureReadPlansAsync(memberId);
         await AssertSurveySubstratePlansAsync(strangerId);
         await AssertProximityPlanAsync(strangerId);
+        await AssertDolineAndClosestApproachPlansAsync(strangerId);
         await AssertSharedLinkAsync(client, ownerId, settled);
         await AssertSpatialFilterStaysResponsiveAsync(strangerEmail, strangerId);
 
@@ -318,18 +346,151 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var connection = db.Database.GetDbConnection();
 
         var ctx = new AccessContext(strangerId, false, [], []);
+        // Two candidates at opposite corners of the seeded window, each ranked from itself.
         var (sql, parameters) = ProximitySql.Build(
             ctx,
-            new NetTopologySuite.Geometries.Envelope(West, East, South, North),
-            new NetTopologySuite.Geometries.Coordinate((West + East) / 2, (South + North) / 2),
+            [
+                new NetTopologySuite.Geometries.Coordinate(West, South),
+                new NetTopologySuite.Geometries.Coordinate(East, North),
+            ],
+            5_000,
             [FeatureKind.CaveEntrance, FeatureKind.Generic],
-            VisibleProximitySearch.MaxNearbyFeatures);
+            VisibleProximitySearch.MaxNearbyFeatures / 2);
         var plan = await ExplainAsync(connection, parameters, "proximity pool (guarded)", sql);
         plan.ShouldContain("ix_features_geom", Case.Insensitive,
             "the proximity pool must reach the feature table through a geometry index");
         plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
             "the proximity pool must never scan the feature table");
         AssertAncestorProbeIsIndexed(plan, "proximity pool (guarded)");
+    }
+
+    /// <summary>
+    /// The two spatial queries that measure shapes — the doline table and the closest-approach
+    /// table — over the invented band, which holds more outlines and more caves than either will
+    /// admit: both must find their candidates through an index and never by scanning the feature
+    /// table — the doline table through the geometry index, the closest-approach table through it
+    /// or through the centre lines' own index — and both must answer with real rows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The second half is what makes the first one worth asserting. Over an empty window a
+    /// planner is right to do nothing at all and every "no scan" check passes; so each pin runs
+    /// the statement it explained and asserts it returns what the band is built to give it — a
+    /// full page of dolines, nearby pairs whose line work carries altitudes.
+    /// </para>
+    /// <para>
+    /// The caller is a viewer who owns nothing, so the dolines — private under an area every
+    /// signed-in reader may see — reach them only through the visibility walk, and a plan that
+    /// skipped that walk would return fewer rows than the page holds.
+    /// </para>
+    /// </remarks>
+    private async Task AssertDolineAndClosestApproachPlansAsync(Guid strangerId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var workingSrid = scope.ServiceProvider.GetRequiredService<IOptions<SpatialOptions>>().Value.WorkingSrid;
+        var ctx = new AccessContext(strangerId, false, [], []);
+
+        var sinkholeTypeId = await connection.QuerySingleAsync<long>(
+            "SELECT id FROM feature_types WHERE code = @code", new { code = FeatureTypeSeeds.Sinkhole });
+
+        // The doline table over the whole band: the cap on measured outlines is below what the band holds.
+        var (dolineSql, dolineParameters) = PolygonMorphometrySql.BuildForArea(
+            ctx, BandWest, BandSouth, BandEast, BandNorth, sinkholeTypeId,
+            FeatureMorphometryLimits.DefaultRows, FeatureMorphometryLimits.MaxCandidates, workingSrid);
+        var dolinePlan = await ExplainAsync(connection, dolineParameters, "doline morphometry table", dolineSql);
+        AssertReachesFeaturesByGeometryIndex(dolinePlan, "doline morphometry table");
+        AssertAncestorProbeIsIndexed(dolinePlan, "doline morphometry table");
+
+        var dolines = (await connection.QueryAsync<PolygonMorphometryRow>(dolineSql, dolineParameters)).ToList();
+        dolines.Count.ShouldBe(FeatureMorphometryLimits.DefaultRows,
+            "doline morphometry table: the band holds more readable outlines than one page, so a short "
+            + "answer means the visibility walk or the candidate cut dropped rows it should have kept");
+        dolines.ShouldAllBe(d => d.GeometryValid && d.AreaM2 > 0 && d.Elongation >= 1,
+            "doline morphometry table: every invented outline is a valid polygon with a measurable shape");
+
+        // One doline by id is a primary-key lookup, whatever the size of the table.
+        var (oneSql, oneParameters) = PolygonMorphometrySql.BuildForFeature(ctx, dolines[0].FeatureId, workingSrid);
+        var onePlan = await ExplainAsync(connection, oneParameters, "doline morphometry, one outline", oneSql);
+        AssertReachesFeaturesByIndex(onePlan, "doline morphometry, one outline");
+
+        // The closest-approach table over the whole band, the caves in one corner of it.
+        var (approachSql, approachParameters) = ClosestApproachSql.BuildForArea(
+            ctx, BandWest, BandSouth, BandEast, BandNorth,
+            ClosestApproachLimits.DefaultDistanceM, ClosestApproachLimits.DefaultRows,
+            ClosestApproachLimits.MaxCavesPaired, workingSrid);
+        var approachPlan = await ExplainAsync(connection, approachParameters, "closest approach table", approachSql);
+        AssertReachesLineWorkByIndex(approachPlan, "closest approach table");
+
+        var pairs = (await connection.QueryAsync<ClosestApproachRow>(approachSql, approachParameters)).ToList();
+        pairs.Count.ShouldBe(ClosestApproachLimits.DefaultRows,
+            "closest approach table: the band's caves overlap their neighbours' line work, so the "
+            + "table must come back full");
+        pairs.ShouldAllBe(
+            p => p.HasAltitudes && p.DistanceM <= ClosestApproachLimits.DefaultDistanceM && p.CaveAId.CompareTo(p.CaveBId) < 0,
+            "closest approach table: only measurable pairs within the threshold, one row per pair");
+
+        // One named pair is two cave ids, not a window.
+        var (pairSql, pairParameters) = ClosestApproachSql.BuildForPair(ctx, pairs[0].CaveAId, pairs[0].CaveBId, workingSrid);
+        var pairPlan = await ExplainAsync(connection, pairParameters, "closest approach, one pair", pairSql);
+        AssertReachesFeaturesByIndex(pairPlan, "closest approach, one pair");
+
+        // Passages beneath one doline: the subject is a primary-key lookup, and the caves are found
+        // from the doline's own window through the line-work indexes, never by reading either
+        // table end to end whatever the number of caves in the installation.
+        var (subjectSql, subjectParameters) = FeaturePassagesSql.BuildSubject(ctx, dolines[0].FeatureId);
+        var subjectPlan = await ExplainAsync(connection, subjectParameters, "passages beneath, subject", subjectSql);
+        AssertReachesFeaturesByIndex(subjectPlan, "passages beneath, subject");
+        (await connection.QuerySingleOrDefaultAsync<FeaturePassagesSubjectRow>(subjectSql, subjectParameters))
+            .ShouldNotBeNull("passages beneath: an outline the reader may see is a subject");
+
+        var (passagesSql, passagesParameters) = FeaturePassagesSql.BuildPassages(
+            ctx, dolines[0].FeatureId, FeaturePassagesLimits.DefaultDistanceM,
+            FeaturePassagesLimits.MaxCaves + 1, FeaturePassagesLimits.MaxCandidates, workingSrid);
+        var passagesPlan = await ExplainAsync(connection, passagesParameters, "passages beneath a doline", passagesSql);
+        AssertReachesLineWorkByIndex(passagesPlan, "passages beneath a doline");
+
+        var beneath = (await connection.QueryAsync<FeaturePassageRow>(passagesSql, passagesParameters)).ToList();
+        beneath.Count.ShouldBeLessThanOrEqualTo(FeaturePassagesLimits.MaxCaves + 1,
+            "passages beneath a doline: the query's own cap is one more than a page, so a cut is known to be a cut");
+        beneath.Select(b => b.CaveId).Distinct().Count().ShouldBe(beneath.Count,
+            "passages beneath a doline: one row per cave, never one per line");
+    }
+
+    /// <summary>
+    /// A window query over line work or outlines must read the feature table through the plain
+    /// geometry index — the whole-table GIST index, not the entrance-only partial one, which
+    /// shares a prefix in its name and would satisfy a substring check while proving nothing
+    /// about these kinds.
+    /// </summary>
+    private static void AssertReachesFeaturesByGeometryIndex(string plan, string label)
+    {
+        Regex.IsMatch(plan, @"Index Scan using ix_features_geom\b|Bitmap Index Scan on ix_features_geom\b").ShouldBeTrue(
+            $"{label}: the window must be found through the geometry index on features");
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            $"{label}: the window must never be answered by scanning the feature table");
+    }
+
+    /// <summary>
+    /// The closest-approach window starts from the caves' default line work, and the planner has
+    /// two sound ways in: the feature table's geometry index, or the centre-line table's own
+    /// index followed by one id probe per line into the feature table. Which it takes depends on
+    /// how much of all the line work the window holds — over this band, which holds most of it,
+    /// walking the few thousand centre lines and stopping at the candidate cap is the cheaper
+    /// plan, and statistics gathered from a randomly placed fixture can tip it either way. What
+    /// must never happen is the window being answered by reading either table end to end, so
+    /// that is what is pinned, together with proof that the feature table was reached through
+    /// an index at all.
+    /// </summary>
+    private static void AssertReachesLineWorkByIndex(string plan, string label)
+    {
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            $"{label}: the window must never be answered by scanning the feature table");
+        plan.ShouldNotContain("Seq Scan on centerlines", Case.Insensitive,
+            $"{label}: the window must never be answered by scanning the centre-line table");
+        Regex.IsMatch(plan, @"Index Scan using ix_features_geom\b|Bitmap Index Scan on ix_features_geom\b|Index Scan using pk_features\b")
+            .ShouldBeTrue($"{label}: the line work must reach the feature table through its geometry index or its primary key");
     }
 
     /// <summary>
@@ -357,6 +518,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             UPDATE features SET visibility = {(short)Visibility.Public}
             WHERE id IN (SELECT id FROM features
                          WHERE kind = {(short)FeatureKind.Cave} AND owner_user_id = {ownerId}
+                           AND name LIKE 'Perf Cave %'
                          ORDER BY id LIMIT {publicCaves})
             """);
         await db.Database.ExecuteSqlRawAsync("ANALYZE features;");
@@ -585,7 +747,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
         var connection = db.Database.GetDbConnection();
 
         var caveId = await connection.QuerySingleAsync<Guid>(
-            $"SELECT id FROM features WHERE kind = {(short)FeatureKind.Cave} LIMIT 1");
+            $"SELECT id FROM features WHERE kind = {(short)FeatureKind.Cave} AND name LIKE 'Perf Cave %' LIMIT 1");
 
         // Not the owner and holding nothing: the caller for whom both arms of the access walk
         // actually run rather than short-circuiting on ownership.
@@ -1193,7 +1355,7 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// sanctioned mutator of the aggregate's derived state, but it is row-at-a-time by design;
     /// at 100k rows this test writes the same end state in one statement instead — so it must
     /// reproduce every invariant the service maintains, or the integrity verifier (which walks
-    /// the whole shared database) would report this data as corrupt:
+    /// the whole of this class's database) would report this data as corrupt:
     /// primary containment edge per entrance, ancestor arrays and closure rows carrying self +
     /// the cave, effective protection, and the cave mirror (entrance count and the cave
     /// feature's representative point = its main entrance). Entrance rows are seeded
@@ -1467,6 +1629,138 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
             SELECT d.depression_id, d.area_id FROM depression_rows d
             """);
 
+        // The band the doline-morphometry and closest-approach pins read. Everything is invented:
+        // outlines are scaled, turned circles; each cave is one three-dimensional line of three
+        // vertices with altitudes in the hundreds of metres, so the line work genuinely "has
+        // altitudes" and neighbouring caves differ in height by tens of metres. Names start
+        // "Perf band" so none of the statements above or the picks below that look for "Perf Cave"
+        // or "Perf area" can land on these rows; they are owned by the same account, so the
+        // cleanup removes them with everything else.
+        await db.Database.ExecuteSqlAsync($$"""
+            WITH band_area AS MATERIALIZED (
+                SELECT gen_random_uuid() AS area_id
+            ),
+            doline_rows AS MATERIALIZED (
+                SELECT gen_random_uuid() AS doline_id, a.area_id, q.d,
+                       ST_SetSRID(ST_Translate(
+                           ST_Rotate(
+                               ST_Scale(ST_Buffer(ST_MakePoint(0, 0), q.radius, 4), 1, q.squash),
+                               q.turn),
+                           q.cx, q.cy), 4326) AS geom
+                FROM band_area a,
+                     (SELECT d,
+                             0.0002 + random() * 0.0008 AS radius,
+                             0.4 + random() * 0.6 AS squash,
+                             random() * pi() AS turn,
+                             {{BandWest}} + random() * {{BandEast - BandWest}} AS cx,
+                             {{BandSouth}} + random() * {{BandNorth - BandSouth}} AS cy
+                      FROM generate_series(1, {{BandDolines}}) d) q
+            ),
+            area_feature AS (
+                INSERT INTO features (
+                    id, kind, category, feature_type_id, name, geom, location_protected,
+                    is_protected_effective, ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    a.area_id, {{(short)FeatureKind.Generic}}, {{(short)FeatureCategory.Surface}},
+                    (SELECT id FROM feature_types WHERE code = {{FeatureTypeSeeds.KarstArea}}),
+                    'Perf band area',
+                    ST_SetSRID(ST_MakeEnvelope({{BandWest}}, {{BandSouth}}, {{BandEast}}, {{BandNorth}}), 4326),
+                    false, false, ARRAY[a.area_id], {{ownerId}}, {{(short)Visibility.Authenticated}}, now(), now()
+                FROM band_area a
+                RETURNING id
+            ),
+            doline_features AS (
+                INSERT INTO features (
+                    id, kind, category, feature_type_id, name, geom, location_protected,
+                    is_protected_effective, ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    d.doline_id, {{(short)FeatureKind.Generic}}, {{(short)FeatureCategory.Surface}},
+                    (SELECT id FROM feature_types WHERE code = {{FeatureTypeSeeds.Sinkhole}}),
+                    'Perf band doline ' || d.d, d.geom, false, false,
+                    ARRAY[d.doline_id, d.area_id], {{ownerId}}, {{(short)Visibility.Private}}, now(), now()
+                FROM doline_rows d
+                RETURNING id
+            ),
+            doline_edges AS (
+                INSERT INTO feature_hierarchy_edges (parent_id, child_id, is_primary, created_at, updated_at)
+                SELECT d.area_id, d.doline_id, true, now(), now() FROM doline_rows d
+                RETURNING id
+            ),
+            doline_closure AS (
+                INSERT INTO feature_ancestors (feature_id, ancestor_id)
+                SELECT a.area_id, a.area_id FROM band_area a
+                UNION ALL
+                SELECT d.doline_id, d.doline_id FROM doline_rows d
+                UNION ALL
+                SELECT d.doline_id, d.area_id FROM doline_rows d
+                RETURNING feature_id
+            ),
+            cave_rows AS MATERIALIZED (
+                SELECT gen_random_uuid() AS cave_id, gen_random_uuid() AS centerline_id, n,
+                       ST_SetSRID(ST_MakeLine(ARRAY[
+                           ST_MakePoint(x0, y0, z0),
+                           ST_MakePoint(x0 + 0.0012, y0 + 0.0006, z0 + 10 + k1 * 20),
+                           ST_MakePoint(x0 + 0.0018, y0 + 0.0014, z0 - k2 * 20)]), 4326) AS line
+                FROM (SELECT (gx * {{BandCaveRows}} + gy + 1) AS n,
+                             {{BandWest}} + gx * {{BandCaveSpacing}} AS x0,
+                             {{BandSouth}} + gy * {{BandCaveSpacing}} AS y0,
+                             300 + random() * 60 AS z0, random() AS k1, random() AS k2
+                      FROM generate_series(0, {{BandCaveColumns - 1}}) gx,
+                           generate_series(0, {{BandCaveRows - 1}}) gy) g
+            ),
+            cave_features AS (
+                INSERT INTO features (
+                    id, kind, category, name, geom, location_protected, is_protected_effective,
+                    ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    c.cave_id, {{(short)FeatureKind.Cave}}, {{(short)FeatureCategory.Underground}},
+                    'Perf band cave ' || c.n, ST_Force2D(ST_StartPoint(c.line)), false, false,
+                    ARRAY[c.cave_id], {{ownerId}}, {{(short)Visibility.Authenticated}}, now(), now()
+                FROM cave_rows c
+                RETURNING id
+            ),
+            cave_subtypes AS (
+                INSERT INTO caves (
+                    id, kind, cave_type_id, exploration_status, is_show_cave, entrance_count)
+                SELECT c.cave_id, {{(short)FeatureKind.Cave}},
+                       (SELECT id FROM cave_types WHERE code = 'cave'),
+                       {{(short)ExplorationStatus.Unknown}}, false, 0
+                FROM cave_rows c
+                RETURNING id
+            ),
+            line_features AS (
+                INSERT INTO features (
+                    id, kind, category, name, geom, location_protected, is_protected_effective,
+                    ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    c.centerline_id, {{(short)FeatureKind.Centerline}}, {{(short)FeatureCategory.Underground}},
+                    'Perf band centerline', ST_Multi(c.line), false, false,
+                    ARRAY[c.centerline_id, c.cave_id], {{ownerId}}, {{(short)Visibility.Authenticated}},
+                    now(), now()
+                FROM cave_rows c
+                RETURNING id
+            ),
+            line_rows AS (
+                INSERT INTO centerlines (
+                    id, cave_feature_id, kind, is_default, skeleton, path_count, source, length_m)
+                SELECT c.centerline_id, c.cave_id, {{(short)FeatureKind.Centerline}}, true,
+                       ST_Force2D(ST_Multi(c.line)), 1, {{(short)CenterlineSource.Uploaded}}, 100
+                FROM cave_rows c
+                RETURNING id
+            ),
+            line_edges AS (
+                INSERT INTO feature_hierarchy_edges (parent_id, child_id, is_primary, created_at, updated_at)
+                SELECT c.cave_id, c.centerline_id, true, now(), now() FROM cave_rows c
+                RETURNING id
+            )
+            INSERT INTO feature_ancestors (feature_id, ancestor_id)
+            SELECT c.cave_id, c.cave_id FROM cave_rows c
+            UNION ALL
+            SELECT c.centerline_id, c.centerline_id FROM cave_rows c
+            UNION ALL
+            SELECT c.centerline_id, c.cave_id FROM cave_rows c
+            """);
+
         // Fresh bulk-loaded tables have no statistics yet (autoanalyze hasn't run) and the
         // planner picks pathological plans (measured 50x). Real databases are analyzed.
         await db.Database.ExecuteSqlRawAsync(
@@ -1627,9 +1921,8 @@ public sealed class PerformanceTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// Removes the bulk-seeded rows again.
     ///
     /// <para>
-    /// This class shares one database with nearly every other class in the assembly, and they run
-    /// one after another rather than side by side, so whatever it leaves behind is queried by
-    /// every class ordered after it for the rest of the run. A hundred thousand extra entrances
+    /// The tests of this class share one database, so whatever one leaves behind is queried by
+    /// every test ordered after it. A hundred thousand extra entrances
     /// is enough to push ordinary reads past the command timeout: it was measured producing
     /// seventeen failures on surfaces nothing had touched, all of them timeouts wearing the
     /// costume of a server error, and each one passing on its own the moment it was re-run

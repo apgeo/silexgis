@@ -148,7 +148,7 @@ public sealed class StorageFiguresService(
             scanStored + scanReserved,
             scans.Value.TotalCap,
             FreeBytes(storeRoot),
-            handoff.Enabled ? FreeBytes(handoff.Root) : null,
+            handoff.Enabled ? WorkerFreeBytes() : null,
             Math.Max(0, storage.Value.MinFreeBytes),
             storage.Value.Thresholds);
     }
@@ -197,6 +197,21 @@ public sealed class StorageFiguresService(
     /// be read. The directory is made first so that a fresh installation, whose store has never
     /// been written, still answers for the volume it will be on.
     /// </summary>
+    /// <summary>The least free space of the workers' hand-off directories: a step is refused on the volume with the least room.</summary>
+    private long? WorkerFreeBytes()
+    {
+        long? least = null;
+        foreach (var root in handoff.Roots)
+        {
+            if (FreeBytes(root) is { } free && (least is null || free < least))
+            {
+                least = free;
+            }
+        }
+
+        return least;
+    }
+
     public static long? FreeBytes(string directory)
     {
         try

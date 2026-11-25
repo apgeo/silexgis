@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Terrain;
 
 namespace SilexGis.Api.Features.Terrain;
@@ -35,6 +36,7 @@ public sealed record TerrainProfileSampleDto(
 /// <param name="AscentM">Total rise between neighbouring stations that both got a height.</param>
 /// <param name="DescentM">Total fall between neighbouring stations that both got a height.</param>
 /// <param name="Samples">Stations, in increasing distance along.</param>
+/// <param name="Accuracy">The stated accuracy of the terrain build the heights were read from, or null when none is recorded.</param>
 public sealed record TerrainProfileDto(
     bool HasTerrain,
     double LengthM,
@@ -43,7 +45,8 @@ public sealed record TerrainProfileDto(
     double? HighestM,
     double AscentM,
     double DescentM,
-    IReadOnlyList<TerrainProfileSampleDto> Samples);
+    IReadOnlyList<TerrainProfileSampleDto> Samples,
+    TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>Refuses a line the elevation reader should not be asked about.</summary>
 public sealed class TerrainProfileRequestValidator : AbstractValidator<TerrainProfileRequest>
@@ -102,6 +105,7 @@ public static class TerrainProfileEndpoints
     private static async Task<Results<Ok<TerrainProfileDto>, UnauthorizedHttpResult, ProblemHttpResult>>
         ProfileAsync(
             TerrainProfileRequest request,
+            SilexGisDbContext db,
             IAccessContextAccessor accessAccessor,
             TerrainRasterIndex index,
             IDemSampleService sampler,
@@ -136,6 +140,7 @@ public static class TerrainProfileEndpoints
             summary.AscentM,
             summary.DescentM,
             [.. stations.Select((s, i) => new TerrainProfileSampleDto(
-                s.DistanceAlongM, s.Longitude, s.Latitude, samples[i].Outcome, samples[i].ElevationM))]));
+                s.DistanceAlongM, s.Longitude, s.Latitude, samples[i].Outcome, samples[i].ElevationM))],
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 }

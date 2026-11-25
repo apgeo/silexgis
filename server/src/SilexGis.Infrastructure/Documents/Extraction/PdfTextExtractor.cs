@@ -22,6 +22,24 @@ namespace SilexGis.Infrastructure.Documents.Extraction;
 /// </summary>
 public sealed class PdfTextExtractor : ITextExtractor
 {
+    /// <summary>How deeply the document's objects may nest while it is read.</summary>
+    private const int MaxNesting = 256;
+
+    private readonly long maxStreamBytes;
+    private readonly long maxDocumentBytes;
+
+    public PdfTextExtractor()
+        : this(BoundedPdfFilters.DefaultMaxStreamBytes, BoundedPdfFilters.DefaultMaxDocumentBytes)
+    {
+    }
+
+    /// <summary>A reader with its own decoding ceilings; the defaults are the installation's.</summary>
+    internal PdfTextExtractor(long maxStreamBytes, long maxDocumentBytes)
+    {
+        this.maxStreamBytes = maxStreamBytes;
+        this.maxDocumentBytes = maxDocumentBytes;
+    }
+
     /// <inheritdoc />
     public string Name => "pdf";
 
@@ -44,11 +62,17 @@ public sealed class PdfTextExtractor : ITextExtractor
         // The file came from outside, so its cross-references and fonts are as likely to be
         // slightly wrong as deliberately hostile. Lenient parsing recovers the everyday damage
         // a generator left behind; a missing font stops that page rendering, never the reading.
+        // Its streams decode under a ceiling, since a chain of decoders can turn a megabyte into
+        // gigabytes, and its nesting is bounded explicitly rather than by whatever the library
+        // happens to default to: a self-referencing form or resource chain is otherwise a way to
+        // exhaust the worker's stack.
         var options = new ParsingOptions
         {
             UseLenientParsing = true,
             SkipMissingFonts = true,
             ClipPaths = false,
+            FilterProvider = BoundedPdfFilters.ForOneDocument(maxStreamBytes, maxDocumentBytes),
+            MaxStackDepth = MaxNesting,
         };
 
         using var document = PdfDocument.Open(source.Stream, options);

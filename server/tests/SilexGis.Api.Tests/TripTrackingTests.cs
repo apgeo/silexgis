@@ -226,6 +226,12 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// and then fails its precondition against the version the first one moved: a 412 naming the
     /// version, never a duplicate row, a unique-index failure or a 500. Sent together rather than
     /// one after the other, so the lock is what decides it whenever the two do overlap.
+    /// <para>
+    /// A smoke test: nothing forces the two writes into one another, and handled one after another
+    /// they give the same verdict through the ordinary stale-version check. It can only fail when
+    /// the requests happen to overlap. The overlap is forced by
+    /// <see cref="Two_first_configurations_held_at_the_trip_row_until_both_wait_leave_one_watch_and_refuse_the_second"/>.
+    /// </para>
     /// </remarks>
     [Fact]
     public async Task Two_first_configurations_of_one_watch_at_once_leave_one_watch_and_refuse_the_second()
@@ -264,6 +270,55 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         }
 
         (await StateAsync(owner, trip)).GetProperty("state").GetString().ShouldBe("armed");
+    }
+
+    /// <summary>
+    /// The forced twin of the test above. The trip row is held by this test until both first
+    /// configurations are seen waiting on it, so both have read the trip's version before either
+    /// writes, and both carry a version that was current when they arrived. Only the comparison
+    /// made under the lock can then refuse the second: a 412 naming the version, and one watch row.
+    /// </summary>
+    [Fact]
+    public async Task Two_first_configurations_held_at_the_trip_row_until_both_wait_leave_one_watch_and_refuse_the_second()
+    {
+        var (trip, _) = await CreateTripAsync("First arm held", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var held = (await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking")).Headers.ETag!.ToString();
+
+        Task<HttpResponseMessage> ArmWithAsync()
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
+            {
+                Content = JsonContent.Create(new { state = "armed", surveyModelId = model }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", held);
+            return owner.SendAsync(request);
+        }
+
+        HttpResponseMessage[] answers;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var holding = await db.Database.BeginTransactionAsync();
+            await db.Database.ExecuteSqlRawAsync("SELECT 1 FROM trip_logs WHERE id = {0} FOR UPDATE", trip);
+
+            var sent = new[] { ArmWithAsync(), ArmWithAsync() };
+            await LockWaits.UntilParkedAsync(db, 2, Task.WhenAny(sent), "both first configurations");
+            await holding.CommitAsync();
+            answers = await Task.WhenAll(sent);
+        }
+
+        answers.Select(a => a.StatusCode).ShouldBe(
+            [HttpStatusCode.OK, HttpStatusCode.PreconditionFailed], ignoreOrder: true);
+        var loser = answers.Single(a => a.StatusCode == HttpStatusCode.PreconditionFailed);
+        (await loser.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripTrackings.CountAsync(x => x.TripLogId == trip)).ShouldBe(1);
+        }
     }
 
     [Fact]
@@ -3195,6 +3250,12 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// report — whichever of them got there first, and whether the others found it by looking or
     /// were stopped at the constraint.
     /// </summary>
+    /// <remarks>
+    /// A smoke test: nothing forces the sends into one another, and handled one after another they
+    /// give the same verdict by finding the report already there. It can only fail when the sends
+    /// happen to overlap. The overlap is forced in
+    /// <see cref="One_act_whose_duplicate_is_written_after_it_looked_is_answered_with_the_duplicates_reports"/>.
+    /// </remarks>
     [Fact]
     public async Task One_act_sent_many_times_at_once_leaves_one_report_and_every_send_succeeds()
     {
@@ -3238,6 +3299,11 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// these name them backwards. Asked several times over, because the first sends an
     /// application ever takes are slow enough to fall into an order by themselves.
     /// </summary>
+    /// <remarks>
+    /// A smoke test, like the one above: the overlap it is about is likely, not forced, and handled
+    /// one after another the sends give the same verdict. The lost race itself is forced in the
+    /// test after this one.
+    /// </remarks>
     [Fact]
     public async Task One_act_naming_several_people_sent_many_times_at_once_leaves_one_report_each_and_every_send_succeeds()
     {
@@ -3276,6 +3342,56 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
             && a.EntityType == nameof(TripPositionEvent))).ShouldBe(People * Acts);
+    }
+
+    /// <summary>
+    /// The forced twin of the two tests above. The send under test has looked for its act, found
+    /// nothing and is about to write when the same act is sent again and written in full; its own
+    /// insert is then refused by the one-report-per-person-per-act constraint, and only the
+    /// recovery from that refusal can answer it — with the other send's reports, and leaving no
+    /// report or history row of its own.
+    /// </summary>
+    [Fact]
+    public async Task One_act_whose_duplicate_is_written_after_it_looked_is_answered_with_the_duplicates_reports()
+    {
+        var (trip, cavers) = await CreateTripAsync("Duplicate written first", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.1", recordedAt = At(13, 0),
+            clientKey = Guid.NewGuid(),
+        };
+
+        HttpResponseMessage? duplicate = null;
+        var meanwhile = new BeforeFirstSave<TripPositionEvent>(
+            e => e.TripLogId == trip,
+            async () => duplicate = await PostEventAsync(owner, trip, body));
+        using var host = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(meanwhile));
+        });
+        var interrupted = await AuthHelper.BearerClientAsync(host, ownerEmail);
+
+        var send = await PostEventAsync(interrupted, trip, body);
+
+        meanwhile.Fired.ShouldBeTrue("the duplicate has to be written between the look and the write");
+        duplicate!.StatusCode.ShouldBe(HttpStatusCode.OK, await duplicate.Content.ReadAsStringAsync());
+        send.StatusCode.ShouldBe(HttpStatusCode.OK, await send.Content.ReadAsStringAsync());
+        var written = (await BodyAsync(duplicate)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        var answered = (await BodyAsync(send)).EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToList();
+        written.Count.ShouldBe(2);
+        answered.ShouldBe(written, ignoreOrder: true);
+
+        var log = (await LogAsync(owner, trip)).Select(e => e.GetProperty("id").GetGuid()).ToList();
+        log.ShouldBe(written, ignoreOrder: true);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.IgnoreQueryFilters().CountAsync(e => e.TripLogId == trip)).ShouldBe(2);
+        (await db.AuditEntries.CountAsync(a => a.RootEntityId == trip.ToString()
+            && a.EntityType == nameof(TripPositionEvent))).ShouldBe(2);
     }
 
     /// <summary>

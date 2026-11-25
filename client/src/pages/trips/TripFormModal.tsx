@@ -15,9 +15,11 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { ApiError, lastReadETag } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
   useCreateDoor,
   useCreateTripLog,
@@ -242,7 +244,7 @@ function RosterField({
                   <Form.Item name={[field.name, 'note']} noStyle>
                     <Input size="small" placeholder={t('trips.participantNote')} maxLength={500} />
                   </Form.Item>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {t('trips.participantTimesHint')}
                   </Typography.Text>
                 </Flex>
@@ -268,6 +270,8 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
   const createTrip = useCreateTripLog();
   const createPlan = useCreateTripPlan();
   const updateTrip = useUpdateTripLog();
@@ -308,12 +312,14 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // tab, after anything that refreshes trips — and every read files a newer version for the next
   // save to carry. A save that carried that one would tell the server this form had seen a change
   // it never showed, and the roster and times somebody else saved meanwhile would be written back
-  // to what they were with nobody told. So the save names the version taken here.
+  // to what they were with nobody told. So the save names the version taken here, and takes it
+  // from the copy the fields came from: the newest version filed for the trip's address can
+  // already be ahead of that copy, and with an older roster it would pass for the newer one.
   const openedAtVersion = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (open) {
-      openedAtVersion.current = trip ? lastReadETag(`/api/v1/trip-logs/${trip.id}`) : undefined;
+      openedAtVersion.current = trip ? versionReadWith(trip) : undefined;
       form.resetFields();
       if (trip) {
         form.setFieldsValue({
@@ -471,7 +477,11 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
       // rather than an error, and with what to do — the form still holds the roster as it was
       // before the other save, so saving it again unread would undo what the other person did.
       const code = error instanceof ApiError ? error.code : undefined;
-      if (code === 'trip_log.concurrent_roster_write') {
+      if (isConcurrencyConflict(error)) {
+        // Saved against a version somebody else has moved past: the application's conflict
+        // warning words it, and a "save failed" beside it would contradict it. The form stays
+        // open with what was typed in it.
+      } else if (code === 'trip_log.concurrent_roster_write') {
         message.warning({ content: t('trips.rosterChangedMeanwhile'), duration: 8 });
       } else {
         message.error(
@@ -506,14 +516,15 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
     <Modal
       title={trip ? t('trips.edit') : planning ? t('trips.plan.new') : t('trips.new')}
       open={open}
-      onCancel={() => onClose()}
+      onCancel={() => requestDiscard(edits.edited, () => onClose())}
       onOk={() => void onOk()}
       confirmLoading={createTrip.isPending || createPlan.isPending || updateTrip.isPending}
       width={720}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       afterOpenChange={setShown}
     >
-      <Form<FormValues> form={form} layout="vertical">
+      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Form.Item name="title" label={t('trips.titleField')} rules={[{ required: true }]}>
           <Input maxLength={255} />
         </Form.Item>

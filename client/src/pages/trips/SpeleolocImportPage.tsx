@@ -29,6 +29,7 @@ import SpeleolocImportSummary, {
 } from '../../components/import/SpeleolocImportSummary.tsx';
 import SpeleolocPeoplePanel from '../../components/import/SpeleolocPeoplePanel.tsx';
 import SpeleolocPointTable from '../../components/import/SpeleolocPointTable.tsx';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
 import {
   clampCandidateCount,
   couldBeRecorded,
@@ -438,7 +439,7 @@ export default function SpeleolocImportPage() {
             appears, so a live button would offer to record the same scans a second time. */}
         <Button
           type="primary"
-          disabled={blockers.length > 0 || result !== null}
+          disabled={blockers.length > 0 || result !== null || saveSession.isError}
           loading={commit.isPending}
           onClick={() => void onCommit()}
           data-testid="speleoloc-import-commit"
@@ -446,6 +447,12 @@ export default function SpeleolocImportPage() {
           {t('speleolocImport.recordSelected', { count: takenIds.length })}
         </Button>
       </Flex>
+
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
 
       {recordings.isError && (
         <Alert
@@ -493,7 +500,6 @@ export default function SpeleolocImportPage() {
           style={{ marginBottom: 16 }}
           data-testid="speleoloc-import-preview-error"
           title={errorText(previewError, 'previewFailed')}
-          description={previewError instanceof ApiError ? previewError.detail : undefined}
         />
       )}
 

@@ -66,12 +66,16 @@
     "speleolocImport": "Importă o înregistrare",
     "registryRegions": "Regiuni",
     "registryCategories": "Categorii",
-    "publishedTrips": "Ture publicate"
+    "cavePotential": "Potențial speologic",
+    "publishedTrips": "Ture publicate",
+    "testData": "Date de test"
   },
   "terrain": {
     "title": "Relief",
     "noBuilds": "Pentru această instalare nu a fost generată încă nicio suprafață de altitudine.",
     "noBuildsHint": "Trasează un dreptunghi mai sus și pornește prima generare.",
+    "listLoadFailed": "Generările de teren nu au putut fi încărcate.",
+    "buildLoadFailed": "Această generare nu a putut fi încărcată. Poate a fost ștearsă.",
     "intro": "Trasează un dreptunghi, spune de unde vin datele de altitudine, iar instalarea generează terenul pe care îl desenează scena 3D.",
     "area": {
       "draw": "Trasează dreptunghi",
@@ -230,6 +234,7 @@
       "derivativeBuildNotFinished": "Generarea nu s-a încheiat, deci nu există încă relieful din care să se deseneze terenul.",
       "derivativeNotFound": "Imaginea nu mai există.",
       "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus.",
+      "derivativeAnalysisUnavailable": "Imaginea este calculată de programul de analiză a terenului (WhiteboxTools), pe care această instalare nu îl rulează.",
       "baseNotFound": "Generarea de extins nu mai există.",
       "baseUnchecked": "Generarea de extins nu a avut niciodată dalele citite înapoi și găsite întregi, așa că nu există nimic sigur la care să se adauge.",
       "baseNotPublished": "Generarea de extins nu mai are dale acolo de unde se servește terenul. Pornește în schimb o generare nouă peste toată zona.",
@@ -245,7 +250,7 @@
       "stale": "Depășită",
       "staleHints": {
         "elevationReplaced": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
-        "methodRevised": "Calculată înainte ca modul în care se obține acest tip de imagine să fie corectat. Este în continuare desenată, dar nu este ceea ce ar da terenul astăzi. Cere din nou aceeași imagine și este calculată de la capăt."
+        "methodRevised": "Calculată înainte ca modul în care se obține acest tip de imagine să fie corectat, sau de o versiune mai veche a programului care o calculează. Este în continuare desenată, dar nu este ceea ce ar da terenul astăzi. Cere din nou aceeași imagine și este calculată de la capăt."
       },
       "totalSize": "{{size}} pe disc",
       "statuses": {
@@ -262,7 +267,8 @@
         "positionIndex": "Poziție topografică",
         "roughness": "Rugozitate",
         "colourRelief": "Relief colorat",
-        "contours": "Curbe de nivel"
+        "contours": "Curbe de nivel",
+        "geomorphons": "Forme de relief"
       }
     },
     "derivativeForm": {
@@ -313,6 +319,19 @@
       "contourInterval": "O curbă la fiecare (m)",
       "contourIntervalHint": "Metri de înălțime între o curbă și următoarea, numărați de la nivelul mării. Fiecare a cincea curbă este desenată mai gros. Curbele sunt o imagine: de-a lungul lor nu se poate măsura și nu pot fi selectate.",
       "contourIntervalInvalid": "Curbele de nivel se află la o distanță de la {{min}} la {{max}} metri de înălțime una de alta.",
+      "kindUnavailable": "{{kind}} (indisponibil aici)",
+      "unavailable": {
+        "not_configured": "Formele de relief sunt calculate de WhiteboxTools, pe care această instalare nu îl rulează. Un administrator îl poate configura.",
+        "tool_missing": "Formele de relief sunt calculate de WhiteboxTools, pe care această instalare este configurată să îl ruleze, dar nu îl găsește. Un administrator poate verifica unde este instalat.",
+        "sandbox_missing": "Formele de relief sunt calculate de WhiteboxTools, care este instalat aici, dar nu poate rula fără mediul său izolat (bubblewrap). Un administrator îl poate instala."
+      },
+      "landformSearch": "Distanța de căutare (m)",
+      "landformSearchHint": "Cât de departe privește fiecare celulă de-a lungul a opt linii de vizare. Stabilește scara formelor: același versant este pantă la 100 m și umăr la 1 km.",
+      "landformSkip": "Ignoră până la (m)",
+      "landformSkipHint": "Denivelările mai apropiate decât atât sunt ignorate. De obicei zero.",
+      "landformFlatness": "Unghi de planeitate (°)",
+      "landformFlatnessHint": "O linie de vizare care urcă sau coboară mai puțin abrupt decât atât este socotită plană.",
+      "landformInvalid": "Distanța de căutare este peste 0 și cel mult {{search}} m, distanța ignorată este mai mică decât ea, iar unghiul de planeitate este între 0 și {{flatness}}°.",
       "computeEdges": "Calculează celulele de la margine din vecinii pe care îi au",
       "computeEdgesHint": "Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală. Pornit, marginea este ușor greșită — cu mai puțin decât o linie lipsă.",
       "colourRamp": "Rampa de culori",
@@ -331,6 +350,7 @@
     },
     "derivativeList": {
       "title": "Registrul imaginilor derivate",
+      "loadFailed": "Imaginile calculate nu au putut fi citite acum. Asta nu spune nimic despre care există, deci nu calcula nimic din nou până nu au fost citite.",
       "empty": "Nicio imagine a terenului nu a fost calculată încă.",
       "emptyHint": "Cere una mai sus, dintr-o generare încheiată.",
       "picture": "Imagine",
@@ -350,8 +370,47 @@
         "zFactor": "înălțimi ×{{factor}}",
         "stops": "{{count}} trepte de culoare",
         "interval": "o curbă la fiecare {{metres}} m",
-        "edgesOff": "margini lăsate goale"
+        "edgesOff": "margini lăsate goale",
+        "search": "privind la {{metres}} m",
+        "skip": "dincolo de primii {{metres}} m",
+        "flatness": "plan sub {{degrees}}°"
       }
+    },
+    "accuracy": {
+      "column": "Acuratețea elevației",
+      "notRecorded": "Nenotată",
+      "edit": "Acuratețe",
+      "editTitle": "Acuratețea elevației",
+      "editIntro": "Spune cât de des eșantionează elevația acestei construcții terenul și cu cât pot greși înălțimile. Lasă toate câmpurile goale pentru a nu nota nimic.",
+      "saved": "Acuratețea a fost salvată.",
+      "formTitle": "Acuratețea elevației (opțional)",
+      "formIntro": "Lăsat gol, o construcție făcută doar din acoperirea obținută notează cifrele publicate ale acelui set de date; o construcție din rasterele tale nu notează nimic până nu o spui aici.",
+      "resolution": "Pasul pe teren (m)",
+      "resolutionHint": "Distanța dintre eșantioanele de elevație, în metri.",
+      "error": "Eroare verticală (m)",
+      "errorHint": "Cu cât se poate abate o înălțime de la terenul real.",
+      "statistic": "Statistica",
+      "source": "De unde provin cifrele",
+      "sourceHint": "O publicație, un raport de măsurători sau declarația unui furnizor.",
+      "spacing": "pas de {{value}} m",
+      "vertical": "{{value}} m {{statistic}}",
+      "statistics": {
+        "RMSE": "RMSE (eroare medie pătratică)",
+        "LE90": "LE90 (eroare nedepășită de 90 % din puncte)",
+        "LE95": "LE95 (eroare nedepășită de 95 % din puncte)"
+      }
+    },
+    "landforms": {
+      "flat": "Plan",
+      "peak": "Vârf",
+      "ridge": "Creastă",
+      "shoulder": "Umăr",
+      "spur": "Pinten",
+      "slope": "Versant",
+      "hollow": "Scobitură",
+      "footslope": "Bază de versant",
+      "valley": "Vale",
+      "pit": "Depresiune"
     },
     "configured": {
       "title": "O adresă de relief din configurația acestei instalări are prioritate față de generarea aleasă",
@@ -381,6 +440,8 @@
     "noActivity": "Nu a fost adăugat nimic încă.",
     "loadFailed": "Panoul de bord nu a putut fi încărcat.",
     "noViews": "Nicio vedere salvată încă.",
+    "viewsFailed": "Vederile tale salvate nu au putut fi citite acum. Asta nu spune nimic despre care le ai.",
+    "workAreasFailed": "Zonele de lucru nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "untitled": "Fără titlu",
     "kind": {
       "cave": "Peșteră",
@@ -396,6 +457,27 @@
     "allMyTrips": "Toate turele mele"
   },
   "auth": {
+    "forgotPassword": "Ai uitat parola?",
+    "forgotTitle": "Alege o parolă nouă",
+    "forgotIntro": "Scrie adresa cu care te autentifici. Dacă are un cont aici, i se trimite prin e-mail un link pentru alegerea unei parole noi.",
+    "forgotSubmit": "Trimite linkul",
+    "forgotSent": "Dacă există un cont pentru această adresă, un e-mail cu un link pentru alegerea unei parole noi este pe drum.",
+    "backToSignIn": "Înapoi la autentificare",
+    "createAccount": "Creează un cont",
+    "registerTitle": "Creează un cont",
+    "displayName": "Numele tău (opțional)",
+    "registerMailSent": "Cererea a fost primită. Verifică-ți căsuța de e-mail: un mesaj cu pasul următor este pe drum.",
+    "registerDone": "Cererea a fost primită. Dacă adresa era nouă aici, te poți autentifica acum cu ea și cu această parolă. Dacă avea deja un cont, autentifică-te cu parola acelui cont sau alege una nouă.",
+    "registerMailNotSent": "Cererea a fost primită, dar nu s-a putut trimite un e-mail de confirmare a adresei. Cere unui administrator al acestei instalări să o confirme.",
+    "registerRejected": "Adresa sau parola nu a fost acceptată. Folosește o adresă validă și o parolă de cel puțin 10 caractere.",
+    "registrationDisabled": "Această instalare nu deschide conturi la cerere. Cere o invitație unuia dintre administratorii ei.",
+    "configFailed": "Opțiunile de autentificare nu au putut fi citite, deci este posibil să lipsească furnizorii de autentificare.",
+    "externalNoAccount": "Nu există aici un cont pentru această autentificare, iar această instalare nu deschide unul prin acest furnizor. Cere unui administrator să-ți creeze contul sau să te invite.",
+    "externalEmailUnverified": "Furnizorul nu ți-a verificat adresa. Verific-o la furnizor, apoi încearcă din nou.",
+    "externalLinkRequired": "Un cont de aici folosește deja această adresă, dar furnizorul nu a verificat-o. Autentifică-te cu parola, apoi asociază furnizorul din setările de securitate.",
+    "externalNoEmail": "Furnizorul nu a transmis o adresă de e-mail, deci contul nu a putut fi găsit. Permite-i să-ți transmită adresa sau autentifică-te cu parola.",
+    "externalNotAllowed": "Acest cont nu se poate autentifica încă. Este posibil ca adresa să trebuiască încă confirmată; altfel, cere ajutorul unui administrator.",
+    "externalProviderUnknown": "Acest furnizor de autentificare nu este configurat pe această instalare.",
     "email": "Email",
     "password": "Parolă",
     "signIn": "Autentificare",
@@ -411,6 +493,17 @@
     "externalFailed": "Autentificarea externă nu a fost finalizată. Încearcă din nou sau folosește parola.",
     "serverUnreachable": "Serverul nu poate fi contactat",
     "serverUnreachableHint": "Autentificarea nu a putut fi inițiată. Verifică dacă serverul funcționează, apoi încearcă din nou.",
+    "unreachable": "Serverul nu a putut fi contactat. Verifică conexiunea, apoi încearcă din nou.",
+    "serverFailed": "Serverul nu a putut finaliza acum această operație. Încearcă din nou peste câteva momente.",
+    "tooManyAttempts": "Prea multe cereri de autentificare din această rețea. Așteaptă un minut, apoi încearcă din nou.",
+    "tooManyAttemptsWait": "Prea multe cereri de autentificare din această rețea. Încearcă din nou peste {{seconds}} s.",
+    "callbackFailed": "Autentificarea nu a putut fi finalizată.",
+    "callbackFailedHint": "Revenirea de la pagina de autentificare nu a fost acceptată. Se poate întâmpla când ceasul dispozitivului este greșit sau autentificarea a durat prea mult. Verifică ceasul, apoi încearcă din nou.",
+    "signInLapsedTitle": "Autentificarea ta a expirat",
+    "signInLapsedBody": "Serverul nu mai acceptă această autentificare, așa că nu se poate citi sau salva nimic până nu te autentifici din nou. Autentificarea părăsește această pagină și revine la ea: copiază mai întâi orice ai scris și nu ai salvat încă.",
+    "signInLapsedSignIn": "Autentifică-te din nou",
+    "signInLapsedStay": "Rămâi pe această pagină",
+    "mfaMethodUnavailable": "Această metodă nu este disponibilă pentru acest cont. Alege alta.",
     "mfaMethod": "Trimite codul prin",
     "mfaMethod_authenticator": "Aplicație de autentificare",
     "mfaMethod_email": "E-mail",
@@ -463,6 +556,10 @@
     "save": "Salvează",
     "ok": "OK",
     "cancel": "Anulează",
+    "discardTitle": "Renunți la modificări?",
+    "discardBody": "Ce ai modificat aici nu a fost salvat și se va pierde.",
+    "discardOk": "Renunță",
+    "keepEditing": "Continuă editarea",
     "edit": "Editează",
     "back": "Înapoi",
     "continue": "Continuă",
@@ -475,6 +572,11 @@
     "retry": "Reîncearcă",
     "conflict": "Altcineva a modificat acest element de când l-ai încărcat. Reîncarcă și reaplică modificările.",
     "loadFailed": "Nu s-a putut încărca. Încearcă din nou.",
+    "readFailedTitle": "Nu a putut fi citit acum",
+    "readFailedDetail": "Serverul nu a putut fi contactat sau nu a răspuns. Nimic de aici nu spune ceva despre ce s-a cerut — încearcă din nou.",
+    "refreshFailed": "Nu a putut fi citit din nou; ce se vede poate fi depășit.",
+    "readRefused": "Serverul a refuzat să-ți arate aceste date.",
+    "readRefusedHeld": "Nu mai poți citi aceste date; ce se vede provine dintr-o citire anterioară.",
     "close": "Închide",
     "reset": "Resetează",
     "clearAnswer": "Șterge răspunsul",
@@ -488,7 +590,9 @@
   "errorBoundary": {
     "title": "Ceva nu a funcționat pe acest ecran",
     "description": "Pagina nu a mai putut fi afișată. De obicei reîncărcarea o aduce înapoi.",
-    "reload": "Reîncarcă pagina"
+    "reload": "Reîncarcă pagina",
+    "downloadTitle": "Acest ecran nu s-a descărcat complet",
+    "downloadDescription": "Conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă această parte din SilexGIS, ori SilexGIS a fost actualizat de când a fost deschisă pagina. Datele tale nu au nicio problemă. Verifică conexiunea și reîncarcă pagina."
   },
   "map": {
     "baseLayers": "Hărți de bază",
@@ -523,6 +627,10 @@
     "geolocationFailed": "Locația nu a putut fi determinată.",
     "clusterTitle": "{{count}} intrări în această zonă",
     "zoomHere": "Apropie aici",
+    "clusterLoadFailed": "Intrările din această zonă nu au putut fi citite.",
+    "selectionLoadFailed": "Ce a fost ales pe hartă nu a putut fi citit.",
+    "selectionRefused": "Nu mai există sau nu ai dreptul să îl citești.",
+    "layerReadsFailed": "Unele straturi ale hărții nu au putut fi citite; lista poate fi incompletă.",
     "approximateShort": "aprox.",
     "swipeCompare": "Compară rasterul cu harta de dedesubt (glisor)",
     "hideChrome": "Ascunde barele de instrumente ale hărții",
@@ -544,6 +652,23 @@
       "refused": {
         "window": "Despre această imagine nu se poate întreba. Mută harta pentru a întreba din nou.",
         "other": "Indicele de carstificare a fost refuzat pentru această imagine."
+      }
+    },
+    "passageDepth": {
+      "layer": "Rocă deasupra galeriei",
+      "loading": "Se citește galeria din vedere…",
+      "shown": "Peșteri desenate: {{count}}.",
+      "none": "Nicio peșteră cu altitudini în vedere pe care o poți plasa exact.",
+      "failed": "Adâncimea galeriei nu a putut fi citită. Mutarea hărții cere din nou.",
+      "noTerrain": "Aici nu este construit niciun model de elevație, deci galeria nu poate fi colorată.",
+      "truncated": "În vedere sunt mai multe peșteri decât se desenează odată (cel mult {{max}}). Mărește harta pentru a le vedea pe celelalte.",
+      "legendAbove": "Se citește deasupra terenului",
+      "legendBand": "{{from}} – {{to}} m de rocă",
+      "legendOver": "Peste {{from}} m de rocă",
+      "refused": {
+        "window": "Pentru această vedere nu se poate cere un răspuns. Mută harta pentru a cere din nou.",
+        "terrain": "Nu ai dreptul de a citi elevația, de care are nevoie acest strat.",
+        "other": "Adâncimea galeriei a fost refuzată pentru această vedere."
       }
     },
     "karstLegend": {
@@ -632,6 +757,7 @@
     "regionPlaceholder": "Regiune",
     "lengthPlaceholder": "Lungime (m): 300, >300, 300..500",
     "filterRefused": "Acest filtru nu poate fi rulat cu drepturile tale. Modifică sau golește câmpurile de mai sus.",
+    "loadFailed": "Lista peșterilor nu a putut fi citită acum. Asta nu spune nimic despre ce peșteri există.",
     "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile tale, așa că nu a fost aplicat.",
     "savedNotAboutCaves": "Filtrul salvat nu se referă la peșteri.",
     "saved": "Salvat ca „{{name}}”.",
@@ -668,6 +794,7 @@
   "featureList": {
     "unreadableLink": "Filtrul din acest link nu a putut fi citit, așa că sunt afișate toate obiectele. Cere celui care l-a trimis un link nou.",
     "filterRefused": "Acest filtru nu poate fi rulat cu drepturile tale. Modifică sau golește câmpurile de mai sus.",
+    "loadFailed": "Lista obiectelor nu a putut fi citită acum. Asta nu spune nimic despre ce obiecte există.",
     "savedNotAboutFeatures": "Filtrul salvat nu se referă la obiecte.",
     "searchLabel": "Caută obiecte după denumire",
     "kindLabel": "Felul obiectului",
@@ -699,6 +826,7 @@
     "intro": "Un filtru salvat este o întrebare pe care o păstrezi. Dacă îl partajezi cu un grup de speologie sau cu toți cei autentificați, aceștia o pot pune; fiecăruia i se răspunde cu ce are el însuși dreptul să vadă.",
     "toRegistry": "Registrul peșterilor",
     "empty": "Niciun filtru salvat. Salvează unul din registrul peșterilor.",
+    "loadFailed": "Filtrele salvate nu au putut fi citite acum.",
     "name": "Nume",
     "description": "Descriere",
     "nothingToSave": "Nu există nicio condiție de salvat — stabilește mai întâi cel puțin una.",
@@ -735,6 +863,12 @@
     "notAvailable": "indisponibil pentru tine",
     "otherClubs": "Alte cluburi — e posibil să nu ai voie să partajezi cu ele",
     "groupNotAllowed": "Nu ai voie să partajezi filtre cu acest club. Alege unul dintre cluburile tale, „Doar eu” sau „Toți cei autentificați”.",
+    "saveRefused": {
+      "forbidden": "Nu poți salva filtre pe această instalare. Cere unui administrator dreptul de a le crea.",
+      "holdsPosition": "Filtrul conține un punct introdus, un poligon lipit sau locul de la care se ordonează „cel mai apropiat”, iar un filtru salvat nu le păstrează niciodată. Măsoară în schimb de la un obiect sau de la o zonă numită.",
+      "notSavable": "Serverul nu a putut salva filtrul în forma actuală. Verifică condițiile, schimbă-o pe cea pe care nu o poate folosi și salvează din nou.",
+      "gone": "Filtrul salvat a fost șters sau nu mai este partajat cu tine de când l-ai deschis, așa că modificarea nu a fost salvată. Reîncarcă lista ca să vezi filtrele pe care le mai poți modifica."
+    },
     "parts": {
       "search": "Numele conține „{{text}}”",
       "region": "Regiunea conține „{{text}}”",
@@ -745,8 +879,14 @@
     }
   },
   "caves": {
+    "problems": {
+      "typeUnknown": "Tipul de peșteră ales nu mai există. Alege altul și salvează din nou.",
+      "rockTypeUnknown": "Tipul de rocă ales nu mai există. Alege altul și salvează din nou."
+    },
     "title": "Peșteri",
     "newCave": "Peșteră nouă",
+    "notFound": "Nicio astfel de peșteră",
+    "notFoundDetail": "Fie nu există, fie nu o poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "editCave": "Editare peșteră",
     "name": "Denumire",
     "type": "Tip",
@@ -826,8 +966,10 @@
       "tripLogs": "{{count}} jurnale de tură"
     },
     "tripLogsEmpty": "Nicio tură nu numește această peșteră.",
+    "tripLogsLoadFailed": "Turele care numesc această peșteră nu au putut fi citite acum. Asta nu spune nimic despre dacă există vreuna.",
     "depthPlaces": {
       "title": "Locurile numite ale acestei peșteri",
+      "loadFailed": "Locurile numite ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă există vreunul declarat, așa că nu se poate declara niciunul până nu sunt citite.",
       "help": "O adâncime singură nu este un loc: transformarea ei în poziție înseamnă căutarea celei mai apropiate stații, iar asta nu poate spune care dintre mai multe stații apropiate este locul la care se referă oamenii. Declară o dată aici și fiecare raport la acea adâncime ajunge unde spui — introdus, corectat sau importat — iar numele devine ceva prin care un speolog poate raporta, în loc de un număr. Un loc poate fi numit și fără adâncime — o sală sau o joncțiune pe care o numește lista clubului — cu câteva cuvinte lângă nume, dacă o singură adâncime nu spune destul; un astfel de loc apare și este publicat împreună cu locurile peșterii, iar nicio adâncime raportată nu este plasată după el.",
       "declare": "Declară un loc",
       "depth": "Adâncime",
@@ -856,6 +998,7 @@
     }
   },
   "entrances": {
+    "loadFailed": "Intrările acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
     "add": "Adaugă intrare",
     "edit": "Editare intrare",
     "deleteConfirm": "Ștergi această intrare?",
@@ -874,7 +1017,12 @@
       "map": "De pe hartă",
       "estimated": "Estimată"
     },
-    "surveyedAt": "Cartată"
+    "surveyedAt": "Cartată",
+    "problems": {
+      "locationForbidden": "Nu poți alege intrarea principală a unei peșteri a cărei locație exactă îți este ascunsă. Salveaz-o ca intrare suplimentară sau roagă pe cineva care poate vedea poziția peșterii.",
+      "notFound": "Această intrare nu mai există. Poate a fost ștearsă.",
+      "caveNotFound": "Peștera căreia îi aparține această intrare nu mai există sau nu o mai poți vedea."
+    }
   },
   "features": {
     "title": "Obiecte",
@@ -960,6 +1108,14 @@
     "noParents": "Fără părinți",
     "editParents": "Editează părinții",
     "parentFixed": "O intrare sau o drumuire stă doar sub propria peșteră. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
+    "problems": {
+      "typeChangeForbidden": "Nu ai dreptul să modifici obiecte de tipul în care îl schimbi pe acesta, așa că nimic nu a fost salvat. Păstrează-i tipul actual sau cere ajutorul cuiva care poate modifica acel tip.",
+      "linkSelf": "Un obiect nu poate fi legat de el însuși. Alege alt obiect.",
+      "linkKindUnknown": "Acest fel de legătură nu mai este oferit. Reîncarcă și alege altul.",
+      "linkDuplicate": "Același obiect este legat de două ori cu același fel de legătură. Șterge una dintre ele.",
+      "linkTargetNotFound": "Unul dintre obiectele legate nu mai există sau nu îl mai poți vedea. Șterge-l și salvează din nou.",
+      "parentPrimaryHidden": "Părintele principal al acestui obiect este unul pe care nu îl poți vedea, așa că nu îi poți schimba părinții. Cere ajutorul cuiva care vede acel părinte."
+    },
     "parentFixedNote": "O intrare sau o drumuire stă doar sub propria peșteră, așa că părintele ei nu poate fi schimbat aici. Pentru a o proteja, protejează peștera sau pune peștera sub zona protejată.",
     "addParent": "Adaugă părinte…",
     "parentSearchPlaceholder": "Caută obiecte…",
@@ -993,10 +1149,14 @@
     "uploadPrompt": "Apasă sau trage fotografii și documente aici pentru a le atașa",
     "deleteConfirm": "Elimini acest atașament? Fișierul rămâne disponibil celui care l-a încărcat.",
     "empty": "Încă nu există fotografii sau documente.",
+    "loadFailed": "Atașamentele nu au putut fi citite acum. Asta nu spune nimic despre ce este atașat.",
     "versions": "Versiuni",
     "uploadVersion": "Încarcă o versiune nouă",
     "currentVersion": "curentă",
     "noVersions": "Încă nu există versiuni.",
+    "versionsLoadFailed": "Versiunile nu au putut fi citite acum.",
+    "versionInUse": "Această versiune este încă folosită, așa că nu poate fi ștearsă.",
+    "headUndeletable": "Versiunea curentă nu poate fi ștearsă. Încarcă mai întâi o versiune nouă, apoi șterge-o pe aceasta.",
     "deleteVersionConfirm": "Ștergi această versiune? Conținutul ei este eliminat definitiv.",
     "details": "Detalii",
     "caption": "Legendă",
@@ -1014,7 +1174,9 @@
       "other": "Altele"
     },
     "makePrimary": "Folosește ca fotografie reprezentativă",
-    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă"
+    "clearPrimary": "Nu mai folosi ca fotografie reprezentativă",
+    "primarySet": "Aceasta este acum fotografia reprezentativă.",
+    "primaryCleared": "Nu mai este fotografia reprezentativă."
   },
   "documents": {
     "deletion": {
@@ -1121,6 +1283,7 @@
   },
   "cabinets": {
     "title": "Dulapuri",
+    "loadFailed": "Dulapurile nu au putut fi citite acum. Nimic de aici nu spune dacă există vreunul.",
     "empty": "Niciun dulap încă.",
     "pickOne": "Alege un dulap pentru a vedea ce este clasat în el.",
     "new": "Nou",
@@ -1149,6 +1312,8 @@
     "unfiled": "Nedepuse",
     "unfiledHint": "Tot ce ai adăugat și nu se află încă într-un dulap. Depunerea este o decizie de mai târziu — alege ce ține împreună și depune dintr-o dată.",
     "unfiledEmpty": "Nu așteaptă nimic să fie depus.",
+    "unfiledLoadFailed": "Ce așteaptă să fie arhivat nu a putut fi citit acum.",
+    "listLoadFailed": "Documentele de aici nu au putut fi citite acum. Asta nu spune nimic despre ce este arhivat.",
     "defaults": "Ce ajunge aici",
     "defaultsHint": "Se aplică la tot ce se încarcă în acest dulap. Lăsat gol, răspunsul vine de la dulapul de deasupra.",
     "defaultType": "Tipul documentului",
@@ -1174,6 +1339,7 @@
     "queueExplain": "Aici așteaptă încărcările conturilor aflate sub verificare. Nimic din ele nu a fost scris încă: ce accepți se scrie atunci, iar ce respingi nu se scrie niciodată.",
     "wholeView": "Aici schimbările care așteaptă sunt arătate în întregime, inclusiv pozițiile exacte ale peșterilor protejate și fotografiile peșterilor pe care altfel nu le-ai putea deschide.",
     "queueEmpty": "Nimic nu așteaptă verificarea.",
+    "queueLoadFailed": "Coada de verificare nu a putut fi citită acum. Asta nu spune nimic despre dacă așteaptă ceva.",
     "forbidden": "Nu ai voie să verifici încărcări.",
     "uploader": "Trimis de",
     "unknownUploader": "Cont necunoscut",
@@ -1190,6 +1356,7 @@
     "readOnly": "Poți citi această încărcare, dar nu o poți decide.",
     "mine": {
       "title": "Încărcările tale în verificare",
+      "loadFailed": "Încărcările tale în verificare nu au putut fi citite acum. Asta nu spune nimic despre dacă sunt reținute.",
       "explain": "Contul tău este ținut pentru verificare: ce trimiți așteaptă un verificator și se scrie doar când îl acceptă. Aici vezi unde se află fiecare încărcare.",
       "sentAt": "Trimisă",
       "decidedAt": "Decisă",
@@ -1354,6 +1521,8 @@
     "selectLine": "Selectează {{name}}",
     "acceptSelected": "Acceptă selecția ({{count}})",
     "rejectSelected": "Respinge selecția ({{count}})",
+    "rejectSelectedTitle": "Respingi {{count}} de linii?",
+    "rejectSelectedExplain": "Aceste {{count}} de linii nu sunt scrise, iar cel care le-a trimis este anunțat, cu nota de mai jos. O linie respinsă poate fi totuși acceptată ulterior, cu „Acceptă totuși”.",
     "noteLabel": "Notă pentru cel care a încărcat (opțională, trimisă cu următoarea decizie)",
     "notePlaceholder": "De ce, sau ce să facă în loc",
     "showDecided": "Arată liniile deja decise",
@@ -1373,6 +1542,7 @@
     "problem": {
       "generic": "Decizia nu a putut fi luată.",
       "review_not_pending": "Ceva la care ajunge această decizie a fost deja decis sau nu mai poate fi schimbat. Pagina arată ultima stare.",
+      "review_batch_reverted": "Această încărcare a fost anulată, așa că o linie respinsă din ea nu mai poate fi acceptată. Cereți proprietarului telefonului să o trimită din nou dacă mai este dorită.",
       "review_own_batch": "Încărcările sunt decise de altcineva decât contul care le-a trimis.",
       "review_batch_not_found": "Această încărcare nu așteaptă verificarea sau nu ai voie să o vezi.",
       "review_item_not_found": "Această linie nu mai există.",
@@ -1405,8 +1575,15 @@
     "duplicateUnknown": "Acest conținut este deja salvat. Salvezi și această copie?",
     "duplicateStoreAnyway": "Salvează oricum",
     "duplicateSkip": "Sari peste",
+    "stop": "Oprește încărcarea",
+    "stopTitle": "Oprești această încărcare?",
+    "stopContent": "{{stored}} din {{total}} fișiere sunt salvate și rămân acolo unde sunt. Celelalte {{rest}} nu vor mai fi trimise.",
+    "stopConfirm": "Oprește",
+    "keepGoing": "Continuă încărcarea",
     "batches": "Încărcări",
     "batchesEmpty": "Nu s-a încărcat încă nimic în loturi.",
+    "batchesLoadFailed": "Încărcările nu au putut fi citite acum.",
+    "importRootsLoadFailed": "Directoarele de import nu au putut fi citite acum. Asta nu spune nimic despre dacă sunt configurate.",
     "batchSource": "Sursă",
     "batchSourceValues": {
       "interactive": "Browser",
@@ -1422,6 +1599,7 @@
       "failed": "Eșuat"
     },
     "batchCounts": "{{stored}} salvate · {{skipped}} sărite · {{failed}} eșuate",
+    "batchCountsTitle": "Fișiere",
     "batchReport": "Raport",
     "importDirectory": "Importă dintr-un director de pe server",
     "importDirectoryHint": "Copiază fișiere la care serverul are deja acces, fără a le trimite prin rețea. Folderele devin dulapuri.",
@@ -1438,11 +1616,24 @@
       "pathRefused": "Această cale de folder nu poate fi depusă",
       "filingRefused": "Nu ai voie să depui în acel dulap",
       "unreadable": "Fișierul nu a putut fi citit",
-      "failed": "Încărcarea a eșuat"
+      "failed": "Încărcarea a eșuat",
+      "lengthRequired": "Serverul nu a aflat lungimea unei bucăți; ceva între tine și server o poate elimina",
+      "sessionEnded": "Încărcarea s-a încheiat înainte ca fișierul să fie confirmat. Poate e deja salvat: verifică înainte să-l trimiți din nou",
+      "outOfStep": "Copia de pe server și acest fișier nu mai corespund",
+      "connectionLost": "Conexiunea s-a pierdut înainte ca fișierul să ajungă",
+      "serverFault": "Serverul nu a putut salva fișierul; poate nu mai are spațiu",
+      "archiveUnreadable": "Arhiva nu a putut fi deschisă",
+      "archiveTooManyEntries": "Arhiva conține mai multe fișiere decât acceptă această instalare",
+      "archiveTooLarge": "Arhiva despachetată depășește cât acceptă această instalare",
+      "archiveSuspicious": "Arhiva este comprimată într-un mod care pare nesigur, așa că nu a fost despachetată",
+      "importDirectoryNotFound": "Directorul nu a fost găsit pe server",
+      "importPathNotAllowed": "Directorul este în afara celor din care această instalare poate importa",
+      "importNoRoots": "Această instalare nu are configurat niciun director de import"
     },
     "batchStarted": "Încărcat"
   },
   "gallery": {
+    "creditLoadFailed": "Fotografia nu a putut fi citită, așa că atribuirea ei nu poate fi modificată deocamdată.",
     "filter": {
       "advanced": "Condiții…",
       "advancedTitle": "Condiții pentru fotografii",
@@ -1473,6 +1664,7 @@
     "noAlbums": "Niciun album încă.",
     "albumCount": "{{count}} fotografii",
     "empty": "Nicio fotografie nu corespunde.",
+    "loadFailed": "Fotografiile nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "publicEmpty": "Nu s-a publicat încă nimic.",
     "search": "Caută în descrieri și locuri",
     "photographer": "Fotograf",
@@ -1503,6 +1695,12 @@
     "shareTitle": "Link de partajare",
     "shareOnce": "Copiază-l acum — linkul se arată o singură dată și nu mai poate fi recuperat. Dacă se pierde, revocă-l și creează altul.",
     "revokeConfirm": "Revoci linkul de partajare al acestui album?",
+    "shareAlbum": "Creează un link de partajare",
+    "revokeShare": "Revocă linkul de partajare",
+    "deleteAlbum": "Șterge albumul",
+    "shareRevoked": "Linkul de partajare a fost revocat.",
+    "shareForbidden": "Nu poți publica acest album: partajarea lui cere dreptul de partajare asupra albumului.",
+    "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
     "licences": {
       "cc0": "Domeniu public (CC0)",
@@ -1533,9 +1731,35 @@
     "openInGallery": "Deschide în galerie",
     "arrangeHint": "Trage o fotografie peste locul unde o vrei, sau mut-o cu săgețile.",
     "albumEmpty": "Încă nimic în acest album. Adaugă fotografii din galerie.",
-    "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora."
+    "albumNotFound": "Albumul nu există",
+    "albumNotFoundDetail": "Acest album nu există sau a fost șters.",
+    "albumPhotosLoadFailed": "Fotografiile din acest album nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
+    "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora.",
+    "createForbidden": "Contul tău nu poate crea albume.",
+    "subjectGone": "Subiectul acestui album nu mai există sau nu îl poți vedea."
   },
   "geodata": {
+    "refusals": {
+      "connection": "Serverul nu a putut fi contactat. Verifică conexiunea și încearcă din nou.",
+      "signedOut": "Ai fost deconectat. Autentifică-te din nou și repetă operația.",
+      "forbidden": "Contul tău nu are voie să facă asta.",
+      "gone": "Nu mai există: poate a fost șters de altcineva. Reîncarcă lista.",
+      "server": "Serverul a dat o eroare ({{status}}). Încearcă din nou peste puțin timp.",
+      "busy": "Este încă în curs de procesare. Încearcă din nou după ce s-a terminat.",
+      "groupNotAllowed": "Nu poți atribui elementul acestui grup de speologie.",
+      "fileNotReady": "Fișierul nu a fost citit complet, așa că nu este încă nimic de revizuit.",
+      "selectionTooLarge": "Sunt alese prea multe rânduri pentru o singură confirmare. Alege mai puține și confirmă pe rând.",
+      "nothingCreated": "Toate rândurile alese au fost lăsate deoparte, deci nu s-ar crea nimic.",
+      "reviewRequired": "Aici importurile se revizuiesc întâi: alege rândurile și confirmă-le.",
+      "tooLargeWithoutReview": "Fișierul este prea mare pentru a fi creat fără revizuire: alege rândurile și confirmă-le.",
+      "noFiles": "Niciuna dintre fotografiile alese nu a putut fi citită.",
+      "ruleSetGone": "Setul de reguli ales nu mai există. Alege altul."
+    },
+    "deleteFailed": "Nu a fost șters.",
+    "exportFailed": "Fișierul nu a putut fi exportat.",
+    "cavingGroup": "Grup de speologie",
+    "cavingGroupRequired": "Alege grupul de speologie care îl poate citi.",
+    "editLoadFailed": "Setările actuale nu au putut fi citite, așa că nu poate fi editat acum.",
     "title": "Geodate",
     "name": "Denumire",
     "format": "Format",
@@ -1550,6 +1774,19 @@
     "uploadPrompt": "Apasă sau trage fișiere vectoriale aici pentru încărcare",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, shapefile arhivat, CSV cu coloane de coordonate, WKT — importate în fundal. Cel mult 150 MB pe fișier.",
     "uploadQueued": "{{name}} încărcat — importul a fost programat.",
+    "encoding": {
+      "action": "Codificarea caracterelor",
+      "title": "Codificarea caracterelor acestui tabel",
+      "hint": "Dacă litere precum ă, ș, à sau ñ apar greșit în denumirile din acest fișier, alege cum a fost salvat fișierul. Fișierul este apoi citit din nou de la început cu acea codificare, păstrându-i separatorul și coloanele de coordonate.",
+      "detect": "Detectează din fișier",
+      "confirm": "Citește din nou",
+      "queued": "{{name}} este citit din nou.",
+      "inProgress": "Fișierul este încă în curs de citire. Așteaptă să se termine, apoi alege din nou codificarea.",
+      "forbidden": "Contul tău nu poate modifica acest fișier.",
+      "gone": "Fișierul nu mai există sau nu îl mai poți vedea.",
+      "failed": "Fișierul nu a putut fi citit din nou. Încearcă din nou peste puțin timp.",
+      "busy": "Disponibil după ce fișierul a fost citit"
+    },
     "upload": {
       "sending": "Se încarcă — {{sent}} din {{total}}",
       "checking": "Trimis — serverul verifică fișierul…",
@@ -1722,6 +1959,7 @@
       "published": "Harta a fost poziționată și publicată.",
       "publishing": "Se poziționează harta…",
       "publishFailed": "Harta nu a putut fi publicată cu această poziție.",
+      "publishWatchFailed": "Nu s-a putut citi acum dacă harta a fost poziționată. Poziționarea a fost salvată; citește din nou pentru a vedea unde a ajuns.",
       "importNotJson": "Fișierul nu este un fișier de poziționare (JSON)."
     },
     "redraw": {
@@ -1741,6 +1979,9 @@
     "tabImports": "Importuri"
   },
   "mapEdit": {
+    "entranceNotCreated": "Peștera a fost creată, dar intrarea ei nu: {{problem}}",
+    "entranceNotCreatedTitle": "Peștera a fost creată, dar intrarea ei nu.",
+    "entranceRetryHint": "Apasă OK pentru a adăuga doar intrarea acestei peșteri; peștera nu este creată a doua oară. Dacă închizi, peștera rămâne fără intrare, iar intrarea poate fi adăugată din fișa ei.",
     "featureType": "Tip de obiect",
     "draw": "Desenează",
     "modify": "Modifică (trage vârfurile; Alt+clic șterge)",
@@ -1752,6 +1993,24 @@
     "measureDistance": "Măsoară distanța",
     "measureArea": "Măsoară aria",
     "discard": "Renunță la editări",
+    "discardConfirm": "Renunți la {{count}} editări nesalvate? Desenele dispar, iar obiectele remodelate revin la forma salvată. Acțiunea nu poate fi anulată.",
+    "discardConfirmOk": "Renunță",
+    "leaveTitle": "Părăsești harta cu editări nesalvate?",
+    "leaveBody": "{{count}} editări de pe hartă nu sunt salvate. Dacă părăsești harta, se pierd.",
+    "leaveOk": "Pleacă și renunță",
+    "leaveStay": "Rămâi pe hartă",
+    "saveIncomplete": "{{saved}} salvate, {{failed}} nesalvate. Ce nu s-a salvat este încă pe hartă, marcat cu roșu; corectează și apasă din nou Salvează. Prima problemă: {{reason}}",
+    "typeUnresolved": "Tipul acestui obiect nu a fost găsit în lista tipurilor de obiecte, așa că forma lui nouă nu a fost trimisă. Reîncarcă pagina și încearcă din nou.",
+    "problems": {
+      "geometryInvalid": "O formă nu este acceptată de server, de exemplu un contur care se intersectează singur.",
+      "typeRequired": "Un obiect nu are tip sau are un tip pe care această instalare nu îl are.",
+      "typeNotAllowed": "Nu ai voie să creezi sau să modifici obiecte de acest tip.",
+      "propertiesInvalid": "Atributele unui obiect nu corespund cu ce cere tipul lui.",
+      "parentRequired": "Un obiect de acest tip trebuie să fie în interiorul altui obiect. Alege-l pe cel căruia îi aparține.",
+      "parentUnavailable": "Obiectul ales să îl conțină nu mai există sau nu îl poți vedea.",
+      "forbidden": "Nu ai voie să faci această modificare.",
+      "notFound": "Obiectul nu mai există. Poate a fost șters."
+    },
     "finishDrawing": "Încheie",
     "finishDrawingHint": "Mai adaugă puncte înainte de a încheia forma.",
     "removeLastPoint": "Punct",
@@ -1968,6 +2227,7 @@
       "weather_note": "Notă meteo",
       "whatsapp_group_url": "Link către grupul de discuții"
     },
+    "stateTransitionInvalid": "Această schimbare nu este posibilă din starea în care se află acum: poate cineva a mutat-o între timp. Reîncarcă pentru a vedea unde a rămas.",
     "state": "Stare",
     "stateValues": {
       "draft": "Ciornă",
@@ -2041,6 +2301,11 @@
     "organizingCavingGroup": "Grupul organizator",
     "gallery": "Fotografii",
     "noPhotographs": "Nicio fotografie nu este atașată încă acestei ture.",
+    "photographsLoadFailed": "Fotografiile acestei ture nu au putut fi citite acum.",
+    "albumsLoadFailed": "Albumele acestei ture nu au putut fi citite acum.",
+    "photographsUnread": "Fotografiile nu au putut fi citite când a fost tipărit acest document.",
+    "accountsUnread": "Relatările turelor nu au putut fi citite când a fost tipărit acest document.",
+    "rolesLoadFailed": "Rolurile nu au putut fi citite acum.",
     "galleryVisibleToYou": "Fotografiile pe care le poți vedea. Altcineva poate vedea mai multe sau mai puține.",
     "report": {
       "open": "Vezi raportul",
@@ -2163,6 +2428,7 @@
     "calloutOverdueBody": "A trecut ora alarmei și nimeni nu confirmase că echipa a ieșit. Toți cei din tură au fost anunțați.",
     "calloutStandDown": "Echipa a ieșit",
     "calloutStoodDownSuccess": "Înregistrat — apelul de urgență a fost oprit.",
+    "calloutNotArmed": "Această ieșire nu mai are nicio verificare de întârziere de oprit: poate cineva a anulat-o deja.",
     "calloutStandDownFailed": "Apelul de urgență nu a putut fi oprit. Încearcă din nou și ia legătura pe altă cale dacă eroarea persistă.",
     "calloutArrange": "Stabilește o alarmă",
     "calloutChange": "Modifică alarma",
@@ -2865,6 +3131,11 @@
     "checklistAdvisory": "Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine poate citi tura.",
     "checklistTickedAt": "Confirmat la {{when}}",
     "checklistTickFailed": "Confirmarea nu a putut fi înregistrată.",
+    "checklistLoadFailed": "Lista de verificare a acestei ture nu a putut fi citită acum. Nimic de aici nu spune dacă are una.",
+    "checklistProblems": {
+      "tickForbidden": "Nu poți confirma linii din lista de verificare a acestei ture.",
+      "itemGone": "Linia nu mai este în listă; lista este afișată așa cum este acum."
+    },
     "empty": "Nicio tură încă.",
     "emptyFiltered": "Nicio tură nu corespunde acestui filtru.",
     "listFailed": "Turele nu au putut fi încărcate.",
@@ -2907,7 +3178,16 @@
     }
   },
   "expeditions": {
+    "problems": {
+      "forbidden": "Nu ai dreptul să modifici această tabără.",
+      "createForbidden": "Nu ai dreptul să înregistrezi tabere.",
+      "cavingGroupForbidden": "Nu ai dreptul să atribui o tabără acestui club.",
+      "gone": "Această tabără nu mai există sau nu mai ai dreptul să o vezi.",
+      "geometryInvalid": "Zona de lucru a taberei nu este o formă care poate fi salvată. Deseneaz-o din nou.",
+      "stayGone": "Acea ședere nu mai este în lista taberei."
+    },
     "notFound": "Nicio astfel de tabără",
+    "listUnavailable": "Taberele nu au putut fi citite acum. Asta nu spune nimic despre ce tabere există.",
     "notFoundDetail": "Fie nu există, fie nu o poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "title": "Tabere",
     "searchPlaceholder": "Caută tabere",
@@ -2952,9 +3232,11 @@
       "personGone": "Această persoană nu mai este în lista de speologi. Alege-o din nou sau scrie-i numele."
     },
     "mapEmpty": "Nu este nimic de desenat pentru această tabără: nu are o zonă de lucru, iar niciuna dintre turele pe care le poți citi nu a lăsat o schiță sau nu a numit o peșteră a cărei poziție o poți vedea.",
+    "mapUnavailable": "Harta acestei tabere nu a putut fi citită acum.",
     "mapCaveat": "Desenat peste turele pe care le poți citi. Zona de lucru este forma trasată pe plan; schița unei ture este arătată exact așa cum a fost trasată, oricare ar fi protecția peșterilor pe care le numește; iar o intrare de peșteră apare doar acolo unde îi poți vedea poziția exactă.",
     "mapTruncated": "Această tabără numește mai multe intrări de peșteră decât poate purta o hartă, așa că nu toate intrările sunt desenate.",
     "noTripsVisible": "Nicio tură din această tabără pe care să o poți citi.",
+    "tripsUnavailable": "Turele acestei tabere nu au putut fi citite acum. Asta nu spune nimic despre ce ture are.",
     "tripsTruncated": "Se afișează {{shown}} din {{total}} ture.",
     "watch": {
       "intro": "Cine este în peșteră în turele acestei tabere, așa cum o spune urmărirea fiecărei ture — numărat peste turele pe care le poți citi. Înregistrează ce s-a raportat: nu urmărește niciun ceas și nu dă nicio alarmă.",
@@ -2970,6 +3252,7 @@
     },
     "albums": "Albume despre această tabără",
     "noAlbums": "Încă niciun album despre această tabără.",
+    "albumsLoadFailed": "Albumele despre această tabără nu au putut fi citite acum.",
     "rosterRoleValues": {
       "member": "Membru",
       "organiser": "Organizator",
@@ -3058,6 +3341,7 @@
     },
     "tabPhotos": "Fotografii",
     "noPhotographs": "Nicio fotografie nu este atașată acestei tabere sau turelor din ea pe care le poți citi.",
+    "photosUnavailable": "Fotografiile acestei tabere nu au putut fi citite acum. Asta nu spune nimic despre ce fotografii sunt atașate aici.",
     "galleryVisibleToYou": "Fotografiile pe care le poți vedea, din tabără și din turele ei pe care le poți citi. Altcineva poate vedea mai multe sau mai puține."
   },
   "tags": {
@@ -3067,21 +3351,42 @@
   },
   "audit": {
     "title": "Istoric modificări",
+    "loadFailed": "Jurnalul de audit nu a putut fi citit acum. Asta nu spune nimic despre ce conține.",
     "at": "Când",
     "user": "Utilizator",
     "action": "Acțiune",
     "entityType": "Entitate",
     "entityId": "Id entitate",
+    "actions": {
+      "created": "Creat",
+      "updated": "Modificat",
+      "deleted": "Șters",
+      "permission_changed": "Permisiuni schimbate",
+      "notification_retried": "Mesaj retrimis",
+      "login": "Autentificare",
+      "two_factor_reset": "Al doilea factor resetat",
+      "upload_review_marked": "Verificarea încărcărilor schimbată",
+      "external_account_linked": "Autentificarea externă a preluat contul",
+      "exported": "Exportat",
+      "storage_reclaimed": "Spațiu de stocare eliberat"
+    },
     "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
   },
   "history": {
     "title": "Istoric",
     "empty": "Nicio modificare înregistrată încă.",
+    "loadFailed": "Istoricul nu a putut fi încărcat.",
+    "partial": "Se arată ultimele {{shown}} din {{total}} modificări.",
+    "loadMore": "Arată modificările mai vechi",
+    "loadMoreFailed": "Modificările mai vechi nu au putut fi încărcate.",
     "hidden": "Valoare ascunsă (locație protejată)",
     "geometrySummary": "Geometrie cu {{points}} puncte (prea mare pentru a fi înregistrată integral)",
     "systemUser": "Sistem",
     "restoreField": "Restaurează această valoare",
     "restoreAll": "Restaurează toate valorile dinaintea acestei modificări",
+    "restoreAllConfirm": "Pui la loc {{count}} de valori dinaintea acestei modificări?",
+    "restoreAllOk": "Pune la loc",
+    "restoreFailed": "Valoarea anterioară nu a putut fi pusă la loc. Încearcă din nou.",
     "restored": "Valoare restaurată.",
     "restoredPartly_one": "O valoare a fost restaurată. Unele au rămas neschimbate:",
     "restoredPartly": "{{count}} valori au fost restaurate. Unele au rămas neschimbate:",
@@ -3098,7 +3403,8 @@
       "undo": "Anulare",
       "reviewDecision": "Decizie de revizuire",
       "job": "Sarcină în fundal",
-      "tripConversion": "Tură convertită dintr-o înregistrare"
+      "tripConversion": "Tură convertită dintr-o înregistrare",
+      "generated": "Date de test generate"
     },
     "skipReason": {
       "not_restorable": "istoricul nu poate restaura această valoare",
@@ -3167,8 +3473,10 @@
     "manage": "Administrează",
     "addMember": "Adaugă",
     "removeConfirm": "Elimini acest membru?",
+    "membersLoadFailed": "Lista membrilor nu a putut fi citită acum. Asta nu spune nimic despre cine este pe ea, așa că nimeni nu poate fi adăugat până nu a fost citită.",
     "announce": {
       "open": "Anunță",
+      "audienceFailed": "Persoanele la care ar ajunge nu au putut fi numărate acum. Anunțul nu poate fi trimis până nu au fost numărate.",
       "title": "Anunț pentru {{name}}",
       "message": "Anunț",
       "placeholder": "Un singur rând — o schimbare de oră, un loc de întâlnire, o închidere.",
@@ -3179,6 +3487,8 @@
       "send": "Trimite",
       "done": "Trimis. Persoane anunțate: {{people}}",
       "queued": "Se trimite — clubul este destul de mare încât anunțurile se scriu în fundal. Persoane care vor fi anunțate: {{people}}",
+      "tooSoon": "Ai scris unui grup de speologi acum câteva clipe. Așteaptă câteva minute înainte de a trimite un alt anunț.",
+      "paidCapReached": "Această instalare a atins azi suma pe care o cheltuie pe mesaje text, așa că anunțul nu a fost trimis nimănui. Poate fi trimis mâine sau un administrator poate mări limita zilnică.",
       "failed": "Anunțul nu a fost trimis. Încearcă din nou."
     },
     "roles": {
@@ -3217,6 +3527,9 @@
       "grantsFullAdmin": "Doar un administrator deplin poate face asta: contul acestei persoane ar deveni administrator deplin.",
       "revokesFullAdmin": "Doar un administrator deplin poate face asta: un cont și-ar pierde drepturile de administrator deplin.",
       "exceedsOwnRights": "Nu poți face asta: contul acestei persoane ar primi drepturi pe care tu nu le ai.",
+      "mergeTwoAccounts": "Ambele înregistrări au câte un cont propriu. Detașează contul de la una dintre ele înainte de a le uni.",
+      "mergeSelf": "O persoană nu poate fi unită cu ea însăși. Alege altă înregistrare de unit.",
+      "mergeRaced": "Ceva legat de una dintre aceste persoane s-a schimbat în timp ce se făcea unirea, așa că nu s-a unit nimic. Reîncarcă și încearcă din nou.",
       "memberRaced": "Altcineva a adăugat această persoană în grup în același moment. Reîncarcă grupul și încearcă din nou.",
       "lastFullAdmin": "Instalarea ar rămâne fără un administrator deplin care se poate autentifica."
     },
@@ -3317,12 +3630,17 @@
     "empty": "Niciun telefon nu a trimis încă nimic.",
     "forbidden": "Lista utilizatorilor de telefon este deschisă conturilor care pot citi lista speologilor.",
     "loadFailed": "Utilizatorii de telefon nu au putut fi încărcați.",
+    "refreshFailed": "Lista utilizatorilor de telefon nu a putut fi citită din nou; ce se vede poate fi depășit.",
+    "relinkTitle": "Asociezi acest utilizator de telefon cu altcineva?",
+    "relinkBody": "{{user}} este acum asociat cu {{from}}. Asocierea cu {{to}} înlocuiește această legătură.",
+    "relinkOk": "Asociază cu noua persoană",
     "errors": {
       "caverNotFound": "Acest speolog nu mai este în listă.",
       "userNotFound": "Acest utilizator de telefon nu mai este listat."
     }
   },
   "statistics": {
+    "cardReadFailed": "Aceste cifre nu au putut fi citite acum. Asta nu spune nimic despre peștera însăși.",
     "title": "Statistici din ture",
     "open": "Statistici",
     "asVisibleToYou": "Numărate peste turele pe care le poți citi. Cineva cu alt acces vede alte totaluri pentru același subiect, iar amândouă sunt corecte.",
@@ -3473,6 +3791,12 @@
     }
   },
   "permissions": {
+    "subjectKindLabel": "Tipul subiectului",
+    "userLabel": "Cont",
+    "cavingGroupLabel": "Grup speologic",
+    "actionFor": "{{action}} pentru {{subject}}",
+    "scopeFor": "Întinderea regulii pentru {{subject}}",
+    "removeRuleFor": "Șterge regula pentru {{subject}}",
     "title": "Permisiuni",
     "button": "Permisiuni",
     "subject": "Subiect",
@@ -3482,6 +3806,10 @@
     "pickCavingGroup": "Alege un grup de speologie…",
     "addRule": "Adaugă regulă",
     "notManager": "Nu poți administra permisiunile acestui obiect.",
+    "loadFailed": "Permisiunile acestui obiect nu au putut fi încărcate, așa că nu pot fi modificate încă.",
+    "storedRulesMoved": "Cineva a schimbat regulile acestui obiect de când le-ai deschis. O salvare acum ar înlocui acea schimbare cu a ta.",
+    "loadStoredRules": "Încarcă regulile salvate (renunță la modificările tale)",
+    "keepMyRules": "Păstrează modificările mele și salvează peste ale lor",
     "scope": "Se aplică la",
     "scopeObject": "Doar acest obiect",
     "scopeSubtree": "Acest obiect și tot ce conține",
@@ -3586,19 +3914,33 @@
     "nameTaken": "Există deja un grup de permisiuni cu această denumire.",
     "nameInvalid": "Denumirea trebuie să conțină litere sau cifre.",
     "lastFullAdmin": "Refuzat: nu ar mai rămâne niciun administrator deplin activ care să se poată autentifica.",
+    "defaultMembership": "Conturile noi intră în acest grup. Scoate-l din setarea de apartenență implicită (SILEXGIS__Auth__DefaultPermissionGroups) înainte de a-l șterge.",
     "exceedsOwnRights": "Refuzat: o regulă nu poate acorda drepturi pe care nu le deții tu.",
+    "removalExceedsOwnRights": "Nu poți elimina o interdicție care reține drepturi pe care nu le deții tu.",
+    "denyFullAdministrators": "Refuzat: nicio interdicție nu îi poate atinge pe Administratorii deplini — apartenența la acel grup este însăși acordarea.",
+    "subjectUnknown": "Contul sau grupul speologic ales nu mai există. Alege-l din nou și salvează.",
+    "anchorNotFound": "Obiectul de care este legată o regulă nu mai există. Alege altul și salvează din nou.",
+    "scopeInvalid": "Întinderea unei reguli nu se potrivește cu ceea ce protejează. Schimbă întinderea sau acțiunile și salvează din nou.",
+    "forbidden": "Nu ai dreptul să schimbi regulile aici.",
+    "rulesLoadFailed": "Regulile grupului nu au putut fi încărcate, așa că nu pot fi modificate încă.",
+    "loadFailed": "Grupurile de permisiuni nu au putut fi încărcate.",
+    "membersLoadFailed": "Membrii grupului nu au putut fi încărcați.",
+    "storedRulesMoved": "Regulile grupului au fost schimbate de altcineva de când le-ai deschis. O salvare acum ar înlocui acea schimbare cu regulile tale.",
+    "loadStoredRules": "Încarcă regulile salvate (renunță la modificările tale)",
+    "keepMyRules": "Păstrează modificările mele și salvează peste ale lor",
+    "savedWithDeny": "Salvat. Setul de reguli conține o interdicție: deschide acum previzualizarea pentru a vedea ce dețin cei afectați cu ea în vigoare.",
     "rulesTab": "Reguli",
     "membersTab": "Membri",
     "previewTab": "Previzualizare",
     "addRule": "Adaugă regulă",
     "fullAdminNoRules": "Administratorii deplini nu au reguli: apartenența însăși este dreptul, decisă înaintea oricărei reguli — de aceea nicio interdicție nu îi poate atinge.",
-    "previewRequired": "Acest set de reguli conține o interdicție. Deschide previzualizarea și uită-te ce ar deține cineva afectat înainte de a salva — o interdicție salvată orbește poate bloca oameni.",
+    "previewRequired": "Acest set de reguli conține o interdicție. Deschide previzualizarea înainte de a salva și uită-te pe cine atinge acest grup. Previzualizarea răspunde din regulile deja salvate, deci arată ce dețin oamenii azi, nu ce le-ar lua această interdicție — verific-o din nou după ce interdicția este salvată, pentru că o interdicție poate bloca oameni.",
     "openPreview": "Deschide previzualizarea",
     "addMember": "Adaugă",
     "noMembers": "Încă niciun membru.",
     "removeMemberConfirm": "Elimini acest membru?",
     "runPreview": "Previzualizează",
-    "previewIntro": "Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le-ar deține.",
+    "previewIntro": "Alege un utilizator sau un grup de speologie pentru a vedea drepturile pe care le dețin după regulile salvate acum. Modificările nesalvate din fila Reguli nu intră în acest răspuns.",
     "previewLegend": "Extinde un rând pentru a vedea ce regulă a decis fiecare acțiune.",
     "noRights": "nimic",
     "narrowKind": "Restrânge la un fel…",
@@ -3624,8 +3966,10 @@
     "searchFeature": "Caută obiecte…",
     "addFeature": "Adaugă",
     "noMembers": "Niciun obiect în acest set.",
+    "membersLoadFailed": "Membrii setului nu au putut fi citiți, așa că apartenența la set nu poate fi modificată deocamdată.",
     "deleteConfirm": "Ștergi acest set de obiecte?",
     "inUse": "Există reguli care se referă la acest set; elimină-le mai întâi.",
+    "nameInvalid": "Denumirea unui set de obiecte trebuie să conțină cel puțin o literă sau o cifră.",
     "nameTaken": "Există deja un set de obiecte cu această denumire."
   },
   "cavingGroupPicker": {
@@ -3670,15 +4014,18 @@
     "disableConfirm": "Dezactivezi autentificarea în doi pași?",
     "recoveryLeft": "Coduri de recuperare rămase: {{count}}",
     "recoveryTitle": "Salvează aceste coduri de recuperare acum — sunt afișate o singură dată.",
+    "recoveryKept": "Le-am salvat",
     "linkedAccounts": "Conturi asociate",
     "linkedIntro": "Autentifică-te cu un furnizor extern, pe lângă parolă.",
     "linkWith": "Asociază {{provider}}",
     "linkAdded": "Cont asociat.",
     "linkFailed": "Contul nu a putut fi asociat. Este posibil să fie deja asociat în altă parte.",
+    "loginsLoadFailed": "Metodele tale de autentificare nu au putut fi citite, așa că setările pentru parolă și conturile asociate nu sunt afișate.",
     "unlink": "Dezasociază",
     "unlinkConfirm": "Elimini acest cont asociat?",
     "unlinked": "Cont dezasociat.",
     "unlinkFailed": "Contul nu a putut fi dezasociat.",
+    "unlinkLastLogin": "Setează o parolă înainte de a elimina singura metodă de autentificare.",
     "method_authenticator": "Aplicație de autentificare",
     "method_email": "Cod prin e-mail",
     "method_sms": "Cod prin SMS",
@@ -3712,6 +4059,12 @@
     "phoneConfirmed": "Numărul este confirmat.",
     "phoneNumber": "Număr de telefon",
     "phonePending": "Se așteaptă codul trimis la {{number}}.",
+    "phoneResend": "Trimite din nou codul",
+    "phoneResendTooSoon": "Așteaptă un minut înainte să ceri din nou codul.",
+    "phoneNothingPending": "Niciun număr nu mai așteaptă codul.",
+    "phoneUseOther": "Folosește alt număr",
+    "phoneCancelPending": "Renunță la acest număr",
+    "phonePendingCancelled": "Ai renunțat la numărul care aștepta codul.",
     "phoneSendFailed": "Codul nu a putut fi trimis la acel număr.",
     "phoneTaken": "Alt cont folosește deja acel număr.",
     "phoneHint": "Folosit doar pentru codurile de autentificare. Introdu-l în format internațional, de exemplu +40712345678.",
@@ -3786,6 +4139,8 @@
     "sharedNotFound": "Această vedere partajată nu există sau a fost revocată.",
     "sharedClusterHint": "{{count}} intrări aici — apropie harta pentru a le vedea pe rând.",
     "sharedNoBackground": "Nicio hartă de fundal nu este disponibilă pentru vederile partajate în această instalare.",
+    "loadFailed": "Vederile salvate nu au putut fi citite acum.",
+    "sharedDataFailed": "Peșterile sau obiectivele acestei vederi nu au putut fi citite; ce se vede poate fi incomplet.",
     "sharedUnnamed": "Fără nume",
     "sharedClose": "Închide",
     "sharedProtectedNote": "Peșterile protejate nu sunt afișate niciodată pe o hartă partajată.",
@@ -3797,7 +4152,15 @@
     "shareExplain": "Oricine are acest link poate deschide vederea fără cont. Arată zona spre care privește vederea, peste un fundal public, cu straturile pe care vederea le avea pornite — doar ce este public în sine, iar peșterile și obiectele protejate lipsesc cu totul.",
     "shareWithoutData": "Această vedere este restrânsă de un filtru salvat sau de un filtru venit dintr-un link, pe care un link nu îl poate aplica — așa că linkul arată zona și fundalul ei, fără peșteri și obiecte. Nici straturile desenate din filtre salvate nu apar vreodată printr-un link.",
     "shareWithoutFilterLayers": "Straturile desenate din filtre salvate nu apar niciodată printr-un link; linkul arată celelalte straturi ale vederii.",
-    "shareQr": "Linkul către vederea {{name}} ca cod QR"
+    "deleteConfirm": "Ștergi această vedere salvată? Acțiunea nu poate fi anulată.",
+    "shareQr": "Linkul către vederea {{name}} ca cod QR",
+    "problems": {
+      "createForbidden": "Nu poți salva vederi de hartă pe această instalare. Cere unui administrator dreptul de a le crea.",
+      "groupForbidden": "Nu poți partaja o vedere cu acel grup speologic.",
+      "notFound": "Această vedere salvată nu mai există. Poate a șters-o altcineva.",
+      "invalid": "Numele vederii lipsește sau are mai mult de 200 de caractere.",
+      "forbidden": "Nu ai voie să modifici această vedere salvată."
+    }
   },
   "panel": {
     "unknown": "Panou necunoscut.",
@@ -3807,6 +4170,7 @@
     "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
     "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "viewer3dLoadFailed": "Modelele topografice nu au putut fi citite acum. Asta nu spune nimic despre care există.",
     "viewer3dUnavailable": "Acest model topografic nu mai este disponibil sau nu ai acces la el.",
     "scene3dTitle": "Scena 3D",
     "sections": {
@@ -3845,6 +4209,7 @@
     "multiMixed": "Amestecate",
     "multiHint": "Ține Ctrl sau Shift în timp ce dai clic pe hartă pentru a adăuga la selecție.",
     "multiNothingReadable": "Niciunul dintre obiectele selectate nu poate fi citit aici.",
+    "multiLoadFailed": "Ce au în comun obiectele alese nu a putut fi citit.",
     "clearSelection": "Golește selecția",
     "zoomToAll": "Încadrează-le pe toate",
     "bulkTag": "Etichetează-le pe toate",
@@ -3872,7 +4237,11 @@
     "unsupportedTitle": "Acest browser nu poate afișa vizualizarea 3D",
     "unsupportedHint": "Vizualizarea 3D are nevoie de WebGL 2, pe care acest browser sau driverul său grafic nu îl oferă. Încearcă un browser actualizat sau folosește în continuare harta 2D.",
     "openFlatMap": "Deschide harta 2D",
+    "startFailedHint": "Ceva din acest browser a împiedicat pornirea vizualizării 3D. Încearcă din nou; dacă eșuează la fel, reîncarcă pagina.",
     "startFailed": "Vizualizarea 3D nu a putut fi pornită",
+    "downloadFailedTitle": "Vizualizarea 3D nu s-a descărcat complet",
+    "downloadFailedHint": "Vizualizarea 3D este o descărcare mare (aproximativ un megaoctet), iar conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă. Harta și datele nu au nicio problemă. Încearcă din nou sau reîncarcă pagina dacă SilexGIS a fost actualizat de când ai deschis-o.",
+    "downloadFailedRetry": "Încearcă din nou",
     "centerlinesFlat": "{{count}} drumuiri desenate la suprafață — pentru ele nu au fost disponibile adâncimi topografiate.",
     "surfaceTitle": "Terenul de deasupra peșterii",
     "surfaceOverlay": "Arată peștera prin el",
@@ -3952,6 +4321,14 @@
       "vector_unreadable": "Stilul sau datele acestui fundal nu au putut fi încărcate, așa că vederea 3D nu îl desenează.",
       "vector_stand_in": "Desenat în 3D ca {{name}}."
     },
+    "relief": {
+      "title": "Relief",
+      "label": "Exagerare verticală",
+      "value": "×{{factor}}",
+      "reset": "Înălțimea reală",
+      "hint": "Desenează toate înălțimile mai înalte sau mai turtite — terenul, peșterile, camera — împreună, astfel încât intrările rămân pe teren. Altitudinile și adâncimile afișate rămân cele reale.",
+      "notice": "Relief ×{{factor}}"
+    },
     "terrainTitle": "Terenul",
     "terrainBuildsHint": "Fiecare generare acoperă o zonă la un nivel de detaliu. Schimbarea recitește terenul și mută topografiile pe noua suprafață.",
     "terrainConfiguredEntry": "Modelul de altitudine configurat",
@@ -3996,7 +4373,12 @@
     "scansInViewNone": "Nicio peșteră din vedere nu are o scanare plasată de desenat.",
     "scansInViewShown": "Scanările a {{shown}} din {{total}} peșteri din vedere — {{size}}.",
     "scansInViewOverBytes": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul ar depăși {{limit}}.",
-    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată."
+    "scansInViewOverCount": "Scanările a {{shown}} din {{total}} peșteri din vedere — restul depășesc cele {{limit}} desenate deodată.",
+    "dataFailed": "Peșterile din această vedere nu au putut fi încărcate.",
+    "tracksFailed": "Liniile unui fișier importat nu au putut fi încărcate.",
+    "layersFailed": "Unele straturi oferite de această vedere nu au putut fi citite.",
+    "filterLayersFailed": "Un strat desenat dintr-un filtru nu a putut fi încărcat.",
+    "tryAgain": "Încearcă din nou"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4008,6 +4390,16 @@
       "station": "Stație aleasă: {{name}}"
     },
     "loadError": "Modelul 3D nu a putut fi încărcat",
+    "loadFailed": {
+      "unreadable": "Fișierul topografiei nu a putut fi citit. Poate fi deteriorat sau scris de o versiune a programului de topografie pe care vizualizatorul nu o cunoaște.",
+      "stalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
+      "missing": "Fișierul topografiei nu mai este pe server.",
+      "refused": "Fișierul topografiei a fost refuzat. Adresa lui poate să fi expirat cât pagina a stat deschisă; încearcă din nou.",
+      "server": "Serverul nu a putut da fișierul topografiei (eroarea {{status}}). Încearcă din nou peste puțin timp.",
+      "viewer": "Vizualizatorul 3D nu a putut fi încărcat. Verifică conexiunea și încearcă din nou.",
+      "network": "Fișierul topografiei nu a putut fi descărcat. Verifică conexiunea și încearcă din nou."
+    },
+    "tryAgain": "Încearcă din nou",
     "linkThisPart": "Leagă asta…",
     "notInThisModel": "Acel punct nu se află în acest model",
     "labelSize": "Mărimea numelor de stații",
@@ -4084,10 +4476,9 @@
       "previewError": "Modelul nu a putut fi încărcat pentru previzualizare.",
       "opening": "Se deschide realizarea filmului…",
       "openFailed": "Realizarea filmului nu s-a putut deschide.",
-      "openFailedStale": "Aplicația a fost actualizată după ce ai deschis această pagină, iar pagina cere încă fișierele versiunii vechi. Reîncarcă pagina ca să folosești versiunea nouă.",
+      "openFailedStale": "Realizarea filmului nu s-a descărcat complet: conexiunea a fost prea lentă sau s-a întrerupt înainte să ajungă, ori aplicația a fost actualizată după ce ai deschis această pagină. Datele tale nu au nicio problemă. Reîncarcă pagina ca să încerci din nou.",
       "previewLoadingSoFar": "Se încarcă modelul pentru previzualizare… {{received}} până acum",
       "previewLoadingOf": "Se încarcă modelul pentru previzualizare… {{received}} din {{total}}",
-      "previewStalled": "Din fișierul topografiei nu a mai sosit nimic timp de {{seconds}} de secunde, așa că descărcarea a fost abandonată. Serverul sau conexiunea pot fi lente; încearcă din nou.",
       "previewRetry": "Încearcă din nou",
       "make": "Fă un film",
       "makeHelp": "Exportă un film al acestui model, cu turele urmărite deplasându-se prin el",
@@ -4357,6 +4748,8 @@
     }
   },
   "surveyModels": {
+    "loadFailed": "Modelele 3D ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcat vreunul.",
+    "heightlessNudge": "Dacă acest fișier este în coordonate locale, dă altitudinea nivelului său zero. Fără ea topografia este totuși desenată, dar înălțimile rămân relative la acel punct: grosimea rocii de deasupra, nivelurile izvoarelor și distanța pe verticală față de alte peșteri nu vor fi calculate până când nu este declarată.",
     "uploadPointCloud": "Încarcă nor de puncte",
     "scanProcessing": "Scanarea este împărțită în dale pentru vederea 3D. Progresul ei este pe pagina de stare a topografiei.",
     "scanFailed": "Scanarea nu a putut fi procesată.",
@@ -4537,6 +4930,18 @@
     }
   },
   "centerlines": {
+    "loadFailed": "Drumuirile acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcată vreuna.",
+    "problems": {
+      "formatUnsupported": "Acest tip de fișier nu este citit ca drumuire. Încarcă un fișier GeoJSON, GPX, KML sau KMZ.",
+      "sizeInvalid": "Fișierul este gol sau mai mare de 20 MB.",
+      "unreadable": "Fișierul nu a putut fi citit ca drumuire: poate fi deteriorat sau nu are formatul pe care îl indică numele.",
+      "noLines": "Fișierul nu conține linii. O drumuire are nevoie de cel puțin o linie, nu doar de puncte.",
+      "surveyModelInvalid": "Modelul de topografie ales nu aparține acestei peșteri.",
+      "defaultRequired": "O peșteră cu drumuiri are mereu una ca formă. Setează în schimb o altă drumuire ca implicită.",
+      "notFound": "Această drumuire nu mai există: poate a șters-o cineva.",
+      "caveNotFound": "Această peșteră nu mai există sau nu o mai poți vedea.",
+      "forbidden": "Nu ai dreptul să modifici drumuirile acestei peșteri."
+    },
     "title": "Drumuiri",
     "upload": "Încarcă drumuire",
     "uploaded": "Drumuire încărcată",
@@ -4555,6 +4960,12 @@
     "paths": "Trasee"
   },
   "settings": {
+    "meLoadFailed": "Detaliile contului tău nu au putut fi citite acum. Nu s-a schimbat nimic.",
+    "problems": {
+      "cavingClubUnknown": "Acel club de speologie nu mai există. Alege altul și salvează din nou.",
+      "emailNotUsable": "Această adresă nu poate fi folosită pentru autentificare aici. Alege alta.",
+      "preferencesBusy": "Preferințele tale se salvează chiar acum din altă fereastră sau de pe alt dispozitiv. Încearcă din nou peste câteva clipe."
+    },
     "scanProfiles": {
       "title": "Profiluri de procesare",
       "intro": "Seturi de setări cu nume după care rulează un pas de procesare a scanărilor. Le poți păstra pentru tine, pentru un grup speologic sau pentru toată instalarea, poți alege unul când încarci o înregistrare și poți aduce sau scoate fișierele de parametri ale HDMapping.",
@@ -4774,7 +5185,12 @@
           "running": "Se pregătește…",
           "ready": "Gata",
           "failed": "Eșuat"
-        }
+        },
+        "inProgress": "Un export se pregătește deja. Așteaptă să se termine.",
+        "expired": "Acest export a expirat. Pregătește unul nou.",
+        "gone": "Acest export nu mai este disponibil. Pregătește unul nou.",
+        "requestFailed": "Exportul nu a putut fi cerut. Încearcă din nou.",
+        "downloadFailed": "Exportul nu a putut fi descărcat. Încearcă din nou."
       },
       "calendarFeed": {
         "heading": "Flux de calendar",
@@ -4796,6 +5212,7 @@
     },
     "notifications": {
       "categories": "Despre ce să fiu anunțat și unde",
+      "loadFailed": "Alegerile tale pentru notificări nu au putut fi citite acum. Nu s-a schimbat nimic.",
       "category": "Anunță-mă despre",
       "channels": {
         "inApp": "În aplicație",
@@ -4841,7 +5258,8 @@
         "securityAlerts": "Se trimit mereu — acestea te avertizează despre propriul cont.",
         "tripCallout": "Se trimit mereu și nu se amână pentru rezumatul zilnic — o echipă întârziată nu mai este o noutate a doua zi dimineața."
       },
-      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul."
+      "noDelivery": "Această instalare nu are un server de e-mail configurat, deci nu se trimite nimic încă. Alegerile sunt salvate și vor fi folosite când va exista unul.",
+      "choiceRefused": "Una dintre aceste alegeri nu este permisă pe canalul ei, așa că nu s-a salvat nimic. Reîncarcă pagina ca să vezi ce se poate alege."
     },
     "filters": {
       "heading": "Filtre salvate",
@@ -4958,6 +5376,8 @@
     }
   },
   "admin": {
+    "listLoadFailed": "Această listă nu a putut fi citită acum. Asta nu spune nimic despre ce conține, așa că nu adăuga nimic din nou până nu a fost citită.",
+    "settingsLoadFailed": "Aceste setări nu au putut fi citite acum. Nu schimba nimic până nu au fost citite.",
     "forbidden": "Ai nevoie de drepturi de administrator pentru această pagină.",
     "users": {
       "title": "Conturi",
@@ -4971,6 +5391,7 @@
       "createdAt": "Deschis",
       "actions": "Acțiuni",
       "you": "tu",
+      "loadFailed": "Conturile nu au putut fi încărcate.",
       "statusActive": "Se poate autentifica",
       "statusLocked": "Blocat",
       "statusNoPassword": "Fără parolă încă",
@@ -5051,6 +5472,14 @@
         "fullAdministratorAccount": "Doar un administrator deplin poate bloca, debloca, șterge sau reseta al doilea factor al contului unui administrator deplin."
       }
     },
+    "settingsProblems": {
+      "invalid": "O valoare din acest formular a fost refuzată. Verifică ce ai introdus și salvează din nou.",
+      "forbidden": "Nu ai dreptul să schimbi aceste setări.",
+      "smsGatewayInternal": "Adresa gateway-ului este pe acest server sau într-o rețea internă. Configurația instalării trebuie să permită acest lucru.",
+      "mailPasswordCleared": "Serverul de e-mail s-a schimbat, așa că parola salvată a fost ștearsă. Introdu-o din nou.",
+      "smsAuthHeaderCleared": "Adresa gateway-ului s-a schimbat, așa că antetul de autorizare salvat a fost șters. Introdu-l din nou.",
+      "noticeUnworded": "Setările au fost salvate, dar serverul a semnalat ceva despre această salvare pe care pagina nu îl poate exprima. Verifică valorile secțiunii."
+    },
     "messaging": {
       "title": "Mesagerie",
       "intro": "Unde ajung e-mailurile și SMS-urile și ce necesită autentificarea. Acestea pot fi setate și din mediul de instalare; ce salvezi aici înlocuiește acele valori.",
@@ -5105,6 +5534,9 @@
       "testSent": "Mesajul de test a fost trimis.",
       "testFailed": "Trimiterea a eșuat: {{error}}",
       "testNotConfigured": "Configurează și salvează mai întâi canalul.",
+      "testTooSoon": "Un SMS de test a fost trimis adineauri. Așteaptă puțin înainte de a trimite altul.",
+      "testRecipientInvalid": "Acest destinatar nu poate fi folosit pentru un test. Verifică adresa sau numărul.",
+      "testRequestFailed": "Testul nu a putut fi cerut. Încearcă din nou.",
       "sendConfirmation": "Trimite un mesaj de confirmare la crearea unui cont",
       "requireConfirmed": "Cere o adresă confirmată pentru autentificare",
       "requireConfirmedHint": "Conturile care nu și-au confirmat adresa vor fi refuzate la autentificare și li se va oferi un nou mesaj de confirmare.",
@@ -5121,7 +5553,7 @@
       "importIntro": "Un fișier importat este verificat înainte să se creeze ceva. Aici acest pas poate fi eliminat și tot aici se stabilește cât de departe caută implicit detectarea duplicatelor.",
       "allowWithoutReview": "Permite unui utilizator de încredere să creeze obiecte fără verificare",
       "allowWithoutReviewHint": "Dezactivat implicit. Regulile sunt o presupunere despre obiceiurile de denumire ale cuiva, iar primul import cu un set pe care nimeni nu l-a ajustat este exact momentul în care presupunerea este cea mai slabă. Activarea nu lărgește cine poate crea — cel care importă are în continuare nevoie de dreptul de a crea obiecte — ci doar elimină pasul intermediar.",
-      "duplicateRadius": "Caută ceva deja existent pe o rază de",
+      "duplicateRadius": "Caută ceva deja existent pe o rază de (metri)",
       "duplicateRadiusHint": "Raza de pornire pentru o verificare nouă; cel care importă o poate schimba. Se măsoară doar față de obiectele a căror poziție exactă o poate vedea.",
       "duplicateSimilarity": "Numele se consideră identice peste",
       "duplicateSimilarityHint": "Cât de asemănătoare trebuie să fie două nume, de la 0 la 1, pentru ca un obiect din apropiere să fie considerat același lucru, nu doar aproape.",
@@ -5151,6 +5583,11 @@
       "dailyPaidMessageCapHint": "Un operator taxează un mesaj SMS pe segmente, nu pe mesaj: 160 de caractere din alfabetul latin simplu încap într-un singur segment, dar o singură literă cu diacritice recodifică tot mesajul în segmente de 70, așa că aceeași formulare costă de două ori mai mult în română decât în engleză. Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Segmentele deja angajate azi contează, inclusiv cele care încă așteaptă să plece.",
       "photoLibrariesTab": "Fototeci",
       "surveyUploadsTab": "Încărcări de topografii",
+      "testDataTab": "Date de test",
+      "testDataIntro": "Generatorul de date de test umple această instalare cu date inventate, realiste, și le șterge din nou. Este oferit administratorilor deplini cât timp acest comutator este pornit și implementarea îl permite.",
+      "testDataNotAllowed": "Această implementare nu permite generatorul de date de test (SILEXGIS__TestData__Allowed=false), așa că acest comutator nu schimbă nimic.",
+      "testDataEnabled": "Oferă generatorul de date de test",
+      "testDataEnabledHint": "Oprit, pagina este ascunsă administratorilor deplini și rutele ei sunt refuzate. Datele deja generate rămân până sunt șterse.",
       "surveyUploadsIntro": "Alegeri despre topografiile trimise de pe un dispozitiv de teren, cum ar fi TopoDroid.",
       "firstModelOfCreatedCave": "O peșteră creată de o încărcare primește primul ei model",
       "firstModelOfCreatedCaveHint": "Când o încărcare creează o peșteră, primul model adus devine modelul curent al peșterii, iar drumuirea lui forma peșterii. Oprit: un model dintr-o încărcare nu devine niciodată curent singur; cineva alege pe web.",
@@ -5194,6 +5631,12 @@
       "latestDownload": "Ultima descărcare:",
       "cancel": "Anulează descărcarea",
       "loadFailed": "Starea hărții de bază nu a putut fi citită.",
+      "requestFailed": "Cererea nu a putut fi dusă la capăt. Încearcă din nou.",
+      "boxIncomplete": "Completează toate cele patru laturi ale zonei.",
+      "boxInverted": "Vestul trebuie să fie mai mic decât estul, iar sudul mai mic decât nordul.",
+      "cancelTitle": "Oprești această descărcare?",
+      "cancelBody": "Ce s-a descărcat până acum se aruncă, iar harta continuă să folosească harta de bază pe care o are acum.",
+      "cancelFailed": "Descărcarea nu a putut fi oprită. Încearcă din nou.",
       "state": {
         "queued": "în așteptare",
         "running": "în curs",
@@ -5467,6 +5910,7 @@
       "name_email_confirm_address": "Confirmarea adresei",
       "name_email_change_address": "Confirmarea unei adrese noi",
       "name_email_password_reset": "Resetarea parolei",
+      "name_email_already_registered": "Înregistrarea unei adrese care are deja un cont",
       "name_email_account_invitation": "Invitație la un cont nou",
       "name_email_two_factor_code": "Cod de autentificare prin e-mail",
       "name_sms_two_factor_code": "Cod de autentificare prin SMS",
@@ -5514,6 +5958,7 @@
   "notifications": {
     "bell": "Notificări",
     "title": "Notificări",
+    "markFailed": "Notificarea nu a putut fi marcată drept citită. Încearcă din nou.",
     "markAllRead": "Marchează tot ca citit",
     "allCategories": "Toate categoriile",
     "scopeAll": "Toate",
@@ -5522,6 +5967,7 @@
     "about": "Despre",
     "when": "Când",
     "empty": "Nu ai nimic de citit.",
+    "loadFailed": "Notificările tale nu au putut fi citite acum. Asta nu spune nimic despre dacă există.",
     "withheld": "Lucrul la care se referă aceasta nu îți mai este disponibil.",
     "unrenderable": "Această notificare nu mai poate fi afișată."
   },
@@ -5534,6 +5980,7 @@
     "failed": "Linkul nu mai este valid. Poți modifica setările de notificare după autentificare.",
     "doneDigest": "Rezumatul zilnic a fost oprit, iar odată cu el orice alt e-mail de notificare.",
     "alertsStillSent": "Alertele despre propriul cont se trimit în continuare — te avertizează când cineva îl modifică.",
+    "unreachable": "Serverul nu a putut fi contactat, deci nimic nu s-a schimbat încă. Încearcă din nou peste puțin timp.",
     "manage": "Gestionează setările de notificare",
     "inboxUntouched": "Nimic altceva nu s-a schimbat: aceste notificări apar în continuare în inboxul din aplicație, unde le poți citi oricând."
   },
@@ -5544,6 +5991,9 @@
     "centerline": "Drumuire"
   },
   "search": {
+    "refused": "Serverul a refuzat această căutare.",
+    "failed": "Căutarea nu a putut fi făcută acum. Asta nu spune nimic despre ce conține arhiva. Apasă aici pentru a încerca din nou.",
+    "placesFailed": "Numele de locuri nu au putut fi căutate acum. Apasă aici pentru a încerca din nou.",
     "features": "Obiecte",
     "trips": "Jurnale de tură",
     "expeditions": "Tabere",
@@ -5785,10 +6235,12 @@
     "squareFor": "Cod QR pentru {{code}}"
   },
   "resLinks": {
+    "targetSearchFailed": "Căutarea țintei legăturii nu a putut fi făcută acum. Asta nu spune nimic despre dacă ea există.",
     "titleCount": "Elemente legate ({{count}})",
     "incomplete": "Incompletă",
     "incompleteHint": "Doar un element al acestei legături îți este vizibil. O legătură spune ceva abia când unește două sau mai multe — adaugă încă un element, dacă există unul de adăugat.",
     "addAction": "Leagă…",
+    "loadFailed": "Legăturile nu au putut fi citite acum. Asta nu spune nimic despre care sunt înregistrate.",
     "moreMembers": "+{{count}}",
     "rowActions": "Acțiuni pentru legătură",
     "openPage": "Deschide pagina legăturii",
@@ -6098,9 +6550,13 @@
     }
   },
   "importReview": {
+    "saveFailed": "Ultimele tale modificări ale acestei verificări nu au putut fi salvate.",
+    "saveFailedHint": "Confirmarea așteaptă până sunt salvate, ca să creeze ce vezi aici. Încearcă din nou sau fă o altă modificare pentru a salva din nou.",
     "held": "Importurile contului tău așteaptă un recenzent. Nu s-a creat nimic încă; se va crea după ce un recenzent le acceptă."
   },
   "vectorImport": {
+    "previewFailed": "Revizuirea nu a putut fi calculată pentru aceste setări.",
+    "sessionFailed": "Revizuirea salvată nu a putut fi citită.",
     "title": "Verifică și importă",
     "reviewAndImport": "Verifică și importă în registru",
     "mapPreview": "Previzualizare pe hartă",
@@ -6131,12 +6587,34 @@
     "tracksIgnore": "Lasă-le în fișier",
     "tracksAsLine": "Importă ca obiect liniar",
     "trackKind": "Tipul obiectului liniar",
+    "optionsAreas": "Contururi (zone)",
+    "areas": "Ce se face cu ele",
+    "areasHint": "Regulile citesc nume, iar numele unui contur spune rareori ce este. Alege tipul în care devine fiecare contur din fișier — pentru o hartă geologică, Unitate geologică — sau lasă-le în fișier.",
+    "areasIgnore": "Rămân în fișier",
+    "areasAsArea": "Importă fiecare ca obiect de tip zonă",
+    "areaKind": "Tipul obiectului de tip zonă",
     "mappingAuto": "Determină automat",
     "mapping": {
       "nameField": "Nume",
       "descriptionField": "Descriere",
       "codeField": "Cod de identificare",
-      "elevationField": "Altitudine"
+      "elevationField": "Altitudine",
+      "lithologyField": "Tip de rocă (unități geologice)"
+    },
+    "lithologyStep": {
+      "title": "Tipurile de rocă din fișier",
+      "unmatched": "Denumiri de rocă fără clasă corespunzătoare: {{count}}. Alege o clasă pentru fiecare sau lasă-le, iar acele unități vor fi create neclasificate.",
+      "allMatched": "Fiecare denumire de rocă din fișier corespunde unei clase. Schimbă-le pe cele cu care nu ești de acord.",
+      "sourceValue": "În fișier",
+      "count": "Contururi",
+      "becomes": "Devine",
+      "becomesFor": "Clasa pentru {{value}}",
+      "how": "Cum",
+      "match": {
+        "mapped": "Alegerea ta",
+        "recognised": "Recunoscută",
+        "unmatched": "Fără corespondență"
+      }
     },
     "selectAll": "Toate",
     "selectAllPages": "Selectează toate cele {{count}} de pe toate paginile",
@@ -6203,6 +6681,8 @@
     "batchFromDevice": "Încărcare de pe telefon",
     "batchMode": "Cum",
     "batchDetail": "Ce a creat acest import",
+    "batchDetailLoadFailed": "Ce a făcut acest import nu a putut fi citit acum. Asta nu spune nimic despre ce a creat.",
+    "batchesLoadFailed": "Importurile nu au putut fi citite acum. Asta nu spune nimic despre care există sau ce se poate anula.",
     "confirmedAt": "Confirmat",
     "modes": {
       "reviewed": "Verificat",
@@ -6245,6 +6725,7 @@
       }
     },
     "revert": "Anulează",
+    "revertFailed": "Importul nu a putut fi anulat. Încearcă din nou.",
     "reverted": "Importul a fost anulat.",
     "revertedTag": "Anulat",
     "reviewPendingTag": "Așteaptă verificarea",
@@ -6273,6 +6754,9 @@
     "saving": "Toate cele {{total}} rânduri au fost parcurse; se salvează"
   },
   "photoImport": {
+    "uploadFailedNamed": "{{name}} nu a fost încărcat: {{reason}}",
+    "previewFailed": "Fotografiile nu au putut fi grupate în locuri pentru aceste setări.",
+    "sessionFailed": "Revizuirea salvată nu a putut fi citită.",
     "title": "Obiecte din fotografii",
     "openFromGeodata": "Din fotografii",
     "openFromTrip": "Creează obiecte din fotografiile turei",
@@ -6387,6 +6871,16 @@
     }
   },
   "termRules": {
+    "loadFailed": "Setul de reguli nu a putut fi citit, așa că nu poate fi modificat deocamdată.",
+    "errors": {
+      "seededUndeletable": "Setul livrat cu această instalare nu poate fi șters: la el se întorc importurile când nu se aplică niciun alt set.",
+      "promotionForbidden": "Doar un administrator poate schimba ce moștenește toată lumea.",
+      "promoteFailed": "Setul nu a putut fi făcut implicit pentru instalare. Încearcă din nou.",
+      "notEditable": "Acest set nu poate fi modificat aici. Fă-ți o copie proprie și modific-o pe aceea.",
+      "notFound": "Acest set nu mai există: poate a fost șters de altcineva.",
+      "groupNotFound": "Grupul de speologie căruia îi aparține setul nu mai există.",
+      "forbidden": "Contul tău nu are voie să modifice acest set."
+    },
     "title": "Reguli de detectare",
     "intro": "Ce se propune să devină un punct numit Peștera, P., aven, izbuc, ponor sau dolină. Ordinea decide: când două reguli revendică același candidat, câștigă prima.",
     "name": "Nume",
@@ -6403,7 +6897,6 @@
     "promote": "Fă implicit",
     "makeInstallationDefault": "Fă din acesta punctul de plecare al oricărui import",
     "promoted": "Orice import pornește acum de la acest set.",
-    "promoteFailed": "Doar un administrator poate schimba ce moștenesc toți.",
     "deleteConfirm": "Ștergi acest set de reguli?",
     "default": "Implicit",
     "shipped": "Livrat",
@@ -6605,7 +7098,7 @@
         },
         "visibilities": {
           "private": "Privat",
-          "cavingGroup": "Club",
+          "cavingGroup": "Grup de speologie",
           "authenticated": "Conturi autentificate",
           "public": "Public"
         },
@@ -6664,7 +7157,7 @@
       "type": "Tip",
       "tag": "Etichetă",
       "owner": "Proprietar",
-      "cavingGroup": "Club",
+      "cavingGroup": "Grup de speologie",
       "organizingGroup": "Club organizator",
       "visibility": "Vizibilitate",
       "protected": "Locație protejată",
@@ -6739,6 +7232,7 @@
     }
   },
   "fileStorage": {
+    "remeasureFailed": "Fișierele au fost șterse, dar spațiul de stocare nu a putut fi măsurat din nou: cifrele afișate sunt cele de dinainte.",
     "title": "Spațiu de stocare",
     "intro": "Ce ocupă depozitul de fișiere al instalației, cât de repede crește și ce s-ar putea șterge. Originalele încărcate nu sunt oferite niciodată spre ștergere.",
     "measure": "Măsoară acum",
@@ -6856,6 +7350,8 @@
   },
   "notificationHealth": {
     "title": "Trimiterea mesajelor",
+    "healthLoadFailed": "Cifrele livrărilor nu au putut fi citite acum; nimic de aici nu spune dacă mesajele pleacă.",
+    "deliveriesLoadFailed": "Livrările nu au putut fi citite acum. Asta nu spune nimic despre ce așteaptă.",
     "intro": "Dacă mesajele ies din această instalare. Fiecare rând de aici este unul pe care cineva trebuia să îl primească: un canal pe care o persoană l-a oprit nu produce niciun rând, deci o coadă rămasă în urmă este întotdeauna o problemă.",
     "stalled": "Nu s-a mai trimis nimic de {{age}}.",
     "stalledHint": "Cel mai vechi mesaj care încă așteaptă a fost pus la coadă atunci. Verifică setările serverului de e-mail și trimiterea de probă din pagina de mesagerie.",
@@ -7007,6 +7503,7 @@
     "markDone": "A avut loc",
     "markDoneSuccess": "Evenimentul a fost înregistrat ca desfășurat.",
     "notFound": "Niciun astfel de eveniment",
+    "listUnavailable": "Evenimentele nu au putut fi citite acum. Asta nu spune nimic despre ce evenimente există.",
     "notFoundDetail": "Fie nu există, fie nu îl poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "callOff": "Anulează",
     "callOffConfirm": "Anulezi acest eveniment?",
@@ -7059,6 +7556,11 @@
     "seriesPartlyForbidden": "Seria conține o apariție care nu e a ta de modificat, deci nimic nu a fost modificat. O schimbare aplicată pe jumătate ar lăsa calendarul în contradicție cu sine.",
     "notInSeries": "Acest eveniment nu se repetă, deci nu există nicio serie asupra căreia să se acționeze.",
     "seriesMoveOutOfRange": "Mutarea acestei apariții atât de departe ar duce o apariție ulterioară dincolo de sfârșitul calendarului, deci niciuna nu a fost mutată. Alege o zi mai apropiată.",
+    "recurrenceOverlapping": "Fiecare apariție ar dura încă în ziua în care începe următoarea. Fă evenimentul mai scurt decât intervalul dintre repetări sau repetă-l mai rar. Nu s-a scris nimic.",
+    "recurrenceFrequencyInvalid": "Aceasta nu este o repetare după care calendarul poate avansa. Alege una dintre repetările oferite. Nu s-a scris nimic.",
+    "seriesFrequencySeriesOnly": "Cât de des se repetă un eveniment ține de serie, nu de o singură apariție. Pentru a schimba asta, editează această apariție și toate cele următoare.",
+    "stateTransitionInvalid": "Evenimentul nu poate trece din starea în care este acum în cea aleasă. Poate că altcineva l-a schimbat între timp — reîncarcă-l pentru a vedea unde se află.",
+    "goneOrUnreadable": "Acest eveniment nu mai există sau poate că nu îl mai poți vedea. Nu s-a schimbat nimic.",
     "responses": {
       "title": "Cine vine",
       "invite": "Invită",
@@ -7120,7 +7622,18 @@
       "authenticated": "Oricine este autentificat",
       "public": "Toată lumea"
     },
-    "delete": "Șterge această listă"
+    "delete": "Șterge această listă",
+    "loadFailed": "Listele de verificare nu au putut fi încărcate.",
+    "changedSinceShown": "Cineva a modificat această listă după ce pagina a afișat-o. Uită-te din nou la ea înainte s-o ștergi.",
+    "problems": {
+      "openFailed": "Lista nu a putut fi deschisă. Încearcă din nou.",
+      "deleteFailed": "Lista nu a putut fi ștearsă.",
+      "notFound": "Lista nu mai există sau nu o mai poți vedea.",
+      "forbidden": "Nu ai voie să modifici această listă.",
+      "createForbidden": "Nu ai voie să creezi o listă pentru acel club de speologie. Alege alt club sau cere-i administratorului clubului.",
+      "groupNotAllowed": "Nu ai voie să dai o listă acelui club de speologie.",
+      "invalid": "Ceva din listă nu este valid: verifică titlul, descrierea și fiecare linie."
+    }
   },
   "workAreas": {
     "title": "Zone de lucru",
@@ -7370,9 +7883,18 @@
       "failed": "Suprafața nu a fost făcută. Progresul de mai sus spune de ce."
     },
     "problems": {
+      "pointCloudInvalid": "Norul de puncte nu este un fișier LAS sau LAZ pe care acest server îl poate citi: antetul lipsește, e scurt sau nu se potrivește.",
+      "recordingInvalid": "Înregistrarea scanerului nu a putut fi procesată: o parte nu se citește, un jurnal nu are coloanele așteptate sau unei bucăți îi lipsește perechea.",
+      "workerUnavailable": "Nu există pe această instalare un proces care să prelucreze scanări, sau cel existent nu poate rula un pas de care are nevoie această încărcare. Întreabă un administrator.",
+      "workerSilent": "Lucrarea a fost lăsată procesului care prelucrează scanări și nimic nu a preluat-o în timpul permis. Întreabă un administrator dacă procesul rulează, apoi rulează din nou.",
+      "workerFailed": "Procesul care prelucrează scanări a preluat lucrarea și a raportat că a eșuat sau a fost oprit. Rulează din nou; dacă eșuează la fel, întreabă un administrator.",
+      "workerTimeout": "Prelucrarea a durat mai mult decât permite această instalare pentru o lucrare.",
+      "workerInterrupted": "Procesul care prelucrează scanări a fost oprit în timp ce rula, iar rezultatele scrise pe jumătate nu sunt folosite. Rulează din nou încărcarea pentru a relua pasul de la început.",
+      "exportInvalid": "Norul de puncte făcut din înregistrare nu a trecut verificarea, așa că nu s-a construit nimic pe el. Rulează din nou; dacă eșuează la fel, înregistrarea poate fi deteriorată.",
       "surfaceUnplaced": "Suprafața a fost făcută, dar nu a fost salvată: scanarea nu mai e plasată sau peștera aleasă pentru ea nu mai există. Plasează scanarea și fă din nou suprafața.",
       "surfaceNeedsTiles": "O suprafață se face dintr-o scanare procesată și împărțită în dale.",
       "surfaceNeedsPlacement": "Plasează întâi scanarea: suprafața ei se salvează acolo unde e plasată scanarea.",
+      "surfaceProtectedCave": "Peștera scanării este protejată, iar peștera aleasă nu este: pereții ei ar arăta unde sunt galeriile peșterii protejate. Salvează suprafața pentru peștera scanării sau protejează întâi cealaltă peșteră.",
       "surfaceProfileStep": "Acel profil nu este unul pentru făcut suprafețe.",
       "profileUnknown": "Acel profil nu mai există sau nu îl poți folosi.",
       "profileValuesInvalid": "Valorile acelui profil nu se mai potrivesc pasului. Deschide-l în setări și salvează-l din nou.",
@@ -7520,6 +8042,7 @@
     }
   },
   "surveySources": {
+    "loadFailed": "Sursele arhivate ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost arhivată vreuna.",
     "title": "Surse topografice",
     "explanation": "Materialul din care au fost făcute modelele compilate de mai sus. Păstrat pentru ca topografia să poată fi compilată din nou atunci când uneltele care au produs exportul nu mai există în forma de azi. Un jurnal de compilare este deschis, pentru cifrele de închidere pe care le raportează; nimic altceva de aici nu este citit sau interpretat.",
     "upload": "Arhivează o sursă",
@@ -7686,6 +8209,11 @@
     }
   },
   "karstStats": {
+    "axesNone": "Axele principale nu au putut fi desenate: prea puține peșteri din acest set înregistrează toate măsurile, sau măsurile rămase nu variază.",
+    "axisDropped": "Lăsate în afara axelor pentru că toate peșterile grupate înregistrează aceeași valoare: {{measures}}.",
+    "axisLoadings": "Axa {{axis}} cuprinde {{share}} % din variație și este alcătuită din {{loadings}}. Contează doar semnele relative; axa însăși poate fi citită în oricare sens.",
+    "axisScope": "{{drawn}} din cele {{total}} peșteri de pe această pagină sunt poziționate. Axele și culorile se calculează pe întregul set la care este restrânsă lista, așa că peșterile de pe alte pagini sunt poziționate și ele, dar nu sunt desenate aici.",
+    "axisTitle": "Axa {{axis}} ({{share}} % din variație)",
     "clusterArbitrary": "Gruparea încă muta peșteri când a atins limita de pași, așa că grupul în care a căzut o peșteră aflată la limită este arbitrar în detalii, nu greșit.",
     "clusterCoverage": "{{measure}}: {{missing}} dintre peșterile luate în considerare nu o înregistrează, iar {{soleReason}} dintre acestea ar fi fost grupate dacă această măsură nu ar fi fost cerută.",
     "clusterEmpty": "Nimic nu a putut fi grupat: mai puțin de {{minimum}} peșteri din acest set înregistrează toate măsurile cerute. Punctele de mai jos sunt desenate necolorate, iar cifrele de mai sus rămân valabile.",
@@ -7695,12 +8223,15 @@
     "clusterNoWork": "Toate peșterile grupate au aceeași valoare pentru {{measure}}, așa că acea măsură nu a mutat nicio peșteră în niciun grup.",
     "clusterNotAsked": "Această listă este restrânsă după ceva ce gruparea la nivel de registru nu poate fi întrebată, așa că peșterile sunt desenate necolorate, nu colorate după gruparea altui set de peșteri.",
     "clusterPopulation": "Grupat pe cele {{eligible}} din {{considered}} peșteri pe care le poți citi din întregul set la care este restrânsă această listă — nu doar din pagina desenată mai jos — și care înregistrează toate măsurile cerute. Celelalte {{excluded}} înregistrează mai puține, așa că nicio grupare nu le poate plasa, iar neavând nici lungime, nici adâncime de reprezentat, lipsesc din grafic, nu sunt desenate în el.",
+    "clusterPopulationAxes": "Grupat și poziționat pe cele {{eligible}} din {{considered}} peșteri pe care le poți citi din întregul set la care este restrânsă această listă — nu doar din pagina desenată mai jos — și care înregistrează toate măsurile cerute. Celelalte {{excluded}} înregistrează mai puține, așa că nicio grupare nu le poate plasa și nici poziționa pe axe, iar în grafic lipsesc, nu sunt desenate în el.",
     "clusterUngrouped": "Negrupate",
     "clusterWeak": "Grupurile sunt la fel de late pe cât sunt de depărtate între ele, deci această grupare este slabă. Metoda returnează exact numărul de grupuri cerut, oricare ar fi datele, inclusiv zgomot, așa că mai jos culorile sunt o împărțire a acestor peșteri, nu o descoperire despre ele.",
     "clusterWithheld": "Unele grupuri conțin mai puțin de {{floor}} peșteri. Acelea nu sunt rezumate, iar peșterile lor sunt desenate necolorate, pentru că o medie pe două peșteri sunt chiar valorile acelor două peșteri, nu ceva despre un grup.",
     "count": "Peșteri",
     "depthAxis": "Denivelare (m)",
     "lengthAxis": "Lungime carotată (m)",
+    "modeAxes": "Axe principale",
+    "modeMeasures": "Măsuri alese",
     "nothingMeasured": "Nicio peșteră de pe această pagină nu are lungime măsurată.",
     "powerLawFit": "Ajustare putere (exponent {{exponent}})",
     "rank": "Rang",
@@ -7816,6 +8347,23 @@
     "box": "P10 · P25 · mediană · P75 · P90",
     "tooFewForABox": "Prea puține peșteri măsurate pentru o cutie"
   },
+  "featurePassages": {
+    "title": "Galerii sub această trăsătură",
+    "intro": "Peșteri cu galerii la cel mult {{distance}} m de această trăsătură, în plan, de la cea mai apropiată. Sunt luate în calcul doar peșterile pe care le poți localiza exact.",
+    "reach": "Rază (m)",
+    "empty": "Nicio galerie pe care o poți localiza nu se află în această rază.",
+    "noTerrain": "Pe această instalație nu au fost pregătite date de elevație, deci grosimea rocii de deasupra nu se cunoaște; distanțele se cunosc.",
+    "truncated": "Mai multe peșteri se potrivesc decât sunt listate; sunt arătate cele mai apropiate.",
+    "cave": "Peștera",
+    "offset": "Distanță",
+    "offsetUnder": "Sub contur",
+    "altitude": "Altitudinea galeriei",
+    "overburden": "Roca de deasupra",
+    "notMeasured": "—",
+    "unitMetres": "{{value}} m",
+    "approximate": "aproximativ",
+    "noAltitudes": "Fără altitudini măsurate"
+  },
   "morphometry": {
     "title": "Formă măsurată",
     "area": "Suprafață",
@@ -7846,14 +8394,19 @@
     "between": "De la {{from}} la {{to}}.",
     "horizontalIsOfTheSameLine": "Valorile orizontală și verticală sunt cele două componente ale aceleiași linii minime, nu distanța orizontală minimă și distanța verticală minimă, care sunt alte perechi de puncte.",
     "unavailable": "Nicio distanță pentru această pereche",
+    "tooCostly": "Topografiile acestor două peșteri sunt prea mari pentru a fi măsurate una față de cealaltă într-o singură cerere.",
     "unavailableWhy": "O distanță între două peșteri o localizează pe fiecare pornind de la cealaltă, așa că este dată doar unui cititor care poate vedea exact unde se află amândouă.",
     "absence": {
+      "altitudesRelative": "Cel puțin una dintre aceste două peșteri a fost topografiată fără altitudinea punctului său zero, deci înălțimile ei sunt doar relative la acel punct și distanța pe verticală dintre ele nu poate fi măsurată. Declară acea altitudine pe topografia ei pentru a le compara.",
       "noLineWork": "Cel puțin una dintre aceste două peșteri nu are traseu topografic din care să se măsoare.",
       "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
     },
     "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vezi doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
   },
   "viewLinks": {
+    "revealGone": "Ce indică această legătură nu mai există, așa că vederea a rămas unde era.",
+    "revealForbidden": "Nu ai voie să vezi ce indică această legătură, așa că vederea a rămas unde era.",
+    "revealFailed": "Locul indicat de această legătură nu a putut fi citit, așa că vederea a rămas unde era. Urmează legătura din nou peste puțin timp.",
     "controls": {
       "map2d": "Harta",
       "scene3d": "Scena 3D",
@@ -7863,6 +8416,9 @@
   },
   "textLink": {
     "notAnnotated": "Acest document nu este un text cu legături.",
+    "textLoadFailed": "Textul nu a putut fi citit acum.",
+    "linksCutOff": "În acest text sunt evidențiate doar primele {{shown}} din {{total}} legături.",
+    "linksFailed": "Legăturile acestui text nu au putut fi încărcate, așa că niciun pasaj nu este evidențiat.",
     "empty": "Textul nu conține încă nimic.",
     "popOut": "Deschide într-o fereastră separată",
     "controls": {
@@ -7901,6 +8457,8 @@
     "title": "Catalogul peșterilor",
     "subtitle": "Caută în catalogul comunitar al peșterilor din România de pe speologie.org și adu peșteri de acolo în această instalare.",
     "portalLink": "Deschide speologie.org",
+    "statusLoadFailed": "Nu s-a putut citi acum dacă această instalare poate interoga catalogul, așa că deocamdată nu se poate căuta sau importa nimic.",
+    "caveLoadFailed": "Această peșteră nu a putut fi citită acum din catalog.",
     "openInPortal": "Deschide pe speologie.org",
     "notConfigured": {
       "title": "Această instalare nu are cheie pentru catalog",
@@ -8013,12 +8571,23 @@
       "searchTooDeep": "Căutarea are mai multe rezultate decât se pot răsfoi. Restrânge-o cu un județ sau cu o denumire mai lungă.",
       "caveNotFound": "Catalogul nu mai publică acea peșteră.",
       "selectionTooLarge": "Au fost alese prea multe peșteri pentru un singur import. Adu-le în loturi mai mici — fiecare poate fi anulat separat.",
-      "importFailed": "Importul nu a putut fi finalizat."
+      "importFailed": "Importul nu a putut fi finalizat.",
+      "createForbidden": "Contul tău nu poate crea peșteri, așa că nu poate aduce peșteri din catalog.",
+      "selectionEmpty": "Nu a fost aleasă nicio peșteră pentru import.",
+      "nothingCreated": "Toate peșterile alese au fost lăsate deoparte, așa că nu era nimic de importat.",
+      "recordMissing": "Catalogul nu mai publică această peșteră.",
+      "updateForbidden": "Nu poți modifica peștera ca care a fost importată această intrare.",
+      "caveMissing": "Peștera ca care a fost importată această intrare nu mai este o peșteră aici.",
+      "positionInvalid": "Poziția dată pentru această peșteră nu este pe pământ.",
+      "typeUnknown": "Tipul de peșteră sau de intrare ales nu există în această instalare.",
+      "parentNotFound": "Elementul părinte ales nu mai există sau nu îl poți vedea.",
+      "alreadyImported": "Această peșteră este deja în registru. Actualizeaz-o în loc să creezi o a doua copie."
     },
     "paging": {
       "previous": "Anterioare",
       "next": "Următoare",
-      "page": "Pagina {{page}}"
+      "page": "Pagina {{page}}",
+      "backTo": "Înapoi la pagina {{page}}"
     }
   },
   "tripImport": {
@@ -8336,6 +8905,7 @@
     }
   },
   "hypsometry": {
+    "altitudesRelative": "Topografia a fost încărcată fără altitudinea punctului său zero: aceste înălțimi sunt relative la acel punct, nu deasupra nivelului mării, iar nivelurile izvoarelor nu sunt afișate.",
     "caveTitle": "Galerii după altitudine",
     "areaTitle": "Intrări după altitudine",
     "loading": "Se măsoară…",
@@ -8354,6 +8924,7 @@
     "noProposal": "Măsurătorile nu se separă în niveluri.",
     "notConfirmed": "Nu s-a înregistrat încă nicio citire",
     "confirm": "Înregistrează această citire",
+    "clearFailed": "Citirea nu a putut fi retrasă. Încearcă din nou.",
     "clear": "Retrage citirea",
     "clearConfirm": "Retragi citirea înregistrată a nivelurilor acestei peșteri?",
     "saved": "Citirea a fost înregistrată.",
@@ -8380,13 +8951,19 @@
     "unitDegrees": "°",
     "noDivergence": "O parte nu conține nimic, deci nu există niciun dezacord de raportat. Zero aici ar susține un acord cu o structură pe care nimeni nu a cartat-o.",
     "divergenceScale": "Zero înseamnă că cele două se suprapun ca direcție; unu înseamnă că sunt perpendiculare, la un sfert de tură distanță.",
-    "linesOnly": "Se compară doar liniile de fractură și de falie cartate. Măsurătorile de strat și de diaclază luate la o stație sunt un alt fel de înregistrare, iar această instalare nu stochează niciuna.",
+    "linesOnly": "Aici se compară liniile de fractură și de falie cartate, rozetă cu rozetă, după lungime. Măsurătorile structurale luate într-un punct — strat, diaclaze, plane de falie — se reprezintă pe o stereogramă, iar galeriile unei peșteri se testează față de direcțiile lor.",
     "dolineModeElsewhere": "Compararea axelor lungi ale depresiunilor cu direcțiile faliilor se face pe o zonă, pe pagina zonei respective.",
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
+    "truncatedNearest": "În rază se află mai multe trasee de fractură decât încap într-o comparație; roza este construită din cele mai apropiate dintre ele.",
+    "truncatedArea": "Această zonă conține mai multe trasee de fractură decât încap într-o comparație; roza este construită dintr-o parte a lor.",
+    "unmeasuredDolines_one": "{{count}} contur nu a putut fi măsurat (se intersectează sau nu are lățime) și este lăsat în afara rozei.",
+    "unmeasuredDolines": "{{count}} contururi nu au putut fi măsurate (se intersectează sau nu au lățime) și sunt lăsate în afara rozei.",
     "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
   },
   "overburden": {
+    "altitudesRelativeTitle": "Înălțimile sunt doar relative",
+    "altitudesRelativeReason": "Topografia acestei peșteri a fost încărcată fără altitudinea punctului său zero, deci înălțimile ei nu pot fi comparate cu terenul. Declară acea altitudine pe topografie pentru a măsura grosimea rocii de deasupra.",
     "title": "Roca de deasupra",
     "loading": "Se măsoară roca de deasupra…",
     "nothingMeasured": "Această peșteră nu are traseu de-a lungul căruia să se măsoare, deci nu există unde să se întrebe câtă rocă se află deasupra.",
@@ -8421,7 +8998,12 @@
       "noData": "Datele de elevație nu înregistrează nimic aici"
     },
     "markLabel": "{{value}} de rocă deasupra",
-    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici"
+    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici",
+    "leastCover": "Cea mai subțire acoperire de rocă",
+    "leastCoverAt": "{{value}} la {{distance}} de-a lungul galeriei",
+    "leastCoverNote": "Cea mai subțire dintre citirile făcute de-a lungul galeriei, nu minimul real dintre ele.",
+    "showLeastCover": "Arată pe hartă",
+    "leastCoverMark": "Acoperire minimă: {{value}}"
   },
   "altitudeCheck": {
     "title": "Altitudinile intrărilor față de teren",
@@ -8472,8 +9054,31 @@
     "disagreesWithRecord": "diferă de cifra calculată",
     "unitMetres": "{{value}} m",
     "notMeasured": "—",
+    "altitudesRelative": "Topografia a fost încărcată fără altitudinea punctului zero, deci înălțimile ei sunt relative la acel punct și nu pot fi comparate cu altitudinile intrărilor: adâncimea totală și înălțimea nu sunt măsurate. Declarați acea altitudine pe topografie pentru a le măsura.",
     "noSurveyAltitudes": "Traseul nu conține altitudini, deci adâncimea și înălțimea nu pot fi măsurate din el. Un desen în plan nu este o peșteră fără adâncime.",
     "explained": "Adâncimea se măsoară de la cea mai înaltă intrare până la cel mai de jos punct atins de ridicare, iar înălțimea de la cea mai joasă intrare până la cel mai înalt punct. Nivelul exurgenței este cea mai joasă intrare a unei peșteri-izvor din zona care conține această peșteră, dintre cele pe care le poți localiza; adâncimea potențială este cea mai înaltă intrare minus acest nivel."
+  },
+  "areaSystemFigures": {
+    "title": "Adâncimea și înălțimea sistemului",
+    "loading": "Se măsoară pe peșterile membre…",
+    "noCaves": "Nicio peșteră din această zonă nu este una pe care o poți localiza, deci nu există ce să se măsoare.",
+    "caves": "Peșteri membre măsurate",
+    "surveyedCaves": "dintre ele cu o ridicare care conține altitudini",
+    "entrances": "Intrări",
+    "highestEntrance": "Cea mai înaltă intrare a sistemului",
+    "lowestEntrance": "Cea mai joasă intrare a sistemului",
+    "entranceSpread": "Diferența de nivel dintre intrările sistemului",
+    "totalDepth": "Adâncimea sistemului sub cea mai înaltă intrare",
+    "height": "Înălțime deasupra celei mai joase intrări",
+    "resurgenceLevel": "Nivelul exurgenței din această zonă",
+    "potentialDepth": "Adâncime potențială până la nivelul exurgenței",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "basisDeclared": "Calculat pe peșterile declarate ca fiind în această zonă și doar pe cele a căror poziție o poți vedea. O peșteră închisă pentru tine nu adaugă nimic aici, nici măcar la numărătoare.",
+    "truncated": "Aici sunt încadrate mai multe peșteri decât măsoară un singur răspuns, deci cifrele descriu primele {{count}} dintre ele.",
+    "approximate": "Adâncimea a cel puțin unei peșteri provine dintr-o reducere pe baza formei traseului desenat, nu din vize, deci acele cifre sunt aproximative.",
+    "noSurveyAltitudes": "Ridicarea niciunui membru nu conține altitudini, deci adâncimea și înălțimea nu pot fi măsurate din ele.",
+    "explained": "Adâncimea sistemului merge de la cea mai înaltă intrare a oricărei peșteri membre până la cel mai de jos punct atins de ridicarea oricărui membru; înălțimea, de la cea mai joasă intrare până la cel mai înalt punct ridicat. Nivelul exurgenței este cea mai joasă intrare a unei peșteri-izvor din această zonă dintre cele pe care le poți localiza; adâncimea potențială este cea mai înaltă intrare minus acest nivel."
   },
   "depthProfile": {
     "title": "Profil de adâncime",
@@ -8513,6 +9118,8 @@
     "noLayer": "Pentru această măsurătoare nu a fost calculată încă nicio imagine a reliefului. Un administrator o poate calcula din pagina de relief.",
     "needsSlope": "Orientarea se numără doar pe teren înclinat, iar pentru asta e nevoie de imaginea pantei.",
     "slopeUnit": "Imaginea pantei există doar în procente; clasele sunt tăiate în grade.",
+    "analysisUnavailable": "Formele de relief sunt calculate de programul de analiză a reliefului (WhiteboxTools), pe care această instalație nu îl rulează, și nu au fost calculate anterior. Un administrator îl poate configura.",
+    "landformNote": "Formele de relief sunt citite din cea mai nouă imagine a formelor de relief din pagina de relief. Distanța ei de căutare le dă scara: același versant este pantă la 100 m și umăr la 1 km. Terenul pe care imaginea l-a lăsat neclasificat, cum sunt celulele de la margine, nu se numără.",
     "entrances": "Intrări",
     "sinkholes": "Doline",
     "background": "Terenul zonei",
@@ -8521,7 +9128,8 @@
     "measure": {
       "slope": "Panta",
       "aspect": "Orientarea versantului",
-      "position": "Poziția pe relief"
+      "position": "Poziția pe relief",
+      "landform": "Forma de relief"
     },
     "classes": {
       "lt5": "sub 5°",
@@ -8639,7 +9247,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Părți legate din această imagine: {{count}}"
+    "regionCount": "Părți legate din această imagine: {{count}}",
+    "linksCutOff": "Pe această imagine sunt desenate doar primele {{shown}} din {{total}} legături."
   },
   "tripStats": {
     "title": "Sinteza turelor",
@@ -9673,6 +10282,995 @@
       "title": "Analiza topografiei din această încărcare",
       "note": "Măsurată pe topografia din fișierele acestei încărcări, nu pe cea după care este desenată acum peștera.",
       "none": "Topografia acestei încărcări nu a fost citită în vize: nu a putut fi plasată pe hartă sau citirea ei nu s-a încheiat."
+    }
+  },
+  "testData": {
+    "title": "Date de test",
+    "intro": "Generează date de test inventate, realiste — peșteri, intrările lor și zonele carstice din jur — și șterge-le din nou. Fiecare obiect generat poartă eticheta numită în profil; ștergerea ia exact ce a scris o rulare și nimic altceva.",
+    "disabled": "Generatorul de date de test este oprit pe această instalare.",
+    "loadFailed": "Generatorul de date de test nu a putut fi citit.",
+    "newRun": "Rulare nouă",
+    "profile": "Profil",
+    "profiles": {
+      "small": "Mic (25 de peșteri)",
+      "default": "Implicit (500 de peșteri)",
+      "large": "Mare (5.000 de peșteri)"
+    },
+    "caveCount": "Peșteri",
+    "seed": "Sămânță",
+    "json": "Profil (JSON)",
+    "jsonHelp": "Profilul întreg. Același profil și aceeași sămânță generează aceleași date; o secțiune pe care această versiune nu o cunoaște încă este ignorată.",
+    "jsonInvalid": "Profilul nu este JSON valid.",
+    "start": "Generează",
+    "started": "Rularea a fost pusă în coadă.",
+    "existingNote": "Această instalare conține deja {{caves}} peșteri, {{trips}} ture și {{documents}} documente pe care nicio rulare de date de test nu le-a creat. O rulare alături de ele trebuie confirmată.",
+    "existingTitle": "Generezi alături de datele existente?",
+    "existingBody": "Această instalare conține deja {{caves}} peșteri, {{trips}} ture și {{documents}} documente pe care nicio rulare de date de test nu le-a creat. Datele generate vor sta alături de ele; ștergerea ulterioară a rulării ia doar ce a generat.",
+    "existingOk": "Generează oricum",
+    "runInProgress": "O rulare sau o ștergere este deja în desfășurare.",
+    "profileInvalid": "Profilul nu poate rula: {{problems}}",
+    "startFailed": "Rularea nu a putut fi pornită.",
+    "runs": "Rulări",
+    "noRuns": "Nicio rulare încă.",
+    "created": "Pornită",
+    "statusLabel": "Stare",
+    "status": {
+      "queued": "În așteptare",
+      "running": "Se generează",
+      "succeeded": "Gata",
+      "failed": "Eșuată",
+      "cancelled": "Anulată",
+      "removing": "Se șterge",
+      "removed": "Ștearsă"
+    },
+    "alongside": "Alături de date existente",
+    "progress": "Progres",
+    "countsLabel": "Scrise",
+    "counts": {
+      "massifs": "masive",
+      "karstAreas": "zone carstice",
+      "caves": "peșteri",
+      "entrances": "intrări",
+      "protectedCaves": "peșteri protejate",
+      "tags": "etichete"
+    },
+    "cancel": "Anulează",
+    "cancelFailed": "Rularea nu a putut fi anulată.",
+    "remove": "Șterge",
+    "removeTitle": "Ștergi datele acestei rulări?",
+    "removeBody": "Tot ce a generat rularea este șters definitiv. Datele pe care rularea nu le-a creat rămân neatinse, la fel și o zonă generată în care cineva a pus între timp date proprii.",
+    "removeFailed": "Ștergerea nu a putut fi pornită.",
+    "notes": "Note",
+    "noteCodes": {
+      "keptInUse": "{{count}} peșteri sau locuri generate au fost păstrate pentru că sunt folosite: cineva a atașat un fișier, a încărcat o topografie, a legat o tură, un document sau alt obiect ori a desenat o hartă pentru ele.",
+      "keptBeneath": "{{count}} zone sau peșteri generate au fost păstrate pentru că sub ele se află date care nu au fost create de o rulare de date de test.",
+      "inventedElevations": "Altitudinile provin dintr-o suprafață inventată; altitudinile reale ale terenului dintr-o construcție de teren vor veni într-o parte ulterioară a generatorului.",
+      "clubOnlyAsSignedIn": "Vizibilitatea doar pentru club este scrisă ca vizibilitate pentru utilizatorii autentificați, până când generatorul va crea grupuri de speologi.",
+      "codesTaken": "{{count}} peșteri generate au fost scrise fără cod de identificare, pentru că o peșteră din această instalare are deja codul plănuit pentru ele."
+    },
+    "coverage": "Ce a scris rularea, tabel cu tabel",
+    "table": "Tabel",
+    "rows": "Rânduri",
+    "emptyColumns": "Coloane rămase goale",
+    "noEmptyColumns": "niciuna",
+    "tables": "Fiecare tabel și cum ajung datele de test în el",
+    "roleLabel": "Cum",
+    "role": {
+      "generated": "Generat",
+      "derived": "Urmează din datele generate",
+      "planned": "Planificat",
+      "exempt": "Niciodată generat"
+    },
+    "part": {
+      "geography": "cu geografia",
+      "people": "cu oamenii, cluburile și accesul",
+      "underground": "cu topografiile și subteranul",
+      "activity": "cu turele, taberele și evenimentele",
+      "documents": "cu documentele și fișierele media",
+      "geodata": "cu datele geografice, importurile și dispozitivele",
+      "accounts": "cu exporturile de cont"
+    },
+    "note": "Notă",
+    "runGone": "Această rulare nu mai există. Lista arată ce a rămas.",
+    "notRemovable": "Doar o rulare terminată, eșuată sau anulată poate fi eliminată, și doar o dată.",
+    "notCancellable": "Această rulare s-a terminat deja, deci nu mai e nimic de anulat."
+  },
+  "flyby": {
+    "title": "Survol",
+    "openHint": "Survol: zboară camera în jurul unei peșteri, al mai multor peșteri sau al unui munte",
+    "movie": {
+      "open": "Fă un film",
+      "openHint": "Scrie acest survol într-un fișier film: MP4, WebM sau GIF",
+      "title": "Fă un film",
+      "close": "Închide",
+      "framedHint": "Vizualizarea 3D este încadrată în cadrul filmului: ce vezi este ce va conține fișierul. Pornește sau trage survolul de mai jos ca să vezi orice moment al lui.",
+      "presetsTitle": "Fișiere gata pregătite",
+      "level": "Cum este luat fiecare cadru",
+      "levels": {
+        "quick": "Rapid",
+        "fine": "Fin",
+        "fineLarge": "Fin, mai mare decât ecranul",
+        "live": "Înregistrare în timp real"
+      },
+      "levelHelp": {
+        "quick": "Fiecare cadru este luat imediat ce este desenat, cum îl arată vizualizarea în timp real: plăcile hărții pot fi încă pe drum.",
+        "fine": "Înaintea fiecărui cadru, scena termină de încărcat ce arată. Mai lent: secunde pe cadru pe un calculator fără placă grafică.",
+        "fineLarge": "Ca la Fin, iar scena este desenată la mărimea filmului chiar acolo unde aceasta e mai mare decât fereastra. Cel mai clar fișier și cel mai lent de făcut.",
+        "live": "Survolul rulează în timp real și îl filmează chiar înregistratorul browserului: fișierul conține ce a arătat ecranul, cu viteza cu care l-a desenat acest calculator. Pe un calculator lent filmul sacadează, iar în unele browsere fișierul nu are durată și nu poate fi derulat."
+      },
+      "draft": "Ciornă",
+      "draftHelp": "Jumătate din mărime, {{fps}} cadre pe secundă, fiecare cadru luat rapid: ca să verifici ritmul într-o fracțiune din timp.",
+      "part": "Ce se filmează",
+      "partWhole": "Tot survolul ({{length}})",
+      "partStretch": "O porțiune din el",
+      "from": "De la (s)",
+      "to": "Până la (s)",
+      "summary_one": "{{count}} cadru de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "summary": "{{count}} cadre de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "summaryLive_one": "Până la {{count}} cadru de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "summaryLive": "Până la {{count}} cadre de {{size}} · {{length}} · aproximativ {{bytes}}",
+      "liveFormats": "Acest browser înregistrează în timp real doar ca {{formats}}: alege acest format.",
+      "liveProgress": "Se înregistrează în timp real: {{done}} din {{total}}",
+      "liveReport_one": "{{count}} cadru înregistrat în {{time}}: aproximativ {{fps}} pe secundă.",
+      "liveReport": "{{count}} cadre înregistrate în {{time}}: aproximativ {{fps}} pe secundă.",
+      "liveReportSlow": "Mai puține decât cele {{fps}} pe secundă cerute: filmul va sacada. Rapid sau Fin fac un fișier fluent, oricât de încet ar desena calculatorul.",
+      "gifTooLong": "Un GIF are cel mult {{max}} de cadre, iar acesta ar avea {{frames}}. Filmează o porțiune, scade numărul de cadre pe secundă sau fă un film video.",
+      "gifLarge": "Un GIF atât de lung poate depăși {{size}}, iar multe aplicații de mesagerie îl refuză. Filmează o porțiune, micșorează-l sau fă un film video.",
+      "privacy": "Filmul arată unde sunt aceste peșteri. Trimite-l doar celor care au voie să vadă asta.",
+      "notReady": "Survolul nu a putut fi pregătit pentru filmare.",
+      "preparing": "Se pregătește survolul…",
+      "timeLeft": "mai sunt aproximativ {{time}}",
+      "reportFrames_one": "{{count}} cadru, făcut în {{time}}.",
+      "reportFrames": "{{count}} cadre, făcute în {{time}}.",
+      "reportUnsettled_one": "{{count}} dintre ele a fost luat înainte ca scena să termine de încărcat.",
+      "reportUnsettled": "{{count}} dintre ele au fost luate înainte ca scena să termine de încărcat.",
+      "reportSettled": "Toate cadrele au fost luate cu scena încărcată complet."
+    },
+    "bundle": {
+      "format": "Pachet Blender (.zip)",
+      "help": "Un zip cu scena, peșterile și un player. Dezarhivează-l și randează-l pe calculatorul tău cu Blender {{version}} sau mai nou — aici nu se randează nimic. Conține și o ciornă rapidă a aceleiași scene.",
+      "fps": "Un pachet se face la {{fps}} cadre pe secundă.",
+      "summary_one": "{{count}} cadru de {{size}} · {{length}}",
+      "summary": "{{count}} cadre de {{size}} · {{length}}",
+      "fileNamed": "Fișierul poartă numele survolului și se termină în -blender.zip.",
+      "walls_one": "Include pereții unei peșteri care nu au fost descărcați în vizualizare ({{size}})",
+      "walls": "Include pereții celor {{count}} peșteri care nu au fost descărcați în vizualizare ({{size}})",
+      "wallsHelp": "Ajung direct în pachet; nu se mai descarcă nimic în vizualizare.",
+      "leftOutTitle": "Nu sunt în pachet",
+      "leftOutHelp": "Pachetul se face oricum, iar fișierul README din el spune același lucru.",
+      "leftOut": {
+        "ground": "Terenul și harta desenată pe el: peșterile stau în spațiu gol, sub un cer simplu.",
+        "timedChanges": "Schimbările de aspect din timpul survolului — straturi, culori, fundaluri, cerul: scena păstrează aspectul primului cadru.",
+        "reliefChanges": "Schimbarea reliefului din timpul survolului: scena păstrează relieful primului cadru.",
+        "wallColours": "Culoarea cu care sunt nuanțați pereții: sunt desenați ca rocă simplă.",
+        "surfaceOpening": "Deschiderea tăiată în teren deasupra unei peșteri.",
+        "entrances": "Marcajele intrărilor.",
+        "surfaceFeatures": "Fenomenele de suprafață și straturile de obiecte.",
+        "scans": "Scanările.",
+        "photos": "Fotografiile din stații.",
+        "mapLayers": "Straturile suprapuse de hartă și hărțile georeferențiate.",
+        "tracks": "Liniile fișierelor importate.",
+        "layerOpacity": "Intensitatea cu care sunt desenate straturile: ce se vede este desenat complet.",
+        "wallsNotDownloaded": "Pereții care nu au fost descărcați în vizualizare: acele peșteri sunt desenate prin drumuiri.",
+        "moreCavesInView": "O parte din peșterile din vizualizare: un pachet ia doar un număr limitat."
+      },
+      "privacy": "Pachetul conține forma acestor peșteri — pereții și drumuirile lor — și cum sunt așezate una față de alta. Nu conține coordonate, teren sau hartă. Totuși, trimite-l doar celor care au voie să vadă aceste peșteri.",
+      "export": "Descarcă pachetul",
+      "refusal": {
+        "tooLong": "Un pachet are cel mult {{max}} de cadre, iar acesta ar avea {{frames}}. Ia o porțiune din survol.",
+        "noCaves": "Un pachet este făcut din peșteri, iar acest survol nu este despre niciuna. Alege mai întâi peșterile în jurul cărora zboară.",
+        "nothingShown": "Pereții și drumuirile sunt amândouă ascunse în aspectul acestui survol, deci nu s-ar desena nimic. Afișează una dintre ele."
+      },
+      "progress": {
+        "preparing": "Se pregătește survolul…",
+        "asking": "Se alcătuiește pachetul…"
+      },
+      "saved": "Pachetul a fost salvat.",
+      "reportWalls_one": "{{count}} peșteră cu pereții ei.",
+      "reportWalls": "{{count}} peșteri cu pereții lor.",
+      "reportLines_one": "{{count}} peșteră prin drumuirile ei.",
+      "reportLines": "{{count}} peșteri prin drumuirile lor.",
+      "reportNotDrawn_one": "{{count}} peșteră nu este în el: nimic din ea nu este disponibil pentru desenare.",
+      "reportNotDrawn": "{{count}} peșteri nu sunt în el: nimic din ele nu este disponibil pentru desenare.",
+      "reportWallsLeftOut_one": "Pereții unei peșteri au fost lăsați deoparte; este desenată prin drumuiri.",
+      "reportWallsLeftOut": "Pereții a {{count}} peșteri au fost lăsați deoparte; sunt desenate prin drumuiri.",
+      "reportReadme": "Fișierul README.txt din pachet spune cum se randează și ce lasă deoparte.",
+      "failed": {
+        "nothingToDraw": "Nimic din peșterile acestui survol nu este disponibil pentru desenare, deci nu există pachet de făcut.",
+        "tooLong": "Survolul are mai multe cadre decât încap într-un pachet. Ia o porțiune din el.",
+        "frameRate": "Un pachet nu poate fi făcut la acest număr de cadre pe secundă.",
+        "other": "Pachetul nu a putut fi făcut."
+      }
+    },
+    "layersHeld": "Camera este condusă de un survol. Oprește-l ca să schimbi straturile.",
+    "unnamedCave": "Peșteră fără nume",
+    "aboutTitle": "În jurul a ce se zboară",
+    "source": {
+      "selected": "Ce este selectat",
+      "inView": "Peșterile din vedere",
+      "view": "Ce arată vederea",
+      "nothingSelected": "Selectează mai întâi o peșteră sau o zonă pe hartă sau în scenă.",
+      "noCaves": "Nicio peșteră nu este desenată în vedere. Apropie-te de una, apoi reîmprospătează lista.",
+      "refresh": "Reîmprospătează lista",
+      "shortestRoute": "Traseul cel mai scurt",
+      "file": "Un fișier importat",
+      "pickFile": "Fișierul de urmat",
+      "noFiles": "Niciun fișier importat nu este gata. Importă mai întâi un traseu GPX sau KML la Geodate.",
+      "filesLoadFailed": "Fișierele importate nu au putut fi citite acum, așa că niciunul nu poate fi ales."
+    },
+    "subject": {
+      "all": "toate împreună",
+      "feature": "zona selectată",
+      "view": "vederea",
+      "place": "un loc fixat",
+      "file": "un fișier importat"
+    },
+    "presetTitle": "Presetare",
+    "preset": {
+      "aroundCave": {
+        "name": "În jurul unei peșteri",
+        "hint": "Se apropie, dă ocol peșterii și, dacă i se cere, coboară până în punctul ei cel mai de jos și înapoi."
+      },
+      "tour": {
+        "name": "Turul peșterilor",
+        "hint": "Vizitează pe rând fiecare peșteră — până la ea, în jurul ei — și se încheie deasupra tuturor."
+      },
+      "aroundSeveral": {
+        "name": "În jurul mai multor peșteri",
+        "hint": "Un singur ocol, destul de larg cât să le cuprindă pe toate."
+      },
+      "aroundArea": {
+        "name": "În jurul unui munte",
+        "hint": "Dă ocol zonei de deasupra crestelor, privind spre interior."
+      },
+      "planToProfile": {
+        "name": "Din plan în profil",
+        "hint": "Pornește de deasupra, ca în planul topografiei, se înclină până la vederea din lateral și se rotește."
+      },
+      "myViews": {
+        "name": "Vederile mele",
+        "hint": "Zboară prin vederile pe care le salvezi din scenă, în ordinea din listă, ca un singur zbor lin."
+      },
+      "descent": {
+        "name": "Coborâre",
+        "hint": "De la cel mai înalt punct desenat al peșterii, pe drumuire în jos, până la cel mai adânc, cu camera puțin în urmă și deasupra, privind de-a lungul galeriei. Într-o peșteră a cărei drumuire nu este desenată sau nu le leagă pe cele două, camera coboară direct."
+      },
+      "alongLine": {
+        "name": "De-a lungul unei linii",
+        "hint": "Urmează traseul unui fișier importat la o înălțime deasupra terenului, privind înainte, apoi se ridică pentru a-l arăta întreg."
+      }
+    },
+    "editedNote": "Aceste secțiuni au fost deschise sau modificate de mână. Schimbarea subiectului, a presetării sau a opțiunilor le construiește din nou.",
+    "optionsTitle": "Opțiuni",
+    "turns": "Ocoluri în jurul fiecăreia",
+    "secondsPerTurn": "Secunde pe ocol",
+    "direction": "Sens",
+    "clockwise": "În sensul acelor de ceasornic",
+    "counterclockwise": "În sens invers",
+    "underground": "Coboară sub pământ până în punctul cel mai de jos al peșterii",
+    "speed": "Viteza întregului survol: ×{{speed}}",
+    "speedLabel": "Viteza întregului survol",
+    "loadRoute": "Încarcă mai întâi traseul, ca zborul să nu arate harta sosind",
+    "sectionsTitle_one": "{{count}} secțiune",
+    "sectionsTitle": "{{count}} secțiuni",
+    "section": {
+      "approach": "Apropiere",
+      "orbit": "Ocol",
+      "hop": "Spre",
+      "dive": "Coborâre în",
+      "rise": "Urcare înapoi",
+      "hold": "Oprire",
+      "tilt": "Înclinare",
+      "keyframe": "Spre o vedere",
+      "descent": "Pe drumuire în jos",
+      "follow": "De-a lungul liniei",
+      "fromFar": "De departe"
+    },
+    "secondsUnit": "s",
+    "sectionSeconds": "Secunde — {{section}}",
+    "sectionSpeed": "Viteză — {{section}}",
+    "keepTitle": "Păstrează",
+    "name": "Numele survolului",
+    "namePlaceholder": "Nume",
+    "openSaved": "Deschide un survol salvat",
+    "deleteSaved": "Șterge survolul salvat cu acest nume",
+    "deleteConfirm": "Ștergi survolul salvat „{{name}}”? Este păstrat doar în acest browser, așa că nu mai poate fi recuperat.",
+    "replaceTitle": "Înlocuiești survolul salvat „{{name}}”?",
+    "replaceBody": "Un survol este deja salvat sub acest nume în acest browser. Salvarea îl înlocuiește.",
+    "replaceOk": "Înlocuiește",
+    "closeTitle": "Închizi cu modificări nesalvate?",
+    "closeBody": "Survolul este păstrat pentru când deschizi din nou acest panou, dar numai până la reîncărcarea sau închiderea paginii. Salvează-l ca să-l păstrezi în acest browser.",
+    "closeOk": "Închide",
+    "saveFile": "Salvează în fișier",
+    "openFile": "Deschide din fișier",
+    "holdsPlace": "Acest survol conține un loc fixat. Fișierul lui arată unde este acel loc oricui îi este trimis.",
+    "transportTitle": "Redarea survolului",
+    "play": "Redă",
+    "pause": "Pauză",
+    "stop": "Oprește și pune camera la loc",
+    "position": "Poziția în survol",
+    "loop": "Repetă",
+    "loopHint": "Redă din nou de la început când se termină",
+    "cleanScreen": "Ecran curat",
+    "cleanScreenHint": "Redă pe un ecran curat, pentru înregistrarea cu alt program: doar scena și atribuirile hărților, după o numărătoare inversă. Escape te aduce înapoi.",
+    "cleanScreenLeave": "Ecran curat. Apasă Escape ca să revii, Spațiu pentru pauză.",
+    "preparing": "Se pregătește…",
+    "preparingSubjects": "Se caută peșterile: {{done}} din {{total}}",
+    "preparingRoute": "Se încarcă traseul: {{done}} din {{total}}",
+    "trouble": {
+      "problems": "Acest survol nu poate fi redat așa cum este: o secțiune are o durată, o viteză sau o distanță în afara limitelor.",
+      "missing": "Ceva în jurul căruia zboară acest survol nu a putut fi găsit. Poate a fost șters sau nu îl poți citi.",
+      "noScene": "Vizualizarea 3D nu este încă pregătită.",
+      "badFile": "Acest fișier nu este un survol pe care această versiune îl poate deschide.",
+      "failed": "Survolul nu a putut fi pregătit: {{detail}}"
+    },
+    "look": {
+      "openingTitle": "Aspectul la început",
+      "own": "Cum îl ai",
+      "background": "Harta de bază",
+      "backgroundOpacityOn": "Alege cât de puternic se desenează harta de bază",
+      "backgroundOpacity": "Intensitatea hărții de bază",
+      "skyOn": "Culoarea cerului",
+      "sky": "Culoarea cerului",
+      "wallsOn": "Colorează pereții peșterii",
+      "wallsColour": "Culoarea pereților",
+      "wallsStrength": "Intensitatea culorii pereților",
+      "linesOn": "Drumuirile într-o singură culoare",
+      "linesColour": "Culoarea drumuirilor",
+      "surface": "Terenul peste peșteri",
+      "surfaceOverlay": "Desenat peste peșteri",
+      "surfaceCutaway": "Decupat deasupra peșterii",
+      "recipesTitle": "Schimbări gata făcute",
+      "recipe": {
+        "add": "Adaugă",
+        "secondsEach": "Secunde fiecare",
+        "cycle": {
+          "name": "Hărțile de bază pe rând",
+          "backgrounds": "Hărțile de bază, în ordine",
+          "crossFade": "Trecere treptată"
+        },
+        "seeThrough": {
+          "name": "Prin teren în timpul ocolului",
+          "share": "Intensitatea hărții de bază în timpul ocolului"
+        },
+        "colour": {
+          "name": "Colorează peșterile",
+          "colour": "Culoarea peșterilor",
+          "from": "Începând cu secțiunea"
+        },
+        "oldMap": {
+          "name": "Hartă veche, hartă nouă",
+          "raster": "Hartă georeferențiată",
+          "section": "În timpul secțiunii",
+          "none": "Nu este listată nicio hartă georeferențiată."
+        },
+        "features": {
+          "name": "Obiecte pe rând",
+          "filters": "Straturi de obiecte, în ordine",
+          "none": "Nu există niciun strat de obiecte de arătat. Adaugă unul la „Obiecte arătate de survol” sau un strat din filtru în straturile hărții plane."
+        }
+      },
+      "changesTitle_one": "{{count}} schimbare",
+      "changesTitle": "{{count}} schimbări",
+      "noChanges": "Nicio schimbare deocamdată. Adaugă câteva cu o schimbare gata făcută.",
+      "changeAt": "Secunde de la începutul secțiunii — {{what}}, {{section}}",
+      "changeSeconds": "Cât durează, în secunde — {{what}}",
+      "removeChange": "Șterge schimbarea — {{what}}",
+      "changeClash": "Schimbă același lucru ca o altă schimbare, în același timp.",
+      "changeBad": "Începe în afara secțiunii sale sau numește o secțiune pe care survolul nu o mai are.",
+      "change": {
+        "background": "Harta de bază: {{name}}",
+        "backgroundOpacity": "Harta de bază la {{percent}}%",
+        "layerOn": "Arată {{name}}",
+        "layerOff": "Ascunde {{name}}",
+        "layerOpacity": "{{name}} la {{percent}}%",
+        "walls": "Pereți în {{colour}}, {{percent}}%",
+        "wallsOwn": "Pereții în culorile lor",
+        "lines": "Drumuiri în {{colour}}",
+        "linesOwn": "Drumuiri colorate după adâncime",
+        "surfaceOverlay": "Teren desenat peste peșteri",
+        "surfaceCutaway": "Teren decupat deasupra peșterii",
+        "sky": "Cer în {{colour}}",
+        "skyNone": "Fără cer"
+      },
+      "layer": {
+        "centerlines": "drumuirile",
+        "entrances": "intrările",
+        "surface-features": "fenomenele de suprafață",
+        "walls": "pereții",
+        "scans": "scanările",
+        "photos": "fotografiile din stații",
+        "unknown": "un strat care nu mai este listat"
+      },
+      "textsTitle": "Texte peste imagine",
+      "title": "Titlu",
+      "subtitle": "Subtitlu",
+      "captions": "O legendă pentru fiecare secțiune",
+      "captionFor": "Legendă — {{section}}",
+      "end": "Cartonul de final",
+      "endSubtitle": "Cartonul de final, al doilea rând",
+      "fadeIn": "Apare din negru la început",
+      "fadeOut": "Se stinge în negru la final",
+      "trouble": "Acest survol nu poate fi redat așa cum este: o schimbare sau o legendă numește o secțiune pe care nu o mai are, începe în afara secțiunii sale sau schimbă același lucru ca o altă schimbare, în același timp.",
+      "listsLoadFailed": "Unele dintre listele din care acest panou ia numele straturilor, filtrelor și tipurilor de obiecte nu au putut fi citite acum, așa că un nume poate apărea ca necunoscut și o alegere poate lipsi."
+    },
+    "edit": {
+      "open": "Modifică ce face {{section}}",
+      "up": "Mută {{section}} mai sus",
+      "down": "Mută {{section}} mai jos",
+      "duplicate": "Dublează {{section}}",
+      "remove": "Elimină {{section}}",
+      "addKind": "Felul secțiunii de adăugat",
+      "add": "Adaugă o secțiune",
+      "legend": "Ce face {{section}}",
+      "fieldFor": "{{field}} — {{section}}",
+      "kind": "Fel",
+      "subject": "Despre",
+      "turn": "Rotire cu",
+      "turnDegrees": "Rotire cu, în grade",
+      "turnTurns": "Rotire cu, în ture",
+      "turnUnit": "Rotirea se numără în",
+      "turnsShort": "ture",
+      "heading": "Orientare (grade de la nord)",
+      "pitch": "Unghi sub orizont",
+      "range": "Distanță, în mărimi ale subiectului",
+      "aim": "Privește spre",
+      "aimCentre": "Mijlocul lui",
+      "aimTop": "Punctul cel mai înalt",
+      "aimBottom": "Punctul cel mai jos",
+      "lift": "Ridicat cu, în jumătăți de înălțime",
+      "clearance": "Deasupra terenului",
+      "clearanceAbove": "Cel puțin",
+      "clearanceUnderground": "Poate intra sub teren",
+      "clearanceMetres": "Metri păstrați deasupra terenului",
+      "asBefore": "Ca înainte",
+      "rest": "Se oprește la sfârșitul ei",
+      "problem": {
+        "badSeconds": "Durata ei este în afara limitelor.",
+        "badSpeed": "Viteza ei este în afara limitelor.",
+        "badRange": "Distanța ei este în afara limitelor.",
+        "badPitch": "Unghiul ei este în afara limitelor.",
+        "badPose": "O rotire, o ridicare sau o înălțime deasupra terenului este în afara limitelor.",
+        "unknownSubject": "Subiectul ei nu este în acest survol.",
+        "duplicateSection": "Două secțiuni au același nume în fișier.",
+        "badEach": "Ar trebui parcursă pentru fiecare peșteră a subiectului său, iar acesta nu este un filtru salvat."
+      },
+      "rangeM": "Distanță, în metri"
+    },
+    "handLook": {
+      "layersTitle": "Straturi",
+      "layerShown": "{{name}}: afișat sau ascuns",
+      "layerStrength": "{{name}}: intensitate",
+      "shown": "Afișat",
+      "hidden": "Ascuns",
+      "ownStrength": "Ca la tine",
+      "addTitle": "Adaugă o schimbare",
+      "kind": "Ce se schimbă",
+      "kinds": {
+        "background": "Harta de bază",
+        "backgroundOpacity": "Intensitatea hărții de bază",
+        "layer": "Un strat afișat sau ascuns",
+        "layerOpacity": "Intensitatea unui strat",
+        "walls": "Culoarea pereților",
+        "lines": "Culoarea drumuirilor",
+        "surface": "Terenul peste peșteri",
+        "sky": "Cerul",
+        "lens": "Obiectivul",
+        "relief": "Relief (exagerare verticală)"
+      },
+      "layer": "Strat",
+      "layerTo": "Afișat sau ascuns",
+      "strength": "Intensitate",
+      "linesByDepth": "Din nou după adâncime",
+      "noSky": "Fără cer",
+      "section": "În timpul secțiunii",
+      "at": "Secunde de la începutul secțiunii",
+      "seconds": "Secunde cât durează",
+      "add": "Adaugă schimbarea",
+      "layerNames": {
+        "centerlines": "Drumuiri",
+        "entrances": "Intrări",
+        "surface-features": "Fenomene de suprafață",
+        "walls": "Pereți",
+        "scans": "Scanări",
+        "photos": "Fotografii din stații"
+      }
+    },
+    "views": {
+      "hint": "Adu scena la imaginea dorită, apoi apasă Adaugă această vedere. Adaugă câte vrei; survolul zboară de la una la următoarea.",
+      "add": "Adaugă această vedere",
+      "noGround": "Mijlocul imaginii nu arată terenul. Întoarce camera spre teren și încearcă din nou.",
+      "name": "Vederea {{number}}",
+      "distance": "la {{metres}} m de ce privește",
+      "underground": "sub teren, la {{metres}} m de ce privește",
+      "seconds": "Secunde de zbor până la {{view}}",
+      "recapture": "Ia din nou {{view}} din camera de acum",
+      "up": "Mută {{view}} mai sus",
+      "down": "Mută {{view}} mai jos",
+      "remove": "Elimină {{view}}"
+    },
+    "routes": {
+      "fallback": "Drumuirea nu este desenată sau liniile ei nu leagă cel mai înalt punct al peșterii de cel mai adânc: camera coboară direct, în loc să o urmeze.",
+      "noLine": "Fișierul nu are nicio linie de urmat: camera zboară direct spre el."
+    },
+    "fromFar": "Pornește de departe, la scara țării",
+    "atCave": {
+      "seconds": "Oprire la fiecare peșteră timp de",
+      "say": "Scrie peste imagine",
+      "sayNone": "Nimic",
+      "sayName": "Numele peșterii",
+      "sayNameAndSize": "Numele, lungimea și adâncimea ei",
+      "length": "{{metres}} m lungime",
+      "depth": "{{metres}} m adâncime"
+    },
+    "frame": {
+      "north": "Săgeata nordului în colț",
+      "corner": "Un rând de text în colț"
+    },
+    "lens": {
+      "on": "Alege obiectivul",
+      "degrees": "Obiectiv, în grade pe lățimea imaginii",
+      "change": "Obiectiv la {{degrees}}°"
+    },
+    "byFilter": {
+      "source": "Peșterile selectate de un filtru salvat",
+      "pick": "Filtrul salvat",
+      "none": "Nu ai niciun filtru salvat care poate fi rulat. Salvează mai întâi unul din panoul de filtre al hărții.",
+      "limit": "Cel mult",
+      "hint": "Care peșteri și în ce ordine se află abia când survolul este redat, pentru cine îl redă: survolul păstrează doar filtrul și numărul.",
+      "subject": "peșterile din „{{name}}”",
+      "unknown": "un filtru salvat",
+      "eachOf": "fiecare dintre {{name}}",
+      "empty": "Filtrul salvat al acestui survol nu selectează nicio peșteră pe care o poți vedea sau nu mai poate fi rulat.",
+      "search": "Adaugă o peșteră după nume",
+      "searchNone": "Nicio peșteră cu acest nume",
+      "loadFailed": "Filtrele salvate nu au putut fi citite acum, așa că niciunul nu poate fi ales."
+    },
+    "features": {
+      "title_one": "Obiecte arătate de survol ({{count}})",
+      "title": "Obiecte arătate de survol ({{count}})",
+      "hint": "Straturi de obiecte pe care survolul le desenează singur, după tip sau după un filtru salvat: doar în vizualizarea 3D și doar cât timp rulează. Lista ta de straturi nu se schimbă. Fiecare e arătat de la început, dacă aspectul de la început nu îl ascunde.",
+      "add": "Încă un strat",
+      "by": "Ales după",
+      "byTypes": "Tip",
+      "byFilter": "Filtru salvat",
+      "types": "Tipuri de obiecte",
+      "ofTypes": "Obiecte: {{names}}",
+      "colour": "Culoarea pentru {{name}}",
+      "symbol": "Simbolul pentru {{name}}",
+      "remove": "Elimină stratul {{name}}"
+    },
+    "lightCave": {
+      "name": "Luminează peștera vizitată",
+      "lit": "Culoarea peșterii vizitate",
+      "dim": "Culoarea celorlalte peșteri",
+      "change": "Peștera vizitată în {{colour}}, {{percent}}%",
+      "changeBack": "Peștera vizitată revine la culoarea celorlalte"
+    },
+    "walls": {
+      "title": "Pereți pe traseul acestui survol",
+      "question_one": "Pereții unei peșteri de pe traseu au {{size}} de descărcat. Îi descarci pentru acest survol?",
+      "question": "Pereții celor {{count}} peșteri de pe traseu au {{size}} de descărcat. Îi descarci pentru acest survol?",
+      "download": "Descarcă-i",
+      "without": "Rulează fără ei"
+    },
+    "relief": {
+      "on": "Stabilește exagerarea verticală",
+      "factor": "Exagerarea verticală, de câte ori înălțimea reală",
+      "change": "Relieful la ×{{factor}}",
+      "changeBack": "Relieful înapoi la cel de la începutul survolului",
+      "backOption": "Înapoi la cel de la începutul survolului",
+      "grow": {
+        "name": "Relieful crește",
+        "factor": "Factorul până la care crește relieful",
+        "during": "Când crește și revine",
+        "everyCircle": "În fiecare cerc"
+      },
+      "mark": "Relief ×{{factor}}",
+      "markOn": "Scrie „Relief ×2” într-un colț cât timp relieful este exagerat"
+    }
+  },
+  "mapSymbols": {
+    "names": {
+      "shape_cave": "Intrare de peșteră",
+      "shape_circle": "Cerc",
+      "shape_dot": "Punct",
+      "shape_ring": "Inel",
+      "shape_square": "Pătrat",
+      "shape_triangle": "Triunghi",
+      "shape_diamond": "Romb",
+      "shape_star": "Stea",
+      "shape_cross": "Cruce",
+      "sinkhole": "Dolină",
+      "pit": "Aven",
+      "pitch": "Puț",
+      "chimney": "Horn",
+      "tunnel": "Tunel",
+      "continuation": "Continuare",
+      "desobstruction": "Dezobstrucție",
+      "exploration_point": "Punct de explorare",
+      "calm": "Calm",
+      "dedritus": "Detritus",
+      "fracture_line": "Linie de fractură",
+      "lake": "Lac",
+      "water_flow": "Curs de apă",
+      "peak": "Vârf",
+      "bivouac": "Bivuac",
+      "driller": "Bormașină",
+      "flag": "Steag",
+      "arrows": "Săgeți",
+      "generic_feature": "Obiectiv generic",
+      "osm_cave": "Peșteră (OpenStreetMap)",
+      "qgis_poi_cave": "Peșteră (QGIS)",
+      "osm_spring": "Izvor (OpenStreetMap)",
+      "osm_waterfall": "Cascadă",
+      "osm_peak": "Vârf (OpenStreetMap)",
+      "qgis_poi_peak": "Vârf (QGIS)",
+      "osm_saddle": "Șa",
+      "qgis_poi_mine": "Mină",
+      "qgis_poi_mine_abandoned": "Mină abandonată",
+      "qgis_survey_point": "Punct topografic",
+      "qgis_view_point": "Punct de belvedere",
+      "qgis_archaeological": "Sit arheologic",
+      "qgis_alpine_hut": "Cabană",
+      "qgis_shelter": "Adăpost",
+      "qgis_camping": "Loc de campare",
+      "qgis_parking": "Parcare",
+      "qgis_walker": "Traseu",
+      "qgis_information": "Informații",
+      "qgis_first_aid": "Prim ajutor",
+      "qgis_danger": "Pericol",
+      "qgis_flag": "Steag (QGIS)",
+      "qgis_camera": "Punct foto",
+      "qgis_tree": "Copac",
+      "qgis_question": "Necunoscut",
+      "fgdc_spring": "Izvor",
+      "fgdc_thermal_spring": "Izvor termal",
+      "fgdc_well": "Fântână",
+      "fgdc_kettle": "Depresiune glaciară (kettle)",
+      "fgdc_fossil_locality": "Punct fosilifer",
+      "fgdc_bedding_horizontal": "Strat orizontal",
+      "fgdc_bedding_inclined": "Strat înclinat (direcție și înclinare)",
+      "fgdc_bedding_vertical": "Strat vertical",
+      "fgdc_joint_vertical": "Diaclază verticală",
+      "fgdc_dome": "Dom",
+      "fgdc_basin": "Bazin",
+      "fgdc_prospect": "Lucrare de prospecțiune",
+      "fgdc_open_pit": "Carieră",
+      "fgdc_adit": "Galerie de coastă",
+      "fgdc_mine_portal": "Gură de mină",
+      "fgdc_shaft": "Puț de mină",
+      "fgdc_survey_station": "Stație topografică",
+      "fgdc_control_point": "Punct de control"
+    },
+    "groups": {
+      "shapes": "Forme desenate",
+      "speleo": "Speologice (SilexGIS)",
+      "cartographic": "Cartografice (OpenStreetMap, QGIS)",
+      "geology": "Geologice (standardul USGS FGDC)"
+    },
+    "tab": "Simboluri pe hartă",
+    "intro": "Alege semnul cu care sunt desenate intrările de peșteră pe hartă, în vederea 3D și pe legăturile de hartă partajate. O formă desenată primește o culoare proprie; un fișier de simbol este desenat în culorile sale.",
+    "entrance": "Intrare la poziția măsurată",
+    "entranceHint": "Desenat pentru fiecare intrare pe care cititorul o poate vedea exact.",
+    "approximate": "Intrare afișată aproximativ",
+    "approximateHint": "Desenat pentru o intrare protejată, arătată unui cititor fără acces la poziția exactă. Alege ceva diferit de primul: o formă desenată primește și un contur punctat.",
+    "color": "Culoare",
+    "layerColour": "Culoarea stratului",
+    "layerColourHint": "Fără o culoare proprie, o formă este desenată în culoarea stratului care o folosește.",
+    "reset": "Revino la valorile implicite",
+    "preview": "Previzualizare",
+    "none": "Fără simbol (punct simplu)",
+    "sources": "Sursele simbolurilor: setul speologic propriu al clubului; OpenStreetMap Carto (CC0); QGIS (GPL-2.0-or-later); standardul FGDC pentru simbolizarea hărților geologice (USGS)."
+  },
+  "geology": {
+    "lithology": {
+      "limestone": "Calcar",
+      "dolomite": "Dolomit",
+      "marble": "Marmură",
+      "gypsum_anhydrite": "Gips / anhidrit",
+      "salt": "Sare gemă",
+      "conglomerate_calcareous": "Conglomerat (calcaros)",
+      "sandstone": "Gresie",
+      "shale_marl": "Șist argilos / marnă",
+      "granite": "Granit",
+      "crystalline_schist": "Șist cristalin",
+      "volcanic": "Rocă vulcanică",
+      "unconsolidated": "Depozite neconsolidate",
+      "other": "Altele"
+    },
+    "unclassified": "Neclasificat",
+    "karstifiable": "carstificabil",
+    "unrecognised": "în afara vocabularului",
+    "legend": {
+      "title": "Unități geologice"
+    },
+    "area": {
+      "title": "Geologia din interiorul zonei",
+      "basisPlaceable": "Măsurată pe hartă, peste unitățile geologice și intrările pe care le poți localiza exact — de aceea numărul de intrări nu este totalul declarat de mai sus.",
+      "noneMapped": "În această zonă nu este cartată nicio unitate geologică pe care o poți localiza.",
+      "lithology": "Litologie",
+      "areaKm2": "Afloriment (km²)",
+      "share": "Pondere din zonă",
+      "entrances": "Intrări",
+      "entrancesPerKm2": "Intrări pe km²",
+      "notMeasured": "nemăsurat",
+      "karstifiableArea": "Afloriment carstificabil (km²)",
+      "karstifiableDensity": "Intrări pe km² de afloriment carstificabil",
+      "unmappedArea": "Teren fără unitate cartată (km²)",
+      "unmappedEntrances": "Intrări pe teren necartat"
+    }
+  },
+  "structural": {
+    "types": {
+      "bedding": "Stratificație",
+      "joint": "Diaclază",
+      "fault": "Plan de falie",
+      "cleavage": "Clivaj",
+      "fracture": "Fractură",
+      "other": "Altul"
+    },
+    "fields": {
+      "measurement_type": "Planul măsurat",
+      "dip_direction": "Direcția de înclinare (°)",
+      "dip": "Înclinare (°)",
+      "note": "Notă",
+      "measured_on": "Măsurat la (AAAA-LL-ZZ)"
+    },
+    "entry": {
+      "label": "Orientare introdusă ca",
+      "dipDirection": "Direcție de înclinare și înclinare",
+      "strike": "Direcție și înclinare (regula mâinii drepte)",
+      "strikeField": "Direcția stratului (°, regula mâinii drepte: planul înclină spre dreapta ei)"
+    },
+    "stereonet": {
+      "title": "Stereograma măsurătorilor structurale",
+      "areaTitle": "Măsurătorile structurale din această zonă",
+      "loading": "Se reprezintă…",
+      "noReadings": "Nu a fost înregistrată aici nicio măsurătoare structurală pe care o poți localiza.",
+      "readingCount": "{{count}} măsurători reprezentate",
+      "caveReach": "{{count}} măsurători pe o rază de {{radius}} m de peșteră",
+      "measurementType": "Măsurători de tip",
+      "allTypes": "toate tipurile",
+      "description": "Rețea echiarială, emisfera inferioară: fiecare punct este polul unui plan (dreapta perpendiculară pe el, luată în jos). Un plan cu înclinare mică apare lângă centru; unul abrupt lângă margine, de partea opusă înclinării.",
+      "densityLegend": "Umbrire: densitate Kamb, o bandă la fiecare {{interval}} abateri standard. Măsurători împrăștiate la întâmplare ar da {{expected}} peste tot; locul cel mai dens de aici dă {{max}}.",
+      "poleLabel": "{{type}}: înclinare {{dip}}° spre {{dipDirection}}°",
+      "north": "N"
+    },
+    "strikeComparison": {
+      "title": "Galeriile față de direcțiile măsurate (Watson U²)",
+      "statistic": "U²",
+      "pValue": "Probabilitate",
+      "counts": "{{legs}} vize de topografie față de {{readings}} direcții",
+      "tooFew": "Testul are nevoie de cel puțin {{min}} vize și {{min}} măsurători cu direcție; aici sunt {{legs}} și {{readings}}.",
+      "different": "Este puțin probabil ca direcțiile galeriilor și direcțiile măsurate să provină din aceeași distribuție (probabilitate {{p}}).",
+      "alike": "Nimic de aici nu arată că direcțiile galeriilor diferă de direcțiile măsurate (probabilitate {{p}}).",
+      "caveat": "Fiecare viză și fiecare măsurătoare contează o dată. Vizele de-a lungul aceleiași galerii nu sunt independente, deci o probabilitate mică spune mai puțin decât pare. U² compară întreaga împrăștiere a direcțiilor, nu doar direcția medie: o galerie dreaptă față de direcții împrăștiate cu aceeași medie tot diferă.",
+      "strikeRose": "Direcțiile măsurătorilor ({{count}})",
+      "noStrikes": "Nicio măsurătoare pe care o poți localiza în apropiere nu are direcție."
+    }
+  },
+  "cavePotential": {
+    "layers": {
+      "title": "Potențial speologic",
+      "hint": "Hărți care arată unde sunt mai favorabile dovezile cântărite de un model, fiecare pentru o zonă, la data afișată.",
+      "cell": "celule de {{meters}} m"
+    },
+    "statuses": {
+      "queued": "În așteptare",
+      "computing": "Se calculează",
+      "ready": "Gata",
+      "failed": "Eșuat"
+    },
+    "legend": {
+      "low": "Mai puțin favorabil",
+      "high": "Mai favorabil",
+      "caveat": "O cântărire a dovezilor, așa cum o descrie modelul, nu o constatare: nimic de aici nu a fost verificat pe teren. Doar pentru uz intern.",
+      "positionsCaveat": "Realizată din poziții înregistrate, dintre care unele pot fi protejate; o vezi pentru că le poți localiza exact pe toate. Nu o transmite mai departe.",
+      "relativeCaveat": "Culorile merg de la terenul cel mai puțin favorabil la cel mai favorabil al acestei hărți; ele ordonează terenul și nu pot fi comparate cu cele ale altei hărți."
+    },
+    "page": {
+      "title": "Potențial speologic",
+      "intro": "Un model cântărește dovezi — forma reliefului, roca, ce a fost înregistrat — într-o hartă a locurilor unde peșterile sunt mai mult sau mai puțin probabile. Hărțile sunt o cântărire a acestor dovezi, nu o constatare, și sunt doar pentru uz intern.",
+      "models": "Modele",
+      "newModel": "Model nou",
+      "noModels": "Niciun model încă. Scrie unul pentru a spune ce dovezi contează și cât de mult.",
+      "unreadableModel": "Acest model nu poate fi citit de această versiune.",
+      "results": "Hărți calculate",
+      "noResults": "Nicio hartă încă. Rulează un model pe o zonă pentru a calcula una.",
+      "needsTerrain": "Rularea unui model și citirea hărților lui cer dreptul de a citi relieful, pe care contul tău nu îl are.",
+      "columns": {
+        "name": "Nume",
+        "method": "Ponderi",
+        "layers": "Dovezi și pondere",
+        "author": "Scris de",
+        "audience": "Partajat cu",
+        "actions": "Acțiuni",
+        "model": "Model",
+        "area": "Zonă",
+        "cell": "Mărimea celulei",
+        "status": "Stare",
+        "computed": "Data",
+        "requestedBy": "Cerut de"
+      },
+      "you": "Tu",
+      "someone": "Un membru al clubului",
+      "positionsTag": "Folosește poziții înregistrate",
+      "positionsTagHint": "Cântărește un strat făcut din poziții înregistrate. O hartă calculată din el este arătată doar cititorilor care pot localiza exact fiecare obiect din care a fost calculată.",
+      "run": "Rulează",
+      "editOf": "Modifică {{name}}",
+      "copyOf": "Copiază {{name}}",
+      "deleteOf": "Șterge {{name}}",
+      "deleteResultOf": "Șterge harta modelului {{name}}",
+      "modelHidden": "Un model pe care nu îl poți deschide",
+      "groundReplaced": "Teren mai vechi",
+      "groundReplacedHint": "Această hartă a fost făcută dintr-o construcție de elevație care nu mai este cea activă. Rulează modelul din nou pentru a citi terenul curent.",
+      "copyName": "Copie a {{name}}",
+      "copied": "Copiat. Copia este a ta și este privată.",
+      "saved": "Model salvat.",
+      "deleteModelConfirm": "Ștergi acest model? Hărțile deja calculate din el rămân.",
+      "deleteResultConfirm": "Ștergi această hartă?",
+      "showOnMap": "Arată pe hartă",
+      "unnamedArea": "Zonă fără nume",
+      "summary": "{{scored}} din {{cells}} celule evaluate · media {{mean}}",
+      "learnsTag": "Învață din intrări cunoscute",
+      "learnsTagHint": "Ponderile sunt numărate, la fiecare rulare, din intrările de peșteră pe care le poți localiza exact. O hartă calculată din el este arătată doar cititorilor care pot localiza exact fiecare intrare din care a fost numărată.",
+      "trainingSummary": "învățat din {{training}} intrări, testat pe {{heldOut}} · AUC {{success}} / {{prediction}}",
+      "weightsAndCurves": "Ponderi și curbe"
+    },
+    "methods": {
+      "directWeights": "Ponderi date direct",
+      "pairwiseComparison": "Comparații pe perechi",
+      "frequencyRatio": "Raport de frecvență",
+      "weightsOfEvidence": "Ponderile dovezilor"
+    },
+    "audiences": {
+      "private": "Doar eu",
+      "authenticated": "Toți cei autentificați",
+      "cavingGroup": "Membrii {{name}}",
+      "someGroup": "Un grup de speologie"
+    },
+    "evidence": {
+      "elevation": "Altitudine",
+      "slope": "Pantă",
+      "aspect": "Orientare",
+      "position_index": "Poziție topografică",
+      "ruggedness": "Asperitate",
+      "roughness": "Rugozitate",
+      "geomorphons": "Formă de relief",
+      "fault_distance": "Distanța până la falii",
+      "lithology": "Tipul rocii",
+      "sinkhole_distance": "Distanța până la doline",
+      "entrance_density": "Densitatea intrărilor de peșteră"
+    },
+    "units": {
+      "m": "m",
+      "deg": "°",
+      "per_km2": "pe km²"
+    },
+    "transforms": {
+      "classes": "Un tabel de clase",
+      "fuzzyLinear": "O rampă între două valori",
+      "categories": "Un scor pentru fiecare clasă"
+    },
+    "editor": {
+      "titleNew": "Model nou de potențial speologic",
+      "titleEdit": "Modifică modelul",
+      "name": "Nume",
+      "description": "Descriere",
+      "audience": "Partajat cu",
+      "method": "Cum sunt cântărite straturile",
+      "layers": "Straturi de dovezi",
+      "addLayer": "Stratul de dovezi de adăugat",
+      "addLayerConfirm": "Adaugă stratul",
+      "removeLayer": "Elimină {{name}}",
+      "scoring": "Evaluat prin",
+      "scoringOf": "Cum este evaluat stratul {{name}}",
+      "weight": "Pondere",
+      "weightOf": "Ponderea stratului {{name}}",
+      "low": "Valoarea cu scorul 0",
+      "high": "Valoarea cu scorul 1",
+      "lowOf": "Valoarea din {{name}} cu scorul 0",
+      "highOf": "Valoarea din {{name}} cu scorul 1",
+      "rampHint": "Scorul crește liniar între cele două valori. Pune întâi valoarea mai mare când valorile mici sunt cele favorabile — de la 500 m în jos până la 0 m dă scorul 1 locului aflat pe o falie.",
+      "classUpTo": "Până la",
+      "classAbove": "Tot ce este peste",
+      "classBoundOf": "Limita superioară a clasei {{row}} din {{name}}",
+      "classScoreOf": "Scorul clasei {{row}} din {{name}}",
+      "score": "scor",
+      "addClass": "Adaugă o clasă",
+      "removeClass": "Elimină clasa {{row}}",
+      "categoryScoreOf": "Scorul pentru {{category}} în {{name}}",
+      "categoriesHint": "Scorurile merg de la 0 la 1. O clasă lăsată goală are scorul 0.",
+      "comparisons": "Comparații",
+      "comparisonsHint": "Pentru fiecare pereche, spune cu cât este mai important primul strat decât al doilea. Ponderile rezultă din comparații.",
+      "compare": "{{first}} față de {{second}}",
+      "judgment": {
+        "equal": "La fel de important",
+        "more": "de {{n}} ori mai important",
+        "less": "de {{n}} ori mai puțin important"
+      },
+      "weights": "Ponderi",
+      "unfinished": "Ponderile apar aici după ce fiecare strat este completat.",
+      "consistency": "Raport de consistență {{ratio}}",
+      "consistencyFine": "Comparațiile se potrivesc între ele suficient de bine (cel mult 0,1).",
+      "consistencyWarning": "Peste 0,1 comparațiile se contrazic mai mult decât se obișnuiește; ia în calcul revizuirea lor. Modelul poate fi totuși salvat și rulat.",
+      "weightsFailed": "Ponderile nu au putut fi calculate.",
+      "positionsNotice": "Acest model cântărește un strat făcut din poziții înregistrate. O hartă calculată din el arată unde se află acele obiecte, așa că este arătată doar cititorilor care le pot localiza exact pe toate.",
+      "hintFrequencyRatio": "Nimic nu este cântărit prin judecată. Fiecare clasă a fiecărui strat primește partea din intrările cunoscute pe care o conține, raportată la partea din teren pe care o acoperă, iar indicele unei celule este suma rapoartelor claselor în care se află.",
+      "hintWeightsOfEvidence": "Nimic nu este cântărit prin judecată. Fiecare clasă a fiecărui strat primește ponderile dovezilor la care duc intrările cunoscute, iar valoarea unei celule este probabilitatea pe care i-o dau aceste ponderi.",
+      "heldOutShare": "Intrări păstrate pentru testare (%)",
+      "seed": "Sămânța tragerii",
+      "trainingHint": "Intrările păstrate nu sunt arătate niciodată modelului; cât de bine le găsește harta lui este rata de predicție. Aceeași zonă, aceleași intrări, aceeași parte și aceeași sămânță păstrează aceleași intrări la fiecare rulare.",
+      "circularLayer": "Un model care învață din intrări cunoscute nu poate cântări și densitatea lor: i s-ar arăta intrările pe care este testat. Elimină acest strat.",
+      "categoriesCounted": "Fiecare clasă a acestui strat este numărată; nu este nimic de completat.",
+      "learningNotice": "Acest model învață din intrări de peșteră cunoscute. O rulare numără doar intrările pe care le poți localiza exact, iar harta, tabelele de ponderi și curbele sunt arătate doar cititorilor care le pot localiza exact pe toate.",
+      "weightsCounted": "Ponderile acestui model sunt numărate din intrările cunoscute atunci când este rulat și sunt arătate împreună cu fiecare hartă."
+    },
+    "run": {
+      "title": "Rulează {{name}}",
+      "area": "Zonă",
+      "areaPlaceholder": "Scrie numele unei zone",
+      "noArea": "Nicio zonă cu acest nume",
+      "cell": "Mărimea celulei (m)",
+      "cellHint": "Între {{min}} și {{max}} m. O zonă mare cere o celulă mai mare.",
+      "start": "Rulează",
+      "queued": "Pus în așteptare. Harta apare în listă când este gata.",
+      "failed": "Rularea nu a putut fi pusă în așteptare.",
+      "positionsNotice": "Acest model folosește poziții înregistrate. Rularea citește doar obiectele pe care le poți localiza exact, iar harta este arătată doar cititorilor care le pot localiza pe toate."
+    },
+    "failures": {
+      "access_changed": "Contul care a cerut-o nu mai poate citi ce îi trebuie rulării.",
+      "model_invalid": "Modelul, așa cum a fost rulat, nu mai poate fi rulat.",
+      "area_unusable": "Zona nu mai poate fi acoperită la această mărime a celulei.",
+      "evidence_unavailable": "O parte din dovezile modelului nu este disponibilă aici",
+      "nothing_scored": "Nicio parte a zonei nu a avut o valoare din fiecare strat.",
+      "failed": "Harta nu a putut fi calculată.",
+      "too_few_entrances": "Prea puține intrări cunoscute în zonă, dintre cele pe care contul le poate localiza exact, pentru a păstra o parte și a învăța din rest.",
+      "too_many_entrances": "Zona conține mai multe intrări cunoscute, dintre cele pe care contul le poate localiza exact, decât poate folosi o rulare. Alege o zonă mai mică.",
+      "nothing_to_learn": "Intrările cunoscute nu lasă nimic de deosebit în această zonă."
+    },
+    "training": {
+      "classNumber": "Clasa {{n}}",
+      "classBelow": "sub {{upper}}",
+      "classFrom": "{{lower}} și peste",
+      "classBetween": "de la {{lower}} până la {{upper}}",
+      "successRate": "Rata de succes",
+      "predictionRate": "Rata de predicție",
+      "chance": "Întâmplare",
+      "areaAxis": "Teren, de la cel mai favorabil (%)",
+      "occurrenceAxis": "Celule ocupate găsite (%)",
+      "counts": "Învățat din {{training}} intrări în {{trainingCells}} celule; {{heldOut}} intrări în {{heldOutCells}} celule păstrate.",
+      "split": "{{percent}} % păstrate, sămânța {{seed}} · {{cells}} celule de teren cântărite",
+      "protectedEntrances": "Intrări cu localizare protejată printre cele folosite: {{n}}. Vezi acest rezultat pentru că le poți localiza exact pe toate. Nu îl transmite mai departe.",
+      "scaleFrequencyRatio": "Pe hartă, 0 înseamnă o sumă a rapoartelor de {{minimum}}, iar 1 înseamnă {{maximum}}.",
+      "scaleWeightsOfEvidence": "Pe hartă, 0 înseamnă o probabilitate de {{minimum}}, iar 1 înseamnă {{maximum}}.",
+      "expected": "Probabilitățile însumează {{expected}} celule ocupate, față de cele {{trainingCells}} din care s-a învățat. O sumă mult mai mare înseamnă că straturile se repetă între ele și probabilitățile sunt prea mari; ordonarea rămâne utilizabilă.",
+      "aucSuccess": "Rata de succes: AUC {{auc}} ({{n}} celule ocupate din care s-a învățat)",
+      "aucPrediction": "Rata de predicție: AUC {{auc}} ({{n}} celule ocupate păstrate)",
+      "curvesLabel": "Curbele ratei de succes și ratei de predicție",
+      "curvesHint": "O curbă mult deasupra liniei întrerupte găsește intrările pe puțin teren; o arie de sub curbă de 0,5 nu este mai bună decât întâmplarea. Rata de predicție este cea cinstită: este trasată față de intrări pe care modelul nu le-a văzut.",
+      "corrected": "ajustat",
+      "correctedHint": "Una dintre cele patru numărători era zero, așa că fiecăreia i s-a adăugat o jumătate înainte de calculul ponderilor.",
+      "studentisedHint": "Contrastul împărțit la abaterea lui standard. Peste aproximativ 2, clasa deosebește intrările de teren cu oarecare încredere.",
+      "tablesHint": "Un raport de frecvență peste 1 și un W+ pozitiv înseamnă că intrările sunt mai dese în clasă decât pe întregul teren. Se numără celule, nu intrări: două intrări într-o celulă se numără o dată.",
+      "columns": {
+        "class": "Clasă",
+        "cells": "Celule",
+        "occurrences": "Cu intrare",
+        "frequencyRatio": "Raport de frecvență",
+        "positiveWeight": "W+",
+        "negativeWeight": "W−",
+        "contrast": "Contrast",
+        "contrastDeviation": "s(C)",
+        "studentisedContrast": "C / s(C)"
+      }
+    },
+    "unavailable": {
+      "no_terrain": "nicio elevație construită",
+      "no_layer": "necalculat pentru elevația curentă",
+      "slope_unit": "panta calculată doar în procente",
+      "too_many_features": "prea multe obiecte înregistrate în rază"
     }
   }
 }

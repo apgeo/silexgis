@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { CaveDepthProfile } from '../../api/hooks/karstProfiles.ts';
 
 const { profileSpy } = vi.hoisted(() => ({ profileSpy: vi.fn() }));
@@ -37,8 +38,20 @@ const profile: CaveDepthProfile = {
   ],
 };
 
+/**
+ * What the read failed with, when a test makes it fail. A refusal unless the test says otherwise:
+ * that is what the server answers a reader who may not read the subject, and the one failure the
+ * card must answer with nothing at all.
+ */
+let readError: unknown;
+const readRefetch = vi.fn();
+beforeEach(() => {
+  readError = new ApiError(404, 'cave.not_found');
+  readRefetch.mockReset();
+});
+
 function show(data: CaveDepthProfile | undefined, isError = false) {
-  profileSpy.mockReturnValue({ data, isLoading: false, isError });
+  profileSpy.mockReturnValue({ data, isLoading: false, isError, error: isError ? readError : null, refetch: readRefetch });
   return render(<CaveDepthProfilePanel caveId="cave-1" />);
 }
 
@@ -63,5 +76,24 @@ describe('CaveDepthProfilePanel', () => {
   it('renders nothing when the server refuses', () => {
     show(undefined, true);
     expect(screen.queryByTestId('cave-depth-profile')).toBeNull();
+  });
+});
+
+describe('CaveDepthProfilePanel when its read fails for a reason other than a refusal', () => {
+  it('names the failed read with a way to ask again instead of vanishing from the page', () => {
+    // A dropped connection or a server error says nothing about the subject, so the card does not
+    // get to disappear: a page missing a card reads as complete.
+    readError = new TypeError('Failed to fetch');
+    show(undefined, true);
+
+    const failed = screen.getByTestId('cave-depth-profile-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still draws nothing when the server refuses', () => {
+    show(undefined, true);
+    expect(screen.queryByTestId('cave-depth-profile-read-failed')).toBeNull();
   });
 });

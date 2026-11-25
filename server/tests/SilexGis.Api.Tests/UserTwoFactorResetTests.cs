@@ -282,7 +282,7 @@ public sealed class UserTwoFactorResetTests : IAsyncLifetime, IDisposable, IClas
         user.ShouldNotBeNull();
 
         (await users.ResetAuthenticatorKeyAsync(user)).Succeeded.ShouldBeTrue();
-        // Numbers are unique across accounts, and every class shares one database server.
+        // Numbers are unique across accounts, and the tests of this class share one database.
         user.PhoneNumber = "+4071" + RandomNumberGenerator.GetInt32(10_000_000).ToString("D7", CultureInfo.InvariantCulture);
         user.PhoneNumberConfirmed = true;
         user.TwoFactorAuthenticatorEnabled = true;

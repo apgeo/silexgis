@@ -75,6 +75,29 @@ public static class AccountMessages
             ct);
 
     /// <summary>
+    /// Tells the holder of an address that somebody tried to register it again, with a reset link
+    /// in case it was the holder who had forgotten. The token is a password-reset token, so the
+    /// link lands on the same reset page as a forgotten-password message.
+    /// </summary>
+    public static Task<MessageResult> SendAlreadyRegisteredAsync(
+        IMessageDispatcher dispatcher,
+        IConfiguration configuration,
+        SilexGisUser user,
+        string token,
+        CancellationToken ct = default) =>
+        dispatcher.SendAsync(
+            MessageTemplateCatalog.EmailAlreadyRegistered,
+            user.Email!,
+            user.Locale,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["displayName"] = Greeting(user),
+                ["url"] = ResetUrl(configuration, user.Email!, token),
+                ["expiresHours"] = LinkLifetimeHours,
+            },
+            ct);
+
+    /// <summary>
     /// Invites somebody an administrator opened an account for to choose their password. Carries
     /// the sign-in address as well as the link, because the person did not choose it and may not
     /// know which of their addresses the account was opened under.
@@ -168,8 +191,12 @@ public static class AccountMessages
     private static string ConfirmUrl(IConfiguration configuration, Guid userId, string token) =>
         $"{PublicUrl(configuration)}/confirm-email?user={userId}&token={Uri.EscapeDataString(token)}";
 
-    /// <summary>A change is confirmed from the settings page, where the person already is.</summary>
-    private static string SettingsConfirmUrl(IConfiguration configuration, string token) =>
+    /// <summary>
+    /// Where an address-change link lands: the settings page, where the person already is. Public
+    /// because a development host without mail hands this same address back to the caller instead
+    /// of sending it.
+    /// </summary>
+    public static string SettingsConfirmUrl(IConfiguration configuration, string token) =>
         $"{PublicUrl(configuration)}/settings/emails?confirm={Uri.EscapeDataString(token)}";
 
     private static string ResetUrl(IConfiguration configuration, string email, string token) =>

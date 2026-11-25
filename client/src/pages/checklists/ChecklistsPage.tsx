@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DeleteOutlined, EditOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
@@ -10,6 +10,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Result,
   Select,
   Skeleton,
   Space,
@@ -17,21 +18,27 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
 import {
   useCan,
   useCavingGroups,
   useChecklists,
   useCreateChecklist,
   useDeleteChecklist,
+  useEffectiveAccess,
   useMe,
+  useReadChecklistForChange,
   useUpdateChecklist,
+  parseAccessActions,
   type ChecklistInfo,
   type ChecklistWrite,
 } from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import { checklistProblem, type ChecklistAct } from './checklistProblems.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 /** The audience a list is given, in the order they widen. */
 const visibilities = ['private', 'cavingGroup', 'authenticated', 'public'] as const;
@@ -59,7 +66,7 @@ type FormValues = {
 export default function ChecklistsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading } = useChecklists();
+  const { data, isLoading, isError, error, refetch } = useChecklists();
   const { data: cavingGroups } = useCavingGroups();
 
   // Handing one list to one person by name is narrower than any audience the visibility control
@@ -69,16 +76,97 @@ export default function ChecklistsPage() {
   // server decides for anybody else, and the dialog says so when it is refused.
   const { data: me } = useMe();
   const managesAnyList = useCan('checklists', 'managePermissions');
+  const writesAnyList = useCan('checklists', 'write');
+  const deletesAnyList = useCan('checklists', 'delete');
   const [sharing, setSharing] = useState<ChecklistInfo | null>(null);
   const create = useCreateChecklist();
   const update = useUpdateChecklist();
   const remove = useDeleteChecklist();
+  const readForChange = useReadChecklistForChange();
   const [editing, setEditing] = useState<ChecklistInfo | null>(null);
+  // The list whose current reading is being fetched before it is opened or deleted.
+  const [reading, setReading] = useState<string | null>(null);
+  // The version of the list the dialog was filled from: the rewrite is whole, so it has to be
+  // refused if somebody changed the list after these lines were read.
+  const openedAtVersion = useRef<string | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [initial, setInitial] = useState<FormValues | undefined>(undefined);
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
+
+  const tell = (error: unknown, act: ChecklistAct) => {
+    const sentence = checklistProblem(error, act, t);
+    if (sentence) {
+      void message.error(sentence);
+    }
+  };
+
+  // Each listing row carries its lines and the version they were read at, so the dialog is filled
+  // from the row and the rewrite is held to the row's version: a list changed since the row was
+  // read is refused rather than rewritten from lines nobody saw. A row without a version is read
+  // on its own first, and the dialog is filled from that answer and held to its version.
+  const openForEdit = async (list: ChecklistInfo) => {
+    if (list.version) {
+      openedAtVersion.current = list.version;
+      openFor(list);
+      return;
+    }
+    setReading(list.id);
+    try {
+      const held = await readForChange(list.id);
+      openedAtVersion.current = held.version;
+      openFor(held.list);
+    } catch (error) {
+      tell(error, 'open');
+    } finally {
+      setReading(null);
+    }
+  };
+
+  // A delete is decided on the list as this page showed it, so it is held to the version of the
+  // row shown; a list changed since is refused, and the shared conflict prompt says so while the
+  // lists are read again. A row without a version falls back to reading the list now and deleting
+  // only when it has not moved since the listing was read.
+  const deleteShown = async (list: ChecklistInfo) => {
+    if (list.version) {
+      remove.mutate(
+        { id: list.id, ifMatch: list.version },
+        {
+          onError: (error) => {
+            if (isConcurrencyConflict(error)) {
+              void refetch();
+            }
+            tell(error, 'delete');
+          },
+        },
+      );
+      return;
+    }
+    setReading(list.id);
+    try {
+      const held = await readForChange(list.id);
+      if (held.list.updatedAt !== list.updatedAt) {
+        void message.warning(t('checklists.changedSinceShown'));
+        void refetch();
+        return;
+      }
+
+      remove.mutate(
+        { id: list.id, ifMatch: held.version },
+        { onError: (error) => tell(error, 'delete') },
+      );
+    } catch (error) {
+      tell(error, 'delete');
+    } finally {
+      setReading(null);
+    }
+  };
 
   const openFor = (list: ChecklistInfo | null) => {
+    if (!list) {
+      openedAtVersion.current = undefined;
+    }
     setEditing(list);
     // Handed to the form as it mounts rather than written into it here. The dialog's body is
     // destroyed while it is shut, so at this moment the form instance is attached to no form, and
@@ -106,14 +194,15 @@ export default function ChecklistsPage() {
     };
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, body });
+        await update.mutateAsync({ id: editing.id, body, ifMatch: openedAtVersion.current });
       } else {
         await create.mutateAsync(body);
       }
       setOpen(false);
       void message.success(t('checklists.saved'));
     } catch (error) {
-      void message.error(error instanceof ApiError ? error.detail : t('checklists.saveFailed'));
+      // The dialog stays open with what was typed, whatever the refusal.
+      tell(error, 'save');
     }
   };
 
@@ -131,8 +220,16 @@ export default function ChecklistsPage() {
         </Button>
       </Flex>
 
+      {/* A list already on screen stays through a failed re-read, under a notice. */}
+      <ReadFailedAlert isError={isError && data !== undefined} error={error} held onRetry={refetch} testId="checklists-refresh-failed" />
       {isLoading ? (
         <Skeleton active />
+      ) : isError && data === undefined ? (
+        <Result
+          status="warning"
+          title={t('checklists.loadFailed')}
+          extra={<Button onClick={() => void refetch()}>{t('common.retry')}</Button>}
+        />
       ) : !data?.length ? (
         <Empty description={t('checklists.empty')} />
       ) : (
@@ -160,24 +257,15 @@ export default function ChecklistsPage() {
                       data-testid={`checklist-permissions-${list.id}`}
                     />
                   )}
-                  <Button
-                    icon={<EditOutlined />}
-                    onClick={() => openFor(list)}
-                    aria-label={t('common.edit')}
+                  <ChangeActions
+                    list={list}
+                    owned={list.ownerUserId === me?.id}
+                    writesAnyList={writesAnyList}
+                    deletesAnyList={deletesAnyList}
+                    reading={reading === list.id}
+                    onEdit={() => void openForEdit(list)}
+                    onDelete={() => void deleteShown(list)}
                   />
-                  <Popconfirm
-                    title={t('checklists.deleteConfirm')}
-                    onConfirm={() => {
-                      remove.mutate(list.id, {
-                        onError: (error) =>
-                          void message.error(
-                            error instanceof ApiError ? error.detail : t('checklists.saveFailed'),
-                          ),
-                      });
-                    }}
-                  >
-                    <Button danger icon={<DeleteOutlined />} aria-label={t('checklists.delete')} />
-                  </Popconfirm>
                 </Space>
               </Flex>
             </Card>
@@ -197,15 +285,17 @@ export default function ChecklistsPage() {
       <Modal
         open={open}
         title={editing ? t('checklists.edit') : t('checklists.new')}
-        onCancel={() => setOpen(false)}
+        onCancel={() => requestDiscard(edits.edited, () => setOpen(false))}
         onOk={() => void form.submit()}
         confirmLoading={create.isPending || update.isPending}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         destroyOnHidden
       >
         <Form
           form={form}
           layout="vertical"
           initialValues={initial}
+          onValuesChange={edits.onValuesChange}
           onFinish={(values) => void submit(values)}
         >
           <Form.Item
@@ -276,6 +366,53 @@ export default function ChecklistsPage() {
           </Form.List>
         </Form>
       </Modal>
+    </>
+  );
+}
+
+/**
+ * Edit and Delete for one list, drawn only for somebody who may take them.
+ *
+ * The listing does not say per row what the reader may do, and a list published to everybody is
+ * read by people who may not change it, so offering both to everyone sends them into a refusal the
+ * page could have foreseen. The owner always may, and so may a holder of the right over every list;
+ * for anybody else the server is asked about that one list, which also covers a list handed to a
+ * person by name. While that answer is not in, the buttons are not drawn.
+ */
+function ChangeActions({
+  list,
+  owned,
+  writesAnyList,
+  deletesAnyList,
+  reading,
+  onEdit,
+  onDelete,
+}: {
+  list: ChecklistInfo;
+  owned: boolean;
+  writesAnyList: boolean;
+  deletesAnyList: boolean;
+  reading: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  const settled = owned || (writesAnyList && deletesAnyList);
+  const { data: effective } = useEffectiveAccess('checklist', list.id, { enabled: !settled });
+  const held = effective ? parseAccessActions(effective.actions) : null;
+  const mayEdit = owned || writesAnyList || (held?.has('write') ?? false);
+  const mayDelete = owned || deletesAnyList || (held?.has('delete') ?? false);
+
+  return (
+    <>
+      {mayEdit && (
+        <Button icon={<EditOutlined />} loading={reading} onClick={onEdit} aria-label={t('common.edit')} />
+      )}
+      {mayDelete && (
+        <Popconfirm title={t('checklists.deleteConfirm')} onConfirm={onDelete}>
+          <Button danger icon={<DeleteOutlined />} disabled={reading} aria-label={t('checklists.delete')} />
+        </Popconfirm>
+      )}
     </>
   );
 }

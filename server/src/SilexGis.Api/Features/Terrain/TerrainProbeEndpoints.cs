@@ -54,7 +54,12 @@ public sealed record TerrainFeatureProbeSampleDto(
 /// no-answer to a caller and completely different things to whoever administers the installation.
 /// </param>
 /// <param name="Samples">One row per place asked about, in the order they were asked.</param>
-public sealed record TerrainProbeDto(bool HasTerrain, IReadOnlyList<TerrainProbeSampleDto> Samples);
+/// <param name="Accuracy">
+/// How accurate the elevation these heights were read from is, as recorded for the build the scene
+/// draws; null when nothing is recorded. About the data, not about any place asked about.
+/// </param>
+public sealed record TerrainProbeDto(
+    bool HasTerrain, IReadOnlyList<TerrainProbeSampleDto> Samples, TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>
 /// Ground heights under the features asked about, as far as the caller is entitled to have them.
@@ -65,8 +70,12 @@ public sealed record TerrainProbeDto(bool HasTerrain, IReadOnlyList<TerrainProbe
 /// height: a keyed row carrying a null says "this one exists and you may not have it", which is
 /// precisely the fact being protected.
 /// </param>
+/// <param name="Accuracy">
+/// The recorded accuracy of the elevation the heights were read from; a fact about the data that
+/// says nothing about which features exist or where they are.
+/// </param>
 public sealed record TerrainFeatureProbeDto(
-    bool HasTerrain, IReadOnlyList<TerrainFeatureProbeSampleDto> Samples);
+    bool HasTerrain, IReadOnlyList<TerrainFeatureProbeSampleDto> Samples, TerrainAccuracyDto? Accuracy = null);
 
 /// <summary>
 /// Whether the caller has named places this application can look at.
@@ -185,6 +194,7 @@ public static class TerrainProbeEndpoints
     private static async Task<Results<Ok<TerrainProbeDto>, UnauthorizedHttpResult, ProblemHttpResult>>
         ProbeAsync(
             TerrainProbeRequest request,
+            SilexGisDbContext db,
             IAccessContextAccessor accessAccessor,
             TerrainRasterIndex index,
             IDemSampleService sampler,
@@ -211,7 +221,8 @@ public static class TerrainProbeEndpoints
         return TypedResults.Ok(new TerrainProbeDto(
             coverage.Rasters.Count > 0,
             [.. samples.Select(s => new TerrainProbeSampleDto(
-                s.Point.Longitude, s.Point.Latitude, s.Outcome, s.ElevationM))]));
+                s.Point.Longitude, s.Point.Latitude, s.Outcome, s.ElevationM))],
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 
     /// <summary>
@@ -301,7 +312,8 @@ public static class TerrainProbeEndpoints
         return TypedResults.Ok(new TerrainFeatureProbeDto(
             coverage.Rasters.Count > 0,
             [.. ordered.Select((id, i) => new TerrainFeatureProbeSampleDto(
-                id, samples[i].Outcome, samples[i].ElevationM))]));
+                id, samples[i].Outcome, samples[i].ElevationM))],
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct)));
     }
 
     private sealed record Row(

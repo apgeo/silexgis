@@ -19,6 +19,7 @@ import { useCompareOffer } from '../../caveview/useCompareOffer.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import SelectionPanel from '../../components/map/SelectionPanel.tsx';
 import { RowButton } from '../../components/RowOpeners.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
 import AnnotatedTextPanel from '../../textlink/AnnotatedTextPanel.tsx';
@@ -184,11 +185,15 @@ function Viewer3dPanel() {
 
   // The pinned model is asked for by its own id; the cave it belongs to comes back with it, so
   // the two paths converge on one cave id and everything below reads the same either way.
-  const { data: pinnedModel, isPending: pinnedPending } = useSurveyModel(pinnedModelId ?? undefined);
+  const pinnedRead = useSurveyModel(pinnedModelId ?? undefined);
+  const { data: pinnedModel, isPending: pinnedPending } = pinnedRead;
   const effectiveCaveId = pinnedModelId ? (pinnedModel?.caveId ?? null) : caveId;
 
   const { data: cave } = useCave(effectiveCaveId ?? undefined);
-  const { data: models } = useSurveyModels(pinnedModelId ? undefined : (caveId ?? undefined));
+  const modelsRead = useSurveyModels(pinnedModelId ? undefined : (caveId ?? undefined));
+  const { data: models } = modelsRead;
+  // The read that decides which model is shown. When it failed, neither silence below is true.
+  const modelRead = pinnedModelId ? pinnedRead : modelsRead;
   const { data: entrances } = useEntrances(effectiveCaveId ?? undefined);
   // A cave whose models are all wall meshes has nothing for the survey viewer, and handing it one
   // would produce a parse failure instead of the empty panel that is the truth. Which formats it
@@ -248,11 +253,25 @@ function Viewer3dPanel() {
               the reader did something wrong — when what happened is that the model is gone or is
               one whose cave's location is withheld from them, which the server answers as a plain
               404 because a cave's models are its location. */}
-          <Typography.Text type="secondary">
-            {pinnedModelId && !pinnedPending
-              ? t('panel.viewer3dUnavailable')
-              : t('panel.viewer3dEmpty')}
-          </Typography.Text>
+          {modelRead.isError ? (
+            // A refusal of a pinned model is the server's answer that it is gone or withheld, so
+            // it keeps that wording; any other failure is named as one, with a way to ask again.
+            <ReadFailedAlert
+              isError
+              error={modelRead.error}
+              held={false}
+              onRetry={modelRead.refetch}
+              title={t('panel.viewer3dLoadFailed')}
+              refusedTitle={pinnedModelId ? t('panel.viewer3dUnavailable') : undefined}
+              testId="panel-viewer3d-load-failed"
+            />
+          ) : (
+            <Typography.Text type="secondary">
+              {pinnedModelId && !pinnedPending
+                ? t('panel.viewer3dUnavailable')
+                : t('panel.viewer3dEmpty')}
+            </Typography.Text>
+          )}
         </Flex>
       )}
     </Flex>
@@ -264,7 +283,7 @@ function RegistryPanel() {
   const [params, setParams] = useState<CaveListParams>({ page: 1, pageSize: 20 });
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
-  const { data, isFetching } = useCaves({ ...params, search: search || undefined });
+  const { data, isFetching, isError, error, refetch } = useCaves({ ...params, search: search || undefined });
   // Pointing at a row rings its cave on the map in the main window; a cave picked there is
   // marked here.
   const tableMap = useTableMapLink<CaveListItem>();
@@ -294,12 +313,22 @@ function RegistryPanel() {
           onChange={(e) => setSearchInput(e.target.value)}
         />
       </Flex>
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('caveRegistry.loadFailed')}
+        testId="panel-registry-load-failed"
+      />
       <Table<CaveListItem>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         loading={isFetching && !data}
         dataSource={data?.items}
+        // A list that could not be read says so above; "no data" here would be a false answer.
+        locale={isError && !data ? { emptyText: <span /> } : undefined}
         onChange={(pagination: TablePaginationConfig) =>
           setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }))}
         rowClassName={tableMap.rowClassName}

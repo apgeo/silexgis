@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { ownContext } from './consoleGuard.ts';
+import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 // The session's own token, read where the raster-map flows already read it: one copy of how.
 import { bearerToken } from './rastermapApi.ts';
@@ -18,7 +18,7 @@ import { bearerToken } from './rastermapApi.ts';
  */
 
 export interface Account {
-  /** The account's id, as the registration answered it — what a grant to this person names. */
+  /** The account's id, as signing in answered it — what a grant to this person names. */
   id: string;
   email: string;
   password: string;
@@ -50,7 +50,16 @@ export async function registerAccount(request: Page['request'], label: string): 
   };
   const registered = await request.post('/api/v1/auth/register', { data: account });
   expect(registered.ok(), `registering answered ${registered.status()}`).toBeTruthy();
-  const { userId } = (await registered.json()) as { userId: string };
+  // Registration answers alike for a new and a taken address, so it names no account; signing in
+  // A plain fetch rather than the caller's request context, so the caller's session is left as it was.
+  const base = test.info().project.use.baseURL ?? '';
+  const session = await fetch(new URL('/api/v1/auth/login', base), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: account.email, password: account.password }),
+  });
+  expect(session.ok, `signing the new account in answered ${session.status}`).toBeTruthy();
+  const { userId } = (await session.json()) as { userId: string };
   return { id: userId, ...account };
 }
 

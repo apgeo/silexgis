@@ -223,29 +223,7 @@ public sealed class TerrainInPlaceSourceTests : IAsyncLifetime, IDisposable, ICl
         return JsonDocument.Parse(body).RootElement.GetProperty("id").GetGuid();
     }
 
-    private async Task RunAsync(Guid buildId)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.TerrainBuild);
-
-        try
-        {
-            await handler.ExecuteAsync(
-                new ProcessingJob
-                {
-                    Kind = ProcessingJobKinds.TerrainBuild,
-                    Attempts = 1,
-                    RequestedBy = administratorId,
-                    Payload = JsonSerializer.Serialize(new TerrainBuildPayload(buildId), JsonSerializerOptions.Web),
-                },
-                CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // A run that stops throws so the queue row goes red; the build row is what is read here.
-        }
-    }
+    private Task RunAsync(Guid buildId) => TerrainRuns.RunAsync(factory, buildId, requestedBy: administratorId);
 
     private async Task<TerrainBuild> ReadAsync(Guid buildId)
     {

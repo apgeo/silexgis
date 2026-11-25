@@ -17,6 +17,7 @@ vi.mock('../../api/hooks.ts', () => ({
 const signInAgain = vi.fn<(returnTo: string) => Promise<void>>();
 vi.mock('../../auth/renewSignIn.ts', () => ({
   renewSignIn: () => Promise.resolve('lapsed'),
+  lastSignInRenewal: () => 'lapsed',
   onSignInRenewed: () => () => undefined,
   signInAgain: (returnTo: string) => signInAgain(returnTo),
 }));

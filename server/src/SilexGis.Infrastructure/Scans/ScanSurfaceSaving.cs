@@ -58,7 +58,6 @@ public sealed class ScanSurfaceSaving(
         SurveyModel scan,
         ScanRecipe recipe,
         IReadOnlyList<ScanArtifact> made,
-        string directory,
         CancellationToken ct)
     {
         var surface = made.FirstOrDefault(a => a.Kind == ScanArtifactKind.MeshStl)
@@ -83,33 +82,35 @@ public sealed class ScanSurfaceSaving(
 
         var sourcePath = await db.StoredFiles.AsNoTracking()
             .Where(f => f.Id == surface.FileId).Select(f => f.StoragePath).SingleAsync(ct);
-        var placedPath = Path.Combine(directory, "surface.placed.stl");
+        // Placed in a file of the application's own, never in the job directory, which the worker
+        // can write to as well: a link it left there under this name would have the application
+        // write the placed mesh wherever the link pointed. The file is created new and removed
+        // when it is closed.
+        var placedPath = Path.Combine(Path.GetTempPath(), $"silexgis-surface-{Guid.NewGuid():N}.stl");
         long triangles;
-        try
-        {
-            await using (var read = await fileStore.OpenReadAsync(sourcePath, ct))
-            await using (var write = File.Create(placedPath))
-            {
-                triangles = ScanSurfaceStl.Place(read, write, placement);
-            }
-        }
-        catch (InvalidDataException e)
-        {
-            throw new SurveyPipelineException(SurveyPipelineFailures.WorkerFailed, "The surface the worker made does not read as a binary STL: " + e.Message);
-        }
-
         string storagePath;
         long size;
         string sha256;
-        await using (var read = File.OpenRead(placedPath))
+        await using (var placedFile = new FileStream(
+            placedPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81_920, FileOptions.DeleteOnClose))
         {
-            size = read.Length;
-            sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
-            read.Position = 0;
-            storagePath = await fileStore.SaveAsync(read, ".stl", ct);
-        }
+            try
+            {
+                await using var read = await fileStore.OpenReadAsync(sourcePath, ct);
+                triangles = ScanSurfaceStl.Place(read, placedFile, placement);
+            }
+            catch (InvalidDataException e)
+            {
+                throw new SurveyPipelineException(SurveyPipelineFailures.WorkerFailed, "The surface the worker made does not read as a binary STL: " + e.Message);
+            }
 
-        File.Delete(placedPath);
+            await placedFile.FlushAsync(ct);
+            placedFile.Position = 0;
+            size = placedFile.Length;
+            sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(placedFile, ct));
+            placedFile.Position = 0;
+            storagePath = await fileStore.SaveAsync(placedFile, ".stl", ct);
+        }
 
         var stem = FileFormats.FitFileName(upload.SurveyTitle);
         stem = string.IsNullOrWhiteSpace(stem) ? "scan" : stem;

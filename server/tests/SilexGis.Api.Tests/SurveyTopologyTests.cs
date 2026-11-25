@@ -3,9 +3,10 @@ using System.Globalization;
 using System.Text.Json;
 using Shouldly;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Surveys;
-using Therion.Blender;
-using Therion.Blender.Geometry;
+using Therion.Cave3D;
+using Therion.CaveGeometry;
 
 namespace SilexGis.Api.Tests;
 
@@ -259,6 +260,67 @@ public class SurveyTopologyTests
         measured.Beta.ShouldNotBeNull().ShouldBe(1.0, Tolerance);
         measured.Gamma.ShouldNotBeNull().ShouldBe(0.5, Tolerance);
         measured.MeanDegree.ShouldNotBeNull().ShouldBe(2.0, Tolerance);
+    }
+
+    /// <summary>
+    /// The pattern suggestion and the topology figures count nodes, edges, components and loops
+    /// with one routine, so over the same legs they cannot disagree. Run over the networks both
+    /// features are tested on, and over the shapes where a hand-written reading would diverge — a
+    /// ring with no junction, parallel routes between two junctions, a loop hanging off one
+    /// junction — so that a second definition creeping back in fails here rather than showing as
+    /// two different loop counts for one cave.
+    /// </summary>
+    [Theory]
+    [InlineData("maze")]
+    [InlineData("branchwork")]
+    [InlineData("huttes")]
+    [InlineData("sakany")]
+    [InlineData("ring")]
+    [InlineData("parallel")]
+    [InlineData("hanging")]
+    [InlineData("spurs")]
+    public void Both_features_report_the_same_counts_over_the_same_legs(string network)
+    {
+        var model = network switch
+        {
+            "maze" => Maze(),
+            "branchwork" => Branchwork(),
+            "huttes" => ReferenceNetwork("Huttes"),
+            "sakany" => ReferenceNetwork("Sakany"),
+            "ring" => Network(
+                [new(0, 0, 0), new(10, 0, 0), new(10, 10, 0), new(0, 10, 0)],
+                [(0, 1), (1, 2), (2, 3), (3, 0)]),
+            "parallel" => Network(
+                [new(0, 0, 0), new(100, 0, 0), new(50, 10, 0), new(50, 20, 0), new(50, 30, 0)],
+                [(0, 2), (2, 1), (0, 3), (3, 1), (0, 4), (4, 1)]),
+            "hanging" => Network(
+                [new(0, 0, 0), new(10, 0, 0), new(10, 10, 0), new(-10, 0, 0)],
+                [(0, 1), (1, 2), (2, 0), (0, 3)]),
+            "spurs" => Network(
+                [new(0, 0, 0), new(20, 0, 0), new(10, 17, 0), new(-10, -5, 0), new(30, -5, 0), new(10, 30, 0)],
+                [(0, 1), (1, 2), (2, 0), (0, 3), (1, 4), (2, 5)]),
+            _ => throw new ArgumentOutOfRangeException(nameof(network)),
+        };
+
+        var graph = CenterlineGraph.Build(model);
+        var topology = SurveyTopologyAnalyzer.Measure(graph, Guid.Empty, DateTime.UnixEpoch).ShouldNotBeNull();
+        var pattern = PassageNetwork.Measure(
+            graph.Edges.Select(e => ((string?)graph.StationName(e.From), (string?)graph.StationName(e.To))))
+            .ShouldNotBeNull();
+
+        pattern.NodeCount.ShouldBe(topology.NodeCount);
+        pattern.EdgeCount.ShouldBe(topology.EdgeCount);
+        pattern.ComponentCount.ShouldBe(topology.ComponentCount);
+        pattern.ReducedNodeCount.ShouldBe(topology.ReducedNodeCount);
+        pattern.CyclomaticNumber.ShouldBe(topology.CyclomaticNumber);
+        pattern.ExtremityCount.ShouldBe(topology.ExtremityCount);
+
+        // The survey's own contraction is still read for the length of each branch, so the two
+        // reductions have to find the same branches or those lengths would belong to a different
+        // network than the counts.
+        var network2 = PassageNetwork.Reduce(graph.DistinctEdges).ShouldNotBeNull();
+        network2.BranchCount.ShouldBe(graph.Reduce().Branches.Count);
+        network2.BranchCount.ShouldBe(topology.BranchCount);
     }
 
     private const double Tolerance = 1e-8;

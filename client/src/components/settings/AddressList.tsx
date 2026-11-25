@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
 import PointField from './PointField.tsx';
+import { nextSortOrder } from './addressOrder.ts';
 
 /** Mirrors the server's cap; the list is a few places a person lives, not storage. */
 const MAX_ADDRESSES = 10;
@@ -58,14 +59,19 @@ export default function AddressList({ addresses }: Props) {
   };
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body: UserAddressWrite = {
       label: values.label,
       country: values.country ?? null,
       city: values.city ?? null,
       addressText: values.addressText ?? null,
       geom: values.point ? { type: 'Point', coordinates: values.point } : null,
-      sortOrder: editing?.sortOrder ?? addresses.length,
+      sortOrder: editing?.sortOrder ?? nextSortOrder(addresses),
     };
 
     try {

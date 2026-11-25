@@ -8,8 +8,10 @@ import i18n from '../../i18n';
 import { caveRegistryDocument, readCaveRegistryAddress } from '../../filters/caveRegistry.ts';
 import { galleryDocument, galleryWhere, readGalleryFilter } from '../../filters/gallery.ts';
 import type { SavedFilter } from '../../api/hooks/savedFilters.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
-const { filters, updateSpy, deleteSpy } = vi.hoisted(() => ({
+const { filters, updateSpy, deleteSpy, filtersFailure } = vi.hoisted(() => ({
+  filtersFailure: { current: undefined as unknown },
   filters: { current: [] as unknown[] },
   updateSpy: vi.fn(),
   deleteSpy: vi.fn(),
@@ -37,7 +39,10 @@ vi.mock('../../api/hooks/savedFilters.ts', async () => {
   );
   return {
     documentOf: actual.documentOf,
-    useSavedFilters: () => ({ data: filters.current, isLoading: false }),
+    useSavedFilters: () =>
+      filtersFailure.current === undefined
+        ? { data: filters.current, isLoading: false, isError: false, error: null, refetch: vi.fn() }
+        : { data: undefined, isLoading: false, isError: true, error: filtersFailure.current, refetch: vi.fn() },
     useUpdateSavedFilter: () => ({ mutateAsync: updateSpy, isPending: false }),
     useDeleteSavedFilter: () => ({ mutateAsync: deleteSpy, isPending: false }),
   };
@@ -88,6 +93,17 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe('the saved filters screen', () => {
+  it('says the saved filters could not be read, rather than that there are none', () => {
+    filtersFailure.current = new TypeError('Failed to fetch');
+    try {
+      show();
+      expect(screen.getByTestId('saved-filters-load-failed')).toBeTruthy();
+      expect(screen.queryByText('No saved filters. Save one from the cave registry.')).toBeNull();
+    } finally {
+      filtersFailure.current = undefined;
+    }
+  });
+
   it('says what each filter asks, naming values only through lists the reader may read', () => {
     filters.current = [
       filter({}),
@@ -131,6 +147,28 @@ describe('the saved filters screen', () => {
     expect(screen.queryByTestId('saved-filter-delete-f-2')).toBeNull();
     expect(screen.getByTestId('saved-filter-edit-f-3')).toBeInTheDocument();
     expect(screen.getByTestId('saved-filter-delete-f-3')).toBeInTheDocument();
+  });
+
+  it('Save with an emptied name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      filters.current = [filter({})];
+      show();
+      fireEvent.click(screen.getByTestId('saved-filter-edit-f-1'));
+      const dialog = await screen.findByRole('dialog');
+      const name = within(dialog).getByTestId('saved-filter-edit-name');
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      expect(updateSpy).not.toHaveBeenCalled();
+      await afterRejectionsAreReported();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('keeps the group an administrator is not in on offer when they rename a filter shared with it', async () => {

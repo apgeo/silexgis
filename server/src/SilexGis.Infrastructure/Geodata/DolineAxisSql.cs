@@ -145,15 +145,19 @@ public static class DolineAxisSql
                 WHERE len IS NOT NULL
                 GROUP BY id
             )
-            SELECT a.id AS "FeatureId",
+            -- Every outline that was considered comes back, the ones with no rectangle round them
+            -- (invalid, or collinear) with a null axis, so "could not be measured" is an answer
+            -- and not the same silence as "not there". Measured ones first.
+            SELECT s.id AS "FeatureId",
                    mod(degrees(ST_Azimuth(
                        ST_Transform(a.long_a, 4326)::geography,
                        ST_Transform(a.long_b, 4326)::geography))::numeric,
                        180)::double precision AS "AxisAzimuthDegrees",
                    a.long_axis AS "LongAxisM",
                    a.short_axis AS "ShortAxisM"
-            FROM axes a
-            ORDER BY a.long_axis DESC, a.id
+            FROM shape s
+            LEFT JOIN axes a ON a.id = s.id
+            ORDER BY a.long_axis DESC NULLS LAST, s.id
             LIMIT @da_limit
             """;
 

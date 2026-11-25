@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
-import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Switch, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { App, Card, Collapse, Flex, Form, Input, InputNumber, Select, Spin, Switch, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import { useDiscardGuard, useFormEdits, useLeaveGuard } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -13,8 +14,13 @@ import {
   useUpdateCave,
   type CaveWrite,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import TypedField from '../../components/typedProperties/TypedField.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
 
@@ -27,7 +33,7 @@ export default function CaveFormPage() {
   const isEdit = !!id;
   const [form] = Form.useForm<CaveFormValues>();
 
-  const { data: cave } = useCave(id);
+  const { data: cave, isError, error: readError, refetch } = useCave(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
   const { data: featureTypes } = useFeatureTypes();
@@ -44,15 +50,39 @@ export default function CaveFormPage() {
     [featureTypes],
   );
   const [extra, setExtra] = useState<Record<string, unknown>>({});
+  // The club's own fields live beside the antd form, so the form's own record of what was touched
+  // does not see them; a change to one is noted here for the question leaving the form asks.
+  const extraTouched = useRef(false);
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits();
+  const typed = () => edits.edited() || extraTouched.current;
+  const forgetTyping = () => {
+    edits.forget();
+    extraTouched.current = false;
+  };
+  useLeaveGuard(typed);
+
+  // The cave the form was filled from, and the version of it, taken once per cave. The page goes
+  // on reading the cave under the form — on a return to the browser tab, after an entrance is
+  // edited elsewhere — and each read is a new object. Filling the form again from every one threw
+  // away whatever was being typed; and a save carrying the newest version with values from an
+  // earlier read would present somebody else's change as already seen and write over it. So the
+  // form keeps what it was filled from, and the save names the version that very reading was
+  // answered at — not the newest one filed for the cave, which a save a moment ago can have moved
+  // ahead of the cached copy. A change made meanwhile is refused, and the conflict warning says to
+  // reload.
+  const seeded = useRef<{ cave: NonNullable<typeof cave>; version: string | undefined } | null>(null);
 
   useEffect(() => {
-    if (cave && isEdit) {
+    if (cave && isEdit && seeded.current?.cave.id !== cave.id) {
+      seeded.current = { cave, version: versionReadWith(cave) };
       form.setFieldsValue(cave as unknown as CaveFormValues);
       setExtra((cave.properties as Record<string, unknown> | null) ?? {});
     }
   }, [cave, isEdit, form]);
 
-  const setExtraValue = (key: string, value: unknown) =>
+  const setExtraValue = (key: string, value: unknown) => {
+    extraTouched.current = true;
     setExtra((current) => {
       const next = { ...current };
       if (value === undefined || value === null || value === '') {
@@ -62,27 +92,41 @@ export default function CaveFormPage() {
       }
       return next;
     });
+  };
 
   const onFinish = async (values: CaveFormValues) => {
+    // An edit writes every field, so one sent before the form holds the stored cave would blank
+    // it; the page shows no form until then, and this is the same rule where the save is sent.
+    if (isEdit && !seeded.current) {
+      return;
+    }
+    const source = isEdit ? seeded.current?.cave : undefined;
     const body: CaveWrite = {
       ...values,
       isShowCave: values.isShowCave ?? false,
       locationProtected: values.locationProtected ?? false,
       explorationStatus: values.explorationStatus ?? 'unknown',
       visibility: values.visibility ?? 'private',
-      cavingGroupId: cave?.cavingGroupId ?? null,
+      cavingGroupId: source?.cavingGroupId ?? null,
       // The stored document with the club's own fields as edited here; every key this form does
       // not offer is sent back unchanged. The cave stays under its current primary parent (the
       // write DTO addresses containment by parent id).
-      properties: { ...((cave?.properties as Record<string, unknown> | null) ?? {}), ...extra },
-      parentId: cave?.parents.find((p) => p.isPrimary)?.id ?? null,
+      properties: { ...((source?.properties as Record<string, unknown> | null) ?? {}), ...extra },
+      parentId: source?.parents.find((p) => p.isPrimary)?.id ?? null,
     };
     try {
-      const saved = isEdit ? await updateCave.mutateAsync(body) : await createCave.mutateAsync(body);
+      const saved = isEdit
+        ? await updateCave.mutateAsync({ body, ifMatch: seeded.current?.version })
+        : await createCave.mutateAsync(body);
       message.success(t('common.saved'));
+      forgetTyping();
       navigate(`/caves/${saved.id}`);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a refusal worded
+      // here beside it would contradict it. The form stays with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -92,13 +136,46 @@ export default function CaveFormPage() {
     </Form.Item>
   );
 
+  // An edit form shown before the cave is read is a blank form that saves blanks, and without its
+  // version the save is refused as if somebody else had changed the cave. A failed read is said
+  // as such, with a way to ask again; a deleted or unreadable cave as gone.
+  if (isEdit && readFailureEndsPage(isError, cave, readError)) {
+    return (
+      <ReadFailedResult
+        error={readError}
+        onRetry={() => void refetch()}
+        notFoundTitle={t('caves.notFound')}
+        notFoundDetail={t('caves.notFoundDetail')}
+        actions={
+          <Button type="primary" onClick={() => void navigate('/caves')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (isEdit && !cave) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Spin size="large" />
+      </Flex>
+    );
+  }
+
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
       <Typography.Title level={3}>
         {isEdit ? t('caves.editCave') : t('caves.newCave')}
       </Typography.Title>
       <Card>
-        <Form<CaveFormValues> form={form} layout="vertical" onFinish={(v) => void onFinish(v)} requiredMark>
+        <Form<CaveFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={(v) => void onFinish(v)}
+          onValuesChange={edits.onValuesChange}
+          requiredMark
+        >
           <Collapse
             defaultActiveKey={['identification', 'localization', 'access', 'clubFields']}
             items={[
@@ -130,7 +207,7 @@ export default function CaveFormPage() {
                       >
                         <Select options={caveTypes?.map((x) => ({ value: x.id, label: x.name }))} />
                       </Form.Item>
-                      <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280 }}>
+                      <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280, maxWidth: '100%' }}>
                         <Input />
                       </Form.Item>
                     </Flex>
@@ -157,7 +234,7 @@ export default function CaveFormPage() {
                     <Form.Item name="tributaryRiver" label={t('caves.fields.tributaryRiver')} style={{ width: 220 }}>
                       <Input />
                     </Form.Item>
-                    <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340 }}>
+                    <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340, maxWidth: '100%' }}>
                       <Input />
                     </Form.Item>
                     <Form.Item name="landRegistryNumber" label={t('caves.fields.landRegistryNumber')} style={{ width: 220 }}>
@@ -235,7 +312,7 @@ export default function CaveFormPage() {
                     <Form.Item name="discoveryDate" label={t('caves.fields.discoveryDate')} style={{ width: 220 }}>
                       <Input placeholder="1952 / 1952-07 / 1952-07-14" />
                     </Form.Item>
-                    <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340 }}>
+                    <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340, maxWidth: '100%' }}>
                       <Input />
                     </Form.Item>
                   </Flex>
@@ -273,7 +350,7 @@ export default function CaveFormPage() {
                       children: (
                         <Flex gap={16} wrap data-testid="cave-club-fields">
                           {clubFields.map((field) => (
-                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280 }}>
+                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280, maxWidth: '100%' }}>
                               <TypedField
                                 field={field}
                                 value={extra[field.key]}
@@ -290,7 +367,16 @@ export default function CaveFormPage() {
             ]}
           />
           <Flex gap={8} justify="end" style={{ marginTop: 16 }}>
-            <Button onClick={() => navigate(-1)}>{t('common.cancel')}</Button>
+            <Button
+              onClick={() =>
+                requestDiscard(typed, () => {
+                  forgetTyping();
+                  navigate(-1);
+                })
+              }
+            >
+              {t('common.cancel')}
+            </Button>
             <Button type="primary" htmlType="submit" loading={createCave.isPending || updateCave.isPending}>
               {t('common.save')}
             </Button>

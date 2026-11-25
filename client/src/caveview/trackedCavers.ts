@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later
 import type { TrackingState } from '../api/hooks.ts';
 import { placeOnModel } from './drawableOn.ts';
 // What "no moment" means is one rule with one home, and this is a caller of it rather than a

@@ -50,6 +50,8 @@ vi.mock('../../../api/hooks.ts', async () => {
   );
   return {
     terrainBuildUnsettled: actual.terrainBuildUnsettled,
+    // The area picker draws over the catalogue's background; this installation names none.
+    useMapLayers: () => ({ isPending: false, data: [] }),
     useSubmitTerrainBuild: () => ({ mutateAsync: submitMutate, isPending: false }),
     useUploadTerrainRaster: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useTerrainSourceDirectories: () => ({ data: undefined }),

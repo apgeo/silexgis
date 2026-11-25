@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
@@ -230,7 +231,7 @@ public sealed class DocumentDeletionService(
             }
         }
 
-        var shown = mine.Skip((page - 1) * pageSize).Take(pageSize)
+        var shown = mine.Skip(PageOffset.Of(page, pageSize)).Take(pageSize)
             .Select(d => new DeletedDocumentRow(d, SoftDeleteRules.RemovedAt(d.DeletedAt!.Value, Window)))
             .ToList();
         return (shown, mine.Count);

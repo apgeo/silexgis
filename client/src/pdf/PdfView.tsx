@@ -6,6 +6,7 @@ import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { capturedQuoteFrom, type CapturedQuote } from './textSelection.ts';
 import type { LoadedPdf } from './pdfEngine.ts';
+import { importWithRetry } from '../codeLoading.ts';
 
 /**
  * A PDF read in the browser, one page at a time, with its words where the words are.
@@ -47,8 +48,15 @@ export default function PdfView({
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [page, setPage] = useState(Math.max(1, initialPage));
   const [zoom, setZoom] = useState(1);
-  const [failed, setFailed] = useState(false);
+  // Two failures, told apart: a document that could not be loaded is one the reader cannot
+  // move around in at all, while one page that could not be drawn leaves the rest readable.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [pageFailed, setPageFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [drawAttempt, setDrawAttempt] = useState(0);
   const [drawing, setDrawing] = useState(true);
+  // The drawing in progress, so the next one starts only once it has let go of the canvas.
+  const lastDraw = useRef<Promise<void>>(Promise.resolve());
   // Measured from the frame rather than assumed, so the page fits a phone and a wide desktop
   // pane without either being told about the other.
   const [frameWidth, setFrameWidth] = useState(0);
@@ -58,19 +66,20 @@ export default function PdfView({
     const controller = new AbortController();
     let loaded: LoadedPdf | null = null;
     setPdf(null);
-    setFailed(false);
+    setLoadFailed(false);
+    setPageFailed(false);
     setDrawing(true);
 
     void (async () => {
       try {
-        const { loadPdf } = await import('./pdfEngine.ts');
+        const { loadPdf } = await importWithRetry(() => import('./pdfEngine.ts'));
         loaded = await loadPdf({ url, signal: controller.signal });
         if (!controller.signal.aborted) {
           setPdf(loaded);
         }
       } catch {
         if (!controller.signal.aborted) {
-          setFailed(true);
+          setLoadFailed(true);
           setDrawing(false);
         }
       }
@@ -80,7 +89,7 @@ export default function PdfView({
       controller.abort();
       void loaded?.destroy().catch(() => {});
     };
-  }, [url]);
+  }, [url, loadAttempt]);
 
   // ---- measure ------------------------------------------------------------
   useLayoutEffect(() => {
@@ -106,37 +115,48 @@ export default function PdfView({
       return;
     }
 
-    let stale = false;
+    // A page turn or a zoom inside the time one page takes to draw starts a second drawing on
+    // the same canvas. The library refuses that outright, so the earlier drawing is cancelled
+    // (by this effect's clean-up) and the new one waits until it has actually stopped.
+    const controller = new AbortController();
     let rendered: { dispose: () => void } | null = null;
+    const before = lastDraw.current;
     setDrawing(true);
+    setPageFailed(false);
 
-    void (async () => {
+    const draw = (async () => {
+      await before;
+      if (controller.signal.aborted) {
+        return;
+      }
       try {
         const result = await pdf.renderPage({
           page: Math.min(page, pdf.pageCount),
           canvas,
           textLayer,
           width: Math.max(200, frameWidth * zoom),
+          signal: controller.signal,
         });
-        if (stale) {
+        if (controller.signal.aborted) {
           result.dispose();
           return;
         }
         rendered = result;
         setDrawing(false);
       } catch {
-        if (!stale) {
-          setFailed(true);
+        if (!controller.signal.aborted) {
+          setPageFailed(true);
           setDrawing(false);
         }
       }
     })();
+    lastDraw.current = draw;
 
     return () => {
-      stale = true;
+      controller.abort();
       rendered?.dispose();
     };
-  }, [pdf, page, zoom, frameWidth]);
+  }, [pdf, page, zoom, frameWidth, drawAttempt]);
 
   useEffect(() => onPageChange?.(page), [page, onPageChange]);
 
@@ -165,14 +185,38 @@ export default function PdfView({
     };
   }, [onSelect, publishSelection]);
 
-  if (failed) {
-    return <Alert type="warning" showIcon title={t('documents.viewer.pdfFailed')} />;
+  if (loadFailed) {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title={t('documents.viewer.pdfFailed')}
+        action={
+          <Button size="small" onClick={() => setLoadAttempt((n) => n + 1)}>
+            {t('common.retry')}
+          </Button>
+        }
+      />
+    );
   }
 
   const pageCount = pdf?.pageCount ?? null;
 
   return (
     <Flex vertical gap={12} align="center" style={{ width: '100%', minWidth: 0 }}>
+      {pageFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ width: '100%' }}
+          title={t('documents.viewer.pageFailed')}
+          action={
+            <Button size="small" onClick={() => setDrawAttempt((n) => n + 1)}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
       <div ref={frameRef} style={{ position: 'relative', width: '100%', minWidth: 0 }}>
         {(pdf === null || drawing) && (
           <Flex justify="center" style={{ padding: 24 }}>

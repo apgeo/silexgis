@@ -122,6 +122,21 @@ public sealed record PhotoQuery(
     string? Search,
     Guid? ExpeditionId);
 
+public sealed class PhotoQueryValidator : AbstractValidator<PhotoQuery>
+{
+    /// <summary>The longest text any of the gallery's free-text filters takes.</summary>
+    public const int MaxTextLength = 200;
+
+    public PhotoQueryValidator()
+    {
+        // Each is matched as a pattern against every photograph the caller may read; a bound
+        // keeps a single query string from being the most expensive thing the gallery is asked.
+        RuleFor(x => x.Search).MaximumLength(MaxTextLength);
+        RuleFor(x => x.Camera).MaximumLength(MaxTextLength);
+        RuleFor(x => x.Bbox).MaximumLength(MaxTextLength);
+    }
+}
+
 /// <summary>Editing what a photograph says about itself.</summary>
 public sealed record PhotoCreditWriteRequest(
     Guid? PhotographerCaverId,

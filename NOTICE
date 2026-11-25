@@ -4,6 +4,14 @@ Copyright (c) 2014-2026 Silex Brașov speleo club and SilexGIS contributors
 This product is licensed under the GNU Affero General Public License v3.0 or later
 (AGPL-3.0-or-later). See the LICENSE file for the full text.
 
+One exception: the published-trip fold — the source files compiled into
+client/dist-trips/silexgis-trips.js by `npm run build:trips` (client/src/publictrips/
+and the files it imports, each marked "SPDX-License-Identifier: AGPL-3.0-or-later OR
+GPL-2.0-or-later") — is also offered under the GNU General Public License v2.0 or later,
+at the recipient's choice, so that the compiled file can ship inside GPL-2.0-or-later
+software such as a WordPress plugin. client/src/publictrips/bundle.test.ts fails when a
+file without that header is compiled into it.
+
 ================================================================================
 Bundled third-party components
 ================================================================================
@@ -12,19 +20,30 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
-ThIDE — Therion.Blender, Therion.Build, Therion.Core,
-        Therion.Processing.Abstractions, Therion.Semantics, Therion.Syntax,
-        Therion.Workspace
+ThIDE — Therion.Blender, Therion.Build, Therion.Cave3D, Therion.CaveGeometry,
+        Therion.Core, Therion.Orientation, Therion.Processing.Abstractions,
+        Therion.Semantics, Therion.Syntax, Therion.Workspace
 --------------------------------------------------------------------------------
-Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d),
+Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d)
+and the survey model they produce, the centreline graph built from that model,
 the reader for what a Therion compilation printed while it ran, the runner that
 starts a Therion compilation, and the builder of a compilable Therion project
-around a survey uploaded from a field device. Not vendored:
+around a survey uploaded from a field device, and the orientation statistics of
+structural readings (poles, the equal-area net, Kamb density contours and
+Watson's U-squared test), and the scene plan a Blender render is described by,
+with the writer of a render bundle. Not vendored:
 the source is a Git submodule at server/external/ThIDE, pinned to the commit
 below, and the built assemblies are redistributed inside the server image.
 
+A render bundle is a zip this application hands to a signed-in reader, who
+renders it with Blender on a machine of their own. It carries ThIDE's player —
+Python source held inside the Therion.Blender assembly — unmodified, with the
+text of the MPL-2.0 (LICENSE) and a note of where its source is (NOTICE) written
+into the bundle by ThIDE's own writer. This application does not run the player
+and does not start Blender.
+
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    798482bde2b479dd237be8261a96da327f7cb0bd
+  Commit:    e02ec92cd81fa936bd804aa2b1a7d103f813f290
   License:   MPL-2.0 — see the LICENSE file beside each module under
              server/external/ThIDE/src/
 
@@ -109,12 +128,24 @@ Test fixture only: nothing here is built into a shipped artifact.
   Checksum:  sha256 6147b6d027aa5b51da88c56a8d1ced1c3586e1ca47ac3be16885f40fc1d9fc78
 
 --------------------------------------------------------------------------------
-Feature symbol icons
+Map symbols
 --------------------------------------------------------------------------------
-The 19 PNG symbols under client/public/feature_symbols/ (used to render surface
-features on the map). These originate from earlier SilexGIS versions.
+The symbol files under client/public/feature_symbols/ (surface features and cave
+entrances on the map and in the 3D view). Per-file sources, commits and the way each
+was prepared: client/public/feature_symbols/PROVENANCE.md
 
-  Provenance and license status: client/public/feature_symbols/PROVENANCE.md
+  - 19 PNG: the SilexGIS / Silex Brașov speleological set, from earlier SilexGIS
+    versions (project license; owner sign-off pending, see PROVENANCE.md).
+  - osm_*.svg (5): OpenStreetMap Carto, https://github.com/gravitystorm/openstreetmap-carto
+    License: CC0 1.0 Universal. The drawn cave-entrance shape in
+    client/src/map/symbolLibrary.ts is that project's natural/cave.svg outline.
+  - qgis_*.svg (19): QGIS, https://github.com/qgis/QGIS (images/svg)
+    License: GPL-2.0-or-later, used under GPL-3.0 —
+    client/public/feature_symbols/LICENSE-GPL-3.0.txt
+  - fgdc_*.svg (18): FGDC Digital Cartographic Standard for Geologic Map
+    Symbolization (USGS, a U.S. Government work), SVG renditions from
+    https://github.com/rodreras/geologic_icons
+    License: GPL-3.0 — client/public/feature_symbols/LICENSE-GPL-3.0.txt
 
 --------------------------------------------------------------------------------
 Noto Sans (the labels of vector map backgrounds)

@@ -28,6 +28,7 @@ import {
   publicTripPath,
 } from '../../pages/public/publicTripEmbed.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 interface Props {
   tripLogId: string;
@@ -439,7 +440,7 @@ export default function TrackingSharePanel({
                   value={snippet}
                   rows={4}
                   onFocus={(event) => event.target.select()}
-                  style={{ fontFamily: 'monospace', fontSize: 12 }}
+                  style={{ fontFamily: 'monospace', fontSize: FONT_SIZE.sm }}
                   data-testid="trip-tracking-publish-snippet"
                 />
                 <Button

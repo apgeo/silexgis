@@ -2,8 +2,8 @@
 import type { TFunction } from 'i18next';
 import type { CaveViewer, CaveViewLabelText, CaveViewLiveMarker, CaveViewRef } from '../loadCaveView.ts';
 import { syncLiveMarkers, type DrawnMarker } from '../liveMarkerSync.ts';
-import { openMovieEncoder, type MovieEncoder } from './encode/movieEncoder.ts';
-import { isMovieSinkMismatch, type MovieSink } from './encode/movieSink.ts';
+import { openMovieEncoder, type MovieEncoder } from '../../movie/encode/movieEncoder.ts';
+import { isMovieSinkMismatch, type MovieSink } from '../../movie/encode/movieSink.ts';
 import { drawMovieCaptions, movieCaptionColors, movieCaptionsAt } from './movieCaptions.ts';
 import { movieMarkerId, movieParty, type MovieParty, type MovieTripData } from './movieParty.ts';
 import {

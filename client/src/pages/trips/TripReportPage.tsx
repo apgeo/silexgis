@@ -20,6 +20,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { ReadFailedLine } from '../../components/ReadFailedAlert.tsx';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
@@ -64,6 +65,8 @@ import '../../components/trips/TripReport.css';
 import { reportPdfRefusal, type ReportFormat } from '../../api/download.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
+import TripReadFailed from './TripReadFailed.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 
 /** How many photographs a write-up carries. The rest are one click away in the gallery. */
@@ -155,7 +158,7 @@ export default function TripReportPage() {
   const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
   const coordinateSettings = useUiPrefsStore((s) => s.coordinateSettings);
   const { id } = useParams<{ id: string }>();
-  const { data: trip, isPending } = useTripLog(id);
+  const { data: trip, isPending, isError, error, refetch } = useTripLog(id);
   const { data: tripTypes } = useTripTypes();
   const { data: cavingGroups } = useCavingGroups();
   const { data: participantRoles } = useTripParticipantRoles();
@@ -199,6 +202,13 @@ export default function TripReportPage() {
     }),
     [tripType],
   );
+
+  // A refused or failed read settles as an error with no trip, and without this the spinner below
+  // would stay for good. The trip page draws the same answer, from the same component, so the
+  // write-up of a trip that is gone says what the trip itself says.
+  if (readFailureEndsPage(isError, trip, error)) {
+    return <TripReadFailed error={error} onRetry={() => void refetch()} />;
+  }
 
   if (isPending || !trip) {
     return (
@@ -548,7 +558,14 @@ export default function TripReportPage() {
 
         {mayReadPhotos && (
           <Part title={t('trips.gallery')}>
-            {photosQuery.isPending ? (
+            {photosQuery.isError && photosQuery.data === undefined ? (
+              <ReadFailedLine
+                error={photosQuery.error}
+                onRetry={photosQuery.refetch}
+                text={t('trips.photographsUnread')}
+                testId="trip-report-photographs-unread"
+              />
+            ) : photosQuery.isPending ? (
               <Spin />
             ) : photos.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('trips.noPhotographs')} />
@@ -568,7 +585,7 @@ export default function TripReportPage() {
                         <img src={photo.thumbnailUrl} alt={photo.credit.caption ?? photo.title} />
                       )}
                       <figcaption>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" className="hint-text">
                           {[photo.credit.caption ?? photo.title, photo.credit.photographerName]
                             .filter(Boolean)
                             .join(' — ')}

@@ -2,9 +2,20 @@
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+
+// A read of the list that did not land, switched on by the test that needs it.
+const listRead = vi.hoisted(() => {
+  const refetch = vi.fn();
+  return {
+    failed: false,
+    refetch,
+    answer: () => ({ data: undefined, isLoading: false, isError: true, error: new TypeError('offline'), refetch }),
+  };
+});
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { ResLinkRelationType } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
@@ -43,7 +54,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCapabilities: () => ({
     data: { domains: {}, isFullAdmin: groups.some((group) => group.slug === 'full-administrators') },
   }),
-  useResLinkRelationTypes: () => ({ data: relationTypes, isLoading: false }),
+  useResLinkRelationTypes: () => (listRead.failed ? listRead.answer() : { data: relationTypes, isLoading: false }),
   useCreateResLinkRelationType: () => ({ mutateAsync: createMutate, isPending: false }),
   useUpdateResLinkRelationType: () => ({ mutateAsync: updateMutate, isPending: false }),
   useDeleteResLinkRelationType: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -179,5 +190,39 @@ describe('RelationTypesPage', () => {
     fireEvent.click(confirm[confirm.length - 1]);
 
     await waitFor(() => expect(deleteMutate).toHaveBeenCalledWith(7));
+  });
+
+  it('Save with nothing written marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    createMutate.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show();
+      fireEvent.click(screen.getByRole('button', { name: /Add a relation/ }));
+      const name = await screen.findByLabelText('Reads as');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      await afterRejectionsAreReported();
+      expect(createMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+});
+
+describe('a failed read of the list', () => {
+  it('says the read failed instead of showing an empty list, and offers Retry', () => {
+    listRead.failed = true;
+    try {
+      show();
+      expect(screen.getByTestId('relation-types-load-failed')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(listRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      listRead.failed = false;
+      listRead.refetch.mockReset();
+    }
   });
 });

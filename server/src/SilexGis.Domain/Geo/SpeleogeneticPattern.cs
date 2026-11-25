@@ -233,6 +233,8 @@ public sealed record PatternSuggestion(
 /// <param name="ExtremityCount">Reduced-network nodes with exactly one passage.</param>
 /// <param name="Clustering">How often two passages from one junction are themselves joined.</param>
 /// <param name="OrientationEntropy">How evenly the bearings are spread, nought to one.</param>
+/// <param name="OrientationSampleCount">How many bearings the spread was taken over. Null when
+/// not known, which leaves the spread to be read as given.</param>
 /// <param name="HasAltitudes">Whether the line work carried a third coordinate. When false every
 /// vertical figure below must be null, and the profile rules say they could not be assessed rather
 /// than reporting a level cave.</param>
@@ -259,7 +261,8 @@ public sealed record PatternEvidence(
     double? MaximumDipDegrees = null,
     double? MedianWidthHeightRatio = null,
     int? DroppedShotCount = null,
-    int? MergedStationCount = null);
+    int? MergedStationCount = null,
+    int? OrientationSampleCount = null);
 
 /// <summary>
 /// The pattern classifier: rules over a cave's network and profile figures, producing a suggested
@@ -344,14 +347,26 @@ public static class SpeleogeneticPattern
     public const double TallSectionRatio = 0.7;
 
     /// <summary>
-    /// How many rules must have had figures to read before a pattern is named at all.
+    /// How many distinct figures the rules that could be assessed must have read between them
+    /// before a pattern is named at all.
     /// </summary>
     /// <remarks>
     /// One or two readings agreeing is not a classification, it is a coincidence with a trace
     /// attached — and a confident label on a cave nobody measured is worse than no label, because
-    /// the trace makes it look considered.
+    /// the trace makes it look considered. Counted in figures, not rules: the wide-section and the
+    /// tall-section rules both read the one width-over-height median, and counting them as two
+    /// would let a bearing spread and a single cross-section figure pass for three readings.
     /// </remarks>
-    public const int MinimumAssessableRules = 3;
+    public const int MinimumAssessableFigures = 3;
+
+    /// <summary>
+    /// The fewest bearings the bearing-spread rule is assessed on. Below it the rule cannot do
+    /// anything but fire: n bearings fill at most n of the rose's sectors, so the spread is at most
+    /// log(n) / log(sectors), and below this count that is under the concentration threshold
+    /// however evenly the passage points every way. Derived from the two, not chosen.
+    /// </summary>
+    public static readonly int MinimumBearingSamples =
+        (int)Math.Ceiling(Math.Pow(OrientationStatistics.BinCount, ConcentratedBearingsThreshold));
 
     private static readonly SpeleogeneticPatternKind[] Branching =
         [SpeleogeneticPatternKind.VadoseBranchwork, SpeleogeneticPatternKind.WaterTable];
@@ -395,6 +410,12 @@ public static class SpeleogeneticPattern
         var minimumDip = evidence.HasAltitudes ? evidence.MinimumDipDegrees : null;
         var maximumDip = evidence.HasAltitudes ? evidence.MaximumDipDegrees : null;
 
+        // Too few bearings to spread past the threshold is not a concentrated cave, it is a short one.
+        var orientationEntropy = evidence.OrientationSampleCount is { } bearingCount
+            && bearingCount < MinimumBearingSamples
+                ? null
+                : evidence.OrientationEntropy;
+
         var loopsPerNode = Ratio(evidence.CyclomaticNumber, evidence.ReducedNodeCount);
         var deadEndFraction = Ratio(evidence.ExtremityCount, evidence.ReducedNodeCount);
 
@@ -420,8 +441,8 @@ public static class SpeleogeneticPattern
                 evidence.Clustering > 0),
 
             Rule(PatternRule.BearingsAreConcentrated, Maze, weight: 1,
-                [new(PatternFigure.OrientationEntropy, evidence.OrientationEntropy)],
-                evidence.OrientationEntropy <= ConcentratedBearingsThreshold),
+                [new(PatternFigure.OrientationEntropy, orientationEntropy)],
+                orientationEntropy <= ConcentratedBearingsThreshold),
 
             Rule(PatternRule.PassageIsSteep, Vadose, weight: 2,
                 [new(PatternFigure.MeanAbsoluteDip, meanAbsoluteDip)],
@@ -454,6 +475,11 @@ public static class SpeleogeneticPattern
         };
 
         var assessable = rules.Count(r => r.Outcome != PatternRuleOutcome.NotAssessable);
+        var figuresRead = rules
+            .Where(r => r.Outcome != PatternRuleOutcome.NotAssessable)
+            .SelectMany(r => r.Figures.Select(f => f.Figure))
+            .Distinct()
+            .Count();
         var fired = rules.Count(r => r.Outcome == PatternRuleOutcome.Fired);
 
         var scores = Scored
@@ -466,7 +492,7 @@ public static class SpeleogeneticPattern
             .ToList();
 
         return new PatternSuggestion(
-            Winner(scores, assessable),
+            Winner(scores, figuresRead),
             evidence.Basis,
             evidence.Basis == SurveySegmentBasis.SkeletonHeuristic,
             scores,
@@ -485,9 +511,9 @@ public static class SpeleogeneticPattern
     /// a cave whose figures pull two ways is genuinely between two patterns and saying so is more
     /// use than picking one.
     /// </remarks>
-    private static SpeleogeneticPatternKind Winner(IReadOnlyList<PatternScore> scores, int assessable)
+    private static SpeleogeneticPatternKind Winner(IReadOnlyList<PatternScore> scores, int figuresRead)
     {
-        if (assessable < MinimumAssessableRules)
+        if (figuresRead < MinimumAssessableFigures)
         {
             return SpeleogeneticPatternKind.Insufficient;
         }

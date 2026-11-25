@@ -4,30 +4,46 @@ import { SearchOutlined } from '@ant-design/icons';
 import { App, AutoComplete, Input, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { isSettledRefusal } from '../../api/client.ts';
 import { useNominatim, useSearch, type FeatureKind } from '../../api/hooks.ts';
 import { featureDetailPath } from '../features/featureNavigation.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { flyTo } from '../../map/mapContext.ts';
 import SearchDocumentHit from './SearchDocumentHit.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 interface MapSearchProps {
   /** Fill the container rather than the fixed desktop width — the mobile search strip. */
   fullWidth?: boolean;
 }
 
+/** The entries that stand in for a read that failed; picking one asks again. */
+const SEARCH_RETRY = 'search:failed';
+const PLACES_RETRY = 'places:failed';
+
 /**
  * Unified search: internal features (every kind), trip logs and document text, plus Nominatim
  * geocoding. Internal results carry no coordinates — picking one navigates to the record's page
  * (entrances/centerlines resolve to their parent cave); only geocoded places move the map.
  */
+
 export default function MapSearch({ fullWidth = false }: MapSearchProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message } = App.useApp();
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query);
-  const { data: results } = useSearch(debounced);
-  const { data: places } = useNominatim(debounced);
+  const search = useSearch(debounced);
+  const geocode = useNominatim(debounced);
+  const results = search.data;
+  const places = geocode.data;
+  // A search that did not land is not an empty answer: an empty list reads as "this archive has
+  // nothing about that", which is a false thing to tell somebody who is looking for a cave. So a
+  // failed read with nothing held becomes an entry of its own that names the failure and, picked,
+  // asks again — unless the server refused the search, which asking again would only repeat.
+  const searchFailed = search.isError && results === undefined;
+  const searchRefused = searchFailed && isSettledRefusal(search.error);
+  const placesFailed = geocode.isError && places === undefined;
 
   // Documents are matched by what they say, so the group carries a snippet rather than a name,
   // and it is the one group with a total: the server pages it, and the number that comes back
@@ -72,7 +88,7 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       value: 'documents:no-text',
       disabled: true,
       label: (
-        <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'normal' }}>
+        <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, whiteSpace: 'normal' }}>
           {t('search.noTextLayerHint')}
         </Typography.Text>
       ),
@@ -82,7 +98,7 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
       value: 'documents:more',
       disabled: true,
       label: (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('search.moreDocuments', {
             shown: documents.items.length,
             total: documents.totalItems,
@@ -92,10 +108,22 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
     });
   }
 
+  const failure = (value: string, text: string, disabled = false) => ({
+    value,
+    disabled,
+    label: (
+      <Typography.Text type="warning" style={{ fontSize: 12, whiteSpace: 'normal' }} data-testid={value}>
+        {text}
+      </Typography.Text>
+    ),
+  });
+
   const options = [
     {
       label: t('search.features'),
-      options: (results?.features ?? []).map((feature) => ({
+      options: searchFailed
+        ? [failure(SEARCH_RETRY, searchRefused ? t('search.refused') : t('search.failed'), searchRefused)]
+        : (results?.features ?? []).map((feature) => ({
         value: `feature:${feature.kind}:${feature.id}`,
         // The server's context line — what it is and the cave or region it belongs to, as far as
         // this reader may read them — is the same one the object selector shows; the kind is
@@ -129,14 +157,25 @@ export default function MapSearch({ fullWidth = false }: MapSearchProps) {
     },
     {
       label: t('map.places'),
-      options: (places ?? []).map((place) => ({
-        value: `place:${place.place_id}`,
-        label: place.display_name,
-      })),
+      options: placesFailed
+        ? [failure(PLACES_RETRY, t('search.placesFailed'))]
+        : (places ?? []).map((place) => ({
+            value: `place:${place.place_id}`,
+            label: place.display_name,
+          })),
     },
   ].filter((group) => group.options.length > 0);
 
   const onSelect = (value: string) => {
+    // Asking again keeps what was typed: the question has not been answered yet.
+    if (value === SEARCH_RETRY) {
+      void search.refetch();
+      return;
+    }
+    if (value === PLACES_RETRY) {
+      void geocode.refetch();
+      return;
+    }
     setQuery('');
     if (value.startsWith('feature:')) {
       const [, kind, id] = value.split(':');

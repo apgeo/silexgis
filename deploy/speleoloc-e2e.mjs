@@ -264,7 +264,7 @@ function startServer(portArgs, logFile) {
  * the pipe fills, the server blocks on its next log line, and every request the tests make times
  * out against a server that looks alive.
  */
-function runFlutter({ flutter, appDir, files, baseUrl, timeoutMinutes, logFile }) {
+function runFlutter({ flutter, appDir, files, baseUrl, timeoutMinutes, logFile, onStart = () => {} }) {
   const args = ['test', '--reporter', 'json', '--concurrency', '1', ...files];
   console.log(`\n$ (in ${appDir}) ${flutter} ${args.join(' ')}`);
   return new Promise((done) => {
@@ -273,9 +273,14 @@ function runFlutter({ flutter, appDir, files, baseUrl, timeoutMinutes, logFile }
       cwd: appDir,
       // flutter is a batch file on Windows, which spawn only runs through a shell.
       shell: process.platform === 'win32',
+      // A group of its own, as the server's, so a timeout or a stop reaches the test processes
+      // flutter starts too. Killing flutter alone leaves them holding the output pipes, and the
+      // run then waits for a close that never comes.
+      detached: detachApi(),
       env: { ...process.env, [LIVE_SWITCH]: '1', SPELEO_LOC_SILEXGIS_URL: baseUrl },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    onStart(child);
     for (const stream of [child.stdout, child.stderr]) {
       stream.setEncoding('utf8');
       stream.on('data', (chunk) => chunks.push(chunk));
@@ -283,7 +288,7 @@ function runFlutter({ flutter, appDir, files, baseUrl, timeoutMinutes, logFile }
     let problem = null;
     const timer = setTimeout(() => {
       problem = `the test run did not finish within ${timeoutMinutes} minutes`;
-      child.kill();
+      killTree(child);
     }, timeoutMinutes * 60_000);
     child.on('error', (error) => { problem = `Could not run ${flutter}: ${error.message}`; });
     child.on('close', () => {
@@ -293,6 +298,11 @@ function runFlutter({ flutter, appDir, files, baseUrl, timeoutMinutes, logFile }
       done({ output, problem });
     });
   });
+}
+
+/** Stops a process and everything it started, at once: what is stopped here has already hung. */
+export function killTree(child, { platform = process.platform, ...hooks } = {}) {
+  stopApiTree(child, { platform, signalGroup: (pid) => process.kill(-pid, 'SIGKILL'), ...hooks });
 }
 
 async function main(options) {
@@ -361,7 +371,18 @@ async function main(options) {
     server.log.end();
     spawnSync(process.execPath, [DEV_SCRIPT, 'down', ...portArgs], { stdio: 'ignore' });
   };
-  process.on('SIGINT', () => { stopApiTree(server.child); process.exit(130); });
+  // Every way this run can be told to stop takes the server and the tests down with it: a
+  // server left behind holds its port, and the next run's port check then refuses for it.
+  let tests = null;
+  const stopOnSignal = (code) => () => {
+    if (tests) killTree(tests);
+    stopApiTree(server.child);
+    spawnSync(process.execPath, [DEV_SCRIPT, 'down', ...portArgs], { stdio: 'ignore' });
+    process.exit(code);
+  };
+  process.on('SIGINT', stopOnSignal(130));
+  process.on('SIGTERM', stopOnSignal(143));
+  process.on('SIGHUP', stopOnSignal(129));
 
   const setupProblem = await server.ready;
   if (setupProblem) {
@@ -371,7 +392,9 @@ async function main(options) {
 
   const { output, problem } = await runFlutter({
     flutter, appDir, files, baseUrl, timeoutMinutes, logFile: join(logDir, 'flutter.jsonl'),
+    onStart: (child) => { tests = child; },
   });
+  tests = null;
   await stopServer();
   const summary = summarizeFlutterJson(output);
   if (problem) {

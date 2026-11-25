@@ -572,7 +572,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
 
     /// <summary>
     /// Catalog ids for one cave, so the assertion never depends on how many rasters the
-    /// shared database happens to hold or on which page they land.
+    /// class's database happens to hold or on which page they land.
     /// </summary>
     private static async Task<List<Guid>> MapIdsOfCaveAsync(HttpClient client, Guid caveFeatureId)
     {

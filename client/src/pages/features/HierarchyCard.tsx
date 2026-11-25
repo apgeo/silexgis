@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { DeleteOutlined, EditOutlined, StarFilled } from '@ant-design/icons';
 import { App, Card, Flex, Modal, Radio, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ApiError } from '../../api/client.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import {
   useFeatureChildren,
   useFeatureParents,
@@ -14,6 +15,7 @@ import {
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../../components/useDiscardGuard.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 
 interface HierarchyCardProps {
@@ -57,9 +59,15 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
 
   const [editing, setEditing] = useState(false);
   const [rows, setRows] = useState<ParentRow[]>([]);
+  const requestDiscard = useDiscardGuard();
+  // The parents as the editor opened them, to tell an edited list from one only looked at.
+  const openedRows = useRef('');
+  const rowsPrint = (list: ParentRow[]) => JSON.stringify(list.map((r) => [r.parentId, r.isPrimary]));
 
   const openEditor = () => {
-    setRows((parents ?? []).map((p) => ({ parentId: p.id, name: p.name, isPrimary: p.isPrimary })));
+    const opened = (parents ?? []).map((p) => ({ parentId: p.id, name: p.name, isPrimary: p.isPrimary }));
+    openedRows.current = rowsPrint(opened);
+    setRows(opened);
     setEditing(true);
   };
 
@@ -105,13 +113,12 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
       setEditing(false);
       message.success(t('common.saved'));
     } catch (error) {
-      // The one refusal that is not worth retrying says why, in words; anything else is the
-      // general failure it always was.
-      message.error(
-        error instanceof ApiError && error.code === 'feature.parent_fixed'
-          ? t('features.parentFixed')
-          : t('common.saveFailed'),
-      );
+      // A refusal that retrying will not cure says why, in words; anything else is the general
+      // failure it always was. A stale version is answered by the application's conflict warning
+      // alone.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -190,9 +197,10 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
       <Modal
         title={t('features.editParents')}
         open={editing}
-        onCancel={() => setEditing(false)}
+        onCancel={() => requestDiscard(rowsPrint(rows) !== openedRows.current, () => setEditing(false))}
         onOk={() => void onSave()}
         confirmLoading={setParents.isPending}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         destroyOnHidden
       >
         <Table<ParentRow>

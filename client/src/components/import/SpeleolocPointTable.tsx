@@ -106,7 +106,7 @@ export default function SpeleolocPointTable({
         <Space orientation="vertical" size={0}>
           <Typography.Text>{point.placeTitle ?? t('speleolocImport.noPlaceTitle')}</Typography.Text>
           {point.placeDepthM !== null && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('speleolocImport.placeDepth', { depth: point.placeDepthM })}
             </Typography.Text>
           )}
@@ -148,12 +148,12 @@ export default function SpeleolocPointTable({
                       {t('speleolocImport.clearStation')}
                     </Button>
                   </Space>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {t('speleolocImport.namedStationHint')}
                   </Typography.Text>
                 </>
               ) : (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t('speleolocImport.unresolvedHint')}
                 </Typography.Text>
               )}
@@ -187,7 +187,7 @@ export default function SpeleolocPointTable({
                 })}`,
               }))}
             />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('speleolocImport.proposedFrom', { depth: point.placeDepthM ?? 0 })}
             </Typography.Text>
           </Space>
@@ -216,7 +216,7 @@ export default function SpeleolocPointTable({
       key: 'note',
       render: (_, point) =>
         point.notes ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {point.notes}
           </Typography.Text>
         ) : null,

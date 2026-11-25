@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type {
   ExpeditionRoster,
@@ -366,5 +367,29 @@ describe('keeping a camp’s roster', () => {
 
     expect(screen.getByTestId('expedition-roster-withheld')).toBeTruthy();
     expect(screen.queryByTestId('expedition-stay-add')).toBeNull();
+  });
+});
+
+describe('a stay removal that was not carried out', () => {
+  async function removeTheStay() {
+    showToAKeeper();
+    fireEvent.click(screen.getByTestId('expedition-stay-remove-1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(removeStay).toHaveBeenCalled());
+  }
+
+  it('says the caller may not change the camp when the server refuses them', async () => {
+    removeStay.mockRejectedValue(new ApiError(403, 'acl.forbidden'));
+    await removeTheStay();
+
+    expect(await screen.findByText(i18n.t('expeditions.problems.forbidden'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
+  it('says the removal failed, not a save, when the server gave no reason it has words for', async () => {
+    removeStay.mockRejectedValue(new Error('connection lost'));
+    await removeTheStay();
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
   });
 });

@@ -80,6 +80,14 @@ describe('what is filed against a camp', () => {
     expect(screen.getByText('Bihor summer camp')).toBeTruthy();
   });
 
+  it('says a failed read of the albums failed, rather than that the camp has none', () => {
+    albumsSpy.mockReturnValue({ data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: vi.fn() });
+    show();
+
+    expect(screen.queryByText(/No albums about this camp yet/)).toBeNull();
+    expect(screen.getByTestId('expedition-albums-load-failed')).toBeTruthy();
+  });
+
   it('says an empty camp has no albums yet, rather than showing nothing at all', () => {
     albumsSpy.mockReturnValue({ data: { items: [], page: 1, pageSize: 100, totalItems: 0 } });
     show();

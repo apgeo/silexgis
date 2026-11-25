@@ -10,6 +10,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Map;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Basemap;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -88,7 +89,13 @@ public sealed record SharedViewBackgroundDto(
 
 /// <param name="Entrances">The cave entrances overlay is drawn: the view had it on, and the installation allows it.</param>
 /// <param name="Features">The surface features overlay is drawn, on the same two conditions.</param>
-public sealed record SharedViewOverlaysDto(bool Entrances, bool Features);
+/// <param name="EntranceSymbol">
+/// The installation's entrance marker, so the link draws entrances the way the map does. Not
+/// information about any cave: the same answer for every link and every reader.
+/// </param>
+/// <param name="ApproximateEntranceSymbol">The marker of an entrance shown only approximately.</param>
+public sealed record SharedViewOverlaysDto(
+    bool Entrances, bool Features, string EntranceSymbol, string ApproximateEntranceSymbol);
 
 public sealed record MapViewWriteRequest(
     string Name,
@@ -104,6 +111,12 @@ public sealed class MapViewWriteRequestValidator : AbstractValidator<MapViewWrit
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Description).MaximumLength(2000);
+        RuleFor(x => x.Visibility).IsInEnum();
+        // Club visibility says "the club this belongs to may read it", so it needs a club to
+        // name; without one it would be an audience that admits nobody, silently.
+        RuleFor(x => x.CavingGroupId).NotNull()
+            .When(x => x.Visibility == Visibility.CavingGroup)
+            .WithMessage("Caving-group visibility needs a caving group.");
         RuleFor(x => x.Config)
             .Must(c => c.ValueKind == JsonValueKind.Object)
             .WithMessage("Config must be a JSON object.");
@@ -161,9 +174,12 @@ public static class MapViewEndpoints
 
         var views = await db.MapViews.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.MapViews)
-            .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name)
             .ToListAsync(ct);
-        return TypedResults.Ok(views.Select(ToDto).ToList());
+        // Ordered by what this reader is told, so another owner's home never leads the list.
+        return TypedResults.Ok(views
+            .Select(x => ToDto(x, ctx.UserId))
+            .OrderByDescending(x => x.IsHome).ThenBy(x => x.Name, StringComparer.InvariantCulture)
+            .ToList());
     }
 
     private static async Task<Results<Created<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -199,7 +215,7 @@ public static class MapViewEndpoints
         view.IsHome = request.IsHome;
         db.MapViews.Add(view);
         await SaveWithHomeAsync(db, view, ownerChoosesHome: true, ct);
-        return TypedResults.Created($"/api/v1/map-views/{view.Id}", ToDto(view));
+        return TypedResults.Created($"/api/v1/map-views/{view.Id}", ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<Ok<MapViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -249,7 +265,7 @@ public static class MapViewEndpoints
         }
 
         await SaveWithHomeAsync(db, view, ownerChoosesHome, ct);
-        return TypedResults.Ok(ToDto(view));
+        return TypedResults.Ok(ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -304,7 +320,7 @@ public static class MapViewEndpoints
         // Idempotent: an existing token is reused so shared links stay stable.
         view.ShareToken ??= Guid.NewGuid();
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(ToDto(view));
+        return TypedResults.Ok(ToDto(view, ctx.UserId));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> UnshareAsync(
@@ -336,6 +352,7 @@ public static class MapViewEndpoints
         SilexGisDbContext db,
         IOptions<MapOptions> mapOptions,
         BasemapStore basemap,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         var view = await db.MapViews.AsNoTracking().FirstOrDefaultAsync(x => x.ShareToken == token, ct);
@@ -348,8 +365,12 @@ public static class MapViewEndpoints
         // least-privileged reader there is; this answer only says which of them to ask, and where.
         var config = SharedViewConfig.Read(view.Config);
         var dataOn = mapOptions.Value.SharedViewData;
+        var symbols = await settings.GetMapSymbolsAsync(ct);
         var overlays = new SharedViewOverlaysDto(
-            dataOn && config.EntrancesVisible, dataOn && config.SurfaceFeaturesVisible);
+            dataOn && config.EntrancesVisible,
+            dataOn && config.SurfaceFeaturesVisible,
+            symbols.EntranceSymbol,
+            symbols.ApproximateEntranceSymbol);
         var anyAccount = await AccessContextResolver.ResolveForAnyAccountAsync(db, ct);
         var camera = config.Camera;
         var reach = (overlays.Entrances || overlays.Features) && camera is not null ? camera.Reach : null;
@@ -465,8 +486,8 @@ public static class MapViewEndpoints
         await transaction.CommitAsync(ct);
     }
 
-    private static MapViewDto ToDto(MapView x) => new(
+    private static MapViewDto ToDto(MapView x, Guid readerId) => new(
         x.Id, x.Name, x.Description,
         JsonSerializer.Deserialize<JsonElement>(x.Config),
-        x.ShareToken, x.IsHome, x.OwnerUserId, x.CavingGroupId, x.Visibility, x.CreatedAt, x.UpdatedAt);
+        x.ShareToken, SavedViewRules.IsHomeOf(x.IsHome, x.OwnerUserId, readerId), x.OwnerUserId, x.CavingGroupId, x.Visibility, x.CreatedAt, x.UpdatedAt);
 }

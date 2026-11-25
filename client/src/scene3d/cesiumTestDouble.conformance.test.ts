@@ -56,6 +56,7 @@ const TEST_ONLY_MEMBERS = new Set([
   'Cesium3DTileset.static:isWaitingFor',
   'Cesium3DTileset.static:forget',
   'Cesium3DTileset.static:waiting',
+  'TerrainPicker.proto:finishSplits',
 ]);
 
 const BUILT_IN_FUNCTION_KEYS = new Set(['length', 'name', 'prototype']);

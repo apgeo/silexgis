@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { App, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -38,6 +39,7 @@ import SurveyModelPlacementModal, { type PlacementChange } from './SurveyModelPl
 import SurveyModelEstimatedPassagesModal from './SurveyModelEstimatedPassagesModal.tsx';
 import { formatKm, formatPassageLength, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What each format is called in the list. The two line-plot names are product names and read the
@@ -65,11 +67,16 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const { data: models } = useSurveyModels(caveId);
+  const { data: models, isError: modelsFailed, error: modelsError, refetch: refetchModels } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
   const makeCurrent = useMakeSurveyModelCurrent();
   const readAgain = useReadSurveyModelAgain();
-  const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
+  // Held by id and read off the list on every render, never kept as the row it was opened from:
+  // the list is asked again every few minutes because each model's address is signed for only
+  // ten, and a viewer left open past that reads the file again (another tab, a retry) through
+  // whatever address it was handed. A model gone from the list closes the viewer.
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const viewing = viewingId === null ? null : (models?.find((m) => m.id === viewingId) ?? null);
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -95,7 +102,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
     return (
       <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-estimated-note-${model.id}`}>
         {drawn > 0 ? (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          <Typography.Text type="warning" className="hint-text">
             <span
               aria-hidden
               style={{
@@ -114,7 +121,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             })}
           </Typography.Text>
         ) : (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('surveyModels.estimated.unsized', { length, count: unsizedLegs })}
           </Typography.Text>
         )}
@@ -149,11 +156,11 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
     return (
       <Flex vertical gap={2} align="flex-start" data-testid={`survey-model-placement-note-${model.id}`}>
         {typeof model.placementOffByKm === 'number' && (
-          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+          <Typography.Text type="warning" className="hint-text">
             {t('surveyModels.placement.far', { km: formatKm(model.placementOffByKm) })}
           </Typography.Text>
         )}
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {epsg === null
             ? t('surveyModels.placement.suggestLocal')
             : typeof model.suggestedOffByKm !== 'number'
@@ -190,7 +197,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           <Tag color="error">{t('surveyModels.statusValues.failed')}</Tag>
           {/* The server's own words: it knows why this file could not be read, and no phrase
               written here in advance could say it as precisely. */}
-          <Typography.Text type="danger" style={{ fontSize: 12 }}>
+          <Typography.Text type="danger" className="hint-text">
             {model.processingError ??
               t(scan ? 'surveyModels.scanFailed' : walls ? 'surveyModels.conversionFailed' : 'surveyModels.readingFailed')}
           </Typography.Text>
@@ -202,7 +209,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       return (
         <Flex vertical gap={2}>
           <Tag color="processing">{t(`surveyModels.statusValues.${model.status}`)}</Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t(scan ? 'surveyModels.scanProcessing' : walls ? 'surveyModels.converting' : 'surveyModels.reading')}
           </Typography.Text>
         </Flex>
@@ -220,13 +227,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         )}
         {model.triangleCount !== null && (
           <Flex gap={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('surveyModels.triangles', { count: model.triangleCount })}
             </Typography.Text>
             {/* The bytes the scene will download, which is what a viewer on a slow link wants
                 to know; the triangle count alone says nothing about that. */}
             {model.meshSizeBytes !== null && (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" className="hint-text">
                 {formatSize(model.meshSizeBytes)}
               </Typography.Text>
             )}
@@ -237,13 +244,13 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             what it was made from decides how far it can be trusted — only what the survey
             itself measured or drew is in it. */}
         {!walls && model.triangleCount !== null && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('surveyModels.wallsBuilt')}
           </Typography.Text>
         )}
         {model.sourcePrecisionLost && (
           <Tooltip title={t('surveyModels.precisionLostHint')}>
-            <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            <Typography.Text type="warning" className="hint-text">
               {t('surveyModels.precisionLost')}
             </Typography.Text>
           </Tooltip>
@@ -259,7 +266,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       title={t('surveyModels.title')}
       style={{ marginTop: 16 }}
       extra={
-        canEdit && (
+        // Offered once the list has been read: adding under a list that was never read invites
+        // a second copy of something already there.
+        canEdit && models !== undefined && (
           <Flex gap={8} wrap>
             <Button size="small" icon={<UploadOutlined />} onClick={() => setUploading(true)}>
               {t('surveyModels.upload')}
@@ -278,13 +287,22 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         )
       }
     >
+      <ReadFailedAlert
+        error={modelsError}
+        isError={modelsFailed}
+        held={models !== undefined}
+        onRetry={refetchModels}
+        title={t('surveyModels.loadFailed')}
+        testId="survey-models-load-failed"
+      />
       <Table<SurveyModelInfo>
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="small"
         dataSource={models}
         pagination={false}
-        locale={{ emptyText: t('surveyModels.empty') }}
+        // Said only after a read that landed: a failed one is named above, and is not an empty list.
+        locale={{ emptyText: modelsFailed ? <span /> : t('surveyModels.empty') }}
         columns={[
           {
             title: t('caves.name'),
@@ -325,7 +343,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                 )}
                 {surveyModelReadableByViewer(model) && (
                   <>
-                    <Button size="small" icon={<EyeOutlined />} onClick={() => setViewing(model)}>
+                    <Button size="small" icon={<EyeOutlined />} onClick={() => setViewingId(model.id)}>
                       {t('surveyModels.view')}
                     </Button>
                     {/* The same model in the two other places it can be looked at. Behind the same
@@ -464,7 +482,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       {(models?.length ?? 0) > 0 && (
         <Typography.Paragraph
           type="secondary"
-          style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}
+          style={{ fontSize: FONT_SIZE.sm, marginTop: 8, marginBottom: 0 }}
         >
           {t('surveyModels.currentHint')}
         </Typography.Paragraph>
@@ -499,7 +517,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         />
       )}
 
-      <SurveyModelViewerModal model={viewing} onClose={() => setViewing(null)} />
+      <SurveyModelViewerModal model={viewing} onClose={() => setViewingId(null)} />
       <LazyTrackingMovieDialog surveyModelId={movieModelId} onClose={() => setMovieModelId(null)} />
     </Card>
   );

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../i18n';
+import i18n from '../../../i18n';
 import { ApiError } from '../../../api/client.ts';
 import type { RasterMapInfo } from '../../../api/hooks.ts';
 import { cornersToPlacement, type Corners } from '../../../geodata/placement/placement.ts';
@@ -26,6 +26,9 @@ const live = vi.hoisted(() => ({
   systems: undefined as unknown,
   stations: undefined as unknown,
   background: null as unknown,
+  /** Whether the dialog's read of the map, while it watches it publish, failed. */
+  watchFailed: false,
+  refetchWatched: vi.fn(),
 }));
 
 vi.mock('../../../api/hooks.ts', () => ({
@@ -36,7 +39,11 @@ vi.mock('../../../api/hooks.ts', () => ({
   fetchRasterAnnotation: vi.fn(),
   useMapLayers: () => ({ data: [] }),
   usePlacementSystems: () => ({ data: live.systems }),
-  useRasterMap: (_id: string, watch: boolean) => ({ data: watch ? live.watched : undefined }),
+  useRasterMap: (_id: string, watch: boolean) => ({
+    data: watch ? live.watched : undefined,
+    isError: watch && live.watchFailed,
+    refetch: live.refetchWatched,
+  }),
   useSheetStationPoints: (_id: string, enabled: boolean) => ({ data: enabled ? live.stations : undefined }),
 }));
 
@@ -202,6 +209,8 @@ beforeEach(() => {
   live.systems = undefined;
   live.stations = undefined;
   live.background = null;
+  live.watchFailed = false;
+  live.refetchWatched.mockReset();
   onClose.mockReset();
 });
 
@@ -288,6 +297,22 @@ describe('the placement editor', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  /**
+   * The dialog learns that the map was published only by reading it again. When that read does not
+   * land, a spinner that goes on saying "placing the map" says something nobody knows; the dialog
+   * says the read failed and offers to read again.
+   */
+  it('says when it cannot read whether the map was published, and offers Retry', async () => {
+    live.watched = undefined;
+    live.watchFailed = true;
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('placement-save'));
+    expect(await screen.findByTestId('placement-watch-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(live.refetchWatched).toHaveBeenCalledTimes(1);
+  });
+
   it('goes back to editing, with the reason, when publishing fails', async () => {
     live.watched = sheet({ status: 'unplaced', processingError: 'The placement folds the sheet over itself.' });
     show();
@@ -333,7 +358,9 @@ describe('the placement editor', () => {
     fireEvent.click(screen.getByText('Two points'));
     expect(screen.getByTestId('fake-sheet')).toBeInTheDocument();
     expect(screen.getByTestId('placement-save')).toBeDisabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(1);
   });
 });
@@ -364,7 +391,9 @@ describe('the placement editor with control points', () => {
     await addTyped(0, 24.001, 45.5015);
     await addTyped(1, 24.003, 45.5015);
     expect(screen.getByTestId('placement-too-few')).toHaveTextContent('Affine needs at least 3 complete points; there are 2.');
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(1);
     // The third point's ground half is chosen on the map.
     fireEvent.click(screen.getByTestId('fake-sheet-pick'));
@@ -391,7 +420,9 @@ describe('the placement editor with control points', () => {
       'Perspective needs at least 4 complete points; there are 3.',
     );
     expect(screen.getByTestId('placement-save')).toBeDisabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    // Nothing is scheduled at all for an arrangement that cannot be previewed: the state says so at
+    // once, where a preview on its way would read "pending" — no wait on the clock is needed.
+    expect(screen.getByTestId('placement-preview-state')).toHaveAttribute('data-state', 'idle');
     expect(preview).toHaveBeenCalledTimes(asked);
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Transformation' }));
     fireEvent.click(await screen.findByText('Thin-plate spline — at least 3 points'));
@@ -527,5 +558,53 @@ describe('the placement editor and what the installation knows', () => {
     show(unplaced());
     fireEvent.click(screen.getByText('Control points'));
     expect(screen.queryByTestId('placement-use-stations')).toBeNull();
+  });
+});
+
+describe('the placement editor and work not yet saved', () => {
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  const closeCross = () => fireEvent.click(document.querySelector('.ant-modal-close') as HTMLElement);
+
+  it('closes at once when only the starting corners it chose itself are there', async () => {
+    show(sheet({ status: 'unplaced', placement: null, placementSource: null }));
+    await waitFor(() => expect(preview).toHaveBeenCalled());
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before Cancel throws away a moved corner, and closes only on the answer', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    cancel();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('discard-confirm'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('asks the same of the close cross and Escape, and is not closed by a click beside it', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(screen.queryAllByText('Discard your changes?')).toHaveLength(0);
+    closeCross();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not ask once the placement was saved', async () => {
+    show();
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('fake-drag'));
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByTestId('placement-save'));
+    await screen.findByTestId('placement-publishing');
+    closeCross();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

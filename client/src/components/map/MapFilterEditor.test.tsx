@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument } from '../../filters/types.ts';
 import type { SpatialSources } from '../filters/spatialSources.ts';
 import type { MapFilter } from '../../map/mapFilters.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
+const createSpy = vi.hoisted(() => vi.fn());
 const savedFilterId = '0e6f2c4a-5b1d-4c39-9b7e-2f8a1d3c4e5f';
 const otherWorldId = '1f7a3d5b-6c2e-4d4a-8c8f-3a9b2e4d5f60';
 const storedDocument: FilterDocument = withWhere(emptyDocument(['feature']), 'feature', {
@@ -20,7 +23,7 @@ vi.mock('../../api/hooks/savedFilters.ts', () => ({
       { id: otherWorldId, name: 'About trips', state: 'ok', document: emptyDocument(['tripLog']) },
     ],
   }),
-  useCreateSavedFilter: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSavedFilter: () => ({ mutateAsync: createSpy, isPending: false }),
   documentOf: (f: { document: unknown }) => f.document ?? null,
   appliesTo: (f: { state: string; document: FilterDocument | null }, world: string) =>
     f.state !== 'unreadable' && f.document !== null && f.document.scope.some((s) => s.world === world),
@@ -140,4 +143,31 @@ it('does not offer to store a filter that holds a view or a drawn outline, and s
   render(<MapFilterEditor filter={{ kind: 'document', document: nearSelection }} onChange={vi.fn()} />);
   fireEvent.click(screen.getByTestId('map-filter-edit'));
   expect(screen.getByTestId('map-filter-save')).not.toBeDisabled();
+});
+
+it('Save with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+  createSpy.mockReset();
+  const unhandled: unknown[] = [];
+  const record = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', record);
+  try {
+    // The save dialog links to the saved-filter page, so it is drawn inside a router here.
+    render(
+      <MemoryRouter>
+        <MapFilterEditor filter={{ kind: 'document', document: storedDocument }} onChange={vi.fn()} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('map-filter-edit'));
+    fireEvent.click(screen.getByTestId('map-filter-save'));
+    const name = await screen.findByTestId('map-saved-filter-name');
+    const dialog = name.closest('.ant-modal') as HTMLElement;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+    await afterRejectionsAreReported();
+    expect(createSpy).not.toHaveBeenCalled();
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off('unhandledRejection', record);
+  }
 });

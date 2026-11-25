@@ -15,6 +15,13 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Caves;
 
+/// <summary>One entrance of a cave, its position as the caller may see it.</summary>
+/// <remarks>
+/// <c>Version</c> is filled on the rows of a cave's entrance listing: the entity tag of the
+/// entrance's feature row, which is what an entrance edit or delete is checked against, so an
+/// edit opened from a row sends it as <c>If-Match</c> without a read of its own. Answers about one
+/// entrance leave it empty and carry the version in their <c>ETag</c> header.
+/// </remarks>
 public sealed record EntranceDto(
     Guid Id,
     Guid CaveId,
@@ -26,7 +33,8 @@ public sealed record EntranceDto(
     string? Description,
     PositionQuality PositionQuality,
     DateOnly? SurveyedAt,
-    bool ApproximateLocation);
+    bool ApproximateLocation,
+    string? Version = null);
 
 public sealed record EntranceWriteRequest(
     string? Name,
@@ -46,6 +54,7 @@ public sealed class EntranceWriteRequestValidator : AbstractValidator<EntranceWr
         RuleFor(x => x.Description).MaximumLength(2000);
         RuleFor(x => x.EntranceTypeId).GreaterThan(0);
         RuleFor(x => x.PositionQuality).IsInEnum();
+        RuleFor(x => x.Altitude).InclusiveBetween(CaveMetricLimits.MinAltitude, CaveMetricLimits.MaxAltitude);
         RuleFor(x => x.Geom).NotNull();
         RuleFor(x => x.Geom.Type).Equal("Point").When(x => x.Geom is not null);
         RuleFor(x => x.Geom.Coordinates).Must(c => c is { Length: 2 or 3 })
@@ -114,11 +123,23 @@ public static class EntranceEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
+        // Readability is decided on the cave alone (see CavePartReads). The rows and their
+        // versions come from one snapshot: read apart, an edit landing between them would pair an
+        // entrance's older values with its newer version, and an edit opened from that row would be
+        // taken over the change it never saw.
+        await using var snapshot = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
         var rows = await CavePartReads.EntrancesAsync(db, caveId, ct);
 
-        var exact = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(e => e.Id)], ct);
+        List<Guid> ids = [.. rows.Select(e => e.Id)];
+        var versions = await ConcurrencySql.VersionsAsync(db, VersionedTable.Features, ids, ct);
+        var exact = await protection.ExactViewIdsAsync(ctx, ids, ct);
+        await snapshot.CommitAsync(ct);
         return TypedResults.Ok(rows
-            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), accessOptions.Value.LocationGridMeters))
+            .Select(e => ToDto(e.Feature, e, exact.Contains(e.Id), accessOptions.Value.LocationGridMeters) with
+            {
+                Version = versions.TryGetValue(e.Id, out var version) ? Concurrency.ETagOf(version) : null,
+            })
             .ToList());
     }
 
@@ -182,6 +203,9 @@ public static class EntranceEndpoints
             SurveyedAt = request.SurveyedAt,
         };
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         try
         {
             // Owner and caving-group binding default from the cave in the write service, and
@@ -199,6 +223,7 @@ public static class EntranceEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
 
         // Adding a further entrance is unrestricted even for callers without exact-location
         // access: the coordinates are theirs, so echoing them back discloses nothing. The main

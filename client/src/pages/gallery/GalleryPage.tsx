@@ -6,6 +6,8 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import { ApiError } from '../../api/client.ts';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -110,7 +112,10 @@ export default function GalleryPage() {
     [params, page, galleryFilter],
   );
 
-  const { data, isFetching, isError } = usePhotos(query, canRead);
+  const { data, isFetching, isError, error, refetch } = usePhotos(query, canRead);
+  // Only a refusal of the question itself is about the conditions; a dropped connection or a
+  // server error says nothing about them, and blaming the filter would send somebody to change it.
+  const filterRefused = isError && error instanceof ApiError && (error.status === 400 || error.status === 422);
   // Narrowed to what the grid and the viewer take, so a caption edited here shows here: the
   // listing nests it under a credit and both components read the flat shape.
   const photos = useMemo(() => (data?.items ?? []).map(viewPhoto), [data]);
@@ -300,13 +305,22 @@ export default function GalleryPage() {
         />
       )}
 
-      {isError && (
+      {filterRefused ? (
         <Alert
           type="error"
           showIcon
           style={{ marginBottom: 12 }}
           data-testid="gallery-filter-refused"
           title={t('gallery.filter.refused')}
+        />
+      ) : (
+        <ReadFailedAlert
+          isError={isError}
+          error={error}
+          held={data !== undefined}
+          onRetry={refetch}
+          title={t('gallery.loadFailed')}
+          testId="gallery-load-failed"
         />
       )}
 
@@ -377,7 +391,7 @@ export default function GalleryPage() {
         </Flex>
       )}
 
-      {isFetching && !data ? (
+      {isError && !data ? null : isFetching && !data ? (
         <Spin style={{ display: 'block', marginTop: '15vh' }} />
       ) : photos.length === 0 ? (
         <Empty description={t('gallery.empty')} style={{ marginTop: '15vh' }} />

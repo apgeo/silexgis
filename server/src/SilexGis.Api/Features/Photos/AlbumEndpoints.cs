@@ -23,6 +23,10 @@ namespace SilexGis.Api.Features.Photos;
 /// exactly how much the grid withheld.
 /// </param>
 /// <param name="CoverThumbnailUrl">A rendering of the cover, or null when there is no cover to draw.</param>
+/// <param name="CanShare">
+/// Whether this caller holds the Share right on the album, which is what minting, changing or
+/// revoking its public link takes — writing to the album is not enough.
+/// </param>
 public sealed record AlbumDto(
     Guid Id,
     string Title,
@@ -36,6 +40,7 @@ public sealed record AlbumDto(
     Guid OwnerUserId,
     int PhotoCount,
     bool HasActiveShare,
+    bool CanShare,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -47,6 +52,25 @@ public sealed record AlbumWriteRequest(
     Guid? CavingGroupId,
     string? SubjectEntityType,
     Guid? SubjectEntityId);
+
+/// <summary>
+/// The body of adding photographs to an album: the documents' ids, in the order they are added.
+/// </summary>
+/// <remarks>
+/// The body is a bare list of ids, so this validator is the one any route validating a list of
+/// ids would get; only the album route asks for it.
+/// </remarks>
+public sealed class AlbumItemsRequestValidator : AbstractValidator<List<Guid>>
+{
+    public AlbumItemsRequestValidator()
+    {
+        // Bounded like the bulk route: one statement decides the list, but its size is still the caller's.
+        RuleFor(x => x.Count)
+            .LessThanOrEqualTo(AlbumEndpoints.MaxItemsPerRequest)
+            .WithProblemCode(AlbumEndpoints.TooManyItemsCode)
+            .WithMessage($"At most {AlbumEndpoints.MaxItemsPerRequest} photographs in one request.");
+    }
+}
 
 public sealed class AlbumWriteRequestValidator : AbstractValidator<AlbumWriteRequest>
 {
@@ -102,6 +126,9 @@ public static class AlbumEndpoints
     public const string NotFoundCode = "album.not_found";
     public const string WriteForbiddenCode = "album.write_forbidden";
 
+    /// <summary>The caller may read the album but does not hold the Share right on it.</summary>
+    public const string ShareForbiddenCode = "album.share_forbidden";
+
     /// <summary>The album names a subject that does not exist or that the caller cannot read.</summary>
     public const string SubjectNotFoundCode = "album.subject_not_found";
 
@@ -126,7 +153,7 @@ public static class AlbumEndpoints
         albums.MapDelete("/{id:guid}", DeleteAsync)
             .WithSummary("Deletes an album. The photographs in it are untouched.");
 
-        albums.MapPost("/{id:guid}/items", AddItemsAsync)
+        albums.MapPost("/{id:guid}/items", AddItemsAsync).WithValidation<List<Guid>>()
             .WithSummary("Adds photographs to the end of an album.");
         albums.MapDelete("/{id:guid}/items/{documentId:guid}", RemoveItemAsync)
             .WithSummary("Takes a photograph out of an album; clears the cover if it was the cover.");
@@ -146,6 +173,7 @@ public static class AlbumEndpoints
     private static async Task<Results<Ok<PagedResult<AlbumDto>>, UnauthorizedHttpResult>> ListAsync(
         SilexGisDbContext db,
         IFileAccessTokenService tokens,
+        IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
         Guid? subjectEntityId = null,
@@ -170,7 +198,7 @@ public static class AlbumEndpoints
             .ThenByDescending(a => a.Id)
             .ToPagedAsync(p, size, a => a, ct);
 
-        var items = await ProjectAsync(db, ctx, tokens, paged.Items, ct);
+        var items = await ProjectAsync(db, access, ctx, tokens, paged.Items, ct);
         return TypedResults.Ok(new PagedResult<AlbumDto>(
             items, paged.Page, paged.PageSize, paged.TotalItems));
     }
@@ -195,7 +223,7 @@ public static class AlbumEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        var projected = await ProjectAsync(db, ctx, tokens, [album], ct);
+        var projected = await ProjectAsync(db, access, ctx, tokens, [album], ct);
         return TypedResults.Ok(projected[0]);
     }
 
@@ -259,7 +287,7 @@ public static class AlbumEndpoints
         db.Albums.Add(album);
         await db.SaveChangesAsync(ct);
 
-        var projected = await ProjectAsync(db, ctx, tokens, [album], ct);
+        var projected = await ProjectAsync(db, access, ctx, tokens, [album], ct);
         return TypedResults.Created($"/api/v1/albums/{album.Id}", projected[0]);
     }
 
@@ -325,7 +353,7 @@ public static class AlbumEndpoints
         album.SubjectFeatureId = subjectFeatureId;
         await db.SaveChangesAsync(ct);
 
-        var projected = await ProjectAsync(db, ctx, tokens, [album], ct);
+        var projected = await ProjectAsync(db, access, ctx, tokens, [album], ct);
         return TypedResults.Ok(projected[0]);
     }
 
@@ -383,13 +411,6 @@ public static class AlbumEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        // Bounded like the bulk route: one statement decides the list, but its size is still the caller's.
-        if (documentIds.Count > MaxItemsPerRequest)
-        {
-            return ApiProblems.BadRequest(
-                TooManyItemsCode, $"At most {MaxItemsPerRequest} photographs in one request.");
         }
 
         if (await AlbumAccess.ReadableAsync(db, access, ctx, id, ct) is null)
@@ -556,12 +577,12 @@ public static class AlbumEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        // Sharing is not writing: it publishes. Guarded on Share in the documents domain, the
-        // same right that governs every other link this application mints.
-        if (!AccessEvaluator.Decide(ctx, AccessDomain.Documents, AccessAction.Share, null).Allowed
-            && !await AlbumAccess.CanWriteAsync(db, access, ctx, id, ct))
+        // Sharing is not writing: it publishes. Guarded on Share decided on the album itself, the
+        // same right — and the same per-row decision — that governs every other link this
+        // application mints; writing to the album is not enough.
+        if (!await AlbumAccess.CanShareAsync(db, access, ctx, id, ct))
         {
-            return ApiProblems.Forbidden(WriteForbiddenCode);
+            return ApiProblems.Forbidden(ShareForbiddenCode);
         }
 
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
@@ -597,9 +618,10 @@ public static class AlbumEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        if (!await AlbumAccess.CanWriteAsync(db, access, ctx, id, ct))
+        // Withdrawing a link is the same act as publishing one, so it takes the same right.
+        if (!await AlbumAccess.CanShareAsync(db, access, ctx, id, ct))
         {
-            return ApiProblems.Forbidden(WriteForbiddenCode);
+            return ApiProblems.Forbidden(ShareForbiddenCode);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -652,6 +674,7 @@ public static class AlbumEndpoints
     /// </summary>
     private static async Task<IReadOnlyList<AlbumDto>> ProjectAsync(
         SilexGisDbContext db,
+        IAccessService access,
         AccessContext ctx,
         IFileAccessTokenService tokens,
         IReadOnlyList<Album> albums,
@@ -678,6 +701,10 @@ public static class AlbumEndpoints
             .Select(s => s.AlbumId)
             .Distinct()
             .ToListAsync(ct);
+
+        // The same per-row decision the share route makes, so the page offers the link exactly
+        // where minting one would be accepted.
+        var shareable = await ProtectedWrites.PermittedAsync(access, ctx, AccessAction.Share, albums, ct);
 
         var coverIds = albums.Where(a => a.CoverDocumentId is not null)
             .Select(a => a.CoverDocumentId!.Value)
@@ -721,6 +748,7 @@ public static class AlbumEndpoints
                     a.OwnerUserId,
                     counts.GetValueOrDefault(a.Id),
                     shared.Contains(a.Id),
+                    shareable.Contains(a.Id),
                     a.CreatedAt,
                     a.UpdatedAt);
             }),
@@ -757,5 +785,17 @@ internal static class AlbumAccess
         var album = await db.Albums.AsNoTracking().FirstOrDefaultAsync(a => a.Id == albumId, ct);
         return album is not null
             && (await access.DecideAsync(ctx, AccessAction.Write, album, ct)).Allowed;
+    }
+
+    /// <summary>
+    /// Whether the caller may publish the album through a link: Share decided on the album, as
+    /// for every other row of the documents domain. Writing to it does not imply it.
+    /// </summary>
+    public static async Task<bool> CanShareAsync(
+        SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid albumId, CancellationToken ct)
+    {
+        var album = await db.Albums.AsNoTracking().FirstOrDefaultAsync(a => a.Id == albumId, ct);
+        return album is not null
+            && (await access.DecideAsync(ctx, AccessAction.Share, album, ct)).Allowed;
     }
 }

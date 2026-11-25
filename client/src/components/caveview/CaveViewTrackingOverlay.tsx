@@ -530,7 +530,7 @@ export default function CaveViewTrackingOverlay({
                 is a refinement of the first — and it is turned off with it, since a time nothing
                 is drawing is a switch that answers a press with no change anybody can see. */}
             <label className="caveview-tracking-switch">
-              <Typography.Text style={{ fontSize: 12 }}>
+              <Typography.Text className="hint-text">
                 {t('caveview.tracking.showLabels')}
               </Typography.Text>
               <Switch
@@ -541,7 +541,7 @@ export default function CaveViewTrackingOverlay({
               />
             </label>
             <label className="caveview-tracking-switch">
-              <Typography.Text style={{ fontSize: 12 }} disabled={!showLabels}>
+              <Typography.Text className="hint-text" disabled={!showLabels}>
                 {t('caveview.tracking.showTimes')}
               </Typography.Text>
               <Switch
@@ -598,7 +598,7 @@ export default function CaveViewTrackingOverlay({
                 mark on the model carries only the start of it. */}
             {caveNotes.length > 0 && (
               <div className="caveview-tracking-notes" data-testid="caveview-cave-notes">
-                <Typography.Text strong style={{ fontSize: 12 }}>
+                <Typography.Text strong className="hint-text">
                   {t('caveview.tracking.caveNotes', { count: caveNotes.length })}
                 </Typography.Text>
                 {caveNotes.map(caveNoteRow)}

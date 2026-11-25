@@ -280,7 +280,7 @@ public static class TripImportEndpoints
 
         var filtered = Filter(readable, request.Search).ToList();
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = filtered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
 
         // What "select all" selects, answered here rather than in the browser: a row set aside on
         // the first page has to stay set aside when the ninth page is the one on screen.

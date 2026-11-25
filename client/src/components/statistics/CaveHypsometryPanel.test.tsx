@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { CaveHypsometry, CaveLevelBands } from '../../api/hooks.ts';
 
 const { hypsometrySpy, bandsSpy, saveSpy, clearSpy } = vi.hoisted(() => ({
@@ -21,6 +22,8 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const { default: CaveHypsometryPanel } = await import('./CaveHypsometryPanel.tsx');
 
+const clearMutateAsync = vi.fn();
+
 const twoStoreys: CaveHypsometry = {
   caveId: 'cave-1',
   basis: 'surveyFlags',
@@ -28,6 +31,7 @@ const twoStoreys: CaveHypsometry = {
   surveyModelId: 'model-1',
   hasAltitudes: true,
   springAltitudesM: [820],
+  altitudesRelative: false,
   proposal: {
     sampleCount: 20,
     totalWeightM: 400,
@@ -55,15 +59,27 @@ const nothingSaved: CaveLevelBands = {
   confirmedAt: null,
 };
 
+/**
+ * What the read failed with, when a test makes it fail. A refusal unless the test says otherwise:
+ * that is what the server answers a reader who may not read the subject, and the one failure the
+ * card must answer with nothing at all.
+ */
+let readError: unknown;
+const readRefetch = vi.fn();
+beforeEach(() => {
+  readError = new ApiError(404, 'cave.not_found');
+  readRefetch.mockReset();
+});
+
 function show(
   data: CaveHypsometry | undefined,
   saved: CaveLevelBands = nothingSaved,
   { isError = false, isLoading = false, canEdit = true } = {},
 ) {
-  hypsometrySpy.mockReturnValue({ data, isLoading, isError });
+  hypsometrySpy.mockReturnValue({ data, isLoading, isError, error: isError ? readError : null, refetch: readRefetch });
   bandsSpy.mockReturnValue({ data: saved });
   saveSpy.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
-  clearSpy.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  clearSpy.mockReturnValue({ mutate: vi.fn(), mutateAsync: clearMutateAsync, isPending: false });
   return render(
     <App>
       <CaveHypsometryPanel caveId="cave-1" canEdit={canEdit} />
@@ -74,6 +90,16 @@ function show(
 afterEach(cleanup);
 
 describe('CaveHypsometryPanel', () => {
+  it('says so when withdrawing the recorded reading fails', async () => {
+    clearMutateAsync.mockReset().mockRejectedValue(new ApiError(503, undefined));
+    show(twoStoreys, { ...nothingSaved, confirmed: true, bands: [{ fromM: 1000, toM: 1009, label: null }] });
+    fireEvent.click(screen.getByTestId('hypsometry-clear'));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(clearMutateAsync).toHaveBeenCalled());
+    expect(await screen.findByText(i18n.t('hypsometry.clearFailed'))).toBeTruthy();
+  });
+
   it('draws the histogram and lists the proposed levels as a proposal', () => {
     show(twoStoreys);
 
@@ -110,6 +136,19 @@ describe('CaveHypsometryPanel', () => {
     expect(screen.getByText(/no third coordinate/)).toBeTruthy();
   });
 
+  it('keeps the shape of a survey with relative heights but says they are not altitudes', () => {
+    show({ ...twoStoreys, altitudesRelative: true, springAltitudesM: [] });
+
+    expect(screen.getByTestId('chart-cave-hypsometry')).toBeTruthy();
+    expect(screen.getByTestId('hypsometry-altitudes-relative').textContent).toMatch(
+      /not above sea level/,
+    );
+    cleanup();
+
+    show(twoStoreys);
+    expect(screen.queryByTestId('hypsometry-altitudes-relative')).toBeNull();
+  });
+
   it('offers no way to record a reading to somebody who may not write the cave', () => {
     show(twoStoreys, nothingSaved, { canEdit: false });
 
@@ -123,5 +162,24 @@ describe('CaveHypsometryPanel', () => {
 
     // A card of dashes would announce that a guarded cave is here.
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('CaveHypsometryPanel when its read fails for a reason other than a refusal', () => {
+  it('names the failed read with a way to ask again instead of vanishing from the page', () => {
+    // A dropped connection or a server error says nothing about the subject, so the card does not
+    // get to disappear: a page missing a card reads as complete.
+    readError = new TypeError('Failed to fetch');
+    show(undefined, nothingSaved, { isError: true });
+
+    const failed = screen.getByTestId('cave-hypsometry-read-failed');
+    expect(failed.textContent).toContain('These figures could not be read just now');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(readRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('still draws nothing when the server refuses', () => {
+    show(undefined, nothingSaved, { isError: true });
+    expect(screen.queryByTestId('cave-hypsometry-read-failed')).toBeNull();
   });
 });

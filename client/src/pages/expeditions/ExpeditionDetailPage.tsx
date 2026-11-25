@@ -14,13 +14,15 @@ import {
   Descriptions,
   Flex,
   Popconfirm,
-  Result,
   Spin,
   Tabs,
   Tag,
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
+import { expeditionProblemKey } from './expeditionProblems.ts';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -40,7 +42,9 @@ import TagChips from '../../components/tags/TagChips.tsx';
 // the same code rather than by a second copy that could drift from it.
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 import ExpeditionFilesTab from './ExpeditionFilesTab.tsx';
+import ExpeditionReadFailed from './ExpeditionReadFailed.tsx';
 import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
@@ -79,7 +83,7 @@ export default function ExpeditionDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: camp, isPending, isError } = useExpedition(id);
+  const { data: camp, isPending, isError, error, refetch } = useExpedition(id);
   const { data: cavingGroups } = useCavingGroups();
   // Per-object capabilities once the answer arrives; the coarse domain-level check only bridges
   // the first render (the server enforces regardless).
@@ -96,19 +100,10 @@ export default function ExpeditionDetailPage() {
   const requested = searchParams.get('tab');
   const activeTab: TabKey = isTabKey(requested) ? requested : DEFAULT_TAB;
 
-  if (isError) {
-    return (
-      <Result
-        status="404"
-        title={t('expeditions.notFound')}
-        subTitle={t('expeditions.notFoundDetail')}
-        extra={
-          <Button type="primary" onClick={() => void navigate('/')}>
-            {t('common.back')}
-          </Button>
-        }
-      />
-    );
+  // A settled refusal, or a failure with no camp in hand, ends the page; a failed re-read of a camp
+  // already on screen keeps it, and says so below.
+  if (readFailureEndsPage(isError, camp, error)) {
+    return <ExpeditionReadFailed error={error} onRetry={() => void refetch()} />;
   }
 
   if (isPending || !camp) {
@@ -130,11 +125,15 @@ export default function ExpeditionDetailPage() {
 
   const onDelete = async () => {
     try {
-      await deleteCamp.mutateAsync(camp.id);
+      await deleteCamp.mutateAsync({ id: camp.id, ifMatch: versionReadWith(camp) });
       message.success(t('common.deleted'));
       void navigate('/expeditions');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once, by the application's conflict warning; a message of this
+      // page's own beside it would contradict it.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(expeditionProblemKey(error, 'common.deleteFailed')));
+      }
     }
   };
 
@@ -207,6 +206,21 @@ export default function ExpeditionDetailPage() {
           )}
         </Flex>
       </Flex>
+
+      {isError && (
+        <Alert
+          type="warning"
+          showIcon
+          title={t('common.refreshFailed')}
+          style={{ marginBottom: 12 }}
+          data-testid="expedition-refresh-failed"
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
 
       {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
           A draft is not hidden from anyone its visibility admits — being unfinished is not a

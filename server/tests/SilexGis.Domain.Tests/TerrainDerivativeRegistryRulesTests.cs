@@ -240,6 +240,64 @@ public sealed class TerrainDerivativeRegistryRulesTests
     }
 
     /// <summary>
+    /// A landform picture drawn by one version of the analysis program is out of date once the
+    /// program reports another, over ground and arithmetic that have not changed.
+    /// </summary>
+    [Fact]
+    public void A_landform_picture_drawn_by_another_version_of_the_program_is_out_of_date()
+    {
+        var build = Guid.CreateVersion7();
+        var today = TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Geomorphons);
+
+        TerrainDerivativeRegistry.Staleness(
+                build, build, TerrainDerivative.Geomorphons, 1, today,
+                recordedToolVersion: "WhiteboxTools 2.3.0", currentToolVersion: "WhiteboxTools 2.4.0")
+            .ShouldBe(TerrainDerivativeStaleness.MethodRevised);
+
+        // The same version is current: the mark is about a change, not about the program existing.
+        TerrainDerivativeRegistry.Staleness(
+                build, build, TerrainDerivative.Geomorphons, 1, today,
+                recordedToolVersion: "WhiteboxTools 2.4.0", currentToolVersion: "WhiteboxTools 2.4.0")
+            .ShouldBeNull();
+
+        // A picture never drawn has no rasters to be wrong.
+        TerrainDerivativeRegistry.IsMethodRevised(
+                TerrainDerivative.Geomorphons, 0, today, "WhiteboxTools 2.3.0", "WhiteboxTools 2.4.0")
+            .ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A program that is absent or silent now, or a picture whose version was never recorded, says
+    /// nothing about whether the picture is old; and a version move never touches a picture the
+    /// program did not draw.
+    /// </summary>
+    [Theory]
+    [InlineData(null, "WhiteboxTools 2.4.0")]
+    [InlineData("WhiteboxTools 2.3.0", null)]
+    [InlineData("", "WhiteboxTools 2.4.0")]
+    [InlineData("WhiteboxTools 2.3.0", " ")]
+    public void An_unknown_tool_version_does_not_mark_a_landform_picture(string? recorded, string? current)
+    {
+        TerrainDerivativeRegistry.IsMethodRevised(
+                TerrainDerivative.Geomorphons, 1,
+                TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Geomorphons), recorded, current)
+            .ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(TerrainDerivative.Hillshade)]
+    [InlineData(TerrainDerivative.Slope)]
+    [InlineData(TerrainDerivative.RuggednessIndex)]
+    public void A_version_move_of_the_program_leaves_a_picture_it_did_not_draw_current(
+        TerrainDerivative derivative)
+    {
+        TerrainDerivativeRegistry.IsMethodRevised(
+                derivative, 1, TerrainDerivativeRegistry.MethodRevision(derivative),
+                "WhiteboxTools 2.3.0", "WhiteboxTools 2.4.0")
+            .ShouldBeFalse();
+    }
+
+    /// <summary>
     /// A kind whose arithmetic has not changed is not marked for the others having changed.
     /// </summary>
     [Theory]

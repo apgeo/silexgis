@@ -94,7 +94,7 @@ export default function CaverNameField({
               <Flex vertical>
                 <span>{caver.name}</span>
                 {clubs && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {clubs}
                   </Typography.Text>
                 )}
@@ -119,12 +119,12 @@ export default function CaverNameField({
         <Input data-testid={testId} placeholder={placeholder} maxLength={200} />
       </AutoComplete>
       {picked && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="caver-name-picked">
+        <Typography.Text type="secondary" className="hint-text" data-testid="caver-name-picked">
           {t('cavers.picker.picked')}
         </Typography.Text>
       )}
       {typed && (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="caver-name-typed">
+        <Typography.Text type="secondary" className="hint-text" data-testid="caver-name-typed">
           {t('cavers.picker.typed')}
         </Typography.Text>
       )}

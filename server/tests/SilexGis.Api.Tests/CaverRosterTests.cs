@@ -171,8 +171,8 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     /// <summary>
     /// Gives the subject a confirmed sign-in number, which is the only kind there is. Unique per
-    /// account because one number reaches exactly one account, and every class in this suite
-    /// shares one database.
+    /// account because one number reaches exactly one account, and the tests of this class
+    /// share one database.
     /// </summary>
     private async Task<string> ConfirmViewerPhoneAsync()
     {
@@ -767,6 +767,98 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
         // Repeated now that nothing is in flight, the merge goes through.
         (await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new { sourceCaverId = duplicateId }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// A row that comes to name the duplicate while the merge is running is carried onto the person
+    /// kept. Without a lock on both entries the merge reads the duplicate's rows before the other
+    /// writer commits, and the removal of the duplicate then cascades the new row away while the
+    /// merge still answers that it went through.
+    /// </summary>
+    [Fact]
+    public async Task A_membership_added_to_the_duplicate_during_a_merge_lands_on_the_person_kept()
+    {
+        var survivorId = await CreateCaverAsync($"Lock Survivor {suffix}");
+        var duplicateId = await CreateCaverAsync($"Lock Duplicate {suffix}");
+        var groupId = await SeedCavingGroupAsync($"Merge race club {suffix}");
+
+        var merged = await AnotherWriterFirst.SendAsync(
+            factory,
+            "INSERT INTO caving_group_memberships (caver_id, caving_group_id, role, created_at, updated_at) "
+            + $"VALUES ('{duplicateId}', '{groupId}', 0, now(), now())",
+            () => keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new { sourceCaverId = duplicateId }));
+
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.CavingGroupMemberships.AsNoTracking().Where(m => m.CavingGroupId == groupId)
+            .Select(m => m.CaverId).ToListAsync()).ShouldBe([survivorId]);
+    }
+
+    [Fact]
+    public async Task An_answer_given_by_the_duplicate_during_a_merge_lands_on_the_person_kept()
+    {
+        var survivorId = await CreateCaverAsync($"Answer Survivor {suffix}");
+        var duplicateId = await CreateCaverAsync($"Answer Duplicate {suffix}");
+        var tripId = await SeedTripAsync($"Answer race trip {suffix}");
+
+        var merged = await AnotherWriterFirst.SendAsync(
+            factory,
+            "INSERT INTO trip_invitations (trip_log_id, caver_id, response, created_at, updated_at) "
+            + $"VALUES ('{tripId}', '{duplicateId}', 1, now(), now())",
+            () => keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new { sourceCaverId = duplicateId }));
+
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripInvitations.AsNoTracking().Where(x => x.TripLogId == tripId)
+            .Select(x => x.CaverId).ToListAsync()).ShouldBe([survivorId]);
+    }
+
+    /// <summary>
+    /// A person put on a trip while their entry is being deleted is the reason the delete is
+    /// refused, said as the refusal and not as a constraint violation.
+    /// </summary>
+    [Fact]
+    public async Task A_delete_that_meets_a_roster_entry_added_meanwhile_is_refused_by_name()
+    {
+        var caverId = await CreateCaverAsync($"Delete Race {suffix}");
+        var tripId = await SeedTripAsync($"Delete race trip {suffix}");
+
+        var deleted = await AnotherWriterFirst.SendAsync(
+            factory,
+            "INSERT INTO trip_log_participants (trip_log_id, role_id, caver_id) "
+            + $"VALUES ('{tripId}', (SELECT id FROM trip_participant_roles ORDER BY id LIMIT 1), '{caverId}')",
+            () => admin.DeleteAsync($"/api/v1/cavers/{caverId}"));
+
+        var payload = await deleted.Content.ReadAsStringAsync();
+        deleted.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
+        payload.ShouldContain("caver.referenced_by_trips");
+    }
+
+    private async Task<Guid> SeedCavingGroupAsync(string name)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var group = new CavingGroup { Name = name, Slug = Tag.Slugify(name) };
+        db.CavingGroups.Add(group);
+        await db.SaveChangesAsync();
+        return group.Id;
+    }
+
+    private async Task<Guid> SeedTripAsync(string title)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var trip = new TripLog
+        {
+            Title = title,
+            TripDate = new DateOnly(2026, 6, 1),
+            OwnerUserId = await db.Users.Select(u => u.Id).FirstAsync(),
+        };
+        db.TripLogs.Add(trip);
+        await db.SaveChangesAsync();
+        return trip.Id;
     }
 
     [Fact]

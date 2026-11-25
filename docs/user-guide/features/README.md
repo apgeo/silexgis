@@ -17,6 +17,7 @@ detail those walkthroughs link into.
 | [Map workspace](map-workspace.md) | The main map: layers, selection, drawing, measuring, the details panel |
 | [Map services (WMS and WMTS)](map-services.md) | Agencies' maps drawn from their own servers: where they are, what is different about them |
 | [3D view](3d-view.md) | The globe, surveys in place, cutaway, camera, walls |
+| [Flybys in the 3D view](flybys.md) | The camera flown for you around a cave, several caves or a mountain: ready-made flights, sections and speeds, playing, the clean screen for recording, keeping a flyby as a file |
 | [Terrain](terrain.md) | Real relief under the 3D scene, and what an installation must do for it |
 | [Work areas](work-areas.md) | The ground your club actually works, as a browsable tree |
 | [Saved views, panels and multi-window](saved-views-and-windows.md) | Saving and sharing a map, popping panels into their own windows, arrangements that follow your account |
@@ -31,6 +32,9 @@ detail those walkthroughs link into.
 | [Surveys, centerlines and 3D models](surveys-and-models.md) | Therion, Survex, walls, centerlines, survey sources |
 | [Point clouds (LiDAR scans)](point-clouds.md) | Laser scans of a cave: uploading a cloud or a raw MANDEYE recording, processing profiles, viewing, placing on the map |
 | [Measurements and statistics](measurements-and-statistics.md) | What the application computes, and what it refuses to compute |
+| [Karst analyses](karst-analyses.md) | Karst-area statistics, density and spacing of entrances, the depth of a system, a cave's passage network and what its shape suggests |
+| [Geology: units, structural readings and the stereonet](geology.md) | Geological units and their lithology, an area's geology split, structural readings, the stereonet, passages against measured strikes |
+| [Cave potential: models, evidence and favourability maps](cave-potential.md) | Writing a model that weighs evidence, pairwise comparisons and the consistency ratio, running it over an area, the map it draws and what that map does not claim, models that learn from known entrances (frequency ratio, weights of evidence, the two rate curves and the AUC), who can see a map |
 | [Geodata files](geodata.md) | Vector import and export, the imports register |
 | [The national cave catalogue](cave-catalogue.md) | Searching speologie.org and importing caves from it |
 | [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays: GeoTIFFs, PDFs and scans, and placing a sheet by its corners or by control points |

@@ -29,5 +29,15 @@ public sealed class FeatureSetWriteRequestValidator : AbstractValidator<FeatureS
 public sealed class FeatureSetMemberReplaceRequestValidator
     : AbstractValidator<FeatureSetMemberReplaceRequest>
 {
-    public FeatureSetMemberReplaceRequestValidator() => RuleFor(x => x.FeatureIds).NotNull();
+    /// <summary>
+    /// The most members one replace names. A set is a hand-picked list a person curates in the
+    /// workspace, not a bulk store; the bound keeps one request from writing a membership and an
+    /// audit row the size of the whole registry.
+    /// </summary>
+    public const int MaxFeatureIds = 5_000;
+
+    public FeatureSetMemberReplaceRequestValidator() =>
+        RuleFor(x => x.FeatureIds).Cascade(CascadeMode.Stop).NotNull()
+            .Must(ids => ids.Count <= MaxFeatureIds)
+            .WithMessage($"At most {MaxFeatureIds} features may be named at once.");
 }

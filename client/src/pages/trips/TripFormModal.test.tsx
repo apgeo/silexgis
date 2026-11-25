@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
+import { noteVersionOfReading } from '../../api/readingVersion.ts';
 import type { TripLogInfo, TripLogWrite } from '../../api/hooks.ts';
 
 const createTrip = vi.fn();
@@ -20,7 +21,15 @@ const holdsTheRight = { canCreate: true, unbound: true, cavingGroups: [] };
 const silex = { id: 'g-1', name: 'Silex' };
 const avenul = { id: 'g-2', name: 'Avenul' };
 
-// The version on file for the trip, as the transport would answer it at this moment.
+/** `reading` as a read answered at `version` hands it over: the version is kept with the values. */
+function readAt<T extends object>(reading: T, version: string): T {
+  noteVersionOfReading(reading, new Response(null, { headers: { ETag: version } }));
+  return reading;
+}
+
+// The newest version filed for the trip's address, as the transport would answer it at this
+// moment. A form must not take its version from here: the newest filed can be ahead of the copy
+// the form was filled from.
 const versionOnFile = vi.fn<() => string | undefined>(() => undefined);
 
 vi.mock('../../api/client.ts', async (original) => ({
@@ -29,6 +38,8 @@ vi.mock('../../api/client.ts', async (original) => ({
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
+  // The sketch maps draw over the catalogue's background; this installation names none.
+  useMapLayers: () => ({ isPending: false, data: [] }),
   useCavingGroups: () => ({ data: [] }),
   useCan: () => false,
   useCreateCavingGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -716,13 +727,13 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     // return to the browser tab is enough — and each read files a newer version. Were the save
     // to carry that one, a roster somebody else saved in the meantime would be written back to
     // what this form still shows, with the server told the change had been seen.
-    versionOnFile.mockReturnValue('"1"');
-    const view = show(trip());
+    // A read made outside the cache has filed a version newer than either copy for the address.
+    versionOnFile.mockReturnValue('"3"');
+    const view = show(readAt(trip(), '"1"'));
 
-    versionOnFile.mockReturnValue('"2"');
     view.rerender(
       <App>
-        <TripFormModal open trip={trip({ title: 'Renamed by somebody else' })} onClose={() => {}} />
+        <TripFormModal open trip={readAt(trip({ title: 'Renamed by somebody else' }), '"2"')} onClose={() => {}} />
       </App>,
     );
 
@@ -734,9 +745,36 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     expect(sent.body.title).toBe('Digging weekend');
   });
 
-  it('takes the version afresh each time it is opened', async () => {
+  it('leaves a stale-version refusal to the conflict warning and stays open with its values', async () => {
+    // The application's conflict warning says what happened and what to do; a "save failed"
+    // beside it would contradict it, and closing the form would throw away what was typed.
     versionOnFile.mockReturnValue('"1"');
-    const view = show(trip());
+    const onClose = vi.fn();
+    render(
+      <App>
+        <TripFormModal open trip={trip()} onClose={onClose} />
+      </App>,
+    );
+    updateTrip.mockReset().mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    // Messages are drawn in the order they were asked for, so a second refusal in words of its own
+    // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
+    // too — whatever words it would have used. No waiting on the clock.
+    updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.participant_tracked'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByText(/has reports on this trip's tracking/);
+
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Digging weekend')).toBeInTheDocument();
+  });
+
+  it('takes the version afresh each time it is opened', async () => {
+    versionOnFile.mockReturnValue('"3"');
+    const view = show(readAt(trip(), '"1"'));
     const closed = (
       <App>
         <TripFormModal open={false} trip={trip()} onClose={() => {}} />
@@ -744,15 +782,63 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     );
     view.rerender(closed);
 
-    versionOnFile.mockReturnValue('"2"');
     view.rerender(
       <App>
-        <TripFormModal open trip={trip()} onClose={() => {}} />
+        <TripFormModal open trip={readAt(trip(), '"2"')} onClose={() => {}} />
       </App>,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
     expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"2"');
+  });
+});
+
+describe('TripFormModal leaving with typed work', () => {
+  afterEach(cleanup);
+
+  function showClosable(subject: TripLogInfo | null) {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <TripFormModal open trip={subject} onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable(trip());
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    const onClose = showClosable(trip());
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend, part two' } });
+    cancel();
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Digging weekend, part two');
+
+    // The first question may still be in the document, fading out; the newest one comes last.
+    const before = screen.queryAllByTestId('discard-confirm').length;
+    cancel();
+    await vi.waitFor(() => expect(screen.getAllByTestId('discard-confirm').length).toBe(before + 1));
+    fireEvent.click(screen.getAllByTestId('discard-confirm').at(-1)!);
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('is not closed by a click beside it', () => {
+    const onClose = showClosable(trip());
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

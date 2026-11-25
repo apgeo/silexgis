@@ -60,9 +60,7 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable, I
 
         // The work is queued rather than done inline, and the queue row is written in the same
         // unit of work as the file: an upload that was rejected leaves neither behind.
-        (await db.ProcessingJobs.AsNoTracking()
-            .CountAsync(j => j.Kind == ProcessingJobKinds.TextExtraction))
-            .ShouldBeGreaterThan(0);
+        (await JobsNamingAsync(fileId)).ShouldBe(1, "the upload queues one reading of its own file");
 
         var file = await WaitForExtractionAsync(fileId);
         file.TextExtraction.ShouldBe(TextExtractionState.Extracted);
@@ -114,6 +112,8 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable, I
             .GetProperty("id").GetGuid();
 
         (await WaitForExtractionAsync(readable)).TextExtraction.ShouldBe(TextExtractionState.Extracted);
+        (await JobsNamingAsync(readable)).ShouldBe(1);
+        (await JobsNamingAsync(picture)).ShouldBe(0, "a picture is never queued for a reading");
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -476,7 +476,11 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable, I
     }
 
     /// <summary>Whether a reading of this file has been queued by anything other than its upload.</summary>
-    private async Task<bool> QueuedForAsync(Guid fileId)
+    /// <remarks>The upload queued one of its own, so the sweep's is the second.</remarks>
+    private async Task<bool> QueuedForAsync(Guid fileId) => await JobsNamingAsync(fileId) > 1;
+
+    /// <summary>How many text-reading jobs name this file, whatever their state.</summary>
+    private async Task<int> JobsNamingAsync(Guid fileId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -484,12 +488,9 @@ public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable, I
             .Where(j => j.Kind == ProcessingJobKinds.TextExtraction)
             .Select(j => j.Payload)
             .ToListAsync();
-
-        // The upload queued one of its own, so the sweep's is the second — which is why this
-        // counts rather than merely looking for one.
         return payloads.Count(p =>
             JsonSerializer.Deserialize<TextExtractionPayload>(p, JsonSerializerOptions.Web)?.FileId
-                == fileId) > 1;
+                == fileId);
     }
 
     /// <summary>

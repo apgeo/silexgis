@@ -105,4 +105,16 @@ public class SelfHostedBasemapTests
     {
         SelfHostedBasemap.ProgressPercent(output).ShouldBe(percent);
     }
+
+    [Fact]
+    public void An_extract_fits_only_with_the_headroom_beside_it()
+    {
+        const long free = 1_300_000_000;
+        SelfHostedBasemap.FitsOnDisk(free - SelfHostedBasemap.DiskHeadroomBytes, free).ShouldBeTrue();
+        SelfHostedBasemap.FitsOnDisk(free - SelfHostedBasemap.DiskHeadroomBytes + 1, free).ShouldBeFalse();
+        SelfHostedBasemap.FitsOnDisk(free - (100L * 1024 * 1024), free).ShouldBeFalse();
+
+        // A disk whose free space cannot be told is not a reason to refuse.
+        SelfHostedBasemap.FitsOnDisk(long.MaxValue / 2, null).ShouldBeTrue();
+    }
 }

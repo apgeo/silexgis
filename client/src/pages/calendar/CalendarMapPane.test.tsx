@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Map from 'ol/Map';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -10,6 +10,8 @@ const { mapSpy, campSpy } = vi.hoisted(() => ({ mapSpy: vi.fn(), campSpy: vi.fn(
 vi.mock('../../api/hooks.ts', () => ({
   useTripLogMap: (...args: unknown[]) => mapSpy(...args),
   useCampAreasMap: (...args: unknown[]) => campSpy(...args),
+  // The installation names no background, so the pane draws the fallback every small map uses.
+  useMapLayers: () => ({ isPending: false, data: [] }),
 }));
 
 const { default: CalendarMapPane } = await import('./CalendarMapPane.tsx');
@@ -198,6 +200,18 @@ describe("the calendar's map", () => {
     expect(screen.queryByTestId('calendar-map-empty')).toBeNull();
   });
 
+  it('offers to ask again for the half of the map that failed', () => {
+    const refetchTrips = vi.fn();
+    const refetchCamps = vi.fn();
+    mapSpy.mockReturnValue({ data: undefined, isError: true, refetch: refetchTrips });
+    campSpy.mockReturnValue({ data: collection([]), isError: false, refetch: refetchCamps });
+    render(<CalendarMapPane entries={[row()]} {...WINDOW} active />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetchTrips).toHaveBeenCalledTimes(1);
+    expect(refetchCamps).not.toHaveBeenCalled();
+  });
+
   /** Nor is an answer still on its way. It has told the pane nothing, so the pane says nothing. */
   it('claims nothing about the ground while the first answer is still on its way', () => {
     mapSpy.mockReturnValue({ data: undefined });
@@ -212,5 +226,16 @@ describe("the calendar's map", () => {
     render(<CalendarMapPane entries={[row()]} {...WINDOW} active />);
 
     expect(screen.getByText(/Only trips and camps are drawn/)).toBeTruthy();
+  });
+
+  it('draws the installation’s background rather than a tile server of its own choosing', () => {
+    const sized = vi.spyOn(Map.prototype, 'getSize');
+    render(<CalendarMapPane entries={[row()]} {...WINDOW} active />);
+    const map = sized.mock.contexts.find((context) => (context as Map).getTargetElement?.()) as Map;
+    const urls = map
+      .getAllLayers()
+      .flatMap((layer) => (layer.getSource() as { getUrls?: () => string[] | null })?.getUrls?.() ?? []);
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.some((url) => url.includes('tile.openstreetmap.org'))).toBe(false);
   });
 });

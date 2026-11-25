@@ -4,6 +4,8 @@ import { UndoOutlined } from '@ant-design/icons';
 import { App, Drawer, Flex, Popconfirm, Table, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { refusalText } from '../../components/geodata/refusalText.ts';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useImportBatch,
@@ -15,6 +17,7 @@ import {
   type ImportBatchUndoItem,
 } from '../../api/hooks.ts';
 import MyReviewUploads from '../../components/review/MyReviewUploads.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 import { UndoOutcome, UploadRowChanges } from './PhoneUploadParts.tsx';
 
@@ -152,20 +155,32 @@ export default function ImportBatchesTab() {
       } else {
         message.warning(t('vectorImport.upload.undoneWithLeft', { count: left.length }));
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(refusalText(error, t, 'vectorImport.revertFailed'));
+      }
     }
   };
 
   return (
     <>
       <MyReviewUploads />
+      <ReadFailedAlert
+        isError={batches.isError}
+        error={batches.error}
+        held={batches.data !== undefined}
+        onRetry={batches.refetch}
+        title={t('vectorImport.batchesLoadFailed')}
+        testId="import-batches-load-failed"
+      />
       <Table<ImportBatch>
         rowKey="id"
         size="middle"
         scroll={{ x: 'max-content' }}
         loading={batches.isLoading}
         dataSource={batches.data?.items}
+        // A list that could not be read says so above; "no data" here would be a false answer.
+        locale={batches.isError && !batches.data ? { emptyText: <span /> } : undefined}
         data-testid="import-batches"
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);
@@ -187,7 +202,7 @@ export default function ImportBatchesTab() {
                   {batchLabel(row.source, name)}
                 </Typography.Link>
                 {row.termRuleSetName && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {row.termRuleSetName}
                   </Typography.Text>
                 )}
@@ -255,6 +270,14 @@ export default function ImportBatchesTab() {
         }}
         destroyOnHidden
       >
+        <ReadFailedAlert
+          isError={detail.isError}
+          error={detail.error}
+          held={detail.data !== undefined}
+          onRetry={detail.refetch}
+          title={t('vectorImport.batchDetailLoadFailed')}
+          testId="import-batch-detail-load-failed"
+        />
         {detail.data?.batch && reviewTag(detail.data.batch.reviewState) && (
           <Flex vertical gap={8} style={{ marginBottom: 16 }} data-testid="import-batch-review">
             <div>{reviewTag(detail.data.batch.reviewState)}</div>
@@ -308,6 +331,7 @@ export default function ImportBatchesTab() {
           size="small"
           loading={detail.isLoading}
           dataSource={detail.data?.items}
+          locale={detail.isError && !detail.data ? { emptyText: <span /> } : undefined}
           pagination={{ pageSize: 50 }}
           expandable={
             phone

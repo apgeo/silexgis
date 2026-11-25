@@ -28,6 +28,7 @@ public sealed class PlaceStationAnchorTests
     [InlineData("""{"station":12}""")]
     [InlineData("""{"station":"A","splay":[1,2]}""")]
     [InlineData("""{"station":"A","splay":[1,"2",3]}""")]
+    [InlineData("""{"station":"A","splay":[1e400,0,0]}""")]
     [InlineData("""{"shape":"point","x":0.1,"y":0.2}""")]
     [InlineData("not json")]
     public void Anything_else_is_not_a_station(string? payload) =>

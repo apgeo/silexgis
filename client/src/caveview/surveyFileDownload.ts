@@ -39,6 +39,16 @@ export class SurveyFileStalledError extends Error {
   }
 }
 
+/** A download the server answered with something other than the file. */
+export class SurveyFileRequestError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`survey file request failed (${status})`);
+    this.status = status;
+    this.name = 'SurveyFileRequestError';
+  }
+}
+
 interface Download {
   blob: Promise<Blob>;
   controller: AbortController;
@@ -150,7 +160,7 @@ function start(key: string, url: string): Download {
     watch();
     try {
       const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
+      if (!response.ok) throw new SurveyFileRequestError(response.status);
       // The length a compressed answer declares is of the compressed bytes, and what is read off
       // the body is the file itself, so the two cannot be set against each other.
       const declared = Number(response.headers.get('content-length'));

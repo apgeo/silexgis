@@ -93,6 +93,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TripInvitationsTab', () => {
+  it('keeps the list on screen when a later read fails, under a may-be-out-of-date notice', () => {
+    list.mockReturnValue({ data: answers(), isPending: false, error: new TypeError('Failed to fetch'), refetch: vi.fn() });
+    show();
+
+    expect(screen.queryByTestId('trip-invitations-unavailable')).toBeNull();
+    expect(screen.getByTestId('trip-invitations-refresh-failed')).toBeTruthy();
+  });
+
+  it('offers to read again when nothing could be read', () => {
+    const refetch = vi.fn();
+    list.mockReturnValue({ data: undefined, isPending: false, error: new TypeError('Failed to fetch'), refetch });
+    show();
+
+    expect(screen.getByTestId('trip-invitations-unavailable')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it('writes an unanswered row’s control in words rather than in the stored token', () => {
     // Not answered is where every row starts, and the picker has no option for it because
     // nobody may set it back. A control given a value none of its options carry falls back to

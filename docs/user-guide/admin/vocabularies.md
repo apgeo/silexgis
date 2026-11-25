@@ -43,7 +43,7 @@ records on the map — sinkhole, spring, pitch, bivouac, karst area and the rest
 | **Shapes it may be drawn as** | Point · Line · Outline · Several points · Several lines · Several outlines |
 | **When protected** | *Shown snapped to the grid (points only)* or *Not shown at all* — how a feature of this kind appears to somebody without exact view. See [Location protection](location-protection.md) |
 | **Only inside another feature** | For kinds that make no sense on their own, such as a place inside a cave |
-| **Map symbol** | Chosen from the symbols the application carries, or none |
+| **Map symbol** | Chosen from the symbol library, or none: a drawn shape (circle, dot, ring, square, triangle, diamond, star, cross, cave entrance) in the features' colour or one of your own, the club's speleological symbols, cartographic symbols (OpenStreetMap, QGIS) or geological ones (the USGS FGDC standard). Type in the list to search it; the list shows each symbol as the map draws it |
 | **Map style overrides** | Optional; empty keeps the default style |
 | **Details schema** | What a feature of this kind is asked for. Only flat text, number, yes/no and choice fields appear on the form, and the dialog previews the fields the feature form will offer |
 

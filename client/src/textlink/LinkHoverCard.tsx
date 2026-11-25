@@ -12,7 +12,7 @@ import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { targetTypeEntry, anchorSummary, memberRoute, linkPageRoute } from '../components/reslinks/registry.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
-import { canRevealHere, refreshRoster, subscribeToRoster } from '../viewlinks/viewTargets.ts';
+import { allControls, canRevealHere, refreshRoster, subscribeToRoster } from '../viewlinks/viewTargets.ts';
 import { highlightIsUncertain, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
 
 /**
@@ -66,13 +66,7 @@ export default function LinkHoverCard({
 
     // A window opening or closing while the card is up changes the answer; the roster announces
     // itself on both, so the card follows without asking again.
-    const unsubscribe = subscribeToRoster(() => {
-      void refreshRoster().then((roster) => {
-        if (alive) {
-          setControls(roster);
-        }
-      });
-    });
+    const unsubscribe = subscribeToRoster(() => setControls(allControls()));
 
     return () => {
       alive = false;
@@ -87,7 +81,7 @@ export default function LinkHoverCard({
           {index > 0 && <Divider style={{ margin: '2px 0' }} />}
 
           <Flex align="baseline" gap={6} wrap>
-            <Typography.Text strong style={{ fontSize: 12 }}>
+            <Typography.Text strong className="hint-text">
               {highlight.relationLabel ?? t('resLinks.relations.unspecified')}
             </Typography.Text>
             {highlightIsUncertain(highlight) && (
@@ -95,7 +89,7 @@ export default function LinkHoverCard({
               // measured may be highlighting the wrong words, and a reader has no other way of
               // telling that from a passage that is exactly right.
               <Tooltip title={t('textLink.card.uncertainDetail')}>
-                <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                <Typography.Text type="warning" className="hint-text">
                   <WarningOutlined /> {t('textLink.card.uncertain')}
                 </Typography.Text>
               </Tooltip>
@@ -103,13 +97,13 @@ export default function LinkHoverCard({
           </Flex>
 
           {highlight.description && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {highlight.description}
             </Typography.Text>
           )}
 
           {highlight.targets.length === 0 ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('textLink.card.noTargets')}
             </Typography.Text>
           ) : (
@@ -181,7 +175,7 @@ function TargetRow({
     // A target this reader may not read. Named as withheld and nothing more — no title, no note,
     // nothing that would narrow down what it is.
     return (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         <Icon /> {t('resLinks.restricted')}
       </Typography.Text>
     );

@@ -127,8 +127,17 @@ default to inherit.
 The update logic is *copied* to `/opt/silexgis-ops/`, outside the deployed checkout, rather
 than being run from inside it. A script that lives in the tree it is about to `git pull` can be
 rewritten underneath the shell executing it, and a copy placed into the checkout by hand
-collides with the pull the moment the same path arrives from upstream. Re-run `install-ops.sh`
-after an update to refresh that copy.
+collides with the pull the moment the same path arrives from upstream. A successful update
+refreshes its own copy of `update.sh` from the checkout once the new version answers healthy, so a
+fix to the update logic takes effect from the next update on. The other scripts in that folder
+(`set-domain.sh`, `install-app.sh`, `reset.sh`) and the wrappers are refreshed only by re-running
+`install-ops.sh`.
+
+"Up to date" means the commit last deployed — recorded in the checkout's git directory only once a
+version has answered healthy — equals the branch. An update cut short after the checkout moved (a
+dropped SSH session during the build, a shutdown, a failed submodule update) leaves the previous
+version recorded as deployed, so the next `silexgis-update` finishes the update instead of reporting
+nothing to do.
 
 ### 5. Create the first content
 
@@ -228,7 +237,8 @@ describes.
 `silexgis-backup.timer` runs nightly at 03:20 UTC and keeps the last 14, plus one before every
 update. Each backup is a directory containing `db.sql.gz` (a `pg_dump`), `files.tar.gz` (the
 uploads volume) and, when anybody has uploaded a terrain raster through the browser,
-`terrain-uploads.tar.gz` (those rasters only).
+`terrain-uploads.tar.gz` (those rasters only) and, when any cave-potential map has been computed,
+`cave-potential.tar.gz` (those maps only).
 
 ```bash
 systemctl list-timers silexgis-\*        # when it last ran and next runs
@@ -243,7 +253,9 @@ Four things are deliberately *not* in a backup: three are recoverable without on
   stored data.
 - **Baked terrain.** Derived data whose recipe is in the database. Rebuild it. The exception, a
   raster **uploaded through the browser**, has exactly one copy under the build root, so it is the
-  one part of the terrain volume that *is* in the backup (`terrain-uploads.tar.gz`).
+  one part of the terrain volume that *is* in the backup (`terrain-uploads.tar.gz`), together with
+  the computed cave-potential maps (`cave-potential.tar.gz`), which are dated and cannot be recomputed
+  into the same answer.
 - **Photo libraries** (Immich, PhotoPrism) keep their own databases and settings, which are the
   club's to back up with each product's own tool; see INSTALL.md, "Photo libraries".
 - **`.env`.** It holds the database password. Keep a copy somewhere off the machine, or a
@@ -435,6 +447,13 @@ Check that `silexgis-keys` is mounted and owned by the container's `app` user.
 (and, for a survey sent from a field device, `SILEXGIS__SurveyUploads__MaxFileBytes`),
 Kestrel's limits (derived from them automatically), and the proxy's `client_max_body_size`, which
 the `web` container reads from `SILEXGIS_MAX_BODY_SIZE` at start (default `1024m`). INSTALL.md, "Upload sizes", has the detail.
+
+**502 on every page while the api reports healthy, on a host with several installations.** When an
+installation's `web` service joins a network shared with other Compose projects (the front proxy's),
+any other project's service called `api` on that network answers to the bare name too, and the web
+proxy may send everything there. Check with `docker exec <project>-web-1 getent hosts api`: an
+address outside the project's own network is the wrong one. Set `SILEXGIS_API_UPSTREAM=<project>-api-1:8080`
+in that installation's `.env` and `docker compose up -d web`.
 
 **Disk filling.** `docker system df`. Image layers live under `/var/lib/docker` and old build
 caches accumulate; `docker system prune -a` reclaims them, at the cost of a slower next build.

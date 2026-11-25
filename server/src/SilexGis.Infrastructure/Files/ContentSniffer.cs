@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Documents.Extraction;
 
 namespace SilexGis.Infrastructure.Files;
 
@@ -73,6 +74,14 @@ public static class ContentSniffer
     {
         try
         {
+            // An office or OpenDocument package is a few dozen parts, a few thousand for a
+            // large workbook. An archive stating more is left a plain ZIP without being opened:
+            // opening it builds an object for every entry, inside the upload request.
+            if (ZipEntryCount.Exceeds(content, ExtractionStreams.MaxPackageEntries))
+            {
+                return null;
+            }
+
             using var archive = new ZipArchive(content, ZipArchiveMode.Read, leaveOpen: true);
 
             foreach (var (entry, mimeType) in OfficeOpenXmlEntries)

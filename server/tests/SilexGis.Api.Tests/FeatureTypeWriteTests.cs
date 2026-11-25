@@ -154,6 +154,20 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+    [Theory]
+    [InlineData("osm_cave.svg")]
+    [InlineData("shape:triangle")]
+    [InlineData("shape:cave:d46b08")]
+    public async Task A_kind_takes_a_bundled_svg_or_a_drawn_shape_as_its_symbol(string symbol)
+    {
+        var code = Code();
+        await CreateAsync(Kind(code, symbolFile: symbol));
+
+        var listed = (await viewer.GetFromJsonAsync<JsonElement>("/api/v1/feature-types"))
+            .EnumerateArray().Single(t => t.GetProperty("code").GetString() == code);
+        listed.GetProperty("symbolFile").GetString().ShouldBe(symbol);
+    }
+
     [Fact]
     public async Task A_request_that_cannot_describe_a_kind_is_refused_before_anything_is_written()
     {
@@ -163,6 +177,9 @@ public sealed class FeatureTypeWriteTests : IAsyncLifetime, IDisposable, IClassF
             Kind(Code(), classes: []),
             Kind(Code(), symbolFile: "../../etc/passwd"),
             Kind(Code(), symbolFile: "https://elsewhere.example/pin.png"),
+            Kind(Code(), symbolFile: "shape:hexagon"),
+            Kind(Code(), symbolFile: "shape:cave:D46B08"),
+            Kind(Code(), symbolFile: "shape:cave:red"),
         };
         foreach (var request in bad)
         {

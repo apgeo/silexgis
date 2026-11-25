@@ -28,7 +28,12 @@ namespace SilexGis.Api.Features.Caves;
 /// when the area holds no spring, or when the springs it holds are ones this caller may not
 /// place — an altitude being a position, these are gathered under the same withhold-entirely rule
 /// the area view uses, so a spring closed to the reader draws no line and is in no way visible as
-/// a line that is missing.</param>
+/// a line that is missing. Empty as well when <paramref name="AltitudesRelative"/> is true.</param>
+/// <param name="AltitudesRelative">True when the survey's heights are relative to its own zero
+/// point, because no altitude was declared for that point. The histogram and the proposed levels
+/// still describe the cave's shape, in heights about that zero point, but no spring line is drawn
+/// against them: a spring's altitude is measured from sea level, and the gap between the two
+/// would be the missing declaration, not a fact about the cave.</param>
 public sealed record CaveHypsometryDto(
     Guid CaveId,
     SurveySegmentBasis Basis,
@@ -36,7 +41,8 @@ public sealed record CaveHypsometryDto(
     Guid? SurveyModelId,
     bool HasAltitudes,
     ElevationBandProposal? Proposal,
-    IReadOnlyList<double> SpringAltitudesM);
+    IReadOnlyList<double> SpringAltitudesM,
+    bool AltitudesRelative);
 
 /// <summary>
 /// How the entrances under one area are distributed vertically.
@@ -137,7 +143,9 @@ public sealed class SaveCaveLevelBandsRequestValidator : AbstractValidator<SaveC
 
         RuleFor(x => x.Note).MaximumLength(CaveLevelBandLimits.MaxNoteLength);
 
-        RuleForEach(x => x.Bands).ChildRules(band =>
+        // A null band binds from `[null]`; the child rules skip it, and it would be stored as a
+        // reading's band and read back as one with no edges.
+        RuleForEach(x => x.Bands).NotNull().ChildRules(band =>
         {
             band.RuleFor(b => b.FromM).Must(double.IsFinite)
                 .WithMessage("A band edge must be a number.");
@@ -149,7 +157,7 @@ public sealed class SaveCaveLevelBandsRequestValidator : AbstractValidator<SaveC
         });
 
         RuleFor(x => x.Bands!).Must(BeAscendingAndDisjoint)
-            .When(x => x.Bands is not null && x.Bands.Count > 1)
+            .When(x => x.Bands is not null && x.Bands.Count > 1 && x.Bands.All(b => b is not null))
             .WithMessage("Level bands must be in ascending order and must not overlap.");
     }
 

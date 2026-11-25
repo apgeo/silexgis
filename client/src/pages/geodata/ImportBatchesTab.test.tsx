@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { App as AntApp } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { ImportBatch } from '../../api/hooks.ts';
 
 const { batchesSpy, detailSpy, configSpy, revertSpy, historySpy } = vi.hoisted(() => ({
@@ -298,5 +299,91 @@ describe('the imports this account made', () => {
       expect(result.textContent).toContain('Partly undone');
       expect(result.textContent).toContain('Name was left: it has been changed since');
     });
+  });
+});
+
+describe('a read of the imports that did not land', () => {
+  function failedRead(refetch = vi.fn()) {
+    return { data: undefined, isLoading: false, isError: true, error: new Error('network'), refetch };
+  }
+
+  /**
+   * A list that could not be read is not a list with nothing in it: "no data" there would tell the
+   * reader there is nothing to undo. The failure is named, with a way to ask again.
+   */
+  it('names a failed read of the list and offers to read it again, instead of an empty table', () => {
+    const refetch = vi.fn();
+    batchesSpy.mockReturnValue(failedRead(refetch));
+    render(
+      <AntApp>
+        <MemoryRouter>
+          <ImportBatchesTab />
+        </MemoryRouter>
+      </AntApp>,
+    );
+    const alert = screen.getByTestId('import-batches-load-failed');
+    expect(alert.textContent).toContain('The uploads could not be read just now');
+    expect(within(screen.getByTestId('import-batches')).queryByText(/No data/)).toBeNull();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a failed read of one batch and offers to read it again, instead of an empty list of lines', async () => {
+    batchesSpy.mockReturnValue({
+      data: { items: [batch()], page: 1, pageSize: 20, totalItems: 1 },
+      isLoading: false,
+    });
+    const refetch = vi.fn();
+    detailSpy.mockReturnValue(failedRead(refetch));
+    render(
+      <AntApp>
+        <MemoryRouter initialEntries={['/?batch=aaaaaaaa-0000-0000-0000-000000000001']}>
+          <ImportBatchesTab />
+        </MemoryRouter>
+      </AntApp>,
+    );
+    const alert = await screen.findByTestId('import-batch-detail-load-failed');
+    expect(alert.textContent).toContain('What this upload did could not be read just now');
+    expect(within(screen.getByTestId('import-batch-detail')).queryByText(/No data/)).toBeNull();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('undoing an ordinary import', () => {
+  async function confirmUndo() {
+    await undoConfirmation();
+    const tooltip = screen.getByRole('tooltip');
+    const buttons = within(tooltip).getAllByRole('button');
+    fireEvent.click(buttons[buttons.length - 1]);
+  }
+
+  it('undoes the batch the confirmation was for and says it was undone', async () => {
+    show([batch({ source: 'vectorFile', geofileName: 'entrances.gpx' })]);
+
+    await confirmUndo();
+
+    await vi.waitFor(() => expect(revertSpy).toHaveBeenCalledWith(expect.objectContaining({ id: batch({}).id })));
+    expect(await screen.findByText(i18n.t('vectorImport.reverted'))).toBeInTheDocument();
+  });
+
+  it('says an undo failed in its own words, never that something could not be saved', async () => {
+    revertSpy.mockRejectedValue(new TypeError('Failed to fetch'));
+    show([batch({ source: 'vectorFile', geofileName: 'entrances.gpx' })]);
+
+    await confirmUndo();
+
+    expect(await screen.findByText(i18n.t('vectorImport.revertFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+    expect(screen.queryByText(i18n.t('vectorImport.reverted'))).toBeNull();
+  });
+
+  it('names a refusal through the import refusals, here a server failure with its status', async () => {
+    revertSpy.mockRejectedValue(new ApiError(503, undefined));
+    show([batch({ source: 'vectorFile', geofileName: 'entrances.gpx' })]);
+
+    await confirmUndo();
+
+    expect(await screen.findByText(i18n.t('geodata.refusals.server', { status: 503 }))).toBeInTheDocument();
   });
 });

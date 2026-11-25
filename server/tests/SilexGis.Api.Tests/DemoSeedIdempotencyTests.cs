@@ -111,6 +111,8 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
     /// </summary>
     [Theory]
     [InlineData("features", "DELETE FROM features WHERE name = 'Falia Demo'")]
+    [InlineData("features", "DELETE FROM features WHERE name = 'Calcar Demo'")]
+    [InlineData("features", "DELETE FROM features WHERE name = 'Stratificatie Demo'")]
     [InlineData("features", "DELETE FROM features WHERE name = 'Avenul Demo Vântului entrance'")]
     [InlineData("features", "DELETE FROM features WHERE name = 'Demo: choked crawl'")]
     [InlineData("expeditions", "DELETE FROM expeditions WHERE name = 'Demo: winter recce'")]

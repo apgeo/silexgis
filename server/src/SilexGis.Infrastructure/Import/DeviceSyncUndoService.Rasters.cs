@@ -136,7 +136,22 @@ public sealed partial class DeviceSyncUndoService
         var mapLine = item.RasterMapId is not null;
         var rowId = (item.RasterMapId ?? item.RasterPinId)!.Value;
         var key = rowId.ToString();
+        // What is compared below is read under the lock its writers take — the map's own row for a
+        // map, the map's row for a pin on it — so a phone that has changed it and not yet committed
+        // is waited for, and the comparison is made on what it committed.
+        if (mapLine)
+        {
+            await HoldRowAsync(UndoLockedRow.RasterMap, rowId, ct);
+        }
+
         var pin = mapLine ? null : await PlacePoints.FindAsync(rowId, ct);
+        if (pin is not null)
+        {
+            await PlacePoints.LockAsync(pin.Map.Id, ct);
+            await ReloadAsync([db.Entry(pin.Link), db.Entry(pin.Picture), db.Entry(pin.Place)], ct);
+            pin = await PlacePoints.FindAsync(rowId, ct);
+        }
+
         var edits = mapLine
             ? written.Where(a => a.EntityType == nameof(RasterMap) && a.EntityId == key && a.Action == AuditActions.Updated).ToList()
             : PinEdits(written, key, pin);

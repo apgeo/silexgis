@@ -146,6 +146,24 @@ internal sealed class SyncHeldBatchHandler(
         }
     }
 
+    /// <summary>Whether the section can read the kept proposal back at all.</summary>
+    private static bool Readable(ISyncUploadSection section, string proposal)
+    {
+        try
+        {
+            _ = section.FieldsOf(proposal);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     public async Task<IReadOnlyList<HeldLineOutcome>> ApplyAsync(
         ImportBatch batch,
         IReadOnlyList<ImportBatchItem> lines,
@@ -181,6 +199,16 @@ internal sealed class SyncHeldBatchHandler(
             if (line.ProposalSection is not { } name || !sections.TryGetValue(name, out var section)
                 || line.Proposal is not { } proposal)
             {
+                outcomes.Add(new HeldLineOutcome(line.Id, false, null, "review.proposal_unreadable",
+                    "This line keeps no proposal this server can write."));
+                continue;
+            }
+
+            if (!Readable(section, proposal))
+            {
+                // Kept under a shape of the proposal this build no longer reads: the line is
+                // answered as one with no proposal at all, as reading it for the review screen
+                // already treats it, and the rest of the batch is decided as usual.
                 outcomes.Add(new HeldLineOutcome(line.Id, false, null, "review.proposal_unreadable",
                     "This line keeps no proposal this server can write."));
                 continue;

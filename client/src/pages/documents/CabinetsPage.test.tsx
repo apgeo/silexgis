@@ -3,7 +3,8 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import '../../i18n';
+import i18n from '../../i18n';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * What a shelf says about whatever lands on it. Every cabinet carries this — the server
@@ -40,6 +41,32 @@ const cabinets = [
     documentCount: 2,
     defaults: noDefaults,
   },
+  {
+    // A shelf with settings of its own, and a name that repeats elsewhere in the tree — the
+    // two things a careless write or a bare-name picker would lose.
+    id: 'c3',
+    parentId: null,
+    name: 'Bulletins',
+    description: null,
+    ancestorIds: ['c3'],
+    documentCount: 0,
+    defaults: {
+      ...noDefaults,
+      documentTypeId: 7,
+      visibility: 'cavingGroup',
+      tagIds: [4],
+      requiredMetadataKeys: ['author'],
+    },
+  },
+  {
+    id: 'c4',
+    parentId: 'c1',
+    name: 'Bulletins',
+    description: null,
+    ancestorIds: ['c1', 'c4'],
+    documentCount: 0,
+    defaults: noDefaults,
+  },
 ];
 
 // Two documents on the shelf and a count of two, so the page is exercised on the case
@@ -74,20 +101,28 @@ const fileMutate = vi.fn(() => Promise.resolve());
 // readable, none of the controls that move access are offered.
 let capabilities = { domains: { documents: 'read' } };
 
+const refetchCabinets = vi.fn();
+const cabinetsLoaded = () => ({ data: cabinets, isPending: false, isError: false, refetch: refetchCabinets });
+let cabinetsRead: () => unknown = cabinetsLoaded;
+/** What a cabinet's listing failed with, when a test makes it fail. */
+let documentsFailure: unknown;
+
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
   return {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
-    useCabinets: () => ({ data: cabinets, isPending: false }),
-    useCabinetDocuments: (id: string | undefined) => ({
-      data: id ? shelf : undefined,
-      isFetching: false,
-    }),
+    useCabinets: () => cabinetsRead(),
+    useCabinetDocuments: (id: string | undefined) =>
+      documentsFailure !== undefined && id
+        ? { data: undefined, isFetching: false, isError: true, error: documentsFailure, refetch: vi.fn() }
+        : { data: id ? shelf : undefined, isFetching: false, isError: false, error: null, refetch: vi.fn() },
     useCreateCabinet: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateCabinet: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteCabinet: () => ({ mutateAsync: deleteMutate, isPending: false }),
     useFileDocument: () => ({ mutateAsync: fileMutate, isPending: false }),
+    useDocumentTypes: () => ({ data: [] }),
+    useTags: () => ({ data: [] }),
   };
 });
 
@@ -98,7 +133,12 @@ vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => mobile }));
 
 const { default: CabinetsPage } = await import('./CabinetsPage.tsx');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  cabinetsRead = cabinetsLoaded;
+  refetchCabinets.mockReset();
+  documentsFailure = undefined;
+});
 
 function renderPage() {
   return render(
@@ -150,6 +190,17 @@ describe('CabinetsPage', () => {
     expect(screen.queryByText('File elsewhere')).not.toBeInTheDocument();
   });
 
+  it('says a failed listing of a cabinet failed, rather than that nothing is filed in it', () => {
+    capabilities = { domains: { documents: 'read' } };
+    documentsFailure = new TypeError('Failed to fetch');
+    renderPage();
+
+    fireEvent.click(screen.getByText('Surveys (2)'));
+
+    expect(screen.getByTestId('cabinet-documents-load-failed')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing filed here that you may read.')).not.toBeInTheDocument();
+  });
+
   it('offers filing to a writer, and files rather than moving so a document can sit on several shelves', async () => {
     capabilities = { domains: { documents: 'read, write' } };
     fileMutate.mockClear();
@@ -194,5 +245,129 @@ describe('CabinetsPage', () => {
     fireEvent.click(screen.getByText('Surveys (2)'));
     expect(screen.getByText('Cave survey 2026')).toBeInTheDocument();
     mobile = false;
+  });
+
+  it('moves a cabinet in the tree without clearing the settings it carries', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    updateMutate.mockClear();
+    renderPage();
+
+    // The cabinet route replaces what it is sent, so a move that sends only the new parent
+    // would wipe this shelf's own type, audience, tags and required keys.
+    // The root-level one: roots follow the club archive's subtree in the drawn tree.
+    const dragged = screen.getAllByText('Bulletins').at(-1)!.closest('.ant-tree-treenode')!;
+    const target = screen.getByText('Surveys (2)').closest('.ant-tree-treenode')!;
+    fireEvent.dragStart(dragged);
+    fireEvent.dragEnter(target);
+    fireEvent.dragOver(target);
+    fireEvent.drop(target);
+
+    await waitFor(() => expect(updateMutate).toHaveBeenCalledTimes(1));
+    expect(updateMutate).toHaveBeenCalledWith({
+      id: 'c3',
+      name: 'Bulletins',
+      description: null,
+      parentId: 'c2',
+      defaultDocumentTypeId: 7,
+      defaultVisibility: 'cavingGroup',
+      defaultTagIds: [4],
+      requiredMetadataKeys: ['author'],
+    });
+  });
+
+  it('OK with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    createMutate.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      renderPage();
+      fireEvent.click(screen.getByText('New'));
+      const name = await screen.findByLabelText('Name');
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+      await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      await afterRejectionsAreReported();
+      expect(createMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+
+  it('offers a cabinet the four audiences the server knows, each named', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+
+    fireEvent.click(screen.getByText('New'));
+    const field = await screen.findByLabelText('Who can read it');
+    fireEvent.mouseDown(field);
+
+    for (const label of ['Private', 'Caving group', 'Authenticated users', 'Public']) {
+      await waitFor(() => expect(screen.getAllByTitle(label).length).toBeGreaterThan(0));
+    }
+    expect(screen.queryByText(/visibilityValues/)).not.toBeInTheDocument();
+  });
+
+  it('names every filing target by its whole path, so two shelves of one name can be told apart', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+
+    fireEvent.click(screen.getByText('Surveys (2)'));
+    fireEvent.click(screen.getByText('File elsewhere'));
+    fireEvent.mouseDown(screen.getByText('Choose a cabinet'));
+
+    await waitFor(() => expect(screen.getAllByTitle('Club archive / Bulletins').length).toBeGreaterThan(0));
+    expect(screen.getAllByTitle('Bulletins').length).toBeGreaterThan(0);
+  });
+
+  // A tree that could not be read is not an empty one: drawn as nothing but the inbox, it reads as
+  // an archive with no shelves in it.
+  it('says the cabinets could not be read, keeps the inbox, and asks again on Retry', () => {
+    cabinetsRead = () => ({ data: undefined, isPending: false, isError: true, error: new Error('offline'), refetch: refetchCabinets });
+    renderPage();
+    expect(screen.getByTestId('cabinets-load-failed')).toBeTruthy();
+    expect(screen.getByText(i18n.t('cabinets.unfiled'))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetchCabinets).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a tree already shown when a later read fails, and says it may be out of date', () => {
+    cabinetsRead = () => ({ data: cabinets, isPending: false, isError: true, error: new Error('offline'), refetch: refetchCabinets });
+    renderPage();
+    expect(screen.getByText('Club archive (3)')).toBeTruthy();
+    expect(screen.getByText(i18n.t('common.refreshFailed'))).toBeTruthy();
+  });
+});
+
+describe('leaving the cabinet dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    fireEvent.click(screen.getByText('New'));
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByLabelText('Name')).toBeNull());
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing a typed name away, and a click beside it does not close it', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    fireEvent.click(screen.getByText('New'));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Survey notes' } });
+
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    expect(screen.getByLabelText('Name')).toHaveValue('Survey notes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Name')).toHaveValue('Survey notes');
   });
 });

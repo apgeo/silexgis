@@ -240,7 +240,7 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = Array.Empty<object>(),
         });
-        untitled.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await untitled.RefusedFieldsAsync()).ShouldBe(["Title"]);
 
         var blankLine = await owner.PostAsJsonAsync("/api/v1/checklists", new
         {
@@ -248,7 +248,17 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = new[] { new { text = "   " } },
         });
-        blankLine.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await blankLine.RefusedFieldsAsync()).ShouldBe(["Items[0].Text"]);
+
+        // The same body with a title and a line that says something is accepted, so each refusal
+        // above is the one field it names and not the shape of the request.
+        var accepted = await owner.PostAsJsonAsync("/api/v1/checklists", new
+        {
+            title = "A list",
+            visibility = (int)Visibility.Private,
+            items = new[] { new { text = "Rope" } },
+        });
+        accepted.StatusCode.ShouldBe(HttpStatusCode.Created, await accepted.Content.ReadAsStringAsync());
 
         var anonymous = factory.CreateClient();
         (await anonymous.GetAsync("/api/v1/checklists")).StatusCode
@@ -366,7 +376,10 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
             visibility = (int)Visibility.Private,
             items = Enumerable.Range(1, 201).Select(i => new { text = $"Line {i}" }).ToArray(),
         });
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.RefusedFieldsAsync()).ShouldBe(["Items"]);
+
+        var untouched = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
+        untouched!.Items.Select(x => x.Text).ShouldBe(["Permit obtained"]);
 
         var exactly = await owner.PutAsJsonAsync($"/api/v1/checklists/{list.Id}", new
         {
@@ -423,10 +436,73 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
         var refused = await owner.PutAsJsonAsync(
             $"/api/v1/checklists/{list.Id}",
             Body(list.Title, [(first, "Permit obtained"), (first, "Permit obtained again")]));
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        var body = await refused.Content.ReadAsStringAsync();
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        // Its own code rather than the generic one, so a screen can say what is wrong without
+        // parsing the message.
+        System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("code").GetString()
+            .ShouldBe("checklist.line_repeated");
 
         var after = await owner.GetFromJsonAsync<ChecklistPayload>($"/api/v1/checklists/{list.Id}");
         after!.Items.OrderBy(x => x.SortOrder).Select(x => x.Text).ShouldBe(["Permit obtained", "Rope checked"]);
+
+        // A request with that problem and another one as well is described by neither code alone,
+        // and falls back to the generic answer that lists both.
+        using var twoProblems = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{list.Id}",
+            Body(string.Empty, [(first, "Permit obtained"), (first, "Permit obtained again")]));
+        var both = await twoProblems.Content.ReadAsStringAsync();
+        twoProblems.StatusCode.ShouldBe(HttpStatusCode.BadRequest, both);
+        System.Text.Json.JsonDocument.Parse(both).RootElement.GetProperty("code").GetString()
+            .ShouldBe("validation.failed");
+
+        // The same rewrite naming each line once goes through.
+        var second = list.Items.Single(x => x.Text == "Rope checked").Id;
+        using var allowed = await owner.PutAsJsonAsync(
+            $"/api/v1/checklists/{list.Id}",
+            Body(list.Title, [(second, "Rope checked"), (first, "Permit obtained")]));
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Each row of the listing carries the version a read of that one list hands out, so an edit
+    /// opened from the listing sends the version the row was shown at: accepted while it is
+    /// current, refused as stale once the list has changed since.
+    /// </summary>
+    [Fact]
+    public async Task Each_listed_list_carries_its_version_and_an_edit_sent_with_it_is_checked()
+    {
+        var first = await CreateAsync($"Versioned list A {suffix}", "Permit obtained");
+        var second = await CreateAsync($"Versioned list B {suffix}", "Rope checked");
+
+        var listing = await owner.GetAsync("/api/v1/checklists");
+        listing.StatusCode.ShouldBe(HttpStatusCode.OK, await listing.Content.ReadAsStringAsync());
+        var rows = System.Text.Json.JsonDocument.Parse(await listing.Content.ReadAsStringAsync())
+            .RootElement.EnumerateArray()
+            .ToDictionary(
+                x => x.GetProperty("id").GetGuid(),
+                x => x.TryGetProperty("version", out var v) ? v.GetString() : null);
+
+        foreach (var id in new[] { first.Id, second.Id })
+        {
+            var one = await owner.GetAsync($"/api/v1/checklists/{id}");
+            one.StatusCode.ShouldBe(HttpStatusCode.OK);
+            rows[id].ShouldNotBeNullOrEmpty();
+            rows[id].ShouldBe(one.Headers.ETag!.Tag);
+        }
+
+        using var current = await owner.PutWithIfMatchAsync(
+            $"/api/v1/checklists/{first.Id}",
+            Body(first.Title, [(first.Items[0].Id, "Permit obtained and filed")]),
+            rows[first.Id]!);
+        current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
+
+        // The row was shown before that edit: sending its version again is a stale write.
+        using var stale = await owner.PutWithIfMatchAsync(
+            $"/api/v1/checklists/{first.Id}",
+            Body(first.Title, [(first.Items[0].Id, "Permit lost")]),
+            rows[first.Id]!);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
     }
 
     private async Task<ChecklistPayload> CreateAsync(string title, params string[] lines)

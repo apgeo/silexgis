@@ -3,15 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, confirmOk } from './helpers.ts';
+import { gotoRoute, login, confirmOk, pickCaveType } from './helpers.ts';
 
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
 async function createCave(page: Page, name: string) {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
 }
@@ -93,8 +92,8 @@ test('a cave at two heights proposes two levels and a confirmed reading survives
 });
 
 /**
- * The cave's passages set against the rock around them, and the one comparison this installation
- * cannot make said in words rather than left as a dead affordance.
+ * The cave's passages set against the rock around them, and where readings taken at a point are
+ * compared said in words.
  */
 test('a cave shows its passage rose against the mapped structure', async ({ page }) => {
   const caveName = `E2E Structure Cave ${Date.now()}`;
@@ -123,9 +122,9 @@ test('a cave shows its passage rose against the mapped structure', async ({ page
   // Nought is not the answer when one side is empty, and the panel refuses to give one.
   await expect(comparison.getByTestId('cave-structure-comparison-no-divergence')).toBeVisible();
 
-  // Bedding and joint readings are the comparison this installation cannot make. Said here, so a
-  // reader is not left looking for a control that was never built.
-  await expect(card.getByText(/Bedding and joint readings/)).toBeVisible();
+  // Readings taken at a point are compared another way, and the note under the lines says how, so
+  // a reader is not left looking for them in the line comparison.
+  await expect(card.getByText(/plotted on a stereonet/)).toBeVisible();
 
   // And the surface comparison is named and placed, rather than being absent without explanation.
   await expect(card.getByText(/asked of an area, on that area's own page/)).toBeVisible();

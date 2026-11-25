@@ -7,8 +7,15 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { api } from '../client.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { components, paths } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
+import {
+  invalidateAfterDelete,
+  unwrap,
+  unwrapVersioned,
+  unwrapVoid,
+  useInvalidateHistory,
+} from './shared.ts';
 import type { CaveListParams, CaveWrite, EntranceWrite } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 
@@ -168,12 +175,21 @@ export function useCaves(params: CaveListParams) {
   });
 }
 
+/**
+ * One cave's read as a query object rather than as a hook, for code that is told about a cave
+ * outside React's render and still has to go through the same cache under the same key.
+ */
+export function caveQuery(id: string) {
+  return {
+    queryKey: queryKeys.cave(id),
+    // The cave form is filled from this reading, and saves under the version it was answered at.
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+    structuralSharing: sharesKeepingVersion,
+  };
+}
+
 export function useCave(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.cave(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id: id! } } })),
-    enabled: !!id,
-  });
+  return useQuery({ ...caveQuery(id ?? ''), enabled: !!id });
 }
 
 /**
@@ -189,8 +205,7 @@ export function useCave(id: string | undefined) {
 export function useCaveNames(ids: readonly string[]) {
   return useQueries({
     queries: ids.map((id) => ({
-      queryKey: queryKeys.cave(id),
-      queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+      ...caveQuery(id),
       staleTime: 300_000,
       retry: false,
     })),
@@ -242,14 +257,26 @@ export function useCreateCave() {
 }
 
 export function useUpdateCave(id: string) {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: (body: CaveWrite) =>
-      unwrap(api.PUT('/api/v1/caves/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` names the version the form was filled from, so a change somebody else saved
+    // meanwhile is refused instead of overwritten. Left out, the newest version read is sent.
+    mutationFn: ({ body, ifMatch }: { body: CaveWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
+    // The save is finished once the cave has been read again. Until then the cache holds the cave
+    // as it was before the save, and a form opened on it at once would be filled from that copy.
     onSuccess: () => {
       invalidate(id);
       invalidateHistory();
+      return queryClient.invalidateQueries({ queryKey: queryKeys.cave(id), exact: true });
     },
   });
 }
@@ -284,8 +311,18 @@ export function useUpdateEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: EntranceWrite }) =>
-      unwrap(api.PUT('/api/v1/cave-entrances/{id}', { params: { path: { id } }, body })),
+    // `ifMatch` is the version of the listing row the editing form was filled from (each row of a
+    // cave's entrance listing carries one). Nothing else supplies it: the version an entrance
+    // write answers with is filed under the feature's own address, not this route's — so without
+    // it the save overwrites whatever somebody else saved since the row was read.
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: EntranceWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/cave-entrances/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: () => {
       invalidate(caveId);
       invalidateHistory();
@@ -297,12 +334,16 @@ export function useDeleteEntrance(caveId: string) {
   const invalidate = useInvalidateCaves();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error, response } = await api.DELETE('/api/v1/cave-entrances/{id}', { params: { path: { id } } });
-      if (error !== undefined) {
-        throw new Error(`API error ${response.status}`);
-      }
-    },
+    // `ifMatch` is the version of the listing row the delete was decided on, so an entrance
+    // somebody changed since is refused rather than deleted unseen. The refusal keeps its status
+    // and code, which is what lets a stale delete reach the shared conflict prompt.
+    mutationFn: ({ id, ifMatch }: { id: string; ifMatch?: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/cave-entrances/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+        }),
+      ),
     onSuccess: () => {
       invalidate(caveId);
       invalidateHistory();

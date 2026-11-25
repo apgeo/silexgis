@@ -5,6 +5,8 @@ using NetTopologySuite.Geometries;
 using Npgsql;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Features;
@@ -174,6 +176,13 @@ public sealed class ImportCommitService(
         // table and walks every tracked feature, so the cost grew with the square of the
         // selection — and only the final pass could be right in any case.
         writer.BeginDeferredDerivedState();
+
+        // The deferred recompute takes the hierarchy lock only at the end, when the walk already
+        // holds the rows of every cave it touched; a protection switched on above one of them by
+        // somebody holding the lock would then wait for that cave while this waits for the lock,
+        // and the database would roll the whole import back. Taken now, before any row, the other
+        // writer waits for the import instead.
+        await writer.HoldHierarchyAsync(ct);
 
         // How far the walk has got, told as each row is reached so a confirmation of thousands
         // of rows is more than "running" on the page waiting for it.
@@ -805,6 +814,17 @@ public sealed class ImportCommitService(
             Visibility = options.Visibility,
             LocationProtected = options.LocationProtected,
         };
+
+        // An outline that becomes a geological unit takes its rock class from the mapped column.
+        // A value nothing matched leaves the unit unclassified rather than refusing it: the
+        // outline is still mapped ground, and the per-lithology split lists it as such.
+        if (string.Equals(code, FeatureTypeSeeds.GeologicalUnit, StringComparison.OrdinalIgnoreCase)
+            && LithologyImport.Resolve(candidate.SourceLithology, options.Mapping.LithologyValues).Code is { } lithology)
+        {
+            feature.Properties = System.Text.Json.JsonSerializer.Serialize(
+                new Dictionary<string, string> { [Lithology.PropertyKey] = lithology });
+        }
+
         await writer.CreateGenericAsync(feature, [], ct);
         return feature.Id;
     }

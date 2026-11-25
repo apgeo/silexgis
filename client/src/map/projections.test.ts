@@ -45,7 +45,7 @@ describe('the coordinate systems the map can place a raster in', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(STEREO_70, { status: 200 }));
     try {
       await expect(installationDefinition('EPSG:3844')).resolves.toBe(STEREO_70);
-      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/crs/3844.proj4', expect.anything());
+      expect(new URL((fetchSpy.mock.calls[0][0] as Request).url).pathname).toBe('/api/v1/crs/3844.proj4');
 
       fetchSpy.mockClear();
       await expect(installationDefinition('ESRI:102008')).resolves.toBeNull();

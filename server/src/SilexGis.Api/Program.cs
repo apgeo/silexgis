@@ -25,6 +25,7 @@ using SilexGis.Api.Features.Checklists;
 using SilexGis.Api.Features.Crs;
 using SilexGis.Api.Features.Calendar;
 using SilexGis.Api.Features.Catalogue;
+using SilexGis.Api.Features.CavePotential;
 using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Features.Dashboard;
 using SilexGis.Api.Features.AnnotatedTexts;
@@ -53,6 +54,7 @@ using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
 using SilexGis.Api.Features.Features;
 using SilexGis.Api.Features.Filters;
+using SilexGis.Api.Features.Flybys;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.QrLanding;
@@ -61,6 +63,7 @@ using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
 using SilexGis.Api.Features.Sync;
 using SilexGis.Api.Features.Storage;
+using SilexGis.Api.Features.TestData;
 using SilexGis.Api.Features.SurveyUploads;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
@@ -142,11 +145,15 @@ try
         // members, as it must be for a document that went through a jsonb column. A polymorphic
         // object that names no shape at all is a malformed body rather than a server fault.
         options.SerializerOptions.AllowOutOfOrderMetadataProperties = true;
+        // A record saved whole (a settings section) is held to every yes/no and number being
+        // sent, so a member left out is refused rather than saved as false or 0.
         options.SerializerOptions.TypeInfoResolver = System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
             System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
-                options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-                SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
-            SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects);
+                System.Text.Json.Serialization.Metadata.JsonTypeInfoResolver.WithAddedModifier(
+                    options.SerializerOptions.TypeInfoResolver ?? new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
+                    SilexGis.Domain.Filters.FilterDocument.RequireAuthoredMembers),
+                SilexGis.Api.Common.PolymorphicBodies.RefuseShapelessObjects),
+            SilexGis.Api.Common.CompleteBodies.RequireValueMembers);
     });
 
     // A request the framework cannot bind — a body naming a word an enum does not have, a null
@@ -158,6 +165,9 @@ try
     builder.Services.PostConfigure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(
         options => options.ThrowOnBadRequest = true);
     builder.Services.AddExceptionHandler<SilexGis.Api.Common.BindingProblemHandler>();
+    // A deadlock the database broke up, or a serialization failure, is a collision with another
+    // request rather than a fault: answered as a conflict the client may send again.
+    builder.Services.AddExceptionHandler<SilexGis.Api.Common.TransientDatabaseConflictHandler>();
 
     // A large upload passes three independent ceilings before a handler sees it: the request
     // body limit, the multipart form limit, and the reverse proxy's own cap. The first two
@@ -212,6 +222,7 @@ try
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
     builder.Services.AddSingleton<ITerrainRasterTokenService, TerrainRasterTokenService>();
+    builder.Services.AddSingleton<ICavePotentialRasterTokenService, CavePotentialRasterTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
@@ -330,6 +341,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // The roster and caving-group writes ask whether filling a trustee caving group hands an
     // account more than the caller holds; the permission area answers with its own rule judgement.
     builder.Services.AddScoped<ITrusteeRightsBound, SilexGis.Api.Features.Permissions.TrusteeRightsBound>();
+    // A trip leaving a camp, and a camp being deleted, take away the rules the camp's sharing wrote
+    // on its trips; lifting a deny among them is bounded by the permission area's own judgement.
+    builder.Services.AddScoped<IRuleRemovalBound, SilexGis.Api.Features.Permissions.RuleRemovalBound>();
     // Why a published page was refused and how much the published surface is read, for the
     // operator: a log event and counters, and nothing in any response. One for the application's
     // lifetime because it owns the counters.
@@ -625,15 +639,18 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveTopologyEndpoints();
     api.MapCaveHypsometryEndpoints();
     api.MapCaveOverburdenEndpoints();
+    api.MapFeaturePassagesEndpoints();
     api.MapEntranceAltitudeEndpoints();
     api.MapCaveSystemFiguresEndpoints();
     api.MapCaveDepthProfileEndpoints();
     api.MapCaveStructureComparisonEndpoints();
+    api.MapStructuralStereonetEndpoints();
     api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
     api.MapFeatureMorphometryEndpoints();
     api.MapAreaKarstStatisticsEndpoints();
+    api.MapAreaSystemFiguresEndpoints();
     api.MapAreaTerrainStatisticsEndpoints();
     api.MapFilterEndpoints();
     api.MapFeatureHierarchyEndpoints();
@@ -643,9 +660,11 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapDataEndpoints();
     api.MapMapDensityEndpoints();
     api.MapMapKarstIndexEndpoints();
+    api.MapMapPassageDepthEndpoints();
     api.MapMapPointPatternEndpoints();
     api.MapMapCaveMeshEndpoints();
     api.MapMapCaveScanEndpoints();
+    api.MapFlybyBlenderBundleEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();
@@ -728,6 +747,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapUserAdminEndpoints();
     api.MapMapViewEndpoints();
     api.MapSavedFilterEndpoints();
+    api.MapCavePotentialModelEndpoints();
+    api.MapCavePotentialResultEndpoints();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
@@ -739,6 +760,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapProcessingProfileEndpoints();
     api.MapStorageEndpoints();
     api.MapStorageReportEndpoints();
+    api.MapTestDataEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -885,25 +907,44 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         return;
     }
 
-    // `dotnet run -- seed-demo`: load the demo dataset and exit.
+    // `dotnet run -- seed-demo [--alongside-real-data]`: load the demo dataset and exit. It refuses
+    // on a database holding accounts or content it did not create unless the switch is given.
     if (args.Contains("seed-demo"))
     {
         using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
-        var admins = await userManager.GetUsersInRoleAsync(GlobalRoles.Admin);
-        if (admins.Count == 0)
+        var seeded = await DemoSeedCommand.RunAsync(scope.ServiceProvider, args);
+        switch (seeded.Outcome)
         {
-            Log.Error("seed-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
-            return;
+            case DemoSeedOutcome.NoAdministrator:
+                Log.Error("seed-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
+                Environment.ExitCode = 1;
+                return;
+            case DemoSeedOutcome.RefusedRealData:
+                // A code of its own, so a script that runs the command can tell "refused because of
+                // real data" from a failure; never zero, which every caller reads as "loaded".
+                Environment.ExitCode = DemoSeedCommand.RefusedExitCode;
+                Log.Error(
+                    "seed-demo refused: this database holds {Foreign} that the demonstration dataset did not "
+                    + "create, and the dataset would attach its trips and texts to them. Pass {Switch} if this "
+                    + "installation really is meant to have the demo alongside real data",
+                    seeded.Foreign!.Describe(),
+                    DemoSeedCommand.AlongsideRealDataSwitch);
+                return;
+            default:
+                Log.Information("Demo data seeded (owner: {Email})", seeded.OwnerEmail);
+                return;
         }
+    }
 
-        await DemoSeeder.SeedAsync(
-            db,
-            admins[0].Id,
-            scope.ServiceProvider.GetRequiredService<DocumentWriteService>(),
-            scope.ServiceProvider.GetRequiredService<IFileStore>());
-        Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
+    // `dotnet run -- generate-test-data [--profile small|default|large|<file.json>] [--seed <n>]
+    // [--alongside-existing-data]`: runs the administrators' test-data generator in this process
+    // for the bootstrap admin and exits; `remove-test-data <run id>` removes what a run wrote.
+    if (args.Contains("generate-test-data") || args.Contains("remove-test-data"))
+    {
+        using var scope = app.Services.CreateScope();
+        var admins = await scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>()
+            .GetUsersInRoleAsync(GlobalRoles.Admin);
+        Environment.ExitCode = await TestDataCommand.RunAsync(app.Services, args, admins.FirstOrDefault()?.Id);
         return;
     }
 

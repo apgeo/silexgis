@@ -13,7 +13,7 @@ vi.mock('../api/hooks/map.ts', () => ({
 }));
 
 const { addFilterLayer, filterLayerId, updateFilterLayer } = await import('./filterLayerList.ts');
-const { detachFilterLayers, onFilterLayerRefusal, syncFilterLayers } = await import('./filterLayers.ts');
+const { detachFilterLayers, filterLayerStyle, onFilterLayerRefusal, syncFilterLayers } = await import('./filterLayers.ts');
 const { findOverlayLayer, getOverlayOrder } = await import('./mapContext.ts');
 
 const first = '00000000-0000-4000-8000-000000000001';
@@ -33,24 +33,30 @@ function fakeMap(): Map & { pan: () => Promise<void> } {
     getView: () => view,
     on: vi.fn((type: string, handler: () => void) => type === 'moveend' && moveEnd.add(handler)),
     un: vi.fn((type: string, handler: () => void) => type === 'moveend' && moveEnd.delete(handler)),
-    // A pan, past the loaders' debounce.
+    // A pan, past the loaders' debounce on the fake clock the tests run on.
     pan: async () => {
       moveEnd.forEach((handler) => handler());
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.advanceTimersByTimeAsync(300);
     },
   } as unknown as Map & { pan: () => Promise<void> };
 }
 
 const sourceOf = (savedFilterId: string) =>
   (findOverlayLayer(filterLayerId(savedFilterId)) as VectorLayer).getSource() as VectorSource;
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Lets the loads already started answer: their promises settle, and nothing waits on real time. */
+const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('the layers drawn from saved filters', () => {
   beforeEach(() => {
+    // The loaders' debounce runs on a fake clock, so a pan is past it exactly, however loaded the machine.
+    vi.useFakeTimers();
     fetchEntranceFeatures.mockReset().mockResolvedValue(point('e1'));
     fetchMapFeatures.mockReset().mockResolvedValue(empty);
   });
-  afterEach(() => detachFilterLayers());
+  afterEach(() => {
+    detachFilterLayers();
+    vi.useRealTimers();
+  });
 
   it('asks both map routes with its own saved filter, and draws what they answer', async () => {
     const map = fakeMap();
@@ -127,5 +133,14 @@ describe('the layers drawn from saved filters', () => {
     syncFilterLayers(map, list, new Set(), new globalThis.Map());
     await settle();
     expect(fetchEntranceFeatures).not.toHaveBeenCalled();
+  });
+
+  it('fills an area in its colour made see-through, under an outline in the colour itself', async () => {
+    const { default: Feature } = await import('ol/Feature');
+    const { default: Polygon } = await import('ol/geom/Polygon');
+    const area = new Feature(new Polygon([[[0, 0], [1, 0], [1, 1], [0, 0]]]));
+    const style = filterLayerStyle(area, 'green', undefined);
+    expect(style.getStroke()?.getColor()).toBe('#389e0d');
+    expect(style.getFill()?.getColor()).toBe('rgba(56, 158, 13, 0.15)');
   });
 });

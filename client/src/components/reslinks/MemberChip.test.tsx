@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -50,12 +50,14 @@ function pictureMember(): ResLinkMember {
   } as unknown as ResLinkMember;
 }
 
-/** Opens a hover preview and lets antd's open delay elapse; jsdom runs no animation. */
+/**
+ * Opens a hover preview and waits until it is drawn. Every chip shows one — a hint, with the
+ * picture above it when there is one — so the drawn tooltip is the witness that the hover was
+ * answered, and anything missing from it is missing, not still to come.
+ */
 async function hover(element: HTMLElement) {
   fireEvent.mouseEnter(element);
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 600));
-  });
+  await screen.findByRole('tooltip');
 }
 
 /**

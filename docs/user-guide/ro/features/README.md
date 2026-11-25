@@ -17,6 +17,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Spațiul de lucru al hărții](map-workspace.md) | Harta principală: straturi, selecție, desenare, măsurare, panoul de detalii |
 | [Servicii de hărți (WMS și WMTS)](map-services.md) | Hărțile agențiilor, desenate de pe serverele lor: unde sunt și ce e diferit la ele |
 | [Vizualizarea 3D](3d-view.md) | Globul, topografiile la locul lor, decuparea, camera, pereții |
+| [Survoluri în vizualizarea 3D](flybys.md) | Camera zburată în locul tău în jurul unei peșteri, al mai multor peșteri sau al unui munte: zboruri gata făcute, secțiuni și viteze, redarea, ecranul curat pentru înregistrare, păstrarea unui survol ca fișier |
 | [Relief](terrain.md) | Relieful real sub scena 3D și ce trebuie să facă o instalare pentru el |
 | [Zone de lucru](work-areas.md) | Terenul pe care lucrează efectiv clubul, ca arbore navigabil |
 | [Vederi salvate, panouri și ferestre multiple](saved-views-and-windows.md) | Salvarea și partajarea unei hărți, desprinderea panourilor în ferestre proprii, aranjări care îți urmează contul |
@@ -31,6 +32,9 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Topografii, drumuiri și modele 3D](surveys-and-models.md) | Therion, Survex, pereți, drumuiri, surse topografice |
 | [Nori de puncte (scanări LiDAR)](point-clouds.md) | Scanări laser ale unei peșteri: încărcarea unui nor sau a unei înregistrări brute MANDEYE, profiluri de procesare, vizualizare, plasare pe hartă |
 | [Măsurători și statistici](measurements-and-statistics.md) | Ce calculează aplicația și ce refuză să calculeze |
+| [Analize carstice](karst-analyses.md) | Statistici pe zona carstică, densitatea și spațierea intrărilor, adâncimea unui sistem, rețeaua de galerii a unei peșteri și ce sugerează forma ei |
+| [Geologie: unități, măsurători structurale și stereograma](geology.md) | Unitățile geologice și litologia lor, geologia unei zone, măsurătorile structurale, stereograma, galeriile față de direcțiile măsurate |
+| [Potențial speologic: modele, dovezi și hărți de favorabilitate](cave-potential.md) | Scrierea unui model care cântărește dovezi, comparațiile pe perechi și raportul de consistență, rularea lui pe o zonă, harta pe care o desenează și ce nu afirmă ea, modelele care învață din intrări cunoscute (raportul de frecvență, ponderile dovezilor, cele două curbe de rată și AUC), cine poate vedea o hartă |
 | [Fișiere de geodate](geodata.md) | Import și export vectorial, registrul importurilor |
 | [Catalogul național al peșterilor](cave-catalogue.md) | Căutarea pe speologie.org și importul peșterilor de acolo |
 | [Hărți raster georeferențiate](georeferenced-maps.md) | Foi geologice și topografice ca straturi suprapuse: GeoTIFF-uri, PDF-uri și scanări, și poziționarea unei planșe după colțuri sau după puncte de control |

@@ -46,18 +46,26 @@ public static class AccessEntryMapping
     /// are removed. Deleting and re-inserting every row would credit each untouched rule to
     /// whoever saved the list last and fill the history with removals and additions of rules
     /// nobody changed. Every rule of the new list has still been through
-    /// <see cref="RejectAsync"/>, kept ones included; this decides only how the result is stored.
+    /// <see cref="RejectAsync"/>, kept ones included; the rules that are gone go through
+    /// <see cref="RejectRemovalsAsync"/> here, before anything is staged, because dropping a
+    /// deny widens access exactly as adding an allow would. Returns the problem the whole
+    /// replace is refused with, or null once it is staged.
     /// </summary>
-    public static void StageReplace(
-        SilexGisDbContext db, IReadOnlyList<AccessEntry> current, IReadOnlyList<AccessEntry> replacement)
+    public static async Task<ProblemHttpResult?> StageReplaceAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        IReadOnlyList<AccessEntry> current,
+        IReadOnlyList<AccessEntry> replacement,
+        CancellationToken ct)
     {
         var unmatched = current.ToList();
+        var added = new List<AccessEntry>();
         foreach (var entry in replacement)
         {
             var same = unmatched.FirstOrDefault(row => SameRule(row, entry));
             if (same is null)
             {
-                db.AccessEntries.Add(entry);
+                added.Add(entry);
             }
             else
             {
@@ -65,7 +73,41 @@ public static class AccessEntryMapping
             }
         }
 
+        if (await RejectRemovalsAsync(db, ctx, unmatched, ct) is { } refused)
+        {
+            return refused;
+        }
+
+        db.AccessEntries.AddRange(added);
         db.AccessEntries.RemoveRange(unmatched);
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the problem a removal of these rules must be refused with, or null when the
+    /// caller may remove all of them: a deny may only be lifted by somebody who holds, at the
+    /// deny's own anchor, every action it withholds. Every path that removes rules a caller
+    /// chose, or lifts them for somebody — a list replace, a whole permission group deleted, a
+    /// trustee taken out of a group, a camp's sharing withdrawn — asks here.
+    /// </summary>
+    public static async Task<ProblemHttpResult?> RejectRemovalsAsync(
+        SilexGisDbContext db, AccessContext ctx, IEnumerable<AccessEntry> removed, CancellationToken ct)
+    {
+        if (ctx.IsFullAdmin)
+        {
+            return null;
+        }
+
+        foreach (var entry in removed.Where(e => e.Effect == AccessEffect.Deny))
+        {
+            var facts = await AnchorFactsAsync(db, entry, ct);
+            if (AccessEntryRules.ExceededByRemoval(ctx, entry.ToSnapshot(), facts) != AccessAction.None)
+            {
+                return ApiProblems.Forbidden(AccessEntryRules.RemovalExceedsOwnRightsCode);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Whether two rows state the same rule: everything but who wrote it and when.</summary>
@@ -413,6 +455,9 @@ public static class AccessEntryMapping
             [typeof(SavedFilter)] = Protected(
                 (db, id, ct) => db.SavedFilters.AnyAsync(x => x.Id == id, ct),
                 db => db.SavedFilters),
+            [typeof(CavePotentialModel)] = Protected(
+                (db, id, ct) => db.CavePotentialModels.AnyAsync(x => x.Id == id, ct),
+                db => db.CavePotentialModels),
             [typeof(Document)] = Protected(
                 (db, id, ct) => db.Documents.AnyAsync(x => x.Id == id, ct),
                 db => db.Documents.IgnoreQueryFilters()),

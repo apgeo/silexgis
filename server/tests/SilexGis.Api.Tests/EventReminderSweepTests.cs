@@ -26,9 +26,9 @@ namespace SilexGis.Api.Tests;
 /// asserted in the same test as the person who is not.
 /// </para>
 /// <para>
-/// The run-up window is shut wherever this suite runs, because one pass reads every row in the
-/// database every class shares. Each test that needs it open builds a host of its own that opens
-/// it, which is also the assertion that the setting is what governs the window.
+/// The run-up window is shut in this class's own host, because one pass reads every row in the
+/// class's database and its tests share it. Each test that needs it open builds a host of its own
+/// that opens it, which is also the assertion that the setting is what governs the window.
 /// </para>
 /// </summary>
 public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
@@ -175,8 +175,8 @@ public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable, IClas
 
     /// <summary>
     /// A shut window is a real operator setting: an installation may want the overdue check and no
-    /// reminders at all, and this suite depends on it, because one pass reads every row in the
-    /// database every class shares.
+    /// reminders at all, and this class depends on it, because one pass reads every row in the
+    /// class's database, which its tests share.
     /// </summary>
     [Fact]
     public async Task A_shut_window_reminds_nobody()
@@ -435,7 +435,7 @@ public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable, IClas
 
     /// <summary>
     /// The member's own inbox line for one event, found by the notification the sweep wrote for
-    /// them rather than by position, because the suite shares a database with every other class.
+    /// them rather than by position, because the tests of this class share one database.
     /// </summary>
     private async Task<JsonElement> InboxLineAsync(Guid eventId)
     {

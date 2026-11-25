@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
@@ -290,7 +291,21 @@ public static class DependencyInjection
     public static IServiceCollection AddSilexGisMessaging(this IServiceCollection services)
     {
         services.AddMemoryCache();
-        services.AddHttpClient(Sms.HttpSmsSender.HttpClientName);
+        services.AddOptions<Sms.SmsGatewayOptions>().BindConfiguration(Sms.SmsGatewayOptions.SectionName);
+        // Redirects are not followed: a gateway that answers "go over there" would otherwise
+        // carry the request, its authorisation header included, to an address nobody checked.
+        // No proxy either: the internal-address check runs on the connection the handler opens,
+        // and through a proxy that is the proxy's address rather than the gateway's — so a public
+        // proxy would carry a request to a private address straight past it.
+        services.AddHttpClient(Sms.HttpSmsSender.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(sp => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseProxy = false,
+                ConnectCallback = sp.GetRequiredService<IOptions<Sms.SmsGatewayOptions>>().Value.AllowInternalAddresses
+                    ? null
+                    : Sms.SmsGatewayAddress.ConnectToPublicAddressAsync,
+            });
 
         services.AddScoped<IAppSettingsService, AppSettingsService>();
         services.AddScoped<MessageTemplateStore>();
@@ -373,6 +388,11 @@ public static class DependencyInjection
         services.AddSingleton<IPhotoGeotagReader, MagickPhotoGeotagReader>();
         services.AddSingleton<IContentMetadataReader, ContentMetadataReader>();
         services.AddScoped<ContentIntake>();
+        services.AddOptions<UploadedGeodataOptions>()
+            .Bind(configuration.GetSection(UploadedGeodataOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<UploadedGeodataOptions>,
+            UploadedGeodataOptionsValidator>();
         services.AddSingleton<IVectorIO, GdalVectorIO>();
         services.AddSingleton<RasterCogService>();
         services.AddOptions<GeoreferencedMapOptions>()
@@ -458,6 +478,8 @@ public static class DependencyInjection
             services.AddSingleton<Surveys.ISurveyCompiler, Surveys.NoSurveyCompiler>();
         }
 
+        Analysis.WhiteboxRegistration.AddWhiteboxTools(services, configuration);
+
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 
@@ -517,6 +539,7 @@ public static class DependencyInjection
         // when two threads touch one, so whatever drives it either takes one piece of work at a time
         // or holds a gate of its own.
         services.AddSingleton<Domain.Terrain.ITerrainDerivativeComputer, Terrain.GdalDemDerivatives>();
+        services.AddSingleton<Terrain.TerrainLandforms>();
 
         // What ground each of a build's prepared rasters covers, described once and kept beside the
         // build. Scoped because it reads and writes rows.
@@ -526,6 +549,10 @@ public static class DependencyInjection
         // scoped because they read and write rows; the job kind runs on the terrain worker, which is
         // what keeps a picture from being drawn from rasters a build is in the middle of rewriting.
         services.AddScoped<Terrain.TerrainDerivativeCatalogue>();
+        services.AddScoped<Analysis.CavePotentialEvidenceBuilder>();
+        services.AddSingleton<Analysis.CavePotentialRasterWriter>();
+        services.AddScoped<Analysis.CavePotentialResultAccess>();
+        services.AddScoped<IProcessingJobHandler, CavePotentialRunHandler>();
         services.AddScoped<IProcessingJobHandler, TerrainDerivativeHandler>();
 
         // Turning those rasters into tiles. The program that does that is a command-line tool, run
@@ -586,6 +613,15 @@ public static class DependencyInjection
             configuration.GetSection(TripRetentionOptions.SectionName));
         services.AddScoped<IProcessingJobHandler, TripPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, TripRecordingConvertHandler>();
+
+        // The administrators' test-data generator: both halves of its switch, the run and its removal.
+        services.AddOptions<TestData.TestDataOptions>().BindConfiguration(TestData.TestDataOptions.SectionName);
+        services.AddScoped<TestData.TestDataAvailability>();
+        services.AddScoped<TestData.TestDataService>();
+        services.AddSingleton<TestData.TestDataRunner>();
+        services.AddSingleton<TestData.TestDataRemoval>();
+        services.AddScoped<IProcessingJobHandler, TestDataGenerateHandler>();
+        services.AddScoped<IProcessingJobHandler, TestDataRemoveHandler>();
         services.AddHostedService<TripPurgeScheduler>();
         return services;
     }

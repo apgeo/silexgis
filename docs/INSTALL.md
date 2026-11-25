@@ -9,6 +9,7 @@ are a database password, an admin account, and the public URL.
 - [Encryption at rest](#encryption-at-rest)
 - [Showing Word and Excel files](#showing-word-and-excel-files)
 - [Survey compiler (optional)](#survey-compiler-optional)
+- [Terrain analysis with WhiteboxTools (optional)](#terrain-analysis-with-whiteboxtools-optional)
 - [Terrain (optional)](#terrain-optional)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
@@ -70,6 +71,10 @@ The first start creates the database schema, seeds taxonomies, default map layer
 built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
+The built-in groups are given to an installation once. Administrators, Caving Group Managers,
+Editors and Reviewers can be deleted, and a deleted one stays deleted through restarts and
+updates; Full Administrators and All Users cannot be deleted and are always present.
+
 To load a small demo dataset (six caves with their entrances, a containing karst area and two
 surface features, trips with the people on them, four camps with a roster and the trips they
 gathered, two leads on the camp's board, club dates including a series and one with answers, two
@@ -81,6 +86,19 @@ something to show; re-running it puts back any row that was lost and leaves the 
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo
+```
+
+**It refuses a database that already holds real data.** It writes nothing — says how much it
+found, in counts only, and exits with code 2 so a script that runs it sees the refusal — when the database holds an account other than the bootstrap administrator
+and the built-in development accounts (`admin@test.local`, `editor@test.local`,
+`viewer@test.local`, `member@dev.local`), or a cave, trip or document that is not one of its own
+(its caves are coded `DEMO-…`, its trips are titled `Demo: …`, its documents carry "demo" in their
+titles). An installation that really is meant to have the demo beside real data says so
+explicitly; the demo set then still ties its trips, links and texts only to the caves, cabinets
+and documents it made itself:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll seed-demo --alongside-real-data
 ```
 
 **The demo set publishes its followed trip, and the address is not a secret.** So that a fresh
@@ -144,6 +162,31 @@ The account holds the Viewer role and belongs to Demo Caving Club, so it can rea
 public, everything visible to signed-in accounts, and everything that club may see. Treat it as
 what it is: a second party that exists so location protection can be watched working.
 
+## Generating test data
+
+A full administrator can fill an installation with invented, realistic test data from
+**Administration → Test data**: caves with every register field, their entrances and the karst
+areas around them, placed in real Romanian karst massifs with real village, valley and river names
+around them — the caves themselves are invented. A run is repeatable (the same profile and seed give
+the same data), listed row by row, and removable from the same page; removal never touches data the
+run did not create, and keeps a generated area that somebody has since put a cave of their own in.
+
+Every generated object carries the tag `testgenerated`, and every generated description ends with a
+line saying it is test data. When the database already holds caves, trips or documents that no run
+created, the page asks for a confirmation before generating beside them.
+
+The same is available from the command line, for the bootstrap administrator:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll generate-test-data --profile small
+docker compose exec api dotnet SilexGis.Api.dll generate-test-data --profile default --seed 7 --alongside-existing-data
+docker compose exec api dotnet SilexGis.Api.dll remove-test-data <run id>
+```
+
+`--profile` takes `small` (25 caves), `default` (500) or `large` (5,000), or the path of a profile
+file (JSON, as shown on the page). The generator is on by default; `SILEXGIS__TestData__Allowed=false`
+removes it from a deployment altogether.
+
 ## Running a test installation (public demo logins)
 
 An installation meant for strangers to try — a public demo, a place to show the application
@@ -152,7 +195,14 @@ without handing out accounts — can announce working demo credentials on its ow
 ```bash
 SILEXGIS__TestLogins__Enabled=true
 # SILEXGIS__TestLogins__Password=test-login-pass-1   # the default; all three accounts share it
+# SILEXGIS__TestLogins__AllowOnRealData=true        # only if the database holds other accounts — see below
 ```
+
+The switch refuses a database that holds real data: with it on, the installation does not start
+when its database holds an account other than the bootstrap administrator and the built-in
+development accounts, or a cave, trip or document owned by such an account, and the log says how
+many of each it found. A test installation whose visitors may register accounts of their own
+needs `SILEXGIS__TestLogins__AllowOnRealData=true` to keep starting once one does.
 
 At the next start this seeds three accounts and the sign-in page lists them, each with a
 fill-in button and a note on what it may do:
@@ -388,7 +438,7 @@ the database, the uploads and the keys in one step:
   needs covering separately.
 
 **2. Encrypt the backups.** `deploy/scripts/backup.sh` writes plain `db.sql.gz`, `files.tar.gz` and,
-when browser-uploaded terrain rasters exist, `terrain-uploads.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
+when browser-uploaded terrain rasters exist, `terrain-uploads.tar.gz`, and when any cave-potential map has been computed, `cave-potential.tar.gz`. A backup is the copy most likely to end up somewhere you do not control, so
 encrypt it before it leaves the host and keep the passphrase somewhere other than the backup
 medium:
 
@@ -397,9 +447,10 @@ cd deploy
 sh scripts/backup.sh
 age -r age1yourrecipientkey... -o backups/<timestamp>/db.sql.gz.age    backups/<timestamp>/db.sql.gz
 age -r age1yourrecipientkey... -o backups/<timestamp>/files.tar.gz.age backups/<timestamp>/files.tar.gz
-# only when the backup has one:
+# only when the backup has them:
 age -r age1yourrecipientkey... -o backups/<timestamp>/terrain-uploads.tar.gz.age backups/<timestamp>/terrain-uploads.tar.gz
-shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz backups/<timestamp>/terrain-uploads.tar.gz
+age -r age1yourrecipientkey... -o backups/<timestamp>/cave-potential.tar.gz.age backups/<timestamp>/cave-potential.tar.gz
+shred -u backups/<timestamp>/db.sql.gz backups/<timestamp>/files.tar.gz backups/<timestamp>/terrain-uploads.tar.gz backups/<timestamp>/cave-potential.tar.gz
 ```
 
 `gpg --encrypt --recipient …` works the same way. To restore, decrypt back to the original
@@ -827,6 +878,134 @@ To check the compiler is there, open the device capabilities the phone reads,
 `compiler.version` names Therion once the service has answered. To stop compiling, stop the
 service and set the mode back to `none`; runs that fail meanwhile say the compiler is not available
 and can be run again with *Rerun*.
+
+## Terrain analysis with WhiteboxTools (optional)
+
+Some terrain analyses — geomorphons, the landform class (peak, ridge, valley, pit and six more) of
+every cell of the elevation model, first — are not something the application's own raster library
+can compute. They are run by [WhiteboxTools](https://www.whiteboxgeo.com/), a separate program
+(the MIT-licensed open core, version 2.4.0), when the installation chooses to run it. Without it
+those analyses are listed as not available, saying why; everything else works as before. What the
+program is given is an elevation raster and nothing else — never a cave's position.
+
+**In Docker**, start the analysis overlay and tell the application to use it:
+
+```bash
+# in deploy/.env
+SILEXGIS__Analysis__Whitebox__Mode=service
+
+docker compose -f docker-compose.yml -f docker-compose.whitebox.yml up -d
+```
+
+The overlay builds an image from the server sources with WhiteboxTools compiled from the source of
+its tagged release, checked against a pinned checksum (the build stops if the download ever
+differs), and starts it as `whitebox`, with no published port, on an internal network the application shares
+with it and which has no way out. It runs with a read-only filesystem, no capabilities, a memory
+limit (`SILEXGIS_WHITEBOX_MEMORY`, default `6g`), a processor limit (`SILEXGIS_WHITEBOX_CPUS`,
+default `2`) and a process limit, and holds nothing worth reading — no database password, no stored
+files, none of the application's settings. It runs only the tools the application has an analysis
+for. Each run is further bounded by `SILEXGIS__Analysis__Whitebox__TimeoutSeconds`,
+`__MaxMemoryBytes` and `__MaxOutputFileBytes`, runs one at a time
+(`SILEXGIS__WhiteboxService__MaxConcurrentRuns`, default `1`), takes inputs of at most
+`SILEXGIS__WhiteboxService__MaxInputBytes` (default 2 GB), and its directory (on the
+`silexgis-whitebox-work` volume) is deleted when it ends. Compiling the program makes the first
+build of this image slower — a couple of minutes on a large machine, longer on a small server, and
+about two gigabytes more of build cache — and later builds reuse it. It is compiled for the server's own processor, ARM included.
+
+As with the survey compiler, the program is not wrapped in bubblewrap inside the container: under
+Docker's default security profile bubblewrap cannot create its namespaces, and the container is the
+sandbox there.
+
+**Natively on Linux** (the scripted [Non-Docker install](#non-docker-install) does not do this for
+you), download the Linux archive, check it, and put the program somewhere of its own that the
+account the API runs as can read but not write:
+
+```bash
+curl -fsSLO https://www.whiteboxgeo.com/WBT_Linux/WhiteboxTools_linux_amd64.zip
+echo "370493b569aaf84977fde95921f96d4a39c1820a2d36d907da9d53772295f440  WhiteboxTools_linux_amd64.zip" | sha256sum -c -
+unzip -q WhiteboxTools_linux_amd64.zip
+sudo install -d /opt/whitebox
+sudo install -m 0755 WhiteboxTools_linux_amd64/WBT/whitebox_tools /opt/whitebox/
+echo "96bb47a9d1f0fe8a3cb46df524242c990eab9bc2ae1930e540e09328331172e4  /opt/whitebox/whitebox_tools" | sha256sum -c -
+printf '{\n  "verbose_mode": false,\n  "working_directory": "",\n  "compress_rasters": true,\n  "max_procs": -1\n}\n' \
+  | sudo tee /opt/whitebox/settings.json > /dev/null
+/opt/whitebox/whitebox_tools --version    # WhiteboxTools v2.4.0 …
+sudo apt-get install bubblewrap
+```
+
+These are the checksums of the vendor's archive and program of version 2.4.0. The vendor publishes
+each release at the same address, so a mismatch means it has published a newer one, not
+necessarily that the download is damaged — move to the newer one deliberately, or build 2.4.0 from
+its tagged source as the analysis image does (`deploy/whitebox/Dockerfile` names the source
+archive, its checksum and the compiler version). Only the program is needed, with a `settings.json` of your own beside it (the one
+above is the one the analysis image writes): not the `plugins` folder beside it in the archive, two
+of whose programs download and install software, and not the vendor's `settings.json`, which names
+a working directory on its author's machine. Then, in the API's configuration
+(`/etc/silexgis/silexgis.env` on a scripted install), and restart:
+
+```bash
+SILEXGIS__Analysis__Whitebox__Mode=local
+SILEXGIS__Analysis__Whitebox__WhiteboxPath=/opt/whitebox/whitebox_tools
+```
+
+The API then starts the program itself, inside a bubblewrap sandbox (no network, its own folder
+read-only, the run's directory as the only place it reads and writes, limits on time, memory and
+file size, none of the API's environment), and refuses to run it without one unless
+`SILEXGIS__Analysis__Whitebox__AllowUnsandboxed=true`. Each run is made in a directory of its own
+beside the picture it computes, under `SILEXGIS__Terrain__BuildRoot`, and deleted when it ends; that
+path must not contain `=` or a quote, which the program cannot be handed (a run refuses, saying so).
+
+**Natively on Windows**, the same, by hand. Download
+`https://www.whiteboxgeo.com/WBT_Windows/WhiteboxTools_win_amd64.zip` and check it in PowerShell:
+
+```powershell
+(Get-FileHash .\WhiteboxTools_win_amd64.zip -Algorithm SHA256).Hash
+# 2B39F0FC90F73B295467850BD470BFACD3DAB34E84B8550C049D30B4F7600D6B for version 2.4.0
+```
+
+Unpack it and copy `WBT\whitebox_tools.exe` (SHA-256 `1212C668F89048E3189B9AD73F2670E60F8CD4B7A976272FC27F502C5157C925`)
+and `WBT\LICENSE.txt` into a folder of their own, for example `C:\Program Files\WhiteboxTools`,
+with a `settings.json` beside them holding the same contents as on Linux above. Leave the
+`plugins` folder out here above all, because nothing on Windows stops a program it starts from
+reaching the network. Then add to `C:\ProgramData\SilexGIS\config\silexgis.env`:
+
+```
+SILEXGIS__Analysis__Whitebox__Mode=local
+SILEXGIS__Analysis__Whitebox__WhiteboxPath=C:\Program Files\WhiteboxTools\whitebox_tools.exe
+SILEXGIS__Analysis__Whitebox__AllowUnsandboxed=true
+```
+
+and run the installer again, which copies the settings into the Windows service (see
+[Windows](#windows) under the non-Docker install). Windows has no bubblewrap, so the third line is
+required, and what the program gets is less than on Linux: it runs as the API's own account, with
+the application's settings removed from its environment, its temporary files in the run's
+directory, and stopped at the time limit; its outputs are measured against
+`__MaxOutputFileBytes` and `__MaxOutputBytes` after it ends. There is no memory limit and no
+filesystem of its own — it could read whatever the API's account can. What it is handed is an
+elevation raster and nothing else, so this is a choice about trusting the program you downloaded,
+not about cave data; an installation that wants the boundary runs the analysis service in Docker
+instead.
+
+**Checking it works.** On the *Terrain* page, the *Derived pictures* form lists **Landform
+classes** among the kinds; where the installation cannot compute it, the entry reads *(not
+available here)* and the line under the field says why — not configured, the program not found, or
+(on Linux) the sandbox not found. The same answer is `GET /api/v1/terrain/derivatives/kinds`, for
+an account that may read terrain. In `service` mode the kind is always offered; a service that does
+not answer fails that picture, after the job queue's own retries, with a message saying so.
+
+A mode other than `none`, `local` or `service`, or `service` without a usable `http(s)` address,
+stops the application at start with a message naming the setting. In `local` mode a missing
+program or a missing sandbox is not fatal: the API log says which at start, and the analyses are
+listed as not available with that reason.
+
+**Switching it off** (`SILEXGIS__Analysis__Whitebox__Mode=none`, or stopping the overlay) keeps
+every landform picture already computed: it is elevation already turned into classes, so it still
+draws on the map and the area statistics still count against it. Only new ones cannot be asked for.
+
+**When the image build stops at the checksum**, the source archive it downloaded is not the one
+the release was pinned to. A tagged release's archive does not change, so treat it as a damaged or
+tampered download, not as a newer release: the build refuses it rather than compile code nobody
+checked. The pin in `deploy/whitebox/Dockerfile` moves only with a SilexGIS update.
 
 ## Terrain (optional)
 
@@ -1529,13 +1708,15 @@ docker compose -f docker-compose.yml -f docker-compose.scans.yml up -d --build
 
 It is behind the `hdmapping` profile because building it compiles HDMapping, which takes most of an
 hour. It is isolated exactly as the tiler is (no network, read-only, no capabilities, bounded
-processes) and shares the `silexgis-scans` volume with it; each worker announces its own steps in the
-volume's `capabilities.json` and keeps the other's, so **rebuild both images together** after an
-update — an older tiler image rewrites that file without the HDMapping steps. Its limits are
+processes), and works on a volume of its own, `silexgis-scans-hdmapping`, rather than the tiler's
+`silexgis-scans`: it runs C++ programs over raw uploads, so it is given only its own jobs and never
+sees the tiler's jobs or its announcement. The application mounts both volumes and leaves each step's
+job in the directory of the worker that runs it (`SILEXGIS__Scans__HdmappingHandoffRoot`), and reads
+each worker's `capabilities.json` from its own directory. Its limits are
 `SILEXGIS_SCANS_HDM_MEMORY` (16 GB; odometry peaked at 11.9 GB on a 15-minute two-sensor recording
 and 5.7 GB on a 6-minute one) and `SILEXGIS_SCANS_HDM_CPUS` (8; odometry runs about 1.4 times as
 long as the recording on 12 processors). **Disk:** while odometry runs its cache grows to about
-twenty times the recording inside the job's directory on the scans volume, and the worker refuses a
+twenty times the recording inside the job's directory on its volume, and the worker refuses a
 recording the volume has no room for (it wants 22 times the recording free) rather than fill it.
 The cache is removed when the step ends. Without this worker a recording is archived and inspected,
 and its run ends saying it was not processed; *Rerun* processes it once the worker is there.
@@ -1627,7 +1808,7 @@ through the terrain page:
 
 ```bash
 cd deploy
-sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz]}
+sh scripts/backup.sh                 # → ./backups/<timestamp>/{db.sql.gz,files.tar.gz[,terrain-uploads.tar.gz][,cave-potential.tar.gz]}
 ```
 
 A backup is all of those files or none of them. Each archive is written into a hidden `.incomplete`
@@ -1647,8 +1828,29 @@ sh scripts/restore.sh ./backups/<timestamp>
 docker compose up -d
 ```
 
-A backup without `terrain-uploads.tar.gz` — one made before it existed, or by an installation that
-never uploaded a raster — restores as before and leaves the terrain volume as it is.
+A backup without `terrain-uploads.tar.gz` or without `cave-potential.tar.gz` — one made before it
+existed, or by an installation that never uploaded a raster or computed a cave-potential map —
+restores as before and leaves that folder of the terrain volume as it is.
+
+### Copying an installation's data to another installation
+
+To replicate one installation's dataset in another, make a bundle and serve it over HTTPS:
+
+```bash
+sh scripts/export-bundle.sh /srv/export/<random-name>      # db.sql.gz, files.tar.gz, SHA256SUMS, MANIFEST.txt
+```
+
+Browser-uploaded terrain rasters are left out unless `--with-terrain` is given, and baked terrain is
+never included (it is rebuilt from its recipe). On the receiving installation:
+
+```bash
+sh scripts/import-bundle.sh https://host/<random-name>/ --yes
+```
+
+The import downloads everything, checks it against `SHA256SUMS`, and only then stops the api, runs
+`restore.sh` and starts the stack again, which applies any newer migrations. **It replaces the
+receiving installation's database and uploads.** The bundle carries everything the database holds,
+password hashes and share tokens included, so serve it only where that is acceptable.
 
 ### Rehearsing a restore
 
@@ -1683,12 +1885,19 @@ files — see [Backups and restoring](#backups-and-restoring) under Non-Docker i
 Both outputs are unencrypted. If a copy leaves the host — offsite, object storage, a USB disk —
 encrypt it first; see [Encryption at rest](#encryption-at-rest).
 
-**Terrain: only the rasters uploaded through the browser are backed up.** A raster somebody
+**Terrain: only the rasters uploaded through the browser and the computed cave-potential maps are
+backed up.** A raster somebody
 uploaded on the terrain page has exactly one copy — in the `builds/uploads` folder of the terrain
 volume, with no copy in the file store — and a build keeps the ones it names there until somebody
 deletes the build (one no build names is removed after a day; see
 `SILEXGIS__Terrain__UploadRetentionHours`). So `backup.sh` archives that folder, and only that, as
-`terrain-uploads.tar.gz`; an installation that never uploaded one gets no such file. Everything else
+`terrain-uploads.tar.gz`; an installation that never uploaded one gets no such file. A computed
+cave-potential map is dated on purpose, and elevation and features move on, so it cannot be recomputed
+into the same answer; its row is in the database, so a restored installation without the file would
+list maps nobody can open. `backup.sh` therefore also archives the volume's `builds/cave-potential`
+folder, and only that, as `cave-potential.tar.gz` (no file when no map has been computed). A map whose
+run was deleted, or whose area or account was purged, is removed from that folder by the hourly
+housekeeping pass, so the archive does not grow with maps nobody can reach. Everything else
 on the volume is left out on purpose, and this is the reasoning so that you can disagree with it
 knowingly:
 
@@ -1714,7 +1923,8 @@ docker run --rm -v silexgis_silexgis-terrain:/data:ro -v "$PWD/backups":/backup 
 ```
 
 (`restore.sh` does not read that file; unpack it into the volume by hand.) The restore replaces only
-the volume's `builds/uploads` folder, so builds and pyramids beside it are not touched by it.
+the volume's `builds/uploads` and `builds/cave-potential` folders, so builds and pyramids beside them
+are not touched by it.
 
 ### Restoring a backup from before the migration baseline
 
@@ -1744,7 +1954,7 @@ chain, let that build bring the database forward, and then update:
 4. **Return to the current revision** (`git checkout <your branch>`), rebuild and start; the
    current build then moves the history onto the baseline by itself.
 
-The files archive and `terrain-uploads.tar.gz` do not depend on the schema and restore the same way
+The files archive, `terrain-uploads.tar.gz` and `cave-potential.tar.gz` do not depend on the schema and restore the same way
 whichever build is running. The restore rehearsal (`restore-drill.sh`) loads a dump into a throwaway
 database that has no application on it, so it works on a pre-baseline dump too — it compares
 tables with the running installation, which has since moved on, and says so.
@@ -2211,6 +2421,21 @@ For Twilio, point `Url` at
 `ContentType=application/json` and a body such as
 `{"to":"{to}","from":"{from}","message":"{text}"}`.
 
+The gateway has to be a service on the internet. An address on the server itself, or on a private,
+shared (`100.64.0.0/10`, which tailnets use) or link-local network, is refused when the settings
+are saved and again whenever a message is sent, and the gateway's redirects are not followed — so
+the settings page cannot be used to reach what only the server can reach. If your gateway really
+does run beside the installation, allow it here (the settings page cannot change this):
+
+```env
+SILEXGIS__SmsGateway__AllowInternalAddresses=true
+```
+
+Moving the mail settings to another host or port, or the SMS settings to another gateway address,
+drops the stored mail password or the gateway's authorisation header unless the same save types
+it again. After such a save the settings page shows a warning above the section naming the secret
+it dropped, and the warning stays until the next save; type the password or header again.
+
 A configured SMS gateway is also what a charging notification channel needs: with
 `SILEXGIS__Announcements__PaidChannelsEnabled` on, an announcement to a caving group may be
 texted to the members who have confirmed a telephone number, and every such message is charged by
@@ -2480,7 +2705,9 @@ sudo node deploy/native/update.mjs --no-pull  # build the checkout as it is, wit
 
 The same procedure as the Docker path's update script: one update at a time; fetch and
 fast-forward the checkout, submodules included; **back up first** (to
-`/var/backups/silexgis/<timestamp>/`, keeping the newest `SILEXGIS_BACKUP_KEEP`, default 10); build
+`/var/backups/silexgis/<timestamp>/`, keeping as many as the nightly backup timer keeps — the
+installer's `--backup-keep`, recorded at install time, default 14; `SILEXGIS_BACKUP_KEEP` overrides
+it for one run); build
 the new version beside the running one, so a build that fails changes nothing; bring the nginx site
 and the unit up to date; switch, start, wait for `/health/ready` (up to
 `SILEXGIS_HEALTH_TIMEOUT` seconds, default 300) and run the check. **If the new version is not
@@ -2506,7 +2733,8 @@ It writes **the same files the Docker path's `backup.sh` writes**: `db.sql.gz` (
 `pg_dump`, made with this machine's `pg_dump` as the application's role), `files.tar.gz` (the
 uploads directory) and, when rasters were uploaded through the terrain page,
 `terrain-uploads.tar.gz` (the terrain directory's `builds/uploads` folder, the same member path as on
-the Docker path, so either path restores the other's). The keys and the rest of the terrain are left
+the Docker path, so either path restores the other's) and, when any cave-potential map was computed,
+`cave-potential.tar.gz` (`builds/cave-potential`, likewise). The keys and the rest of the terrain are left
 out for the reasons given under [Backups](#backups). The installer's nightly timer runs this command; see it with
 `systemctl list-timers silexgis-backup.timer`.
 
@@ -2516,7 +2744,7 @@ sudo node deploy/native/restore.mjs /var/backups/silexgis/<timestamp> --yes
 
 It first reads every archive of the backup back in full, and refuses with nothing changed a backup
 that does not: a `db.sql.gz` cut short or without `pg_dump`'s closing line, or a `files.tar.gz` or
-`terrain-uploads.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
+`terrain-uploads.tar.gz` or `cave-potential.tar.gz` that `tar` cannot list. Then it stops the API, drops and recreates the
 database's `public` schema, loads the dump, unpacks the files, hands them to the service account and starts the API again. **It fails on any error in the
 load** except the three the Docker restore also lets through (the PostGIS image's `tiger`,
 `tiger_data` and `topology` schemas already existing) — and then leaves the files untouched and the
@@ -2577,6 +2805,11 @@ otherwise) and `--web-server none`. What that covers, and what it does not:
   `C:\ProgramData\SilexGIS\config\nginx-silexgis.conf`, ready for nginx for Windows. IIS in front
   needs URL Rewrite and Application Request Routing, and the site's headers and log scrubbing
   rebuilt by hand (see [The web server](#the-web-server)).
+- **Not covered: the optional programs.** The terrain-analysis program (WhiteboxTools) is set up by
+  hand, in `local` mode and without a sandbox — see
+  [Terrain analysis with WhiteboxTools (optional)](#terrain-analysis-with-whiteboxtools-optional).
+  Leave its folder under `C:\Program Files`, where the service's account can read and run it but
+  not change it.
 - **File permissions** are set as described above in `windows-service` mode only; in `process` mode
   the directories inherit ProgramData's, which every local account can read — restrict `config\`
   to Administrators yourself.
@@ -2640,6 +2873,7 @@ the reasoning beside each one.
 | `SILEXGIS__Scans__MaxTotalBytes` | `0` (no separate cap) | the most everything kept for point clouds may take together — uploaded originals (always kept) and every product made from them. Checked beside the installation and account caps when a point-cloud upload opens, as each file arrives, and before each processing step, which is refused before it starts with the missing amount (code `storage.insufficient` for an upload, `survey_pipeline.storage_insufficient` for a run) |
 | `SILEXGIS__Scans__ProcessingEnabled` | `false` | whether this installation has a worker that can tile a point cloud. Set by the same deployment that starts the scans worker (see *Point-cloud worker (optional)*); switched on with no worker running, every point-cloud upload fails at the first worker step, saying so, once `PickupSeconds` have passed — the same wait whether the worker never announced itself or announced itself and takes nothing |
 | `SILEXGIS__Scans__HandoffRoot` | `data/scans` (the compose stack sets `/data/scans`) | the directory the application and the scans worker leave jobs and answers for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
+| `SILEXGIS__Scans__HdmappingHandoffRoot` | empty (the compose stack sets `/data/scans-hdmapping`) | the HDMapping worker's own hand-off directory, on a volume only it and the application mount. The steps that worker runs (odometry, export and the exported cloud's check) are left here, and its announcement and default parameters are read from here, so it never sees the tiler's jobs. Empty, both workers share `HandoffRoot` |
 | `SILEXGIS__Scans__PickupSeconds` | `300` | how long a job may wait in the hand-off directory before something takes it. Past this the run fails saying no worker is running, rather than waiting for an answer nothing will write |
 | `SILEXGIS__Scans__JobTimeoutSeconds` | `14400` | the most one worker step (estimate, thin, tile) may run before it is called off and the run fails. Four hours: tiling was measured at about a minute per 40 million points |
 | `SILEXGIS__Scans__DisplayWarnPoints` | `50000000` | above this many points, the upload is shown the estimate table and a thinned display copy is suggested |
@@ -2669,6 +2903,17 @@ the reasoning beside each one.
 | `SILEXGIS__TherionService__MaxConcurrentCompiles` | `1` | *read by the survey compiler container, not the API* (the overlay passes it through): how many compiles it runs at once; the rest wait their turn. Each compile can use up to `SILEXGIS__SurveyCompiler__MaxMemoryBytes`, so raise `SILEXGIS_THERION_MEMORY` with it. One at a time also means a run's files are the only survey files in the container while it compiles |
 | `SILEXGIS__TherionService__MaxProjectBytes` | `268435456` | *read by the survey compiler container, not the API* (the overlay passes it through): the most one project sent to it may hold, sources and drawings together (256 MB). A larger one is refused, that run fails (as `survey_pipeline.unexpected`), and the API log names the refusal. Never below 1 MB |
 | `SILEXGIS__SurveyCompiler__WorkDir` | *(empty)* | where compile runs are made, one directory per run, deleted when the run ends however it ends. Empty, `survey-work` under `SILEXGIS__Files__Root` — on the volume already sized for files. Do not point it at a memory-backed temporary directory: a run writes the project, Therion's own temporary files and every output |
+| `SILEXGIS__Analysis__Whitebox__Mode` | `none` | whether and where WhiteboxTools runs the terrain analyses that need it (see *Terrain analysis with WhiteboxTools (optional)*). `none` runs nothing: those analyses are listed as not available. `local` starts the `whitebox_tools` program installed beside the API, inside a bubblewrap sandbox. `service` hands each run to the analysis container; a service that does not answer fails that run as not available, and the job queue tries it again. **Checked at start:** any other value stops the application with a message naming the setting |
+| `SILEXGIS__Analysis__Whitebox__Url` | *(empty)* | the analysis service's address in `service` mode. The overlay sets it to `http://whitebox:3200`. **Checked at start:** `service` without an `http` or `https` address stops the application |
+| `SILEXGIS__Analysis__Whitebox__WhiteboxPath` | *(empty)* | the WhiteboxTools program `local` mode runs. Empty, the first `whitebox_tools` on the search path. Its folder (which holds the program's `settings.json`) is made visible to the sandbox read-only |
+| `SILEXGIS__Analysis__Whitebox__BwrapPath` | *(empty)* | the bubblewrap program `local` mode starts WhiteboxTools through. Empty, the first `bwrap` on the search path |
+| `SILEXGIS__Analysis__Whitebox__AllowUnsandboxed` | `false` | whether `local` mode may run WhiteboxTools without the sandbox when bubblewrap is not found. `false` makes the analyses unavailable (the API log says why); `true` runs the program directly with the same limits and an emptied environment, and the API log warns at start-up. Windows has no bubblewrap and needs `true` |
+| `SILEXGIS__Analysis__Whitebox__TimeoutSeconds` | `1800` | how long one run may take before it is stopped. **Checked at start:** outside 10 to 21600 seconds stops the application |
+| `SILEXGIS__Analysis__Whitebox__MaxMemoryBytes` | `4294967296` | the address space one run may use (4 GB). Size it against the memory the server is guaranteed, not the total it reports; in the analysis container keep `SILEXGIS_WHITEBOX_MEMORY` above it. Never below 256 MB |
+| `SILEXGIS__Analysis__Whitebox__MaxOutputFileBytes` | `2147483648` | the largest single file one run may write (2 GB). A larger output is removed and the run fails. Never below 1 MB |
+| `SILEXGIS__Analysis__Whitebox__MaxOutputBytes` | `4294967296` | the most the outputs of one run may hold together (4 GB) — in `service` mode also the most one answer may carry. More fails the run rather than being stored. Never below 1 MB |
+| `SILEXGIS__WhiteboxService__MaxConcurrentRuns` | `1` | *read by the analysis container, not the API* (the overlay passes it through): how many runs it makes at once; the rest wait their turn. Raise `SILEXGIS_WHITEBOX_MEMORY` with it |
+| `SILEXGIS__WhiteboxService__MaxInputBytes` | `2147483648` | *read by the analysis container, not the API* (the overlay passes it through): the most the inputs of one run may hold (2 GB). A larger run is refused. Never below 1 MB |
 | `SILEXGIS__TripTracking__PublishRealNames` | `true` | whether a **published** trip names the party for real. On by default, and the one setting here that defaults to showing something: a club publishes a trip so that families and friends can watch a party come out, and a page that will not say which person is still underground does not answer the question it was opened for. Set it to `false` and every published page in this installation goes back to naming nobody — each person appears as their place in the party ("Caver 2") and the page says nothing else about who they are. It applies as each page is read rather than being stored on a share, so it moves links already handed out in both directions: turning it off closes the disclosure on every live link with nothing to re-issue, and turning it on — which is what upgrading from a build before this setting existed does — opens it on links minted when the page named nobody. An installation with follow links in circulation should decide in the same step as the upgrade; see "Upgrading across the release that names the party on published trips" above. Two things it does not decide. An administrator can give one person a name of their own for a trip's page, and that name is what the page shows whichever way this is set — which is how somebody who does not want to appear is kept off a public page without the club turning names off for everybody. And a cave whose coordinates are protected still cannot be published at all, whatever this says. Note that where a club has also allowed its own website to embed the page, that site is told the party the same way |
 | `SILEXGIS__TripTracking__PublishExpectedReturn` | `false` | whether a **published** trip says the hour its party planned to be out by. **Off by decision, not by oversight:** the question "may a published page show the hour a party planned to be out?" was put to this project's owner, who answered no, so this default is deliberate, is not waiting to be flipped, and should not be "corrected" to `true` by a later change on the assumption that somebody forgot it. The setting stays because it is how an installation whose own answer differs — or a later change of mind — gets it without new code. Off unless you turn it on: it tells people without an account something about the party's plan that a published page does not otherwise say, and whether your club wants that said in public is yours to decide. Set it to `true` and the page of a trip that is being followed gains one line under "followed since" — "planned out by 17:00" — for as long as somebody of that party is still underground; once the hour has passed the line says so in the same calm words and nothing more. It is the hour typed into the trip as "expected back", and only that: the alarm hour of the trip's overdue callout, whether that callout has gone off or been stood down, and anything else about it are never published, and switching this on sends nothing and alerts nobody. An hour that is not later than the moment the watch was started is left out, because it belongs to an earlier outing of the same trip record. Finished trips never show it — not in the list of past trips and not in a replay. Like the setting above it is read as each page is drawn, so it applies to links already handed out, in both directions |
 | `SILEXGIS__TripTracking__PublishClubs` | `false` | whether a **published** trip says which caving groups each person named on it belongs to. Off unless you turn it on: whom somebody caves with is a fact about them no published page said before, and whether people without an account read it is yours to decide. Set it to `true` and each person named by their own name carries the names of their caving groups, in alphabetical order, on a trip being followed, on the list of trips being followed and on a finished trip's replay — what a club's journal page needs to count its figures per club without keeping a list of its own. Never beside a caption (that is how somebody is kept off a public page, and their club beside it would point at them), never where `PublishRealNames` is off, and nothing about a person's role in a group. Read as each page is drawn, so a person who joins or leaves a group is shown so on the next read, and it applies to links already handed out, in both directions |
@@ -2692,8 +2937,14 @@ the reasoning beside each one.
 | `SILEXGIS__GraphDemo__Allow` | `false` | permits `seed-graph-demo` on a host that is not in development. That command writes a few thousand invented rows (caves, trips, documents, links, clubs) and, when the test logins exist, makes them members of the invented clubs, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
+| `SILEXGIS__TestData__Allowed` | `true` | whether this deployment offers the **test-data generator**: a page for full administrators (*Administration → Test data*) that fills the database with invented but realistic caves, entrances and areas — and, as it grows, people, trips, documents and files — and removes them again. `false` hides the page, refuses its routes as if they did not exist, and refuses the `generate-test-data` command |
+| `SILEXGIS__TestData__Enabled` | `true` | the administrators' half of the generator's switch. **A default only:** the administrator settings page (tab *Test data*) changes it while the application runs, and a saved value wins over this one. The generator works only while this and `Allowed` are both on |
+| `SILEXGIS__TestData__MaxCaves` | `20000` | the most caves one run may ask for on this deployment (never more than 50,000) |
+| `SILEXGIS__MapSymbols__EntranceSymbol` | `shape:cave` | the marker cave entrances are drawn with on the map, in the 3D view and on shared map links: a symbol file shipped in `client/public/feature_symbols` (`osm_cave.svg`, `qgis_poi_cave.svg`, …) or a drawn shape — `shape:` followed by `circle`, `dot`, `ring`, `square`, `triangle`, `diamond`, `star`, `cross` or `cave`, optionally with a colour as six lower-case hex digits (`shape:triangle:146262`). **A default only:** the administrator settings page (tab *Map symbols*) chooses it from the whole library with a preview while the application runs, and a saved value wins over this one. A value that is not a well-formed symbol is ignored in favour of the default |
+| `SILEXGIS__MapSymbols__ApproximateEntranceSymbol` | `shape:cave:d46b08` | the marker of a protected entrance shown only approximately (snapped to the protection grid for a reader without exact view). Same values and the same rules as the line above; choose something a reader can tell from it — a drawn shape is also given a dashed outline here |
 | `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
 | `SILEXGIS__TestLogins__Password` | `test-login-pass-1` | the one password all three demo accounts share. A change is applied to existing accounts at the next start, so the page never advertises a credential that does not work |
+| `SILEXGIS__TestLogins__AllowOnRealData` | `false` | with the test logins switched on, the installation refuses to start when its database holds an account other than the bootstrap administrator and the built-in development accounts, or a cave, trip or document owned by such an account — so an environment file copied from a test host cannot publish an administrator password on a real one. `true` says that is known and wanted |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |
@@ -2764,6 +3015,7 @@ the reasoning beside each one.
 | `SILEXGIS__Basemap__BuildsUrl` | `https://build-metadata.protomaps.dev/builds.json` | the list of builds the page offers, and where "the latest" is looked up |
 | `SILEXGIS__Basemap__ExtractorPath` | `pmtiles` | the program that cuts the region — the `pmtiles` command-line tool, which the api image carries |
 | `SILEXGIS__Basemap__MaxBytes` | `5000000000` (5 GB) | the largest extract accepted. Romania to zoom 15 is about 1.3 GB, Europe about 49 GB |
+| `SILEXGIS__Basemap__ExtractStallSeconds` | `900` (15 minutes) | how long the extracting program may print nothing before the download is taken as stalled, stopped, and failed as "the source could not be reached". It prints progress continuously while bytes arrive, so silence means the source stopped answering; without this a stalled download holds the one-at-a-time job lane until cancelled by hand |
 | `SILEXGIS__Basemap__InitialRegion` | *(empty)* | a region (`romania`, or `apuseni` for a karst region) downloaded by itself on the first start that finds no basemap and no download ever asked for — for test and showcase installations. Once only |
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
@@ -2789,7 +3041,7 @@ the reasoning beside each one.
 | `SILEXGIS__Map__MeshesInViewMaxCaves` | `12` | the most caves whose walls one such view is answered with, nearest the middle of the view first. The view says how many caves there were in all |
 | `SILEXGIS__Map__MeshesInViewMaxCavesLimit` | `60` | the most caves a member may raise that number to for their own browser; a request for more is answered as this many. Every mesh is fetched from this installation, so this is where you keep the last word on how much one view may pull. Set it equal to the default to let nobody raise it; a default set above it is held to it |
 | `SILEXGIS__Map__MeshesInViewMaxBytes` | `67108864` (64 MB) | how much wall mesh the 3D view may hold at once in that mode, counted in the bytes the meshes are to download. A browser needs roughly twice that in graphics memory, so raise it with the machines your members use in mind; caves that do not fit are left out and counted on screen, nearest first |
-| `SILEXGIS__Map__MeshesInViewMaxBytesLimit` | `536870912` (512 MB) | the most a member may raise that budget to for their own browser — a workstation with a real graphics card can hold far more walls than the default assumes, and a phone far fewer. The budget is spent by the browser, which is told this ceiling and keeps to it. Set it equal to the default to let nobody raise it; a default set above it is held to it |
+| `SILEXGIS__Map__MeshesInViewMaxBytesLimit` | `536870912` (512 MB) | the most a member may raise that budget to for their own browser — a workstation with a real graphics card can hold far more walls than the default assumes, and a phone far fewer. The budget is spent by the browser, which is told this ceiling and keeps to it. Set it equal to the default to let nobody raise it; a default set above it is held to it. It is also the most wall mesh the server reads into one Blender bundle of a flyby: a cave whose walls would pass it is drawn in the bundle by its survey lines |
 | `SILEXGIS__Map__ScansInViewMinZoom` | `14` | the zoom from which the 3D view may show the placed **point clouds** (scans) of every cave in view. A scan's tiles are fetched by level of detail, so a wide view does not cost every point, but every scan shown is a tileset held open, and a district's worth of them is a district's worth of readers. This and the next two are what a member starts from; each can set their own for their browser, the other two up to the ceilings below |
 | `SILEXGIS__Map__ScansInViewMaxCaves` | `6` | the most caves whose scan one such view is answered with, nearest the middle of the view first. Fewer than the walls' default because a scan drawn at any detail is far heavier on a browser than a wall mesh. The view says how many caves there were in all |
 | `SILEXGIS__Map__ScansInViewMaxCavesLimit` | `30` | the most caves a member may raise that number to for their own browser; a request for more is answered as this many. Every tile is served by this installation, so this is where you keep the last word on how many scans one view may hold open. Set it equal to the default to let nobody raise it; a default set above it is held to it |
@@ -2806,6 +3058,10 @@ the reasoning beside each one.
 | `SILEXGIS__Import__DuplicateNameSimilarity` | `0.8` | how alike two names must be, from 0 to 1, before a nearby object is called the same thing rather than merely close |
 | `SILEXGIS__Import__PhotoProximityRadiusMeters` | `80` | how far a photograph looks for objects already in the registry — wider than for a vector file, because a picture is taken from where the photographer stood |
 | `SILEXGIS__Import__PhotoClusterRadiusMeters` | `25` | how far apart two photographs can be and still be proposed as one place. These five are also editable under **Administration → Messaging → Vector import**, which replaces them once saved |
+| `SILEXGIS__UploadedGeodata__MaxZippedShapefileBytes` | `1073741824` (1 GB) | the most a zipped shapefile's entries may state they expand to, all together; a larger one is refused before it is read |
+| `SILEXGIS__UploadedGeodata__MaxKmzDocumentBytes` | `268435456` (256 MB) | the most the KML document inside a KMZ may expand to; counted as it is unpacked, so a document that states less than it holds is refused too. Lower than the shapefile figure because a KML document is read whole into memory |
+| `SILEXGIS__UploadedGeodata__MaxFeatures` | `500000` | the most features one uploaded vector file may hold (each part of a multi-part feature counts); a larger file is refused with a request to split it |
+| `SILEXGIS__UploadedGeodata__MaxRasterPixelValues` | `6000000000` | the most pixel values (width × height × bands, as the file states them) an uploaded raster map may have — two gigapixels in three bands by default; a larger one is refused before it is converted. Each of these four must be above zero: the server will not start with a ceiling of zero or less, and names the setting. A KMZ's document is unpacked into the `scratch` folder under `SILEXGIS__Files__Root` for the read and removed after it |
 | `SILEXGIS__GeoreferencedMaps__CogCompression` | `webp` | how a map sheet's published GeoTIFF is compressed: `webp` (small; lossy below quality 100) or `deflate` (lossless, several times larger) |
 | `SILEXGIS__GeoreferencedMaps__CogWebpQuality` | `85` | WebP quality, 1–100; read only with `webp` |
 | `SILEXGIS__GeoreferencedMaps__CogDeflateLevel` | `6` | deflate level, 1–9; read only with `deflate` |
@@ -2825,6 +3081,7 @@ the reasoning beside each one.
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB unless `SILEXGIS_MAX_BODY_SIZE` raises it) |
 | `SILEXGIS_MAX_BODY_SIZE` | `1024m` | the largest request body the bundled web service's proxy passes to the API, as an nginx size (`1024m`, `2g`). It answers before the application, so it must stay above `SILEXGIS__Files__MaxUploadBytes`, the raster limit and `SILEXGIS__SurveyUploads__MaxFileBytes`. Read when the web container starts: `docker compose up -d web`. The container receives it as `SILEXGIS__Web__MaxBodySize`. Not read by a hand-installed nginx, where it is `client_max_body_size` in the nginx file |
+| `SILEXGIS_API_UPSTREAM` | `api:8080` | where the bundled web service's proxy finds the API, as `host:port`. Leave it for a stack on its own. When the web service also joins a Docker network shared with other Compose projects (one reverse proxy fronting several installations), set it to the API's container name (`<project>-api-1:8080`): a service called `api` in another project answers to the bare name there too, and every request would fail with 502 while this API reports healthy. Read when the web container starts: `docker compose up -d web`. The container receives it as `SILEXGIS__Web__ApiUpstream` |
 | `SILEXGIS__Files__DefaultUserQuotaBytes` | `0` (no limit) | how much stored content one account may own, unless the account is given a figure of its own. Not an allocation: nothing is reserved, and the sum of everybody's quotas may exceed the disk. The packaged stack sets it from `SILEXGIS_USER_QUOTA_BYTES` in `.env` |
 | `SILEXGIS__Files__MaxTotalStoreBytes` | `0` (no limit) | how much the whole installation may hold — the limit that actually protects the disk. The packaged stack sets it from `SILEXGIS_MAX_TOTAL_STORE_BYTES` |
 | `SILEXGIS__Storage__NoticePercent` | `75` | the percentage of a cap (the installation's, or the point clouds' own) at which administrators get a notice that storage is filling up |
@@ -2838,7 +3095,6 @@ the reasoning beside each one.
 | `SILEXGIS__Files__ImportRoots__0`, `__1`, … | *(none: switched off)* | directories **on the server** an administrator may import documents from, and a Full Administrator may name as terrain sources. Under Docker a path is resolved inside the api container, so it must also be mounted into it. A security boundary rather than a convenience: what these name is chosen by whoever deploys the installation, never by whoever is signed in. Mount them read-only where you can |
 | `SILEXGIS__Files__MaxArchiveEntries` | `5000` | how many entries an uploaded archive expanded into filed documents may hold before it is refused |
 | `SILEXGIS__Files__MaxArchiveExpandedBytes` | `21474836480` (20 GB) | how large such an archive may expand to |
-| `SILEXGIS__Files__MaxArchiveCompressionRatio` | `200` | how many times larger than its compressed form one entry may expand — the guard against an archive built to fill the disk |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys and the sign-in token certificates (must persist across restarts, and be shared by every API instance of one installation) |
 | `SILEXGIS__Conversion__Enabled` | `false` | use a document-conversion service so office documents can be read page by page. Needs the converter overlay running; without it those documents are still stored, searched and downloaded |
 | `SILEXGIS__Conversion__Url` | — | where that service is, e.g. `http://convert:3000` |
@@ -2871,7 +3127,7 @@ the reasoning beside each one.
 | `SILEXGIS__AccessHistory__SweepInterval` | `1.00:00:00` | how often the pass that deletes expired access-history rows is queued. `00:00:00` turns the schedule off, and nothing is then deleted. Note the leading `1.` — a day is written `d.hh:mm:ss`, and `24:00:00` on its own means twenty-four **days** |
 | `SILEXGIS__DocumentRetention__RetentionDays` | `0` | how many days a deleted document or photograph can still be restored before its rows and bytes are removed for good. Deleting removes nothing — it only hides the document everywhere, and anyone who may edit it can restore it from the deleted list. `0` or less, the default, switches the removal off: deleted documents are kept, and stay restorable, until this is set to a number of days. (Before this release `0` meant remove at the next sweep and the default was `30`; an installation that relied on either sets the number it wants.) The packaged stack sets it from `SILEXGIS_RETENTION_DAYS` in `.env` |
 | `SILEXGIS__DocumentRetention__SweepInterval` | `06:00:00` | how often the pass that removes documents past that window is queued. Nothing is queued while no window is set |
-| `SILEXGIS__FeatureIntegrity__Interval` | `1.00:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. `00:00:00` turns the schedule off |
+| `SILEXGIS__FeatureIntegrity__Interval` | `1.00:00:00` | how often a background pass re-checks the map data for internal inconsistencies; findings go to the log and the admin jobs list. Counted from the last pass, not from start-up, and looked at once an hour, so an instance restarted every night is still checked. `00:00:00` turns the schedule off |
 | `SILEXGIS__TripCallout__SweepInterval` | `00:15:00` | how often a background pass checks whether a party that said when it would be back is overdue, and tells the people the trip names. This interval is also how late that message can arrive, which is why it is minutes rather than hours. `00:00:00` turns the check off entirely and nobody is told, whatever a trip has recorded. Values above `00:30:00` are treated as `00:30:00`: a trip showing an armed check reports a check that has not run for an hour as *unchecked* and tells the reader to reach the party another way, and a warning every armed trip carries permanently is one nobody reads |
 | `SILEXGIS__TripCallout__ReminderLead` | `2.00:00:00` | how far ahead of a trip, or of a club event, the people it concerns are reminded that it is coming up. The same pass sends both, so something put back or called off stops reminding anybody. One setting for the whole installation, not one per reader. `00:00:00` sends no reminders and leaves the overdue check running |
 | `SILEXGIS__Trips__DeletedRetentionDays` | `30` | how many days a deleted trip can still be restored. Deleting a trip removes nothing — it only hides the trip everywhere — and a background pass, queued every six hours, removes for good the trips deleted longer ago than this, with their rosters, links and generated write-ups (photographs and hand-uploaded reports stay in the library). `0` or less switches that pass off: deleted trips are then kept, and stay restorable, until this is set to a number of days again. The window is read when the pass runs, so shortening it shortens it for trips already deleted |

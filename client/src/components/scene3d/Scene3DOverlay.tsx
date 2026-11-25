@@ -38,6 +38,14 @@ export interface Scene3DOverlayProps {
   hovered?: Scene3DPickPayload;
   /** Where the pointer is, in surface pixels — the tooltip follows the pointer, as the map's does. */
   hoveredAt?: Scene3DScreenPosition;
+  /**
+   * The same, for a pointer that moves on every frame: read when the tooltip is placed, and told
+   * when it moved, so following it costs no render of anything. Over `hoveredAt` when both are given.
+   */
+  hoverPointer?: {
+    read(): Scene3DScreenPosition | undefined;
+    subscribe(listener: () => void): () => void;
+  };
   /** What was picked in this scene, or undefined when nothing was or it was dismissed. */
   selected?: Scene3DPickPayload;
   /**
@@ -65,6 +73,7 @@ export interface Scene3DOverlayProps {
 export default function Scene3DOverlay({
   hovered,
   hoveredAt,
+  hoverPointer,
   selected,
   project,
   subscribeFrames,
@@ -103,7 +112,7 @@ export default function Scene3DOverlay({
       // does: a pointer resting on a long survey line has no single place on it to point at, and a
       // label that jumped to the middle of a cave while the pointer was at its end would read as
       // naming something else.
-      place(tooltip, hoveredAt, surface);
+      place(tooltip, hoverPointer ? hoverPointer.read() : hoveredAt, surface);
     }
 
     const callout = calloutRef.current;
@@ -117,7 +126,7 @@ export default function Scene3DOverlay({
       // and it lets presses through to whatever is beneath it in any case.
       place(callout, selectedAnchor ? project(selectedAnchor) : undefined, surface, controlsArea?.());
     }
-  }, [hoveredAt, project, selectedAnchor, controlsArea]);
+  }, [hoveredAt, hoverPointer, project, selectedAnchor, controlsArea]);
 
   // Placed once as soon as it exists, before the browser paints, and then again on every drawn
   // frame. Both are needed and neither is enough: a still scene draws no frames at all, so waiting
@@ -126,6 +135,7 @@ export default function Scene3DOverlay({
   useLayoutEffect(reposition, [reposition, hoverLabel, selectedTitle, selectedKind]);
 
   useEffect(() => subscribeFrames(reposition), [subscribeFrames, reposition]);
+  useEffect(() => hoverPointer?.subscribe(reposition), [hoverPointer, reposition]);
 
   // Escape closes the callout while the keyboard is inside it, the way every dismissible surface
   // in this application closes. Bound to the callout rather than to the window so it cannot

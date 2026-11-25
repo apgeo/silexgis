@@ -5,6 +5,7 @@ using System.Text.Json;
 using MaxRev.Gdal.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NetTopologySuite.Geometries;
 using OSGeo.GDAL;
 using OSGeo.OSR;
@@ -15,20 +16,26 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Terrain;
+using SilexGis.Infrastructure.Analysis;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// Entrances against the ground they sit on, read from computed steepness, facing and position
-/// pictures. The pictures are generated rasters whose value depends on the pixel column alone, so
-/// every expected class is known by construction:
+/// Entrances against the ground they sit on, read from computed steepness, facing, position and
+/// landform pictures. The pictures are generated rasters whose value depends on the pixel column
+/// alone, so every expected class is known by construction:
 /// <list type="bullet">
-/// <item>columns 0-7 slope 10 degrees facing 90 (east), position level;</item>
-/// <item>columns 8-13 slope 40 degrees facing 270 (west), position a rise;</item>
-/// <item>columns 14-15 flat (slope 0) with the bearing zero the picture writes for flat ground.</item>
+/// <item>columns 0-7 slope 10 degrees facing 90 (east), position level, landform slope;</item>
+/// <item>columns 8-13 slope 40 degrees facing 270 (west), position a rise, landform ridge;</item>
+/// <item>columns 14-15 flat (slope 0) with the bearing zero the picture writes for flat ground;
+/// landform valley in column 14, and in column 15 the zero WhiteboxTools leaves on cells it did not
+/// classify.</item>
 /// </list>
+/// The landform pictures are seeded as rows and files, as the job would leave them: the installation
+/// under test runs no analysis program, which is also what lets one test see that a picture drawn
+/// earlier is still read once the program is gone.
 /// </summary>
 public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
@@ -38,7 +45,9 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
     private const double Latitude = 46.09;
 
     private readonly SilexGisApiFactory factory;
+    private readonly string connectionString;
     private readonly string buildRoot;
+    private string viewerEmail = null!;
 
     private HttpClient owner = null!;
     private HttpClient viewer = null!;
@@ -49,10 +58,12 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
     private long caveTypeId;
     private long entranceTypeId;
     private long karstAreaTypeId;
+    private long sinkholeTypeId;
 
     public AreaTerrainStatisticsTests(PostgresFixture postgres)
     {
         buildRoot = Path.Combine(TestScratch.Root, $"silexgis-terstat-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
@@ -63,7 +74,8 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"ts-own-{suffix}@t.local");
-        var viewerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ts-read-{suffix}@t.local");
+        viewerEmail = $"ts-read-{suffix}@t.local";
+        var viewerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, viewerEmail);
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"ts-none-{suffix}@t.local");
 
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -87,6 +99,7 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
             caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).FirstAsync();
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
             karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).FirstAsync();
+            sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).FirstAsync();
 
             await db.TerrainBuilds.Where(b => b.IsActive)
                 .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
@@ -143,6 +156,77 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
+    public async Task Entrances_and_sinkholes_are_counted_by_landform_and_unclassified_ground_is_left_out()
+    {
+        await SeedPicturesAsync();
+        var area = await CreateAreaAsync();
+        await CaveAtAsync(area, 25.002);
+        await CaveAtAsync(area, 25.004);
+        await CaveAtAsync(area, 25.011);
+        await SinkholeAtAsync(area, 25.0145);
+
+        var body = await ReadAsync(viewer, area);
+        var landform = Measure(body, "landform");
+
+        landform.GetProperty("available").GetBoolean().ShouldBeTrue();
+        landform.GetProperty("classes").EnumerateArray().Select(c => c.GetProperty("code").GetString())
+            .ShouldBe(TerrainGeomorphons.Classes);
+        landform.GetProperty("entrancesRead").GetInt32().ShouldBe(3);
+        Row(landform, "slope").GetProperty("entrances").GetInt32().ShouldBe(2);
+        Row(landform, "ridge").GetProperty("entrances").GetInt32().ShouldBe(1);
+        Row(landform, "valley").GetProperty("entrances").GetInt32().ShouldBe(0);
+        landform.GetProperty("sinkholesRead").GetInt32().ShouldBe(1);
+        Row(landform, "valley").GetProperty("sinkholes").GetInt32().ShouldBe(1);
+        Row(landform, "valley").GetProperty("sinkholeShare").GetDouble().ShouldBe(1d);
+
+        // The grid's last three of 45 columns fall on pixel column 15, which holds no landform: those
+        // points are not read as any class, so every share is of the 42 columns that have one. Of
+        // those, about 8 pixel columns in 15 are slope (one grid column sits exactly on the edge
+        // between pixel columns 7 and 8, so the exact count rests on rounding, not on the rule).
+        var groundRead = landform.GetProperty("backgroundRead").GetInt32();
+        var groundPoints = body.GetProperty("backgroundPoints").GetInt32();
+        groundRead.ShouldBe(groundPoints / 45 * 42);
+        Row(landform, "slope").GetProperty("backgroundShare").GetDouble().ShouldBe(8d / 15d, 0.03);
+        Row(landform, "flat").GetProperty("background").GetInt32().ShouldBe(0);
+        Row(landform, "flat").GetProperty("entranceRatio").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_missing_landform_picture_says_whether_this_installation_can_draw_one()
+    {
+        var area = await CreateAreaAsync();
+        await CaveAtAsync(area, 25.002);
+
+        // This installation runs no analysis program: there is nothing an administrator can compute.
+        var landform = Measure(await ReadAsync(viewer, area), "landform");
+        landform.GetProperty("available").GetBoolean().ShouldBeFalse();
+        landform.GetProperty("reason").GetString().ShouldBe("analysis_unavailable");
+        landform.GetProperty("classes").GetArrayLength().ShouldBe(0);
+
+        // The same database read by an installation that runs it: the picture is merely not drawn yet.
+        await using (var withTool = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
+            services =>
+            {
+                JobWorkers.RemoveFrom(services);
+                services.Replace(ServiceDescriptor.Singleton<IWhiteboxTools>(new FakeWhiteboxTools()));
+            }))
+        {
+            using var reader = await AuthHelper.BearerClientAsync(withTool, viewerEmail);
+            var drawable = Measure(await ReadAsync(reader, area), "landform");
+            drawable.GetProperty("available").GetBoolean().ShouldBeFalse();
+            drawable.GetProperty("reason").GetString().ShouldBe("no_layer");
+        }
+
+        // A picture drawn while the program ran is read after it is gone.
+        await SeedLayerAsync(TerrainDerivative.Geomorphons, _ => 6f);
+        landform = Measure(await ReadAsync(viewer, area), "landform");
+        landform.GetProperty("available").GetBoolean().ShouldBeTrue();
+        Row(landform, "slope").GetProperty("entrances").GetInt32().ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Facing_counts_only_where_the_ground_slopes()
     {
         await SeedPicturesAsync();
@@ -171,11 +255,11 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
         var body = await ReadAsync(viewer, area);
 
         body.GetProperty("hasTerrain").GetBoolean().ShouldBeTrue();
-        foreach (var name in new[] { "slope", "aspect", "position" })
+        foreach (var name in new[] { "slope", "aspect", "position", "landform" })
         {
             var measure = Measure(body, name);
             measure.GetProperty("available").GetBoolean().ShouldBeFalse();
-            measure.GetProperty("reason").GetString().ShouldBe("no_layer");
+            measure.GetProperty("reason").GetString().ShouldBe(name == "landform" ? "analysis_unavailable" : "no_layer");
             measure.GetProperty("classes").GetArrayLength().ShouldBe(0);
         }
 
@@ -190,9 +274,10 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
     }
 
     /// <summary>
-    /// An entrance the reader may not place sits on ground of a class no other entrance is in. The
-    /// report for the reader must be byte-for-byte what it was before the cave existed; the author,
-    /// who may place it, sees it counted.
+    /// An entrance the reader may not place sits on ground of a class no other entrance is in, in
+    /// every measure: flat, facing nowhere, level, and in the only valley. The report for the reader
+    /// must be byte-for-byte what it was before the cave existed; the author, who may place it, sees
+    /// it counted.
     /// </summary>
     [Fact]
     public async Task A_protected_entrance_moves_no_count_share_or_ratio_for_a_reader_who_may_not_place_it()
@@ -210,6 +295,9 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
         var author = await ReadAsync(owner, area);
         author.GetProperty("entrances").GetInt32().ShouldBe(2);
         Row(Measure(author, "slope"), "lt5").GetProperty("entrances").GetInt32().ShouldBe(1);
+        Row(Measure(author, "landform"), "valley").GetProperty("entrances").GetInt32().ShouldBe(1);
+        Row(Measure(await ReadAsync(viewer, area), "landform"), "valley")
+            .GetProperty("entrances").GetInt32().ShouldBe(0);
     }
 
     [Fact]
@@ -271,6 +359,7 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
         await SeedLayerAsync(TerrainDerivative.Slope, c => c < 8 ? 10f : c < 14 ? 40f : 0f);
         await SeedLayerAsync(TerrainDerivative.Aspect, c => c < 8 ? 90f : c < 14 ? 270f : 0f);
         await SeedLayerAsync(TerrainDerivative.PositionIndex, c => c < 8 ? 0f : c < 14 ? 5f : 0f);
+        await SeedLayerAsync(TerrainDerivative.Geomorphons, c => c < 8 ? 6f : c < 14 ? 3f : c == 14 ? 9f : 0f);
     }
 
     /// <summary>
@@ -373,6 +462,21 @@ public sealed class AreaTerrainStatisticsTests : IAsyncLifetime, IDisposable, IC
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task SinkholeAtAsync(Guid area, double longitude)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"TerStat Sinkhole {Guid.NewGuid():N}"[..30],
+            featureTypeId = sinkholeTypeId,
+            parents = new[] { new { parentId = area, isPrimary = true } },
+            geometry = new { type = "Point", coordinates = new[] { longitude, Latitude } },
+            locationProtected = false,
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
     }
 
     private async Task<Guid> CaveAtAsync(Guid area, double longitude, bool locationProtected = false)

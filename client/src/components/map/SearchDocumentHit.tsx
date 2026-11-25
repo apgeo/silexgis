@@ -3,6 +3,7 @@ import { Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { SearchDocumentItem } from '../../api/hooks.ts';
 import { splitSnippet } from './searchSnippet.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 const { Text } = Typography;
 
@@ -29,18 +30,18 @@ export default function SearchDocumentHit({ hit }: { hit: SearchDocumentItem }) 
       <div>
         <Text strong>{hit.title}</Text>
         {where ? (
-          <Text type="secondary" style={{ marginInlineStart: 8, fontSize: 12 }}>
+          <Text type="secondary" style={{ marginInlineStart: 8, fontSize: FONT_SIZE.sm }}>
             {where}
           </Text>
         ) : null}
         {!hit.isCurrentVersion ? (
-          <Text type="secondary" style={{ marginInlineStart: 8, fontSize: 12 }}>
+          <Text type="secondary" style={{ marginInlineStart: 8, fontSize: FONT_SIZE.sm }}>
             {t('search.supersededVersion', { number: hit.versionNumber })}
           </Text>
         ) : null}
       </div>
       {parts.length > 0 ? (
-        <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'normal' }}>
+        <Text type="secondary" style={{ fontSize: FONT_SIZE.sm, whiteSpace: 'normal' }}>
           {parts.map((part, index) =>
             part.matched ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>,
           )}

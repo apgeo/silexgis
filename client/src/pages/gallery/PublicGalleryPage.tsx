@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Alert, Empty, Pagination, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import { usePublicPhotos, useSharedAlbum } from '../../api/hooks.ts';
+import Button from '../../components/Button.tsx';
 import Lightbox from '../../components/gallery/Lightbox.tsx';
 import PhotoGrid from '../../components/gallery/PhotoGrid.tsx';
 
@@ -25,7 +27,7 @@ export default function PublicGalleryPage() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const { data, isPending } = usePublicPhotos(page);
+  const { data, isPending, isError, refetch } = usePublicPhotos(page);
 
   const photos = data?.items ?? [];
 
@@ -35,7 +37,11 @@ export default function PublicGalleryPage() {
         {t('gallery.publicTitle')}
       </Typography.Title>
 
-      {isPending ? (
+      {isError && !data ? (
+        // A gallery that could not be read is not an empty one: saying "nothing published" here
+        // tells the visitor something the server never said.
+        <LoadFailed onRetry={() => void refetch()} />
+      ) : isPending ? (
         <Spin style={{ display: 'block', marginTop: '15vh' }} />
       ) : photos.length === 0 ? (
         <Empty description={t('gallery.publicEmpty')} style={{ marginTop: '15vh' }} />
@@ -76,10 +82,20 @@ export function SharedAlbumPage() {
   const { t } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const { data, isPending, isError } = useSharedAlbum(token);
+  const { data, isPending, isError, error, refetch } = useSharedAlbum(token);
 
   if (isPending) {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
+  }
+
+  // Only the server's "no such link" is read as one; a failure to answer at all is said as that,
+  // with a retry, since telling a visitor a working link was revoked sends them away for nothing.
+  if (isError && !(error instanceof ApiError && error.status === 404)) {
+    return (
+      <div style={{ margin: 24 }}>
+        <LoadFailed onRetry={() => void refetch()} />
+      </div>
+    );
   }
 
   if (isError || !data) {
@@ -108,5 +124,21 @@ export function SharedAlbumPage() {
         onIndexChange={setOpenIndex}
       />
     </div>
+  );
+}
+
+function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Alert
+      type="error"
+      showIcon
+      title={t('common.loadFailed')}
+      action={
+        <Button size="small" onClick={onRetry}>
+          {t('common.retry')}
+        </Button>
+      }
+    />
   );
 }

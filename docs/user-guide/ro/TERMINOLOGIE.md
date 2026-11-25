@@ -363,6 +363,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Being cancelled / Cancelled (a terrain build) | Se anulează / Anulată |
 | Ground pictures | Imagini ale terenului |
 | Out of date (a ground picture) | Depășită |
+| Landform classes (a ground picture) | Forme de relief |
+| Flat / Peak / Ridge / Shoulder / Spur / Slope / Hollow / Footslope / Valley / Pit (landform classes) | Plan / Vârf / Creastă / Umăr / Pinten / Versant / Scobitură / Bază de versant / Vale / Depresiune |
+| Search distance / Look past / Flatness angle (a landform picture) | Distanța de căutare / Ignoră până la / Unghi de planeitate |
+| (not available here) (a kind of ground picture) | (indisponibil aici) |
+| Landform (a measure on the area terrain statistics) | Forma de relief |
 | Photographs at their stations (a 3D view layer) | Fotografii la stațiile lor |
 | Download them (cave walls in the 3D view) | Descarcă-i |
 | Ask above (MB) | Întreabă peste (MB) |
@@ -389,6 +394,11 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 | Needs placement (a map sheet's state) | De poziționat |
 | Redraw… (a map sheet) | Redesenează… |
 | Clear finished (upload rows) | Șterge cele terminate |
+| Rock overhead (a cave's overburden panel) | Roca de deasupra |
+| Least rock cover | Cea mai subțire acoperire de rocă |
+| Rock over the passage (map layer) | Rocă deasupra galeriei |
+| Passages beneath this feature | Galerii sub această trăsătură |
+| Chosen measures / Principal axes (cave scatter) | Măsuri alese / Axe principale |
 
 ## Nori de puncte și spațiu de stocare
 
@@ -437,6 +447,75 @@ verbul este *a privi* („privești o altă echipă", „echipa pe care o privea
 O hartă scanată se **poziționează** (*Poziționează pe hartă…*, *poziție*), o scanare laser se
 **plasează** (*Plasează pe hartă*, *plasare*): așa le numește interfața, iar ghidul păstrează
 deosebirea.
+
+## Geologie
+
+| Engleză | Română |
+|---|---|
+| Geological unit (the guide's word) | Unitate geologică |
+| Lithology | Litologie |
+| karstifiable | carstificabil |
+| not in the vocabulary · Unclassified | în afara vocabularului · Neclasificat |
+| Outcrop (km²) | Afloriment (km²) |
+| Geology inside the area | Geologia din interiorul zonei |
+| Structural measurement / structural reading | Măsurătoare structurală |
+| Measured plane | Planul măsurat |
+| Bedding · Joint · Fault plane · Cleavage · Fracture | Stratificație · Diaclază · Plan de falie · Clivaj · Fractură |
+| Dip direction · Dip | Direcția de înclinare · Înclinare |
+| Strike (right-hand rule) | Direcția stratului (regula mâinii drepte) |
+| Orientation entered as | Orientare introdusă ca |
+| Stereonet | Stereogramă |
+| Equal-area net, lower hemisphere | Rețea echiarială, emisfera inferioară |
+| Readings of … every kind | Măsurători de tip … toate tipurile |
+| Passage against the mapped structure | Galeriile față de structura cartată |
+| Passage against measured strikes (Watson U²) | Galeriile față de direcțiile măsurate (Watson U²) |
+| Probability | Probabilitate |
+
+## Potențial speologic
+
+| Engleză | Română |
+|---|---|
+| Cave potential | Potențial speologic |
+| Cave-potential model (the guide's word) | Model de potențial speologic |
+| Favourability map (the guide's word) | Hartă de favorabilitate |
+| Models · New model · Maps computed | Modele · Model nou · Hărți calculate |
+| Evidence layers · Evidence and weight | Straturi de dovezi · Dovezi și pondere |
+| Elevation · Slope · Aspect | Altitudine · Pantă · Orientare |
+| Topographic position · Ruggedness · Roughness | Poziție topografică · Asperitate · Rugozitate |
+| Landform | Formă de relief |
+| Distance to faults · Distance to sinkholes | Distanța până la falii · Distanța până la doline |
+| Rock type · Cave-entrance density | Tipul rocii · Densitatea intrărilor de peșteră |
+| Scored by · score | Evaluat prin · scor |
+| A table of classes · A ramp between two values · A score per class | Un tabel de clase · O rampă între două valori · Un scor pentru fiecare clasă |
+| Up to · Everything above | Până la · Tot ce este peste |
+| Value that scores 0 / 1 | Valoarea cu scorul 0 / 1 |
+| How the layers are weighed | Cum sunt cântărite straturile |
+| Weights given outright · Pairwise comparisons | Ponderi date direct · Comparații pe perechi |
+| Equally important · N × more important · N × less important | La fel de important · de N ori mai important · de N ori mai puțin important |
+| Weights · Consistency ratio | Ponderi · Raport de consistență |
+| Shared with · Only me · Everyone signed in · Members of … | Partajat cu · Doar eu · Toți cei autentificați · Membrii … |
+| Uses recorded positions | Folosește poziții înregistrate |
+| Run · Area · Cell size (m) | Rulează · Zonă · Mărimea celulei (m) |
+| Queued · Computing · Ready · Failed (a run) | În așteptare · Se calculează · Gata · Eșuat |
+| … cells scored · mean | … celule evaluate · media |
+| Asked for by · Written by | Cerut de · Scris de |
+| Show on the map | Arată pe hartă |
+| Less favourable · More favourable | Mai puțin favorabil · Mai favorabil |
+| Frequency ratio · Weights of evidence | Raport de frecvență · Ponderile dovezilor |
+| Learns from known entrances | Învață din intrări cunoscute |
+| A model that learns · weighed by judgment (the guide's words) | Un model care învață · cântărit prin judecată |
+| Entrances kept back for testing (%) · Seed of the draw | Intrări păstrate pentru testare (%) · Sămânța tragerii |
+| Weights and curves | Ponderi și curbe |
+| Class · Cells · With an entrance | Clasă · Celule · Cu intrare |
+| Contrast · studentised contrast (the guide's word) | Contrast · contrast studentizat |
+| adjusted (a row of a weight table) | ajustat |
+| Success rate · Prediction rate · Chance | Rata de succes · Rata de predicție · Întâmplare |
+| Rate curve · area under the curve (the guide's words) | Curbă de rată · aria de sub curbă (AUC) |
+| Occupied cells · kept back (the guide's words) | Celule ocupate · păstrate |
+| Stretched (a map learnt from entrances; the guide's word) | Întinsă |
+
+Un strat este **evaluat** (primește un *scor*), iar straturile sunt **cântărite** (primesc o
+*pondere*): așa le deosebește interfața, iar ghidul păstrează cele două cuvinte separate.
 
 ## Alte
 

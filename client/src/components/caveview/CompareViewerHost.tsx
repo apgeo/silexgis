@@ -7,22 +7,15 @@ import {
   loadCaveView,
   type CaveViewToolbar,
   type CaveViewToolbarOptions,
-  type CaveViewUi,
   type CaveViewer,
 } from '../../caveview/loadCaveView.ts';
-import { releaseWebGlContext } from '../../caveview/releaseWebGlContext.ts';
-
-/** One survey file a comparison's viewer is built from. */
-export interface CompareViewerFile {
-  /** Where the file is read from, at the moment the viewer is built. */
-  url: string;
-  /** The name the viewer chooses its parser by. */
-  fileName: string;
-  /** The survey this file's own surveys hang from, where it is drawn with another. */
-  label?: string;
-  /** The colour it is drawn in under the by-survey shading. */
-  color?: string;
-}
+import {
+  caveViewerFailureMessage,
+  startCaveViewer,
+  type CaveViewerFailure,
+  type CaveViewerFile,
+} from '../../caveview/viewerLifecycle.ts';
+import Button from '../Button.tsx';
 
 export interface CompareViewerHostProps {
   /**
@@ -32,7 +25,7 @@ export interface CompareViewerHostProps {
    * minutes for as long as anything lists the survey; a viewer rebuilt for each new address would
    * reload the model under the reader and put the camera back where it started.
    */
-  files: readonly CompareViewerFile[];
+  files: readonly CaveViewerFile[];
   /** What identifies those files, so the viewer is built again only for other ones. */
   filesKey: string;
   /** Draws each labelled file in its own colour rather than the model by height. */
@@ -80,7 +73,9 @@ export default function CompareViewerHost({
   const { t, i18n } = useTranslation();
   const containerId = `caveview-compare-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [status, setStatus] = useState<Status>('loading');
-  const [errorDetail, setErrorDetail] = useState<string>();
+  const [failure, setFailure] = useState<CaveViewerFailure | null>(null);
+  // Counts the reader's asks to try again: each builds another viewer for the same files.
+  const [attempt, setAttempt] = useState(0);
   // The viewer lives in a ref and React holds only a count of the models drawn, so the effects
   // that set things on a viewer run again for the next one and none is keyed on an engine.
   const viewerRef = useRef<CaveViewer | null>(null);
@@ -100,37 +95,15 @@ export default function CompareViewerHost({
   onViewerRef.current = onViewer;
 
   useEffect(() => {
-    let disposed = false;
-    let ui: CaveViewUi | null = null;
-    let built: CaveViewer | null = null;
-    const download = new AbortController();
-    // Held from the start: by the time an unmount's cleanup runs, the page no longer has it.
-    const container = document.getElementById(containerId);
-    const wanted = filesRef.current;
     setStatus('loading');
-    setErrorDetail(undefined);
-
-    (async () => {
-      const cv2 = await loadCaveView();
-      const blobs = await Promise.all(
-        wanted.map(async (file) => {
-          const response = await fetch(file.url, { signal: download.signal });
-          if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
-          return response.blob();
-        }),
-      );
-      if (disposed) return;
-
-      const viewer = new cv2.CaveViewer(
-        containerId,
-        caveViewerOptions(languageRef.current, crsLookupRef.current),
-      );
-      built = viewer;
-      viewer.addEventListener('newCave', (event) => {
-        if (disposed) return;
-        // The viewer says this for a model that has loaded, carrying the survey, and also,
-        // carrying none, when a key switches how its controls behave. Only the first is a model.
-        if ((event as { survey?: unknown } | null)?.survey === undefined) return;
+    setFailure(null);
+    // Read through the download every viewer on the page shares: drawn over one another, the
+    // primary survey is the very file the panel beside this viewer has just read.
+    const stop = startCaveViewer({
+      containerId,
+      files: filesRef.current,
+      options: () => caveViewerOptions(languageRef.current, crsLookupRef.current),
+      onLoaded: (viewer, cv2) => {
         // Set on the loaded viewer rather than asked for when it is built: the viewer re-applies
         // whatever its "save as default" button last stored in this browser on every load, and a
         // stored shading would otherwise draw two surveys in one scale of heights.
@@ -141,46 +114,23 @@ export default function CompareViewerHost({
         setLoads((count) => count + 1);
         setStatus('ready');
         onViewerRef.current(viewer);
-      });
-
-      ui = new cv2.CaveViewUI(viewer);
-      const described = wanted.map((file, index) => ({
-        file: new File([blobs[index]], file.fileName),
-        label: file.label,
-        color: file.color,
-      }));
-      if (described.length === 1 && described[0].label === undefined) {
-        ui.loadCave(described[0].file);
-      } else {
-        ui.loadCaves(described);
-      }
-    })().catch((error: unknown) => {
-      if (disposed) return;
-      setStatus('error');
-      setErrorDetail(error instanceof Error ? error.message : String(error));
+      },
+      onFailed: (reason) => {
+        setStatus('error');
+        setFailure(reason);
+      },
     });
 
     return () => {
-      disposed = true;
-      // A file still on its way is not wanted any more.
-      download.abort();
       if (viewerRef.current !== null) {
         viewerRef.current = null;
         onViewerRef.current(null);
       }
-      const canvas = container?.querySelector('canvas') ?? null;
-      (ui as CaveViewUi | null)?.dispose();
-      ui = null;
-      // The first viewer of the comparison is still on the screen, and is the older of the two.
-      releaseWebGlContext(canvas);
-      // A viewer disposed under a load is still asked to draw by its own progress dial; see the
-      // panel, which answers the same late asks the same way.
-      if (built !== null) {
-        (built as CaveViewer).renderView = () => {};
-        built = null;
-      }
+      // The first viewer of the comparison is still on the screen, and is the older of the two:
+      // ending this one gives its drawing context back at once.
+      stop();
     };
-  }, [containerId, filesKey]);
+  }, [containerId, filesKey, attempt]);
 
   // The viewer watches the window and nothing else, and this surface changes size while the
   // window does not: when the two surveys go from side by side to one above the other, and when
@@ -244,7 +194,17 @@ export default function CompareViewerHost({
         <Spin className="caveview-compare-loading" data-testid={`${testId}-loading`} />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('caveview.loadError')}
+          description={failure === null ? undefined : caveViewerFailureMessage(failure, t)}
+          action={
+            <Button size="small" onClick={() => setAttempt((count) => count + 1)} data-testid={`${testId}-retry`}>
+              {t('caveview.tryAgain')}
+            </Button>
+          }
+        />
       )}
       <div
         id={containerId}

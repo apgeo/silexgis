@@ -2,12 +2,14 @@
 import { App, Card, Empty, Typography } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 import {
   useCaveAltitudeDisagreement,
   useFillEntranceAltitude,
 } from '../../api/hooks/entranceAltitudes.ts';
 import EntranceAltitudeTable from './EntranceAltitudeTable.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * One cave's entrance altitudes against the elevation model, with a fill action for an entrance
@@ -28,19 +30,26 @@ import EntranceAltitudeTable from './EntranceAltitudeTable.tsx';
 export default function CaveAltitudePanel({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading, isError } = useCaveAltitudeDisagreement(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveAltitudeDisagreement(caveId);
   const fill = useFillEntranceAltitude();
   const [filling, setFilling] = useState<string | null>(null);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('altitudeCheck.title')} error={error} onRetry={refetch} testId="cave-altitude-read-failed" />
+    );
+  }
 
   const onFill = async (entranceId: string) => {
     setFilling(entranceId);
     try {
       await fill.mutateAsync(entranceId);
       message.success(t('altitudeCheck.filled'));
-    } catch {
-      message.error(t('altitudeCheck.fillFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('altitudeCheck.fillFailed'));
+      }
     } finally {
       setFilling(null);
     }

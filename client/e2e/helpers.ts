@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type CDPSession, type Locator, type Page } from '@playwright/test';
+import { bearerToken } from './rastermapApi.ts';
 
 // Demo credentials/data: `dotnet run -- seed-demo` with the dev admin bootstrap.
 // The full OIDC code+PKCE flow runs in the real browser.
@@ -255,8 +256,13 @@ export async function longPressMap(page: Page, x: number, y: number) {
 }
 
 /**
- * Waits until the scene is drawing and its current load has answered. A test that slows the page
- * on purpose passes a longer patience; the default is for a page running at the machine's speed.
+ * Waits until the scene is drawing and a load of its cave data has started and answered. A test
+ * that slows the page on purpose passes a longer patience; the default is for a page running at
+ * the machine's speed.
+ *
+ * "Not loading" alone is not enough: it is also what the view says in the moment between the scene
+ * starting and its first load going out, and a test that went on from there would be looking at a
+ * view with nothing in it yet.
  */
 export async function waitForScene3dReady(page: Page, timeout = 30_000) {
   // The engine owns the canvas inside our element; its presence is the scene having started.
@@ -264,6 +270,7 @@ export async function waitForScene3dReady(page: Page, timeout = 30_000) {
     timeout,
   });
   await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
+  await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loaded', 'true', { timeout });
   await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', {
     timeout,
   });
@@ -552,8 +559,15 @@ export async function waitForScene3dQuiet(page: Page, timeoutMilliseconds = 60_0
  * The list is watched at a close zoom, where the server serves entrances one by one. At anything
  * wider it aggregates them into counted cells, and a cell has no name for a label to be checked
  * against.
+ *
+ * `nothingDrawnOver` is for a test that clicks the middle of a scene opened over the entrance and
+ * expects the entrance to be what it picks. A cave with a survey has its centerline drawn from its
+ * entrance — the seeded demo survey starts at the demo cave's main entrance, and other specs of a
+ * whole run upload surveys and walls of their own — so a click there can land on the line or the
+ * walls instead, and which entrance a run chose would decide whether the test passed. With it set,
+ * an entrance that has a centerline or walls near it is passed over for the next most isolated.
  */
-export async function entranceToPick(page: Page) {
+export async function entranceToPick(page: Page, { nothingDrawnOver = false } = {}) {
   interface Entrance {
     geometry: { type: string; coordinates: number[] };
     properties: Record<string, unknown>;
@@ -619,14 +633,114 @@ export async function entranceToPick(page: Page) {
         ),
       Number.POSITIVE_INFINITY,
     );
-  const feature = unique.reduce((best, candidate) =>
-    distanceToNearestOther(candidate) > distanceToNearestOther(best) ? candidate : best,
-  );
+  // Ties are broken by coordinates, so equal isolation cannot reintroduce the arrival order.
+  const ranked = unique
+    .map((candidate) => ({ candidate, isolation: distanceToNearestOther(candidate) }))
+    .sort(
+      (a, b) =>
+        b.isolation - a.isolation ||
+        a.candidate.geometry.coordinates.join().localeCompare(b.candidate.geometry.coordinates.join()),
+    )
+    .map(({ candidate }) => candidate);
+  let feature = ranked[0];
+  if (nothingDrawnOver) {
+    let clear: Entrance | undefined;
+    for (const candidate of ranked) {
+      if (!(await surveyDrawnNear(page, candidate.geometry.coordinates))) {
+        clear = candidate;
+        break;
+      }
+    }
+    // A short, wide screen framed on the demo cave can be served a single named entrance — the
+    // cave's own, which its survey starts from — with every other one counted into a cell. The
+    // neighbourhood is then asked for directly, at a zoom where the server names entrances one by
+    // one, nearest first so the same run picks the same place.
+    let asked = 0;
+    if (!clear && ranked.length > 0) {
+      const [lon, lat] = ranked[0].geometry.coordinates;
+      const reach = 0.05;
+      const bbox = [lon - reach, lat - reach, lon + reach, lat + reach].map((n) => n.toFixed(5)).join(',');
+      const response = await page.request.get(`/api/v1/map/cave-entrances?bbox=${bbox}&zoom=16`, {
+        headers: { Authorization: `Bearer ${await bearerToken(page)}` },
+      });
+      expect(response.ok(), `the entrances near the demo cave answered ${response.status()}`).toBeTruthy();
+      const nearby = (((await response.json()) as { features?: Entrance[] }).features ?? [])
+        .filter(
+          (f) =>
+            f.properties.cluster !== true &&
+            f.geometry.type === 'Point' &&
+            typeof f.properties.name === 'string' &&
+            f.properties.name !== '',
+        )
+        .map((f) => ({
+          f,
+          distance: Math.hypot(f.geometry.coordinates[0] - lon, f.geometry.coordinates[1] - lat),
+        }))
+        .sort((a, b) => a.distance - b.distance || a.f.geometry.coordinates.join().localeCompare(b.f.geometry.coordinates.join()))
+        .map(({ f }) => f);
+      asked = nearby.length;
+      for (const candidate of nearby) {
+        if (!(await surveyDrawnNear(page, candidate.geometry.coordinates))) {
+          clear = candidate;
+          break;
+        }
+      }
+    }
+    expect(
+      clear,
+      `every one of the ${ranked.length} named entrances served, and the ${asked} named around them, ` +
+        'has a survey drawn over it',
+    ).toBeDefined();
+    feature = clear!;
+  }
   return {
     lon: feature.geometry.coordinates[0],
     lat: feature.geometry.coordinates[1],
     name: feature.properties.name as string,
   };
+}
+
+/**
+ * Whether the 3D scene would draw a survey within about a hundred metres of a point: a centerline
+ * of any cave, or a cave's walls. Asked of the same endpoints the scene loads them from, as the
+ * signed-in person, so it answers for exactly what that person's scene would show.
+ *
+ * A hundred metres is far wider than a click's reach from a camera 900 m up, so a line passing just
+ * beside the entrance counts as well as one that starts on it.
+ */
+async function surveyDrawnNear(page: Page, [lon, lat]: number[]): Promise<boolean> {
+  const reach = 0.001;
+  const bbox = [lon - reach, lat - reach, lon + reach, lat + reach].map((n) => n.toFixed(5)).join(',');
+  const headers = { Authorization: `Bearer ${await bearerToken(page)}` };
+  const read = async <T>(path: string): Promise<T> => {
+    const response = await page.request.get(path, { headers });
+    expect(response.ok(), `GET ${path} answered ${response.status()}`).toBeTruthy();
+    return (await response.json()) as T;
+  };
+  const lines = await read<{ features: unknown[]; withheldCount: number }>(
+    `/api/v1/map/cave-centerlines?bbox=${bbox}&zoom=17&z=true`,
+  );
+  const walls = await read<{ total: number }>(`/api/v1/map/cave-meshes?bbox=${bbox}`);
+  return lines.features.length > 0 || lines.withheldCount > 0 || walls.total > 0;
+}
+
+/**
+ * Chooses the cave form's type by its name, in the type list's own open dropdown, and reads the
+ * choice back off the field.
+ *
+ * Named rather than "the first option on the page": another select's list left open, or a type
+ * list whose order changes, would otherwise hand the cave whichever option happened to come
+ * first. The default is the seeded "Cave", whose name is the same in every interface language.
+ */
+export async function pickCaveType(page: Page, name = 'Cave') {
+  const field = page.getByLabel('Type', { exact: true });
+  await field.click();
+  const literal = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: new RegExp(`^${literal}$`) })
+    .click();
+  await expect(page.locator('.ant-form-item').filter({ has: field }).locator('.ant-select-content')).toHaveText(name);
 }
 
 /**
@@ -720,6 +834,30 @@ export async function openCaveFromRegistry(page: Page, name: string) {
   await gotoRoute(page, '/caves');
   await page.getByPlaceholder('Search name or toponym…').fill(name);
   await page.getByText(name).click();
+}
+
+/**
+ * Searches the trip list for `word` and proves the server's answer to that search holds no trip.
+ *
+ * A row count of zero alone is no proof: a freshly opened list has no rows while its first request
+ * is still on its way, so the count is zero before anything has been asked. The answer waited for
+ * is the one asked with this search, and its items must be empty before the rows are counted.
+ */
+export async function searchFindsNoTrip(page: Page, word: string) {
+  const answered = page.waitForResponse(
+    (response) => {
+      const url = new URL(response.url());
+      return response.request().method() === 'GET'
+        && url.pathname.replace(/\/$/, '') === '/api/v1/trip-logs'
+        && url.searchParams.get('search') === word;
+    },
+    { timeout: 20_000 },
+  );
+  await page.getByPlaceholder('Search by title…').fill(word);
+  const response = await answered;
+  expect(response.ok()).toBe(true);
+  expect((await response.json()).items).toEqual([]);
+  await expect(page.getByTestId('trip-list-empty')).toBeVisible({ timeout: 15_000 });
 }
 
 /**

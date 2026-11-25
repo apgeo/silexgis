@@ -314,7 +314,7 @@ public sealed class FeatureListFilterTests : IAsyncLifetime, IDisposable, IClass
                     FeatureFilterFields.TypeId, FilterOp.Equals,
                     [new IdValue(sinkholeTypeId.ToString(CultureInfo.InvariantCulture))]),
                 new ConditionNode(FeatureFilterFields.Tag, FilterOp.Equals, [new IdValue(TagSlug)]),
-                // Scoped to this class's rows; the suite shares one database.
+                // Scoped to this test's rows; the class's tests share one database.
                 new ConditionNode(FeatureFilterFields.Name, FilterOp.Contains, [new TextValue(tag)]),
             ])),
         ],

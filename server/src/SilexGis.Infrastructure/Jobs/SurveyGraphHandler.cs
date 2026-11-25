@@ -12,9 +12,9 @@ using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
-using Therion.Blender;
-using Therion.Blender.Parsing;
-using Therion.Blender.Geometry;
+using Therion.Cave3D;
+using Therion.Cave3D.Parsing;
+using Therion.CaveGeometry;
 
 namespace SilexGis.Infrastructure.Jobs;
 
@@ -24,7 +24,12 @@ namespace SilexGis.Infrastructure.Jobs;
 /// The model that held the cave's current mark when the uploader asked for this one to take it
 /// once read; null when nobody asked. See <see cref="SurveyReadingMark"/>.
 /// </param>
-public sealed record SurveyGraphPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null);
+/// <param name="HeightDeclared">
+/// True when this reading was asked for by a declaration that gave the zero point its altitude.
+/// The row already holds that height when the job runs, but so does a model whose reading stored
+/// the 0 it placed a height-less file at, and only the request can tell the two apart.
+/// </param>
+public sealed record SurveyGraphPayload(Guid SurveyModelId, Guid? TakesMarkFrom = null, bool HeightDeclared = false);
 
 /// <summary>
 /// Reads an uploaded line-plot survey into station and shot rows carrying the file's own flags.
@@ -134,6 +139,21 @@ public sealed class SurveyGraphHandler(
                 model.AnchorHeightM ?? 0,
                 await SurveyModelPlacement.CavePositionAsync(db, model.CaveFeatureId, ct));
 
+            // A file in local metres is written about a station fixed at height zero, so with no
+            // height declared for that station its heights are measured from a zero plane at 0 m
+            // and are not altitudes. It is still read and drawn there — the shape is right — but
+            // the model says so, and the analyses that compare it with anything measured from sea
+            // level refuse instead of reporting the missing height as a real difference. The
+            // reading stores the 0 it placed the file at, so on a second reading of the same file
+            // the flag itself is what remembers that no height was ever given. A reading asked for
+            // by a declaration that gives the height clears it — here, in the transaction that
+            // rewrites the heights, and not earlier: until these rows are replaced they are still
+            // measured from 0 m, and the flag has to keep saying so. A file on a projected grid
+            // carries its own heights and is left as it was.
+            var altitudesRelative = declaration.SourceEpsg is null
+                && !payload.HeightDeclared
+                && (model.AnchorHeightM is null || model.AltitudesRelative);
+
             // Which legs are shots at the passage wall, settled once for everything below. The
             // extraction works this out for itself as well — it has to, or a caller that is not
             // this job gets a different answer — but the graph the cave's morphometrics are
@@ -178,6 +198,23 @@ public sealed class SurveyGraphHandler(
                 // the same moment waits here and then sees whether this one made the cave's shape.
                 await SurveyGraphSql.TakeCaveCenterlineLockAsync(db, model.CaveFeatureId, ct);
 
+                // Then the hierarchy lock, before any row is touched — but only by a reading that
+                // creates the cave's centerline, the one write here whose protection is derived
+                // under that lock. Held to the commit, a protection switched on above the cave
+                // waits for the new centerline, or commits first and is seen; taken ahead of the
+                // rows deleted below, this transaction never holds a row a hierarchy writer waits
+                // on while it waits for the lock. A reading again rewrites a centerline that
+                // already exists, which nothing in the hierarchy depends on, and must not take a
+                // lock every feature creation and protection change in the installation queues
+                // behind for the whole of a large survey's delete and insert. Asked under the
+                // cave's centerline lock, so a reading of the same cave cannot change the answer
+                // before the write; and nothing that holds the hierarchy lock takes that lock, so
+                // the two are always taken in this order.
+                if (shape is not null && !await HasExtractedCenterlineAsync(model.Id, ct))
+                {
+                    await writes.HoldHierarchyAsync(ct);
+                }
+
                 // Whatever a previous read of this file left behind. Issued as statements of their
                 // own rather than as tracked deletes, because loading tens of thousands of rows in
                 // order to mark them deleted costs more than the read that produced them.
@@ -211,6 +248,7 @@ public sealed class SurveyGraphHandler(
 
                 model.Anchor = new Point(extraction.AnchorLongitude, extraction.AnchorLatitude) { SRID = 4326 };
                 model.AnchorHeightM = extraction.AnchorHeightM;
+                model.AltitudesRelative = altitudesRelative;
                 model.AppliedRotationDeg = extraction.AppliedRotationDeg;
                 model.DroppedShotCount = extraction.DroppedShotCount;
                 model.MergedStationCount = extraction.MergedStationCount;
@@ -594,6 +632,13 @@ public sealed class SurveyGraphHandler(
     /// the same survey, and the one that is the cave's shape on the map decided by which ran last.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Whether the model already has the centerline a reading extracts — the row
+    /// <see cref="WriteCenterlineAsync"/> rewrites rather than creates.
+    /// </summary>
+    private Task<bool> HasExtractedCenterlineAsync(Guid modelId, CancellationToken ct) =>
+        db.Centerlines.AnyAsync(c => c.SurveyModelId == modelId && c.Source == CenterlineSource.Extracted, ct);
+
     private async Task WriteCenterlineAsync(SurveyModel model, CenterlineShape? shape, CancellationToken ct)
     {
         if (shape is null)

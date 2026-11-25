@@ -80,7 +80,7 @@ export default function MapBackgroundsForm() {
                       should be reading it at the moment they decide. */}
                   {background.groupName && <Tag>{background.groupName}</Tag>}
                 </Flex>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {background.attribution ?? t('admin.mapBackgrounds.noCredit')}
                 </Typography.Text>
               </Flex>

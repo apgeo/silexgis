@@ -77,10 +77,7 @@ public static class CavePatternEndpoints
         var network = PassageNetwork.Measure(
             measurable.Select(s => (s.FromStationName, s.ToStationName)));
 
-        var bearings = OrientationStatistics.Summarize(measurable
-            .Where(s => s.AzimuthDegrees is not null)
-            .Select(s => new OrientationSample(
-                s.AzimuthDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM)));
+        var bearings = OrientationStatistics.Summarize(SurveySegments.DirectionSamples(measurable));
 
         // Refused, not reported as level, for line work with no altitudes: the reduction that
         // produces a drawn centreline's segments substitutes zero for a missing altitude so the
@@ -116,7 +113,8 @@ public static class CavePatternEndpoints
             MaximumDipDegrees: dip?.MaximumDipDegrees,
             MedianWidthHeightRatio: ratio?.Median,
             DroppedShotCount: dropped,
-            MergedStationCount: merged));
+            MergedStationCount: merged,
+            OrientationSampleCount: bearings.SampleCount));
 
         return TypedResults.Ok(new CavePatternDto(
             request.Id,

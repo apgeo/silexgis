@@ -1599,6 +1599,219 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("cave_level_bands", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavePotentialModel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<short>("Method")
+                        .HasColumnType("smallint")
+                        .HasColumnName("method");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("Visibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cave_potential_models");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_cave_potential_models_caving_group_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_cave_potential_models_owner_user_id");
+
+                    b.ToTable("cave_potential_models", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavePotentialResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AreaFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("area_feature_id");
+
+                    b.Property<double>("CellMeters")
+                        .HasColumnType("double precision")
+                        .HasColumnName("cell_meters");
+
+                    b.Property<int?>("Columns")
+                        .HasColumnType("integer")
+                        .HasColumnName("columns");
+
+                    b.Property<DateTimeOffset?>("ComputedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("computed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<double?>("East")
+                        .HasColumnType("double precision")
+                        .HasColumnName("east");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("error_code");
+
+                    b.PrimitiveCollection<Guid[]>("EvidenceFeatureIds")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("evidence_feature_ids")
+                        .HasDefaultValueSql("'{}'::uuid[]");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<short>("Method")
+                        .HasColumnType("smallint")
+                        .HasColumnName("method");
+
+                    b.Property<Guid?>("ModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("model_id");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("model_name");
+
+                    b.Property<double?>("North")
+                        .HasColumnType("double precision")
+                        .HasColumnName("north");
+
+                    b.Property<string>("Path")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("path");
+
+                    b.Property<long?>("ProcessingJobId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("processing_job_id");
+
+                    b.Property<int>("ProtectedFeatureCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("protected_feature_count");
+
+                    b.Property<bool>("RanAsFullAdministrator")
+                        .HasColumnType("boolean")
+                        .HasColumnName("ran_as_full_administrator");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<int?>("Rows")
+                        .HasColumnType("integer")
+                        .HasColumnName("rows");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<double?>("South")
+                        .HasColumnType("double precision")
+                        .HasColumnName("south");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("summary")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<Guid?>("TerrainBuildId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("terrain_build_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<bool>("UsesPositions")
+                        .HasColumnType("boolean")
+                        .HasColumnName("uses_positions");
+
+                    b.Property<double?>("West")
+                        .HasColumnType("double precision")
+                        .HasColumnName("west");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cave_potential_results");
+
+                    b.HasIndex("AreaFeatureId")
+                        .HasDatabaseName("ix_cave_potential_results_area_feature_id");
+
+                    b.HasIndex("ModelId")
+                        .HasDatabaseName("ix_cave_potential_results_model_id");
+
+                    b.HasIndex("ProcessingJobId")
+                        .HasDatabaseName("ix_cave_potential_results_processing_job_id");
+
+                    b.HasIndex("RequestedByUserId")
+                        .HasDatabaseName("ix_cave_potential_results_requested_by_user_id");
+
+                    b.ToTable("cave_potential_results", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cave_potential_results_cell_meters", "cell_meters > 0");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2050,6 +2263,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_seeded");
 
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uuid")
@@ -6327,6 +6544,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AltitudesRelative")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("altitudes_relative");
+
                     b.Property<Point>("Anchor")
                         .HasColumnType("geometry(Point, 4326)")
                         .HasColumnName("anchor");
@@ -7602,6 +7825,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccuracySource")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("accuracy_source");
+
                     b.Property<int?>("AchievedMaxDepth")
                         .HasColumnType("integer")
                         .HasColumnName("achieved_max_depth");
@@ -7683,6 +7911,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("size_bytes");
 
+                    b.Property<double?>("SourceResolutionM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("source_resolution_m");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -7694,6 +7926,15 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<double?>("VerticalAccuracyM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("vertical_accuracy_m");
+
+                    b.Property<string>("VerticalAccuracyStatistic")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("vertical_accuracy_statistic");
 
                     b.HasKey("Id")
                         .HasName("pk_terrain_builds");
@@ -7720,6 +7961,8 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.ToTable("terrain_builds", null, t =>
                         {
+                            t.HasCheckConstraint("ck_terrain_builds_accuracy", "(source_resolution_m is null or source_resolution_m > 0) and (vertical_accuracy_m is null or vertical_accuracy_m > 0) and ((vertical_accuracy_m is null) = (vertical_accuracy_statistic is null))");
+
                             t.HasCheckConstraint("ck_terrain_builds_progress_range", "progress >= 0 and progress <= 100");
                         });
                 });
@@ -7904,6 +8147,11 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("terrain_build_id");
 
+                    b.Property<string>("ToolVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("tool_version");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -7998,6 +8246,126 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_terrain_derivative_rasters_terrain_derivative_layer_id_path");
 
                     b.ToTable("terrain_derivative_rasters", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRow", b =>
+                {
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("TableName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("table_name");
+
+                    b.Property<string>("RowId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("row_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("RunId", "TableName", "RowId")
+                        .HasName("pk_test_data_rows");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .HasDatabaseName("ix_test_data_rows_run_id_sequence");
+
+                    b.HasIndex("TableName", "RowId")
+                        .HasDatabaseName("ix_test_data_rows_table_name_row_id");
+
+                    b.ToTable("test_data_rows", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AlongsideExistingData")
+                        .HasColumnType("boolean")
+                        .HasColumnName("alongside_existing_data");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at");
+
+                    b.Property<string>("Counts")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("counts");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Phase")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("phase");
+
+                    b.Property<long?>("ProcessingJobId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("processing_job_id");
+
+                    b.Property<string>("Profile")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("profile");
+
+                    b.Property<int>("ProgressDone")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_done");
+
+                    b.Property<int>("ProgressTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("progress_total");
+
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at");
+
+                    b.Property<Guid?>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seed");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_test_data_runs");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_test_data_runs_created_at");
+
+                    b.ToTable("test_data_runs", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TextSearchLanguage", b =>
@@ -10167,6 +10535,51 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_cave_level_bands_users_confirmed_by");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavePotentialModel", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_cave_potential_models_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_potential_models_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CavePotentialResult", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("AreaFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_potential_results_features_area_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.CavePotentialModel", null)
+                        .WithMany()
+                        .HasForeignKey("ModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_cave_potential_results_cave_potential_models_model_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingJobId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_cave_potential_results_processing_jobs_processing_job_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_potential_results_users_requested_by_user_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Feature", null)
@@ -11463,6 +11876,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_terrain_derivative_rasters_terrain_derivative_layers_terrai");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TestDataRow", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.TestDataRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_test_data_rows_test_data_runs_run_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripAttention", b =>

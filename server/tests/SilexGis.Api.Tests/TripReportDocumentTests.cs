@@ -35,7 +35,7 @@ public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable, IClas
 {
     // Distinctive enough to find in a document as text, and far enough from any obfuscation
     // grid that a rounded position could not contain these digits by accident. They belong to
-    // this suite alone: the database is shared, and a cave another test placed at this point
+    // this class alone: its tests share one database, and a cave another test placed at this point
     // would put these digits into a payload and be read here as a disclosure.
     private const double CaveLat = 45.13947;
     private const double CaveLon = 23.42681;

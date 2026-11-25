@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EditOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
-import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography } from 'antd';
+import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   hasAccessAction,
   useAlbum,
@@ -51,12 +54,20 @@ const PageSize = 500;
 export default function AlbumDetailPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.documents, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.documents, 'write');
 
-  const { data: album, isPending: albumPending } = useAlbum(id);
+  const {
+    data: album,
+    isPending: albumPending,
+    isError: albumFailed,
+    error: albumError,
+    refetch: refetchAlbum,
+  } = useAlbum(id);
   const photosQuery = usePhotos({ albumId: id, pageSize: PageSize }, canRead && Boolean(id));
   const reorderAlbum = useReorderAlbum();
   const setCover = useSetAlbumCover();
@@ -68,12 +79,27 @@ export default function AlbumDetailPage() {
   // snapping back to where it was, which reads as the drag having failed.
   const [pending, setPending] = useState<string[] | null>(null);
 
-  if (!capabilities || albumPending) {
-    return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
+  if (capabilities && !canRead) {
+    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
   }
 
-  if (!canRead || !album) {
-    return <Alert type="error" showIcon title={t('admin.forbidden')} style={{ margin: 16 }} />;
+  // Being refused the gallery is one thing, an album that is not there another, and a read that
+  // did not land a third: only the first is a matter of rights, and a dropped connection reported
+  // as "you may not" sends somebody to ask for access they already hold.
+  if (readFailureEndsPage(albumFailed, album, albumError)) {
+    return (
+      <ReadFailedResult
+        error={albumError}
+        onRetry={() => void refetchAlbum()}
+        notFoundTitle={t('gallery.albumNotFound')}
+        notFoundDetail={t('gallery.albumNotFoundDetail')}
+        actions={<Button onClick={() => void navigate('/gallery')}>{t('common.back')}</Button>}
+      />
+    );
+  }
+
+  if (!capabilities || albumPending || !album) {
+    return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
   }
 
   // Narrowed to what the grid and the viewer take: the listing nests a caption under a credit,
@@ -104,6 +130,14 @@ export default function AlbumDetailPage() {
       message.error(t('common.saveFailed'));
     } finally {
       setPending(null);
+    }
+  };
+
+  const makeCover = async (albumId: string, documentId: string) => {
+    try {
+      await setCover.mutateAsync({ id: albumId, documentId });
+    } catch {
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -167,7 +201,16 @@ export default function AlbumDetailPage() {
         />
       )}
 
-      {photosQuery.isPending ? (
+      <ReadFailedAlert
+        error={photosQuery.error}
+        isError={photosQuery.isError}
+        held={photosQuery.data !== undefined}
+        onRetry={photosQuery.refetch}
+        title={t('gallery.albumPhotosLoadFailed')}
+        testId="album-photos-load-failed"
+      />
+
+      {photosQuery.isError && photosQuery.data === undefined ? null : photosQuery.isPending ? (
         <Spin style={{ display: 'block', marginTop: '15vh' }} />
       ) : (
         <PhotoGrid
@@ -199,14 +242,12 @@ export default function AlbumDetailPage() {
                         data-cover={album.coverDocumentId === photo.documentId}
                         icon={
                           album.coverDocumentId === photo.documentId ? (
-                            <StarFilled style={{ color: '#faad14' }} />
+                            <StarFilled style={{ color: token.colorWarning }} />
                           ) : (
                             <StarOutlined />
                           )
                         }
-                        onClick={() =>
-                          void setCover.mutateAsync({ id: album.id, documentId: photo.documentId })
-                        }
+                        onClick={() => void makeCover(album.id, photo.documentId)}
                       />
                     </Tooltip>
                     <Tooltip title={t('gallery.editCredit')}>

@@ -2,6 +2,7 @@
 import { App, Card, Empty, Popconfirm, Space, Table, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 
 import {
   useCaveHypsometry,
@@ -12,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import ElevationHistogram from './ElevationHistogram.tsx';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * How much of a cave's passage sits at each height, the storeys it appears to have been cut at, and
@@ -46,12 +48,16 @@ export default function CaveHypsometryPanel({
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading, isError } = useCaveHypsometry(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveHypsometry(caveId);
   const { data: saved } = useCaveLevelBands(caveId);
   const save = useSaveCaveLevelBands(caveId);
   const clear = useClearCaveLevelBands(caveId);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('hypsometry.caveTitle')} error={error} onRetry={refetch} testId="cave-hypsometry-read-failed" />
+    );
+  }
 
   const proposal = data?.proposal ?? null;
   const proposed: ElevationBand[] = proposal?.bands ?? [];
@@ -67,6 +73,18 @@ export default function CaveHypsometryPanel({
       // The one case worth naming: two people recording a reading of the same cave at the same
       // moment. The server refuses the second and the reader has to re-read what stands.
       message.error(t('hypsometry.saveFailed'));
+    }
+  };
+
+  const withdraw = async () => {
+    try {
+      await clear.mutateAsync();
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice; a second toast would only
+      // repeat it in other words.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('hypsometry.clearFailed'));
+      }
     }
   };
 
@@ -101,6 +119,14 @@ export default function CaveHypsometryPanel({
           measure="weight"
           testId="chart-cave-hypsometry"
         />
+
+        {/* The heights are about the survey's own zero point, so the levels describe the cave's
+            shape but are not altitudes, and no spring line is drawn against them. */}
+        {data.altitudesRelative && (
+          <Typography.Text type="warning" data-testid="hypsometry-altitudes-relative">
+            {t('hypsometry.altitudesRelative')}
+          </Typography.Text>
+        )}
 
         <Typography.Text type="secondary">
           {t('hypsometry.proposedCount', { count: proposed.length })}
@@ -154,7 +180,7 @@ export default function CaveHypsometryPanel({
             {saved?.confirmed && (
               <Popconfirm
                 title={t('hypsometry.clearConfirm')}
-                onConfirm={() => clear.mutate()}
+                onConfirm={withdraw}
                 okText={t('common.ok')}
                 cancelText={t('common.cancel')}
               >

@@ -645,8 +645,9 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         // empty list: a survey nobody may place must not read as a survey with nothing in it.
         var blind = await PreviewAsync(editor, fileId, Options(guardedModel, createTrip: true));
         blind.GetProperty("modelUsable").GetBoolean().ShouldBeFalse();
-        blind.GetProperty("points").EnumerateArray()
-            .ShouldAllBe(p => p.GetProperty("state").GetString() == "modelUnavailable");
+        var blindPoints = blind.GetProperty("points").EnumerateArray().ToList();
+        blindPoints.ShouldNotBeEmpty("a closed survey must still list the archive's rows, each saying why");
+        blindPoints.ShouldAllBe(p => p.GetProperty("state").GetString() == "modelUnavailable");
         blind.GetProperty("selectablePointIds").GetArrayLength().ShouldBe(0);
 
         // The same caller, the same archive, a cave of their own: allowed.
@@ -656,6 +657,8 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         var mine = await PreviewAsync(editor, fileId, Options(ownModel, createTrip: true));
         mine.GetProperty("modelUsable").GetBoolean().ShouldBeTrue();
         mine.GetProperty("proposedCount").GetInt32().ShouldBe(2);
+        // The same archive, so the closed preview listed every row the open one did.
+        blindPoints.Count.ShouldBe(mine.GetProperty("points").GetArrayLength());
     }
 
     /// <summary>
@@ -777,9 +780,11 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         // The same phone user, a review with no choice made: prefilled from the link.
         var again = await PreviewAsync(editor, fileId, Options(model, trip, caver: null, recording: nextRecording));
         again.GetProperty("unmappedDeviceUsers").GetArrayLength().ShouldBe(0);
-        again.GetProperty("points").EnumerateArray()
+        var prefilled = again.GetProperty("points").EnumerateArray()
             .Where(p => p.GetProperty("state").GetString() == "proposed")
-            .ShouldAllBe(p => p.GetProperty("caverId").GetGuid() == cavers[0]);
+            .ToList();
+        prefilled.Count.ShouldBe(2, "the second recording's two scans are proposed, or there is nothing prefilled to check");
+        prefilled.ShouldAllBe(p => p.GetProperty("caverId").GetGuid() == cavers[0]);
     }
 
     /// <summary>

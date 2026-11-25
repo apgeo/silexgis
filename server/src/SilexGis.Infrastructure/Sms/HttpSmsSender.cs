@@ -83,14 +83,14 @@ public sealed partial class HttpSmsSender(
         var client = httpClientFactory.CreateClient(HttpClientName);
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(sms.TimeoutSeconds, 1, 120));
 
-        using var response = await client.SendAsync(request, ct);
+        // Only the status is read, so the body is never waited for or buffered.
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!response.IsSuccessStatusCode)
         {
-            // Gateways put the reason in the body; carrying a bounded slice of it makes the
-            // administrator's test-send able to say what was actually wrong.
-            var detail = await ReadTruncatedAsync(response, ct);
+            // The status alone: the body is whatever the server at that address chose to say,
+            // and repeating it would let the settings page read pages only this server can reach.
             throw new InvalidOperationException(
-                $"SMS gateway returned {(int)response.StatusCode} {response.ReasonPhrase}. {detail}".TrimEnd());
+                $"SMS gateway returned {(int)response.StatusCode} {response.ReasonPhrase}.");
         }
 
         logger.LogDebug("Sent SMS to {Recipient}", to);
@@ -137,19 +137,6 @@ public sealed partial class HttpSmsSender(
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
-
-    private static async Task<string> ReadTruncatedAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        try
-        {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            return body.Length <= 300 ? body : body[..300] + "…";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
-        {
-            return string.Empty;
-        }
-    }
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "SMS gateway not configured — message not sent (the text is never logged). To: {To}")]

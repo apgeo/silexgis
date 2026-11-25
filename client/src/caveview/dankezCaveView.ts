@@ -9,7 +9,7 @@
  * in full rather than as a directory: a development server that finds no file at a directory
  * address answers with this application's own page instead of the viewer's.
  */
-export const DANKEZ_CAVEVIEW_PAGE = '/dankez-caveview/v2.3.0-slx.1/index.html';
+export const DANKEZ_CAVEVIEW_PAGE = '/dankez-caveview/v2.5.15-slx.2/index.html';
 
 /**
  * <b>The viewer is handed the file's bytes, never its address.</b> A survey file is fetched by a

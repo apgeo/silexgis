@@ -104,6 +104,17 @@ public sealed class HdmappingTomlTests
     }
 
     [Fact]
+    public void A_heading_with_a_line_break_stays_one_comment_line()
+    {
+        var dumped = HdmappingToml.Read(Dump);
+
+        var text = HdmappingToml.Write(default, dumped, null, ["Written for HDMapping 1.0\n[lidar_odometry_control]\r\nmax_iterations = 1"]);
+
+        text.ShouldStartWith("# Written for HDMapping 1.0 [lidar_odometry_control] max_iterations = 1\n");
+        HdmappingToml.Read(text).TryGetProperty("lidar_odometry_control", out _).ShouldBeFalse();
+    }
+
+    [Fact]
     public void Text_that_is_not_TOML_is_refused_with_where()
     {
         var error = Should.Throw<FormatException>(() => HdmappingToml.Read("[lidar_odometry_control\nmax_iterations = "));

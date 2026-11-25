@@ -1,10 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// A read of the list that did not land, switched on by the test that needs it.
+const listRead = vi.hoisted(() => {
+  const refetch = vi.fn();
+  return {
+    failed: false,
+    refetch,
+    answer: () => ({ data: undefined, isLoading: false, isError: true, error: new TypeError('offline'), refetch }),
+  };
+});
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { FeatureType, FeatureTypeWrite } from '../../api/hooks.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const featureTypes: FeatureType[] = [
   {
@@ -71,7 +82,7 @@ vi.mock('../../api/hooks.ts', async () => {
   return {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
-    useFeatureTypes: () => ({ data: featureTypes, isLoading: false }),
+    useFeatureTypes: () => (listRead.failed ? listRead.answer() : { data: featureTypes, isLoading: false }),
     useCreateFeatureType: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateFeatureType: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteFeatureType: () => ({ mutateAsync: deleteMutate, isPending: false }),
@@ -165,5 +176,89 @@ describe('FeatureTypesPage', () => {
     fireEvent.click(screen.getByText('Save'));
 
     expect(await screen.findByText(/Features of this kind exist/)).toBeInTheDocument();
+  });
+
+  it('Save with the name emptied marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    updateMutate.mockClear();
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      renderPage();
+      fireEvent.click(screen.getAllByText('Edit')[1]);
+      const name = await screen.findByLabelText('Name');
+      await waitFor(() => expect(screen.getByLabelText('Code')).toHaveValue('bat_roost'));
+      fireEvent.change(name, { target: { value: '' } });
+      fireEvent.click(screen.getByText('Save'));
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      await afterRejectionsAreReported();
+      expect(updateMutate).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
+  });
+});
+
+describe('a failed read of the list', () => {
+  it('says the read failed instead of showing an empty list, and offers Retry', () => {
+    listRead.failed = true;
+    try {
+      renderPage();
+      expect(screen.getByTestId('feature-types-load-failed')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+      expect(listRead.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      listRead.failed = false;
+      listRead.refetch.mockReset();
+    }
+  });
+});
+
+describe('leaving the FeatureTypes dialog with typed work', () => {
+  afterEach(cleanup);
+
+  it('closes at once when nothing was typed', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: nothing was typed, so the dialog closes. Its leaving animation
+    // is the witness: a question would have kept it open.
+    await waitFor(() => expect(document.querySelector('.ant-modal')?.className).toContain('leave'));
+    expect(document.querySelectorAll('.ant-modal')).toHaveLength(1);
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing typed work away, and keeps it on "keep editing"', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '{"type":"object"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Keep editing' }).at(-1)!);
+    expect(screen.getByLabelText('Description')).toHaveValue('{"type":"object"}');
+  });
+
+  it('is not closed by a click beside it', async () => {
+    renderPage();
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '{"type":"object"}' } });
+    const wrap = document.querySelector('.ant-modal-wrap') as HTMLElement;
+    fireEvent.mouseDown(wrap);
+    fireEvent.mouseUp(wrap);
+    fireEvent.click(wrap);
+    // A click beside must not even reach the dialog's cancel handler: that handler asks about
+    // typed work, so a question raised now would mean the click was routed, not let go.
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+    expect(document.querySelectorAll('.ant-modal-confirm')).toHaveLength(0);
+    // The witness that the click beside was let go: Cancel, pressed next, asks about the typed
+    // work, which only a dialog still open and still holding that work does.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Description')).toHaveValue('{"type":"object"}');
+    // A close starts the dialog's leaving animation; it must not have begun.
+    expect(document.querySelector('.ant-modal')?.className).not.toContain('leave');
   });
 });

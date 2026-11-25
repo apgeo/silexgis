@@ -49,7 +49,7 @@ export default function TripImportProblemList({ problems, failedRowCount }: Prop
                   </span>
                 }
                 description={
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" className="hint-text">
                     {[problem.column, problem.detail].filter(Boolean).join(' — ')}
                   </Typography.Text>
                 }

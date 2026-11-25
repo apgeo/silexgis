@@ -51,6 +51,7 @@ public sealed class OpenDocumentTextExtractor : ITextExtractor
     {
         ArgumentNullException.ThrowIfNull(content);
 
+        ExtractionStreams.RefuseCrowdedPackage(content);
         using var archive = new ZipArchive(content, ZipArchiveMode.Read, leaveOpen: true);
         var entry = archive.GetEntry(ContentEntry)
             ?? throw new InvalidDataException(

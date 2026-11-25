@@ -3,11 +3,16 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { EntityType } from '../../api/hooks.ts';
 import { ACTION_ORDER } from './accessDisplay.ts';
 
 const replace = vi.fn();
+// The rule lists the saves carried, one per save; the version each was sent under is asserted apart.
+const sentEntries = () => replace.mock.calls.map((call) => (call[0] as { entries: unknown[] }).entries);
+// The read made just before a save; by default it answers whatever is stored now.
+const refetch = vi.fn();
 // The camp a cascade row names, as the reader's own read of it answers: a name when they may
 // open it, nothing when it is not theirs to read.
 let campRead: { data?: { id: string; name: string } } = { data: undefined };
@@ -31,7 +36,7 @@ vi.mock('../../api/hooks.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../api/hooks.ts')>();
   return {
     parseAccessActions: actual.parseAccessActions,
-    useObjectAccess: () => ({ data: rulesArrived ? rules : undefined, isError: false }),
+    useObjectAccess: () => ({ data: rulesArrived ? rules : undefined, isError: false, refetch }),
     // An empty id is the hook's own "ask nothing", exactly as the real one treats it.
     useMember: (id: string) => {
       if (id) {
@@ -77,6 +82,8 @@ function saveButton() {
 beforeEach(() => {
   replace.mockReset();
   replace.mockResolvedValue(undefined);
+  refetch.mockReset();
+  refetch.mockImplementation(() => Promise.resolve({ data: rulesArrived ? rules : undefined }));
   memberLookups.mockReset();
   rules = [];
   rulesArrived = true;
@@ -150,7 +157,7 @@ describe('PermissionsModal on a trip', () => {
 
     // The rule the trip owns travels; the camp's does not, in the same save.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: 'user-9', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });
@@ -206,9 +213,79 @@ describe('PermissionsModal on a trip', () => {
 
     // One rule saved, and it is the trip's own — the camp's is still left where the camp is.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
+  });
+
+  // The save replaces every direct rule on the object, so a save sent before the stored rules
+  // arrived would remove all of them.
+  it('says why a save was refused when it would hand out rights the reader does not hold', async () => {
+    rules = [{
+      subjectKind: 'user', subjectId: 'user-9', subjectName: 'Ana', effect: 'allow',
+      scopeKind: 'object', actions: 'read', grantedViaExpeditionId: null,
+    }];
+    replace.mockRejectedValue(new ApiError(403, 'access_entry.exceeds_own_rights'));
+    show();
+
+    fireEvent.click(saveButton());
+
+    expect(await screen.findByText(i18n.t('permissionGroups.exceedsOwnRights'))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+
+  it('names each action box by its action and subject, and leaves a row with nothing ticked out of the save', async () => {
+    rules = [
+      {
+        subjectKind: 'user', subjectId: 'user-9', subjectName: 'Ana', effect: 'allow',
+        scopeKind: 'object', actions: 'read', grantedViaExpeditionId: null,
+      },
+      {
+        subjectKind: 'cavingGroup', subjectId: 'club-1', subjectName: 'Speo Club', effect: 'allow',
+        scopeKind: 'object', actions: 'read, write', grantedViaExpeditionId: null,
+      },
+    ];
+    show();
+
+    // The pickers say what they are even once a value hides the placeholder.
+    expect(screen.getByRole('combobox', { name: 'Kind of subject' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove the rule for Ana' })).toBeInTheDocument();
+
+    const anaRead = screen.getByRole('checkbox', { name: 'Read for Ana' });
+    expect(anaRead).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Write for Speo Club' })).toBeChecked();
+    fireEvent.click(anaRead);
+
+    fireEvent.click(saveButton());
+
+    // Ana's row holds no action any more, so it is not sent: the save is what remains.
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(sentEntries()).toContainEqual([
+      { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
+    ]);
+  });
+
+  it('cannot be saved before the object\'s rules have arrived, and can once they have', () => {
+    rules = [{
+      subjectKind: 'user',
+      subjectId: 'user-9',
+      subjectName: 'Ana',
+      effect: 'allow',
+      scopeKind: 'object',
+      actions: 'read',
+      grantedViaExpeditionId: null,
+    }];
+    rulesArrived = false;
+    const { rerender } = show();
+
+    expect(saveButton()).toBeDisabled();
+    fireEvent.click(saveButton());
+    expect(replace).not.toHaveBeenCalled();
+
+    rulesArrived = true;
+    rerender(dialog('tripLog'));
+    expect(saveButton()).toBeEnabled();
   });
 });
 
@@ -291,7 +368,7 @@ describe('PermissionsModal opened about an account', () => {
     // One confirmation, one save: the drafted rule and the club's own, which a full replace
     // would otherwise have dropped.
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
@@ -308,7 +385,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([]);
+    expect(sentEntries()).toContainEqual([]);
   });
 
   it('drafts nothing for an id that names nobody, and says nothing about it', () => {
@@ -345,7 +422,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
   });
@@ -373,7 +450,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
   });
@@ -391,7 +468,7 @@ describe('PermissionsModal opened about an account', () => {
 
     fireEvent.click(saveButton());
     await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
-    expect(replace).toHaveBeenCalledWith([
+    expect(sentEntries()).toContainEqual([
       { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
   });
@@ -434,5 +511,63 @@ describe('PermissionsModal opened about an account', () => {
     expect(memberLookups).not.toHaveBeenCalled();
     expect(screen.queryByText('proposed')).not.toBeInTheDocument();
     expect(screen.queryByTestId('permissions-proposed')).not.toBeInTheDocument();
+  });
+});
+
+describe('PermissionsModal when the stored rules move under an open edit', () => {
+  const ana = {
+    subjectKind: 'user' as const, subjectId: 'user-9', subjectName: 'Ana', effect: 'allow' as const,
+    scopeKind: 'object', actions: 'read', grantedViaExpeditionId: null,
+  };
+  const club = {
+    subjectKind: 'cavingGroup' as const, subjectId: 'club-1', subjectName: 'Speo Club', effect: 'allow' as const,
+    scopeKind: 'object', actions: 'read', grantedViaExpeditionId: null,
+  };
+
+  it('keeps the edit, says the rules moved, holds the save, and loads the stored ones when asked', () => {
+    rules = [ana];
+    const { rerender } = show();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Write for Ana' }));
+
+    // Another reader's save, brought in by a background read.
+    rules = [ana, club];
+    rerender(dialog('tripLog'));
+
+    expect(screen.getByTestId('permissions-stored-moved')).toHaveTextContent(i18n.t('permissions.storedRulesMoved'));
+    expect(screen.getByRole('checkbox', { name: 'Write for Ana' })).toBeChecked();
+    expect(saveButton()).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('permissions.loadStoredRules') }));
+    expect(screen.queryByTestId('permissions-stored-moved')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Write for Ana' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Read for Speo Club' })).toBeChecked();
+  });
+
+  it('reads the rules again just before saving and does not save over a change it finds', async () => {
+    rules = [ana];
+    show();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Write for Ana' }));
+    refetch.mockResolvedValue({ data: [ana, club] });
+
+    fireEvent.click(saveButton());
+
+    expect(await screen.findByTestId('permissions-stored-moved')).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('saves over the other change once the reader says to', async () => {
+    rules = [ana];
+    const { rerender } = show();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Write for Ana' }));
+    rules = [ana, club];
+    rerender(dialog('tripLog'));
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('permissions.keepMyRules') }));
+    fireEvent.click(saveButton());
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(sentEntries()).toContainEqual([
+      { subjectKind: 'user', subjectId: 'user-9', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
+    ]);
   });
 });

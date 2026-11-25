@@ -175,12 +175,13 @@ except Exception as error:
 }
 
 describe('the HDMapping worker in the overlay', () => {
-  it('is a second service on the same volume, isolated as the tiler is, behind a profile', () => {
+  it('is a second service on a volume of its own, isolated as the tiler is, behind a profile', () => {
     const service = overlay.slice(overlay.indexOf('  scans-hdmapping:'));
     assert.match(service, /^    profiles: \["hdmapping"\]$/m);
     assert.match(service, /^      target: hdmapping$/m);
     assert.match(service, /^    network_mode: none$/m);
-    assert.match(service, /^      - silexgis-scans:\/data\/scans$/m);
+    assert.match(service, /^      - silexgis-scans-hdmapping:\/data\/scans$/m);
+    assert.ok(!/^      - silexgis-scans:/m.test(service), 'the HDMapping worker does not mount the tiler\'s volume');
     assert.match(service, /^    read_only: true$/m);
     assert.match(service, /^    cap_drop:\n      - ALL$/m);
     assert.match(service, /^      - no-new-privileges:true$/m);
@@ -190,6 +191,18 @@ describe('the HDMapping worker in the overlay', () => {
     assert.match(service, /- \/tmp:size=256m/);
     assert.match(service, /SILEXGIS_SCANS_WORKER_ROLE: hdmapping/);
     assert.ok(!/ports:/.test(service));
+  });
+
+  it('is reached by the application through a directory of its own on that volume', () => {
+    const base = readFileSync(join(deployDir, 'docker-compose.yml'), 'utf8');
+    const tiler = overlay.slice(overlay.indexOf('  scans-worker:'), overlay.indexOf('  scans-hdmapping:'));
+    assert.match(tiler, /^      - silexgis-scans:\/data\/scans$/m);
+    assert.ok(!/silexgis-scans-hdmapping/.test(tiler), 'the tiler does not mount the HDMapping worker\'s volume');
+    assert.match(base, /^      SILEXGIS__Scans__HdmappingHandoffRoot: \/data\/scans-hdmapping$/m);
+    assert.match(base, /^      - silexgis-scans-hdmapping:\/data\/scans-hdmapping$/m);
+    assert.match(base, /^  silexgis-scans-hdmapping:$/m);
+    const apiImage = readFileSync(join(deployDir, '..', 'server', 'Dockerfile'), 'utf8');
+    assert.match(apiImage, /\/data\/scans-hdmapping\/jobs/, 'the api image creates the path, so a fresh volume is seeded writable');
   });
 
   it('runs the same loop in the image, in the HDMapping role', () => {
@@ -389,6 +402,40 @@ describe('the HDMapping worker, run against a hand-off directory with stand-in p
       assert.equal(result(directory).status, 'failed');
       assert.match(result(directory).reason, /outside itself/);
       assert.ok(!existsSync(join(root, 'jobs', 'escape.txt')));
+    });
+  });
+
+  it('refuses a session whose session.mjs names a file outside the session folder, before the export runs', () => {
+    for (const [key, entry] of [
+      ['file_name', { laz_file_names: [{ file_name: '../other-hdmapping-export/pointCloudLaz.laz' }] }],
+      ['file_name', { laz_file_names: [{ file_name: '/data/scans/jobs/other/pointCloudLaz.laz' }] }],
+      ['poses_file_name', { 'Session Settings': { poses_file_name: 'sub/../../poses.reg' }, laz_file_names: [{ file_name: 'scan_lio_0.laz' }] }],
+      ['out_folder_name', { 'Session Settings': { out_folder_name: 'C:\\out' }, laz_file_names: [{ file_name: 'scan_lio_0.laz' }] }],
+    ]) {
+      withRoot((root) => {
+        const directory = job(root, 'export', { step: 'hdmapping.export', inputs: { hdmSession: 'hdmSession.zip' } });
+        spawnSync('python3', ['-I', '-c', 'import sys,zipfile;z=zipfile.ZipFile(sys.argv[1],"w");z.writestr("session.mjs",sys.argv[2]);z.writestr("scan_lio_0.laz","x");z.close()',
+          join(directory, 'hdmSession.zip'), JSON.stringify(entry)]);
+        sweep(root);
+        const answer = result(directory);
+        assert.equal(answer.status, 'failed', JSON.stringify(entry));
+        assert.match(answer.reason, /outside the session folder/);
+        assert.ok(answer.reason.includes(key), answer.reason);
+        assert.ok(!existsSync(join(directory, 'export.laz')));
+      });
+    }
+  });
+
+  it('refuses a session archive that unpacks to far more than it holds, before writing it out', () => {
+    withRoot((root) => {
+      const directory = job(root, 'export', { step: 'hdmapping.export', inputs: { hdmSession: 'hdmSession.zip' } });
+      spawnSync('python3', ['-I', '-c', 'import sys,zipfile;z=zipfile.ZipFile(sys.argv[1],"w",zipfile.ZIP_DEFLATED);z.writestr("session.mjs","{}");z.writestr("scan_lio_0.laz",bytes(16*1024*1024));z.close()',
+        join(directory, 'hdmSession.zip')]);
+      sweep(root);
+      const answer = result(directory);
+      assert.equal(answer.status, 'failed');
+      assert.match(answer.reason, /times its own size/);
+      assert.ok(!existsSync(join(directory, 'session', 'scan_lio_0.laz')));
     });
   });
 

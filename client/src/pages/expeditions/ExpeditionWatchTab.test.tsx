@@ -302,6 +302,18 @@ describe("a camp's head count with nothing to count", () => {
     );
     expect(screen.queryByTestId('expedition-watch-empty')).toBeNull();
   });
+
+  it('keeps the last count on screen when one poll fails, and says it could not be read again', () => {
+    // A background poll that fails leaves the last answer in place and sets the error beside it.
+    logSpy.mockReturnValue({ data: log(), isPending: false, error: new Error('poll lost') });
+    show();
+
+    expect(screen.queryByTestId('expedition-watch-unavailable')).toBeNull();
+    expect(screen.getByTestId(`expedition-watch-trip-${RUNNING}`)).toBeTruthy();
+    expect(screen.getByTestId('expedition-watch-refresh-failed').textContent).toContain(
+      i18n.t('common.refreshFailed'),
+    );
+  });
 });
 
 describe("a camp's head count that was cut short", () => {

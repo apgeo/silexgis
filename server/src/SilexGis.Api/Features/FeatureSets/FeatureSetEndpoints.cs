@@ -263,8 +263,9 @@ public static class FeatureSetEndpoints
                 .Select(f => f.Id)
                 .ToListAsync(ct))
             .ToHashSet();
+        var requestedSet = requested.ToHashSet();
         var added = requested.Where(f => !currentIds.Contains(f)).ToList();
-        var removed = visibleCurrentIds.Where(f => !requested.Contains(f)).ToList();
+        var removed = visibleCurrentIds.Where(f => !requestedSet.Contains(f)).ToHashSet();
         if (added.Count == 0 && removed.Count == 0)
         {
             return TypedResults.NoContent();

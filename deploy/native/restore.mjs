@@ -4,8 +4,9 @@
 //
 //   node deploy/native/restore.mjs <backup-dir> --yes [--db-admin-url <url>] [--no-start]
 //
-// Takes a directory holding db.sql.gz and files.tar.gz (and terrain-uploads.tar.gz, when the backup
-// has browser-uploaded terrain rasters) — written by backup.mjs, or by the Docker
+// Takes a directory holding db.sql.gz and files.tar.gz (and terrain-uploads.tar.gz and
+// cave-potential.tar.gz, when the backup has browser-uploaded terrain rasters or computed
+// cave-potential maps) — written by backup.mjs, or by the Docker
 // path's deploy/scripts/backup.sh — and:
 //   0. reads every archive back in full, and refuses with nothing changed a backup that does not:
 //      a copy cut short in transfer, or a dump that stopped before pg_dump finished;
@@ -16,7 +17,8 @@
 //      `tiger`, `tiger_data` and `topology` schemas already existing);
 //   4. empties the uploads directory and unpacks the archive into it, handing it to the service
 //      account; and, when the backup has one, replaces the terrain directory's `builds/uploads`
-//      from terrain-uploads.tar.gz (a backup without it leaves terrain exactly as it is);
+//      from terrain-uploads.tar.gz and `builds/cave-potential` from cave-potential.tar.gz (a backup
+//      without one leaves that folder exactly as it is);
 //   5. starts the API again and waits for it to be ready (unless --no-start).
 //
 // It replaces everything stored since the backup was taken, so it asks for --yes rather than
@@ -37,6 +39,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 import {
+  acquireLock,
   adminAccess,
   chownTree,
   emptyDirectory,
@@ -63,10 +66,32 @@ import {
 /** Loads a gzipped dump through psql, carrying on past errors as psql does, and judges them. */
 export async function loadDump(layout, target, database, file) {
   const spec = psqlCommand(layout, target, { database, extraArgs: ['-q', '-v', 'ON_ERROR_STOP=0'] });
+  return feedDump(spec, file);
+}
+
+/**
+ * Pipes a gzipped dump into a running psql and answers how it ended. A psql that stops reading
+ * part way — a role that does not exist, a full disk — breaks the pipe; that is reported with what
+ * psql itself said and with the state it leaves, because by then the schema has been dropped, and
+ * a bare "EPIPE" tells the operator neither why nor that the database is now empty.
+ */
+export async function feedDump(spec, file) {
   const { child, done } = spawnStreaming(spec.command, spec.args, { env: spec.env, cwd: spec.cwd });
-  const fed = pipeline(fs.createReadStream(file), createGunzip(), child.stdin);
+  let pipeError = null;
+  const fed = pipeline(fs.createReadStream(file), createGunzip(), child.stdin).catch((error) => {
+    pipeError = error;
+  });
   const [{ code, stderr }] = await Promise.all([done, fed]);
   if (stderr.trim()) console.error(stderr.trim());
+  if (pipeError) {
+    fail(
+      `psql stopped reading the dump part way (${pipeError.code ?? pipeError.message}; psql exited with ${code})` +
+        `${stderr.trim() ? ` -- psql said: ${stderr.trim().split('\n').slice(-3).join(' / ')}` : ''}. ` +
+        'The database schema had already been dropped, so the database is now empty or partly loaded; ' +
+        'the files directory has NOT been touched, and the API has been left stopped. Fix the cause and run ' +
+        'the restore again.',
+    );
+  }
   const unexpected = unexpectedRestoreErrors(stderr);
   return { code, unexpected };
 }
@@ -98,7 +123,7 @@ export async function checkBackup(sourceDir, tar) {
   } catch (error) {
     problems.push(`db.sql.gz does not decompress whole (${error.message})`);
   }
-  const archives = ['files.tar.gz', 'terrain-uploads.tar.gz'].filter(
+  const archives = ['files.tar.gz', 'terrain-uploads.tar.gz', 'cave-potential.tar.gz'].filter(
     (name) => name === 'files.tar.gz' || fs.existsSync(path.join(sourceDir, name)),
   );
   for (const name of archives) {
@@ -153,20 +178,26 @@ export async function runRestore({ layout, db }, sourceDir, { adminUrl, start = 
   run(tar, ['-xzf', filesFile, '-C', layout.filesDir, '--no-same-owner'], { label: 'tar' });
   chownTree(layout.filesDir, layout.serviceUser);
 
-  const terrainFile = path.join(sourceDir, 'terrain-uploads.tar.gz');
-  if (fs.existsSync(terrainFile)) {
-    say(`Restoring the uploaded terrain rasters from ${terrainFile}`);
-    const builds = path.join(layout.terrainDir, 'builds');
-    // A `builds` folder the archive has to create is made by whoever runs the restore, so it is
-    // handed over whole (it then holds only the uploads); an existing one keeps its owner and only
-    // what was unpacked into it changes hands, rather than walking tens of gigabytes of builds.
-    const buildsExisted = fs.existsSync(builds);
-    fs.rmSync(path.join(builds, 'uploads'), { recursive: true, force: true });
-    fs.mkdirSync(layout.terrainDir, { recursive: true });
-    run(tar, ['-xzf', terrainFile, '-C', layout.terrainDir, '--no-same-owner'], { label: 'tar' });
-    chownTree(buildsExisted ? path.join(builds, 'uploads') : builds, layout.serviceUser);
-  } else {
-    note('no terrain-uploads.tar.gz in this backup -- the terrain directory is left as it is');
+  for (const [archive, folder, what] of [
+    ['terrain-uploads.tar.gz', 'uploads', 'uploaded terrain rasters'],
+    ['cave-potential.tar.gz', 'cave-potential', 'cave-potential maps'],
+  ]) {
+    const terrainFile = path.join(sourceDir, archive);
+    if (fs.existsSync(terrainFile)) {
+      say(`Restoring the ${what} from ${terrainFile}`);
+      const builds = path.join(layout.terrainDir, 'builds');
+      // A `builds` folder the archive has to create is made by whoever runs the restore, so it is
+      // handed over whole (it then holds only what was unpacked); an existing one keeps its owner
+      // and only what was unpacked into it changes hands, rather than walking tens of gigabytes
+      // of builds.
+      const buildsExisted = fs.existsSync(builds);
+      fs.rmSync(path.join(builds, folder), { recursive: true, force: true });
+      fs.mkdirSync(layout.terrainDir, { recursive: true });
+      run(tar, ['-xzf', terrainFile, '-C', layout.terrainDir, '--no-same-owner'], { label: 'tar' });
+      chownTree(buildsExisted ? path.join(builds, folder) : builds, layout.serviceUser);
+    } else {
+      note(`no ${archive} in this backup -- that part of the terrain directory is left as it is`);
+    }
   }
 
   if (!start) {
@@ -203,11 +234,18 @@ export async function main(argv) {
   }
   const installation = loadInstallation(values);
   const source = path.resolve(positionals[0]);
-  note(`restoring ${source} into ${installation.db.database} and ${installation.layout.filesDir}`);
-  await runRestore(installation, source, {
-    adminUrl: values['db-admin-url'] ?? process.env.SILEXGIS_DB_ADMIN_URL,
-    start: !values['no-start'],
-  });
+  // The install lock, as install and update hold it: a restore and an update that starts the new
+  // build would otherwise drop and migrate the same database at once.
+  const release = acquireLock(path.join(installation.layout.dataDir, 'install.lock'));
+  try {
+    note(`restoring ${source} into ${installation.db.database} and ${installation.layout.filesDir}`);
+    await runRestore(installation, source, {
+      adminUrl: values['db-admin-url'] ?? process.env.SILEXGIS_DB_ADMIN_URL,
+      start: !values['no-start'],
+    });
+  } finally {
+    release();
+  }
   return 0;
 }
 

@@ -99,7 +99,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         text.ShouldContain($"Fortnight {suffix}");
         text.ShouldContain("Morning shaft");
         text.ShouldContain("Sump push");
-        text.ShouldContain("2 trips");
+        HasFigure(text, "2 trips");
 
         // Day by day, which is the shape a camp has and a trip does not: each day something ran
         // on is its own line, and a day nothing ran on is not printed at all.
@@ -128,13 +128,13 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         var withheld = await DocumentTextAsync(reader, campId);
         withheld.ShouldContain("Open survey");
         withheld.ShouldNotContain("Private dig");
-        withheld.ShouldContain("1 trip");
-        withheld.ShouldNotContain("2 trips");
+        HasFigure(withheld, "1 trip");
+        LacksFigure(withheld, "2 trips");
 
         var entitled = await DocumentTextAsync(owner, campId);
         entitled.ShouldContain("Open survey");
         entitled.ShouldContain("Private dig");
-        entitled.ShouldContain("2 trips");
+        HasFigure(entitled, "2 trips");
     }
 
     /// <summary>
@@ -204,7 +204,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
         // Six hours over the midnight, two hours the next day: eight, not the two the naive
         // subtraction leaves once the night has been thrown away.
-        text.ShouldContain("8 h");
+        HasFigure(text, "8 h");
     }
 
     /// <summary>
@@ -243,18 +243,18 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
         var entitled = await DocumentTextAsync(owner, campId, layoutId);
         entitled.ShouldContain("By tracking");
-        entitled.ShouldContain("8.5 h");
+        HasFigure(entitled, "8.5 h");
 
         var withheld = await DocumentTextAsync(reader, campId, layoutId);
         withheld.ShouldContain("By tracking");
-        withheld.ShouldContain("3.5 h");
-        withheld.ShouldNotContain("8.5 h");
+        HasFigure(withheld, "3.5 h");
+        LacksFigure(withheld, "8.5 h");
 
         // The shipped layout, for the caller who may read everything: no such line, no such figure.
         var shipped = await DocumentTextAsync(owner, campId);
-        shipped.ShouldContain("2 trips");
+        HasFigure(shipped, "2 trips");
         shipped.ShouldNotContain("By tracking");
-        shipped.ShouldNotContain("8.5 h");
+        LacksFigure(shipped, "8.5 h");
     }
 
     /// <summary>
@@ -278,8 +278,8 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         await JoinAsync(owner, campId, second);
 
         var text = await DocumentTextAsync(owner, campId);
-        text.ShouldContain("4 people");
-        text.ShouldNotContain("5 people");
+        HasFigure(text, "4 people");
+        LacksFigure(text, "5 people");
     }
 
     /// <summary>
@@ -555,7 +555,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
         var before = await DocumentTextAsync(owner, campId);
         before.ShouldContain("Entered by mistake against the wrong camp.");
-        before.ShouldContain("2 trips");
+        HasFigure(before, "2 trips");
 
         (await owner.DeleteAsync($"/api/v1/trip-logs/{gone}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
@@ -563,8 +563,8 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         after.ShouldContain("Closed the loop through the upper series.");
         after.ShouldNotContain("Entered by mistake");
         after.ShouldNotContain("Withdrawn trip");
-        after.ShouldContain("1 trip");
-        after.ShouldNotContain("2 trips");
+        HasFigure(after, "1 trip");
+        LacksFigure(after, "2 trips");
     }
 
     private static int Occurrences(string text, string of)
@@ -580,6 +580,15 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         return count;
     }
 
+    /// <summary>
+    /// One line per paragraph, so a figure that ends one paragraph is not run together with the
+    /// first word of the next, the way the document's own concatenated text would have it.
+    /// </summary>
+    private static string WordsOf(WordprocessingDocument document) =>
+        string.Join('\n', document.MainDocumentPart!.Document!.Body!
+            .Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>()
+            .Select(p => p.InnerText));
+
     /// <summary>The words of a trip's own write-up, as the same caller would download it.</summary>
     private static async Task<string> TripDocumentTextAsync(HttpClient client, Guid tripId)
     {
@@ -587,7 +596,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         using var bytes = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
         using var document = WordprocessingDocument.Open(bytes, false);
-        return document.MainDocumentPart!.Document!.InnerText;
+        return WordsOf(document);
     }
 
     /// <summary>
@@ -607,7 +616,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
         using var bytes = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
         using var document = WordprocessingDocument.Open(bytes, false);
-        return document.MainDocumentPart!.Document!.InnerText;
+        return WordsOf(document);
     }
 
     /// <summary>A trip that wrote something about itself, shaped by the caller of this helper.</summary>
@@ -652,6 +661,20 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetInt64();
     }
 
+    /// <summary>
+    /// A figure stands in the text as a whole token: "8 h" is not found inside "18 h", nor
+    /// "2 trips" inside "12 trips", nor "1 trip" inside "1 trips" — near-misses a plain substring
+    /// match would accept.
+    /// </summary>
+    private static void HasFigure(string text, string figure) =>
+        FigurePattern(figure).IsMatch(text).ShouldBeTrue($"'{figure}' as a whole figure in: {text}");
+
+    private static void LacksFigure(string text, string figure) =>
+        FigurePattern(figure).IsMatch(text).ShouldBeFalse($"'{figure}' as a whole figure in: {text}");
+
+    private static System.Text.RegularExpressions.Regex FigurePattern(string figure) =>
+        new($@"(?<![\d.,]){System.Text.RegularExpressions.Regex.Escape(figure)}(?!\w)");
+
     /// <summary>The words of a generated camp document, as a word processor would read them.</summary>
     private static async Task<string> DocumentTextAsync(HttpClient client, Guid campId, Guid? templateId = null)
     {
@@ -676,7 +699,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
         var faults = new OpenXmlValidator().Validate(document).ToList();
         faults.ShouldBeEmpty(string.Join("; ", faults.Select(f => f.Description)));
 
-        return document.MainDocumentPart!.Document!.InnerText;
+        return WordsOf(document);
     }
 
     private static async Task<List<string>> ReportsOnCampAsync(HttpClient client, Guid campId)

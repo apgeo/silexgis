@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useResLinkTargets } from '../../api/hooks.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import ObjectSelector from '../selector/ObjectSelector.tsx';
 import type { ResLinkTargetType } from './registry.ts';
 
@@ -109,7 +110,7 @@ function LegacyTargetSearch({
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query);
   const searchable = debounced.trim().length >= SEARCH_MIN_LENGTH;
-  const { data: hits, isFetching } = useResLinkTargets(targetType, debounced, searchable);
+  const { data: hits, isFetching, isError, error, refetch } = useResLinkTargets(targetType, debounced, searchable);
 
   const options = useMemo(
     () =>
@@ -148,6 +149,17 @@ function LegacyTargetSearch({
         aria-label={t('resLinks.target')}
       />
       {isFetching && <Typography.Text type="secondary">{t('common.loading')}</Typography.Text>}
+      {/* A search that did not land would otherwise read as "no such caver": somebody would
+          conclude the target does not exist, or create a second one. */}
+      <ReadFailedAlert
+        isError={isError && hits === undefined}
+        error={error}
+        held={false}
+        onRetry={refetch}
+        title={t('resLinks.targetSearchFailed')}
+        testId="reslink-target-search-failed"
+        style={{ marginBottom: 0 }}
+      />
     </Flex>
   );
 }

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { App, DatePicker, Flex, Form, Input, Modal, Select } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import {
   useCavingGroups,
   useCreateExpedition,
@@ -10,6 +11,9 @@ import {
   type ExpeditionInfo,
   type ExpeditionWrite,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
+import { expeditionProblemKey } from './expeditionProblems.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
@@ -49,6 +53,8 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits(open);
   const createCamp = useCreateExpedition();
   const updateCamp = useUpdateExpedition();
   const { data: cavingGroups } = useCavingGroups();
@@ -57,8 +63,17 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
   // content in the document — a map built against a container with no size renders nothing.
   const [shown, setShown] = useState(false);
 
+  // The version of the camp the fields were filled from. They are filled once, when the dialog
+  // opens, while the page behind it goes on reading the camp and filing each newer version for
+  // the next save. Carrying that one would tell the server this form had seen a change it never
+  // showed, and somebody else's dates or description would be written back with nobody told.
+  // The version is the one kept with the copy the fields came from, not the newest filed for the
+  // camp's address, which can already be ahead of that copy.
+  const openedAtVersion = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     if (open) {
+      openedAtVersion.current = camp ? versionReadWith(camp) : undefined;
       form.resetFields();
       if (camp) {
         form.setFieldsValue({
@@ -111,12 +126,16 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
 
     try {
       const saved = camp
-        ? await updateCamp.mutateAsync({ id: camp.id, body })
+        ? await updateCamp.mutateAsync({ id: camp.id, body, ifMatch: openedAtVersion.current })
         : await createCamp.mutateAsync(body);
       message.success(t('common.saved'));
       onClose(saved.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A stale version is worded once for every save, by the application's conflict warning; a
+      // generic "failed" beside it would contradict it. The dialog stays open with what was typed.
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(expeditionProblemKey(error, 'common.saveFailed')));
+      }
     }
   };
 
@@ -124,14 +143,15 @@ export default function ExpeditionFormModal({ open, camp, onClose }: ExpeditionF
     <Modal
       title={camp ? t('expeditions.edit') : t('expeditions.new')}
       open={open}
-      onCancel={() => onClose()}
+      onCancel={() => requestDiscard(edits.edited, () => onClose())}
       onOk={() => void onOk()}
       confirmLoading={createCamp.isPending || updateCamp.isPending}
       width={720}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       afterOpenChange={setShown}
     >
-      <Form<FormValues> form={form} layout="vertical">
+      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Form.Item name="name" label={t('expeditions.nameField')} rules={[{ required: true }]}>
           <Input maxLength={255} data-testid="expedition-form-name" />
         </Form.Item>

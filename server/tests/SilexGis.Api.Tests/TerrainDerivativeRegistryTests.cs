@@ -3,6 +3,7 @@ using System.Text.Json;
 using MaxRev.Gdal.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NetTopologySuite.Geometries;
 using OSGeo.GDAL;
 using OSGeo.OSR;
@@ -10,6 +11,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
+using SilexGis.Infrastructure.Analysis;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Terrain;
@@ -55,6 +57,9 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
     private readonly string buildRoot;
     private readonly List<Guid> seeded = [];
 
+    // The analysis program, as a stand-in whose reported version a test can move.
+    private readonly UniformClassTools tools = new();
+
     public TerrainDerivativeRegistryTests(PostgresFixture postgres)
     {
         buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tderiv-{Guid.NewGuid():N}");
@@ -62,9 +67,13 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },
-            // The handler is driven here directly. A worker running beside it would claim the job
-            // row first and this class would be asserting against work it did not do.
-            JobWorkers.RemoveFrom,
+            services =>
+            {
+                // The handler is driven here directly. A worker running beside it would claim the job
+                // row first and this class would be asserting against work it did not do.
+                JobWorkers.RemoveFrom(services);
+                services.Replace(ServiceDescriptor.Singleton<IWhiteboxTools>(tools));
+            },
             // An application of this test's own in either test mode: one test here compares a path the
             // application recorded with the directory this test named, and an application shared by the
             // class knows that directory under the class's name for it.
@@ -128,6 +137,9 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
 
         // And which arithmetic drew it, which is what a later correction is compared against.
         layer.MethodRevision.ShouldBe(TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Hillshade));
+
+        // Drawn in process, so no analysis program's version is recorded against it.
+        layer.ToolVersion.ShouldBeNull();
         layer.ComputedAt.ShouldNotBeNull();
         layer.SizeBytes.ShouldBeGreaterThan(0);
 
@@ -283,6 +295,73 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
         view.Version.ShouldBe(0);
     }
 
+    /// <summary>
+    /// A landform picture records the version the analysis program reported when it drew the
+    /// picture, and reads as drawn by superseded arithmetic once the program reports another —
+    /// until it is drawn again under the new one.
+    /// </summary>
+    /// <remarks>
+    /// A program that is silent about its version at the moment of reading says nothing about the
+    /// pictures it drew earlier, so that state is asserted too: it must not mark the picture.
+    /// </remarks>
+    [Fact]
+    public async Task A_landform_picture_records_the_program_version_and_is_stale_when_that_version_moves()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+        Raster(buildId, "ground.tif");
+        var layerId = await AskForAsync(buildId, new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Geomorphons,
+        });
+
+        tools.Version = "WhiteboxTools 9.1.0-test";
+        await ComputeAsync(layerId);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var layer = await db.TerrainDerivativeLayers.AsNoTracking().SingleAsync(l => l.Id == layerId);
+            layer.Status.ShouldBe(TerrainDerivativeStatus.Ready, layer.Message);
+            layer.Version.ShouldBe(1);
+            layer.MethodRevision.ShouldBe(TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Geomorphons));
+            layer.ToolVersion.ShouldBe("WhiteboxTools 9.1.0-test");
+        }
+
+        tools.Runs.ShouldBe(1);
+        var current = await ViewAsync(layerId);
+        current.ShouldNotBeNull();
+        current.Staleness.ShouldBeNull();
+
+        // The program is upgraded; the elevation and the revision here are unchanged.
+        tools.Version = "WhiteboxTools 9.2.0-test";
+        var moved = await ViewAsync(layerId);
+        moved.ShouldNotBeNull();
+        moved.Staleness.ShouldBe(TerrainDerivativeStaleness.MethodRevised);
+        moved.Stale.ShouldBeTrue();
+        moved.Status.ShouldBe(TerrainDerivativeStatus.Ready);
+
+        // A program that cannot say what it is marks nothing.
+        tools.Version = null;
+        (await ViewAsync(layerId))!.Staleness.ShouldBeNull();
+
+        // Drawn again under the new version: the new version is recorded and the mark clears.
+        tools.Version = "WhiteboxTools 9.2.0-test";
+        await ComputeAsync(layerId);
+
+        var redrawn = await ViewAsync(layerId);
+        redrawn.ShouldNotBeNull();
+        redrawn.Status.ShouldBe(TerrainDerivativeStatus.Ready, redrawn.Message);
+        redrawn.Version.ShouldBe(2);
+        redrawn.Staleness.ShouldBeNull();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TerrainDerivativeLayers.AsNoTracking().SingleAsync(l => l.Id == layerId))
+                .ToolVersion.ShouldBe("WhiteboxTools 9.2.0-test");
+        }
+    }
+
     private async Task<TerrainDerivativeLayerView?> ViewAsync(Guid layerId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -314,8 +393,8 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
     /// Runs the job that draws the picture, and answers the id of the run that drew it.
     /// </summary>
     /// <remarks>
-    /// Driven directly rather than by queueing and waiting: the database this suite runs against is
-    /// shared, so a queued row is claimed by whichever worker in whichever run reaches it first.
+    /// Driven directly rather than by queueing and waiting: the tests of this class share one
+    /// database, so a queued row would be claimed by whichever test's worker reaches it first.
     /// </remarks>
     private async Task<long> ComputeAsync(Guid layerId)
     {
@@ -413,5 +492,52 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
         }
 
         return path;
+    }
+
+    /// <summary>
+    /// Stands in for the analysis program: answers every landform run with one class over the whole
+    /// metric grid it was handed, and reports whatever version the test last gave it.
+    /// </summary>
+    private sealed class UniformClassTools : IWhiteboxTools
+    {
+        private volatile string? version = "WhiteboxTools 0.0-uniform";
+        private int runs;
+
+        public int Runs => runs;
+
+        public string Mode => WhiteboxOptions.ModeLocal;
+
+        public bool IsAvailable => true;
+
+        public string? UnavailableReason => null;
+
+        public string? Version
+        {
+            get => version;
+            set => version = value;
+        }
+
+        public Task<WhiteboxRunResult> RunAsync(WhiteboxRunRequest request, CancellationToken ct)
+        {
+            Interlocked.Increment(ref runs);
+            var input = Path.Combine(request.WorkDirectory, request.Arguments.Single(a => a.Kind == WhiteboxArgumentKind.Input).Value!);
+            var outputName = request.Arguments.Single(a => a.Kind == WhiteboxArgumentKind.Output).Value!;
+
+            using var dem = Gdal.Open(input, Access.GA_ReadOnly);
+            var width = dem.RasterXSize;
+            var height = dem.RasterYSize;
+            using var classes = Gdal.GetDriverByName("GTiff").Create(
+                Path.Combine(request.WorkDirectory, outputName), width, height, 1, DataType.GDT_Float32, null);
+            var transform = new double[6];
+            dem.GetGeoTransform(transform);
+            classes.SetGeoTransform(transform);
+            classes.SetProjection(dem.GetProjection());
+            using var band = classes.GetRasterBand(1);
+            band.SetNoDataValue(-32768);
+            var values = Enumerable.Repeat(1f, width * height).ToArray();
+            band.WriteRaster(0, 0, width, height, values, width, height, 0, 0);
+            classes.FlushCache();
+            return Task.FromResult(new WhiteboxRunResult(true, 0, [outputName], ""));
+        }
     }
 }

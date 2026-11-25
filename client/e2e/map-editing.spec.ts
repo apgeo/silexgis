@@ -230,6 +230,8 @@ async function pinnedShortcutsAndChromeToggle(page: Page, account: Account) {
 
   // Discard the pending edit; unpinning removes the shortcut.
   await toolbar.getByRole('button', { name: 'Discard edits' }).click();
+  // Discarding asks first, naming how many edits go.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'Discard', exact: true }).click();
   await paletteTrigger.click();
   await paletteItem.hover();
   await paletteItem.getByRole('button', { name: 'Unpin from toolbar' }).click();
@@ -336,9 +338,10 @@ test('surface feature history records edits and restores in the map panel', asyn
   try {
     // Selection is by map click at a fixed pixel, so purge any e2e features an earlier
     // aborted run left stacked on that spot — otherwise the click selects a stale one. Named
-    // rather than swept: only these two flows draw on this pixel, and sweeping everything
-    // stamped E2E takes live subjects out from under whatever else is running beside this.
-    await deleteFeatureRows(editor.admin, /E2E (Hist Feat|Sinkhole) /);
+    // rather than swept: only the flows named here draw on this pixel (the round trip, this
+    // history flow and the pan flow), and sweeping everything stamped E2E takes live subjects
+    // out from under whatever else is running beside this.
+    await deleteFeatureRows(editor.admin, /E2E (Hist Feat|Sinkhole|Panned) /);
     await login(page, editor.account.email, editor.account.password);
     await historyRecordsAndRestores(page, featureName, spot);
   } finally {
@@ -423,3 +426,89 @@ async function editFeatureDescription(page: Page, value: string) {
   await modal.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.locator('.ant-descriptions').getByText(value)).toBeVisible({ timeout: 15_000 });
 }
+
+// A pan reloads the surface-feature layer; a drawing that is not saved yet has to come through
+// that reload, and the save that follows has to create it once — where it was drawn.
+test('a drawing survives a pan and its reload, and the save creates it once', async ({ page }, testInfo) => {
+  const spot = ownMapPoint(testInfo.parallelIndex);
+  const featureName = `E2E Panned ${Date.now()}`;
+  await login(page);
+
+  try {
+    const toolbar = page.locator('.map-edit-overlay');
+    await expect(toolbar).toBeVisible();
+    await toolbar.getByRole('button', { name: /Feature type/ }).click();
+    await paletteEntry(page, 'Sinkhole / Doline').click();
+    await toolbar.getByRole('button', { name: 'Draw', exact: true }).click();
+    const canvas = page.locator('.map-canvas');
+    // A small picture around the pixel, taken before and after drawing: the drawing's own
+    // evidence that it is still on the map after the pan, which neither the Save badge nor the
+    // save itself can give — both count the pending edit whether or not it is still drawn.
+    const box = (await canvas.boundingBox())!;
+    const around = { x: box.x + spot.x - 12, y: box.y + spot.y - 12, width: 24, height: 24 };
+    const pictureAround = () => page.screenshot({ clip: around, animations: 'disabled' });
+    const empty = await pictureAround();
+    await canvas.click({ position: spot });
+    const modal = page.getByRole('dialog');
+    await expect(modal.getByText('New feature')).toBeVisible();
+    await modal.getByLabel('Name').fill(featureName);
+    await modal.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(modal).toBeHidden();
+    // The drawn picture is taken once it has stopped changing, so what is compared after the pan
+    // is the drawing and not a frame of its arrival.
+    let drawn = await pictureAround();
+    await expect
+      .poll(async () => {
+        const again = await pictureAround();
+        const still = again.equals(drawn);
+        drawn = again;
+        return still;
+      }, { timeout: 15_000, message: 'the drawing never settled' })
+      .toBe(true);
+    expect(drawn.equals(empty), 'nothing was drawn at the pixel').toBe(false);
+
+    // Pan away and back with the arrow keys: each pan settles into a reload of the layer from the
+    // server, and the way back puts the drawing under the pixel it was drawn at again.
+    const map = page.getByRole('application', { name: /^Map\./ });
+    await map.focus();
+    for (const key of ['ArrowRight', 'ArrowLeft']) {
+      const reloaded = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
+      await page.keyboard.press(key);
+      await reloaded;
+    }
+
+    // Still drawn where it was drawn, after the layer was refilled from the server.
+    await expect
+      .poll(async () => (await pictureAround()).equals(drawn), {
+        timeout: 15_000,
+        message: 'the unsaved drawing is no longer on the map after the pan',
+      })
+      .toBe(true);
+
+    // Still one unsaved edit after the layer was refilled from the server.
+    const save = toolbar.getByRole('button', { name: /Save/ });
+    await expect(save).toBeEnabled();
+    await expect(toolbar.locator('.ant-badge').filter({ has: page.getByRole('button', { name: /Save/ }) })).toContainText('1');
+
+    const creates: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/features') {
+        creates.push(r.url());
+      }
+    });
+    const reloadedAfterSave = page.waitForResponse((r) => r.url().includes('/api/v1/map/features') && r.ok());
+    await save.click();
+    await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+    await reloadedAfterSave;
+    expect(creates).toHaveLength(1);
+
+    // The saved feature is where it was drawn.
+    await canvas.click({ position: spot });
+    await expect(page.getByRole('heading', { name: featureName })).toBeVisible({ timeout: 15_000 });
+  } finally {
+    // The pixel is this worker's for every flow in this file, and selection on it is by click: a
+    // feature left on it would be what the next run's click opens. Removed whether or not the
+    // run got this far; the history flow's purge names this flow's features as the second net.
+    await deleteFeature(page, featureName).catch(() => {});
+  }
+});

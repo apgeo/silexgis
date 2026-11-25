@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditOutlined } from '@ant-design/icons';
 import { App, DatePicker, Flex, Input, Popover, Select, Switch, Typography } from 'antd';
 import Button from '../Button.tsx';
@@ -28,7 +28,7 @@ const ROLES: AttachmentRole[] = [
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {label}
       </Typography.Text>
       {children}
@@ -55,13 +55,23 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
   const updateFile = useUpdateFile();
   const setDefaultSet = useSetDeviceDefaultSet();
 
-  // Re-sync from server state whenever the popover opens (another edit may have landed).
+  // Refill from server state when the popover opens (another edit may have landed) — once per
+  // opening and attachment, not on every answer: a refetch, or flipping the phones' default set,
+  // hands back an equal attachment as a new object, and refilling then would put the stored
+  // values back over what is being typed.
+  const filledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (open) {
-      setCaption(attachment.caption ?? '');
-      setRole(attachment.role);
-      setDocumentDate(attachment.file.documentDate ? dayjs(attachment.file.documentDate) : null);
+    if (!open) {
+      filledFor.current = null;
+      return;
     }
+    if (filledFor.current === attachment.id) {
+      return;
+    }
+    filledFor.current = attachment.id;
+    setCaption(attachment.caption ?? '');
+    setRole(attachment.role);
+    setDocumentDate(attachment.file.documentDate ? dayjs(attachment.file.documentDate) : null);
   }, [open, attachment]);
 
   const captionValue = caption.trim() ? caption.trim() : null;
@@ -137,7 +147,7 @@ export default function AttachmentDetails({ attachment }: { attachment: Attachme
           />
           <Typography.Text>{t('attachments.inDeviceDefaultSet')}</Typography.Text>
         </Flex>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('attachments.inDeviceDefaultSetHint')}
         </Typography.Text>
       </Flex>

@@ -85,7 +85,7 @@ export default function TripImportRowTable({
         <Space orientation="vertical" size={0}>
           <Typography.Text>{row.startDate ?? row.startDateText ?? '—'}</Typography.Text>
           {row.endDate && row.endDate !== row.startDate && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {row.endDate}
             </Typography.Text>
           )}
@@ -99,7 +99,7 @@ export default function TripImportRowTable({
         <Space orientation="vertical" size={0}>
           <Typography.Text strong>{row.title ?? t('tripImport.untitledRow')}</Typography.Text>
           {row.resolution?.locationNote && (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {row.resolution.locationNote}
             </Typography.Text>
           )}

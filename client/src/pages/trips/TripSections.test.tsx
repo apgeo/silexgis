@@ -4,8 +4,17 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { TripLogInfo, TripLogWrite } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 
 const updateTrip = vi.fn();
+
+// The version on file for the trip, as the transport would answer it at this moment.
+const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+}));
 
 const fieldDataSchema = JSON.stringify({
   type: 'object',
@@ -105,6 +114,9 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
   } as unknown as TripLogInfo;
 }
 
+const SAVE_FAILED = 'The operation failed. Please try again.';
+const INVALID_FIELD_DATA = "The Field data section does not fit what this trip's purpose asks for.";
+
 function show(subject: TripLogInfo, canEdit: boolean) {
   return render(
     <App>
@@ -131,6 +143,7 @@ function openSection(label: string) {
 }
 
 beforeEach(() => {
+  versionOnFile.mockReset().mockReturnValue(undefined);
   updateTrip.mockReset();
   updateTrip.mockResolvedValue({});
 });
@@ -444,5 +457,111 @@ describe('TripSections', () => {
     openSection('Safety');
     expect(screen.queryByTestId('trip-safety-withheld')).toBeNull();
     expect(screen.getByText('What happened')).toBeTruthy();
+  });
+});
+
+/**
+ * Unsent text is held across re-reads of the trip so nothing typed is lost, and each re-read files
+ * a newer version of the trip for the next save. The text was typed against the trip as it was
+ * when typing began; a save carrying the newer version would tell the server this card had seen a
+ * change it never showed, and the other person's section or counted facts would be replaced by
+ * the older copy held here with nobody told.
+ */
+describe('a section saved after the trip was read again under it', () => {
+  const path = '/api/v1/trip-logs/trip-1';
+  const onFile = (version: string) =>
+    versionOnFile.mockImplementation((asked) => (asked === path ? version : undefined));
+
+  it('carries the version the held text was typed against', async () => {
+    onFile('"1"');
+    const { rerender } = show(trip({ fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'half a sentence' },
+    });
+
+    // Somebody else saves the depth reached; the page reads the trip again.
+    onFile('"2"');
+    rerender(
+      <App>
+        <TripSections trip={trip({ fieldData: { conditions: 'wet' } as never, depthReachedM: 90 })} canEdit />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"1"');
+  });
+
+  it('carries the newest version when nothing sent was held back from a re-read', async () => {
+    onFile('"1"');
+    const { rerender } = show(trip({ fieldData: { conditions: 'wet' } as never }), true);
+    openSection('Field data');
+
+    onFile('"2"');
+    rerender(
+      <App>
+        <TripSections trip={trip({ fieldData: { conditions: 'flooded' } as never })} canEdit />
+      </App>,
+    );
+
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+    expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"2"');
+  });
+
+  it('keeps the text and its version through a stale-version refusal, and leaves the wording to the conflict warning', async () => {
+    onFile('"1"');
+    const { rerender } = show(trip(), true);
+    openSection('Field data');
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'half a sentence' },
+    });
+    onFile('"2"');
+    rerender(
+      <App>
+        <TripSections trip={trip({ depthReachedM: 90 })} canEdit />
+      </App>,
+    );
+
+    updateTrip.mockRejectedValueOnce(new ApiError(412, 'concurrency.version_mismatch'));
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
+
+    // Another re-read must not take the text, and a second press is still refused rather than
+    // carrying the newer version over somebody else's change.
+    rerender(
+      <App>
+        <TripSections trip={trip({ depthReachedM: 90 })} canEdit />
+      </App>,
+    );
+    expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('half a sentence');
+    // The second press is refused for another reason, which draws its own sentence. Messages are
+    // drawn in the order they are asked for, so once that one is on screen anything the stale
+    // refusal had asked for would be too: only now does the absence of "save failed" mean something.
+    updateTrip.mockRejectedValueOnce(new ApiError(400, 'trip_log.field_data_invalid'));
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+    await vi.waitFor(() => expect(updateTrip).toHaveBeenCalledTimes(2));
+    expect((updateTrip.mock.calls[1][0] as { ifMatch?: string }).ifMatch).toBe('"1"');
+    expect(await screen.findByText(INVALID_FIELD_DATA)).toBeInTheDocument();
+    expect(screen.queryByText(SAVE_FAILED)).toBeNull();
+  });
+
+  it.each([
+    ['the section does not fit the purpose', new ApiError(400, 'trip_log.field_data_invalid'), INVALID_FIELD_DATA],
+    ['the server failed', new ApiError(500, undefined), SAVE_FAILED],
+    ['nothing answered', new TypeError('Failed to fetch'), SAVE_FAILED],
+  ])('says why a save was refused when %s, and keeps what was typed', async (_, error, sentence) => {
+    onFile('"1"');
+    show(trip(), true);
+    openSection('Field data');
+    fireEvent.change(screen.getByTestId('trip-section-field-club_specific'), {
+      target: { value: 'half a sentence' },
+    });
+    updateTrip.mockRejectedValueOnce(error);
+    fireEvent.click(screen.getByTestId('trip-section-save-fieldData'));
+
+    expect(await screen.findByText(sentence)).toBeInTheDocument();
+    expect(screen.getByTestId('trip-section-field-club_specific')).toHaveValue('half a sentence');
   });
 });

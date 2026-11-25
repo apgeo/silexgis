@@ -26,6 +26,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -74,6 +75,11 @@ import CaveRecordingsSection from './CaveRecordingsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
+import { entranceWriteProblem } from '../../components/caves/entranceWriteProblems.ts';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
+import ReadFailedResult from '../../components/ReadFailedResult.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import CaveSurveysSection from './CaveSurveysSection.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
@@ -86,9 +92,9 @@ export default function CaveDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
 
-  const { data: cave, isPending } = useCave(id);
+  const { data: cave, isPending, isError, error, refetch } = useCave(id);
   const { data: summary } = useCaveSummary(id);
-  const { data: entrances } = useEntrances(id);
+  const { data: entrances, isError: entrancesFailed, error: entrancesError, refetch: refetchEntrances } = useEntrances(id);
   const { data: caveTypes } = useCaveTypes();
   const { data: featureTypes } = useFeatureTypes();
   const { data: rockTypes } = useRockTypes();
@@ -139,6 +145,25 @@ export default function CaveDetailPage() {
   };
   const [shareOpen, setShareOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+
+  // A deleted cave and one the reader may not see are refused alike and the refusal is not
+  // retried, so without this the spinner below would stay for good. A read that never reached the
+  // server says nothing about the cave and is worded as such, with a way to ask again.
+  if (readFailureEndsPage(isError, cave, error)) {
+    return (
+      <ReadFailedResult
+        error={error}
+        onRetry={() => void refetch()}
+        notFoundTitle={t('caves.notFound')}
+        notFoundDetail={t('caves.notFoundDetail')}
+        actions={
+          <Button type="primary" onClick={() => void navigate('/caves')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
 
   if (isPending || !cave) {
     return (
@@ -205,8 +230,24 @@ export default function CaveDetailPage() {
       await deleteCave.mutateAsync(cave.id);
       message.success(t('common.deleted'));
       navigate('/caves');
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t, 'common.deleteFailed'));
+      }
+    }
+  };
+
+  // A refused delete leaves the row where it was, so the reader is told why. A version conflict is
+  // already reported by the application-wide handler; a second toast here would contradict it.
+  // The delete is held to the version of the row the table showed.
+  const onDeleteEntrance = async (entrance: Entrance) => {
+    try {
+      await deleteEntrance.mutateAsync({ id: entrance.id, ifMatch: entrance.version ?? undefined });
+    } catch (e) {
+      if (!isConcurrencyConflict(e)) {
+        message.error(entranceWriteProblem(e, t, 'common.deleteFailed'));
+      }
     }
   };
 
@@ -338,7 +379,9 @@ export default function CaveDetailPage() {
       <Card
         title={t('caves.entrances')}
         extra={
-          canEdit && (
+          // Offered once the list has been read: adding under a list that was never read invites
+          // a second copy of something already there.
+          canEdit && entrances !== undefined && (
             <Button
               size="small"
               icon={<PlusOutlined />}
@@ -352,12 +395,23 @@ export default function CaveDetailPage() {
           )
         }
       >
+        <ReadFailedAlert
+          error={entrancesError}
+          isError={entrancesFailed}
+          held={entrances !== undefined}
+          onRetry={refetchEntrances}
+          title={t('entrances.loadFailed')}
+          testId="cave-entrances-load-failed"
+        />
         <Table<Entrance>
           scroll={{ x: 'max-content' }}
           rowKey="id"
           size="small"
           dataSource={entrances}
           pagination={false}
+          // A failed read is named above and is not an empty list, so the table's own "no data"
+          // picture is not drawn under it.
+          locale={entrancesFailed && entrances === undefined ? { emptyText: <span /> } : undefined}
           columns={[
             { title: t('caves.name'), dataIndex: 'name' },
             { title: t('caves.type'), dataIndex: 'entranceTypeId', render: entranceTypeName, width: 160 },
@@ -442,7 +496,7 @@ export default function CaveDetailPage() {
                         <Popconfirm
                           title={t('entrances.deleteConfirm')}
                           description={t('entrances.deleteRestorable')}
-                          onConfirm={() => void deleteEntrance.mutateAsync(e.id)}
+                          onConfirm={() => void onDeleteEntrance(e)}
                         >
                           <Button
                             size="small"

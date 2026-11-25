@@ -131,6 +131,7 @@ public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable, 
     {
         using var client = factory.CreateClient();
         HttpResponseMessage? refused = null;
+        var firstRefused = -1;
         for (var i = 0; i < 12 && refused is null; i++)
         {
             var response = await client.PostAsJsonAsync("/api/v1/auth/login", new
@@ -141,10 +142,16 @@ public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable, 
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 refused = response;
+                firstRefused = i;
             }
         }
 
         refused.ShouldNotBeNull("the limiter should trip within the configured window");
+
+        // Not before the configured eight: a limiter set lower, or one other requests had already
+        // used up, would refuse earlier. A window that happened to turn over during the loop can
+        // only make the refusal later, never earlier.
+        firstRefused.ShouldBeGreaterThanOrEqualTo(8);
 
         // The refusal says why in the same machine-readable way every other refusal does, though
         // nothing but the framework wrote it.

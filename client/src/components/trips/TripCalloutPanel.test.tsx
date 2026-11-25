@@ -1,16 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { TripCalloutState } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
 
 const standDown = vi.fn();
 const arrange = vi.fn();
+const readTripAgain = vi.fn();
+
+// The version on file for the trip, as the transport would answer it at this moment.
+const versionOnFile = vi.fn<(path: string) => string | undefined>(() => undefined);
+
+vi.mock('../../api/client.ts', async (original) => ({
+  ...(await original<typeof import('../../api/client.ts')>()),
+  lastReadETag: (path: string) => versionOnFile(path),
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useStandDownTripCallout: () => ({ mutateAsync: standDown, isPending: false }),
   useArrangeTripCallout: () => ({ mutateAsync: arrange, isPending: false }),
+  useReadTripLogAgain: () => readTripAgain,
 }));
 
 const { default: TripCalloutPanel } = await import('./TripCalloutPanel.tsx');
@@ -41,8 +52,10 @@ function show(
 }
 
 beforeEach(() => {
+  versionOnFile.mockReset().mockReturnValue(undefined);
   standDown.mockReset().mockResolvedValue({});
   arrange.mockReset().mockResolvedValue({});
+  readTripAgain.mockReset();
 });
 
 afterEach(cleanup);
@@ -103,6 +116,24 @@ describe('TripCalloutPanel', () => {
     expect(warning).not.toHaveTextContent(/all is well/i);
   });
 
+  // A desk left on the trip page is the use a callout is for, and nothing else redraws the panel
+  // while the reader only watches it: the hour passing has to be enough on its own.
+  it('starts saying unchecked when the hour passes on a page nobody touches', () => {
+    vi.useFakeTimers();
+    try {
+      show('armed', { lastChecked: new Date(Date.now() - HOUR + 30_000).toISOString() });
+      expect(screen.queryByTestId('trip-callout-unchecked')).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(2 * 60_000);
+      });
+
+      expect(screen.getByTestId('trip-callout-unchecked')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('treats a check nothing has ever run as the strongest form of the same warning', () => {
     show('armed', { lastChecked: null });
 
@@ -129,6 +160,17 @@ describe('TripCalloutPanel', () => {
     expect(standDown).toHaveBeenCalledWith({ id: 'trip-1' });
   });
 
+  // Refused because no check is armed any more (somebody cleared it meanwhile): trying again
+  // fails the same way, and the reader needs to know there is nothing left to stand down.
+  it('says there is no check left to stand down rather than asking to try again', async () => {
+    standDown.mockRejectedValue(new ApiError(409, 'trip_log.callout_not_armed'));
+    show('armed');
+    fireEvent.click(screen.getByTestId('trip-callout-stand-down'));
+
+    expect(await screen.findByText(i18n.t('trips.calloutNotArmed'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('trips.calloutStandDownFailed'))).toBeNull();
+  });
+
   it('stops offering the tap once the party has said it is out', () => {
     show('stoodDown');
 
@@ -136,5 +178,78 @@ describe('TripCalloutPanel', () => {
     expect(screen.queryByTestId('trip-callout-stand-down')).toBeNull();
     // Nothing is being watched any more, so there is no promise to report on.
     expect(screen.queryByTestId('trip-callout-last-checked')).toBeNull();
+  });
+});
+
+/**
+ * The dialog is filled when it opens, while the trip page behind it goes on reading the trip — a
+ * return from the phone app the coordinator used to ring the party is a read — and every read files
+ * a newer version. A save carrying that one would put the alarm the dialog opened with back over
+ * the one another coordinator set meanwhile, on a safety arrangement, with nobody told.
+ */
+describe('arranging from a dialog opened before the trip was read again', () => {
+  const path = '/api/v1/trip-logs/trip-1';
+
+  function panel(alarmAt: string) {
+    return (
+      <App>
+        <TripCalloutPanel
+          tripId="trip-1"
+          state="armed"
+          expectedReturnAt={new Date(Date.now() + 2 * HOUR).toISOString()}
+          calloutAlarmAt={alarmAt}
+          calloutLastCheckedAt={new Date(Date.now() - 60_000).toISOString()}
+          canStandDown
+          canEdit
+        />
+      </App>
+    );
+  }
+
+  it('sends the version the dialog opened with', async () => {
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    const view = render(panel(new Date(Date.now() + 4 * HOUR).toISOString()));
+    fireEvent.click(screen.getByTestId('trip-callout-arrange'));
+    await screen.findByText('Save');
+
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"2"' : undefined));
+    view.rerender(panel(new Date(Date.now() + 6 * HOUR).toISOString()));
+
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(arrange).toHaveBeenCalledTimes(1));
+    expect(arrange.mock.calls[0][0]).toMatchObject({ id: 'trip-1', ifMatch: '"1"' });
+  });
+
+  // Nothing but the refusal has moved: the page has not read the trip since the dialog opened, so
+  // its copy and the version on file are the ones the refused save was made from. Refilled from
+  // them, the next save would be refused in turn, over and over, on a safety arrangement.
+  it('says nothing of its own over the conflict warning, and refills from the trip read again', async () => {
+    arrange.mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+    versionOnFile.mockImplementation((asked) => (asked === path ? '"1"' : undefined));
+    const theirAlarm = new Date(Date.now() + 6 * HOUR);
+    readTripAgain.mockResolvedValue({
+      trip: { expectedReturnAt: new Date(Date.now() + 3 * HOUR).toISOString(), calloutAlarmAt: theirAlarm.toISOString() },
+      version: '"2"',
+    });
+    render(panel(new Date(Date.now() + 4 * HOUR).toISOString()));
+    fireEvent.click(screen.getByTestId('trip-callout-arrange'));
+    await screen.findByText('Save');
+
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(arrange).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(readTripAgain).toHaveBeenCalledWith('trip-1'));
+
+    // Saved again, it carries the version of the read and the times that read found.
+    arrange.mockReset().mockResolvedValue({});
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => expect(arrange).toHaveBeenCalledTimes(1));
+    expect(arrange.mock.calls[0][0]).toMatchObject({ ifMatch: '"2"' });
+    expect(arrange.mock.calls[0][0].calloutAlarmAt).toBe(theirAlarm.toISOString());
+
+    // Messages are drawn in the order they were asked for, so the second save's own word is the
+    // witness: once it is on screen, anything the refused save had said would be there too.
+    await screen.findByText('Saved — the callout is set.');
+    expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
+    expect(screen.queryByText(/could not be saved|failed/i)).toBeNull();
   });
 });

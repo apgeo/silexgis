@@ -46,7 +46,18 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
                 .Select(r => r.Coordinates.Select(Position).ToArray())];
     }
 
-    /// <summary>Converts to an NTS geometry (SRID 4326); returns null when malformed.</summary>
+    /// <summary>
+    /// The most positions one geometry may carry. Far above any shape drawn by hand or brought in
+    /// from a survey or a track; what it stops is a request whose single geometry costs the
+    /// validity check and every later spatial query more than a whole registry does.
+    /// </summary>
+    public const int MaxPositions = 200_000;
+
+    /// <summary>
+    /// Converts to an NTS geometry (SRID 4326); returns null when malformed, when a position lies
+    /// outside longitude ±180 and latitude ±90 or is not a finite number, or when the geometry
+    /// carries more than <see cref="MaxPositions"/> positions.
+    /// </summary>
     public Geometry? ToGeometryOrNull()
     {
         try
@@ -61,6 +72,13 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
                 "MultiPolygon" => new MultiPolygon([.. Parts(Coordinates).Select(ParsePolygon)]),
                 _ => throw new JsonException($"Unsupported geometry type '{Type}'."),
             };
+            // Size and range before validity: the validity check is the costly part, and a
+            // position outside the world's range is a different error that it would not catch.
+            if (geometry.NumPoints > MaxPositions || !geometry.Coordinates.All(InRange))
+            {
+                return null;
+            }
+
             if (!geometry.IsValid)
             {
                 return null;
@@ -69,10 +87,14 @@ public sealed record GeoJsonGeometry(string Type, JsonElement Coordinates)
             geometry.SRID = 4326;
             return geometry;
         }
-        catch (Exception e) when (e is JsonException or InvalidOperationException or ArgumentException)
+        // FormatException: a number too large to be a double.
+        catch (Exception e) when (e is JsonException or InvalidOperationException or ArgumentException or FormatException)
         {
             return null;
         }
+
+        static bool InRange(Coordinate c) =>
+            c.X is >= -180 and <= 180 && c.Y is >= -90 and <= 90 && (double.IsNaN(c.Z) || double.IsFinite(c.Z));
 
         static Coordinate ParsePosition(JsonElement e)
         {

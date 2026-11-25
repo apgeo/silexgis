@@ -176,7 +176,7 @@ export default function PhotoGrid({
                 }}
               >
                 {isSelected ? (
-                  <CheckCircleFilled style={{ color: token.colorPrimary, fontSize: 20 }} />
+                  <CheckCircleFilled style={{ color: token.colorPrimary, fontSize: token.fontSizeXL }} />
                 ) : (
                   <PictureOutlined style={{ color: token.colorTextLightSolid, fontSize: 18 }} />
                 )}
@@ -215,7 +215,7 @@ export default function PhotoGrid({
             )}
 
             <figcaption style={{ maxWidth: Math.round(height * ratio) }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+              <Typography.Text type="secondary" className="hint-text" ellipsis>
                 {photo.caption ?? photo.title}
               </Typography.Text>
             </figcaption>

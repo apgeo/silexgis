@@ -4,23 +4,16 @@ import Button from '../../Button.tsx';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSurveyModel } from '../../../api/hooks.ts';
-import {
-  caveViewerOptions,
-  loadCaveView,
-  type CaveViewer,
-  type CaveViewUi,
-  type Cv2Namespace,
-} from '../../../caveview/loadCaveView.ts';
+import { caveViewerOptions, type CaveViewer, type Cv2Namespace } from '../../../caveview/loadCaveView.ts';
 import { markerLabelTheme } from '../../../caveview/markerLabelTheme.ts';
 import { MOVIE_LABEL_SIZE_RANGE, type MovieSettings } from '../../../caveview/movie/movieSettings.ts';
 import { applyMovieMarkerLabels, applyMovieView, turnToMovieView } from '../../../caveview/movie/movieView.ts';
-import { releaseWebGlContext } from '../../../caveview/releaseWebGlContext.ts';
+import type { SurveyFileProgress } from '../../../caveview/surveyFileDownload.ts';
 import {
-  downloadSurveyFile,
-  SURVEY_FILE_STALL_MS,
-  SurveyFileStalledError,
-  type SurveyFileProgress,
-} from '../../../caveview/surveyFileDownload.ts';
+  caveViewerFailureMessage,
+  startCaveViewer,
+  type CaveViewerFailure,
+} from '../../../caveview/viewerLifecycle.ts';
 import { viewerFileName } from '../../../caveview/viewerFileName.ts';
 import { previewBox, previewSurface } from './previewBox.ts';
 import './MoviePreviewHost.css';
@@ -119,13 +112,13 @@ export default function MoviePreviewHost({
   // is not a reason to build the viewer and read the model again.
   const languageRef = useRef(i18n.language);
   languageRef.current = i18n.language;
-  const tRef = useRef(t);
-  tRef.current = t;
   const containerId = `movie-preview-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const roomRef = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState({ width: 0, height: 0 });
   const [status, setStatus] = useState<Status>('loading');
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CaveViewerFailure | null>(null);
+  // Where the model's own address could not be had, which is a refusal the server worded itself.
+  const [addressError, setAddressError] = useState<string | null>(null);
   // How much of the model has arrived: on a slow server a large survey takes a minute, and a
   // spinner alone over that minute reads as a preview that will never load.
   const [progress, setProgress] = useState<SurveyFileProgress | null>(null);
@@ -148,7 +141,7 @@ export default function MoviePreviewHost({
   useEffect(() => {
     if (source === null && model.error !== null) {
       setStatus('error');
-      setErrorDetail(model.error instanceof Error ? model.error.message : String(model.error));
+      setAddressError(model.error instanceof Error ? model.error.message : String(model.error));
     }
   }, [source, model.error]);
   // Trying again asks for the model's address afresh: the one that failed may have been signed
@@ -156,14 +149,15 @@ export default function MoviePreviewHost({
   const { refetch } = model;
   const tryAgain = useCallback(() => {
     setStatus('loading');
-    setErrorDetail(null);
+    setFailure(null);
+    setAddressError(null);
     setProgress(null);
     void refetch().then((read) => {
       if (read.data !== undefined) {
         setSource({ url: read.data.modelUrl, fileName: viewerFileName(read.data) });
       } else {
         setStatus('error');
-        setErrorDetail(read.error instanceof Error ? read.error.message : String(read.error));
+        setAddressError(read.error instanceof Error ? read.error.message : String(read.error));
       }
     });
   }, [refetch]);
@@ -197,40 +191,22 @@ export default function MoviePreviewHost({
     if (source === null) {
       return;
     }
-    let disposed = false;
-    let ui: CaveViewUi | null = null;
-    let created: CaveViewer | null = null;
-    const download = new AbortController();
-    // Held from the start: by the time an unmount's cleanup runs, the page no longer has it.
-    const container = document.getElementById(containerId);
     setStatus('loading');
-    setErrorDetail(null);
+    setFailure(null);
     setProgress(null);
-    (async () => {
-      const cv2 = await loadCaveView();
+    const stop = startCaveViewer({
+      containerId,
       // The same download as the viewer behind the dialog, where that one is reading this file.
-      const blob = await downloadSurveyFile(source.url, {
-        signal: download.signal,
-        onProgress: (arrived) => {
-          if (!disposed) setProgress(arrived);
-        },
-      });
-      if (disposed) return;
+      files: [source],
       // Built with what the viewer on the page behind the dialog was built with, and the movie's
       // labels on top. The language is not this viewer's alone: all the viewers on a page share
       // one, and a preview built without it would put the other into the browser's.
-      const viewer = new cv2.CaveViewer(containerId, {
-        ...caveViewerOptions(languageRef.current),
-        theme: MOVIE_LABEL_THEME,
-      });
-      created = viewer;
-      viewer.addEventListener('newCave', (event) => {
-        if (disposed) return;
-        // The viewer says `newCave` for a model that has loaded, carrying the survey, and also,
-        // carrying none, when a key switches how its controls behave. Only a model's arrival is a
-        // load: counted as one, the key would turn the preview back to its starting view — throwing
-        // away the reader's framing — and read the movie's own shading as the viewer's.
-        if ((event as { survey?: unknown } | null)?.survey === undefined) return;
+      options: () => ({ ...caveViewerOptions(languageRef.current), theme: MOVIE_LABEL_THEME }),
+      onProgress: setProgress,
+      onLoaded: (viewer, cv2) => {
+        // Only a model's arrival is a load: a `newCave` with no survey (a key switching how the
+        // controls behave) counted as one would turn the preview back to its starting view —
+        // throwing away the reader's framing — and read the movie's own shading as the viewer's.
         // Read before any of the movie's settings is written: this is the viewer's own.
         const shading = viewer.shadingMode;
         loadedRef.current = {
@@ -241,41 +217,26 @@ export default function MoviePreviewHost({
         setLoads((count) => count + 1);
         setStatus('ready');
         onReadyRef.current?.({ viewer, cv2 });
-      });
-      ui = new cv2.CaveViewUI(viewer);
-      ui.loadCave(new File([blob], source.fileName));
-    })().catch((error: unknown) => {
-      if (disposed) return;
-      setStatus('error');
-      setErrorDetail(
-        error instanceof SurveyFileStalledError
-          ? tRef.current('caveview.movie.previewStalled', { seconds: Math.round(SURVEY_FILE_STALL_MS / 1000) })
-          : error instanceof Error
-            ? error.message
-            : String(error),
-      );
+      },
+      onFailed: (reason) => {
+        setStatus('error');
+        setFailure(reason);
+      },
+      // A recording still holding the viewer is let go of first: ending a session is safe when
+      // none is open, and a viewer disposed in the middle of one would leave its state behind.
+      onStop: (viewer) => viewer.endCapture(),
     });
     return () => {
-      disposed = true;
-      // A model still on its way is not wanted any more: a large file would otherwise go on
-      // downloading for a dialog that has closed.
-      download.abort();
       const hadLoaded = loadedRef.current !== null;
       loadedRef.current = null;
       if (hadLoaded) {
         onReadyRef.current?.(null);
       }
-      // The canvas is found before the viewer is disposed, which may take it out of its container.
-      // Given back at once: on the tracking tab the oldest context alive is the live trip's own
-      // viewer, made before any movie dialog was opened, and it is the one a browser would take.
-      const canvas = container?.querySelector('canvas') ?? null;
-      // A recording still holding the viewer is let go of first: ending a session is safe when
-      // none is open, and a viewer disposed in the middle of one would leave its state behind.
-      (created as CaveViewer | null)?.endCapture();
-      (ui as CaveViewUi | null)?.dispose();
-      releaseWebGlContext(canvas);
-      ui = null;
-      created = null;
+      // Ending the viewer calls off a model still on its way — a large file would otherwise go on
+      // downloading for a dialog that has closed — and gives its drawing context back at once: on
+      // the tracking tab the oldest context alive is the live trip's own viewer, made before any
+      // movie dialog was opened, and it is the one a browser would take.
+      stop();
     };
   }, [source, containerId]);
 
@@ -357,7 +318,7 @@ export default function MoviePreviewHost({
           type="error"
           showIcon
           title={t('caveview.movie.previewError')}
-          description={errorDetail}
+          description={failure !== null ? caveViewerFailureMessage(failure, t) : addressError}
           action={
             <Button size="small" onClick={tryAgain} data-testid="movie-preview-retry">
               {t('caveview.movie.previewRetry')}

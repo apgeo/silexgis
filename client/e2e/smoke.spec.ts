@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { gotoRoute, login, openCaveFromRegistry, overlayTreeNode, confirmOk } from './helpers.ts';
+import { gotoRoute, login, openCaveFromRegistry, overlayTreeNode, confirmOk, pickCaveType } from './helpers.ts';
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
@@ -35,9 +35,7 @@ test('cave and entrance create/edit round-trip', async ({ page }) => {
   // Create a cave with the minimum required fields.
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  // antd Select options: role="option" is its hidden a11y mirror; click the visible item.
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
@@ -144,8 +142,7 @@ test('3D survey model: upload, embedded viewer and cross-window 3D panel', async
   // Create a cave to hold the model.
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
@@ -203,8 +200,7 @@ test('cave centerline: upload, computed length and map overlay toggle', async ({
 
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
@@ -281,6 +277,8 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   // Cleanup.
   await page.getByRole('listitem').filter({ hasText: viewName })
     .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
+  // Deleting a saved view asks first.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(viewLink).not.toBeVisible({ timeout: 15_000 });
 });
 
@@ -315,18 +313,40 @@ test('caving groups and per-object permission grants', async ({ page }) => {
   await expect(modal.getByText(cavingGroupName)).toBeVisible();
   await modal.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+  // Gone before the removal below is saved, so the "Saved." that confirms the removal is its own
+  // and not this one still on screen.
+  await expect(page.locator('.ant-message-notice')).toHaveCount(0, { timeout: 15_000 });
 
   // Reopen: the grant persisted; then remove it — sweeping grants left behind by
   // previously aborted runs too (they accumulate on the shared demo cave and make a
   // bare "delete" click ambiguous).
+  const accessAnswer = () =>
+    page.waitForResponse(
+      (r) => r.request().method() === 'GET'
+        && /\/api\/v1\/objects\/[^/]+\/[^/]+\/access$/.test(new URL(r.url()).pathname),
+    );
+  const firstRead = accessAnswer();
   await page.getByRole('button', { name: /Permissions/ }).click();
+  // The stored answer names the group, which is what makes its absence below mean something.
+  expect(JSON.stringify(await (await firstRead).json())).toContain(cavingGroupName);
   await expect(modal.getByText(cavingGroupName)).toBeVisible({ timeout: 15_000 });
   const e2eGrantRows = modal.getByRole('row', { name: /E2E Caving Group/ });
   while ((await e2eGrantRows.count()) > 0) {
-    await e2eGrantRows.first().getByRole('button', { name: 'delete' }).click();
+    await e2eGrantRows.first().getByRole('button', { name: /^Remove the rule for / }).click();
   }
   await modal.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText('Saved.').first()).toBeVisible({ timeout: 15_000 });
+
+  // And the removal was written: reopened, the dialog's own answer holds no grant to this run's
+  // group. Read off the answer rather than the rows, which are absent before it arrives too.
+  await expect(modal).toBeHidden({ timeout: 15_000 });
+  const reread = accessAnswer();
+  await page.getByRole('button', { name: /Permissions/ }).click();
+  const stored = await reread;
+  expect(stored.ok()).toBe(true);
+  expect(JSON.stringify(await stored.json())).not.toContain(cavingGroupName);
+  await expect(modal.getByText(cavingGroupName)).toHaveCount(0);
+  await page.keyboard.press('Escape');
 });
 
 test('trip log with participants, tags and the audit trail', async ({ page }) => {
@@ -362,10 +382,17 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.keyboard.press('Enter');
   await expect(page.locator('.ant-tag', { hasText: tagName })).toBeVisible({ timeout: 15_000 });
 
-  // The admin audit trail recorded the creation.
+  // The admin audit trail recorded this trip's creation. Matched on the trip's own id: every run
+  // and every parallel spec creates trips as this same administrator, so "some TripLog row" is
+  // always there whether or not this creation was written down.
+  const tripId = new URL(page.url()).pathname.split('/').pop()!;
+  expect(tripId).toMatch(/^[0-9a-f-]{36}$/);
   await page.goto('/admin/audit');
   await expect(page.getByText('Audit trail')).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'TripLog' }).first()).toBeVisible({ timeout: 15_000 });
+  await page.getByPlaceholder(/Filter by entity type/).fill('TripLog');
+  await expect(
+    page.getByRole('row').filter({ hasText: tripId }).filter({ hasText: 'Created' }),
+  ).toBeVisible({ timeout: 15_000 });
 
   // Cleanup: delete the trip from its detail page.
   await gotoRoute(page, '/trip-logs');
@@ -508,12 +535,19 @@ test('geofile upload, background import, map layer, export and delete', async ({
 
 test('geotagged photos overlay toggles on and loads the photo map layer', async ({ page }) => {
   await login(page);
-  // Enabling the opt-in overlay in the composer tree triggers a bbox load of the photo endpoint.
-  const photoRequest = page.waitForRequest((r) => r.url().includes('/api/v1/map/photos'), { timeout: 15_000 });
+  // Enabling the opt-in overlay in the composer tree triggers a bbox load of the photo endpoint,
+  // and the load has to be answered, not merely asked: a refused or failed answer is a layer that
+  // is switched on and draws nothing.
+  const photoAnswer = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/v1/map/photos',
+    { timeout: 15_000 },
+  );
   const photosRow = overlayTreeNode(page, 'Geotagged photos');
   await photosRow.locator('.ant-tree-checkbox').click();
   await expect(photosRow.locator('.ant-tree-checkbox-checked')).toBeVisible();
-  await photoRequest;
+  const answer = await photoAnswer;
+  expect(answer.ok()).toBe(true);
+  expect(((await answer.json()) as { type?: string }).type).toBe('FeatureCollection');
 });
 
 test('the layer panel says when the photo overlay\'s answer was cut short', async ({ page }) => {
@@ -549,8 +583,7 @@ test('cave history records edits and restores a previous value', async ({ page }
 
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(caveName);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
@@ -635,5 +668,7 @@ test('dashboard: counts, activity, saved-view jump and the landing preference', 
   await page.locator('.map-workspace-panel').first()
     .getByRole('listitem').filter({ hasText: viewName })
     .getByRole('button', { name: `Delete the view ${viewName}`, exact: true }).click();
+  // Deleting a saved view asks first.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByText(viewName)).not.toBeVisible({ timeout: 15_000 });
 });

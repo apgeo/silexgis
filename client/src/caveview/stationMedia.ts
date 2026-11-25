@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later
 import type { PublicTripStationPicture, ResLink, ResLinkMember } from '../api/hooks.ts';
 import { thumbnailAtSize } from '../components/documents/derivativeUrl.ts';
 import type { CaveViewMediaEntry, CaveViewStationMediaSource } from './loadCaveView.ts';

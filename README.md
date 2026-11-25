@@ -209,4 +209,6 @@ down in **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)**.
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE). Third-party bundled components are listed in
-[NOTICE](NOTICE).
+[NOTICE](NOTICE). The published-trip fold (`client/src/publictrips/` and the files it compiles in)
+is also offered under GPL-2.0-or-later, so its standalone build can ship inside a WordPress
+plugin; see NOTICE.

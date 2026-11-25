@@ -118,7 +118,7 @@ echo "gzip: stdout: No space left on device" >&2
 exit 1
 `;
 
-function sandbox({ failingGzip = false } = {}) {
+function sandbox({ failingGzip = false, cavePotential = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'silexgis-backup-'));
   const bin = join(root, 'bin');
   mkdirSync(bin);
@@ -135,6 +135,11 @@ function sandbox({ failingGzip = false } = {}) {
   const uploads = join(volumes, 'standin_silexgis-terrain', 'builds', 'uploads');
   mkdirSync(uploads, { recursive: true });
   writeFileSync(join(uploads, 'generated.tif'), Buffer.from([0x49, 0x49, 0x2a, 0x00, 1, 2, 3, 4]));
+  if (cavePotential) {
+    const run = join(volumes, 'standin_silexgis-terrain', 'builds', 'cave-potential', '0123456789abcdef0123456789abcdef');
+    mkdirSync(run, { recursive: true });
+    writeFileSync(join(run, 'favourability.tif'), Buffer.from([0x49, 0x49, 0x2a, 0x00, 5, 6, 7, 8]));
+  }
   const out = join(root, 'out');
   mkdirSync(out);
   return { root, bin, volumes, out };
@@ -179,11 +184,28 @@ describe('backup.sh', { skip: SKIP_ON_WINDOWS }, () => {
       const result = backup(box);
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.stdout, /==> Done/);
-      assert.deepEqual(leftovers(box).sort(), ['db.sql.gz', 'files.tar.gz', 'terrain-uploads.tar.gz']);
+      assert.deepEqual(leftovers(box).sort(), ['cave-potential.tar.gz', 'db.sql.gz', 'files.tar.gz', 'terrain-uploads.tar.gz']);
       const dump = gunzipSync(readFileSync(join(box.out, 'db.sql.gz'))).toString('utf8');
       assert.equal(dump, DUMP_HEAD + DUMP_TAIL, 'the dump is archived whole');
       assert.ok(tarList(join(box.out, 'files.tar.gz')).includes('./ab/stored-file'));
       assert.ok(tarList(join(box.out, 'terrain-uploads.tar.gz')).includes('builds/uploads/generated.tif'));
+      // The computed maps are archived from their own folder, and the uploads archive holds none of them.
+      const maps = tarList(join(box.out, 'cave-potential.tar.gz'));
+      assert.ok(maps.includes('builds/cave-potential/0123456789abcdef0123456789abcdef/favourability.tif'), maps.join('\n'));
+      assert.ok(maps.every((name) => name.startsWith('builds/cave-potential')));
+      assert.ok(tarList(join(box.out, 'terrain-uploads.tar.gz')).every((name) => name.startsWith('builds/uploads')));
+    } finally {
+      rmSync(box.root, { recursive: true, force: true });
+    }
+  });
+
+  it('writes no cave-potential archive when no map has been computed', () => {
+    const box = sandbox({ cavePotential: false });
+    try {
+      const result = backup(box);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(leftovers(box).sort(), ['db.sql.gz', 'files.tar.gz', 'terrain-uploads.tar.gz']);
+      assert.match(result.stdout, /no cave-potential maps -- nothing to archive/);
     } finally {
       rmSync(box.root, { recursive: true, force: true });
     }

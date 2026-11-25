@@ -1,27 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { Alert, App, Checkbox, Flex, Form, Input, InputNumber, Select } from 'antd';
-import Map from 'ol/Map';
-import View from 'ol/View';
+import { Alert, App, Checkbox, Flex, Form, Input, InputNumber, Select, theme } from 'antd';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import {
+  fetchFeatureVersion,
   useCreateEntrance,
   useEntranceTypes,
   useUpdateEntrance,
   type Entrance,
   type EntranceWrite,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import { clampLonLat } from '../../geo/coords.ts';
 import DialogHost from '../DialogHost.tsx';
+import { useFormEdits } from '../useDiscardGuard.ts';
 import PositionTextInput from '../coordinates/PositionTextInput.tsx';
+import { useSmallMap } from '../map/useSmallMap.ts';
+import { entranceWriteProblem } from './entranceWriteProblems.ts';
 
 interface EntranceEditorModalProps {
   caveId: string;
@@ -56,13 +57,29 @@ export default function EntranceEditorModal({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<EntranceFormValues>();
-  const mapTarget = useRef<HTMLDivElement>(null);
-  const miniMap = useRef<Map>(null);
+  // A click on the mini-map and a pasted position move the entrance through setFieldsValue, which
+  // the form does not report as an edit, so both mark the form edited themselves.
+  const edits = useFormEdits(open);
   const marker = useRef(new Feature<Point>());
+  // OpenLayers draws outside React, so the marker reads the theme's colour through a ref.
+  const { token } = theme.useToken();
+  const markerColour = useRef(token.colorPrimary);
+  markerColour.current = token.colorPrimary;
 
   const { data: entranceTypes } = useEntranceTypes();
   const createEntrance = useCreateEntrance(caveId);
   const updateEntrance = useUpdateEntrance(caveId);
+
+  /**
+   * The version of the entrance this form was filled from, sent with the save so a change somebody
+   * else saved meanwhile is refused and offered back rather than overwritten. The form is filled
+   * from the listing row it was opened on, and that row carries its own version, so the save is
+   * held to exactly what is on screen; a version read now could already be somebody else's and
+   * would present their change as seen. Only a row without one is read for it as the form opens
+   * (a read that fails leaves that save unguarded). Pinned at opening because the page goes on
+   * re-reading the listing while the form is open.
+   */
+  const openedVersion = useRef<Promise<string | undefined> | null>(null);
 
   /**
    * Whether what is on screen is the snapped position rather than the surveyed one.
@@ -76,6 +93,33 @@ export default function EntranceEditorModal({
    * state; a new one has no stored position to blur.
    */
   const positionIsBlurred = entrance?.approximateLocation === true;
+  const blurred = useRef(positionIsBlurred);
+  blurred.current = positionIsBlurred;
+
+  // Built once the dialog's content is mounted and kept through every re-render; when the dialog
+  // host moves the content between a modal and a side drawer, the same map moves with it.
+  const { targetRef, map: miniMap, ready } = useSmallMap({
+    center: defaultCenter,
+    zoom: 14,
+    active: open,
+    layers: () => [
+      new VectorLayer({
+        source: new VectorSource({ features: [marker.current] }),
+        style: () => markerStyle(markerColour.current),
+      }),
+    ],
+    onCreate: (map) => {
+      map.on('singleclick', (event) => {
+        if (blurred.current) {
+          return;
+        }
+        const [clickLon, clickLat] = toLonLat(event.coordinate);
+        form.setFieldsValue({ lon: Number(clickLon.toFixed(6)), lat: Number(clickLat.toFixed(6)) });
+        edits.onValuesChange();
+        placeMarker(clickLon, clickLat, false);
+      });
+    },
+  });
 
   const placeMarker = (lon: number, lat: number, recenter: boolean) => {
     marker.current.setGeometry(new Point(fromLonLat([lon, lat])));
@@ -108,76 +152,35 @@ export default function EntranceEditorModal({
           positionQuality: 'gps',
         };
     form.setFieldsValue(initial);
+    openedVersion.current = !entrance
+      ? null
+      : entrance.version
+        ? Promise.resolve(entrance.version)
+        : fetchFeatureVersion(entrance.id).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
 
-  // Unmount safety: detach the map if the page navigates away while the modal is open.
-  useEffect(
-    () => () => {
-      miniMap.current?.setTarget(undefined);
-      miniMap.current = null;
-    },
-    [],
-  );
-
-  const teardownMap = () => {
-    miniMap.current?.setTarget(undefined);
-    miniMap.current = null;
-  };
-
-  // The dialog host can re-parent the content between modal and drawer while
-  // open; the map div then unmounts and a fresh one mounts. Tearing down on the
-  // ref going null lets the re-parented host's open transition rebuild cleanly.
-  const onMapTargetRef = (el: HTMLDivElement | null) => {
-    mapTarget.current = el;
-    if (!el) {
-      teardownMap();
-    }
-  };
-
-  // The Modal mounts its children lazily, so the map target div does not exist yet when
-  // `open` flips true — build the map only after the open transition (content mounted).
-  const onAfterOpenChange = (visible: boolean) => {
-    if (!visible) {
-      teardownMap();
+  // A new map shows the entrance the form opened with.
+  useEffect(() => {
+    if (!ready) {
       return;
     }
-    if (miniMap.current || !mapTarget.current) {
-      return;
+    const lon = form.getFieldValue('lon') as number | undefined;
+    const lat = form.getFieldValue('lat') as number | undefined;
+    if (typeof lon === 'number' && typeof lat === 'number') {
+      placeMarker(lon, lat, true);
     }
-    const lon = form.getFieldValue('lon') as number;
-    const lat = form.getFieldValue('lat') as number;
-    const map = new Map({
-      target: mapTarget.current,
-      layers: [
-        new TileLayer({ source: new XYZ({ url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' }) }),
-        new VectorLayer({
-          source: new VectorSource({ features: [marker.current] }),
-          style: new Style({
-            image: new CircleStyle({
-              radius: 8,
-              fill: new Fill({ color: '#146262' }),
-              stroke: new Stroke({ color: '#fff', width: 2 }),
-            }),
-          }),
-        }),
-      ],
-      view: new View({ center: fromLonLat([lon, lat]), zoom: 14 }),
-    });
-    map.on('singleclick', (event) => {
-      if (positionIsBlurred) {
-        return;
-      }
-      const [clickLon, clickLat] = toLonLat(event.coordinate);
-      form.setFieldsValue({ lon: Number(clickLon.toFixed(6)), lat: Number(clickLat.toFixed(6)) });
-      placeMarker(clickLon, clickLat, false);
-    });
-    miniMap.current = map;
-    placeMarker(lon, lat, true);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per map built
+  }, [ready]);
 
   const onOk = async () => {
-    const values = await form.validateFields();
+    let values: EntranceFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The form already marks the field that is missing or wrong; there is nothing to send.
+      return;
+    }
     const [lon, lat] = clampLonLat(values.lon, values.lat);
     const body: EntranceWrite = {
       name: values.name ?? null,
@@ -187,18 +190,25 @@ export default function EntranceEditorModal({
       altitude: values.altitude ?? null,
       description: values.description ?? null,
       positionQuality: values.positionQuality as EntranceWrite['positionQuality'],
-      surveyedAt: null,
+      // The form has no field for the survey date, yet the update replaces it with whatever is
+      // sent; sending the stored one keeps a date a survey upload or an import recorded.
+      surveyedAt: entrance?.surveyedAt ?? null,
     };
     try {
       if (entrance) {
-        await updateEntrance.mutateAsync({ id: entrance.id, body });
+        const ifMatch = (await openedVersion.current) ?? undefined;
+        await updateEntrance.mutateAsync({ id: entrance.id, body, ifMatch });
       } else {
         await createEntrance.mutateAsync(body);
       }
       message.success(t('common.saved'));
       onClose();
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // Somebody else's newer change is answered by the one reload-and-reapply prompt every
+      // mutation shares; the dialog stays open so nothing typed is lost.
+      if (!isConcurrencyConflict(error)) {
+        message.error(entranceWriteProblem(error, t));
+      }
     }
   };
 
@@ -208,8 +218,8 @@ export default function EntranceEditorModal({
       title={entrance ? t('entrances.edit') : t('entrances.add')}
       open={open}
       onCancel={onClose}
+      dirty={edits.edited}
       onOk={() => void onOk()}
-      afterOpenChange={onAfterOpenChange}
       okLoading={createEntrance.isPending || updateEntrance.isPending}
       width={720}
     >
@@ -221,8 +231,8 @@ export default function EntranceEditorModal({
           style={{ marginBottom: 12 }}
         />
       )}
-      <div ref={onMapTargetRef} style={{ height: 280, marginBottom: 16, background: '#e8ecef' }} />
-      <Form<EntranceFormValues> form={form} layout="vertical">
+      <div ref={targetRef} style={{ height: 280, marginBottom: 16, background: token.colorFillTertiary }} />
+      <Form<EntranceFormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
         <Flex gap={12} wrap>
           <Form.Item name="name" label={t('caves.name')} style={{ width: 220 }}>
             <Input />
@@ -242,6 +252,7 @@ export default function EntranceEditorModal({
             onPosition={([lon, lat]) => {
               const [clampedLon, clampedLat] = clampLonLat(Number(lon.toFixed(7)), Number(lat.toFixed(7)));
               form.setFieldsValue({ lon: clampedLon, lat: clampedLat });
+              edits.onValuesChange();
               placeMarker(clampedLon, clampedLat, true);
             }}
           />
@@ -299,4 +310,14 @@ export default function EntranceEditorModal({
       </Form>
     </DialogHost>
   );
+}
+
+function markerStyle(colour: string) {
+  return new Style({
+    image: new CircleStyle({
+      radius: 8,
+      fill: new Fill({ color: colour }),
+      stroke: new Stroke({ color: '#fff', width: 2 }),
+    }),
+  });
 }

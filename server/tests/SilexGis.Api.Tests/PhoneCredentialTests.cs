@@ -109,6 +109,41 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
         (await FailedAttemptsAsync()).ShouldBe(0);
     }
 
+    /// <summary>
+    /// The count above is only worth keeping if it ends somewhere: past the installation's limit
+    /// of misses even the right code is refused, and another account is not held by it.
+    /// </summary>
+    [Fact]
+    public async Task Enough_wrong_codes_lock_the_account_and_only_that_account()
+    {
+        var number = Number(23);
+        var change = await me.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = number });
+        change.StatusCode.ShouldBe(HttpStatusCode.OK, await change.Content.ReadAsStringAsync());
+        var texted = factory.Messages.LastTo(number).Code;
+
+        // Five is the sign-in lockout's limit, which the code checks share.
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            (await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = WrongCode(texted) }))
+                .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
+
+        var locked = await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code = texted });
+        locked.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await locked.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("auth.locked_out");
+
+        var otherEmail = $"phone-unlocked-{suffix}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, otherEmail);
+        using var other = await AuthHelper.BearerClientAsync(factory, otherEmail);
+        var otherNumber = Number(24);
+        (await other.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = otherNumber }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        var confirmed = await other.PostAsJsonAsync(
+            "/api/v1/me/phone/confirm", new { code = factory.Messages.LastTo(otherNumber).Code });
+        confirmed.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task A_number_another_account_already_holds_is_refused_once_the_caller_has_proved_it_is_theirs()
     {
@@ -184,6 +219,53 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
         (await TwoFactorOffAlertsAsync()).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Cancelling_a_pending_number_keeps_the_confirmed_one_and_its_texted_codes()
+    {
+        // The mistake this route exists for: a typo in a new number. Before it, the only way to
+        // drop the unconfirmed number was removing the confirmed one too, and with it texted
+        // sign-in codes and possibly two-factor sign-in altogether.
+        await GiveNumberAsync(Number(30), sms: true, authenticator: false);
+        factory.Messages.Clear();
+        var typo = Number(31);
+        var change = await me.PostAsJsonAsync("/api/v1/me/phone/change", new { phoneNumber = typo });
+        change.StatusCode.ShouldBe(HttpStatusCode.OK, await change.Content.ReadAsStringAsync());
+        var code = factory.Messages.LastTo(typo).Code;
+
+        var cancelled = await me.DeleteAsync("/api/v1/me/phone/pending");
+        cancelled.StatusCode.ShouldBe(HttpStatusCode.NoContent, await cancelled.Content.ReadAsStringAsync());
+
+        var status = await me.GetFromJsonAsync<JsonElement>("/api/v1/me/phone/");
+        status.GetProperty("phoneNumber").GetString().ShouldBe(Number(30));
+        status.GetProperty("confirmed").GetBoolean().ShouldBeTrue();
+        status.GetProperty("pendingPhoneNumber").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var (twoFactor, sms) = await TwoFactorAsync();
+        twoFactor.ShouldBeTrue();
+        sms.ShouldBeTrue();
+        (await TwoFactorOffAlertsAsync()).ShouldBe(0);
+
+        // The code texted to the abandoned number confirms nothing any more.
+        var late = await me.PostAsJsonAsync("/api/v1/me/phone/confirm", new { code });
+        late.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await late.Content.ReadAsStringAsync()).ShouldContain("me.phone_change_missing");
+    }
+
+    [Fact]
+    public async Task Cancelling_when_nothing_is_pending_changes_nothing_and_needs_a_signed_in_caller()
+    {
+        await GiveNumberAsync(Number(32), sms: false, authenticator: false);
+
+        // Asking twice — a double click, a retried request — is the same as asking once.
+        (await me.DeleteAsync("/api/v1/me/phone/pending")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var status = await me.GetFromJsonAsync<JsonElement>("/api/v1/me/phone/");
+        status.GetProperty("phoneNumber").GetString().ShouldBe(Number(32));
+        status.GetProperty("confirmed").GetBoolean().ShouldBeTrue();
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.DeleteAsync("/api/v1/me/phone/pending")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     /// <summary>
     /// A confirmed number and the second factors given, set up through Identity as the enrolment
     /// endpoints leave them — those routes need a working text gateway, which is not the subject.
@@ -223,8 +305,8 @@ public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
-    /// A number unique to this class and this test. Every test class shares one database and the
-    /// number is unique across accounts now, so a hard-coded one would collide with a neighbour.
+    /// A number unique to this test. The tests of this class share its database and a number is
+    /// unique across accounts, so a hard-coded one would collide with another test's.
     /// </summary>
     private string Number(int index) =>
         "+4" + ((uint)suffix.GetHashCode(StringComparison.Ordinal) % 100000000U)

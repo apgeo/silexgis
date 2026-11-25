@@ -2,6 +2,7 @@
 using FluentValidation;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Infrastructure.Import;
 
@@ -81,7 +82,17 @@ public sealed record ImportPreviewDto(
     int FileRowCount,
     int ScannedRowCount,
     IReadOnlyList<RuleHitDto> RuleHits,
-    TermRuleSetDto? RuleSet);
+    TermRuleSetDto? RuleSet,
+    /// <summary>
+    /// The mapping step of a geology import: each distinct value of the outlines' lithology
+    /// column, how many outlines carry it, the class it becomes and how (the reviewer's mapping,
+    /// recognised on its own, or unmatched — created unclassified). Unmatched values first.
+    /// Empty when the file's outlines carry no such column.
+    /// </summary>
+    IReadOnlyList<ImportLithologyValueDto> LithologyValues);
+
+/// <summary>One distinct value of the outlines' lithology column, and the class it becomes.</summary>
+public sealed record ImportLithologyValueDto(string Value, int Count, string? Code, LithologyMatchKind Match);
 
 /// <summary>
 /// Runs a rule set over a loaded file. A computation over a body, so a POST.
@@ -225,12 +236,45 @@ public sealed class ImportPreviewRequestValidator : AbstractValidator<ImportPrev
     }
 }
 
+/// <summary>How much one review may carry, and how each decision in it is held.</summary>
+internal static class ImportReviewRules
+{
+    /// <summary>
+    /// The most decisions, and the most candidates selected, one review may carry: a candidate per
+    /// row of a file far larger than any cave registry. A review is stored and read back whole on
+    /// every save, so without a bound one request could make every later save of it unbounded too.
+    /// </summary>
+    public const int MaxEntries = 200_000;
+
+    public static void Apply<T>(
+        AbstractValidator<T> validator,
+        System.Linq.Expressions.Expression<Func<T, IEnumerable<KeyValuePair<string, ImportDecision>>?>> decisions)
+    {
+        validator.RuleFor(decisions)
+            .Must(d => d is null || d.Count() <= MaxEntries)
+            .WithMessage($"A review holds at most {MaxEntries} decisions.");
+        // An enum binds any number of its underlying type; one outside the defined actions would be
+        // stored in the review and read differently by the preview and by the confirmation.
+        validator.RuleForEach(decisions).ChildRules(entry =>
+        {
+            entry.RuleFor(e => e.Key).MaximumLength(40);
+            entry.RuleFor(e => e.Value.Action).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Kind).IsInEnum().When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.Name).MaximumLength(255).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.FeatureTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.CaveTypeCode).MaximumLength(100).When(e => e.Value is not null);
+            entry.RuleFor(e => e.Value.EntranceTypeCode).MaximumLength(100).When(e => e.Value is not null);
+        });
+    }
+}
+
 public sealed class ImportSessionWriteRequestValidator : AbstractValidator<ImportSessionWriteRequest>
 {
     public ImportSessionWriteRequestValidator()
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new ImportOptionsValidator()!);
         RuleFor(x => x.Decisions).NotNull();
+        ImportReviewRules.Apply(this, x => x.Decisions);
     }
 }
 
@@ -240,6 +284,10 @@ public sealed class ImportCommitRequestValidator : AbstractValidator<ImportCommi
     {
         RuleFor(x => x.Options).NotNull().SetValidator(new ImportOptionsValidator()!);
         RuleFor(x => x.Selection).NotNull();
+        RuleFor(x => x.Selection)
+            .Must(s => s is null || s.Count <= ImportReviewRules.MaxEntries)
+            .WithMessage($"A confirmation selects at most {ImportReviewRules.MaxEntries} candidates.");
+        ImportReviewRules.Apply(this, x => x.Decisions);
 
         // A reviewed confirmation of no rows would queue a job that records an empty batch.
         // Without review the selection is the rules' to make, so the caller sends none.
@@ -266,9 +314,52 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
             .NotEmpty()
             .When(x => x.Tracks == ImportTrackHandling.ImportAsLine)
             .WithMessage("Say which kind of line feature a track becomes.");
-        RuleFor(x => x.Languages).NotNull();
-        RuleFor(x => x.TagIds).NotNull();
+        RuleFor(x => x.Areas).IsInEnum();
+        RuleFor(x => x.AreaFeatureTypeCode)
+            .NotEmpty()
+            .When(x => x.Areas == ImportAreaHandling.ImportAsArea)
+            .WithMessage("Say which kind of area an outline becomes.");
+        // Both lists are stored with the session on every save and sent back on every commit, the
+        // tags as one membership list, so neither may grow past what a person could have chosen.
+        RuleFor(x => x.Languages).Cascade(CascadeMode.Stop).NotNull()
+            .Must(languages => languages.Count <= MaxLanguages)
+            .WithMessage($"At most {MaxLanguages} languages.");
+        RuleForEach(x => x.Languages)
+            .Must(language => !string.IsNullOrWhiteSpace(language) && language.Length <= MaxLanguageTagLength)
+            .WithMessage($"A language is a non-empty tag of at most {MaxLanguageTagLength} characters.")
+            .When(x => x.Languages is not null && x.Languages.Count <= MaxLanguages);
+        RuleFor(x => x.TagIds).Cascade(CascadeMode.Stop).NotNull()
+            .Must(ids => ids.Count <= MaxTags)
+            .WithMessage($"At most {MaxTags} tags.");
+        RuleFor(x => x.Mapping).NotNull();
+        RuleFor(x => x.Mapping.LithologyField).MaximumLength(200).When(x => x.Mapping is not null);
+        RuleFor(x => x.Mapping.LithologyValues)
+            .NotNull()
+            .Must(values => values.Count <= MaxLithologyValues)
+            .WithMessage($"A lithology mapping answers at most {MaxLithologyValues} source values.")
+            .When(x => x.Mapping is not null);
+
+        // The vocabulary is closed: a mapping to any other code would store a class no statistic
+        // can say is karstifiable or not, so it is refused here rather than quietly dropped.
+        RuleForEach(x => x.Mapping.LithologyValues)
+            .Must(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Key.Length <= 200)
+            .WithMessage("A mapped source value must be a non-empty text of at most 200 characters.")
+            .Must(pair => Lithology.Find(pair.Value) is not null)
+            .WithMessage((_, pair) => $"'{pair.Value}' is not a lithology class.")
+            .When(x => x.Mapping?.LithologyValues is not null);
     }
+
+    /// <summary>More distinct rock names than any geology map's legend carries.</summary>
+    public const int MaxLithologyValues = 500;
+
+    /// <summary>More languages than any term rule set is written in.</summary>
+    public const int MaxLanguages = 50;
+
+    /// <summary>The longest language tag stored anywhere else in the application.</summary>
+    public const int MaxLanguageTagLength = 32;
+
+    /// <summary>The same tag ceiling the photograph import keeps.</summary>
+    public const int MaxTags = 50;
 }
 
 /// <summary>

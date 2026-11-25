@@ -122,7 +122,7 @@ public sealed class SurveyModelPlacementTests : IAsyncLifetime, IDisposable, ICl
     [Fact]
     public async Task A_scan_placed_by_hand_is_listed_on_the_map_turned_as_placed_and_its_tiles_are_not_touched()
     {
-        // A spot of this test's own, since the map listing is read over a shared database.
+        // A spot of this test's own, since the map listing is read over the database this class's tests share.
         var lon = 20 + Random.Shared.NextDouble() * 5;
         var lat = 40 + Random.Shared.NextDouble() * 5;
         var scan = await TiledScanAsync(owner);

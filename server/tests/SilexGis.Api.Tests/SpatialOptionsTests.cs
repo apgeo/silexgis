@@ -73,8 +73,8 @@ public class SpatialOptionsTests
         // while being measured in the wrong place.
         var fragment = SpatialSql.ToWorking("f.geom");
 
+        // Equality pins the whole fragment: no code of any system can be spelled in it.
         fragment.ShouldBe("ST_Transform(f.geom, @workingSrid)");
-        fragment.ShouldNotContain("326");
     }
 
     [Fact]

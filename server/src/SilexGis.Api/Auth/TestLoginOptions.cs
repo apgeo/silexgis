@@ -24,4 +24,13 @@ public sealed class TestLoginOptions
     /// page never shows a credential that does not work.
     /// </summary>
     public string Password { get; set; } = "test-login-pass-1";
+
+    /// <summary>
+    /// The explicit "this installation holds real data and I know" switch. Without it an enabled
+    /// installation refuses to start when its database holds an account other than the bootstrap
+    /// administrator and the built-in development accounts, or a cave, trip or document owned by
+    /// such an account: an environment file copied from a test host onto a real one would
+    /// otherwise publish a full administrator's password on that installation's sign-in page.
+    /// </summary>
+    public bool AllowOnRealData { get; set; }
 }

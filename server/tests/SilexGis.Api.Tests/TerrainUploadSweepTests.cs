@@ -4,7 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
+using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Jobs;
@@ -15,7 +17,8 @@ namespace SilexGis.Api.Tests;
 
 /// <summary>
 /// Rasters sent for a build and never used are taken away once they have waited long enough, and
-/// nothing any build names is ever taken.
+/// nothing any build names is ever taken. The same pass takes the maps of cave-potential runs
+/// whose row has gone.
 /// </summary>
 /// <remarks>
 /// Both halves are asserted in one pass over one directory, because each is only meaningful beside
@@ -74,6 +77,102 @@ public sealed class TerrainUploadSweepTests : IDisposable, IClassFixture<Postgre
         File.Exists(Path.Combine(uploads, usedByStopped)).ShouldBeTrue();
         File.Exists(Path.Combine(uploads, usedByWaiting)).ShouldBeTrue();
         File.Exists(Path.Combine(uploads, justSent)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_cave_potential_map_whose_run_is_gone_is_taken_and_one_with_a_row_or_just_written_stays()
+    {
+        var owner = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"sweep-{Guid.NewGuid():N}@t.local");
+        var keptArea = await SeedAreaAsync(owner);
+        var purgedArea = await SeedAreaAsync(owner);
+        var old = DateTime.UtcNow.AddHours(-3);
+
+        var kept = await SeedResultAsync(keptArea, owner);
+        var cascaded = await SeedResultAsync(purgedArea, owner);
+        var rowless = Guid.CreateVersion7();
+        var fresh = Guid.CreateVersion7();
+        foreach (var id in new[] { kept, cascaded, rowless })
+        {
+            CavePotentialFolder(id, old);
+        }
+
+        CavePotentialFolder(fresh, DateTime.UtcNow.AddMinutes(-5));
+
+        // Not a run's name: something put there by hand, which the sweep must not mistake for one.
+        var stray = Path.Combine(buildRoot, "cave-potential", "notes");
+        Directory.CreateDirectory(stray);
+        Directory.SetLastWriteTimeUtc(stray, old);
+
+        // Purging the area is a cascade in the database that never reaches the disk.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.Where(f => f.Id == purgedArea).ExecuteDeleteAsync()).ShouldBe(1);
+            (await db.CavePotentialResults.CountAsync(r => r.Id == cascaded)).ShouldBe(0);
+        }
+
+        await SweepAsync();
+
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential", cascaded.ToString("N"))).ShouldBeFalse();
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential", rowless.ToString("N"))).ShouldBeFalse();
+
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential", kept.ToString("N"))).ShouldBeTrue();
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential", fresh.ToString("N"))).ShouldBeTrue();
+        Directory.Exists(stray).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_sweep_with_no_cave_potential_folder_at_all_does_nothing()
+    {
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential")).ShouldBeFalse();
+        await SweepAsync();
+        Directory.Exists(Path.Combine(buildRoot, "cave-potential")).ShouldBeFalse();
+    }
+
+    private void CavePotentialFolder(Guid id, DateTime writtenAt)
+    {
+        var folder = Path.Combine(buildRoot, "cave-potential", id.ToString("N"));
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "favourability.tif"), "a map");
+        Directory.SetLastWriteTimeUtc(folder, writtenAt);
+    }
+
+    private async Task<Guid> SeedAreaAsync(Guid owner)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var typeId = await db.FeatureTypes.Where(t => t.Code == FeatureTypeSeeds.KarstArea).Select(t => t.Id).SingleAsync();
+        var id = Guid.CreateVersion7();
+        db.Features.Add(new Feature
+        {
+            Id = id,
+            Name = $"Sweep area {id:N}"[..24],
+            Kind = FeatureKind.Generic,
+            FeatureTypeId = typeId,
+            OwnerUserId = owner,
+            Visibility = Visibility.Authenticated,
+            AncestorIds = [id],
+        });
+        db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private async Task<Guid> SeedResultAsync(Guid area, Guid requester)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var row = new CavePotentialResult
+        {
+            ModelName = "A model",
+            CellMeters = 50,
+            AreaFeatureId = area,
+            RequestedByUserId = requester,
+            Status = CavePotentialResultStatus.Ready,
+        };
+        db.CavePotentialResults.Add(row);
+        await db.SaveChangesAsync();
+        return row.Id;
     }
 
     [Theory]

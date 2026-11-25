@@ -44,6 +44,11 @@ public static class SurveyUploadEntrance
             return false;
         }
 
+        // The hierarchy lock is taken before anything is read and held until the entrance
+        // commits: a protection switched on above the cave waits for the new entrance, or
+        // commits before it and is seen, and two runs of the same upload decide "no entrance
+        // yet" one after the other rather than both at once.
+        await using var hierarchy = await features.BeginHierarchyWriteAsync(ct);
         var cave = await db.Features.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == upload.CaveFeatureId && f.Kind == FeatureKind.Cave && f.DeletedAt == null, ct);
         // Deleted entrances count: one somebody removed on the web — because the position must
@@ -88,6 +93,7 @@ public static class SurveyUploadEntrance
             await features.CreateEntranceAsync(feature, entrance, ct);
             await features.SetMainEntranceAsync(cave.Id, feature.Id, ct);
             await db.SaveChangesAsync(ct);
+            await hierarchy.CommitAsync(ct);
             return true;
         }
         catch (FeatureWriteException)

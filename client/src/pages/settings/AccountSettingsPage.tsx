@@ -2,9 +2,11 @@
 import { DownloadOutlined } from '@ant-design/icons';
 import { App, Alert, Card, Flex, Form, Input, Popconfirm, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
-import { downloadFile } from '../../api/download.ts';
+import { DownloadError, downloadFile } from '../../api/download.ts';
 import {
   useChangeUsername,
   useDataExport,
@@ -25,12 +27,24 @@ export default function AccountSettingsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<{ username: string }>();
-  const { data: me, isPending } = useMe();
+  const { data: me, isPending, isError, error: readError, refetch } = useMe();
   const { refreshSession } = useAuth();
   const changeUsername = useChangeUsername();
   const requestExport = useRequestDataExport();
   const { data: dataExport } = useDataExport();
 
+  if (isError && !me) {
+    return (
+      <ReadFailedAlert
+        error={readError}
+        isError
+        held={false}
+        onRetry={refetch}
+        title={t('settings.meLoadFailed')}
+        testId="account-load-failed"
+      />
+    );
+  }
   if (isPending || !me) {
     return <Spin />;
   }
@@ -38,17 +52,22 @@ export default function AccountSettingsPage() {
   const submitUsername = async (values: { username: string }) => {
     try {
       await changeUsername.mutateAsync(values.username);
-      // Renaming invalidates the session behind the tokens; renew before it lapses.
-      await refreshSession();
-      message.success(t('settings.account.usernameChanged'));
     } catch (error) {
       const code = error instanceof ApiError ? error.code : undefined;
       message.error(
         code === 'me.username_taken'
           ? t('settings.account.usernameTaken')
-          : t('settings.account.usernameInvalid'),
+          : code === 'me.username_invalid'
+            ? t('settings.account.usernameInvalid')
+            : t('common.saveFailed'),
       );
+      return;
     }
+    // Renaming invalidates the session behind the tokens; renew before it lapses. The renewal is
+    // best effort and never throws, and it stays outside the rename's catch so that nothing it does
+    // could be reported as a refused name.
+    await refreshSession();
+    message.success(t('settings.account.usernameChanged'));
   };
 
   const ready = dataExport?.status === 'ready';
@@ -99,8 +118,8 @@ export default function AccountSettingsPage() {
                 <Button
                   icon={<DownloadOutlined />}
                   onClick={() => {
-                    downloadFile(`/api/v1/me/data-export/${dataExport.id}/download`).catch(() =>
-                      message.error(t('common.saveFailed')),
+                    downloadFile(`/api/v1/me/data-export/${dataExport.id}/download`).catch((error: unknown) =>
+                      message.error(exportRefusal(error, t, 'settings.account.export.downloadFailed')),
                     );
                   }}
                 >
@@ -119,7 +138,7 @@ export default function AccountSettingsPage() {
             onClick={() => {
               requestExport.mutate(undefined, {
                 onSuccess: () => message.success(t('settings.account.export.requested')),
-                onError: () => message.error(t('common.saveFailed')),
+                onError: (error) => message.error(exportRefusal(error, t, 'settings.account.export.requestFailed')),
               });
             }}
           >
@@ -133,4 +152,24 @@ export default function AccountSettingsPage() {
       <Alert type="info" showIcon title={t('settings.account.noDeletion')} />
     </Flex>
   );
+}
+
+/**
+ * Why asking for, or fetching, the account's export did not go through. The server refuses a
+ * second request while one is still being prepared, and a download of an export that has expired
+ * or been swept; each of those tells the person what to do next. Anything else is said with the
+ * action's own sentence rather than as a failed save.
+ */
+function exportRefusal(error: unknown, t: TFunction, fallbackKey: string): string {
+  const code = error instanceof ApiError || error instanceof DownloadError ? error.code : undefined;
+  switch (code) {
+    case 'me.export_in_progress':
+      return t('settings.account.export.inProgress');
+    case 'me.export_expired':
+      return t('settings.account.export.expired');
+    case 'me.export_not_found':
+      return t('settings.account.export.gone');
+    default:
+      return t(fallbackKey);
+  }
 }

@@ -17,6 +17,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import List from '../../components/List.tsx';
 import { ApiError } from '../../api/client.ts';
@@ -65,7 +66,7 @@ export default function SyncSettingsPage() {
   const [open, setOpen] = useState(false);
 
   const { data: capabilities } = useSyncCapabilities();
-  const { data: sets, isPending } = useSyncSets();
+  const { data: sets, isPending, isError, error: readError, refetch } = useSyncSets();
   const { data: groups } = useCavingGroups();
 
   const create = useCreateSyncSet();
@@ -201,7 +202,15 @@ export default function SyncSettingsPage() {
           </Button>
         }
       >
-        {(sets ?? []).length === 0 ? (
+        <ReadFailedAlert
+          error={readError}
+          isError={isError}
+          held={sets !== undefined}
+          onRetry={refetch}
+          title={t('admin.listLoadFailed')}
+          testId="sync-sets-load-failed"
+        />
+        {sets === undefined && isError ? null : (sets ?? []).length === 0 ? (
           <Empty description={t('settings.sync.noSets')} />
         ) : (
           <List

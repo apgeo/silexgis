@@ -124,8 +124,8 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
 
         // Taken before the first archive, because both uploads are being counted: the one that
-        // lodges the log and the revision that corrects it. Every class in this assembly shares one
-        // database and they run in sequence, so the job table already holds whatever ran before —
+        // lodges the log and the revision that corrects it. The tests of this class share one
+        // database, so the job table already holds whatever ran before —
         // what is under test is how many runs *these two uploads* add, which is a difference and
         // never a total. (The reading below is executed by hand rather than queued, so it adds
         // none of its own; that is the point of asserting the queue at all.)
@@ -191,7 +191,7 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
-    /// Runs queued to re-read a compilation log, across the whole shared database.
+    /// Runs queued to re-read a compilation log, across the whole of this class's database.
     /// </summary>
     /// <remarks>
     /// Only ever meaningful as a difference across an action — see the caller. A total would count
@@ -342,37 +342,35 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
         _ = await ArchiveLogAsync(caveId, "compilation.log", LogText());
         await RunReadingAsync(caveId);
 
+        // The owner, who may place the cave, sees the compilation's events with their figures —
+        // which is what makes what follows a withholding rather than an empty timeline.
+        var seen = (await owner.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/history?entityType=feature&entityId={caveId}"))
+            .GetProperty("items").EnumerateArray()
+            .Where(e => e.GetProperty("entityType").GetString() == nameof(SurveyCompilation))
+            .ToList();
+        seen.ShouldNotBeEmpty("the compilation is audited into its cave's timeline");
+
+        // The reader may read the cave, so its timeline answers. The events stand — that a
+        // compilation happened is not the secret — and every one of them is there, emptied.
         var withheld = await reader.GetAsync($"/api/v1/history?entityType=feature&entityId={caveId}");
-        if (withheld.StatusCode == HttpStatusCode.OK)
-        {
-            var rows = (await withheld.Content.ReadFromJsonAsync<JsonElement>())
-                .GetProperty("items").EnumerateArray()
-                .Where(e => e.GetProperty("entityType").GetString() == nameof(SurveyCompilation))
-                .ToList();
+        withheld.StatusCode.ShouldBe(HttpStatusCode.OK, await withheld.Content.ReadAsStringAsync());
+        var rows = (await withheld.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("items").EnumerateArray()
+            .Where(e => e.GetProperty("entityType").GetString() == nameof(SurveyCompilation))
+            .ToList();
+        rows.Count.ShouldBe(seen.Count);
 
-            // The event may stand — that a compilation happened is not the secret — but nothing it
-            // carries may be a figure. Asserted over the whole payload rather than field by field,
-            // so a column added later is covered without anybody remembering to add it here.
-            foreach (var row in rows)
-            {
-                row.GetProperty("changes").ValueKind.ShouldBe(
-                    JsonValueKind.Null,
-                    "a compilation's figures reached a caller who may not place the cave");
-                row.GetProperty("redactedProperties").GetArrayLength().ShouldBeGreaterThan(0);
-            }
-        }
-        else
+        // Nothing an event carries may be a figure. Asserted over the whole payload rather than
+        // field by field, so a column added later is covered without anybody remembering to add
+        // it here.
+        foreach (var row in rows)
         {
-            withheld.StatusCode.ShouldBeOneOf(HttpStatusCode.NotFound, HttpStatusCode.Forbidden);
+            row.GetProperty("changes").ValueKind.ShouldBe(
+                JsonValueKind.Null,
+                "a compilation's figures reached a caller who may not place the cave");
+            row.GetProperty("redactedProperties").GetArrayLength().ShouldBeGreaterThan(0);
         }
-
-        // And the owner, who may place the cave, still sees them — which is what makes the above a
-        // refusal rather than an empty timeline.
-        var seen = await owner.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/history?entityType=feature&entityId={caveId}");
-        seen.GetProperty("items").EnumerateArray()
-            .Any(e => e.GetProperty("entityType").GetString() == nameof(SurveyCompilation))
-            .ShouldBeTrue("the compilation is audited into its cave's timeline");
     }
 
     [Fact]

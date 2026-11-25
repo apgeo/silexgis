@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 /**
  * The map's "new entrance here" tool: a cave is picked first, then the entrance editor opens for
@@ -11,15 +13,20 @@ import '../../i18n';
 
 const CAVE = '55555555-5555-4555-8555-555555555555';
 
-const { queryCalls } = vi.hoisted(() => ({
+const NEW_CAVE = '66666666-6666-4666-8666-666666666666';
+
+const { queryCalls, createCave, createEntrance, setSelection } = vi.hoisted(() => ({
   queryCalls: [] as { body: unknown; enabled: boolean }[],
+  createCave: vi.fn(),
+  createEntrance: vi.fn(),
+  setSelection: vi.fn(),
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
-  createEntranceFor: vi.fn(),
-  useCaveTypes: () => ({ data: [] }),
-  useEntranceTypes: () => ({ data: [] }),
-  useCreateCave: () => ({ mutateAsync: vi.fn() }),
+  createEntranceFor: createEntrance,
+  useCaveTypes: () => ({ data: [{ id: 3, name: 'Peșteră test' }] }),
+  useEntranceTypes: () => ({ data: [{ id: 4, name: 'Gură test' }] }),
+  useCreateCave: () => ({ mutateAsync: createCave }),
   useFilterVocabulary: () => ({
     data: { worlds: [{ world: 'feature', labelKey: 'x', fields: [], sorts: [] }] },
   }),
@@ -45,7 +52,7 @@ vi.mock('../../api/hooks.ts', () => ({
 vi.mock('../../map/entranceLayer.ts', () => ({ reloadEntrances: vi.fn() }));
 vi.mock('../../stores/workspaceStore.ts', () => ({
   useWorkspaceStore: (select: (state: { setSelection: unknown }) => unknown) =>
-    select({ setSelection: vi.fn() }),
+    select({ setSelection }),
 }));
 // The editor is a dialog of its own with its own tests; here it only has to say which cave and
 // which spot it was opened for.
@@ -71,9 +78,139 @@ async function search() {
   return screen.findByRole('button', { name: /Avenul Nou/ }, { timeout: 3000 });
 }
 
-afterEach(cleanup);
+const unhandled: unknown[] = [];
+const record = (reason: unknown) => unhandled.push(reason);
+
+afterEach(() => {
+  cleanup();
+  process.off('unhandledRejection', record);
+});
 beforeEach(() => {
   queryCalls.length = 0;
+  createCave.mockReset().mockResolvedValue({ id: NEW_CAVE });
+  createEntrance.mockReset().mockResolvedValue({});
+  setSelection.mockReset();
+  unhandled.length = 0;
+  process.on('unhandledRejection', record);
+});
+
+async function choose(label: string, option: string) {
+  fireEvent.mouseDown(screen.getByLabelText(label));
+  fireEvent.click(await screen.findByTitle(option));
+}
+
+async function fillNewCave() {
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Avenul de test' } });
+  await choose('Type', 'Peșteră test');
+  await choose('Entrance type', 'Gură test');
+}
+
+describe('a new cave placed on the map', () => {
+  it('creates the cave, then its main entrance at the clicked spot', async () => {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={onClose} />
+      </App>,
+    );
+    await fillNewCave();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(createCave).toHaveBeenCalledTimes(1);
+    expect(createCave.mock.calls[0][0]).toMatchObject({
+      name: 'Avenul de test',
+      caveTypeId: 3,
+      visibility: 'private',
+      locationProtected: false,
+    });
+    expect(createEntrance).toHaveBeenCalledWith(NEW_CAVE, expect.objectContaining({
+      entranceTypeId: 4,
+      isMain: true,
+      geom: { type: 'Point', coordinates: [23.5, 46.25] },
+    }));
+    expect(setSelection).toHaveBeenCalledWith({ kind: 'cave', caveId: NEW_CAVE });
+  });
+
+  it('says the cave was made but its entrance was not, and a retry adds only the entrance', async () => {
+    createEntrance.mockRejectedValueOnce(new ApiError(503, undefined));
+    const onClose = vi.fn();
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={onClose} />
+      </App>,
+    );
+    await fillNewCave();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(
+      (await screen.findAllByText(/The cave was created but its entrance was not/)).length,
+    ).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+
+    // One cave, never a second: the retry went to the cave that already exists.
+    expect(createCave).toHaveBeenCalledTimes(1);
+    expect(createEntrance).toHaveBeenCalledTimes(2);
+    expect(createEntrance.mock.calls[1][0]).toBe(NEW_CAVE);
+  });
+
+  // The dialog can be docked beside a map that stays usable, so a new placement can arrive while
+  // the retry for an earlier one is still on screen. It must open as a new cave of its own, never
+  // put its point on the earlier cave as that cave's entrance.
+  it.each([
+    ['another spot', (rerender: (ui: React.ReactElement) => void) =>
+      rerender(<App><CaveAddModal mode="add-cave" lonLat={[24, 47]} onClose={vi.fn()} /></App>)],
+    ['the entrance tool and back', (rerender: (ui: React.ReactElement) => void) => {
+      rerender(<App><CaveAddModal mode="add-entrance" lonLat={[24, 47]} onClose={vi.fn()} /></App>);
+      rerender(<App><CaveAddModal mode="add-cave" lonLat={[24.5, 47.5]} onClose={vi.fn()} /></App>);
+    }],
+  ])('starts a new placement after %s as a new cave, leaving the earlier one on its sheet', async (_, move) => {
+    createEntrance.mockRejectedValueOnce(new ApiError(503, undefined));
+    const { rerender } = render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={vi.fn()} />
+      </App>,
+    );
+    await fillNewCave();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(
+      (await screen.findAllByText(/The cave was created but its entrance was not/)).length,
+    ).toBeGreaterThan(0);
+
+    move(rerender);
+
+    await waitFor(() => expect(setSelection).toHaveBeenCalledWith({ kind: 'cave', caveId: NEW_CAVE }));
+    expect(screen.queryByText(/The cave was created but its entrance was not/, { selector: '.ant-alert *' })).toBeNull();
+    expect(screen.getByLabelText('Name')).not.toBeDisabled();
+
+    createCave.mockResolvedValueOnce({ id: CAVE });
+    await fillNewCave();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createCave).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(createEntrance).toHaveBeenCalledTimes(2));
+    expect(createEntrance.mock.calls[1][0]).toBe(CAVE);
+    expect(createEntrance.mock.calls[1][1].geom.coordinates).not.toEqual([23.5, 46.25]);
+  });
+
+  it('names why the cave itself was refused rather than a bare failed save', async () => {
+    createCave.mockRejectedValueOnce(new ApiError(400, 'cave.type_unknown'));
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={vi.fn()} />
+      </App>,
+    );
+    await fillNewCave();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(createCave).toHaveBeenCalledTimes(1));
+    expect(createEntrance).not.toHaveBeenCalled();
+    expect(await screen.findByText(i18n.t('caves.problems.typeUnknown'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
 });
 
 describe('the new-entrance cave picker', () => {
@@ -124,5 +261,73 @@ describe('the new-entrance cave picker', () => {
 
     expect(screen.queryByTestId('entrance-editor')).toBeNull();
     expect(screen.getByTestId('new-entrance-cave-picker-input')).toHaveValue('');
+  });
+
+  it('touches no new-cave form that was never drawn when the tool is put down', async () => {
+    // The form library says, from a timer of its own, when a form that was never drawn is asked
+    // to do something. Only the entrance tool was used here, so the new-cave form never was.
+    const consoleError = vi.spyOn(console, 'error');
+    try {
+      const { rerender } = show();
+      rerender(
+        <App>
+          <CaveAddModal mode={null} lonLat={null} onClose={() => {}} />
+        </App>,
+      );
+      // A timer queued after the library's own, with the same zero delay, runs after it.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+      const unconnected = consoleError.mock.calls.filter(([first]) => String(first).includes('not connected to any Form'));
+      expect(unconnected).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
+
+describe('the new-cave dialog', () => {
+  it('keeps a dialog with no name open, marks the field and sends nothing', async () => {
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={() => {}} />
+      </App>,
+    );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /OK/i }));
+
+    const name = within(dialog).getByLabelText(i18n.t('caves.name'));
+    await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+    await afterRejectionsAreReported();
+    expect(createCave).not.toHaveBeenCalled();
+    expect(unhandled).toEqual([]);
+  });
+});
+
+describe('leaving the new-cave dialog with typed work', () => {
+  function showClosable() {
+    const onClose = vi.fn();
+    render(
+      <App>
+        <CaveAddModal mode="add-cave" lonLat={[23.5, 46.25]} onClose={onClose} />
+      </App>,
+    );
+    return onClose;
+  }
+
+  const cancel = () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = showClosable();
+    cancel();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before throwing typed work away', async () => {
+    const onClose = showClosable();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Avenul de test' } });
+    cancel();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click((await screen.findAllByTestId('discard-confirm')).at(-1)!);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });

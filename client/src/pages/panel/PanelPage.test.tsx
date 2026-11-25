@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { SurveyModelInfo } from '../../api/hooks.ts';
 import type { SurveyCompareOffer } from '../../caveview/surveyCompare.ts';
 
@@ -24,18 +25,24 @@ let askedForCave: string | undefined;
 let busListener: ((event: unknown) => void) | undefined;
 let compareAnswer: SurveyCompareOffer | undefined;
 let comparedModel: string | undefined;
+// A read that did not land, per hook; undefined = the read answered.
+let failing: { models?: unknown; pinned?: unknown; caves?: unknown } = {};
+const refetch = vi.fn();
+const failed = (error: unknown) => ({ data: undefined, isPending: false, isError: true, error, refetch });
 
 vi.mock('../../api/hooks.ts', () => ({
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
   useCave: () => ({ data: { id: 'cave-1', name: 'Test cave' } }),
-  useCaves: () => ({ data: { items: [], totalItems: 0 } }),
+  useCaves: () => (failing.caves ? failed(failing.caves) : { data: { items: [], totalItems: 0 } }),
   useEntrances: () => ({ data: [] }),
   useSurveyModel: (id: string | undefined) => {
     askedForId = id;
+    if (id && failing.pinned) return failed(failing.pinned);
     return { data: id ? pinned : undefined, isPending: false };
   },
   useSurveyModels: (caveId: string | undefined) => {
     askedForCave = caveId;
+    if (caveId && failing.models) return failed(failing.models);
     return { data: caveId ? listed : undefined };
   },
 }));
@@ -107,6 +114,8 @@ beforeEach(() => {
   busListener = undefined;
   compareAnswer = undefined;
   comparedModel = undefined;
+  failing = {};
+  refetch.mockReset();
 });
 
 afterEach(cleanup);
@@ -183,13 +192,62 @@ describe('the survey-model pop-out', () => {
   });
 
   it('says the model is gone rather than telling the reader to pick a cave', async () => {
-    // A model whose cave's location is withheld answers 404, not an empty result, so the query
-    // simply has no data. Falling through to the follow-the-selection message would tell somebody
-    // who was sent a link to "select a cave", implying they did something wrong when they did not.
-    pinned = undefined;
+    // A model whose cave's location is withheld answers 404, which the query layer holds as a
+    // failed read carrying the refusal — the way the hook really answers it. Falling through to
+    // the follow-the-selection message, or to the general refusal sentence with a Retry, would
+    // tell somebody who was sent a link something false: that they did something wrong, or that
+    // asking again could help.
+    failing.pinned = new ApiError(404, 'survey_model.not_found');
     show('?model=withheld');
 
-    expect(await screen.findByText(/no longer available, or you may not see it/i)).toBeInTheDocument();
+    const alert = await screen.findByTestId('panel-viewer3d-load-failed');
+    expect(alert).toHaveAttribute('data-refused', 'true');
+    expect(alert.textContent).toMatch(/no longer available, or you may not see it/i);
+    expect(within(alert).queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(screen.queryByTestId('viewer')).toBeNull();
+  });
+});
+
+describe('a read of the pop-out that did not land', () => {
+  /**
+   * A read that failed is not an answer. "Select a cave" or "no longer available" after a dropped
+   * connection tells the reader something false; the failure is named with a way to ask again.
+   */
+  it('says the model could not be read when the one it was opened on failed to load, not that it is gone', async () => {
+    failing.pinned = new Error('network');
+    show('?model=plot');
+
+    const alert = await screen.findByTestId('panel-viewer3d-load-failed');
+    expect(alert.textContent).toContain('could not be read just now');
+    expect(screen.queryByText(/no longer available/i)).toBeNull();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the selected cave\'s models could not be read instead of telling the reader to select a cave', async () => {
+    failing.models = new Error('network');
+    show();
+    await waitFor(() => expect(busListener).toBeDefined());
+    act(() => busListener!({ kind: 'selection', selection: { kind: 'cave', caveId: 'cave-1' } }));
+
+    const alert = await screen.findByTestId('panel-viewer3d-load-failed');
+    expect(alert.textContent).toContain('could not be read just now');
+    expect(screen.queryByText(/Select a cave with a 3D model/i)).toBeNull();
+  });
+
+  it('names a failed read of the cave registry instead of showing an empty table', async () => {
+    failing.caves = new Error('network');
+    render(
+      <MemoryRouter initialEntries={['/panel/registry']}>
+        <Routes>
+          <Route path="/panel/:panelId" element={<PanelPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const alert = await screen.findByTestId('panel-registry-load-failed');
+    expect(alert.textContent).toContain('The cave list could not be read just now');
+    expect(screen.queryByText(/No data/)).toBeNull();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

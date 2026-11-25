@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DeleteOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { App, Alert, Checkbox, Collapse, Flex, Modal, Select, Table, Tag, theme } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
-  useCavingGroups,
   useEffectiveAccess,
   useMember,
   useObjectAccess,
   useReplaceObjectAccess,
-  useUserSearch,
   type AccessActionFlag,
   type EntityType,
   type ObjectAccessEntry,
   parseAccessActions,
 } from '../../api/hooks.ts';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { accessRuleProblem } from './accessRuleProblem.ts';
 import AccessExplanationList from './AccessExplanationList.tsx';
 import ViaExpeditionTag from './ViaExpeditionTag.tsx';
+import SubjectPicker from './SubjectPicker.tsx';
 import { ACTION_ORDER, joinActions } from './accessDisplay.ts';
 
 // Create is rejected at object scope (nothing is created "into" one row) and valid at
@@ -132,9 +133,11 @@ export default function PermissionsModal({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken();
-  const { data: rules, isError } = useObjectAccess(entityType, entityId, open);
+  const { data: rules, isError, error, refetch } = useObjectAccess(entityType, entityId, open);
+  // Only a refusal means the reader may not manage this object; any other failure is a read
+  // that did not come back and is said as one, with a retry.
+  const notManager = isError && error instanceof ApiError && error.status === 403;
   const replaceRules = useReplaceObjectAccess(entityType, entityId);
-  const { data: cavingGroups } = useCavingGroups();
   const { data: effective } = useEffectiveAccess(entityType, entityId, { explain: true, enabled: open });
   // Who the dialog was opened about, as the reader's own lookup of them answers — the same read
   // the members directory makes, so the name drawn here is one this reader may be shown. An id
@@ -145,18 +148,34 @@ export default function PermissionsModal({
   const [entries, setEntries] = useState<DraftRule[]>([]);
   const [subjectKind, setSubjectKind] = useState<'user' | 'cavingGroup'>('user');
   const [subjectId, setSubjectId] = useState<string>();
+  const [subjectName, setSubjectName] = useState<string | null>(null);
   const [effect, setEffect] = useState<'allow' | 'deny'>('allow');
   const [scopeKind, setScopeKind] = useState<'object' | 'subtree'>('object');
-  const [userQuery, setUserQuery] = useState('');
-  const debouncedUserQuery = useDebouncedValue(userQuery);
-  const { data: users } = useUserSearch(debouncedUserQuery);
 
   // Only the feature world contains other objects, so only it offers subtree reach.
   const scopedToFeature = entityType === 'feature';
 
-  useEffect(() => {
-    if (open && rules) {
-      setEntries(rules.map((entry: ObjectAccessEntry) => ({
+  // Saving replaces every direct rule, so a save built on rules that another reader has changed
+  // since would undo that change without a word. The rules the drafts were built from are
+  // remembered; a later read that differs — a background refetch, or the read made just before
+  // every save — holds the save until the reader loads the stored rules or says to keep their own.
+  // A read that arrives while nothing has been edited simply refills the table. The save carries
+  // the version of the rules the drafts were built from, so the server refuses it when a save
+  // landed between that last read and this one.
+  const editedRef = useRef(false);
+  const baselineRef = useRef<string | null>(null);
+  const baselineVersionRef = useRef<string | undefined>(undefined);
+  const [storedMoved, setStoredMoved] = useState(false);
+  const edit = (next: DraftRule[]) => {
+    editedRef.current = true;
+    setEntries(next);
+  };
+
+  const fillFrom = (stored: ObjectAccessEntry[]) => {
+    baselineRef.current = JSON.stringify(stored);
+    baselineVersionRef.current = versionReadWith(stored);
+    setStoredMoved(false);
+    setEntries(stored.map((entry: ObjectAccessEntry) => ({
         subjectKind: entry.subjectKind,
         subjectId: entry.subjectId,
         subjectName: entry.subjectName ?? null,
@@ -166,8 +185,37 @@ export default function PermissionsModal({
         grantedViaExpeditionId: entry.grantedViaExpeditionId ?? null,
         proposed: false,
       })));
+  };
+
+  useEffect(() => {
+    if (!open) {
+      // A dialog closed and opened again starts from what is stored.
+      editedRef.current = false;
+      setStoredMoved(false);
+      return;
+    }
+    if (!rules) {
+      return;
+    }
+    if (!editedRef.current) {
+      fillFrom(rules);
+    } else if (JSON.stringify(rules) !== baselineRef.current) {
+      setStoredMoved(true);
     }
   }, [open, rules]);
+
+  const loadStored = () => {
+    if (rules) {
+      editedRef.current = false;
+      fillFrom(rules);
+    }
+  };
+
+  const keepMine = () => {
+    baselineRef.current = JSON.stringify(rules);
+    baselineVersionRef.current = versionReadWith(rules);
+    setStoredMoved(false);
+  };
 
   // Drafts Read for the account the dialog was opened about, once both the rules and the
   // account are known. Declared after the effect above so that, when the rules arrive or
@@ -208,13 +256,10 @@ export default function PermissionsModal({
       && e.effect === effect && e.scopeKind === scopeKind)) {
       return;
     }
-    const name = subjectKind === 'cavingGroup'
-      ? cavingGroups?.find((x) => x.id === subjectId)?.name ?? null
-      : users?.find((x) => x.id === subjectId)?.label ?? null;
-    setEntries([...entries, {
+    edit([...entries, {
       subjectKind,
       subjectId,
-      subjectName: name,
+      subjectName,
       effect,
       scopeKind: scopedToFeature ? scopeKind : 'object',
       actions: new Set<AccessActionFlag>(['read']),
@@ -222,11 +267,11 @@ export default function PermissionsModal({
       proposed: false,
     }]);
     setSubjectId(undefined);
-    setUserQuery('');
+    setSubjectName(null);
   };
 
   const toggleAction = (index: number, flag: AccessActionFlag, checked: boolean) => {
-    setEntries(entries.map((entry, i) => {
+    edit(entries.map((entry, i) => {
       if (i !== index) {
         return entry;
       }
@@ -241,8 +286,13 @@ export default function PermissionsModal({
   };
 
   const onSave = async () => {
+    const fresh = await refetch();
+    if (fresh.data && JSON.stringify(fresh.data) !== baselineRef.current) {
+      setStoredMoved(true);
+      return;
+    }
     try {
-      await replaceRules.mutateAsync(entries
+      await replaceRules.mutateAsync({ ifMatch: baselineVersionRef.current, entries: entries
         // A rule a camp wrote is not this object's to replace: the server keeps it whatever
         // this save says, so sending it back would only invite it to be sent as something else.
         .filter((e) => e.grantedViaExpeditionId === null)
@@ -259,11 +309,18 @@ export default function PermissionsModal({
               : e.actions,
           ),
           scopeKind: e.scopeKind,
-        })));
+        })) });
       message.success(t('common.saved'));
       onClose();
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // Saved over since the drafts were built: the application's conflict warning says so, and
+      // the read that follows brings the stored rules, which holds the save until the reader
+      // loads them or keeps their own.
+      if (isConcurrencyConflict(error)) {
+        void refetch();
+        return;
+      }
+      message.error(accessRuleProblem(error, t));
     }
   };
 
@@ -288,60 +345,65 @@ export default function PermissionsModal({
       open={open}
       onCancel={onClose}
       onOk={() => void onSave()}
-      okButtonProps={{ disabled: isError }}
+      // Saving replaces every direct rule on the object: until the stored rules are on screen a
+      // save would send an empty list and remove them all.
+      okButtonProps={{ disabled: rules === undefined || storedMoved }}
       confirmLoading={replaceRules.isPending}
       width={900}
       destroyOnHidden
     >
-      {isError ? (
+      {notManager ? (
         <Tag color="warning">{t('permissions.notManager')}</Tag>
+      ) : isError && rules === undefined ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('permissions.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : (
         <>
+          {storedMoved && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              data-testid="permissions-stored-moved"
+              title={t('permissions.storedRulesMoved')}
+              action={
+                <Flex vertical gap={4}>
+                  <Button size="small" onClick={loadStored}>
+                    {t('permissions.loadStoredRules')}
+                  </Button>
+                  <Button size="small" danger onClick={keepMine}>
+                    {t('permissions.keepMyRules')}
+                  </Button>
+                </Flex>
+              }
+            />
+          )}
           <Flex gap={8} style={{ marginBottom: 12 }} wrap>
-            <Select
-              value={subjectKind}
-              style={{ width: 130 }}
-              onChange={(kind: 'user' | 'cavingGroup') => {
+            <SubjectPicker
+              kind={subjectKind}
+              subjectId={subjectId}
+              kindWidth={130}
+              subjectMinWidth={180}
+              onKindChange={(kind) => {
                 setSubjectKind(kind);
                 setSubjectId(undefined);
+                setSubjectName(null);
               }}
-              options={[
-                { value: 'user', label: t('permissions.user') },
-                { value: 'cavingGroup', label: t('permissions.cavingGroup') },
-              ]}
+              onSubjectChange={(id, name) => {
+                setSubjectId(id);
+                setSubjectName(name);
+              }}
             />
-            {subjectKind === 'cavingGroup' ? (
-              <Select
-                style={{ flex: 1, minWidth: 180 }}
-                // CavingGroups arrive in full, so this filters client-side — unlike the user
-                // picker beside it, which searches the server. Named explicitly because
-                // the option values are ids: filtering the default value prop would
-                // match nothing a person could type.
-                showSearch
-                optionFilterProp="label"
-                placeholder={t('permissions.pickCavingGroup')}
-                value={subjectId}
-                onChange={setSubjectId}
-                options={cavingGroups?.map((group) => ({ value: group.id, label: group.name }))}
-              />
-            ) : (
-              <Select
-                style={{ flex: 1, minWidth: 180 }}
-                showSearch
-                filterOption={false}
-                placeholder={t('permissions.pickUser')}
-                value={subjectId}
-                onSearch={setUserQuery}
-                onChange={setSubjectId}
-                options={users?.map((user) => ({
-                  value: user.id,
-                  // The address is only present when the person shares it; the label always is.
-                  label: user.email ? `${user.label} (${user.email})` : user.label,
-                }))}
-                notFoundContent={null}
-              />
-            )}
             <Select
+              aria-label={t('access.effect')}
               value={effect}
               style={{ width: 110 }}
               onChange={setEffect}
@@ -352,6 +414,7 @@ export default function PermissionsModal({
             />
             {scopedToFeature && (
               <Select
+                aria-label={t('permissions.scope')}
                 value={scopeKind}
                 style={{ width: 210 }}
                 onChange={setScopeKind}
@@ -458,10 +521,11 @@ export default function PermissionsModal({
                     render: (_: unknown, entry: DraftRule, index: number) => (
                       <Select
                         size="small"
+                        aria-label={t('permissions.scopeFor', { subject: entry.subjectName ?? entry.subjectId })}
                         value={entry.scopeKind}
                         style={{ width: 160 }}
                         onChange={(next: 'object' | 'subtree') =>
-                          setEntries(entries.map((e, i) => (i === index ? { ...e, scopeKind: next } : e)))}
+                          edit(entries.map((e, i) => (i === index ? { ...e, scopeKind: next } : e)))}
                         options={[
                           { value: 'object', label: t('permissions.scopeObject') },
                           { value: 'subtree', label: t('permissions.scopeSubtree') },
@@ -478,6 +542,10 @@ export default function PermissionsModal({
                 align: 'center' as const,
                 render: (_: unknown, entry: DraftRule, index: number) => (
                   <Checkbox
+                    aria-label={t('permissions.actionFor', {
+                      action: t(`access.actions.${flag}`),
+                      subject: entry.subjectName ?? entry.subjectId,
+                    })}
                     checked={entry.actions.has(flag)}
                     disabled={
                       (flag === 'create' && entry.scopeKind === 'object')
@@ -497,9 +565,9 @@ export default function PermissionsModal({
                     type="text"
                     danger
                     icon={<DeleteOutlined />}
-                    aria-label={t('iconButtons.delete')}
+                    aria-label={t('permissions.removeRuleFor', { subject: entry.subjectName ?? entry.subjectId })}
                     disabled={entry.grantedViaExpeditionId !== null}
-                    onClick={() => setEntries(entries.filter((_, i) => i !== index))}
+                    onClick={() => edit(entries.filter((_, i) => i !== index))}
                   />
                 ),
               },

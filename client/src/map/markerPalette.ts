@@ -26,6 +26,39 @@ export const surfaceFeaturePalette = {
   stroke: '#ffffff',
   highlight: '#1677ff',
   highlightHalo: 'rgba(22, 119, 255, 0.25)',
+  /** An unsaved edit the server refused on the last Save: it has to be found among its look-alikes. */
+  refused: '#cf1322',
+  refusedHalo: 'rgba(207, 19, 34, 0.25)',
+} as const;
+
+/**
+ * Geological units, filled by rock class. The karstifiable classes take the blues, violets and
+ * teals geology maps conventionally give carbonates and evaporites; the others take earth tones
+ * and greys, so karstifiable ground reads as one family at a glance before any one class is
+ * told apart. A unit nobody classified is left unfilled behind a dashed grey outline, and one
+ * whose stored class is not in the vocabulary behind a dotted magenta one: the first is simply
+ * not known yet, the second is a record somebody should correct.
+ */
+export const lithologyPalette = {
+  classes: {
+    limestone: '#3d7cc9',
+    dolomite: '#6f63c7',
+    marble: '#3ea6bd',
+    gypsum_anhydrite: '#b55db3',
+    salt: '#d0679f',
+    conglomerate_calcareous: '#2e9480',
+    sandstone: '#d39b32',
+    shale_marl: '#8f7d5d',
+    granite: '#c55a4f',
+    crystalline_schist: '#7d8f4c',
+    volcanic: '#9a4d26',
+    unconsolidated: '#c9b45a',
+    other: '#8c8c8c',
+  } as Readonly<Record<string, string>>,
+  /** Fill opacity over the class colour: the basemap's relief has to stay readable under it. */
+  fillAlpha: 0.32,
+  unclassified: '#8c8c8c',
+  unrecognised: '#c41d7f',
 } as const;
 
 export const centerlinePalette = {
@@ -245,4 +278,17 @@ export const karstIndexPalette = {
   /** Outline and label of the area under the cursor or selected. */
   highlight: '#1f1f1f',
   labelHalo: 'rgba(255, 255, 255, 0.9)',
+} as const;
+
+/**
+ * The depth-coloured passage layer: one colour per class of rock over the passage, from the class
+ * of passage reading at or above its ground (first) through the shallowest to the deepest. A
+ * sequential light-to-dark ramp, so more rock reads as darker, with the first class set apart in
+ * a hue the ramp does not use because it marks a reading to be checked, not a depth. The colours
+ * are the ones the legend draws, so the two cannot disagree.
+ */
+export const passageDepthPalette = {
+  classes: ['#c2185b', '#ffe08a', '#f9b24e', '#ea7a3a', '#c2483f', '#7d2a73', '#3a1a5c'],
+  /** Light stroke under the line, so it stays legible over a dark basemap. */
+  casing: 'rgba(255, 255, 255, 0.75)',
 } as const;

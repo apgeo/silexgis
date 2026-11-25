@@ -270,6 +270,63 @@ public sealed class TerrainProbeTests : IAsyncLifetime, IDisposable, IClassFixtu
         (await Code(batch)).ShouldBe("access.forbidden");
     }
 
+    /// <summary>
+    /// A height without its error looks more exact than it is, so both probe answers carry what is
+    /// recorded about the build the scene draws — and carry nothing when nothing is recorded,
+    /// rather than a figure that would read as a perfect model.
+    /// </summary>
+    [Fact]
+    public async Task Both_probes_carry_the_recorded_accuracy_of_the_ground_and_nothing_when_none_is_recorded()
+    {
+        var open = await CaveWithEntranceAsync(KnownLongitude, KnownLatitude, locationProtected: false);
+        var points = new { points = new[] { new { longitude = KnownLongitude, latitude = KnownLatitude } } };
+        var features = new { featureIds = new[] { open.EntranceId } };
+
+        async Task SetAccuracyAsync(double? resolution, double? error, string? statistic, string? source)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.SourceResolutionM, resolution)
+                .SetProperty(b => b.VerticalAccuracyM, error)
+                .SetProperty(b => b.VerticalAccuracyStatistic, statistic)
+                .SetProperty(b => b.AccuracySource, source));
+        }
+
+        // Nothing recorded: the member is absent or null, never zero.
+        await SetAccuracyAsync(null, null, null, null);
+        foreach (var (route, body) in new (string, object)[]
+        {
+            ("/api/v1/terrain/probe", points),
+            ("/api/v1/terrain/probe/features", features),
+        })
+        {
+            var bare = await terrainReader.PostAsJsonAsync(route, body);
+            bare.StatusCode.ShouldBe(HttpStatusCode.OK, await bare.Content.ReadAsStringAsync());
+            var bareJson = await bare.Content.ReadFromJsonAsync<JsonElement>();
+            (!bareJson.TryGetProperty("accuracy", out var none) || none.ValueKind == JsonValueKind.Null)
+                .ShouldBeTrue(bareJson.ToString());
+        }
+
+        await SetAccuracyAsync(1d, 0.3, "RMSE", "A survey report in invented words");
+        foreach (var (route, body) in new (string, object)[]
+        {
+            ("/api/v1/terrain/probe", points),
+            ("/api/v1/terrain/probe/features", features),
+        })
+        {
+            var answer = await terrainReader.PostAsJsonAsync(route, body);
+            answer.StatusCode.ShouldBe(HttpStatusCode.OK, await answer.Content.ReadAsStringAsync());
+            var accuracy = (await answer.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accuracy");
+            accuracy.GetProperty("sourceResolutionM").GetDouble().ShouldBe(1d);
+            accuracy.GetProperty("verticalAccuracyM").GetDouble().ShouldBe(0.3);
+            accuracy.GetProperty("verticalAccuracyStatistic").GetString().ShouldBe("RMSE");
+            accuracy.GetProperty("accuracySource").GetString().ShouldBe("A survey report in invented words");
+        }
+
+        await SetAccuracyAsync(null, null, null, null);
+    }
+
     [Fact]
     public async Task Neither_route_answers_a_visitor_who_is_not_signed_in()
     {
@@ -290,28 +347,30 @@ public sealed class TerrainProbeTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task A_request_naming_nothing_or_far_too_much_is_refused_before_any_file_is_opened()
     {
+        // Each refusal names the one field it is about, so a request refused for some other reason
+        // cannot pass for the rule.
         var empty = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe", new { points = Array.Empty<object>() });
-        empty.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await empty.RefusedFieldsAsync()).ShouldBe(["Points"]);
 
-        var toomany = await terrainReader.PostAsJsonAsync(
-            "/api/v1/terrain/probe",
-            new
-            {
-                points = Enumerable.Range(0, 501)
-                    .Select(_ => new { longitude = KnownLongitude, latitude = KnownLatitude })
-                    .ToArray(),
-            });
-        toomany.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The bound from both sides: the most one request may name is answered, one more is not.
+        var atTheBound = await terrainReader.PostAsJsonAsync("/api/v1/terrain/probe", new { points = Points(500) });
+        atTheBound.StatusCode.ShouldBe(HttpStatusCode.OK, await atTheBound.Content.ReadAsStringAsync());
+
+        var toomany = await terrainReader.PostAsJsonAsync("/api/v1/terrain/probe", new { points = Points(501) });
+        (await toomany.RefusedFieldsAsync()).ShouldBe(["Points"]);
 
         var offEarth = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe",
             new { points = new[] { new { longitude = 400d, latitude = 12d } } });
-        offEarth.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await offEarth.RefusedFieldsAsync()).ShouldBe(["Points[0].Longitude"]);
 
         var noFeatures = await terrainReader.PostAsJsonAsync(
             "/api/v1/terrain/probe/features", new { featureIds = Array.Empty<Guid>() });
-        noFeatures.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await noFeatures.RefusedFieldsAsync()).ShouldBe(["FeatureIds"]);
+
+        static object[] Points(int count) =>
+            [.. Enumerable.Range(0, count).Select(_ => new { longitude = KnownLongitude, latitude = KnownLatitude })];
     }
 
     public async ValueTask DisposeAsync()

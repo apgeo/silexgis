@@ -36,9 +36,9 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     private Guid viewerId;
 
     /// <summary>
-    /// Token woven into every name this instance seeds. The whole suite shares one
+    /// Token woven into every name this instance seeds. The tests of this class share one
     /// database, so search-scoped export assertions must not be able to see another
-    /// class's rows (xUnit builds one instance per test, so the token is per test).
+    /// test's rows (xUnit builds one instance per test, so the token is per test).
     /// </summary>
     private string tag = null!;
 
@@ -727,8 +727,10 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
                 editor.PostAsJsonAsync(url, new { }),
             };
 
-            // Long enough for both to reach the row and wait on it.
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            // Both must be seen parked on the row before it is let go; a request that arrived after
+            // the commit would be refused by the ordinary "import in progress" check and the test
+            // would pass whether or not the decision is serialised.
+            await LockWaits.UntilParkedAsync(db, 2, Task.WhenAny(sent), "both re-imports");
             await holding.CommitAsync();
             answers = await Task.WhenAll(sent);
         }

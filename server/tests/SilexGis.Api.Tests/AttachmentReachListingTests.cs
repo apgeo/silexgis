@@ -28,8 +28,8 @@ namespace SilexGis.Api.Tests;
 /// </para>
 /// <para>
 /// Uploads carry a nonsense word unique to the run and every search asks for it, because the
-/// database is shared with the rest of the collection and a total counted over the whole archive
-/// would say nothing about what this query decided.
+/// tests of this class share its database and a total counted over the whole archive would say
+/// nothing about what this query decided.
 /// </para>
 /// </summary>
 public sealed class AttachmentReachListingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

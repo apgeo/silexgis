@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { SpeleolocImportPreview, SpeleolocImportSession } from '../../api/hooks.ts';
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// A failed dry run, when a test sets one.
+const previewState: { error: unknown } = { error: null };
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
 const navigate = vi.fn();
 const uploadMutate = vi.fn();
 
@@ -162,8 +169,8 @@ let session: SpeleolocImportSession = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useSpeleolocImportSession: () => ({ data: session, isError: false, error: null }),
-  useSaveSpeleolocImportSession: () => ({ mutate: saveSessionMutate }),
-  useSpeleolocImportPreview: () => ({ data: preview, isFetching: false, error: null }),
+  useSaveSpeleolocImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
+  useSpeleolocImportPreview: () => ({ data: preview, isFetching: false, error: previewState.error }),
   useCommitSpeleolocImport: () => ({ mutateAsync: commitMutate, isPending: false }),
   useSpeleolocRecordings: () => ({
     data: { fileId: 'file-1', fileName: 'export.zip', recordings: archiveRecordings },
@@ -224,8 +231,15 @@ function show() {
   return render(tree());
 }
 
-/** Long enough to outlast the autosave's 800 ms debounce with room to spare. */
-const afterTheDebounce = () => new Promise((resolve) => setTimeout(resolve, 1600));
+/**
+ * Moves a fake clock past the autosave's 800 ms debounce. The test starts the fake clock before
+ * the page draws, so the debounce is one of its timers and the wait is exact, not a stretch of
+ * real time that a loaded machine can cut short.
+ */
+const afterTheDebounce = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(1600);
+  });
 
 afterEach(cleanup);
 
@@ -244,6 +258,10 @@ beforeEach(() => {
   };
   commitMutate.mockReset();
   saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
+  previewState.error = null;
   navigate.mockReset();
   uploadMutate.mockReset();
 });
@@ -352,6 +370,34 @@ describe('SpeleolocImportPage', () => {
     expect(screen.getByTestId(`speleoloc-import-state-${PROPOSED}`).textContent).toContain(
       'Proposed',
     );
+  });
+
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  it('words a refused dry run from its code, not with the server\'s English sentence', async () => {
+    previewState.error = new ApiError(400, 'speleoloc_import.model_missing', 'No survey model was chosen for this import.');
+    show();
+    expect(await screen.findByText(i18n.t('speleolocImport.errors.modelMissing'))).toBeInTheDocument();
+    expect(screen.queryByText(/No survey model was chosen/)).toBeNull();
+  });
+
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { fileId: 'file-1', body: { options: {}, decisions: {} } };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    await waitFor(() =>
+      expect(screen.getByTestId('speleoloc-import-commit').textContent).toContain('2'),
+    );
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('speleoloc-import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('speleoloc-import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
   });
 
   it('records the scans the server calls selectable, less the ones just set aside', async () => {
@@ -498,15 +544,21 @@ describe('SpeleolocImportPage', () => {
     // is on screen is an empty set standing in for a review that exists — and a save replaces
     // rather than merges, so saving it would be the page destroying the review by being opened.
     session = { ...session, decisions: {}, positionsWithheld: true };
-    show();
+    // The clock still moves on its own, so the page's reads and the waits below proceed as usual.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      show();
 
-    const banner = await screen.findByTestId('speleoloc-import-withheld');
-    expect(banner.textContent).toContain('The review is still stored');
-    // Said on the screen too, because a page that silently stops saving is its own defect.
-    expect(banner.textContent).toContain('Nothing changed on this page is saved');
+      const banner = await screen.findByTestId('speleoloc-import-withheld');
+      expect(banner.textContent).toContain('The review is still stored');
+      // Said on the screen too, because a page that silently stops saving is its own defect.
+      expect(banner.textContent).toContain('Nothing changed on this page is saved');
 
-    await afterTheDebounce();
-    expect(saveSessionMutate).not.toHaveBeenCalled();
+      await afterTheDebounce();
+      expect(saveSessionMutate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('will not narrow the stations offered to one, which would hide every tie', async () => {

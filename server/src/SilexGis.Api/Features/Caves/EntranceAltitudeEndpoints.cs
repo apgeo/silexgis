@@ -237,7 +237,8 @@ public static class EntranceAltitudeEndpoints
             compared.Count(c => c.Comparison.Verdict == EntranceAltitudeVerdict.NotModelled),
             EntranceAltitudes.ToleranceM,
             ranked.Count > MaxRows,
-            dtos);
+            dtos,
+            await TerrainAccuracyReader.OfActiveBuildAsync(db, ct));
     }
 
     private static async Task<Results<Ok<EntranceDto>, UnauthorizedHttpResult, ProblemHttpResult>> FillAsync(
@@ -288,24 +289,15 @@ public static class EntranceAltitudeEndpoints
             return ApiProblems.Forbidden();
         }
 
-        // The cave first, as every write that reaches both a cave and its entrance takes them.
-        await using var hold = await Concurrency.HoldIfMatchAsync(
-            http, db, VersionedTable.Features, entrance.Id, ct, containerId: cave.Id);
-        if (hold.Refusal is { } stale)
-        {
-            return stale;
-        }
-
         if (entrance.Altitude is not null)
         {
-            return ApiProblems.Conflict(
-                "entrance.altitude_recorded",
-                "This entrance already has a recorded altitude, and the elevation model never replaces one. "
-                + "Edit the entrance to change it.");
+            return AltitudeRecorded();
         }
 
-        var feature = entrance.Feature;
-        var point = (Point)feature.Geom!;
+        // The ground is read before either row is locked. The read can wait behind other elevation
+        // requests, and with the cave and its entrance held through it every edit of that cave
+        // would wait as long.
+        var point = (Point)entrance.Feature.Geom!;
         var coverage = await index.ActiveCoverageAsync(ct);
         var read = (await sampler.SampleAsync(coverage, [new DemSamplePoint(point.X, point.Y)], ct))[0];
         if (read.ElevationM is not { } groundM || !double.IsFinite(groundM))
@@ -319,17 +311,43 @@ public static class EntranceAltitudeEndpoints
         // centimetre would be claiming a precision it does not have.
         var altitude = Math.Round((decimal)groundM, 1, MidpointRounding.AwayFromZero);
 
-        // The read above can wait behind other elevation requests, and an edit of this entrance may
-        // be saved meanwhile. The row is read again and the check repeated against what is stored
-        // now, so a recorded altitude or a moved position is never overwritten by a stale fill.
+        // The cave first, as every write that reaches both a cave and its entrance takes them.
+        await using var hold = await Concurrency.HoldIfMatchAsync(
+            http, db, VersionedTable.Features, entrance.Id, ct, containerId: cave.Id);
+        if (hold.Refusal is { } stale)
+        {
+            return stale;
+        }
+
+        // An edit of this entrance may have been saved while the ground was read. The rows are held
+        // now, so what is read here is what the write lands on: a recorded altitude or a moved
+        // position is never overwritten by a fill read for the old one.
         await db.Entry(entrance).ReloadAsync(ct);
+        var feature = entrance.Feature;
         await db.Entry(feature).ReloadAsync(ct);
+        await db.Entry(cave).ReloadAsync(ct);
+
+        // Who may do this was decided on the rows as they stood before the ground was read, and
+        // the read can be long. The cave may since have been protected, hidden or deleted, or the
+        // entrance moved to another cave; so the same three decisions are taken again on the rows
+        // the write will land on, and answered exactly as they are before the hold.
+        if (Gone(db, entrance) || Gone(db, feature) || Gone(db, cave)
+            || feature.DeletedAt is not null || cave.DeletedAt is not null
+            || entrance.CaveFeatureId != cave.Id
+            || !(await access.DecideAsync(ctx, AccessAction.Read, cave, ct)).Allowed
+            || !(await protection.ExactViewIdsAsync(ctx, [entrance.Id], ct)).Contains(entrance.Id))
+        {
+            return ApiProblems.NotFound(EntranceNotFoundCode);
+        }
+
+        if (!(await access.DecideAsync(ctx, AccessAction.Write, cave, ct)).Allowed)
+        {
+            return ApiProblems.Forbidden();
+        }
+
         if (entrance.Altitude is not null)
         {
-            return ApiProblems.Conflict(
-                "entrance.altitude_recorded",
-                "This entrance already has a recorded altitude, and the elevation model never replaces one. "
-                + "Edit the entrance to change it.");
+            return AltitudeRecorded();
         }
 
         if (feature.Geom is not Point current || current.X != point.X || current.Y != point.Y)
@@ -353,6 +371,15 @@ public static class EntranceAltitudeEndpoints
         return TypedResults.Ok(EntranceEndpoints.ToDto(
             feature, entrance, exact: true, accessOptions.Value.LocationGridMeters));
     }
+
+    /// <summary>A row a reload found no longer there, which the context then stops tracking.</summary>
+    private static bool Gone(SilexGisDbContext db, object row) => db.Entry(row).State == EntityState.Detached;
+
+    private static ProblemHttpResult AltitudeRecorded() =>
+        ApiProblems.Conflict(
+            "entrance.altitude_recorded",
+            "This entrance already has a recorded altitude, and the elevation model never replaces one. "
+            + "Edit the entrance to change it.");
 
     private sealed record Row(
         Guid EntranceId,

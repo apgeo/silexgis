@@ -71,6 +71,7 @@ function clustering(): RegistryClustering {
     iterations: 4,
     converged: true,
     basis: 'Computed over the caves you may read.',
+    projection: null,
   } as RegistryClustering;
 }
 
@@ -142,5 +143,69 @@ describe('a grouping that was not asked for never reaches the picture', () => {
     expect(screen.getByTestId('cave-cluster-unaskable')).toBeTruthy();
     expect(screen.queryByTestId('cave-cluster-population')).toBeNull();
     expect(await legendLabels()).not.toContain('Group 1');
+  });
+});
+
+describe('the principal-axes mode of the length and depth view', () => {
+  function withProjection(): RegistryClustering {
+    return {
+      ...clustering(),
+      measures: ['surveyedLength', 'depth', 'projectedExtension', 'ramificationIndex'],
+      projection: {
+        measures: ['surveyedLength', 'depth', 'projectedExtension'],
+        droppedMeasures: ['ramificationIndex'],
+        first: { loadings: [0.7, 0.5, 0.5], explainedShare: 0.62 },
+        second: { loadings: [-0.2, 0.8, -0.6], explainedShare: 0.25 },
+        positions: [
+          { caveId: 'a', x: 1.2, y: 0.3 },
+          { caveId: 'b', x: -1.2, y: -0.3 },
+        ],
+      },
+    } as RegistryClustering;
+  }
+
+  it('asks the grouping over the measures the axes are taken over, and only in this mode', () => {
+    renderPanel({ caveTypeId: 3 });
+    fireEvent.click(screen.getByTitle('Length vs depth'));
+    expect(lastAsk()[0].measures).toBe('surveyedLength,depth');
+
+    fireEvent.click(screen.getByText('Principal axes'));
+    expect(String(lastAsk()[0].measures).split(',').length).toBeGreaterThan(2);
+    expect(lastAsk()[1]).toBe(true);
+  });
+
+  it('titles the axes with the share of the variation each carries and names the dropped measure', async () => {
+    useRegistryClustering.mockReturnValue({ data: withProjection() });
+    renderPanel({ caveTypeId: 3 });
+    fireEvent.click(screen.getByTitle('Length vs depth'));
+    fireEvent.click(screen.getByText('Principal axes'));
+
+    const frame = await screen.findByTestId('chart-principal-axes');
+    await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
+    const texts = Array.from(frame.querySelectorAll('text')).map((n) => n.textContent ?? '');
+    expect(texts).toContain('Axis 1 (62 % of the variation)');
+    expect(texts).toContain('Axis 2 (25 % of the variation)');
+    expect(screen.getByTestId('principal-axes-dropped').textContent).toContain('Ramification index');
+    expect(screen.getByTestId('principal-axes-first').textContent).toContain('Surveyed length (m) +0.70');
+  });
+
+  it('says so, and draws no chart, when the server published no projection', () => {
+    useRegistryClustering.mockReturnValue({ data: { ...clustering(), projection: null } as RegistryClustering });
+    renderPanel({ caveTypeId: 3 });
+    fireEvent.click(screen.getByTitle('Length vs depth'));
+    fireEvent.click(screen.getByText('Principal axes'));
+
+    expect(screen.getByTestId('principal-axes-none')).toBeTruthy();
+    expect(screen.queryByTestId('chart-principal-axes')).toBeNull();
+  });
+
+  it('draws no axes while the narrowing is one the grouping cannot be asked', () => {
+    useRegistryClustering.mockReturnValue({ data: withProjection() });
+    renderPanel({ search: 'bear' });
+    fireEvent.click(screen.getByTitle('Length vs depth'));
+    fireEvent.click(screen.getByText('Principal axes'));
+
+    expect(screen.getByTestId('cave-cluster-unaskable')).toBeTruthy();
+    expect(screen.queryByTestId('chart-principal-axes')).toBeNull();
   });
 });

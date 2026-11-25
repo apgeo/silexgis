@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -35,7 +36,8 @@ public static class AreaKarstStatisticsEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
                 "Counts, densities, totals, extremes, a rock-type breakdown and a classed "
-                + "karstification index for one area, over the caves declared to be in it.");
+                + "karstification index for one area, over the caves declared to be in it, and the "
+                + "outline split by mapped geology over the placeable units and entrances.");
 
         // The same figures as a spreadsheet. It is a separate route rather than a format parameter
         // on the one above because the two return different media types and a generated client that
@@ -70,7 +72,10 @@ public static class AreaKarstStatisticsEndpoints
         return result.Result switch
         {
             Ok<AreaKarstStatisticsDto> ok when ok.Value is { } dto =>
-                TypedResults.Text(ToCsv(dto), "text/csv"),
+                // A byte-order mark in front, and the charset named: a spreadsheet opening a file
+                // with neither reads it in the machine's legacy code page, and every cave name
+                // with a diacritic comes out garbled.
+                TypedResults.Text("\uFEFF" + ToCsv(dto), "text/csv", System.Text.Encoding.UTF8),
             UnauthorizedHttpResult unauthorized => unauthorized,
             ProblemHttpResult problem => problem,
             _ => ApiProblems.NotFound("feature.not_found"),
@@ -95,8 +100,14 @@ public static class AreaKarstStatisticsEndpoints
         var csv = new System.Text.StringBuilder();
         csv.Append("measure,value\n");
 
+        // Names (cave names, rock type codes) are text somebody typed, so they go through the
+        // spreadsheet-formula guard: a cave named "=1+1" must open as those four characters, not
+        // as a formula. Numbers are written as they are — a guard would turn a negative value
+        // into text.
         void Row(string measure, object? value) =>
-            csv.Append(Escape(measure)).Append(',').Append(Escape(Format(value))).Append('\n');
+            csv.Append(TrackingCsvWriter.TextCell(measure)).Append(',')
+                .Append(value is string text ? TrackingCsvWriter.TextCell(text) : Escape(Format(value)))
+                .Append('\n');
 
         Row("area_id", dto.AreaId);
         Row("membership_basis", dto.Basis);
@@ -139,6 +150,22 @@ public static class AreaKarstStatisticsEndpoints
 
         Row("unparented_inside_count", dto.UnparentedInsideCount);
         Row("placeable_cave_count", dto.PlaceableCaveCount);
+
+        // The lithology split is spatial and over the placeable set, so it carries its own basis.
+        Row("lithology_basis", dto.Lithology.Basis);
+        foreach (var unit in dto.Lithology.Classes)
+        {
+            var code = unit.Code ?? "unclassified";
+            Row($"lithology.{code}.area_km2", unit.AreaKm2);
+            Row($"lithology.{code}.entrance_count", unit.EntranceCount);
+            Row($"lithology.{code}.entrances_per_km2", unit.EntrancesPerKm2);
+        }
+
+        Row("lithology_unmapped_area_km2", dto.Lithology.UnmappedAreaKm2);
+        Row("lithology_unmapped_entrance_count", dto.Lithology.UnmappedEntranceCount);
+        Row("karstifiable_area_km2", dto.Lithology.KarstifiableAreaKm2);
+        Row("karstifiable_entrance_count", dto.Lithology.KarstifiableEntranceCount);
+        Row("karstifiable_entrances_per_km2", dto.Lithology.KarstifiableEntrancesPerKm2);
 
         return csv.ToString();
     }
@@ -209,6 +236,17 @@ public static class AreaKarstStatisticsEndpoints
         var unparentedInside = await KarstAreaStatisticsSql.UnparentedInsideCountAsync(db, ctx, id, ct);
         var placeable = await KarstAreaStatisticsSql.PlaceableCaveCountAsync(db, ctx, id, ct);
 
+        var unitTypeId = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.GeologicalUnit)
+            .Select(t => (long?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        var lithologyRows = await KarstAreaStatisticsSql.LithologyAsync(db, ctx, id, unitTypeId ?? 0L, ct);
+        var unmappedRow = lithologyRows.FirstOrDefault(r => r.Unmapped);
+        var lithology = LithologyStatistics.Summarize(
+            lithologyRows.Where(r => !r.Unmapped).Select(r => new LithologyOutcrop(r.Lithology, r.AreaM2, r.EntranceCount)),
+            totals.AreaM2,
+            new LithologyOutcrop(null, unmappedRow?.AreaM2 ?? 0d, unmappedRow?.EntranceCount ?? 0));
+
         var reading = KarstificationIndex.Read(
             totals.AreaM2, totals.CaveCount, totals.DepressionCount, totals.DepressionAreaM2);
         var areaKm2 = reading.AreaKm2;
@@ -225,7 +263,8 @@ public static class AreaKarstStatisticsEndpoints
             areaKm2 is { } e ? totals.EntranceCount / e : null,
             totals.SurveyedLengthM,
             totals.SurveyedCaveCount,
-            areaKm2 is { } s ? (totals.SurveyedLengthM ?? 0d) / s : null,
+            // Unknown, not nought, when no cave in the area records a surveyed length.
+            areaKm2 is { } s && totals.SurveyedLengthM is { } surveyed ? surveyed / s : null,
             totals.DepressionCount,
             totals.DepressionAreaM2 is { } d ? d / 1_000_000d : null,
             depressionRatio,
@@ -238,8 +277,20 @@ public static class AreaKarstStatisticsEndpoints
                 [.. reading.Components.Select(c =>
                     new KarstificationComponentDto(c.Name, c.Value, c.Normalised, c.Reference))]),
             unparentedInside,
-            placeable));
+            placeable,
+            ToLithologyDto(lithology)));
     }
+
+    private static AreaLithologyBreakdownDto ToLithologyDto(LithologyBreakdown b) => new(
+        AreaKarstStatisticsLimits.PlaceableBasis,
+        [.. b.Classes.Select(c => new AreaLithologyDto(
+            c.Code, c.Recognised, c.Karstifiable, c.AreaKm2, c.AreaShare, c.EntranceCount, c.EntrancesPerKm2))],
+        b.MappedAreaKm2,
+        b.UnmappedAreaKm2,
+        b.UnmappedEntranceCount,
+        b.KarstifiableAreaKm2,
+        b.KarstifiableEntranceCount,
+        b.KarstifiableEntrancesPerKm2);
 
     private static AreaCaveExtremeDto ToExtreme(KarstAreaExtremeRow row) =>
         new(row.FeatureId, row.Name, row.Value);

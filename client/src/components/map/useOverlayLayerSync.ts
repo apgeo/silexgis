@@ -11,9 +11,11 @@ import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
 import { KARST_DENSITY_LAYER_ID } from '../../map/karstDensityLayer.ts';
 import { KARST_INDEX_LAYER_ID } from '../../map/karstIndexLayer.ts';
+import { PASSAGE_DEPTH_LAYER_ID } from '../../map/passageDepthLayer.ts';
 import { GEOFILE_LAYER_PREFIX, syncGeofileLayers } from '../../map/geofileLayers.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../../map/rasterLayers.ts';
 import { syncTerrainDerivativeLayers, terrainDerivativeIdOf } from '../../map/terrainDerivativeLayers.ts';
+import { syncCavePotentialLayers } from '../../map/cavePotentialLayers.ts';
 import { applyPendingOverlayOrder, getOverlayGroup, getWorkspaceMap, setLayerOpacity } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 
@@ -24,10 +26,12 @@ export interface OverlayLayerSyncInput {
   importedGeofiles: Parameters<typeof syncGeofileLayers>[1];
   readyRasters: Parameters<typeof syncRasterLayers>[0];
   derivativeLayers: Parameters<typeof syncTerrainDerivativeLayers>[0];
+  cavePotentialResults: Parameters<typeof syncCavePotentialLayers>[0];
   visibleGeofileIds: string[];
   visibleTileOverlayIds: number[];
   visibleRasterIds: string[];
   visibleTerrainDerivativeIds: string[];
+  visibleCavePotentialIds: string[];
   overlayOpacity: Record<string, number>;
   tileOverlayOpacity: Record<number, number>;
   rasterOpacity: Record<string, number>;
@@ -45,10 +49,12 @@ export function useOverlayLayerSync({
   importedGeofiles,
   readyRasters,
   derivativeLayers,
+  cavePotentialResults,
   visibleGeofileIds,
   visibleTileOverlayIds,
   visibleRasterIds,
   visibleTerrainDerivativeIds,
+  visibleCavePotentialIds,
   overlayOpacity,
   tileOverlayOpacity,
   rasterOpacity,
@@ -75,6 +81,7 @@ export function useOverlayLayerSync({
       ENTRANCE_HEATMAP_LAYER_ID,
       KARST_DENSITY_LAYER_ID,
       KARST_INDEX_LAYER_ID,
+      PASSAGE_DEPTH_LAYER_ID,
     ]) {
       setLayerOpacity(id, overlayOpacity[id] ?? 1);
     }
@@ -116,6 +123,18 @@ export function useOverlayLayerSync({
     );
     applyPendingOverlayOrder();
   }, [derivativeLayers, visibleTerrainDerivativeIds, overlayOpacity]);
+
+  // The cave-potential maps, in a pass of their own for the same reason. A result that stops
+  // being listed — deleted, or no longer this reader's to read — is taken off the map by the same
+  // pass, so the map never goes on showing what the list no longer offers.
+  useEffect(() => {
+    syncCavePotentialLayers(
+      cavePotentialResults,
+      new Set(visibleCavePotentialIds),
+      new globalThis.Map(Object.entries(overlayOpacity)),
+    );
+    applyPendingOverlayOrder();
+  }, [cavePotentialResults, visibleCavePotentialIds, overlayOpacity]);
 
   // Mirrors opacity changes made on the OL layers (the composer's transparency
   // sliders write layer.setOpacity directly) back into the workspace store, which

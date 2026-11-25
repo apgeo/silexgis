@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login, waitForScene3dReady } from './helpers.ts';
+import { gotoRoute, login, waitForScene3dReady, pickCaveType } from './helpers.ts';
 import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 // A photograph linked to a station of a cave's survey, found where it was taken: marked over the
@@ -33,8 +33,7 @@ test.afterEach(async ({ page }) => {
 async function createCave(page: Page, name: string): Promise<string> {
   await page.goto('/caves/new');
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Type', { exact: true }).click();
-  await page.locator('.ant-select-item-option').first().click();
+  await pickCaveType(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];

@@ -3016,8 +3016,7 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable, IClassFixture
     /// A rule naming one person on one object. Written straight into storage: the
     /// authoring surface refuses rules that hand out more than the author holds, which is
     /// exactly what a fixture needs to do. Both the subject and the object belong to this
-    /// class's own run, so the row cannot change what another class in the shared database
-    /// sees. Entries are re-resolved per request, so the next call already sees it.
+    /// test's own run, so the row cannot change what another test of this class sees. Entries are re-resolved per request, so the next call already sees it.
     /// </summary>
     private async Task GrantAsync(Guid userId, AccessDomain domain, AccessAction actions, Guid scopeId)
     {

@@ -36,7 +36,7 @@ export function useImportTripTrack() {
     },
     onSuccess: (trip) => {
       invalidateHistory();
-      written(trip);
+      return written(trip);
     },
   });
 }
@@ -62,6 +62,7 @@ export type ImportOptions = components['schemas']['ImportOptions'];
 export type ImportDecision = components['schemas']['ImportDecision'];
 export type ImportCandidate = components['schemas']['ImportCandidateDto'];
 export type ImportPreview = components['schemas']['ImportPreviewDto'];
+export type ImportLithologyValue = components['schemas']['ImportLithologyValueDto'];
 export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest'];
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
@@ -167,8 +168,14 @@ export function useImportSession(geofileId: string | undefined) {
  * Saves the review as the reviewer works. Deliberately does not invalidate the session
  * query: the browser already holds what it just sent, and refetching would make every tick
  * of the table fight the answer coming back.
+ *
+ * What was sent is written into the cached session instead. A page opened again while the
+ * session is still cached applies the cached copy straight away; if that copy were the one first
+ * read, the reopened page would show the review as it was then and its autosave would write that
+ * older review back over everything saved since.
  */
 export function useSaveImportSession() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       geofileId,
@@ -183,6 +190,15 @@ export function useSaveImportSession() {
           body,
         }),
       ),
+    // Written when sent, and only then: a reviewer who leaves while the save is still on its way
+    // and comes straight back must not find the older copy. The answer is deliberately not
+    // written over it — saves overlap whenever one is slower than the pause between two edits,
+    // and a late answer to the older one would put the older review back in the cache (as would
+    // an answer landing after a confirmation has re-read the spent session).
+    onMutate: ({ geofileId, body }) => {
+      queryClient.setQueryData<ImportSession>(queryKeys.importSession(geofileId), (current) =>
+        current ? { ...current, ...body } : current);
+    },
   });
 }
 
@@ -194,11 +210,14 @@ export function useImportPreview(
 ) {
   return useQuery({
     queryKey: queryKeys.importPreview(geofileId ?? '', body),
-    queryFn: () =>
+    // A dry run of a large file is real work on the server; one the reviewer has moved past is
+    // cancelled rather than left to finish for nobody.
+    queryFn: ({ signal }) =>
       unwrap(
         api.POST('/api/v1/geofiles/{geofileId}/import/preview', {
           params: { path: { geofileId: geofileId! } },
           body,
+          signal,
         }),
       ),
     enabled: Boolean(geofileId) && enabled,
@@ -568,15 +587,24 @@ export function usePhotoImportSession() {
 
 /**
  * Saves the review as the reviewer works. Deliberately does not invalidate the session query,
- * for the same reason the vector one does not: the browser already holds what it just sent.
+ * for the same reason the vector one does not: the browser already holds what it just sent. What
+ * was sent goes into the cache, so a reopened page resumes from it rather than from the copy first
+ * read (whose autosave would otherwise write the older drop back over the newer one).
  */
 export function useSavePhotoImportSession() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: {
       fileIds: string[];
       options: PhotoImportOptions;
       decisions: Record<string, PhotoDecision>;
     }) => unwrap(api.PUT('/api/v1/photo-import/session', { body })),
+    // Written when sent and never from the answer, for the vector review's reason: a late answer
+    // to an older save would put the older drop back in the cache.
+    onMutate: (body) => {
+      queryClient.setQueryData<PhotoSession>(queryKeys.photoImportSession, (current) =>
+        current ? { ...current, ...body } : current);
+    },
   });
 }
 
@@ -584,7 +612,7 @@ export function useSavePhotoImportSession() {
 export function usePhotoImportPreview(body: PhotoPreviewRequest, enabled = true) {
   return useQuery({
     queryKey: queryKeys.photoImportPreview(body),
-    queryFn: () => unwrap(api.POST('/api/v1/photo-import/preview', { body })),
+    queryFn: ({ signal }) => unwrap(api.POST('/api/v1/photo-import/preview', { body, signal })),
     enabled: enabled && body.fileIds.length > 0,
     placeholderData: keepPreviousData,
   });

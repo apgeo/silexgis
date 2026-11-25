@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import { LockOutlined, UndoOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
-import { Alert, App, Card, Empty, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
+import { Alert, App, Card, Empty, Popconfirm, Spin, Table, Tag, Timeline, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import dayjs from 'dayjs';
 import './HistoryPanel.css';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   useHistory,
   useRestoreFromHistory,
@@ -83,12 +84,28 @@ export default function HistoryPanel({
   variant?: 'card' | 'bare';
 }) {
   const { t } = useTranslation();
-  const { data, isLoading } = useHistory(entityType, entityId, enabled);
+  const history = useHistory(entityType, entityId, enabled);
+  const { data, isLoading } = history;
   const events = data?.items ?? [];
+  // The newest page first: a long-lived feature can carry more changes than is worth drawing at
+  // once. Saying how many are left keeps a cut-off timeline from reading as the whole story, and
+  // the older pages are read only when the reader asks for them.
+  const notShown = data ? data.totalItems - events.length : 0;
 
   const body = (
     <>
-      {isLoading ? (
+      {history.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('history.loadFailed')}
+          action={
+            <Button size="small" onClick={() => void history.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : isLoading ? (
         <Spin />
       ) : events.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('history.empty')} />
@@ -105,6 +122,39 @@ export default function HistoryPanel({
               ),
           }))}
         />
+      )}
+      {!history.isError && notShown > 0 && (
+        <Typography.Text type="secondary" data-testid="history-partial">
+          {t('history.partial', { shown: events.length, total: data?.totalItems })}
+        </Typography.Text>
+      )}
+      {!history.isError && history.moreFailed ? (
+        <Alert
+          type="error"
+          showIcon
+          title={t('history.loadMoreFailed')}
+          style={{ marginTop: 8 }}
+          action={
+            <Button size="small" onClick={() => history.loadMore()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      ) : (
+        !history.isError &&
+        history.hasMore && (
+          <div>
+            <Button
+              size="small"
+              type="link"
+              loading={history.loadingMore}
+              onClick={() => history.loadMore()}
+              data-testid="history-load-more"
+            >
+              {t('history.loadMore')}
+            </Button>
+          </div>
+        )
       )}
     </>
   );
@@ -127,6 +177,7 @@ const SOURCE_COLOR: Record<string, string> = {
   restore: 'orange',
   undo: 'orange',
   reviewDecision: 'gold',
+  generated: 'magenta',
 };
 
 /** Where a change came from, and — when it belongs to an import — a way to the import it is part of. */
@@ -230,8 +281,10 @@ function HistoryEventItem({
           setOutcome(result);
         }
       }
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t('history.restoreFailed'));
+      }
     } finally {
       setRestoring(null);
     }
@@ -330,16 +383,26 @@ function HistoryEventItem({
         </div>
       )}
 
+      {/* One value is put back from its own row on one click; several at once rewrite the record
+          wholesale, so the count is said and agreed to first. */}
       {restorable.length > 1 && (
-        <Button
-          size="small"
-          type="link"
-          icon={<UndoOutlined />}
-          loading={restoring === restorable.join(',')}
-          onClick={() => void doRestore(restorable)}
+        <Popconfirm
+          title={t('history.restoreAllConfirm', { count: restorable.length })}
+          okText={t('history.restoreAllOk')}
+          okButtonProps={{ 'data-testid': 'history-restore-all-confirm' } as Record<string, string>}
+          cancelText={t('common.cancel')}
+          onConfirm={() => void doRestore(restorable)}
         >
-          {t('history.restoreAll')}
-        </Button>
+          <Button
+            size="small"
+            type="link"
+            icon={<UndoOutlined />}
+            loading={restoring === restorable.join(',')}
+            data-testid="history-restore-all"
+          >
+            {t('history.restoreAll')}
+          </Button>
+        </Popconfirm>
       )}
 
       {outcome && (

@@ -349,7 +349,12 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
             var body = await ReadAsync(owner, cave);
             var expected = GroundM - UndulationM - PassageAltitudeM;
 
-            foreach (var sample in body.GetProperty("samples").EnumerateArray())
+            // Every sample is read, so a datum that made the answer empty cannot pass for one that
+            // corrected it.
+            var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+            samples.Length.ShouldBeGreaterThan(1);
+            body.GetProperty("coveredSampleCount").GetInt32().ShouldBe(samples.Length);
+            foreach (var sample in samples)
             {
                 sample.GetProperty("overburdenM").GetDouble().ShouldBe(expected, 1e-6);
             }
@@ -382,6 +387,106 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
     {
         var response = await owner.GetAsync($"/api/v1/caves/{Guid.Empty}/overburden");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// Ground rising eastwards over a level passage running east: the rock is thinnest at the west
+    /// end and thickest at the east end, so the least cover is the first reading, and it carries the
+    /// position and the value the summary's minimum names.
+    /// </summary>
+    [Fact]
+    public async Task The_least_cover_is_the_thinnest_reading_with_its_position()
+    {
+        WriteRaster(buildId, (x, y) => (float)(GroundM + (10 * x) + (3 * y)));
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        var body = await ReadAsync(owner, cave);
+        var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+        var least = body.GetProperty("leastCover");
+
+        least.GetProperty("overburdenM").GetDouble()
+            .ShouldBe(body.GetProperty("minOverburdenM").GetDouble(), 1e-9);
+        least.GetProperty("distanceAlongM").GetDouble().ShouldBe(0, 1e-9);
+        least.GetProperty("longitude").GetDouble()
+            .ShouldBe(samples[0].GetProperty("longitude").GetDouble(), 1e-9);
+        least.GetProperty("latitude").GetDouble()
+            .ShouldBe(samples[0].GetProperty("latitude").GetDouble(), 1e-9);
+
+        // Not simply the first or the last reading of every profile: it is the thinner end here.
+        samples[^1].GetProperty("overburdenM").GetDouble()
+            .ShouldBeGreaterThan(least.GetProperty("overburdenM").GetDouble() + 10);
+    }
+
+    /// <summary>
+    /// The least-cover place is a position of the cave, so it is withheld with the rest of the
+    /// profile. The caller holds every terrain right and may read the protected cave, and is shown
+    /// the same figure for an open cave in the same test.
+    /// </summary>
+    [Fact]
+    public async Task The_least_cover_place_is_withheld_from_a_reader_who_may_not_place_the_cave()
+    {
+        var open = await CaveWithPassageAsync(locationProtected: false);
+        var hidden = await CaveWithPassageAsync(locationProtected: true);
+
+        (await ReadAsync(viewer, open)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+        (await viewer.GetAsync($"/api/v1/caves/{hidden}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await viewer.GetAsync($"/api/v1/caves/{hidden}/overburden");
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var text = await refused.Content.ReadAsStringAsync();
+        text.ShouldNotContain("leastCover");
+        text.ShouldNotContain("longitude");
+
+        (await ReadAsync(owner, hidden)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    /// <summary>A drawing with no altitudes has no least cover rather than one at nought.</summary>
+    [Fact]
+    public async Task A_plan_drawing_with_no_altitudes_has_no_least_cover()
+    {
+        var plan = await CaveWithPassageAsync(locationProtected: false, withAltitudes: false);
+
+        (await ReadAsync(owner, plan)).GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// With no terrain built the profile keeps the passage and drops the ground: every station is
+    /// "outside coverage", no thickness is invented, there is no least cover to point at, and the
+    /// answer says there is no terrain so the page can say whom to ask.
+    /// </summary>
+    [Fact]
+    public async Task With_no_terrain_built_the_profile_has_the_passage_but_no_ground_and_no_least_cover()
+    {
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        // The control: the same cave with terrain in place has a thickness and a least cover.
+        var covered = await ReadAsync(owner, cave);
+        covered.GetProperty("hasTerrain").GetBoolean().ShouldBeTrue();
+        covered.GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Object);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainBuilds.Where(b => b.Id == buildId)
+                .ExecuteUpdateAsync(s => s.SetProperty(b => b.IsActive, false));
+        }
+
+        var body = await ReadAsync(owner, cave);
+        body.GetProperty("hasTerrain").GetBoolean().ShouldBeFalse();
+        body.GetProperty("hasAltitudes").GetBoolean().ShouldBeTrue();
+        body.GetProperty("coveredSampleCount").GetInt32().ShouldBe(0);
+        body.GetProperty("minOverburdenM").ValueKind.ShouldBe(JsonValueKind.Null);
+        body.GetProperty("leastCover").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var samples = body.GetProperty("samples").EnumerateArray().ToArray();
+        samples.Length.ShouldBeGreaterThan(1);
+        foreach (var sample in samples)
+        {
+            sample.GetProperty("outcome").GetString().ShouldBe("outsideCoverage");
+            sample.GetProperty("groundAltitudeM").ValueKind.ShouldBe(JsonValueKind.Null);
+            sample.GetProperty("overburdenM").ValueKind.ShouldBe(JsonValueKind.Null);
+            sample.GetProperty("passageAltitudeM").GetDouble().ShouldBe(PassageAltitudeM, 1e-6);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -450,6 +555,44 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
             ScopeKind = AccessScopeKind.All,
         });
         await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task The_overburden_answer_carries_the_recorded_accuracy_of_the_ground_and_nothing_when_none_is_recorded()
+    {
+        var cave = await CaveWithPassageAsync(locationProtected: false);
+
+        await SetAccuracyAsync(null, null, null, null);
+        ShouldCarryNoAccuracy(await ReadAsync(owner, cave));
+
+        await SetAccuracyAsync(1d, 0.3, "RMSE", "A survey report in invented words");
+        ShouldCarryTheRecordedAccuracy(await ReadAsync(owner, cave));
+
+        await SetAccuracyAsync(null, null, null, null);
+    }
+
+    private async Task SetAccuracyAsync(double? resolution, double? error, string? statistic, string? source)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.TerrainBuilds.Where(b => b.Id == buildId).ExecuteUpdateAsync(s => s
+            .SetProperty(b => b.SourceResolutionM, resolution)
+            .SetProperty(b => b.VerticalAccuracyM, error)
+            .SetProperty(b => b.VerticalAccuracyStatistic, statistic)
+            .SetProperty(b => b.AccuracySource, source));
+    }
+
+    private static void ShouldCarryNoAccuracy(JsonElement body) =>
+        (!body.TryGetProperty("accuracy", out var none) || none.ValueKind == JsonValueKind.Null)
+            .ShouldBeTrue(body.ToString());
+
+    private static void ShouldCarryTheRecordedAccuracy(JsonElement body)
+    {
+        var accuracy = body.GetProperty("accuracy");
+        accuracy.GetProperty("sourceResolutionM").GetDouble().ShouldBe(1d);
+        accuracy.GetProperty("verticalAccuracyM").GetDouble().ShouldBe(0.3);
+        accuracy.GetProperty("verticalAccuracyStatistic").GetString().ShouldBe("RMSE");
+        accuracy.GetProperty("accuracySource").GetString().ShouldBe("A survey report in invented words");
     }
 
     private async Task SetDatumAsync(TerrainHeightDatum datum, double geoidHeightM)

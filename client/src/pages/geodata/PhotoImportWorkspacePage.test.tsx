@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
-import type { PhotoCandidate, PhotoPreview, PhotoSession } from '../../api/hooks.ts';
+import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
+import type { PhotoCandidate, PhotoPreview, PhotoPreviewRequest, PhotoSession } from '../../api/hooks.ts';
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
+const uploadMutate = vi.fn();
+const previewRefetch = vi.fn();
+const previewCalls: { body: PhotoPreviewRequest; enabled: boolean }[] = [];
+let previewFailure: ApiError | null = null;
 
 let session: PhotoSession = {
   fileIds: ['file-1', 'file-2', 'file-3'],
@@ -111,7 +121,8 @@ const unplaced: PhotoCandidate = {
   nearby: [],
 };
 
-const preview: PhotoPreview = {
+let preview: PhotoPreview;
+const fullPreview: PhotoPreview = {
   items: [entrance, unplaced],
   page: 1,
   pageSize: 25,
@@ -128,14 +139,20 @@ const preview: PhotoPreview = {
   trackLastFixAt: null,
   unreadableFileIds: [],
 };
+preview = fullPreview;
 
 vi.mock('../../api/hooks.ts', () => ({
   usePhotoImportSession: () => ({ data: session, isError: false }),
-  useSavePhotoImportSession: () => ({ mutate: saveSessionMutate }),
-  usePhotoImportPreview: () => ({ data: preview, isFetching: false }),
+  useSavePhotoImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
+  usePhotoImportPreview: (body: PhotoPreviewRequest, enabled: boolean) => {
+    previewCalls.push({ body, enabled });
+    return previewFailure
+      ? { data: preview, isFetching: false, isError: true, error: previewFailure, refetch: previewRefetch }
+      : { data: preview, isFetching: false, isError: false, refetch: previewRefetch };
+  },
   useCommitPhotoImport: () => ({ mutateAsync: commitMutate, isPending: false }),
   usePhotoImportTracks: () => ({ data: [], isLoading: false }),
-  useUploadFile: () => ({ mutateAsync: vi.fn() }),
+  useUploadFile: () => ({ mutateAsync: uploadMutate }),
   useCaveTypes: () => ({ data: [{ id: 1, code: 'cave', name: 'Cave' }] }),
   useEntranceTypes: () => ({ data: [{ id: 1, code: 'natural', name: 'Natural' }] }),
   useFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole' }] }),
@@ -180,6 +197,14 @@ describe('PhotoImportWorkspacePage', () => {
       failures: [],
     });
     saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
+    uploadMutate.mockReset();
+    previewRefetch.mockReset();
+    previewCalls.length = 0;
+    previewFailure = null;
+    preview = fullPreview;
   });
 
   it('shows one row per place rather than one per picture', async () => {
@@ -212,6 +237,26 @@ describe('PhotoImportWorkspacePage', () => {
     expect(boxes.some((box) => (box as HTMLInputElement).disabled)).toBe(true);
   });
 
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { fileIds: ['file-1'], options: {}, decisions: {} };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('photo-import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('photo-import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
+  });
+
   it('creates only what was selected, and nothing until the button is pressed', async () => {
     show();
     await screen.findByDisplayValue('Pestera Ursilor');
@@ -241,5 +286,91 @@ describe('PhotoImportWorkspacePage', () => {
       action: 'attach',
       attachToFeatureId: 'feat-9',
     });
+  });
+
+  it('says a refused grouping failed, offers a retry and shows no places as current', async () => {
+    previewFailure = new ApiError(400, 'photo_import.no_files');
+    show();
+
+    const alert = await screen.findByTestId('photo-import-preview-error');
+    expect(alert.textContent).toContain(i18n.t('geodata.refusals.noFiles'));
+    expect(screen.queryByDisplayValue('Pestera Ursilor')).toBeNull();
+    expect(screen.getByTestId('photo-import-commit')).toBeDisabled();
+
+    fireEvent.click(within(alert).getByRole('button'));
+    expect(previewRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says why a confirmation was refused', async () => {
+    commitMutate.mockReset();
+    commitMutate.mockRejectedValue(new ApiError(403));
+    show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getByTestId('photo-import-commit'));
+
+    expect(await screen.findByText(i18n.t('geodata.refusals.forbidden'))).toBeInTheDocument();
+  });
+
+  it('names the picture that could not be uploaded, and why', async () => {
+    uploadMutate.mockRejectedValue(new ApiError(413));
+    show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+
+    const input = screen.getByTestId('photo-import-dropzone').querySelector('input[type=file]')!;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'IMG_9999.jpg', { type: 'image/jpeg' })] } });
+
+    expect(
+      await screen.findByText(
+        i18n.t('photoImport.uploadFailedNamed', {
+          name: 'IMG_9999.jpg',
+          reason: i18n.t('geodata.upload.errors.tooLarge'),
+        }),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('drops from the selection a place a new grouping no longer lets be confirmed', async () => {
+    const view = show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect(screen.getByTestId('photo-import-commit').textContent).toContain('1');
+
+    preview = { ...fullPreview, selectableKeys: [] };
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <PhotoImportWorkspacePage />
+        </App>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('photo-import-commit')).toBeDisabled());
+  });
+
+  it('asks for a grouping once the reviewer pauses, not on every step of an option', async () => {
+    show();
+    await screen.findByDisplayValue('Pestera Ursilor');
+    fireEvent.click(screen.getByText(i18n.t('photoImport.optionsClock')));
+    // Past the first settled request, so what follows is only the typing.
+    await waitFor(() => expect(previewCalls.some((call) => call.enabled)).toBe(true));
+
+    const offset = screen
+      .getByText(i18n.t('photoImport.clockOffset'))
+      .closest('.ant-form-item')!
+      .querySelector('input')!;
+    previewCalls.length = 0;
+    for (const typed of ['6', '60', '600', '3600']) {
+      fireEvent.change(offset, { target: { value: typed } });
+    }
+    // The witness that the pause was waited out: the request for the whole value is made. Every
+    // step before it was drawn synchronously, so one asked for on the way would be here first.
+    const asked = () =>
+      new Set(previewCalls.filter((call) => call.enabled).map((call) => call.body.options.cameraClockOffsetSeconds));
+    await waitFor(() => expect(asked().has(3600)).toBe(true));
+    for (const partial of [6, 60, 600]) {
+      expect(asked().has(partial)).toBe(false);
+    }
   });
 });

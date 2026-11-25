@@ -68,8 +68,11 @@ export const queryKeys = {
   featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
   featureLinks: (id: string) => ['features', id, 'links'] as const,
   featureShares: (id: string) => ['features', id, 'shares'] as const,
+  sharedFeature: (token: string) => ['shared-features', token] as const,
   caveQrPublication: (id: string) => ['caves', id, 'qr-publication'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
+  /** Every drawable vector file, for the layer lists; under the prefix the geofile writes refresh. */
+  geofileLayers: ['geofiles', 'layers'] as const,
   geofile: (id: string) => ['geofiles', 'detail', id] as const,
   geofileColumns: (id: string) => ['geofile-columns', id] as const,
   termRuleSets: ['term-rule-sets', 'list'] as const,
@@ -168,6 +171,8 @@ export const queryKeys = {
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  /** Every map ready to draw, for the layer lists; under the prefix the map writes refresh. */
+  rasterMapLayers: ['raster-maps', 'layers'] as const,
   calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,
@@ -259,6 +264,8 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  featurePassages: (id: string, distanceM: number) =>
+    ['features', id, 'passages-beneath', distanceM] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
   caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveAltitudeDisagreement: (id: string) => ['caves', id, 'altitude-disagreement'] as const,
@@ -268,10 +275,11 @@ export const queryKeys = {
   areaTerrainStatistics: (id: string) => ['features', id, 'terrain-statistics'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
-  caveStructureComparison: (id: string, areaId: string) =>
-    ['caves', id, 'structure-comparison', areaId] as const,
+  caveStructureComparison: (id: string, areaId: string, measurementType: string) =>
+    ['caves', id, 'structure-comparison', areaId, measurementType] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  areaSystemFigures: (id: string) => ['features', id, 'system-figures'] as const,
   registryDistribution: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'distribution', params] as const,
   registryCorrelation: (params: Record<string, unknown>) =>
@@ -350,6 +358,11 @@ export const queryKeys = {
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
   terrainDerivatives: ['terrain', 'derivatives'] as const,
+  terrainDerivativeKinds: ['terrain', 'derivative-kinds'] as const,
+  cavePotentialResults: ['cave-potential', 'results'] as const,
+  cavePotentialModels: ['cave-potential', 'models'] as const,
+  cavePotentialEvidenceLayers: ['cave-potential', 'evidence-layers'] as const,
+  cavePotentialWeighting: (request: string) => ['cave-potential', 'weighting', request] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,

@@ -40,6 +40,16 @@ public sealed partial class DeviceSyncUndoService
         }
 
         var mapping = await PlaceStations.FindAsync(item.PlaceStationId!.Value, ct);
+        if (mapping is not null)
+        {
+            // Under the lock the mapping's writers take, and read again under it: a phone that has
+            // changed the mapping and not yet committed is waited for, and what is compared below
+            // is what it committed.
+            await PlaceStations.LockAsync(mapping.PlaceId, ct);
+            await ReloadAsync([db.Entry(mapping.Link), db.Entry(mapping.Place), db.Entry(mapping.Survey)], ct);
+            mapping = await PlaceStations.FindAsync(item.PlaceStationId.Value, ct);
+        }
+
         if (created)
         {
             if (mapping is null)

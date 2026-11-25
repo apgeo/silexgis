@@ -89,11 +89,18 @@ public static class CaveSystemFiguresEndpoints
         // holds are ones this caller may not place.
         var springs = await CaveHypsometryEndpoints.SpringReferenceLinesAsync(db, protection, ctx, request.Id, ct);
 
+        // A survey measured from its own zero point (no height declared for it) has heights that
+        // mean nothing beside an entrance's altitude above sea level: subtracting one from the other
+        // would report the gap between the two datums as the cave's depth. Its extremes are left
+        // out, so total depth and height come back unmeasured while the entrance-only figures stand.
+        var surveyHighest = set.AltitudesRelative ? null : indices.HighestZM;
+        var surveyLowest = set.AltitudesRelative ? null : indices.LowestZM;
+
         var figures = CaveSystemFigures.Compute(
             [.. placeable.Where(e => e.Altitude is not null).Select(e => (double)e.Altitude!.Value)],
             placeable.Count,
-            indices.HighestZM,
-            indices.LowestZM,
+            surveyHighest,
+            surveyLowest,
             springs.Count > 0 ? springs[0] : null);
 
         return TypedResults.Ok(new CaveSystemFiguresDto(
@@ -103,8 +110,9 @@ public static class CaveSystemFiguresEndpoints
             set.SurveyModelId,
             indices.HasAltitudes,
             figures,
-            indices.HighestZM,
-            indices.LowestZM,
-            CaveSurveyIndices.CompareDepth(figures.PotentialDepthM, cave.PotentialDepth)));
+            surveyHighest,
+            surveyLowest,
+            CaveSurveyIndices.CompareDepth(figures.PotentialDepthM, cave.PotentialDepth),
+            set.AltitudesRelative));
     }
 }

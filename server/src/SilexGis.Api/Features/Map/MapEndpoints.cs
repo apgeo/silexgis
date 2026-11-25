@@ -10,9 +10,11 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -193,6 +195,11 @@ public sealed record TerrainBuildChoiceDto(
 /// cave-density layer colours by when a reader chooses fixed rather than relative bands; the band
 /// above the last bound is open-ended.
 /// </param>
+/// <param name="EntranceSymbol">
+/// The marker an entrance is drawn with at its surveyed position: a bundled symbol file or a drawn
+/// shape, as an administrator chose it (see the administration settings' map symbols).
+/// </param>
+/// <param name="ApproximateEntranceSymbol">The marker of an entrance shown only approximately.</param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -215,7 +222,9 @@ public sealed record MapConfigDto(
     int ScansInViewMaxCavesLimit,
     long ScansInViewMaxBytesLimit,
     int SelectionMax,
-    IReadOnlyList<double> DensityFixedBands);
+    IReadOnlyList<double> DensityFixedBands,
+    string EntranceSymbol,
+    string ApproximateEntranceSymbol);
 
 /// <summary>One entrance the point branch of the entrance layer considers, before it is shaped.</summary>
 public sealed record EntrancePointRow(
@@ -313,6 +322,7 @@ public static class MapEndpoints
         IOptions<MapOptions> mapOptions,
         IOptions<TerrainOptions> terrainOptions,
         SilexGisDbContext db,
+        IAppSettingsService settings,
         CancellationToken ct)
     {
         if (await userAccessor.GetAsync(ct) is null)
@@ -321,6 +331,7 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
+        var symbols = await settings.GetMapSymbolsAsync(ct);
         var sources = await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct);
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
@@ -346,7 +357,9 @@ public static class MapEndpoints
             options.ScansInViewMaxCavesLimit,
             options.ScansInViewMaxBytesLimit,
             options.SelectionMax,
-            options.DensityFixedBandBounds()));
+            options.DensityFixedBandBounds(),
+            symbols.EntranceSymbol,
+            symbols.ApproximateEntranceSymbol));
     }
 
     /// <summary>
@@ -1341,6 +1354,24 @@ public static class MapEndpoints
                 .ToListAsync(ct);
         var typesById = types.ToDictionary(t => t.Id);
 
+        // Two kinds are drawn from what their typed properties say. A structural reading is drawn
+        // as a strike-and-dip tick turned to its orientation, so its dip direction and dip ride
+        // along; a geological unit is filled by its rock class, so its lithology code rides along.
+        // Neither says where the row is — an orientation and a rock class locate nothing — so both
+        // are sent whether or not the row's position is shown exactly. Read only for those rows:
+        // the property bags of every other kind stay in the database.
+        var typedIds = rows
+            .Where(r => r.FeatureTypeId is { } t
+                && typesById.GetValueOrDefault(t)?.Code is FeatureTypeSeeds.StructuralMeasurement or FeatureTypeSeeds.GeologicalUnit)
+            .Select(r => r.Id)
+            .ToList();
+        var bags = typedIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Features.AsNoTracking()
+                .Where(f => typedIds.Contains(f.Id))
+                .Select(f => new { f.Id, f.Properties })
+                .ToDictionaryAsync(f => f.Id, f => f.Properties, ct);
+
         // Only protected rows need the per-row exact-view evaluation; unprotected rows are
         // exact by definition (no protected root exists to veto). The shared rule keeps the
         // narrowing and the verdict apart.
@@ -1363,6 +1394,25 @@ public static class MapEndpoints
                 ["protected"] = row.IsProtectedEffective,
                 ["approximate"] = !exact,
             };
+            if (bags.TryGetValue(row.Id, out var bag))
+            {
+                if (type?.Code == FeatureTypeSeeds.StructuralMeasurement
+                    && StructuralMeasurement.ReadOrientation(bag) is { } plane)
+                {
+                    properties["dipDirection"] = plane.DipDirectionDegrees;
+                    properties["dip"] = plane.DipDegrees;
+                }
+                else if (type?.Code == FeatureTypeSeeds.GeologicalUnit)
+                {
+                    // Sent even when it is not a vocabulary code, so a unit somebody gave an
+                    // unrecognised class is drawn as unrecognised rather than as unclassified.
+                    // Whether the class is karstifiable is the vocabulary's to say, not the
+                    // drawing's, so it is sent rather than repeated in the browser.
+                    var lithology = Lithology.ReadStoredCode(bag);
+                    properties["lithology"] = lithology;
+                    properties["karstifiable"] = Lithology.Find(lithology)?.Karstifiable;
+                }
+            }
 
             if (exact)
             {

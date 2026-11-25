@@ -117,7 +117,7 @@ public static class HistoryEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(a => a.Id)
-            .Skip((p - 1) * size).Take(size)
+            .Skip(Paging.Offset(p, size)).Take(size)
             .ToListAsync(ct);
 
         // Names are resolved after the page materialises rather than joined in: the label a user

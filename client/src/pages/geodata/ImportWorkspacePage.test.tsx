@@ -4,10 +4,22 @@ import { MemoryRouter } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
-import type { ImportCandidate, ImportPreview, ImportSession } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
+import type { ImportCandidate, ImportPreview, ImportPreviewRequest, ImportSession } from '../../api/hooks.ts';
 
 const commitMutate = vi.fn();
 const saveSessionMutate = vi.fn();
+// What the save mutation reports about its last call; a test sets it to a failed save.
+const saveSessionState: { isError: boolean; isPending: boolean; variables?: unknown } = {
+  isError: false,
+  isPending: false,
+};
+const previewRefetch = vi.fn();
+const sessionRefetch = vi.fn();
+const previewCalls: { body: ImportPreviewRequest; enabled: boolean }[] = [];
+/** What the preview hook answers besides its data: a failure, when a test wants one. */
+let previewFailure: ApiError | null = null;
+let sessionFailure: ApiError | null = null;
 
 let session: ImportSession = {
   geofileId: 'geo-1',
@@ -100,15 +112,27 @@ const fullPreview: ImportPreview = {
     { ruleId: 'spring', ruleName: 'Spring', count: 0 },
   ],
   ruleSet: null,
+  // A waypoint file has no outlines, so no rock column to map.
+  lithologyValues: [],
 };
 
 let preview: ImportPreview = fullPreview;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useImportSession: () => ({ data: session, isError: false }),
+  useImportSession: () =>
+    sessionFailure
+      ? { data: undefined, isError: true, error: sessionFailure, refetch: sessionRefetch }
+      : { data: session, isError: false },
   useEffectiveTermRuleSet: () => ({ data: null }),
-  useSaveImportSession: () => ({ mutate: saveSessionMutate }),
-  useImportPreview: () => ({ data: preview, isFetching: false }),
+  useSaveImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
+  useImportPreview: (_geofileId: string, body: ImportPreviewRequest, enabled: boolean) => {
+    previewCalls.push({ body, enabled });
+    // A failed dry run still holds the previous answer as data when the query kept it, which is
+    // exactly what must not be shown as current.
+    return previewFailure
+      ? { data: preview, isFetching: false, isError: true, error: previewFailure, refetch: previewRefetch }
+      : { data: preview, isFetching: false, isError: false, refetch: previewRefetch };
+  },
   useCommitImport: () => ({ mutateAsync: commitMutate, isPending: false }),
   useGeofile: () => ({ data: { id: 'geo-1', name: 'trip.gpx', format: 'gpx' } }),
   useTermRuleSets: () => ({ data: [], isLoading: false }),
@@ -158,8 +182,16 @@ describe('ImportWorkspacePage', () => {
       failures: [],
     });
     saveSessionMutate.mockReset();
+  saveSessionState.isError = false;
+  saveSessionState.isPending = false;
+  saveSessionState.variables = undefined;
     session = { ...session, allowCreateWithoutReview: false, decisions: {} };
     preview = fullPreview;
+    previewFailure = null;
+    sessionFailure = null;
+    previewCalls.length = 0;
+    previewRefetch.mockReset();
+    sessionRefetch.mockReset();
   });
 
   it('says when the file holds more rows than one review reads, and how many it read', async () => {
@@ -212,6 +244,26 @@ describe('ImportWorkspacePage', () => {
     expect(await screen.findByText('Two rules claimed it')).toBeInTheDocument();
   });
 
+  // The review is saved as it is worked on; a save that failed leaves the stored review behind
+  // the screen, so the page says so, offers to send it again and holds the confirmation meanwhile.
+  it('says the last save of the review failed, holds the confirmation and sends it again on Retry', async () => {
+    const lastSave = { geofileId: 'g1', body: { options: {}, decisions: {} } };
+    saveSessionState.isError = true;
+    saveSessionState.variables = lastSave;
+    show();
+    await screen.findByText('Ursilor');
+    fireEvent.click(screen.getByTestId('import-select-all'));
+
+    expect(await screen.findByText(/latest changes to this review could not be saved/)).toBeInTheDocument();
+    expect(screen.getByTestId('import-commit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('import-commit'));
+    expect(commitMutate).not.toHaveBeenCalled();
+
+    saveSessionMutate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(saveSessionMutate).toHaveBeenCalledWith(lastSave);
+  });
+
   it('creates only what was selected, and nothing until the button is pressed', async () => {
     show();
     await screen.findByText('Ursilor');
@@ -255,5 +307,124 @@ describe('ImportWorkspacePage', () => {
       action: 'attach',
       attachToFeatureId: 'feat-9',
     });
+  });
+
+  it('says a refused dry run failed, offers a retry and shows no rows or counts as current', async () => {
+    previewFailure = new ApiError(400, 'import.file_not_ready');
+    show();
+
+    expect(await screen.findByTestId('import-preview-error')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('geodata.refusals.fileNotReady'))).toBeInTheDocument();
+    // The previous answer is not presented as the answer for these settings.
+    expect(screen.queryByText('Ursilor')).toBeNull();
+    expect(screen.getByTestId('import-commit')).toBeDisabled();
+
+    fireEvent.click(within(screen.getByTestId('import-preview-error')).getByRole('button'));
+    expect(previewRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says why a confirmation was refused', async () => {
+    commitMutate.mockReset();
+    commitMutate.mockRejectedValue(new ApiError(400, 'import.nothing_created'));
+    show();
+    await screen.findByText('Ursilor');
+
+    fireEvent.click(screen.getByTestId('import-select-all'));
+    fireEvent.click(screen.getByTestId('import-commit'));
+
+    expect(await screen.findByText(i18n.t('geodata.refusals.nothingCreated'))).toBeInTheDocument();
+  });
+
+  it('says a saved review could not be read without calling the file missing, and offers a retry', async () => {
+    sessionFailure = new ApiError(503);
+    show();
+
+    const alert = await screen.findByTestId('import-session-error');
+    expect(alert.textContent).toContain(i18n.t('geodata.refusals.server', { status: 503 }));
+    expect(alert.textContent).not.toContain(i18n.t('vectorImport.fileNotFound'));
+    fireEvent.click(within(alert).getByRole('button'));
+    expect(sessionRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the file is not available when it is gone', async () => {
+    sessionFailure = new ApiError(404, 'geofile.not_found');
+    show();
+
+    expect((await screen.findByTestId('import-session-error')).textContent).toContain(
+      i18n.t('vectorImport.fileNotFound'),
+    );
+  });
+
+  it('drops from the selection a row the new settings no longer let anything be made of', async () => {
+    const view = show();
+    await screen.findByText('Ursilor');
+    fireEvent.click(screen.getByTestId('import-select-all'));
+    expect(screen.getByTestId('import-commit').textContent).toContain('2');
+
+    // The settings changed and the answer for them no longer lets the conflicted row be made.
+    preview = { ...fullPreview, selectableSourceIds: [1] };
+    view.rerender(
+      <MemoryRouter>
+        <App>
+          <ImportWorkspacePage />
+        </App>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('import-commit').textContent).toContain('1'));
+    fireEvent.click(screen.getByTestId('import-commit'));
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+    expect(commitMutate.mock.calls[0][0].body.selection).toEqual([1]);
+  });
+
+  it('sends the rock classes the reviewer chose with the confirmation that creates the units', async () => {
+    // A geology map: one rock name the vocabulary recognises, one it does not. The server's own
+    // tests prove a mapping on the confirmation becomes the units' classes; this proves the class
+    // chosen on the card is the mapping the confirmation carries.
+    preview = {
+      ...fullPreview,
+      areaCount: 2,
+      lithologyValues: [
+        { value: 'Flis carpatic', count: 3, code: null, match: 'unmatched' },
+        { value: 'Calcar', count: 2, code: 'limestone', match: 'recognised' },
+      ],
+    };
+    show();
+    await screen.findByText('Ursilor');
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Class for Flis carpatic' }));
+    fireEvent.click(await screen.findByTitle('Shale / marl'));
+
+    fireEvent.click(screen.getByTestId('import-select-all'));
+    fireEvent.click(screen.getByTestId('import-commit'));
+
+    await waitFor(() => expect(commitMutate).toHaveBeenCalledTimes(1));
+    const body = commitMutate.mock.calls[0][0].body;
+    // Only the answered value: a recognised one is the server's to resolve, not the browser's.
+    expect(body.options.mapping.lithologyValues).toEqual({ 'Flis carpatic': 'shale_marl' });
+  });
+
+  it('asks for a dry run once the reviewer pauses, not on every letter typed into an option', async () => {
+    show();
+    await screen.findByText('Ursilor');
+    // Past the first settled request, so what follows is only the typing.
+    await waitFor(() => expect(previewCalls.some((call) => call.enabled)).toBe(true));
+
+    const prefix = screen
+      .getByText(i18n.t('vectorImport.namePrefix'))
+      .closest('.ant-form-item')!
+      .querySelector('input')!;
+    previewCalls.length = 0;
+    for (const typed of ['P', 'Pe', 'Pes', 'Pest']) {
+      fireEvent.change(prefix, { target: { value: typed } });
+    }
+    // The witness that the pause was waited out: the request for the whole value is made. Every
+    // keystroke before it was drawn synchronously, so one asked for on the way would be here first.
+    const asked = () =>
+      new Set(previewCalls.filter((call) => call.enabled).map((call) => call.body.options.namePrefix ?? ''));
+    await waitFor(() => expect(asked().has('Pest')).toBe(true));
+    for (const partial of ['P', 'Pe', 'Pes']) {
+      expect(asked().has(partial)).toBe(false);
+    }
   });
 });

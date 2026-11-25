@@ -262,7 +262,7 @@ public sealed class PhotoPrismClient(
         // leaves this process: the pictures are proxied, so no page ever carries it.
         CapturePreviewToken(response);
 
-        var payload = await response.Content.ReadAsStringAsync(ct);
+        var payload = await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct);
 
         JsonDocument document;
         try
@@ -517,7 +517,7 @@ public sealed class PhotoPrismClient(
         // somebody who never opened the map.
         CapturePreviewToken(response);
 
-        var payload = await response.Content.ReadAsStringAsync(ct);
+        var payload = await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct);
 
         JsonDocument document;
         try
@@ -635,7 +635,7 @@ public sealed class PhotoPrismClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -917,7 +917,7 @@ public sealed class PhotoPrismClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {
@@ -1362,9 +1362,16 @@ public sealed class PhotoPrismClient(
         var client = httpClientFactory.CreateClient(HttpClientName);
 
         // Ours, not theirs, and clamped so a nonsensical configured value cannot disable it.
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 120));
+        client.Timeout = BodyLimit;
         return client;
     }
+
+    /// <summary>
+    /// How long one call may take, clamped so a nonsensical configured value cannot disable it.
+    /// It bounds the wait for the headers through the client and, separately, the reading of the
+    /// body: the client's own limit stops counting once the headers have arrived.
+    /// </summary>
+    private TimeSpan BodyLimit => TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 120));
 
     private void Authorise(HttpRequestMessage request) =>
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Options.AccessToken);
@@ -1540,7 +1547,7 @@ public sealed class PhotoPrismClient(
         JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await PhotoLibraryHttp.ReadBodyAsync(response, BodyLimit, Source, ct));
         }
         catch (JsonException e)
         {

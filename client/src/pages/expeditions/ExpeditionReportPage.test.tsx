@@ -4,12 +4,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { DownloadError } from '../../api/download.ts';
 import type { ExpeditionInfo } from '../../api/hooks.ts';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy, fileConfigSpy } = vi.hoisted(() => ({
+const { campSpy, accessSpy, canSpy, keepMutate, downloadSpy, fileConfigSpy, photosSpy } = vi.hoisted(() => ({
+  photosSpy: vi.fn(),
   campSpy: vi.fn(),
   accessSpy: vi.fn(),
   canSpy: vi.fn(),
@@ -26,7 +28,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useKeepExpeditionReport: () => ({ mutate: keepMutate, isPending: false }),
   useFileConfig: () => fileConfigSpy(),
-  usePhotos: () => ({ data: { items: [] }, isPending: false }),
+  usePhotos: () => photosSpy(),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
 
@@ -84,8 +86,43 @@ function renderPage() {
 }
 
 afterEach(cleanup);
+
+describe('a camp whose read failed', () => {
+  // The camp read is not retried, so a refusal settles at once: a page that only knew "loading"
+  // would spin for good on a bookmarked write-up of a camp that was deleted or narrowed.
+  it('says there is no such camp, instead of loading forever', () => {
+    campSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new ApiError(404, 'expedition.not_found'),
+    });
+    renderPage();
+
+    expect(screen.getByText('No such camp')).toBeTruthy();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+  });
+
+  it('says the camp could not be read, with a retry, when the read never reached the server', () => {
+    const refetch = vi.fn();
+    campSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch,
+    });
+    renderPage();
+
+    expect(screen.getByTestId('read-failed')).toBeTruthy();
+    expect(screen.queryByText('No such camp')).toBeNull();
+    fireEvent.click(screen.getByTestId('read-failed-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false });
+  photosSpy.mockReset().mockReturnValue({ data: { items: [] }, isPending: false });
   accessSpy.mockReturnValue({ data: { actions: 'read' } });
   canSpy.mockReturnValue(false);
   keepMutate.mockReset();
@@ -95,6 +132,22 @@ beforeEach(() => {
 });
 
 describe('the camp write-up', () => {
+  it('prints that the pictures could not be read, never that there are none, when their read failed', () => {
+    canSpy.mockImplementation((domain: string, action: string) => domain === 'documents' && action === 'read');
+    photosSpy.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new TypeError('Failed to fetch'),
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByTestId('expedition-report-photographs-unread').textContent).toContain(
+      'The photographs could not be read when this was printed.',
+    );
+  });
+
   it('lays the camp out as a document: its facts, its account, its trips and its roster', () => {
     renderPage();
 

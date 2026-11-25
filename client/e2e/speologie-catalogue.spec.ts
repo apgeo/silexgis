@@ -24,7 +24,11 @@ import { login } from './helpers.ts';
 test('the cave catalogue is offered in the rail and says when no key is configured', async ({ page }) => {
   await login(page);
 
-  await page.goto('/catalogue/speologie');
+  // Through the rail, as a reader finds it: the entry is offered only to an account that may
+  // create features, and an address typed by hand would pass with the entry gone.
+  await page.getByRole('menuitem', { name: /Cadastre$/ }).click();
+  await page.getByRole('menuitem', { name: 'Cave catalogue' }).click();
+  await expect(page).toHaveURL(/\/catalogue\/speologie$/);
 
   await expect(page.getByRole('heading', { name: 'Cave catalogue' })).toBeVisible();
 

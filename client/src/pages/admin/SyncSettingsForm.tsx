@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, App, Form, InputNumber, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
 import { api } from '../../api/client.ts';
 import type { AdminSettings, SyncSettings } from '../../api/hooks.ts';
+import { useSectionFields } from './useSectionFields.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 
 /** The server refuses anything outside this; stated here so the field says so before it is pressed. */
 const MIN_DAYS = 1;
@@ -22,9 +24,12 @@ const MAX_DAYS = 365;
 export default function SyncSettingsForm({
   settings,
   onSaved,
+  onStale,
 }: {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -33,20 +38,27 @@ export default function SyncSettingsForm({
   const scope = Form.useWatch('peopleDirectoryScope', form);
   const directoryOn = Form.useWatch('peopleDirectoryEnabled', form);
 
-  useEffect(() => {
-    form.setFieldsValue(settings.sync);
-  }, [settings, form]);
+  useSectionFields(form, settings.sync);
 
   const save = async (values: SyncSettings) => {
     setSaving(true);
     try {
-      const { data, error } = await api.PUT('/api/v1/admin/settings/sync', { body: values });
+      const { data, error } = await api.PUT('/api/v1/admin/settings/sync', {
+        headers: sectionIfMatch(settings.versions?.sync),
+        body: values,
+      });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
       message.success(t('common.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

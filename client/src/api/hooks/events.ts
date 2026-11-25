@@ -2,7 +2,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, lastReadETag, lastReadRunVersion } from '../client.ts';
 import type { components } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateHistory } from './shared.ts';
+import {
+  invalidateAfterDelete,
+  invalidateDatedRows,
+  unwrap,
+  unwrapVersioned,
+  unwrapVoid,
+  useInvalidateHistory,
+} from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type { ActivityState, EventListParams } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
 import type { TripInvitationAnswer } from './trips.ts';
@@ -164,11 +172,12 @@ export function useEvents(params: EventListParams = {}) {
 export function useEvent(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.event(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id,
-    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
-    // three times only delays the page saying so.
-    retry: false,
+    // No retry setting of its own: the client's default already answers a settled refusal at once
+    // (retrying one only delays the page saying so) while still asking again after a read that did
+    // not land, which says nothing about the event.
   });
 }
 
@@ -206,7 +215,7 @@ function useInvalidateEvents() {
         ? invalidateAfterDelete(queryClient, ['events'], deleted)
         : queryClient.invalidateQueries({ queryKey: ['events'] }),
       // An event is a row on the calendar, so writing one moves what that window answers.
-      queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+      invalidateDatedRows(queryClient).then(() => undefined),
     ];
     if (id) {
       pending.push(queryClient.invalidateQueries({ queryKey: queryKeys.event(id) }));
@@ -224,15 +233,23 @@ export function useCreateEvent() {
 }
 
 /**
- * Stores an edited event. The server requires the version the form was loaded against; a full
- * update is on the path the detail read captured that version under, so the precondition is
- * threaded onto it without this call having to say so.
+ * Stores an edited event. The server requires the version the form was loaded against. A form
+ * names it as `ifMatch`, taken when it opened: the page behind it goes on re-reading the event and
+ * filing each newer version, and the replay that threads the newest one onto a full update would
+ * otherwise present a change the form never showed as already seen. Left out, the newest version
+ * read is sent, which is right for a write made from what the page shows now.
  */
 export function useUpdateEvent() {
   const invalidate = useInvalidateEvents();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: EventWrite }) =>
-      unwrap(api.PUT('/api/v1/events/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: EventWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/events/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     // Handed back rather than started and forgotten: the next write on this event is checked
     // against the version this one produced, and only the read records it.
     onSuccess: (_data, variables) => invalidate(variables.id),
@@ -262,13 +279,14 @@ export type EventSeriesDeleteResult = components['schemas']['EventSeriesDeleteRe
  * and a server that requires one would refuse every edit. What is sent is the version of the whole
  * run the event's own read answered with, not the event's entity tag: the tag speaks for one row,
  * and an edit of the rest of the run has to be refused when any later occurrence has changed since
- * it was read.
+ * it was read. A form names the run version it opened with as `runVersion`, for the same reason
+ * an ordinary update names its `ifMatch`; left out, the one last read is sent.
  */
 export function useEditEventSeriesFollowing() {
   const invalidate = useInvalidateEvents();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: EventWrite }) => {
-      const runVersion = lastReadRunVersion(`/api/v1/events/${id}`);
+    mutationFn: ({ id, body, runVersion: named }: { id: string; body: EventWrite; runVersion?: string }) => {
+      const runVersion = named ?? lastReadRunVersion(`/api/v1/events/${id}`);
       return unwrap(
         api.PUT('/api/v1/events/{id}/series/following', {
           params: { path: { id } },

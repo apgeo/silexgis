@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ProfileOutlined } from '@ant-design/icons';
 import { App, Flex, Input, Popover, Select, Typography } from 'antd';
 import Button from '../Button.tsx';
+import { useDiscardGuard } from '../useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
+import { versionReadWith } from '../../api/readingVersion.ts';
 import {
   hasAccessAction,
   useCabinets,
@@ -14,15 +16,14 @@ import {
   useDocumentTypes,
   useFileDocument,
   useUpdateDocument,
-  type CabinetInfo,
   type Visibility,
 } from '../../api/hooks.ts';
 import TextState from '../documents/TextState.tsx';
+import { visibilityOptions } from './visibilityChoices.ts';
+import { cabinetPathOptions } from '../documents/cabinetChoices.ts';
 import LinksSection from '../reslinks/LinksSection.tsx';
 import TypedField from '../typedProperties/TypedField.tsx';
 import { parsePropertiesSchema } from '../typedProperties/propertiesSchema.ts';
-
-const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', 'public'];
 
 /**
  * The languages this installation indexes with a stemmer of their own. Anything else — and
@@ -31,25 +32,10 @@ const visibilities: Visibility[] = ['private', 'cavingGroup', 'authenticated', '
  */
 const languages = ['ro', 'en'] as const;
 
-/**
- * A cabinet named by its whole path. Names are unique only among siblings — "1987" sits
- * under many archives — so a bare name would be ambiguous away from the tree that gives
- * it context, which is exactly the situation here.
- */
-function cabinetOptions(cabinets: CabinetInfo[]) {
-  const names = new Map(cabinets.map((cabinet) => [cabinet.id, cabinet.name]));
-  return cabinets
-    .map((cabinet) => ({
-      value: cabinet.id,
-      label: cabinet.ancestorIds.map((id) => names.get(id) ?? '…').join(' / '),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {label}
       </Typography.Text>
       {children}
@@ -71,7 +57,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [open, setOpen] = useState(false);
-  const { data: document } = useDocument(documentId, open);
+  const { data: document, isFetching: documentFetching } = useDocument(documentId, open);
   const { data: types } = useDocumentTypes();
   const { data: cavingGroups } = useCavingGroups();
   const updateDocument = useUpdateDocument();
@@ -92,27 +78,63 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
   const [language, setLanguage] = useState<string | null>(null);
   const [filedIn, setFiledIn] = useState<string[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const requestDiscard = useDiscardGuard();
 
-  // Re-sync from server state whenever the popover opens, or when the fetch that the
-  // opening started arrives — another edit may have landed since it was last read.
+  // What the form held when it was last filled from the server, to tell typed work from a form
+  // only looked at. Filing is left out: it is saved the moment it is chosen.
+  const formPrint = (form: unknown[]) => JSON.stringify(form);
+  const filledPrint = useRef('');
+  const edited = () =>
+    filledPrint.current !== '' &&
+    formPrint([title, typeId, visibility, cavingGroupId, language, values]) !== filledPrint.current;
+
+  // Refill from server state when the popover opens, and again when the fetch that the
+  // opening started arrives — another edit may have landed since the cached copy was read.
+  // After that, never: filing from this panel invalidates the document and a document being
+  // read is polled, and each equal answer arriving as a new object would otherwise put the
+  // stored title back over whatever is being typed.
+  const filled = useRef<{ id: string; settled: boolean } | null>(null);
+  // The version of the reading the form was filled from, which the save is held to.
+  const filledAt = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (open && document) {
-      setTitle(document.title);
-      setTypeId(document.documentTypeId);
-      setVisibility(document.visibility);
-      setCavingGroupId(document.cavingGroupId);
-      setLanguage(document.language);
-      setFiledIn(document.cabinetIds);
-      setValues((document.metadata as Record<string, unknown> | null) ?? {});
+    if (!open) {
+      filled.current = null;
+      filledPrint.current = '';
+      return;
     }
-  }, [open, document]);
+    if (!document) {
+      return;
+    }
+    const settled = !documentFetching;
+    const already = filled.current;
+    if (already && already.id === document.id && (already.settled || !settled)) {
+      return;
+    }
+    filled.current = { id: document.id, settled };
+    filledAt.current = versionReadWith(document);
+    setTitle(document.title);
+    setTypeId(document.documentTypeId);
+    setVisibility(document.visibility);
+    setCavingGroupId(document.cavingGroupId);
+    setLanguage(document.language);
+    setFiledIn(document.cabinetIds);
+    setValues((document.metadata as Record<string, unknown> | null) ?? {});
+    filledPrint.current = formPrint([
+      document.title,
+      document.documentTypeId,
+      document.visibility,
+      document.cavingGroupId,
+      document.language,
+      (document.metadata as Record<string, unknown> | null) ?? {},
+    ]);
+  }, [open, document, documentFetching]);
 
   const selectedType = types?.find((type) => type.id === typeId);
   const fields = useMemo(
     () => parsePropertiesSchema(selectedType?.metadataSchema),
     [selectedType],
   );
-  const shelves = useMemo(() => cabinetOptions(cabinets ?? []), [cabinets]);
+  const shelves = useMemo(() => cabinetPathOptions(cabinets ?? []), [cabinets]);
 
   /**
    * Filing is its own request rather than part of Save: it is guarded separately (write on
@@ -152,6 +174,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
     try {
       await updateDocument.mutateAsync({
         id: documentId,
+        ifMatch: filledAt.current,
         title: title.trim(),
         documentTypeId: typeId,
         metadata,
@@ -167,6 +190,11 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       message.success(t('common.saved'));
       setOpen(false);
     } catch (error) {
+      // A document changed since the form was filled is worded once, by the application's
+      // conflict warning.
+      if (isConcurrencyConflict(error)) {
+        return;
+      }
       // Two refusals are worth naming rather than folding into "save failed": metadata the
       // kind's schema rejects, and binding to a club the saver does not belong to — both
       // leave someone guessing which control was at fault otherwise.
@@ -204,10 +232,7 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
         <Select
           value={visibility}
           onChange={setVisibility}
-          options={visibilities.map((value) => ({
-            value,
-            label: t(`caves.visibilityValues.${value}`),
-          }))}
+          options={visibilityOptions(t)}
         />
       </Field>
       <Field label={t('documents.language')}>
@@ -294,7 +319,9 @@ export default function DocumentMetadata({ documentId }: { documentId: string })
       title={t('documents.metadata')}
       trigger="click"
       open={open}
-      onOpenChange={setOpen}
+      // A click outside, or on the button again, closes the popover; with something typed it
+      // asks first, as the next opening would refill the form from the server.
+      onOpenChange={(next) => (next ? setOpen(true) : requestDiscard(edited, () => setOpen(false)))}
     >
       <Button size="small" type="text" icon={<ProfileOutlined />} aria-label={t('documents.metadata')} />
     </Popover>

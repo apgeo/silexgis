@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { ownContext, test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { confirmOk, gotoRoute, login, pickCaveType } from './helpers.ts';
 import { surveyRead, tryAsPerson } from './arrange.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
@@ -65,7 +65,7 @@ test('an administrator replaces a published link and then unpublishes the trip, 
   // The visitor opens an address that has been replaced and one that has been taken back; each is
   // answered 404 on purpose, and the browser logs the refusal.
   guard.allow(
-    /the server responded with a status of 404/,
+    /\/api\/v1\/public\/trips\/[^?:\s]+(\?|:|$)/,
     'this flow opens a replaced address and then an unpublished one, and each read that finds them gone is answered 404',
   );
 
@@ -82,8 +82,7 @@ test('an administrator replaces a published link and then unpublishes the trip, 
     // ---- A cave of this run's own, with the committed survey fixture on it ----
     await page.goto('/caves/new');
     await page.getByLabel('Name', { exact: true }).fill(caveName);
-    await page.getByLabel('Type', { exact: true }).click();
-    await page.locator('.ant-select-item-option').first().click();
+    await pickCaveType(page);
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
     caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
@@ -215,6 +214,43 @@ test('an administrator replaces a published link and then unpublishes the trip, 
     await expect(page.getByRole('button', { name: 'Close tracking' })).toBeVisible({
       timeout: 20_000,
     });
+
+    // ---- Published from the trip's own tab, the way a coordinator does it ----
+    // Every other public-trip flow mints its link through the API; this one presses the button,
+    // takes the address the panel shows once, follows it as a visitor, and takes it back there.
+    const publishing = page.waitForResponse(
+      (r) =>
+        r.url().endsWith(`/api/v1/trip-logs/${trip.id}/tracking/shares`) &&
+        r.request().method() === 'POST',
+    );
+    await page.getByTestId('trip-tracking-publish-mint').click();
+    const published = await publishing;
+    expect(published.ok(), `publishing answered ${published.status()}`).toBeTruthy();
+    const fromPanel = (await published.json()) as { id: string; token: string };
+    const shownLink = new URL(await page.getByTestId('trip-tracking-publish-link').inputValue());
+    expect(shownLink.pathname).toBe(`/shared/trips/${fromPanel.token}`);
+    await expect(page.getByTestId('trip-tracking-publish-snippet')).toHaveValue(
+      new RegExp(fromPanel.token),
+    );
+    const panelVisitor = await ownContext(browser);
+    try {
+      const visitorPage = await panelVisitor.newPage();
+      await visitorPage.goto(`${shownLink.pathname}${shownLink.search}`);
+      await expect(visitorPage.getByTestId('public-trip-title')).toHaveText(tripTitle, {
+        timeout: 30_000,
+      });
+
+      await page.getByTestId(`trip-tracking-publish-revoke-${fromPanel.id}`).click();
+      await confirmOk(page, { scope: page.locator('.ant-popconfirm') });
+      // The address taken back is not left on screen to be pasted somewhere.
+      await expect(page.getByTestId('trip-tracking-publish-link')).toHaveCount(0, { timeout: 20_000 });
+      await visitorPage.goto(`${shownLink.pathname}${shownLink.search}`);
+      await expect(visitorPage.getByTestId('public-trip-not-found')).toBeVisible({ timeout: 20_000 });
+      await expect(visitorPage.getByTestId('public-trip-title')).toHaveCount(0);
+    } finally {
+      await panelVisitor.close();
+    }
+
     await page.goBack();
     await expect(page.getByRole('heading', { name: 'Published trips' })).toBeVisible();
     await expect(firstStatus).toHaveText('Followed now', { timeout: 20_000 });
@@ -284,9 +320,11 @@ test('an administrator replaces a published link and then unpublishes the trip, 
       // One link was still standing, and one is what the act reports having taken back.
       await expect(page.getByText('Links taken back: 1')).toBeVisible({ timeout: 20_000 });
       await expect(standingRows).toHaveCount(0);
+      // Three: the link replaced, the one it was replaced by, and the one published and taken
+      // back from the trip's own tab.
       await expect(
         page.getByRole('row').filter({ hasText: tripTitle }).filter({ hasText: 'Taken back' }),
-      ).toHaveCount(2);
+      ).toHaveCount(3);
 
       // And the fresh address, which answered a moment ago, answers nothing.
       await pub.goto(freshAddress.pathname);

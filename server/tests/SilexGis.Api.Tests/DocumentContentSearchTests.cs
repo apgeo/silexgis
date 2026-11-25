@@ -27,8 +27,8 @@ namespace SilexGis.Api.Tests;
 /// </para>
 /// <para>
 /// Every uploaded page carries a nonsense word unique to the run and every query asks for it.
-/// The database is shared with the rest of the collection, so a result counted over the whole
-/// archive would say nothing about what this query decided.
+/// The tests of this class share one database, so a result counted over the whole archive would
+/// say nothing about what this query decided.
 /// </para>
 /// </summary>
 public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>

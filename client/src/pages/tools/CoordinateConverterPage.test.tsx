@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import type OlMap from 'ol/Map';
 import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { getWorkspaceMap } from '../../map/mapContext.ts';
 import { defaultFormatSettings, FORMAT_IDS } from '../../geo/formats/registry.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import CoordinateConverterPage from './CoordinateConverterPage.tsx';
@@ -12,8 +14,26 @@ vi.mock('../../api/download.ts', () => ({
   saveBlob: (blob: Blob, name: string) => saved.blobs.push({ blob, name }),
 }));
 
+// Every map the page builds, in order.
+const built = vi.hoisted(() => [] as OlMap[]);
+vi.mock('ol/Map', async (original) => {
+  const Actual = (await original<typeof import('ol/Map')>()).default;
+  class Counted extends Actual {
+    constructor(...args: ConstructorParameters<typeof Actual>) {
+      super(...args);
+      built.push(this);
+    }
+  }
+  return { default: Counted };
+});
+vi.mock('../../api/hooks.ts', async (original) => ({
+  ...(await original<typeof import('../../api/hooks.ts')>()),
+  useMapLayers: () => ({ isPending: false, data: [] }),
+}));
+
 afterEach(() => {
   cleanup();
+  built.length = 0;
   saved.blobs.length = 0;
   useUiPrefsStore.setState({
     coordinateFormat: 'dd',
@@ -99,4 +119,26 @@ it('converts many lines, says which failed, and downloads every format as CSV', 
   expect(lines[0]).toContain('Stereo 70 (Romania)');
   expect(lines[1]).toMatch(/^1,45°35′58″N 24°44′10″E,45\.59944\d+,24\.7361\d+,/);
   expect(lines[3]).toMatch(/Not a position in any format this application reads\.$/);
+});
+
+it('shows the position on a map drawn over the installation’s background, and lets the map go when hidden', () => {
+  // The workspace map is the application's one shared map, which the background choice reads.
+  getWorkspaceMap();
+  built.length = 0;
+  open();
+  fireEvent.change(screen.getByTestId('converter-input'), { target: { value: '45.5, 25.5' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Show on a map' }));
+
+  expect(built).toHaveLength(1);
+  const map = built[0];
+  expect(map.getTargetElement()).toBe(screen.getByTestId('converter-map'));
+  const urls = map
+    .getAllLayers()
+    .flatMap((layer) => (layer.getSource() as { getUrls?: () => string[] | null })?.getUrls?.() ?? []);
+  expect(urls.length).toBeGreaterThan(0);
+  expect(urls.some((url) => url.includes('tile.openstreetmap.org'))).toBe(false);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Hide the map' }));
+  expect(map.getTargetElement()).toBeNull();
+  expect(map.getLayers().getLength()).toBe(0);
 });

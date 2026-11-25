@@ -135,18 +135,85 @@ test('"undo anyway" puts back a field a later upload changed', async ({ page }) 
   expect((await cave(page, a.caveId)).name).toBe(a.before.name);
 });
 
-test('one row of an upload can be undone on its own', async ({ page }) => {
+/** Two caves, and one upload that renames both — so undoing one row has a neighbour to leave alone. */
+async function arrangeTwo(page: Page, stamp: string) {
+  const caveTypes = await asPerson<{ id: number }[]>(page, 'GET', '/api/v1/cave-types');
+  const make = (name: string) =>
+    asPerson<{ id: string }>(page, 'POST', '/api/v1/caves', {
+      name,
+      description: `Before ${stamp}`,
+      caveTypeId: caveTypes[0].id,
+      visibility: 'authenticated',
+      locationProtected: false,
+      explorationStatus: 'unknown',
+      isShowCave: false,
+    });
+  const first = { before: `E2E Row Undo First ${stamp}`, uploaded: `E2E Row Undo First renamed ${stamp}` };
+  const second = { before: `E2E Row Undo Second ${stamp}`, uploaded: `E2E Row Undo Second renamed ${stamp}` };
+  const firstCave = await make(first.before);
+  const secondCave = await make(second.before);
+  const set = await asPerson<{ id: string }>(page, 'POST', '/api/v1/sync/sets/', {
+    name: `E2E row undo phone ${stamp}`,
+    uploadVisibility: 'private',
+    rootFeatureIds: [firstCave.id, secondCave.id],
+    settings: {},
+  });
+  const download = await asPerson<{ features: { id: string; updatedAt: string }[] }>(
+    page,
+    'GET',
+    `/api/v1/sync/sets/${set.id}/download`,
+  );
+  const row = (id: string, name: string) => {
+    const held = download.features.find((f) => f.id === id);
+    expect(held, 'the set hands the phone both caves it is rooted at').toBeDefined();
+    return {
+      id,
+      kind: 'cave',
+      baseRevision: held!.updatedAt,
+      deleted: false,
+      name,
+      description: `Before ${stamp}`,
+      caveTypeCode: 'cave',
+      isMain: false,
+    };
+  };
+  const upload = await asPerson<{ importBatchId: string }>(page, 'POST', `/api/v1/sync/sets/${set.id}/upload`, {
+    batchId: crypto.randomUUID(),
+    contractVersion: 1,
+    rows: [row(firstCave.id, first.uploaded), row(secondCave.id, second.uploaded)],
+  });
+  return {
+    batch: upload.importBatchId,
+    first: { id: firstCave.id, ...first },
+    second: { id: secondCave.id, ...second },
+  };
+}
+
+test('one row of an upload can be undone on its own, and the other row is left as uploaded', async ({ page }) => {
   test.slow();
   const stamp = `${Date.now()}`;
   await login(page);
-  const a = await arrange(page, stamp);
+  const a = await arrangeTwo(page, stamp);
+  // Both renames landed, so what the undo leaves behind can be told apart from what never changed.
+  expect((await cave(page, a.first.id)).name).toBe(a.first.uploaded);
+  expect((await cave(page, a.second.id)).name).toBe(a.second.uploaded);
 
-  await gotoRoute(page, `/geodata?tab=batches&batch=${a.firstBatch}`);
+  await gotoRoute(page, `/geodata?tab=batches&batch=${a.batch}`);
   const drawer = page.getByTestId('import-batch-detail');
   await expect(drawer).toBeVisible({ timeout: 30_000 });
+  await expect(drawer.getByTestId('upload-undo-row')).toHaveCount(2, { timeout: 15_000 });
 
-  await drawer.getByTestId('upload-undo-row').click();
+  const firstRow = drawer
+    .locator('.ant-table-row')
+    .filter({ has: page.getByRole('link', { name: a.first.uploaded, exact: true }) });
+  await firstRow.getByTestId('upload-undo-row').click();
   await confirmPopover(page);
   await expect(drawer.getByTestId('upload-undo-result')).toBeVisible({ timeout: 15_000 });
-  await expect.poll(async () => (await cave(page, a.caveId)).name).toBe(a.before.name);
+
+  await expect.poll(async () => (await cave(page, a.first.id)).name).toBe(a.first.before);
+  // The neighbour keeps what the upload gave it: a row undo is not a batch undo.
+  expect((await cave(page, a.second.id)).name, 'the other row of the upload is left alone').toBe(a.second.uploaded);
+  // One row is left to take back, and so is the upload as a whole.
+  await expect(drawer.getByTestId('upload-undo-row')).toHaveCount(1);
+  await expect(drawer.getByTestId('upload-undo')).toBeVisible();
 });

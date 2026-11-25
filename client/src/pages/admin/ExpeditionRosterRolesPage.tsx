@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { PlusOutlined, SolutionOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Popconfirm, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -48,7 +49,7 @@ export default function ExpeditionRosterRolesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: roles, isLoading } = useExpeditionRosterRoles();
+  const { data: roles, isLoading, isError, error: readError, refetch } = useExpeditionRosterRoles();
   const createRole = useCreateExpeditionRosterRole();
   const updateRole = useUpdateExpeditionRosterRole();
   const deleteRole = useDeleteExpeditionRosterRole();
@@ -78,7 +79,12 @@ export default function ExpeditionRosterRolesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body: ExpeditionRosterRoleWrite = {
       code: values.code.trim(),
       name: values.name.trim(),
@@ -135,6 +141,14 @@ export default function ExpeditionRosterRolesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={roles !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="expedition-roster-roles-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}

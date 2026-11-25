@@ -82,8 +82,17 @@ public sealed record AdminUserDetailDto(
 /// are edited through their own profile; what an operator needs is the ability to shut an account
 /// out and to let it back in. Widening this later is a decision about whose data a profile is, so
 /// it is left to be taken deliberately rather than arrived at by adding fields.
+/// A body without <c>locked</c> is refused rather than read as "unlocked": an account shut out is
+/// let back in only by a request that says so.
 /// </remarks>
+[EveryValueRequired]
 public sealed record AdminUserUpdateRequest(bool Locked);
+
+/// <summary>The one decision the lock carries is required by the body's contract; nothing else to check.</summary>
+public sealed class AdminUserUpdateRequestValidator : AbstractValidator<AdminUserUpdateRequest>
+{
+    public AdminUserUpdateRequestValidator() => RuleFor(x => x).NotNull();
+}
 
 /// <summary>Whether what an account uploads waits for a reviewer.</summary>
 /// <remarks>
@@ -91,7 +100,14 @@ public sealed record AdminUserUpdateRequest(bool Locked);
 /// operator changes about an account: this is a second, separate decision about how the
 /// installation treats what the account sends, and neither should be changed by sending the other.
 /// </remarks>
+[EveryValueRequired]
 public sealed record AdminUserUploadReviewRequest(bool UploadsNeedReview);
+
+/// <summary>The decision is required by the body's contract; nothing else to check.</summary>
+public sealed class AdminUserUploadReviewRequestValidator : AbstractValidator<AdminUserUploadReviewRequest>
+{
+    public AdminUserUploadReviewRequestValidator() => RuleFor(x => x).NotNull();
+}
 
 /// <summary>An account an administrator opens for somebody: who it is for, and their address.</summary>
 /// <remarks>
@@ -279,9 +295,14 @@ public static class UserAdminEndpoints
             DisplayName = request.DisplayName.Trim(),
         };
 
+        // One transaction for the account, its roster entry and its default groups: the user manager
+        // saves the account on its own, and a request that ended between that save and the next one
+        // left an account nobody could find on the roster and outside every default group, for good.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var created = await userManager.CreateAsync(user);
         if (!created.Succeeded)
         {
+            await transaction.RollbackAsync(ct);
             // The sign-in name starts out as the address, so an address somebody already uses as
             // their sign-in name is taken just as surely as one held as an address. Said plainly
             // here, unlike on the anonymous registration form: the register already lists every
@@ -295,6 +316,7 @@ public static class UserAdminEndpoints
             db, user.Id, options.Value.DefaultPermissionGroupSlugs, ct);
         CaverDirectory.CreateForNewAccount(db, user.Id, user.DisplayName, user.UserName, user.Email);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return TypedResults.Created(
             $"/api/v1/users/{user.Id}",
@@ -518,7 +540,11 @@ public static class UserAdminEndpoints
             user.AccessFailedCount = 0;
         }
 
-        await db.SaveChangesAsync(ct);
+        if (!await SaveAccountRowAsync(db, user, ct))
+        {
+            await transaction.RollbackAsync(ct);
+            return ChangedMeanwhile();
+        }
 
         if (request.Locked && !await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
@@ -532,7 +558,12 @@ public static class UserAdminEndpoints
 
         // Re-read through the manager so the security stamp the sign-in path checks is the one
         // this change produced.
-        await userManager.UpdateSecurityStampAsync(user);
+        // A stamp that did not move leaves the account's open sessions signed in past the lock, so a
+        // failure here is said rather than swallowed; the lock itself is already in place.
+        if (!(await userManager.UpdateSecurityStampAsync(user)).Succeeded)
+        {
+            return ChangedMeanwhile();
+        }
 
         var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
         var caverIds = await CaverIdsByUserAsync(db, [user.Id], ct);
@@ -612,7 +643,10 @@ public static class UserAdminEndpoints
                 }),
             });
             user.UploadsNeedReview = request.UploadsNeedReview;
-            await db.SaveChangesAsync(ct);
+            if (!await SaveAccountRowAsync(db, user, ct))
+            {
+                return ChangedMeanwhile();
+            }
         }
 
         var administrators = await FullAdministratorIdsAsync(db, [user.Id], ct);
@@ -683,7 +717,23 @@ public static class UserAdminEndpoints
         }
 
         db.Users.Remove(user);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Either somebody deleted the account in the meantime, which is what was asked for, or
+            // the account row was written since it was read; only the second needs saying.
+            await transaction.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            if (await db.Users.AnyAsync(u => u.Id == id, ct))
+            {
+                return ChangedMeanwhile();
+            }
+
+            return TypedResults.NoContent();
+        }
 
         if (!await fullAdminGuard.AnyLiveFullAdminAsync(ct))
         {
@@ -695,6 +745,40 @@ public static class UserAdminEndpoints
 
         await transaction.CommitAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>The refusal when the account row changed between this request's read and its write.</summary>
+    public const string ChangedMeanwhileCode = "user.changed_meanwhile";
+
+    private static ProblemHttpResult ChangedMeanwhile() =>
+        ApiProblems.Conflict(
+            ChangedMeanwhileCode,
+            "The account changed while this was being saved. Reload it and try again.");
+
+    /// <summary>
+    /// Saves a change made to the tracked account row directly rather than through the user manager,
+    /// moving the row's concurrency stamp the way the manager's own writes do.
+    /// </summary>
+    /// <remarks>
+    /// The account row is also written whole by the sign-in machinery (a failed password, a reset of
+    /// the failure count, a stored token), each guarded by the stamp it read. A direct write that
+    /// left the stamp where it was would let such a write, begun before it, succeed afterwards and
+    /// put back the lock or the review mark this one had just changed. Moving the stamp makes that
+    /// stale write fail instead. The other way round — the row written by somebody else after this
+    /// request read it — this write matches no row and is answered as a conflict, not a fault.
+    /// </remarks>
+    private static async Task<bool> SaveAccountRowAsync(SilexGisDbContext db, SilexGisUser user, CancellationToken ct)
+    {
+        user.ConcurrencyStamp = Guid.NewGuid().ToString();
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

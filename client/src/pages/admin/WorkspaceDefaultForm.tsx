@@ -8,6 +8,7 @@ import { api } from '../../api/client.ts';
 import { queryKeys, type AdminSettings } from '../../api/hooks.ts';
 import { installationPresetOf, WORKSPACE_PRESETS } from '../../components/map/workspace/workspacePresets.ts';
 import { readPanelDefaults, withStartingPreset } from './workspaceDefault.ts';
+import { isSettingsConflict, sectionIfMatch, settingsSaveProblem } from './settingsProblems.ts';
 
 const BUILT_IN = 'built-in';
 
@@ -21,9 +22,12 @@ const BUILT_IN = 'built-in';
 export default function WorkspaceDefaultForm({
   settings,
   onSaved,
+  onStale,
 }: {
   settings: AdminSettings;
   onSaved: (next: AdminSettings) => void;
+  /** Called when a save was refused because the section was saved over since it was read. */
+  onStale?: () => void;
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -40,16 +44,23 @@ export default function WorkspaceDefaultForm({
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/api/v1/admin/settings/interface', {
+        headers: sectionIfMatch(settings.versions?.interface),
         body: { panelDefaults: withStartingPreset(defaults, choice === BUILT_IN ? null : choice) },
       });
       if (error !== undefined || !data) {
-        message.error(t('common.saveFailed'));
+        message.error(settingsSaveProblem(error, t));
+        if (isSettingsConflict(error)) {
+          onStale?.();
+        }
         return;
       }
       onSaved(data);
       // Every page reads the starting arrangement through its own query, cached for minutes.
       await queryClient.invalidateQueries({ queryKey: queryKeys.uiDefaults });
       message.success(t('workspace.admin.saved'));
+    } catch {
+      // The request never reached the server (a dropped connection): said, not left unhandled.
+      message.error(t('common.saveFailed'));
     } finally {
       setSaving(false);
     }

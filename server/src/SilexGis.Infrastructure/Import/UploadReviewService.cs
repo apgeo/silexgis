@@ -6,6 +6,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Permissions;
@@ -206,7 +207,14 @@ public sealed class UploadReviewService(
         var standing = held.Where(h => order.Contains(h.Id)).ToDictionary(h => h.Id, h => h.Decision);
         var uploader = await AccessContextResolver.ResolveAsync(db, uploaderId, ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Accepting writes what the upload would have written — creations, moves — and a phone's
+        // upload takes the hierarchy lock before anything else and only then its lines' batches.
+        // Taken here before the lines and batches, in the same order, the two cannot wait on each
+        // other.
+        await HierarchyLockSql.TakeAsync(db, ct);
         await ClaimAsync(standing, ct);
+        await HoldBatchesAsync(order, ct);
         var decidedAt = DecisionStamp();
 
         // The field subsets are stamped first, because the applier reads them off the lines it is
@@ -387,10 +395,17 @@ public sealed class UploadReviewService(
         var wrote = decided.Where(l => l.ReviewDecision == ImportReviewDecision.Accepted && outcomes[l.Id].Written is not null)
             .GroupBy(l => l.ImportBatchId)
             .ToDictionary(g => g.Key, g => g.ToList());
-        foreach (var counted in await db.ImportBatches.Where(b => wrote.Keys.Contains(b.Id)).ToListAsync(ct))
+        // Added in the database rather than read and written back, so a count another decision
+        // on the same batch added meanwhile is kept.
+        foreach (var (batchId, written) in wrote)
         {
-            counted.CreatedCount += wrote[counted.Id].Count(l => l.Action == ImportDecisionAction.Create);
-            counted.AttachedCount += wrote[counted.Id].Count(l => l.Action != ImportDecisionAction.Create);
+            var created = written.Count(l => l.Action == ImportDecisionAction.Create);
+            var attached = written.Count - created;
+            await db.ImportBatches.Where(b => b.Id == batchId).ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(b => b.CreatedCount, b => b.CreatedCount + created)
+                    .SetProperty(b => b.AttachedCount, b => b.AttachedCount + attached),
+                ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -426,6 +441,32 @@ public sealed class UploadReviewService(
         if (claimed != standing.Count)
         {
             throw new HeldNotPendingException();
+        }
+    }
+
+    /// <summary>
+    /// Takes the batches of the lines a decision claimed, right after the claim and before anything
+    /// is read about them, and refuses a decision into a batch that was undone.
+    /// </summary>
+    /// <remarks>
+    /// The lines come first and the batches second, as in a phone's resend, which supersedes lines
+    /// and then restates their batches: taken in the same order the two cannot wait on each other.
+    /// An undo takes the batch and never a line a decision can claim. With the batch held, the
+    /// restatement at the end of the decision sees every other decision on the batch that
+    /// committed first, and an undo that closed the batch first is seen here.
+    /// </remarks>
+    /// <exception cref="HeldBatchRevertedException">A line reached belongs to a batch already undone.</exception>
+    private async Task HoldBatchesAsync(IReadOnlyCollection<long> lineIds, CancellationToken ct)
+    {
+        var batchIds = await db.ImportBatchItems.AsNoTracking()
+            .Where(i => lineIds.Contains(i.Id))
+            .Select(i => i.ImportBatchId)
+            .Distinct()
+            .ToListAsync(ct);
+        await ImportBatchLockSql.LockAsync(db, batchIds, ct);
+        if (await db.ImportBatches.AsNoTracking().AnyAsync(b => batchIds.Contains(b.Id) && b.RevertedAt != null, ct))
+        {
+            throw new HeldBatchRevertedException();
         }
     }
 
@@ -477,6 +518,7 @@ public sealed class UploadReviewService(
         var sync = await settings.GetSyncAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await ClaimAsync(reach.ToDictionary(id => id, _ => (ImportReviewDecision?)ImportReviewDecision.Pending), ct);
+        await HoldBatchesAsync(reach, ct);
         var now = DecisionStamp();
         var decided = await db.ImportBatchItems.Where(i => reach.Contains(i.Id)).ToListAsync(ct);
         var chosenSet = chosen.ToHashSet();
@@ -546,6 +588,14 @@ public sealed class UploadReviewService(
 /// </summary>
 public sealed class HeldNotPendingException()
     : Exception("Nothing this decision reaches is waiting for it any more.");
+
+/// <summary>
+/// A decision that reaches a line of a batch already undone — in practice a rejected line accepted
+/// after all. What it would write could never be undone through its batch, which says it was
+/// undone already, so nothing is decided.
+/// </summary>
+public sealed class HeldBatchRevertedException()
+    : Exception("This upload was undone; its lines can no longer be decided.");
 
 /// <summary>
 /// Something a held batch's writing needs is out of reach for now — the third party a catalogue

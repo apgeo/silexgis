@@ -143,7 +143,7 @@ public static class GeoreferencedMapEndpoints
                 "Paged catalog; visibility-filtered; protected-cave-linked maps omitted and not counted. "
                 + "`filter` (a filter document as a link token) or `savedFilterId` narrows it by the "
                 + "georeferenced map world's conditions, applied after visibility and counted over the "
-                + "narrowed set.");
+                + "narrowed set. `ready=true` keeps only the maps that are ready to draw, and counts only those.");
         maps.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single georeferenced map with a fresh COG delivery URL.");
         maps.MapPut("/{id:guid}", UpdateAsync).WithValidation<GeoreferencedMapUpdateRequest>()
@@ -285,7 +285,8 @@ public static class GeoreferencedMapEndpoints
         Guid? caveFeatureId,
         CancellationToken ct,
         string? filter = null,
-        Guid? savedFilterId = null)
+        Guid? savedFilterId = null,
+        bool? ready = null)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null)
@@ -307,6 +308,14 @@ public static class GeoreferencedMapEndpoints
         if (caveFeatureId is not null)
         {
             query = query.Where(m => m.CaveFeatureId == caveFeatureId);
+        }
+
+        // The map's layer list: only what can be drawn, narrowed inside the protected set and before
+        // the count, so the map can walk the pages and get every ready map — a page filtered after it
+        // was taken stopped at however many of the newest uploads fitted on it.
+        if (ready == true)
+        {
+            query = query.Where(m => m.Status == RasterStatus.Ready);
         }
 
         var (p, size) = Paging.Normalize(page, pageSize);

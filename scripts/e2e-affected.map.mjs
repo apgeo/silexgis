@@ -23,13 +23,19 @@ export const always = ['smoke.spec.ts'];
 /** Area name → the specs that answer for it. An empty list means "nothing narrower than everything". */
 export const specs = {
   about: [],
+  // WhiteboxTools and its analysis service: what they compute is drawn as terrain derivatives.
+  analysis: ['terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts'],
+  // Cave-potential models: written, run over an area and drawn on the map.
+  cavePotential: ['cave-potential.spec.ts'],
+  // A flyby handed over as a render bundle for Blender: asked for through the movie panel, read back.
+  flybys: ['scene3d-flyby-bundle.spec.ts'],
   access: ['permission-groups.spec.ts', 'cave-grant-link.spec.ts', 'expedition-sharing.spec.ts'],
   admin: [
     'settings.spec.ts', 'notification-health.spec.ts', 'published-trips-admin.spec.ts',
     'users-admin.spec.ts',
     'feature-sets.spec.ts',
     'users-admin.spec.ts', 'map-background-kinds.spec.ts', 'sync-settings-admin.spec.ts',
-    'storage-admin.spec.ts',
+    'storage-admin.spec.ts', 'report-layouts.spec.ts',
   ],
   audit: ['panel.spec.ts', 'history-phone-upload.spec.ts'],
   cabinets: ['documents.spec.ts'],
@@ -41,8 +47,8 @@ export const specs = {
   ],
   caves: [
     'map-editing.spec.ts', 'cave-attachments.spec.ts', 'cave-grant-link.spec.ts', 'cave-levels.spec.ts', 'cave-morphometry.spec.ts',
-    'cave-statistics.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
-    'overburden-profile.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
+    'cave-statistics.spec.ts', 'cave-system-figures.spec.ts', 'cave-topology.spec.ts', 'cave-clustering.spec.ts',
+    'overburden-profile.spec.ts', 'feature-passages-least-cover.spec.ts', 'survey-sources.spec.ts', 'qr-landing.spec.ts',
     'feature-restore.spec.ts', 'cave-registry-filters.spec.ts',
     // A cave's declared places are written through the cave's own door and published on a trip's
     // page, so a change here is answered by the walk that reads one as a visitor.
@@ -56,6 +62,8 @@ export const specs = {
     'point-clouds.spec.ts',
     // The cave page's point-cloud dialog in its recording-folder form.
     'scan-recordings.spec.ts',
+    // The list pages measured at a phone's width.
+    'list-pages-phone.spec.ts',
   ],
   cavingGroups: [
     'announcements.spec.ts', 'events.spec.ts', 'plan-trip.spec.ts', 'caver-caving-groups.spec.ts',
@@ -82,7 +90,7 @@ export const specs = {
     'cave-registry-filters.spec.ts',
   ],
   featureSets: ['doline-morphometry.spec.ts', 'vector-import.spec.ts', 'feature-sets.spec.ts'],
-  featureShares: [],
+  featureShares: ['shared-feature.spec.ts'],
   files: [
     'uploads.spec.ts', 'documents.spec.ts', 'gallery.spec.ts', 'cave-attachments.spec.ts',
     'attachment-default-set.spec.ts', 'place-map.spec.ts',
@@ -99,11 +107,15 @@ export const specs = {
     'map-filter-editor.spec.ts',
     // The geodata and map-sheet lists' conditions and saved filters.
     'geodata-filters.spec.ts',
+    'list-pages-phone.spec.ts',
   ],
   geoFeatures: [
     'map-editing.spec.ts', 'doline-morphometry.spec.ts', 'vector-import.spec.ts',
     'photo-import.spec.ts', 'feature-restore.spec.ts', 'table-map.spec.ts',
     'feature-sets.spec.ts',
+    'list-pages-phone.spec.ts',
+    // An area page's terrain card.
+    'area-terrain-statistics.spec.ts',
   ],
   geofiles: ['vector-import.spec.ts', 'geodata-filters.spec.ts'],
   georeferencedMaps: [
@@ -117,11 +129,15 @@ export const specs = {
     'georeferenced-sheet.spec.ts',
   ],
   history: ['panel.spec.ts', 'map-editing.spec.ts'],
-  imports: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts'],
+  imports: [
+    'vector-import.spec.ts', 'geology.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts', 'import-batch-undo.spec.ts',
+    // A phone recording reviewed and recorded onto a trip.
+    'speleoloc-recording-commit.spec.ts',
+  ],
   jobs: ['survey-extraction.spec.ts', 'documents.spec.ts'],
   map: [
     'map-editing.spec.ts', 'cave-clustering.spec.ts', 'karst-density.spec.ts', 'karst-autocorrelation.spec.ts',
-    'karst-layers.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
+    'karst-layers.spec.ts', 'geology.spec.ts', 'passage-depth-layer.spec.ts', 'trip-map.spec.ts', 'panel.spec.ts', 'mobile.spec.ts', 'mobile-ios.spec.ts',
     'accessibility.spec.ts', 'workspace-state.spec.ts', 'map-filters.spec.ts', 'table-map.spec.ts',
     'coordinate-converter.spec.ts', 'terrain-profile-tool.spec.ts',
     // Saved-filter layers clicked on the map and drawn in the 3D view beside it.
@@ -135,10 +151,16 @@ export const specs = {
   // A shared view opened with no account: its background and the public data its link draws.
   mapViews: ['shared-view.spec.ts', 'karst-layers.spec.ts', 'map-filters.spec.ts'],
   basemap: ['map-background-kinds.spec.ts'],
-  me: ['settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts'],
+  me: [
+    'settings.spec.ts', 'my-trips.spec.ts', 'workspace-state.spec.ts', 'sign-out.spec.ts',
+    'account-pages-phone.spec.ts', 'account-identity.spec.ts', 'two-factor-sign-in.spec.ts',
+  ],
   messaging: ['announcements.spec.ts', 'notifications.spec.ts', 'notification-health.spec.ts'],
   metadata: ['documents.spec.ts', 'gallery.spec.ts'],
-  notifications: ['notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts'],
+  notifications: [
+    'notifications.spec.ts', 'notification-health.spec.ts', 'announcements.spec.ts',
+    'account-pages-phone.spec.ts',
+  ],
   photoLibraries: [
     'photo-library-smoke.spec.ts', 'photo-library-browse.spec.ts',
     'photo-library-health.spec.ts', 'photo-library-pictures.spec.ts',
@@ -160,29 +182,58 @@ export const specs = {
     'place-station.spec.ts',
   ],
   scene: [
-    'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
+    'scene3d.spec.ts', 'scene3d-walls.spec.ts', 'scene3d-cutaway.spec.ts', 'scene3d-mobile.spec.ts', 'survey-photos.spec.ts', 'scene3d-backgrounds.spec.ts',
     // A tiled scan drawn in the scene and opened in the local viewer.
     'point-clouds.spec.ts',
+    // A flyby played in the scene: the camera flown, the address left alone, the camera handed back.
+    'scene3d-flyby.spec.ts',
+    // A flyby written to a movie file: the capture session, the boxed scene, the file read back.
+    'scene3d-flyby-movie.spec.ts',
+    // A flyby downloaded as a bundle for Blender: what the panel says it leaves out, and the zip read back.
+    'scene3d-flyby-bundle.spec.ts',
+    // A flyby that crosses backgrounds and colours the caves: the look changed, scrubbed back, handed back.
+    'scene3d-flyby-look.spec.ts',
+    // A flyby built by hand: views captured, sections added and moved, a change written, flown as edited.
+    'scene3d-flyby-edit.spec.ts',
+    // A flyby about what a saved filter selects, with features of a kind drawn while it flies and gone after.
+    'scene3d-flyby-features.spec.ts',
+    // A flyby that grows the relief: the engine's factor read mid-flight, the mark over the picture, the viewer's handed back.
+    'scene3d-flyby-relief.spec.ts',
+    // The relief setting over served relief: a marker on the ground stays on the stretched ground.
+    'scene3d-relief.spec.ts',
+    // The engine's download dropped: asked for again, and said to be a download when it never arrives.
+    'scene3d-download.spec.ts',
+    // The controls over the scene pressed where they are drawn: presets, projection, coupling, the
+    // callout beside them, the saved picture read back, a lost drawing context rebuilt and reloaded.
+    'scene3d-overlay-controls.spec.ts',
   ],
   search: ['documents.spec.ts'],
   settings: [
     'settings.spec.ts', 'not-found.spec.ts', 'saved-filter-audience.spec.ts', 'coordinate-converter.spec.ts',
-    'accessibility.spec.ts',
+    'accessibility.spec.ts', 'account-identity.spec.ts', 'two-factor-sign-in.spec.ts',
   ],
   sms: ['notifications.spec.ts', 'notification-health.spec.ts'],
   statistics: [
     'registry-statistics.spec.ts', 'cave-statistics.spec.ts', 'cave-morphometry.spec.ts',
     'cave-topology.spec.ts', 'cave-levels.spec.ts', 'doline-morphometry.spec.ts',
-    'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'trip-stats.spec.ts',
+    'karst-density.spec.ts', 'karst-autocorrelation.spec.ts', 'karst-layers.spec.ts', 'geology.spec.ts', 'trip-stats.spec.ts',
+    // The terrain class charts on an area page.
+    'area-terrain-statistics.spec.ts',
+    // Structural readings on a stereonet and the passage tested against their strikes.
+    'structural-stereonet.spec.ts',
   ],
   // Room in storage: the administrators' report, and the scans whose uploads and runs it caps.
   storage: ['storage-admin.spec.ts', 'point-clouds.spec.ts'],
+  // The test-data generator has no browser spec of its own yet; its page is covered by unit tests.
+  testData: [],
   surveys: [
     'survey-compare.spec.ts', 'survey-extraction.spec.ts', 'survey-photos.spec.ts', 'survey-quality.spec.ts',
     'survey-sources.spec.ts', 'cave-statistics.spec.ts', 'cave-topology.spec.ts',
     'cave-morphometry.spec.ts', 'cave-levels.spec.ts', 'scene3d-walls.spec.ts',
     'tracking-therion.spec.ts', 'caveview-label-size.spec.ts',
-    'caveview-label-size-mobile.spec.ts',
+    'caveview-label-size-mobile.spec.ts', 'caveview-touch-mobile.spec.ts',
+    // A survey opened and closed many times in its dialog without a page load: one live drawing.
+    'caveview-open-close.spec.ts',
   ],
   // Surveys sent from a field device: the access-key and upload settings, the cave's list of
   // surveys, the status page of one upload and the page behind its public link.
@@ -197,16 +248,18 @@ export const specs = {
     'settings.spec.ts', 'review-queue.spec.ts', 'review-uploader.spec.ts',
     'review-uploader-mobile.spec.ts', 'review-file-import.spec.ts',
     'phone-users.spec.ts', 'sync-settings-admin.spec.ts', 'recordings-attention.spec.ts',
-    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts',
+    'recordings-attention-mobile.spec.ts', 'phone-users-mobile.spec.ts', 'speleoloc-recording-commit.spec.ts',
   ],
   tags: ['trips.spec.ts'],
   taxonomies: [],
   terrain: [
-    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'overburden-profile.spec.ts', 'terrain-profile-tool.spec.ts',
+    'terrain.spec.ts', 'terrain-derivatives.spec.ts', 'terrain-landforms.spec.ts', 'overburden-profile.spec.ts', 'feature-passages-least-cover.spec.ts', 'terrain-profile-tool.spec.ts',
     'scene3d.spec.ts',
+    // An area's entrances and sinkholes against slope, facing, position and landform classes.
+    'area-terrain-statistics.spec.ts',
   ],
   trips: [
-    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts',
+    'trips.spec.ts', 'trip-list.spec.ts', 'trip-stats.spec.ts', 'trip-map.spec.ts', 'trip-two-sessions.spec.ts',
     'trip-import.spec.ts', 'trip-restore.spec.ts', 'trip-report-map.spec.ts',
     'trip-tracking-writes.spec.ts', 'trip-tracking-writes-mobile.spec.ts', 'my-trips.spec.ts',
     'plan-trip.spec.ts', 'published-trips-admin.spec.ts', 'public-trip-offline.spec.ts',
@@ -218,15 +271,19 @@ export const specs = {
     'trip-tracking-held-reports-mobile.spec.ts', 'trip-removal-and-roster-times.spec.ts',
     'tracking-movie-webkit.spec.ts', 'tracking-movie-pictures.spec.ts',
     'tracking-movie-empty-trip.spec.ts',
+    'list-pages-phone.spec.ts', 'report-layouts.spec.ts',
   ],
   // The proximity pool every importer compares against: the import specs that meet it.
   proximity: ['vector-import.spec.ts', 'photo-import.spec.ts', 'trip-import.spec.ts'],
   uploads: ['uploads.spec.ts'],
-  users: ['settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts'],
+  users: [
+    'settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts', 'account-identity.spec.ts',
+    'two-factor-sign-in.spec.ts',
+  ],
   // Which protected rows a window holds, decided on the position each reader is shown — the
   // workspace map's entrance and feature layers, and a shared view's link.
   windowMembership: ['cave-clustering.spec.ts', 'map-editing.spec.ts', 'shared-view.spec.ts'],
-  workAreas: ['karst-density.spec.ts'],
+  workAreas: ['karst-density.spec.ts', 'work-areas.spec.ts'],
 };
 
 /** Client path prefix → the area, or areas, it belongs to. Longest prefix wins. */
@@ -234,10 +291,14 @@ export const clientAreas = {
   'client/src/caveview/': ['surveys', 'trips'],
   'client/src/diagnostics/': 'diagnostics',
   'client/src/filters/': 'filters',
+  // A flyby's document, path and player: played only in the 3D scene.
+  'client/src/flyby/': 'scene',
   // The placement editor's pure rules: corners, point pairs, refusal wording.
   'client/src/geodata/': 'georeferencedMaps',
   'client/src/imagelink/': 'resLinks',
   'client/src/map/': 'map',
+  // The movie encoders and the file a long movie is written to, shared by the movies made here.
+  'client/src/movie/': ['scene', 'surveys', 'trips'],
   'client/src/notifications/': 'notifications',
   'client/src/pdf/': 'documents',
   'client/src/photolibrary/': 'photoLibraries',
@@ -284,6 +345,7 @@ export const clientAreas = {
   'client/src/pages/admin/': 'admin',
   'client/src/pages/calendar/': 'calendar',
   'client/src/pages/catalogue/': 'catalogue',
+  'client/src/pages/cavePotential/': 'cavePotential',
   'client/src/pages/cavers/': 'cavers',
   'client/src/pages/caves/': 'caves',
   'client/src/pages/caves/CaveSurveysSection': 'surveyUploads',
@@ -319,6 +381,7 @@ export const clientAreas = {
   'client/src/pages/QrLandingPage': 'qr',
   'client/src/pages/MapPage': 'map',
   'client/src/pages/SharedViewPage': 'mapViews',
+  'client/src/pages/SharedFeaturePage': 'featureShares',
 };
 
 /**

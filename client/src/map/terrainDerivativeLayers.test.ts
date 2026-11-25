@@ -211,4 +211,26 @@ describe('computed terrain layers', () => {
     expect(terrainDerivativeStyle('hillshade')).toBeUndefined();
     expect(terrainDerivativeStyle('colourRelief')).toBeUndefined();
   });
+
+  // Landform classes are names stored as numbers: stretched or interpolated, a pit would blend
+  // into a valley and the colour on screen would name no class at all.
+  it('reads landform classes as stored numbers and paints each class its own colour', () => {
+    const landforms = layerInfo({ id: '44444444-4444-4444-4444-444444444444', derivative: 'geomorphons' });
+    syncTerrainDerivativeLayers([landforms], new Set([landforms.id]), new Map());
+    const options = sourceOptions(onlyLayer());
+    expect(options.normalize).toBe(false);
+    expect(options.interpolate).toBe(false);
+    expect(options.convertToRGB).toBeUndefined();
+
+    const style = terrainDerivativeStyle('geomorphons');
+    const colour = style?.color as unknown[];
+    expect(colour[0]).toBe('match');
+    // The band, ten class-and-colour pairs, and clear for everything else.
+    expect(colour).toHaveLength(2 + (10 * 2) + 1);
+    expect(colour.filter((_, index) => index >= 2 && index % 2 === 0 && index < 22)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+    const context = { ...newCompilationContext(), bandCount: 2 };
+    expect(typeof expressionToGlsl(context, style!.color!, ColorType)).toBe('string');
+  });
 });

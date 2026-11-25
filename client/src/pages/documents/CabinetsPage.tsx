@@ -9,6 +9,8 @@ import {
   Select, Space, Spin, Switch, Table, Tag, Tooltip, Tree, Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -28,6 +30,8 @@ import {
   type CabinetInfo,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { cabinetPathOptions, cabinetWriteOf } from '../../components/documents/cabinetChoices.ts';
+import { visibilityOptions } from '../../components/attachments/visibilityChoices.ts';
 import ConfigureLink from '../../components/ConfigureLink.tsx';
 import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
@@ -127,9 +131,16 @@ function CabinetEditModal({
     defaultTagIds?: number[];
     requiredMetadataKeys?: string[];
   }>();
+  const requestDiscard = useDiscardGuard();
+  const edits = useFormEdits();
 
   const submit = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     await onSubmit({
       name: values.name,
       description: values.description ?? null,
@@ -145,7 +156,8 @@ function CabinetEditModal({
     <Modal
       title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
       open
-      onCancel={onCancel}
+      onCancel={() => requestDiscard(edits.edited, onCancel)}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       onOk={() => void submit()}
       confirmLoading={busy}
       destroyOnHidden
@@ -154,6 +166,7 @@ function CabinetEditModal({
         form={form}
         layout="vertical"
         requiredMark={false}
+        onValuesChange={edits.onValuesChange}
         initialValues={
           editing === 'new'
             ? { parentId: defaultParentId }
@@ -185,9 +198,9 @@ function CabinetEditModal({
             placeholder={t('cabinets.noParent')}
             // A cabinet cannot sit inside itself; the server refuses a cycle outright,
             // and offering the option here would only be a way to discover that.
-            options={cabinets
-              .filter((cabinet) => editing === 'new' || cabinet.id !== editing.id)
-              .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+            options={cabinetPathOptions(cabinets).filter(
+              (option) => editing === 'new' || option.value !== editing.id,
+            )}
           />
         </Form.Item>
 
@@ -209,10 +222,7 @@ function CabinetEditModal({
           <Select
             allowClear
             placeholder={t('cabinets.defaultInherit')}
-            options={(['private', 'cavingGroup', 'internal', 'public'] as const).map((value) => ({
-              value,
-              label: t(`caves.visibilityValues.${value}`),
-            }))}
+            options={visibilityOptions(t)}
           />
         </Form.Item>
         <Form.Item name="defaultTagIds" label={t('cabinets.defaultTags')}>
@@ -263,7 +273,12 @@ export default function CabinetsPage() {
   // page to everyone. Authoring a kind's schema decides what every document of it may say.
   const canWriteTaxonomies = hasAccessAction(capabilities?.domains.taxonomies, 'write');
 
-  const { data: cabinets, isPending } = useCabinets(canRead);
+  const {
+    data: cabinets,
+    isPending,
+    isError: cabinetsFailed,
+    refetch: refetchCabinets,
+  } = useCabinets(canRead);
   const [selected, setSelected] = useState<string>();
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -277,7 +292,13 @@ export default function CabinetsPage() {
   // The inbox is a reserved key rather than a cabinet, so nothing is asked about it here —
   // the inbox reads its own listing. Passing it through would ask the cabinet route about an
   // id that is not one, which answers 404 on every visit.
-  const { data: documents, isFetching } = useCabinetDocuments(showingUnfiled ? undefined : selected, {
+  const {
+    data: documents,
+    isFetching,
+    isError: documentsFailed,
+    error: documentsError,
+    refetch: refetchDocuments,
+  } = useCabinetDocuments(showingUnfiled ? undefined : selected, {
     includeSubtree,
     page,
     pageSize,
@@ -363,12 +384,7 @@ export default function CabinetsPage() {
     }
     void (async () => {
       try {
-        await updateCabinet.mutateAsync({
-          id: cabinet.id,
-          name: cabinet.name,
-          description: cabinet.description,
-          parentId,
-        });
+        await updateCabinet.mutateAsync({ id: cabinet.id, ...cabinetWriteOf(cabinet, { parentId }) });
         message.success(t('common.saved'));
       } catch (error) {
         failed(error);
@@ -432,7 +448,23 @@ export default function CabinetsPage() {
           </Button>
         )}
       </Flex>
-      {isPending ? (
+      {cabinetsFailed && (
+        // A tree that could not be read is not an empty one. The inbox below it reads its own
+        // listing, so it stays usable while the shelves are asked for again.
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="cabinets-load-failed"
+          style={{ marginBottom: 12 }}
+          title={cabinets === undefined ? t('cabinets.loadFailed') : t('common.refreshFailed')}
+          action={
+            <Button size="small" onClick={() => void refetchCabinets()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      )}
+      {isPending && !cabinetsFailed ? (
         <Spin />
       ) : (
         <Tree
@@ -583,13 +615,21 @@ export default function CabinetsPage() {
             />
           )}
 
+          <ReadFailedAlert
+            isError={documentsFailed}
+            error={documentsError}
+            held={documents !== undefined}
+            onRetry={refetchDocuments}
+            title={t('cabinets.listLoadFailed')}
+            testId="cabinet-documents-load-failed"
+          />
           <Table<CabinetDocument>
             scroll={{ x: 'max-content' }}
             rowKey="id"
             size="middle"
             loading={isFetching && !documents}
             dataSource={documents?.items}
-            locale={{ emptyText: t('cabinets.noDocuments') }}
+            locale={{ emptyText: documentsFailed && !documents ? <span /> : t('cabinets.noDocuments') }}
             rowSelection={
               canWrite
                 ? {
@@ -724,9 +764,7 @@ export default function CabinetsPage() {
           placeholder={t('cabinets.pickCabinet')}
           value={refileTarget}
           onChange={setRefileTarget}
-          options={(cabinets ?? [])
-            .filter((cabinet) => cabinet.id !== selected)
-            .map((cabinet) => ({ value: cabinet.id, label: cabinet.name }))}
+          options={cabinetPathOptions(cabinets ?? []).filter((option) => option.value !== selected)}
         />
       </Modal>
     </>

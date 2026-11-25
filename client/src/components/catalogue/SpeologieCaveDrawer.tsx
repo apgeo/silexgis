@@ -2,6 +2,7 @@
 import { Alert, Descriptions, Drawer, Skeleton, Space, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSpeologieCave, type SpeologieCave } from '../../api/hooks.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 
 interface Props {
   cave: SpeologieCave | null;
@@ -39,7 +40,16 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
       }
       data-testid="speologie-cave-drawer"
     >
-      {detail.isPending && cave !== null ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
+      {detail.isPending && cave !== null && !detail.isError ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
+      {/* What the list already said is still shown below; the failure is that of the full record. */}
+      <ReadFailedAlert
+        isError={detail.isError && detail.data === undefined}
+        error={detail.error}
+        held={false}
+        onRetry={detail.refetch}
+        title={t('speologie.caveLoadFailed')}
+        testId="speologie-cave-load-failed"
+      />
 
       {full ? (
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -73,7 +83,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                 children: full.rockCode ? (
                   <Space orientation="vertical" size={0}>
                     <span>{full.rockCode}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {t('speologie.detail.rockCodeHint')}
                     </Typography.Text>
                   </Space>
@@ -95,7 +105,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                 children: full.hydroBasin ? (
                   <Space orientation="vertical" size={0}>
                     <span>{full.hydroBasin.name}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {full.hydroBasin.path}
                     </Typography.Text>
                   </Space>
@@ -104,7 +114,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                   // hold — show the number rather than nothing, and say why it is only a number.
                   <Space orientation="vertical" size={0}>
                     <span>{full.hydroBasinId}</span>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {t('speologie.detail.hydroBasinUnknown')}
                     </Typography.Text>
                   </Space>
@@ -127,7 +137,7 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
                   {detail.data.description}
                 </Typography.Paragraph>
               </>
-            ) : detail.isPending ? null : (
+            ) : detail.isPending || detail.isError ? null : (
               <Typography.Text type="secondary">{t('speologie.detail.noDescription')}</Typography.Text>
             )}
           </div>

@@ -6,6 +6,8 @@ import {
   clusterByCave,
   clusteredScatter,
   clusteringScopeFor,
+  principalAxesMeasures,
+  principalScatter,
   publishableClusters,
   scatterClusteringMeasures,
   scatterPointsFor,
@@ -184,5 +186,57 @@ describe('the points the scatter draws', () => {
     });
     const groups = clusteredScatter([cave('a', 10, 10), cave('b', 20, 20), cave('z', 30, 30)], three);
     expect(groups!.map((g) => g.cluster)).toEqual([0, 1, null]);
+  });
+});
+
+describe('the caves on their principal axes', () => {
+  const projection = {
+    measures: ['surveyedLength', 'depth'],
+    droppedMeasures: [],
+    first: { loadings: [0.71, 0.71], explainedShare: 0.8 },
+    second: { loadings: [-0.71, 0.71], explainedShare: 0.2 },
+    positions: [
+      { caveId: 'a', x: 1.5, y: -0.2 },
+      { caveId: 'b', x: -1, y: 0.4 },
+      { caveId: 'c', x: 0.1, y: 0.1 },
+      { caveId: 'elsewhere', x: 9, y: 9 },
+    ],
+  } as NonNullable<RegistryClustering['projection']>;
+
+  it('is asked over more than the two measures the plain scatter draws', () => {
+    expect(principalAxesMeasures.split(',').length).toBeGreaterThan(2);
+    expect(clusteringScopeFor({ caveTypeId: 2 }, principalAxesMeasures)).toEqual({
+      measures: principalAxesMeasures,
+      caveTypeId: 2,
+    });
+  });
+
+  it('draws only the positioned caves that are on the page, split by published group', () => {
+    const groups = principalScatter(
+      [cave('a', 1, 1), cave('b', 1, 1), cave('c', 1, 1)],
+      clustering({ projection }),
+    );
+    expect(groups).toEqual([
+      { cluster: 0, points: [[1.5, -0.2], [-1, 0.4]] },
+      // c is in a withheld group: drawn, uncoloured, with the ungrouped.
+      { cluster: null, points: [[0.1, 0.1]] },
+    ]);
+  });
+
+  it('draws nothing where the server published no projection', () => {
+    expect(principalScatter([cave('a', 1, 1)], clustering({ projection: null }))).toBeNull();
+    expect(principalScatter([cave('a', 1, 1)], undefined)).toBeNull();
+  });
+
+  it('draws nothing when none of the positioned caves is on this page', () => {
+    expect(principalScatter([cave('zzz', 1, 1)], clustering({ projection }))).toBeNull();
+  });
+
+  it('still draws when no group is published, because the axes are a finding of their own', () => {
+    const groups = principalScatter(
+      [cave('c', 1, 1)],
+      clustering({ projection, clusters: [], assignments: [] }),
+    );
+    expect(groups).toEqual([{ cluster: null, points: [[0.1, 0.1]] }]);
   });
 });

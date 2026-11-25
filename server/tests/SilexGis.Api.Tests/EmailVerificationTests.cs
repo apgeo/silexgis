@@ -45,9 +45,9 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
             password = AuthHelper.Password,
             displayName = "New Caver",
         });
-        register.StatusCode.ShouldBe(HttpStatusCode.Created, await register.Content.ReadAsStringAsync());
+        register.StatusCode.ShouldBe(HttpStatusCode.Accepted, await register.Content.ReadAsStringAsync());
         var created = await register.Content.ReadFromJsonAsync<JsonElement>();
-        created.GetProperty("confirmationSent").GetBoolean().ShouldBeTrue();
+        created.GetProperty("mailSent").GetBoolean().ShouldBeTrue();
         created.GetProperty("confirmationRequired").GetBoolean().ShouldBeFalse();
 
         // The message really went to the new address, and carries a usable link.
@@ -104,6 +104,77 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
         (await confirm.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("auth.confirm_invalid");
         (await UserAsync(email)).EmailConfirmed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Registering_a_taken_address_answers_as_a_new_one_and_mails_the_holder_instead()
+    {
+        using var client = factory.CreateClient();
+        var taken = Unique();
+        var takenId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, taken);
+        var fresh = Unique();
+        factory.Messages.Clear();
+
+        var forTaken = await client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            email = taken,
+            password = "someone-elses-password-1",
+            displayName = "Somebody",
+        });
+        var forFresh = await client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            email = fresh,
+            password = "someone-elses-password-1",
+            displayName = "Somebody",
+        });
+
+        // One answer for both: the same status, no location, and the same members with the same
+        // values — nothing in it names an account, so nothing in it can tell the two apart.
+        forTaken.StatusCode.ShouldBe(HttpStatusCode.Accepted, await forTaken.Content.ReadAsStringAsync());
+        forFresh.StatusCode.ShouldBe(HttpStatusCode.Accepted, await forFresh.Content.ReadAsStringAsync());
+        forTaken.Headers.Location.ShouldBeNull();
+        forFresh.Headers.Location.ShouldBeNull();
+        var takenBody = await forTaken.Content.ReadFromJsonAsync<JsonElement>();
+        var freshBody = await forFresh.Content.ReadFromJsonAsync<JsonElement>();
+        takenBody.TryGetProperty("userId", out _).ShouldBeFalse(takenBody.ToString());
+        takenBody.GetProperty("email").GetString().ShouldBe(taken);
+        freshBody.GetProperty("email").GetString().ShouldBe(fresh);
+        Without(takenBody, "email").ShouldBe(Without(freshBody, "email"));
+        takenBody.GetProperty("mailSent").GetBoolean().ShouldBeTrue();
+
+        // The new address got its confirmation; the holder of the taken one got a way back in
+        // instead, and no second account was opened over theirs.
+        factory.Messages.LastTo(fresh).Link.Query.ShouldContain("user=");
+        var hint = factory.Messages.LastTo(taken);
+        hint.Subject!.ShouldContain("already have");
+        hint.Link.AbsolutePath.ShouldContain("reset");
+        (await CountAsync(taken)).ShouldBe(1);
+        (await UserAsync(taken)).Id.ShouldBe(takenId);
+
+        // The holder's own password still works: the attempt changed nothing on their account.
+        (await client.PostAsJsonAsync("/api/v1/auth/login", new { email = taken, password = AuthHelper.Password }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Registering_a_taken_address_with_a_short_password_is_refused_as_a_new_one_would_be()
+    {
+        using var client = factory.CreateClient();
+        var taken = Unique();
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, taken);
+        factory.Messages.Clear();
+
+        var forTaken = await client.PostAsJsonAsync("/api/v1/auth/register", new { email = taken, password = "nine-char" });
+        var forFresh = await client.PostAsJsonAsync("/api/v1/auth/register", new { email = Unique(), password = "nine-char" });
+
+        forTaken.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        forFresh.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var takenBody = await forTaken.Content.ReadFromJsonAsync<JsonElement>();
+        var freshBody = await forFresh.Content.ReadFromJsonAsync<JsonElement>();
+        takenBody.GetProperty("code").GetString().ShouldBe("auth.registration_invalid");
+        takenBody.GetProperty("errors").ToString().ShouldBe(freshBody.GetProperty("errors").ToString());
+        takenBody.GetProperty("errors").TryGetProperty("PasswordTooShort", out _).ShouldBeTrue(takenBody.ToString());
+        factory.Messages.Messages.Count.ShouldBe(0);
     }
 
     [Fact]
@@ -250,6 +321,17 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
 
     private static string Unique() => $"verify-{Guid.NewGuid():N}@t.local";
 
+    /// <summary>A body's members other than one, as text, so two answers can be compared whole.</summary>
+    private static string Without(JsonElement body, string member) =>
+        string.Join(",", body.EnumerateObject().Where(p => p.Name != member).Select(p => $"{p.Name}={p.Value}"));
+
+    private async Task<int> CountAsync(string email)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Users.CountAsync(u => u.Email == email);
+    }
+
     private async Task<SilexGisUser> UserAsync(string email)
     {
         using var scope = factory.Services.CreateScope();
@@ -269,8 +351,8 @@ public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClass
     }
 
     /// <summary>
-    /// The settings live in the database, which is shared with every other test class in this
-    /// collection — a policy left switched on here would silently change what they are testing.
+    /// The settings live in this class's database, which its tests share — a policy left switched
+    /// on by one test would silently change what the next one is testing.
     /// </summary>
     public async ValueTask DisposeAsync()
     {

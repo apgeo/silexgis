@@ -9,7 +9,8 @@ import Polygon from 'ol/geom/Polygon';
 import { Draw, Modify, Snap, Translate } from 'ol/interaction';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import type VectorSource from 'ol/source/Vector';
-import { getSurfaceFeatureSource } from './featureLayer.ts';
+import { fetchFeatureVersion } from '../api/hooks.ts';
+import { getSurfaceFeatureSource, PENDING_RESHAPE, SAVE_REFUSED } from './featureLayer.ts';
 import { coarsePointer } from './pointer.ts';
 
 // All OL edit interactions live here; React components only dispatch intents and
@@ -49,7 +50,16 @@ export interface PendingEdits {
   modified: globalThis.Map<string, object>;
 }
 
-type Command = { undo: () => void; redo: () => void };
+type Command = {
+  undo: () => void;
+  redo: () => void;
+  /**
+   * The saved feature a reshape step changes. Its redo is only good while that very object is
+   * still on the map: once every reshape of it is undone the layer no longer holds it, and a reload
+   * swaps it for the server's copy.
+   */
+  reshapes?: Feature;
+};
 
 // Fewest vertices a shape can be finished with — the same thresholds OL enforces on the
 // finishing *gesture*, restated here because the programmatic finish enforces nothing.
@@ -81,13 +91,31 @@ export class MapEditController {
 
   private createdFeatures: { feature: Feature; geometryType: DrawShape }[] = [];
   private modifiedGeometries = new globalThis.Map<string, object>();
+  /**
+   * How many recorded reshapes of each saved feature are in effect — gestures made, less those
+   * undone. At zero the feature is back in the shape the server holds and is no longer pending,
+   * so undoing every edit leaves nothing to save rather than an update that changes nothing.
+   */
+  private reshapeCounts = new globalThis.Map<string, number>();
+
+  /**
+   * The version of each reshaped saved feature that its reshaping began from, read as the first
+   * gesture on it starts, and kept with the very object the gesture took hold of. The save names
+   * this version, so a change somebody else saved since is refused rather than overwritten by a
+   * shape drawn over the older one. A reload that replaces the object puts a newer shape on the
+   * map, and the next gesture on it reads the version afresh.
+   */
+  private openedVersions = new globalThis.Map<string, { feature: Feature; version: Promise<string | undefined> }>();
 
   /** Which saved features the reshaping tools may take hold of. */
   private reshapeScope: ReshapeScope = { kind: 'every' };
 
-  constructor(map: Map) {
+  private readonly readVersion: (id: string) => Promise<string | undefined>;
+
+  constructor(map: Map, readVersion: (id: string) => Promise<string | undefined> = fetchFeatureVersion) {
     this.map = map;
     this.source = getSurfaceFeatureSource();
+    this.readVersion = readVersion;
   }
 
   /** Registers a state listener; it is called immediately with the current snapshot. */
@@ -98,6 +126,14 @@ export class MapEditController {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  /**
+   * The version a reshaped saved feature's pending shape was drawn against, for the save to name.
+   * Undefined when it could not be read when the reshaping began.
+   */
+  openedVersion(id: string): Promise<string | undefined> {
+    return this.openedVersions.get(id)?.version ?? Promise.resolve(undefined);
   }
 
   getPendingEdits(): PendingEdits {
@@ -196,12 +232,14 @@ export class MapEditController {
   }
 
   redo(): void {
+    this.dropStaleRedo();
     const command = this.redoStack.pop();
     if (command) {
       command.redo();
       this.undoStack.push(command);
-      this.emit();
     }
+    // Emitted even with nothing redone: dropping stale steps can have emptied the stack.
+    this.emit();
   }
 
   /**
@@ -320,16 +358,76 @@ export class MapEditController {
     this.onPointPlaced?.(mode, lonLat);
   }
 
+  /**
+   * Takes a drawn feature off the pending list once the server has created it, so that a save
+   * which fails part way leaves exactly what was not saved, and a retry cannot create this one a
+   * second time. The feature stays on the map as the saved feature it now is — carrying its
+   * server id, reshapable as any saved feature — until the next load replaces it with the
+   * server's copy.
+   */
+  markCreatedSaved(feature: Feature, id: string): void {
+    this.createdFeatures = this.createdFeatures.filter((c) => c.feature !== feature);
+    feature.set('id', id);
+    feature.unset('pendingNew');
+    feature.unset('pendingAttrs');
+    feature.unset(SAVE_REFUSED);
+    this.forgetHistory();
+  }
+
+  /** Marks a drawing the server refused to create, so the map shows which one it was. */
+  markCreatedRefused(feature: Feature): void {
+    feature.set(SAVE_REFUSED, true);
+  }
+
+  /** Marks a reshaped saved feature whose new shape the server refused, so the map shows which. */
+  markModifiedRefused(id: string): void {
+    for (const feature of this.source.getFeatures()) {
+      if (feature.get('id') === id && feature.get(PENDING_RESHAPE) === true) {
+        feature.set(SAVE_REFUSED, true);
+      }
+    }
+  }
+
+  /** Takes the refusal marks of the last Save off, as the next one goes out. */
+  clearRefused(): void {
+    for (const feature of this.source.getFeatures()) {
+      if (feature.get(SAVE_REFUSED) === true) {
+        feature.unset(SAVE_REFUSED);
+      }
+    }
+  }
+
+  /**
+   * Takes a saved feature's reshaped geometry off the pending list once the server has stored it —
+   * unless the feature was reshaped again while that request was out, in which case the newer
+   * shape is still pending and stays on the list.
+   */
+  markModifiedSaved(id: string, sentGeometry: object): void {
+    if (this.modifiedGeometries.get(id) === sentGeometry) {
+      this.modifiedGeometries.delete(id);
+      this.reshapeCounts.delete(id);
+      // The stored shape is now this editor's own, at a version its next gesture reads afresh.
+      this.openedVersions.delete(id);
+      this.releaseReshaped((feature) => feature.get('id') === id);
+    }
+    this.forgetHistory();
+  }
+
   /** Called by the toolbar after a successful save or discard. */
   reset(): void {
-    this.createdFeatures = [];
-    this.modifiedGeometries.clear();
-    this.undoStack = [];
-    this.redoStack = [];
+    this.dropPending();
     this.setMode('none');
   }
 
+  /**
+   * Lets go of the map. Whatever was not saved goes with this controller, exactly as a discard
+   * would take it: the feature source outlives the page, so a drawing or a reshape left in it would
+   * come back with the next visit to the map as a feature no controller tracks — still drawn, never
+   * saved, and a reshaped one in a shape its editor threw away, which the next reshape of it would
+   * then write to the server.
+   */
   dispose(): void {
+    this.dropPending();
     this.detachInteractions();
     this.listeners.clear();
     this.onDrawEnd = undefined;
@@ -408,6 +506,9 @@ export class MapEditController {
 
     const capture = (features: Feature[]) => {
       before = new globalThis.Map(features.map((f) => [f, f.getGeometry()!.clone()]));
+      for (const feature of features) {
+        this.noteOpenedVersion(feature);
+      }
     };
     const commit = (features: Feature[]) => {
       // The end event only fires after an actual change; snapshot both sides for undo.
@@ -417,15 +518,17 @@ export class MapEditController {
           continue;
         }
         const next = feature.getGeometry()!.clone();
-        this.registerGeometryChange(feature);
+        const saved = feature.get('id') !== undefined && feature.get('pendingNew') !== true;
+        this.registerGeometryChange(feature, 1);
         this.pushCommand({
+          reshapes: saved ? feature : undefined,
           undo: () => {
             feature.setGeometry(previous.clone());
-            this.registerGeometryChange(feature);
+            this.registerGeometryChange(feature, -1);
           },
           redo: () => {
             feature.setGeometry(next.clone());
-            this.registerGeometryChange(feature);
+            this.registerGeometryChange(feature, 1);
           },
         });
       }
@@ -441,10 +544,40 @@ export class MapEditController {
     }
   }
 
-  private registerGeometryChange(feature: Feature): void {
+  /** Reads the version a saved feature is at as the first gesture on this object of it starts. */
+  private noteOpenedVersion(feature: Feature): void {
+    const id = feature.get('id') as string | undefined;
+    if (!id || feature.get('pendingNew') === true || this.openedVersions.get(id)?.feature === feature) {
+      return;
+    }
+    const entry = {
+      feature,
+      version: this.readVersion(id).catch(() => {
+        // Not read: the next gesture tries again, and until then the save names none of its own.
+        if (this.openedVersions.get(id) === entry) {
+          this.openedVersions.delete(id);
+        }
+        return undefined;
+      }),
+    };
+    this.openedVersions.set(id, entry);
+  }
+
+  private registerGeometryChange(feature: Feature, step: 1 | -1): void {
     const id = feature.get('id') as string | undefined;
     if (id && feature.get('pendingNew') !== true) {
+      const count = (this.reshapeCounts.get(id) ?? 0) + step;
+      if (count <= 0) {
+        this.reshapeCounts.delete(id);
+        this.modifiedGeometries.delete(id);
+        feature.unset(PENDING_RESHAPE);
+        return;
+      }
+      this.reshapeCounts.set(id, count);
       this.modifiedGeometries.set(id, MapEditController.toGeoJsonGeometry(feature.getGeometry()!));
+      // Marks the feature as the editor's, so a reload of the layer keeps this object in its
+      // edited shape instead of replacing it with the server's stored one.
+      feature.set(PENDING_RESHAPE, true);
     }
   }
 
@@ -484,6 +617,62 @@ export class MapEditController {
     this.emit();
   }
 
+  /**
+   * Throws away every pending edit: the drawings come off the map, and the reshaped features are
+   * handed back to the layer, whose next load replaces them with the stored shapes. After a whole
+   * save both lists are already empty here.
+   */
+  private dropPending(): void {
+    this.clearRefused();
+    for (const { feature } of this.createdFeatures) {
+      if (this.source.hasFeature(feature)) {
+        this.source.removeFeature(feature);
+      }
+    }
+    this.releaseReshaped(() => true);
+    this.createdFeatures = [];
+    this.modifiedGeometries.clear();
+    this.reshapeCounts.clear();
+    this.openedVersions.clear();
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
+  /** Stops the layer holding these features in their edited shape across its reloads. */
+  private releaseReshaped(which: (feature: Feature) => boolean): void {
+    for (const feature of this.source.getFeatures()) {
+      if (feature.get(PENDING_RESHAPE) === true && which(feature)) {
+        feature.unset(PENDING_RESHAPE);
+      }
+    }
+  }
+
+  /**
+   * Once anything has reached the server the edit history no longer describes what is pending:
+   * undoing a draw that was saved would only hide the feature, and redoing it would put it back
+   * on the pending list to be created again. A save that partly succeeded therefore ends the
+   * history just as a whole save does.
+   */
+  private isStale(command: Command): boolean {
+    return command.reshapes !== undefined && !this.source.hasFeature(command.reshapes);
+  }
+
+  /**
+   * Drops the redo steps of saved features that a reload has since replaced. Redoing one would set
+   * the edited shape on an object no longer on the map and put that shape on the pending list, so
+   * Save would write a shape the editor cannot see. The steps of each feature stand on their own,
+   * so the rest of the stack keeps its order and meaning.
+   */
+  private dropStaleRedo(): void {
+    this.redoStack = this.redoStack.filter((command) => !this.isStale(command));
+  }
+
+  private forgetHistory(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+    this.emit();
+  }
+
   private syncDirty(): void {
     this.emit();
   }
@@ -497,7 +686,7 @@ export class MapEditController {
     this.state = {
       ...this.state,
       canUndo: this.undoStack.length > 0,
-      canRedo: this.redoStack.length > 0,
+      canRedo: this.redoStack.some((command) => !this.isStale(command)),
       dirty: this.createdFeatures.length + this.modifiedGeometries.size,
       created: this.createdFeatures.length,
     };

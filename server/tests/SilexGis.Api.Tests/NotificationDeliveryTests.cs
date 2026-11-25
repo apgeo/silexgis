@@ -26,9 +26,9 @@ namespace SilexGis.Api.Tests;
 /// to be read and simply never left the system.
 /// </summary>
 /// <remarks>
-/// The worker never runs in tests (the factory sets its poll interval to zero, because every test
-/// class shares one database). Drains are driven directly instead, which is also what makes the
-/// digest testable without waiting a day.
+/// The worker never runs in tests (the factory sets its poll interval to zero, because a worker
+/// settles rows between a request and its assertions). Drains are driven directly instead, which
+/// is also what makes the digest testable without waiting a day.
 /// </remarks>
 public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
@@ -65,9 +65,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         recipientId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, RecipientEmail);
 
         // Leaving a caving group is refused outright when the installation would be left with no
-        // live full administrator, so a class that never mints one can only pass while some other
-        // class happens to have run first and left one behind in the shared database. This class
-        // creates only a manager and an editor, so it seeds its own and depends on nobody.
+        // live full administrator, and a class's database starts with none. This class creates
+        // only a manager and an editor, so it seeds its own administrator.
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"notify-adm-{suffix}@t.local");
 
         manager = await AuthHelper.BearerClientAsync(factory, ManagerEmail);
@@ -1370,7 +1369,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
     /// <remarks>
     /// <para>
     /// Aimed at this test's own recipient rather than at "the next send": the drain settles whatever
-    /// is due in the shared database, so a one-shot failure could land on another class's message
+    /// is due in this class's database, so a one-shot failure could land on another test's message
     /// and leave this one delivered on the first pass.
     /// </para>
     /// <para>
@@ -1528,8 +1527,8 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
             .Where(r => r.RecipientUserId == recipientId || r.RecipientUserId == managerId)
             .ExecuteDeleteAsync();
 
-        // A retention window saved by one test would otherwise decide how long another class's
-        // notifications are kept, against the one database they all share.
+        // A retention window saved by one test would otherwise decide how long the next test's
+        // notifications are kept, in the database the tests of this class share.
         await db.AppSettings.Where(a => a.Key == AppSettingSections.Notifications).ExecuteDeleteAsync();
         Dispose();
     }

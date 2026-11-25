@@ -40,6 +40,14 @@ describe('a refusal the server has settled', () => {
     expect(isSettledRefusal(new TypeError('Failed to fetch'))).toBe(false);
   });
 
+  it('leaves a collision with another transaction unsettled, though it is a 409', () => {
+    // The database broke the request off for colliding with another one at the same moment and
+    // saved nothing; the identical request sent again normally succeeds. Any other 409 is final.
+    expect(isSettledRefusal(new ApiError(409, 'concurrency.transaction_conflict'))).toBe(false);
+    expect(retryQuery(0, new ApiError(409, 'concurrency.transaction_conflict'))).toBe(true);
+    expect(isSettledRefusal(new ApiError(409, 'share.already_exists'))).toBe(true);
+  });
+
   // The retry policy is this rule and not a second reading of it: a 4xx that stopped being
   // retried while some screen still called it transient is exactly the disagreement being avoided.
   it('is the same answer the retry policy acts on', () => {
@@ -205,6 +213,40 @@ describe('the version an answer carries', () => {
     });
     expect(carriedOn('PUT', '/api/v1/features/f-2/links')).toBeNull();
     expect(carriedOn('PUT', '/api/v1/features/f-2')).toBe('"30"');
+  });
+
+  it('is not taken from a read that was sent before a write and answered after it', () => {
+    // A focus re-read goes out, the person saves, the save answers first and the read second. The
+    // read speaks for the record as it stood before the save; filing its tag over the save's would
+    // make the next save carry a version the server has moved past, and it would be refused as a
+    // change somebody else made when nobody did.
+    const path = '/api/v1/trip-logs/t-race';
+    answered('GET', path, { status: 200, headers: { ETag: '"4"' } });
+    const read = new Request(origin + path, { method: 'GET' });
+    threadsVersions.onRequest({ request: read, id: 'read-1' });
+    const write = new Request(origin + path, { method: 'PUT' });
+    threadsVersions.onRequest({ request: write, id: 'write-1' });
+    threadsVersions.onResponse({
+      request: write,
+      response: new Response(null, { status: 200, headers: { ETag: '"5"' } }),
+      id: 'write-1',
+    });
+    threadsVersions.onResponse({
+      request: read,
+      response: new Response(null, { status: 200, headers: { ETag: '"4"' } }),
+      id: 'read-1',
+    });
+    expect(lastReadETag(path)).toBe('"5"');
+
+    // A read sent after the write answered is the record as it now stands, and is filed.
+    const later = new Request(origin + path, { method: 'GET' });
+    threadsVersions.onRequest({ request: later, id: 'read-2' });
+    threadsVersions.onResponse({
+      request: later,
+      response: new Response(null, { status: 200, headers: { ETag: '"6"' } }),
+      id: 'read-2',
+    });
+    expect(lastReadETag(path)).toBe('"6"');
   });
 
   it('is filed where an action says it belongs, and nowhere when the action does not say', () => {

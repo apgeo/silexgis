@@ -220,7 +220,7 @@ export function useSaveAccountPreferences() {
 }
 
 /** How long a burst of changes — a panel being dragged wider — is let settle before it is written. */
-const SAVE_DELAY_MS = 1500;
+export const SAVE_DELAY_MS = 1500;
 
 /** The longest a sign-out waits for the last change to be written before going ahead without it. */
 const FLUSH_WAIT_MS = 3000;

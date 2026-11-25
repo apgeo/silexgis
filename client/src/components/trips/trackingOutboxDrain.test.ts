@@ -8,6 +8,13 @@ import type { HeldReport } from './trackingOutbox.ts';
  * error type. Asked for afresh it is a tab just opened — which is how two tabs of one browser are
  * stood up here, sharing nothing but storage, exactly as they do.
  */
+// What the transport's latest sign-in renewal came to, as the sign-in module would answer it.
+let lastRenewal: 'renewed' | 'lapsed' | 'noAnswer' | null = null;
+vi.mock('../../auth/renewSignIn.ts', async (original) => ({
+  ...(await original<typeof import('../../auth/renewSignIn.ts')>()),
+  lastSignInRenewal: () => lastRenewal,
+}));
+
 async function openTab() {
   vi.resetModules();
   const outbox = await import('./trackingOutbox.ts');
@@ -73,6 +80,7 @@ function log() {
 
 beforeEach(() => {
   made = 0;
+  lastRenewal = null;
   window.localStorage.clear();
 });
 
@@ -272,6 +280,25 @@ describe('sending the held reports', () => {
     },
   );
 
+  // A collision with another transaction is a 409, but it is about the moment and not about the
+  // report: nothing was saved, and the same report goes through once the wait it named is over.
+  it('leaves a report held when it collided with another change, and sends it after the wait', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-01T11:00:00.000Z'));
+    const tab = await openTab();
+    tab.holdReport(report());
+    const send = vi.fn<(request: TrackingReportRequest) => Promise<unknown[]>>(() =>
+      Promise.reject(new tab.ApiError(409, 'concurrency.transaction_conflict', undefined, undefined, 1_000)),
+    );
+
+    expect(await tab.drainHeldReports(ANA, send)).toMatchObject({ refused: 0, stopped: 'serverBusy' });
+    expect(tab.heldReportsOf(ANA)[0]).toMatchObject({ state: 'held' });
+
+    vi.advanceTimersByTime(1_000);
+    send.mockImplementation(() => Promise.resolve([{}]));
+    expect(await tab.drainHeldReports(ANA, send)).toMatchObject({ sent: 1, stopped: null });
+  });
+
   it.each([
     ['the server fails without naming a wait', 'serverBusy'],
     ['no answer comes', 'noAnswer'],
@@ -384,80 +411,44 @@ describe('sending the held reports', () => {
   });
 
   describe('when the sign-in ran out while the report was held', () => {
-    it('renews it and sends the same report again under the same key', async () => {
-      const tab = await openTab();
-      const first = report();
-      const second = report();
-      tab.holdReport(first);
-      tab.holdReport(second);
-      const asked: string[] = [];
-      let signedIn = false;
-      const send = async (request: TrackingReportRequest) => {
-        asked.push(request.clientKey!);
-        if (!signedIn) throw new tab.ApiError(401);
-        return [{}];
-      };
-      const renew = vi.fn(async () => {
-        signedIn = true;
-        return 'renewed' as const;
-      });
-
-      const result = await tab.drainHeldReports(ANA, send, renew);
-
-      expect(result).toMatchObject({ sent: 2, refused: 0, stopped: null });
-      expect(asked).toEqual([first.clientKey, first.clientKey, second.clientKey]);
-      expect(renew).toHaveBeenCalledTimes(1);
-      expect(tab.heldReportsOf(ANA)).toEqual([]);
-      expect(tab.isHeldReportsSignInLapsed()).toBe(false);
-    });
-
-    it('leaves it held and says the sign-in is over when it cannot be renewed', async () => {
+    // A report is sent through the transport, which renews a lapsed sign-in once and resends by
+    // itself; a refusal as coming from nobody that reaches the run is one it could not get past.
+    // What that renewal came to is read, not asked for again.
+    it('leaves it held, says the sign-in is over and sends it no second time', async () => {
       vi.useFakeTimers();
+      lastRenewal = 'lapsed';
       const tab = await openTab();
+      tab.holdReport(report());
       tab.holdReport(report());
       const woken = vi.fn();
       tab.wakeHeldReportsWith(woken);
       const send = vi.fn(() => Promise.reject(new tab.ApiError(401)));
 
-      const result = await tab.drainHeldReports(ANA, send, async () => 'lapsed');
+      const result = await tab.drainHeldReports(ANA, send);
 
       expect(result).toMatchObject({ sent: 0, refused: 0, stopped: 'signedOut' });
+      // Neither the same report again nor the one after it: both would meet the same refusal.
       expect(send).toHaveBeenCalledTimes(1);
-      expect(tab.heldReportsOf(ANA)[0]).toMatchObject({ state: 'held' });
+      expect(tab.heldReportsOf(ANA).map((entry) => entry.state)).toEqual(['held', 'held']);
       expect(tab.isHeldReportsSignInLapsed()).toBe(true);
       // Waiting changes nothing about a sign-in that is over, so nothing is set to try again.
       vi.advanceTimersByTime(10 * 60_000);
       expect(woken).not.toHaveBeenCalled();
     });
 
-    it('renews once in a run: a second refusal straight after a renewal ends it', async () => {
-      const tab = await openTab();
-      tab.holdReport(report());
-      const send = vi.fn(() => Promise.reject(new tab.ApiError(401)));
-      const renew = vi.fn(async () => 'renewed' as const);
-
-      const result = await tab.drainHeldReports(ANA, send, renew);
-
-      expect(result).toMatchObject({ stopped: 'signedOut' });
-      expect(send).toHaveBeenCalledTimes(2);
-      expect(renew).toHaveBeenCalledTimes(1);
-      expect(tab.heldReportsOf(ANA)[0]).toMatchObject({ state: 'held' });
-    });
-
     it('treats a renewal nobody answered as no answer, to be tried again, and not as a sign-in that is over', async () => {
       vi.useFakeTimers();
+      lastRenewal = 'noAnswer';
       const tab = await openTab();
       tab.holdReport(report());
       const woken = vi.fn();
       tab.wakeHeldReportsWith(woken);
+      const send = vi.fn(() => Promise.reject(new tab.ApiError(401)));
 
-      const result = await tab.drainHeldReports(
-        ANA,
-        () => Promise.reject(new tab.ApiError(401)),
-        async () => 'noAnswer',
-      );
+      const result = await tab.drainHeldReports(ANA, send);
 
       expect(result).toMatchObject({ stopped: 'noAnswer' });
+      expect(send).toHaveBeenCalledTimes(1);
       expect(tab.isHeldReportsSignInLapsed()).toBe(false);
       vi.advanceTimersByTime(5_000);
       expect(woken).toHaveBeenCalledTimes(1);

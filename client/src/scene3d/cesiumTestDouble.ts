@@ -117,6 +117,11 @@ export const engineState = {
    */
   captures: [] as FakeCapture[],
   captureFails: false,
+  /**
+   * The largest a drawing surface can be made, each way; a graphics card has such a number. Asked
+   * for more, the surface is silently made this size while its element keeps the size it was told.
+   */
+  surfaceLimit: 16384,
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
@@ -134,6 +139,7 @@ export const engineState = {
     Cesium3DTileset.forget();
     engineState.captures = [];
     engineState.captureFails = false;
+    engineState.surfaceLimit = 16384;
   },
 };
 
@@ -213,6 +219,14 @@ export class Cartesian3 {
 
   static fromDegrees(longitudeDegrees: number, latitudeDegrees: number, height = 0): FakeCartesian3 {
     return { longitudeDegrees, latitudeDegrees, height };
+  }
+
+  static fromRadians(longitude: number, latitude: number, height = 0): FakeCartesian3 {
+    return {
+      longitudeDegrees: CesiumMath.toDegrees(longitude),
+      latitudeDegrees: CesiumMath.toDegrees(latitude),
+      height,
+    };
   }
 
   static normalize(value: Cartesian3, result: Cartesian3): Cartesian3 {
@@ -413,6 +427,8 @@ export const Plane = {
 export class PerspectiveFrustum {
   near = 1;
   fovy = Math.PI / 3;
+  /** The angle across the wider side of the picture, which is what a lens is set by. */
+  fov = Math.PI / 3;
 }
 
 /**
@@ -886,6 +902,22 @@ interface FakeViewOptions {
   orientation?: { heading: number; pitch: number; roll: number };
 }
 
+function rectangleCameraPosition(
+  rectangle: { west: number; south: number; east: number; north: number },
+  frustum: PerspectiveFrustum | OrthographicFrustum,
+): FakeCartesian3 {
+  const latitude = (rectangle.south + rectangle.north) / 2;
+  const across =
+    Math.abs(rectangle.east - rectangle.west) * METERS_PER_DEGREE * Math.cos((latitude * Math.PI) / 180);
+  const along = Math.abs(rectangle.north - rectangle.south) * METERS_PER_DEGREE;
+  const fovy = frustum instanceof PerspectiveFrustum ? frustum.fovy : Math.PI / 3;
+  return {
+    longitudeDegrees: (rectangle.west + rectangle.east) / 2,
+    latitudeDegrees: latitude,
+    height: Math.max(across, along) / 2 / Math.tan(fovy / 2),
+  };
+}
+
 class FakeCamera {
   frustum: PerspectiveFrustum | OrthographicFrustum = new PerspectiveFrustum();
   positionWC: FakeCartesian3 = { longitudeDegrees: 0, latitudeDegrees: 0, height: 0 };
@@ -991,12 +1023,40 @@ class FakeCamera {
     return undefined;
   }
 
+  /** How many flights were called off; the destination of one is applied at once here anyway. */
+  flightsCancelled = 0;
+
+  cancelFlight() {
+    this.flightsCancelled += 1;
+  }
+
+  /**
+   * Where the real library stands a camera looking straight down to show a rectangle: over its
+   * middle, as high above the ELLIPSOID as the wider side needs. The library knows nothing of the
+   * ground for this, which is why a small box over high terrain comes out underground, and why
+   * the stand-in places the camera rather than only recording the box.
+   */
+  getRectangleCameraCoordinates(rectangle: { west: number; south: number; east: number; north: number }) {
+    this.framed.push(rectangle);
+    return rectangleCameraPosition(rectangle, this.frustum);
+  }
+
   private apply(options: FakeViewOptions) {
     const destination = options.destination as Partial<FakeCartesian3>;
     if (typeof destination?.longitudeDegrees === 'number') {
       this.positionWC = destination as FakeCartesian3;
     } else {
       this.framed.push(options.destination);
+      const rectangle = options.destination as { west?: number };
+      if (typeof rectangle?.west === 'number') {
+        this.positionWC = rectangleCameraPosition(
+          options.destination as { west: number; south: number; east: number; north: number },
+          this.frustum,
+        );
+        this.heading = 0;
+        this.pitch = -Math.PI / 2;
+        this.roll = 0;
+      }
     }
     if (options.orientation) {
       this.heading = options.orientation.heading;
@@ -1117,15 +1177,34 @@ export interface FakeMatrix4 {
   headingDegrees?: number;
   pitchDegrees?: number;
   rollDegrees?: number;
+  /**
+   * How many metres one metre of the frame's own up is drawn as, when the frame was stretched
+   * along it; absent for an unstretched frame. The one scale the scene ever applies is that one,
+   * so it is the only one modelled.
+   */
+  verticalScale?: number;
 }
 
+/** What the real library calls to build the frame a turn is applied in; see `headingPitchRollToFixedFrame`. */
+type FakeLocalFrame = (origin: FakeCartesian3, ellipsoid?: unknown, result?: FakeMatrix4) => FakeMatrix4;
+
 export const Transforms = {
-  eastNorthUpToFixedFrame(origin: FakeCartesian3): FakeMatrix4 {
+  eastNorthUpToFixedFrame(origin: FakeCartesian3, _ellipsoid?: unknown, _result?: FakeMatrix4): FakeMatrix4 {
     return { origin };
   },
-  headingPitchRollToFixedFrame(origin: FakeCartesian3, orientation: HeadingPitchRoll): FakeMatrix4 {
+  /**
+   * As the real one: the frame at the origin — the east-north-up one unless a function is given
+   * to build another — followed by the turn. Whatever that function did to the frame is kept.
+   */
+  headingPitchRollToFixedFrame(
+    origin: FakeCartesian3,
+    orientation: HeadingPitchRoll,
+    ellipsoid?: unknown,
+    localFrame?: FakeLocalFrame,
+  ): FakeMatrix4 {
+    const frame = localFrame ? localFrame(origin, ellipsoid) : { origin };
     return {
-      origin,
+      ...frame,
       headingDegrees: CesiumMath.toDegrees(orientation.heading),
       pitchDegrees: CesiumMath.toDegrees(orientation.pitch),
       rollDegrees: CesiumMath.toDegrees(orientation.roll),
@@ -1167,6 +1246,11 @@ export class Matrix4 {
     result.y = point.y;
     result.z = point.z;
     return result;
+  }
+
+  /** A frame with its own axes scaled; only the up axis's scale is kept, see `verticalScale`. */
+  static multiplyByScale(matrix: FakeMatrix4, scale: Cartesian3, _result: unknown): FakeMatrix4 {
+    return { ...matrix, verticalScale: (matrix.verticalScale ?? 1) * scale.z };
   }
 }
 
@@ -1282,6 +1366,25 @@ export interface FakeModelRequest {
 /** The library's axis names, with its own values. */
 export const Axis = { X: 0, Y: 1, Z: 2 } as const;
 
+/** A model's bounding sphere; only the scene's recording handle combines them. */
+export class BoundingSphere {
+  center: unknown;
+  radius: number;
+
+  constructor(center: unknown = undefined, radius = 0) {
+    this.center = center;
+    this.radius = radius;
+  }
+
+  /** Not the library's smallest enclosing sphere: the first centre, and the largest radius. */
+  static fromBoundingSpheres(spheres: BoundingSphere[]) {
+    return new BoundingSphere(spheres[0]?.center, Math.max(0, ...spheres.map((sphere) => sphere.radius)));
+  }
+}
+
+/** How a model's colour is combined with its own, with the library's values. */
+export const ColorBlendMode = { HIGHLIGHT: 0, REPLACE: 1, MIX: 2 } as const;
+
 /**
  * A loaded model.
  *
@@ -1316,6 +1419,15 @@ export class Model {
   /** False until {@link becomeReady}: the real library knows a model's nodes only once it is drawn. */
   ready = false;
   customShader: CustomShader | undefined;
+  color: Color | undefined;
+  colorBlendMode: number = ColorBlendMode.HIGHLIGHT;
+  colorBlendAmount = 0.5;
+  /**
+   * The library's own flag for whether a model may be left out of a frame for being off the screen
+   * — not on its published surface, read when it builds the model's draw commands. On, as in the
+   * library, until the scene says otherwise.
+   */
+  _cull = true;
   readonly readyEvent = {
     listeners: [] as (() => void)[],
     addEventListener(listener: () => void) {
@@ -1377,18 +1489,24 @@ export class Model {
     });
   }
 
-  /** Lands a read the scene is waiting on; with an error, refuses it instead. */
-  static deliver(url: string, error?: unknown) {
+  /**
+   * Lands a read the scene is waiting on, and hands back the model it landed as, so a test can see
+   * what became of it — drawn, or destroyed because nobody wanted it any more. With an error,
+   * refuses the read instead and hands back nothing.
+   */
+  static deliver(url: string, error?: unknown): Model | undefined {
     const pending = Model.waiting.get(url);
     if (!pending) {
       throw new Error(`no model read is waiting for ${url}`);
     }
     Model.waiting.delete(url);
     if (error === undefined) {
-      pending.resolve(new Model(pending.request));
-    } else {
-      pending.reject(error);
+      const model = new Model(pending.request);
+      pending.resolve(model);
+      return model;
     }
+    pending.reject(error);
+    return undefined;
   }
 
   /** Whether a read for this URL is still in the air. */
@@ -1415,6 +1533,14 @@ class FakePrimitiveCollection {
 
   contains(primitive: unknown): boolean {
     return this.items.includes(primitive);
+  }
+
+  get length(): number {
+    return this.items.length;
+  }
+
+  get(index: number): unknown {
+    return this.items[index];
   }
 
   /** Removing a primitive destroys it, the way the real collection does. */
@@ -1465,6 +1591,79 @@ export class ScreenSpaceEventHandler {
  */
 export class EllipsoidTerrainProvider {
   readonly kind = 'ellipsoid';
+}
+
+class FakeTerrainPickerNode {
+  intersectingTriangles = new Uint32Array(0);
+  children: FakeTerrainPickerNode[] = [];
+  buildingChildren = false;
+}
+
+/**
+ * The library's index of one surface tile's triangles, which every height read off the ground and
+ * every marker laid on it goes through. Exported by the library though left out of its type
+ * declarations. Modelled as far as the scene mends it, which is how it behaves when it is rebuilt —
+ * after the tile is stretched again — while a split of it is still away on a worker:
+ *
+ *   - a rebuild hands every triangle back to the root and drops its children, but keeps the root
+ *     itself, the same object the split in flight belongs to;
+ *   - a pick tests the triangles of the nodes it reaches, and sends a root with no children off to
+ *     be split one level down;
+ *   - a split that comes back gives its children whatever triangles fell in them — none, for
+ *     children a rebuild has dropped — and empties the node it split.
+ *
+ * So a split that left before a rebuild and lands after it empties a root the rebuild had just
+ * filled: no node left holds a triangle, and every pick misses until the next rebuild.
+ * `finishSplits` lands the splits in flight.
+ */
+export class TerrainPicker {
+  _needsRebuild = true;
+  _rootNode = new FakeTerrainPickerNode();
+  private readonly splits: (() => void)[] = [];
+  private readonly triangleCount: number;
+
+  constructor(triangleCount: number) {
+    this.triangleCount = triangleCount;
+  }
+
+  get needsRebuild(): boolean {
+    return this._needsRebuild;
+  }
+
+  set needsRebuild(value: boolean) {
+    this._needsRebuild = value;
+  }
+
+  /** Whether a pick through the tile finds any triangle to hit. */
+  rayIntersect(): boolean {
+    if (this._needsRebuild) {
+      this._needsRebuild = false;
+      this._rootNode.intersectingTriangles = Uint32Array.from({ length: this.triangleCount }, (_, index) => index);
+      this._rootNode.children.length = 0;
+    }
+    const node = this._rootNode;
+    const reached = node.children.length > 0 && !node.buildingChildren ? node.children : [node];
+    const hit = reached.some((leaf) => leaf.intersectingTriangles.length > 0);
+    if (node.children.length === 0 && !node.buildingChildren) {
+      node.buildingChildren = true;
+      const triangles = node.intersectingTriangles;
+      node.children = [0, 1, 2, 3].map(() => new FakeTerrainPickerNode());
+      this.splits.push(() => {
+        node.children.forEach((child, index) => {
+          child.intersectingTriangles = index === 0 ? triangles : new Uint32Array(0);
+        });
+        node.intersectingTriangles = new Uint32Array(0);
+        node.buildingChildren = false;
+      });
+    }
+    return hit;
+  }
+
+  finishSplits(): void {
+    for (const land of this.splits.splice(0)) {
+      land();
+    }
+  }
 }
 
 /**
@@ -1535,11 +1734,42 @@ class FakeGlobe {
     this.outlines = value;
   }
 
+  /**
+   * The vertical exaggeration the surface tiles were last drawn at. The real globe re-stretches
+   * every tile it holds while it draws a frame, not when the scene's factor is set, so between the
+   * two its answers are still in the old factor. `FakeScene.render` brings this up to date.
+   */
+  drawnExaggeration = 1;
+
+  /**
+   * The library's own tree of surface tiles, as much of it as the scene reaches — not on the
+   * published surface. Each loaded tile keeps the ground heights it found under markers laid on
+   * the ground, keyed by place and not by factor, until something empties them.
+   */
+  readonly _surface = {
+    loadedTiles: [0, 1].map(() => ({
+      positionCacheClears: 0,
+      clearPositionCache() {
+        this.positionCacheClears += 1;
+      },
+    })),
+    forEachLoadedTile(visit: (tile: { clearPositionCache(): void }) => void) {
+      for (const tile of this.loadedTiles) {
+        visit(tile);
+      }
+    },
+  };
+
+  /**
+   * Height of the ground as drawn: what a test arranged in `terrainHeight` or `terrainHeightAt` is
+   * the ground's true height, and the real globe answers from its stretched surface.
+   */
   getHeight(cartographic: { longitudeDegrees: number; latitudeDegrees: number } | undefined) {
-    if (this.terrainHeightAt && cartographic) {
-      return this.terrainHeightAt(cartographic.longitudeDegrees, cartographic.latitudeDegrees);
-    }
-    return this.terrainHeight;
+    const height =
+      this.terrainHeightAt && cartographic
+        ? this.terrainHeightAt(cartographic.longitudeDegrees, cartographic.latitudeDegrees)
+        : this.terrainHeight;
+    return height === undefined ? undefined : height * this.drawnExaggeration;
   }
 }
 
@@ -1564,8 +1794,15 @@ export interface FakePickCall {
 class FakeScene {
   readonly globe = new FakeGlobe();
   // The camera is given the ground rather than the scene: sizing a box frustum is the one thing it
-  // does that depends on anything outside itself.
-  readonly camera = new FakeCamera(() => this.globe.terrainHeight ?? 0);
+  // does that depends on anything outside itself. The ground as drawn, which is what it measures.
+  readonly camera = new FakeCamera(() => (this.globe.terrainHeight ?? 0) * this.globe.drawnExaggeration);
+  /**
+   * How many times taller than true the library draws what it stretches itself — the ground, models
+   * and the tiles of point clouds — about the ellipsoid. What it draws at a position it is given,
+   * lines, markers, primitives and the camera, it leaves where it was given.
+   */
+  verticalExaggeration = 1;
+  verticalExaggerationRelativeHeight = 0;
   readonly imageryLayers = new FakeImageryLayerCollection();
   readonly primitives = new FakePrimitiveCollection();
   /** Where anything drawn against the ground rather than in the air goes; a separate list. */
@@ -1574,6 +1811,8 @@ class FakeScene {
   readonly screenSpaceCameraController = new FakeScreenSpaceCameraController();
   /** Raised before each drawn frame; a test raises it to stand in for the scene drawing one. */
   readonly preRender = new FakeEvent();
+  /** Raised once a frame has been drawn, after the globe has been drawn in it. */
+  readonly postRender = new FakeEvent();
   /** What the graphics context admits to, fixed when the scene is built, as the real one is. */
   readonly context = { webgl2: engineState.webgl2, depthTexture: engineState.depthTexture };
   /**
@@ -1592,6 +1831,9 @@ class FakeScene {
   renderRequests = 0;
   /** Frames actually drawn, as opposed to frames asked for. */
   framesDrawn = 0;
+  /** The size of the surface actually drawn into, which a graphics card may hold below what was asked. */
+  drawingBufferWidth = 1200;
+  drawingBufferHeight = 800;
   /**
    * Whether the drawing surface still holds the frame last drawn into it.
    *
@@ -1625,9 +1867,12 @@ class FakeScene {
       this.surfaceHoldsFrame = false;
     });
     this.preRender.raise();
+    // Drawing the globe is what re-stretches its tiles, between the two events, as in the library.
+    this.globe.drawnExaggeration = this.verticalExaggeration;
     if (this.globe.clippingPolygons?.enabled) {
       this.globe.clippingPolygons.update();
     }
+    this.postRender.raise();
   }
 
   /**
@@ -1641,10 +1886,16 @@ class FakeScene {
    */
   pickedPositionAt: ((x: number, y: number) => FakeCartesian3 | undefined) | undefined = undefined;
 
+  /**
+   * The point the depth of the last frame shows at a pixel. What a test arranges is the true
+   * point; the depth is of a drawn frame, so the answer is stretched by the factor that frame was
+   * drawn at — which is the globe's.
+   */
   pickPosition(windowPosition: Cartesian2) {
-    return this.pickedPositionAt
+    const found = this.pickedPositionAt
       ? this.pickedPositionAt(windowPosition.x, windowPosition.y)
       : this.pickedPosition;
+    return found && { ...found, height: found.height * this.globe.drawnExaggeration };
   }
 
   pick(windowPosition: Cartesian2, width?: number, height?: number) {
@@ -1698,6 +1949,21 @@ export class CesiumWidget {
   readonly container: Element;
   destroyCount = 0;
   private destroyed = false;
+  /** Pixels drawn for each pixel of the element. The real widget takes it in force at its next resize. */
+  resolutionScale = 1;
+
+  /**
+   * Sizes the surface from its element, as the real widget does: the element's size times the
+   * scale, truncated — which is the arithmetic a caller asking for an exact size has to allow for.
+   */
+  resize() {
+    const canvas = this.canvas as { clientWidth: number; clientHeight: number; width: number; height: number };
+    canvas.width = Math.trunc(canvas.clientWidth * this.resolutionScale);
+    canvas.height = Math.trunc(canvas.clientHeight * this.resolutionScale);
+    const scene = this.scene;
+    scene.drawingBufferWidth = Math.min(canvas.width, engineState.surfaceLimit);
+    scene.drawingBufferHeight = Math.min(canvas.height, engineState.surfaceLimit);
+  }
 
   constructor(container: Element, options: FakeWidgetOptions = {}) {
     this.container = container;

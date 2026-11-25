@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { App, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCreateTermRuleSet,
@@ -22,6 +23,7 @@ import {
 } from '../../api/hooks.ts';
 import { downloadFile } from '../../api/download.ts';
 import TermRuleSetEditor from '../../components/import/TermRuleSetEditor.tsx';
+import { termRuleProblem, termRuleSaveProblem } from '../../components/import/termRuleProblems.ts';
 
 /**
  * The club's naming habits, configured once.
@@ -55,8 +57,8 @@ export default function TermRulesPage() {
         copyFromId: row.id,
       });
       setEditing(copy.set.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'common.saveFailed'));
     }
   };
 
@@ -64,8 +66,8 @@ export default function TermRulesPage() {
     try {
       await remove.mutateAsync(id);
       message.success(t('common.deleted'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'common.deleteFailed'));
     }
   };
 
@@ -76,8 +78,8 @@ export default function TermRulesPage() {
         body: { scope: 'installation', cavingGroupId: null, isDefault: true },
       });
       message.success(t('termRules.promoted'));
-    } catch {
-      message.error(t('termRules.promoteFailed'));
+    } catch (error) {
+      message.error(termRuleProblem(error, t, 'termRules.errors.promoteFailed'));
     }
   };
 
@@ -87,8 +89,10 @@ export default function TermRulesPage() {
       const created = await importSet.mutateAsync({ document, name: document.name ?? file.name });
       setEditing(created.set.id);
       message.success(t('termRules.imported'));
-    } catch {
-      message.error(t('termRules.importFailed'));
+    } catch (error) {
+      // A file that is not JSON never reaches the server; a document the server refused is said
+      // in its words, which name the rule that is wrong.
+      message.error(termRuleSaveProblem(error, t, 'termRules.importFailed'));
     }
   };
 
@@ -125,6 +129,14 @@ export default function TermRulesPage() {
         }}
       />
 
+      <ReadFailedAlert
+        isError={sets.isError}
+        error={sets.error}
+        held={sets.data !== undefined}
+        onRetry={sets.refetch}
+        title={t('admin.listLoadFailed')}
+        testId="term-rule-sets-load-failed"
+      />
       <Table<TermRuleSetInfo>
         rowKey="id"
         size="middle"

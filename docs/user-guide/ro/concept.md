@@ -6,7 +6,7 @@
 
 ---
 
-## Într-un paragraf
+## Descriere SilexGIS
 
 SilexGIS este o aplicație web pentru stocarea, vizualizarea și editarea datelor despre peșteri
 și carst. Poate fi instalat / folosit de un grup / club de speologie, de o echipă de explorare sau de o singură persoană în mod independent. Se instalează pe un server
@@ -37,10 +37,9 @@ deschisă printr-un act deliberat:
 O instalare care nu publică nimic îi arată unui vizitator pagina de autentificare și nimic
 altceva.
 
-## De ce atâta grijă pentru locații
+## Confidentialitatea punctelor intrarilor
 
-Peșterile sunt vandalizate, jefuite și distruse de trafic. În multe locuri poziția unei intrări
-este o informație realmente periculoasă. Așa că aplicația tratează **unde se află o peșteră**
+Din diverse motive utilizatorul poate considera poziția unei intrări ca fiind o informație confidentiala. Așa că aplicația tratează **unde se află o peșteră**
 ca pe un lucru separat de **faptul că o peșteră există**, și poate oferi al doilea lucru fără
 primul.
 
@@ -88,7 +87,7 @@ Un inventar aproximativ al lucrurilor care trăiesc într-o instalare:
   rostul aplicației de telefon — vezi
   [Telefon și sincronizare offline](features/mobile-sync.md).
 - **Nu este perfectă pe telefon.** Funcționează pe telefon, realmente, inclusiv desenarea
-  geometriei cu degetul. Dar este gândită pentru un ecran mare și se vede.
+  cu degetul a geometriei obiectelor geografice de suprafata. Dar este gândită pentru un ecran mare și se vede.
 
 ## Cine ce face
 
@@ -112,10 +111,10 @@ Acestea sunt convenții, nu funcții predefinite. Vezi
 | Versiune | Ani | Stadiu |
 |---|---|---|
 | v1 | ~2014–2022 | PHP/MySQL, instrumentul original al clubului, încă în funcțiune |
-| v2 | 2022 | O rescriere parțială în React/Laravel, abandonată |
-| **v3** | 2026– | Aceasta: o rescriere completă, versiunea descrisă de acest ghid |
+| v1.2 | 2022 | O rescriere parțială în React/Laravel, abandonată |
+| **v2** | 2026– | Aceasta: o rescriere completă, versiunea descrisă de acest ghid |
 
-v3 este o implementare de la zero. Acolo unde face ceva altfel decât v1, este de obicei o
+v2 este o implementare de la zero. Acolo unde face ceva altfel decât v1, este de obicei o
 decizie, nu o omisiune.
 
 ---

@@ -43,6 +43,7 @@ public static class UploadReviewEndpoints
     public const string BatchNotFoundCode = "review.batch_not_found";
     public const string ItemNotFoundCode = "review.item_not_found";
     public const string NotPendingCode = "review.not_pending";
+    public const string BatchRevertedCode = "review.batch_reverted";
     public const string ChangedSinceCode = "review.changed_since";
     public const string FieldsUnsupportedCode = "review.fields_unsupported";
     public const string OwnBatchCode = "review.own_batch";
@@ -112,6 +113,11 @@ public static class UploadReviewEndpoints
     private static ProblemHttpResult OwnBatch() =>
         ApiProblems.Forbidden(OwnBatchCode, "Uploads are decided by somebody other than the account that sent them.");
 
+    private static ProblemHttpResult BatchReverted() =>
+        ApiProblems.Conflict(
+            BatchRevertedCode,
+            "This upload has been undone; a line of it that was turned down can no longer be accepted.");
+
     private static bool MayRead(AccessContext ctx) => UploadReviewRules.MayRead(ctx);
 
     private static bool MayDecide(AccessContext ctx) => UploadReviewRules.MayDecide(ctx);
@@ -136,7 +142,7 @@ public static class UploadReviewEndpoints
                 && db.ImportBatchItems.Any(i => i.ImportBatchId == b.Id && i.ReviewDecision == ImportReviewDecision.Pending))
             .OrderBy(b => b.HeldAt).ThenBy(b => b.Id);
         var total = await query.CountAsync(ct);
-        var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var batches = await query.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
@@ -154,7 +160,7 @@ public static class UploadReviewEndpoints
             .Where(b => b.ConfirmedByUserId == ctx.UserId && b.ReviewState != ImportReviewState.NotHeld)
             .OrderByDescending(b => b.HeldAt).ThenByDescending(b => b.Id);
         var total = await query.CountAsync(ct);
-        var batches = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+        var batches = await query.Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
         return TypedResults.Ok(new PagedResult<HeldBatchDto>(await SummariesAsync(db, batches, ctx, ct), p, size, total));
     }
 
@@ -330,6 +336,13 @@ public static class UploadReviewEndpoints
             return ApiProblems.Conflict(NotPendingCode, "This line has already been decided.");
         }
 
+        // Asked again under the batch's lock by the decision itself; this answers the common case
+        // before any work is done.
+        if (found.Batch.RevertedAt is not null)
+        {
+            return BatchReverted();
+        }
+
         var fields = new Dictionary<long, IReadOnlyList<string>>();
         if (accept && request.Fields is { } named)
         {
@@ -468,6 +481,11 @@ public static class UploadReviewEndpoints
             return (null, ApiProblems.Conflict(
                 NotPendingCode,
                 "What this decision reaches was decided already, by this or another decision, or can no longer be changed."));
+        }
+        catch (HeldBatchRevertedException)
+        {
+            db.ChangeTracker.Clear();
+            return (null, BatchReverted());
         }
         catch (HeldWriteUnavailableException e)
         {

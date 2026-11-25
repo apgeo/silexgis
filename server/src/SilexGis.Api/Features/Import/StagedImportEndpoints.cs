@@ -200,7 +200,7 @@ public static class StagedImportEndpoints
 
         var filtered = Filter(scanned, request).ToList();
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = filtered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
         var details = await candidateService.HydrateAsync(geofile.Id, pageItems, request.Options, ctx, ct);
         var decisions = ReadDecisions(await SessionDecisionsAsync(db, geofile.Id, ctx.UserId, ct));
 
@@ -227,7 +227,9 @@ public static class StagedImportEndpoints
             fileRows,
             scanned.Count,
             [.. ImportCandidateService.HitsOf(scanned, rules).Select(h => new RuleHitDto(h.RuleId, h.RuleName, h.Count))],
-            ruleSet is null ? null : ruleSet.ToDto(rules.Count, TermRuleSetRules.MayEdit(ctx, ruleSet), TermRuleSetRules.MayDelete(ctx, ruleSet))));
+            ruleSet is null ? null : ruleSet.ToDto(rules.Count, TermRuleSetRules.MayEdit(ctx, ruleSet), TermRuleSetRules.MayDelete(ctx, ruleSet)),
+            [.. ImportCandidateService.LithologyValuesOf(scanned, request.Options)
+                .Select(v => new ImportLithologyValueDto(v.Value, v.Count, v.Code, v.Match))]));
     }
 
     // ---------- confirmation ----------

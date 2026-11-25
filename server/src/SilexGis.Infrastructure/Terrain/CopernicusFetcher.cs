@@ -2,6 +2,7 @@
 using System.Net;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain.Terrain;
+using SilexGis.Infrastructure.Outbound;
 
 namespace SilexGis.Infrastructure.Terrain;
 
@@ -33,6 +34,14 @@ public sealed class CopernicusFetcher(
 
     /// <summary>What a transfer still in flight is called.</summary>
     public const string PartialSuffix = TerrainRasterFiles.PartialSuffix;
+
+    /// <summary>
+    /// How long one cell may take, headers and body together: the configured value, clamped so a
+    /// nonsensical one cannot disable it. Settable only so a test can prove the body is covered
+    /// without waiting out the smallest limit an installation can configure.
+    /// </summary>
+    internal TimeSpan CellLimit { get; init; } =
+        TimeSpan.FromSeconds(Math.Clamp(options.Value.CellTimeoutSeconds, 30, 7200));
 
     /// <summary>
     /// Obtains one named cell into <paramref name="target"/>, answering the number of bytes
@@ -98,12 +107,16 @@ public sealed class CopernicusFetcher(
 
         var client = httpClientFactory.CreateClient(HttpClientName);
 
-        // Bounded so a stalled connection cannot hold a build open for ever, and generous because
-        // what is being read is tens of megabytes over whatever link the server happens to have.
-        // The ceiling covers reading the body as well as answering the headers.
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.Value.CellTimeoutSeconds, 30, 7200));
+        // Bounded so a stalled connection cannot hold a build open for ever — and with it every
+        // job queued behind the build on the one-at-a-time lane — and generous because what is
+        // being read is tens of megabytes over whatever link the server happens to have. The
+        // client's own limit stops counting once the headers have arrived, so the same ceiling is
+        // also applied through a token that covers the copy of the body. A cancellation from that
+        // token, rather than from the caller, is reported as a fetch failure by the caller of this.
+        client.Timeout = CellLimit;
+        using var deadline = OutboundBody.Deadline(CellLimit, ct);
 
-        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -119,10 +132,10 @@ public sealed class CopernicusFetcher(
         var declared = response.Content.Headers.ContentLength;
         try
         {
-            await using (var body = await response.Content.ReadAsStreamAsync(ct))
+            await using (var body = await response.Content.ReadAsStreamAsync(deadline.Token))
             await using (var file = File.Create(partial))
             {
-                await body.CopyToAsync(file, ct);
+                await body.CopyToAsync(file, deadline.Token);
             }
 
             var written = new FileInfo(partial).Length;

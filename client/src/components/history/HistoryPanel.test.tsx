@@ -38,9 +38,11 @@ let events: HistoryEvent[] = [
 ];
 
 const restoreOnServer = vi.fn();
+// Null answers with the events above; a test sets another answer (a failure, a cut-off page).
+let historyAnswer: () => unknown = () => null;
 
 vi.mock('../../api/hooks.ts', () => ({
-  useHistory: () => ({ data: { items: events }, isLoading: false }),
+  useHistory: () => historyAnswer() ?? { data: { items: events, totalItems: events.length }, isLoading: false },
   useRestoreFromHistory: () => ({ mutateAsync: restoreOnServer }),
 }));
 
@@ -272,6 +274,10 @@ describe('HistoryPanel', () => {
           // The server holds the full shape beside a summary, so even the summarised geometry offers it.
           expect(screen.getAllByLabelText('Restore this value')).toHaveLength(2);
           fireEvent.click(screen.getByText('Restore all values from before this change'));
+          // Several values at once are put back only once the count was said and agreed to.
+          expect(await screen.findByText('Put back 2 values from before this change?')).toBeTruthy();
+          expect(restoreOnServer).not.toHaveBeenCalled();
+          fireEvent.click(screen.getByTestId('history-restore-all-confirm'));
 
           await waitFor(() =>
             expect(restoreOnServer).toHaveBeenCalledWith({
@@ -289,5 +295,83 @@ describe('HistoryPanel', () => {
         },
       );
     });
+  });
+  it('says the history could not be loaded, and retries, instead of calling it empty', () => {
+    const refetch = vi.fn();
+    historyAnswer = () => ({ data: undefined, isLoading: false, isError: true, refetch });
+    try {
+      render(
+        <App>
+          <HistoryPanel entityType="cave" entityId="c1" />
+        </App>,
+      );
+      expect(screen.getByText('The history could not be loaded.')).toBeInTheDocument();
+      expect(screen.queryByText('No changes recorded yet.')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
+
+  it('says when only the latest part of a long history is shown', () => {
+    historyAnswer = () => ({ data: { items: events, totalItems: 250 }, isLoading: false });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      expect(screen.getByText(`Showing the latest ${events.length} of 250 changes.`)).toBeInTheDocument();
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
+
+  it('reads the older changes when asked, instead of only saying they exist', () => {
+    const loadMore = vi.fn();
+    historyAnswer = () => ({ data: { items: events, totalItems: 250 }, isLoading: false, hasMore: true, loadMore });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Show older changes' }));
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
+  });
+
+  it('keeps the changes it shows when the older ones fail, says so and offers them again', () => {
+    const loadMore = vi.fn();
+    historyAnswer = () => ({
+      data: { items: events, totalItems: 250 },
+      isLoading: false,
+      isError: false,
+      hasMore: true,
+      moreFailed: true,
+      loadMore,
+    });
+    try {
+      render(
+        <MemoryRouter>
+          <App>
+            <HistoryPanel entityType="cave" entityId="c1" />
+          </App>
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('Old note')).toBeInTheDocument();
+      expect(screen.getByText('The older changes could not be loaded.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(loadMore).toHaveBeenCalledTimes(1);
+    } finally {
+      historyAnswer = () => null;
+    }
   });
 });

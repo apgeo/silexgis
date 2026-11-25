@@ -5,7 +5,7 @@
 #   sh scripts/restore.sh ./backups/<timestamp>
 #
 # WARNING: this overwrites the current database and files volume (and, when the backup holds
-# them, the browser-uploaded terrain rasters). Stop the api service first
+# them, the browser-uploaded terrain rasters and the computed cave-potential maps). Stop the api service first
 # so nothing is writing during the restore:
 #   docker compose stop api
 #   sh scripts/restore.sh ./backups/<timestamp>
@@ -36,6 +36,10 @@ tar -tzf "$SRC_ABS/files.tar.gz" > /dev/null || fail "files.tar.gz does not read
 if [ -f "$SRC_ABS/terrain-uploads.tar.gz" ]; then
 	tar -tzf "$SRC_ABS/terrain-uploads.tar.gz" > /dev/null \
 		|| fail "terrain-uploads.tar.gz does not read back -- nothing was changed"
+fi
+if [ -f "$SRC_ABS/cave-potential.tar.gz" ]; then
+	tar -tzf "$SRC_ABS/cave-potential.tar.gz" > /dev/null \
+		|| fail "cave-potential.tar.gz does not read back -- nothing was changed"
 fi
 # The volume name is <project>_<volume>, and the project is asked of the resolved compose
 # config rather than assumed: on a host running more than one installation the projects differ
@@ -108,6 +112,20 @@ if [ -f "$SRC_ABS/terrain-uploads.tar.gz" ]; then
 		|| fail "the uploaded terrain rasters could not be restored; the database and files volume have already been restored"
 else
 	echo "==> No terrain-uploads.tar.gz in this backup -- the terrain volume is left as it is"
+fi
+
+# The same shape as the uploads above: present only when the backup holds computed cave-potential
+# maps, and a backup made before they were archived leaves the folder as it is. Only that folder is
+# replaced.
+if [ -f "$SRC_ABS/cave-potential.tar.gz" ]; then
+	echo "==> Restoring cave-potential maps from $SRC_ABS/cave-potential.tar.gz"
+	docker run --rm \
+		-v "${PROJECT}_silexgis-terrain":/data \
+		-v "$SRC_ABS":/backup:ro \
+		alpine sh -c 'rm -rf /data/builds/cave-potential && mkdir -p /data/builds && tar xzf /backup/cave-potential.tar.gz --no-same-owner -C /data && chown 1654:1654 /data/builds && chown -R 1654:1654 /data/builds/cave-potential' \
+		|| fail "the cave-potential maps could not be restored; the database and files volume have already been restored"
+else
+	echo "==> No cave-potential.tar.gz in this backup -- the cave-potential maps are left as they are"
 fi
 
 echo "==> Done. Start the stack: docker compose up -d"

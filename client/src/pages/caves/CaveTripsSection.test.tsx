@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { TripLogInfo, TripLogListParams } from '../../api/hooks.ts';
+
+/** A read of the list that did not land, switched on by the test that needs it. */
+const failedRead = vi.hoisted(() => ({ on: false, refetch: vi.fn() }));
+const failedAnswer = () => ({ data: undefined, isError: true, isFetching: false, refetch: failedRead.refetch });
 
 let page: { items: TripLogInfo[]; page: number; pageSize: number; totalItems: number };
 let asked: TripLogListParams | null = null;
@@ -11,7 +15,7 @@ let asked: TripLogListParams | null = null;
 vi.mock('../../api/hooks.ts', () => ({
   useTripLogs: (params: TripLogListParams) => {
     asked = params;
-    return { data: page, isFetching: false };
+    return failedRead.on ? failedAnswer() : { data: page, isFetching: false };
   },
   useTripTypes: () => ({
     data: [{ id: 1, code: 'survey', name: 'Survey / mapping', isSeeded: true }],
@@ -93,5 +97,21 @@ describe('CaveTripsSection', () => {
 
     expect(screen.getByText('2')).toBeTruthy();
     expect(screen.queryByText('3')).toBeNull();
+  });
+});
+
+describe('a read of the list that did not land', () => {
+  afterEach(() => {
+    failedRead.on = false;
+    failedRead.refetch.mockReset();
+  });
+
+  it('says the read failed and offers Retry, rather than saying there is nothing', () => {
+    failedRead.on = true;
+    show();
+    expect(screen.getByTestId('cave-trips-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('caves.tripLogsEmpty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(failedRead.refetch).toHaveBeenCalledTimes(1);
   });
 });

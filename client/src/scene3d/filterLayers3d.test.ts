@@ -141,6 +141,28 @@ describe('the layers drawn from saved filters, in the scene', () => {
     expect(markers[0].removed).toBe(true);
   });
 
+  it('draws a layer asked for with a filter document of its own, under its own id, at its own strength', async () => {
+    const { engine, markers } = fakeEngine();
+    const handle = attachFilterLayers3d(engine);
+    const params = { filter: 'encoded-document' };
+    handle.setDrawnLayers([{ id: 'flyby-features:f1', params, color: 'green', symbol: 'square', visible: true, opacity: 0.5 }]);
+    await settle();
+    await vi.waitFor(() => expect(markers[0].items.length).toBe(3));
+    expect(calls.entrances[0][2]).toEqual(params);
+    expect(calls.features[0][1]).toEqual(params);
+    expect(markers[0].id).toBe('flyby-features:f1');
+    expect(markers[0].opacity).toBe(0.5);
+    // A cluster of a layer with no saved filter behind it names none.
+    const cluster = markers[0].items.map((item) => selectionFromPick({ id: item.id })).find((picked) => picked?.kind === 'cluster');
+    expect(cluster).not.toHaveProperty('savedFilterId');
+    // Asked again with another document, it is drawn again; with none, it is gone.
+    handle.setDrawnLayers([{ id: 'flyby-features:f1', params: { filter: 'other' }, color: 'green', symbol: 'square', visible: true, opacity: 1 }]);
+    await vi.waitFor(() => expect(calls.entrances.at(-1)?.[2]).toEqual({ filter: 'other' }));
+    handle.setDrawnLayers([]);
+    expect(markers[0].removed).toBe(true);
+    handle.detach();
+  });
+
   it('selects through the main payloads, and a cluster lists the members of its own filter', async () => {
     const { engine, markers } = fakeEngine();
     const handle = attachFilterLayers3d(engine);
@@ -186,5 +208,57 @@ describe('the layers drawn from saved filters, in the scene', () => {
     vi.advanceTimersByTime(300);
     expect(calls.entrances.length).toBe(before + 1);
     handle.detach();
+  });
+
+  it('says a layer could not be read and keeps what it drew, and stops saying it once a read succeeds', async () => {
+    const { engine, markers } = fakeEngine();
+    const handle = attachFilterLayers3d(engine);
+    handle.setLayers([spec()], new Set(), new Map());
+    await vi.waitFor(() => expect(markers[0].items.length).toBe(3));
+    // A read that succeeded is no failure.
+    expect(handle.getState().loadFailed).toBe(false);
+
+    const answered = responses.features;
+    responses.features = () => Promise.reject(new Error('network'));
+    try {
+      handle.reload();
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      expect(markers[0].items.length).toBe(3);
+    } finally {
+      responses.features = answered;
+    }
+
+    handle.reload();
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(false));
+    handle.detach();
+  });
+
+  it('does not call a refused filter, a hidden layer or a removed one a failure', async () => {
+    const answered = responses.features;
+    responses.features = () => Promise.reject(new Error('network'));
+    try {
+      const { engine } = fakeEngine();
+      const handle = attachFilterLayers3d(engine);
+      const seen: boolean[] = [];
+      handle.subscribe((state) => seen.push(state.loadFailed));
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+
+      handle.setLayers([spec({ visible: false })], new Set(), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      // Unreadable for this reader: the flat map's copy of the layer says so, not a failure here.
+      handle.setLayers([spec()], new Set([LAYER]), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      handle.setLayers([spec()], new Set(), new Map());
+      await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+      handle.setLayers([], new Set(), new Map());
+      expect(handle.getState().loadFailed).toBe(false);
+      expect(seen).toEqual([true, false, true, false, true, false]);
+      handle.detach();
+    } finally {
+      responses.features = answered;
+    }
   });
 });

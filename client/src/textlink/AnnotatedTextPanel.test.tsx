@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../i18n';
+import i18n from '../i18n';
+import { ApiError } from '../api/client.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import { registerViewControl, resetViewControlsForTests } from '../viewlinks/viewTargets.ts';
 import type { ResourceRef } from '../viewlinks/resourceRef.ts';
@@ -60,13 +61,31 @@ const link = {
   ],
 };
 
+// How the document's link read answers: how many links the document has in all, and whether the
+// read failed.
+const linkRead = { totalItems: 1, isError: false };
+/** What the read of the text itself failed with, when a test makes it fail. */
+const textRead: { failure: unknown; refetch: ReturnType<typeof vi.fn> } = { failure: undefined, refetch: vi.fn() };
+const refetchLinks = vi.fn();
+const deleteLinkMutateAsync = vi.fn();
+
 vi.mock('../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../api/hooks.ts')>('../api/hooks.ts');
   return {
     ...actual,
-    useAnnotatedText: () => ({ data: annotatedText, isPending: false, isError: false, error: null }),
-    useResLinksForTarget: () => ({ data: { items: [link], page: 1, pageSize: 200, totalItems: 1 } }),
-    useDeleteResLink: () => ({ mutateAsync: vi.fn() }),
+    useAnnotatedText: () =>
+      textRead.failure === undefined
+        ? { data: annotatedText, isPending: false, isError: false, error: null, refetch: textRead.refetch }
+        : { data: undefined, isPending: false, isError: true, error: textRead.failure, refetch: textRead.refetch },
+    useResLinksForTarget: () =>
+      linkRead.isError
+        ? { data: undefined, isError: true, refetch: refetchLinks }
+        : {
+            data: { items: [link], page: 1, pageSize: 200, totalItems: linkRead.totalItems },
+            isError: false,
+            refetch: refetchLinks,
+          },
+    useDeleteResLink: () => ({ mutateAsync: deleteLinkMutateAsync }),
   };
 });
 
@@ -85,11 +104,39 @@ function renderPanel() {
 }
 
 beforeEach(() => {
+  linkRead.totalItems = 1;
+  linkRead.isError = false;
+  textRead.failure = undefined;
+  textRead.refetch.mockReset();
+  refetchLinks.mockReset();
+  deleteLinkMutateAsync.mockReset();
+  annotatedText.mayWrite = false;
+  link.mayEdit = false;
   resetViewControlsForTests();
   useWorkspaceStore.setState({ selection: null });
 });
 
 afterEach(cleanup);
+
+describe('a text whose own read failed', () => {
+  it('says the text could not be read, not that the document is not an annotated text, and asks again', async () => {
+    textRead.failure = new TypeError('Failed to fetch');
+    renderPanel();
+
+    expect(await screen.findByTestId('tl-text-load-failed')).toBeTruthy();
+    expect(screen.queryByText('This document is not a link-annotated text.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(textRead.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the server's answer that a document is not an annotated text", async () => {
+    const { ApiError } = await import('../api/client.ts');
+    textRead.failure = new ApiError(404, 'document.not_annotated');
+    renderPanel();
+
+    expect(await screen.findByText('This document is not a link-annotated text.')).toBeTruthy();
+  });
+});
 
 describe('following a passage', () => {
   it('sends the target to the views that are listening', async () => {
@@ -126,5 +173,55 @@ describe('following a passage', () => {
     renderPanel();
     const passage = await screen.findByTestId('tl-passage');
     expect(passage).toHaveTextContent('Dolina Demo');
+  });
+});
+
+describe('the links the reader could not draw', () => {
+  it('says when the document has more links than were read, and says nothing when it has not', async () => {
+    renderPanel();
+    await screen.findByTestId('tl-passage');
+    expect(screen.queryByTestId('tl-links-cut-off')).toBeNull();
+    cleanup();
+
+    // More links than one read brings back: a passage among the rest would show no highlight,
+    // which reads as "nothing is linked here".
+    linkRead.totalItems = 250;
+    renderPanel();
+    expect(await screen.findByTestId('tl-links-cut-off')).toHaveTextContent(
+      'Only the first 1 of 250 links are highlighted in this text.',
+    );
+  });
+
+  it('says the links could not be read rather than showing the text as unlinked, and offers a retry', async () => {
+    renderPanel();
+    await screen.findByTestId('tl-passage');
+    expect(screen.queryByTestId('tl-links-failed')).toBeNull();
+    cleanup();
+
+    linkRead.isError = true;
+    renderPanel();
+    const notice = await screen.findByTestId('tl-links-failed');
+    expect(notice).toHaveTextContent("The links of this text could not be loaded");
+    fireEvent.click(within(notice).getByRole('button', { name: 'Retry' }));
+    expect(refetchLinks).toHaveBeenCalled();
+  });
+});
+
+describe('deleting a link', () => {
+  it('says why when the deletion is refused, rather than leaving the rejection unhandled', async () => {
+    annotatedText.mayWrite = true;
+    link.mayEdit = true;
+    deleteLinkMutateAsync.mockRejectedValue(new ApiError(503, undefined));
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit links' }));
+    fireEvent.mouseEnter(await screen.findByTestId('tl-passage'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete link' }, { timeout: 3000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(deleteLinkMutateAsync).toHaveBeenCalledWith('link-1'));
+    // The refusal is said in words. Before, the rejected promise escaped the dialog as an unhandled
+    // rejection (which fails this run by itself) and nothing was said at all.
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
   });
 });

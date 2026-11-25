@@ -1,0 +1,399 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The flyby tool over the 3D scene: a panel down the left edge, where nothing else of the view's
+   chrome stands (the layer and camera controls are top right, the notices bottom right, the
+   engine's credits bottom left under the panel's foot), and a bar along the bottom to play from. */
+.scene3d-flyby-panel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  bottom: 80px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(320px, calc(100% - 64px));
+  padding: 10px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--ant-color-bg-elevated, #fff);
+  border: 1px solid var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.scene3d-flyby-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scene3d-flyby-panel-header h5 {
+  margin: 0;
+}
+
+.scene3d-flyby-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scene3d-flyby-group .ant-radio-group,
+.scene3d-flyby-caves .ant-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scene3d-flyby-caves {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 24px;
+}
+
+/* A long list of caves scrolls inside itself, so the controls under it stay within reach. */
+.scene3d-flyby-caves .ant-checkbox-group {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.scene3d-flyby-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.scene3d-flyby-row .ant-input,
+.scene3d-flyby-saved {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.scene3d-flyby-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scene3d-flyby-field-wide {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.scene3d-flyby-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scene3d-flyby-sections li {
+  display: grid;
+  grid-template-columns: 1fr 84px 64px 36px;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.scene3d-flyby-section-current {
+  background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.1));
+}
+
+.scene3d-flyby-section-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene3d-flyby-section-length {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Above the engine's credit strip, not over it: the credits of the map tiles have to stay readable
+   for as long as their tiles are on the screen, and the strip grows to the right with every layer. */
+.scene3d-flyby-transport {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  z-index: 6;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: min(560px, calc(100% - 16px));
+  padding: 6px 10px;
+  transform: translateX(-50%);
+  background: var(--ant-color-bg-elevated, #fff);
+  border: 1px solid var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.scene3d-flyby-position {
+  flex: 1 1 auto;
+  min-width: 60px;
+  margin: 0 6px;
+}
+
+.scene3d-flyby-position .ant-slider {
+  margin-block: 4px;
+}
+
+.scene3d-flyby-preparing {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scene3d-flyby-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The view's notices stand in the corner the bar now reaches into; while the tool is open they
+   stand above it. */
+.scene3d-wrap:has(.scene3d-flyby-transport) .scene3d-data-state {
+  bottom: 80px;
+}
+
+/* The clean screen: the scene, the engine's own credits — which the map tiles' licences require
+   on any picture of them — and nothing else of the view. */
+.scene3d-wrap-clean .scene3d-controls,
+.scene3d-wrap-clean .scene3d-camera-controls,
+.scene3d-wrap-clean .scene3d-data-state,
+.scene3d-wrap-clean .scene3d-overlay {
+  display: none;
+}
+
+/* A view shown alone on the whole screen has no page behind it to give it a height. */
+.scene3d-wrap-clean:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+}
+
+.scene3d-flyby-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: min(30vh, 240px);
+  font-weight: 600;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.scene3d-flyby-clean-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The movie panel stands where the flyby panel does, and is a little wider. */
+.scene3d-flyby-movie {
+  width: min(360px, calc(100% - 64px));
+}
+
+/* Under a finger or on a narrow screen the panel becomes a sheet across the bottom of the view,
+   above the bar, leaving the top of the scene to be looked at. */
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
+  .scene3d-flyby-panel {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 80px;
+    width: auto;
+    max-height: 55%;
+  }
+}
+
+/* Boxed to a movie's frame: the scene's element is the largest box of exactly the frame's shape
+   that fits beside the controls, at whole pixels, and the rest of the view is dark. What is seen is
+   what the file will hold. The hover and pick labels are off meanwhile: they are drawn as elements
+   over the whole view, not into the frame. */
+.scene3d-wrap-framed {
+  background: #000;
+}
+
+.scene3d-wrap-framed .scene3d-canvas {
+  position: absolute;
+  left: var(--flyby-frame-left);
+  top: var(--flyby-frame-top);
+  width: var(--flyby-frame-width);
+  height: var(--flyby-frame-height);
+}
+
+.scene3d-wrap-framed .scene3d-overlay {
+  display: none;
+}
+
+.scene3d-flyby-movie-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scene3d-flyby-movie-help {
+  font-size: 12px;
+}
+
+/* Held while a movie is being made: the flyby is the recorder's, not the bar's. */
+.scene3d-flyby-held .scene3d-flyby-transport {
+  opacity: 0.6;
+}
+
+/* What a flyby writes over the scene. Over the scene and its callouts, under the panel, the bar
+   and the countdown; it takes no pointer, so the scene under it can still be pressed. */
+.scene3d-flyby-texts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* The look of a flyby: colour wells beside their switches, the ready-made sets one under another,
+   the list of changes with its numbers under each line of words. */
+.scene3d-flyby-colour {
+  width: 32px;
+  height: 22px;
+  padding: 0 2px;
+  border: 1px solid var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scene3d-flyby-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+}
+
+.scene3d-flyby-recipe legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scene3d-flyby-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.scene3d-flyby-change-what {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* Editing a section: its buttons on a line of their own under its numbers, and what it does opened
+   under that, across the whole width of the list. */
+.scene3d-flyby-section-actions,
+.scene3d-flyby-section-wide {
+  grid-column: 1 / -1;
+}
+
+.scene3d-flyby-section-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.scene3d-flyby-section-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  border-radius: 6px;
+}
+
+.scene3d-flyby-section-editor legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scene3d-flyby-section-editor .ant-select,
+.scene3d-flyby-section-editor .ant-input-number {
+  width: 132px;
+}
+
+.scene3d-flyby-grow {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.scene3d-flyby-section-editor .scene3d-flyby-row .ant-input-number {
+  width: 96px;
+}
+
+/* The opening look per layer: the layer's name over its two choices. */
+.scene3d-flyby-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scene3d-flyby-layers li {
+  display: grid;
+  grid-template-columns: 1fr 88px;
+  gap: 4px;
+  align-items: center;
+}
+
+.scene3d-flyby-layer-name {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+/* One of the flyby's own layers of features: its swatch and name on a line, then colour, symbol and removal. */
+.scene3d-flyby-features-list li {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.scene3d-flyby-features-list .scene3d-flyby-layer-name {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.scene3d-flyby-feature-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* What a Blender bundle leaves out, and what went into one: short lists inside the panel's width. */
+.scene3d-flyby-bundle-list {
+  margin: 0;
+  padding-inline-start: 18px;
+}

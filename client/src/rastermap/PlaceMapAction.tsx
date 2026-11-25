@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Tooltip } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import Button from '../components/Button.tsx';
+import { lazyRetrying } from '../codeLoading.ts';
 
-const PlaceMapModal = lazy(() => import('./PlaceMapModal.tsx'));
+const PlaceMapModal = lazyRetrying(() => import('./PlaceMapModal.tsx'));
 
 interface Props {
   documentId: string;

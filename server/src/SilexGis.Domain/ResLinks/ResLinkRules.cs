@@ -675,9 +675,11 @@ public static class ResLinkRules
 
             foreach (var coordinate in point.EnumerateArray())
             {
+                // A number beyond the double range (1e400) is valid JSON that reads as infinity.
                 if (coordinate.ValueKind != JsonValueKind.Number
-                    || coordinate.GetDouble() < 0
-                    || coordinate.GetDouble() > 1)
+                    || !coordinate.TryGetDouble(out var fraction)
+                    || fraction < 0
+                    || fraction > 1)
                 {
                     return "point coordinates must be fractions of the picture, between 0 and 1";
                 }
@@ -756,7 +758,14 @@ public static class ResLinkRules
             return $"'{name}' must be a number";
         }
 
-        value = element.GetDouble();
+        // A number beyond the double range (1e400) is valid JSON that reads as infinity, which
+        // no bound below would refuse when the bound itself is open.
+        if (!element.TryGetDouble(out value) || !double.IsFinite(value))
+        {
+            value = 0;
+            return $"'{name}' must be a finite number";
+        }
+
         if (value < min)
         {
             return $"'{name}' must be at least {min}";
@@ -784,13 +793,9 @@ public static class ResLinkRules
             return $"'{name}' must be an ISO-8601 instant";
         }
 
-        return DateTimeOffset.TryParse(
-            element.GetString(),
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.RoundtripKind,
-            out _)
+        return TripMomentAnchor.TryParseInstant(element.GetString(), out _)
             ? null
-            : $"'{name}' must be an ISO-8601 instant";
+            : $"'{name}' must be an ISO-8601 instant with its date, its time and an offset";
     }
 
     /// <summary>Identity-bearing string: when required, it must be present and

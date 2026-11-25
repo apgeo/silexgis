@@ -10,4 +10,15 @@
     <PackageReference Include="NetTopologySuite" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Orientation statistics (azimuth folding, poles, the equal-area net, Kamb density, Watson's
+         U-squared), taken from the survey-format library's repository as one of its modules. It is
+         the only module of that library the domain may reach, and only because it references
+         nothing but the base class library: no survey format, no package, no process. The
+         architecture tests assert both halves of that - that the domain reaches no other module,
+         and that this one never gains a reference of its own - so the exception cannot quietly
+         widen. MPL-2.0, which permits use from this AGPL application. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Orientation\Therion.Orientation.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -101,8 +101,8 @@ public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable, IClass
 
         // Nothing about the sheet has been resolved or created: a preview is a reading.
         // Counted against the account that did the reading rather than against the whole table:
-        // one database is shared by every test in this suite, so a trip some other test recorded
-        // says nothing about whether this preview wrote.
+        // the tests of this class share its database, so a trip another test recorded says nothing
+        // about whether this preview wrote.
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId)).ShouldBe(0);
@@ -247,6 +247,13 @@ public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable, IClass
         var fileId = await UploadAsync("centralizator.csv", Sheet);
         var found = await editor.GetAsync($"/api/v1/trip-imports/{fileId}/session");
         found.StatusCode.ShouldBe(HttpStatusCode.OK, await found.Content.ReadAsStringAsync());
+
+        // The same sheet, once this account may no longer read it, answers exactly as one that
+        // is not there: its id is not a way to learn that a file exists.
+        await FileDenial.DenyReadAsync(factory, editorId, fileId);
+        var withheld = await editor.GetAsync($"/api/v1/trip-imports/{fileId}/session");
+        withheld.StatusCode.ShouldBe(HttpStatusCode.NotFound, await withheld.Content.ReadAsStringAsync());
+        CodeOf(await withheld.Content.ReadAsStringAsync()).ShouldBe("file.not_found");
     }
 
     [Fact]

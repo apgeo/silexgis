@@ -131,6 +131,10 @@ test('a drop of several files sends every one of them', async ({ page }) => {
   // upload control in the document, and an unscoped locator has previously posted a batch to
   // the wrong endpoint entirely.
   const dropped = payload(['one.txt', 'two.txt', 'three.txt']);
+  // Named, so the drop can be found again on the page that lists every drop.
+  const dropName = `E2E drop ${dropped.run}`;
+  // Reached through its form row: the field carries no accessible name of its own.
+  await drawer.locator('.ant-form-item').filter({ hasText: 'Name this batch' }).locator('input').fill(dropName);
   await drawer
     .getByTestId('upload-files')
     .locator('input[type=file]')
@@ -144,6 +148,14 @@ test('a drop of several files sends every one of them', async ({ page }) => {
   for (const name of dropped.names) {
     await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible({ timeout: 15_000 });
   }
+
+  // The drops report lists the drop under its name with what became of each file, newest first.
+  await gotoRoute(page, '/uploads');
+  await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible({ timeout: 45_000 });
+  const drop = page.getByRole('row').filter({ hasText: dropName });
+  await expect(drop).toHaveCount(1, { timeout: 30_000 });
+  await expect(drop).toContainText('3 stored · 0 skipped · 0 failed');
+  await expect(drop).toContainText('Browser');
 });
 
 test('a dropped folder keeps its structure as cabinets', async ({ page }) => {
@@ -185,7 +197,7 @@ test('uploading the same bytes again is warned about and can be accepted', async
   // The refusal this flow exists to drive. The browser logs every 409 to the console, so the
   // one this test provokes on purpose is declared rather than left to look like a defect.
   consoleErrors.allow(
-    /Failed to load resource.*409/,
+    /\/api\/v1\/files(\/uploads\/[^/?:\s]+\/complete)?(\?|:|$)/,
     'the duplicate refusal this test asks for on purpose',
   );
 
@@ -252,4 +264,119 @@ test('what is uploaded with no destination waits in the inbox and can be filed i
 
   await selectShelf(page, 'Not filed');
   await expect(page.getByRole('row', { name: filed })).toBeHidden({ timeout: 15_000 });
+});
+
+/**
+ * The drawer of the upload in flight. Scoped by its drop zone, because the question asked on
+ * closing it is a dialog too, and a bare dialog locator would then match both.
+ */
+function uploadDrawer(page: Page) {
+  return page.getByRole('dialog').filter({ has: page.getByTestId('upload-files') });
+}
+
+/**
+ * Holds every small-file upload at the browser until `release` is called, so a test can act while
+ * files are still going. Only the posts are held; everything else the page asks passes.
+ */
+async function holdUploads(page: Page) {
+  const held: { continue: () => Promise<void>; abort: () => Promise<void> }[] = [];
+  await page.route(/\/api\/v1\/files(\?|$)/, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    held.push(route);
+  });
+  return {
+    held: () => held.length,
+    release: async () => {
+      await page.unroute(/\/api\/v1\/files(\?|$)/);
+      // A request the page itself gave up on is no longer there to continue.
+      await Promise.all(held.splice(0).map((route) => route.continue().catch(() => undefined)));
+    },
+  };
+}
+
+test('closing the drawer while files are still going asks first, and keeping on finishes them', async ({
+  page,
+}) => {
+  await login(page);
+  await createCabinet(page);
+  const uploads = await holdUploads(page);
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
+
+  const drawer = uploadDrawer(page);
+  const dropped = payload(['kept-a.txt', 'kept-b.txt']);
+  await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(dropped.files);
+  await expect(drawer.getByTestId('upload-stop')).toBeVisible({ timeout: 30_000 });
+  await expect.poll(uploads.held, { timeout: 30_000 }).toBeGreaterThan(0);
+
+  // The drawer's own close control: a stray click must not end a transfer unasked.
+  await drawer.locator('.ant-drawer-close').click();
+  const question = page.getByRole('dialog').filter({ hasText: 'Stop this upload?' });
+  await expect(question).toBeVisible();
+  await expect(question).toContainText('0 of 2 files are stored');
+  await question.getByRole('button', { name: 'Keep uploading' }).click();
+  await expect(question).toBeHidden();
+  await expect(drawer).toBeVisible();
+
+  await uploads.release();
+  await expect(drawer.getByText('2 of 2 stored', { exact: false })).toBeVisible({ timeout: 60_000 });
+  await drawer.getByTestId('upload-done').click();
+  for (const name of dropped.names) {
+    await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible({ timeout: 15_000 });
+  }
+});
+
+test('stopping an upload part-way closes the drawer once it is confirmed', async ({ page }) => {
+  await login(page);
+  await createCabinet(page);
+  const uploads = await holdUploads(page);
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
+
+  const drawer = uploadDrawer(page);
+  const dropped = payload(['stopped-a.txt', 'stopped-b.txt']);
+  await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(dropped.files);
+  await expect.poll(uploads.held, { timeout: 30_000 }).toBeGreaterThan(0);
+
+  await drawer.getByTestId('upload-stop').click();
+  const question = page.getByRole('dialog').filter({ hasText: 'Stop this upload?' });
+  await expect(question).toContainText('The other 2 will not be sent.');
+  await question.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(drawer).toBeHidden();
+  await uploads.release();
+});
+
+test('a filing picker names a nested shelf by its whole path', async ({ page }) => {
+  await login(page);
+  const shelf = await createCabinet(page);
+
+  // A shelf under the new one, made the way a person makes it: a folder dropped into it.
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
+  let drawer = uploadDrawer(page);
+  const folder = payload(['annex/note.txt']);
+  await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(folder.files);
+  await expect(drawer.getByText('1 of 1 stored', { exact: false })).toBeVisible({ timeout: 60_000 });
+  await drawer.getByTestId('upload-done').click();
+  const nested = `annex-${folder.run}`;
+
+  await selectShelf(page, 'Not filed');
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
+  drawer = uploadDrawer(page);
+  const loose = payload(['loose.txt']);
+  await drawer.getByTestId('upload-files').locator('input[type=file]').setInputFiles(loose.files);
+  await expect(drawer.getByText('1 of 1 stored', { exact: false })).toBeVisible({ timeout: 60_000 });
+  await drawer.getByTestId('upload-done').click();
+
+  const row = page.getByRole('row', { name: new RegExp(loose.names[0]) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.getByRole('checkbox').check();
+  await page.getByTestId('bulk-filing-bar').getByRole('button', { name: 'Also file in…' }).click();
+  const modal = page.getByRole('dialog').filter({ hasText: 'Also file in…' });
+  // The bare name would be ambiguous away from the tree — "annex" can sit under many archives —
+  // so the choice is offered under the shelf's whole path, and that is what is picked.
+  await modal.getByRole('combobox').fill(nested);
+  await page.locator('.ant-select-dropdown').getByTitle(`${shelf} / ${nested}`, { exact: true }).click();
+  await modal.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('1 filed.')).toBeVisible({ timeout: 15_000 });
 });

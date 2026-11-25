@@ -123,4 +123,15 @@ describe('Romanian wording', () => {
     expect(ro.settings.accessibility.deviceOnly).toBe('Doar în acest browser');
     expect(all.filter(([, text]) => /Doar acest browser/u.test(text)).map(([key]) => key)).toEqual([]);
   });
+
+  it('calls a line of an upload under review a "linie" throughout the review screen', () => {
+    // One question shows the count, the cascade and the buttons together; "rând" beside "linie"
+    // names the same thing twice. A count of twenty or more needs "de", which "{{count}} de linii"
+    // carries for every count the plural form is used with.
+    const offenders = Object.entries(ro.review)
+      .filter(([, text]) => typeof text === 'string' && /(?<!\p{L})rând/iu.test(text))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+    expect(ro.review.rejectSelectedTitle).toContain('{{count}} de linii');
+  });
 });

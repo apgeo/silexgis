@@ -146,6 +146,12 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
         withoutDepressions["depressionCount"]!.GetValue<int>().ShouldBe(0);
         withoutDepressions["depressionAreaRatio"]!.ShouldBeNull();
 
+        // The one cave records no surveyed length either, and the same rule holds for the density
+        // made from it: an area where nobody has recorded a length is not one with nought metres
+        // of passage per square kilometre.
+        withoutDepressions["surveyedLengthM"].ShouldBeNull();
+        withoutDepressions["surveyedMetresPerKm2"].ShouldBeNull();
+
         // The reference is on the wire beside it, so a reader can reconstruct the normalisation
         // rather than take the score on trust.
         absent["reference"]!.GetValue<double>().ShouldBeGreaterThan(0d);
@@ -281,13 +287,30 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
         await CreateCaveWithEntranceAsync(
             owner, "Kst Csv Cave", -2.50, 36.70, parentId: areaId, surveyedLength: 400d, depth: 30d);
 
+        // A name a spreadsheet would run as a formula; it is in the deepest-caves rows.
+        await CreateCaveWithEntranceAsync(
+            owner, "=1+1 Kst Csv", -2.45, 36.72, parentId: areaId, surveyedLength: 100d, depth: 60d);
+
         var json = await StatisticsAsync(owner, areaId);
 
         var response = await owner.GetAsync($"/api/v1/features/{areaId}/karst-statistics.csv");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
+        response.Content.Headers.ContentType!.CharSet.ShouldBe("utf-8");
 
-        var csv = await response.Content.ReadAsStringAsync();
+        // A byte-order mark first, so a spreadsheet reads the file as UTF-8 and not in the
+        // machine's legacy code page.
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        bytes.Take(3).ShouldBe(new byte[] { 0xEF, 0xBB, 0xBF });
+
+        var csv = System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+
+        // Guarded with a leading tab inside quotes, which makes it text to a spreadsheet. The stored
+        // name carries a unique suffix after the part written here, so the cell is matched up to
+        // that suffix and its closing quote checked on every row it is in (deepest and longest).
+        csv.ShouldContain(",\"\t=1+1 Kst Csv ");
+        csv.Split('\n').Where(r => r.Contains("=1+1 Kst Csv "))
+            .ShouldAllBe(r => r.Contains(",\"\t=1+1 Kst Csv ") && r.EndsWith('"'));
         var rows = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         rows[0].ShouldBe("measure,value");
 

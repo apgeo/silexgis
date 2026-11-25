@@ -32,6 +32,10 @@ a page, a passage of text, a moment in a recording, a survey station, a waypoint
 **Announcement** — One line sent to every member of a caving group who holds an account, each
 in the way they chose. → [People and clubs](features/people-and-clubs.md#announcing-to-a-club)
 
+**AUC** — The area under a *rate curve*, between 0 and 1: about 0.5 is a map that ranks no better
+than chance. It belongs to one area, one cell size, one draw of kept-back entrances and one
+account's rights, and is not an accuracy. → [Cave potential](features/cave-potential.md#what-the-auc-does-not-mean)
+
 **Audit trail** — The installation-wide record of what happened. Distinct from a record's own
 **history**. → [History and audit](features/history-and-audit.md)
 
@@ -49,6 +53,12 @@ roster, working area and leads board. → [Camps](features/camps.md)
 **Categories** *(statistics)* — The screen under **Statistics** that compares one measurement
 across cave types, or across rock types, drawing one box per group. → [Measurements and
 statistics](features/measurements-and-statistics.md#the-whole-registry-explored)
+
+**Cave-potential model** — A saved judgment of which evidence suggests a cave and how much each
+kind counts: evidence layers, how each is scored, and their weights. A model can instead *learn
+from known entrances* (by *frequency ratio* or *weights of evidence*), and then holds only its
+layers, their class bounds and how the entrances are parted for testing. Either kind names no
+place. Run over an area, it gives a *favourability map*. → [Cave potential](features/cave-potential.md)
 
 **Caver** — An entry in the club's roster. **May or may not have an account.** A caver with no
 account can be named on trips but cannot be granted access or sent anything.
@@ -69,6 +79,10 @@ is ever refused because a line is unticked.
 and vertical components — *the two parts of that same line*, not two separate measurements.
 → [Measurements](features/measurements-and-statistics.md#closest-approach)
 
+**Consistency ratio** — For a model weighed by pairwise comparisons: how far the comparisons
+contradict each other. 0 is none; above 0.1 is warned about, never refused. It says nothing about
+whether the judgments are right. → [Cave potential](features/cave-potential.md#pairwise-comparisons-and-the-consistency-ratio)
+
 **Containment** — A feature being inside another feature. Drives breadcrumbs, and **inherits
 location protection downwards**. Distinct from a **link**.
 
@@ -80,6 +94,21 @@ documents of that kind are asked for**.
 
 **Draft** — A trip or event that has told nobody. Not a *hidden* record: whoever its
 visibility admits can already read it.
+
+**Evidence layer** — One surface a cave-potential model weighs, a value per cell: from the shape
+of the ground (elevation, slope, landform…) or from what has been recorded (rock type, distance to
+faults or sinkholes, entrance density). → [Cave potential](features/cave-potential.md#the-evidence-layers)
+
+**Favourability map** — What a cave-potential model gives when run over an area: every cell scored
+from 0 to 1 by the model's weights, on a date. A weighing of evidence, not a probability and not a
+finding. Who may read one is decided by what it was made from, not by its author. A map learnt
+from known entrances is stretched between its own least and most favourable cell, so its colours
+rank the ground of that one map. → [Cave potential](features/cave-potential.md#the-map)
+
+**Frequency ratio** — For one class of an evidence layer: its share of the cells holding a known
+entrance over its share of the ground. 1 is in proportion, above 1 more than its share, 0 none
+known. Also the method that draws a map from the sum of those ratios — an index, not a
+probability. → [Cave potential](features/cave-potential.md#frequency-ratio)
 
 **Filter** — A question about your records: which kinds of object, the conditions they must
 meet, and the order of the answer. Always answered with what the person asking may see — it narrows,
@@ -104,10 +133,21 @@ any rule is consulted. It holds no rules.
 **Geofile** — An uploaded vector file (GPX, KML, shapefile…). Becomes a map layer, and can
 then be reviewed into registry records. → [Geodata](features/geodata.md)
 
+**Geological unit** — An outline of ground that is all one rock class, from a geology map, with
+its lithology chosen from a fixed list. Not the same as a cave's declared *rock type*.
+→ [Geology](features/geology.md#geological-units)
+
 **Headline picture** — The starred photograph that represents a cave or a trip.
 
 **History** — A single record's change trail, with per-field restore. Protected values read
 *"Value hidden"*. → [History and audit](features/history-and-audit.md)
+
+**Karstifiable** — Said of a lithology that dissolves readily enough to host caves: the
+carbonates, the evaporites and calcareous conglomerate. Fixed by the application for each class
+of its list. → [Geology](features/geology.md#the-lithology-list)
+
+**Karstification index** — A single reading, *very low* to *very high*, of how karstified an area is: the mean of its cave density and its depression cover, each against a stated reference. A reading that is missing is left out, not counted as nought.
+→ [Karst analyses](features/karst-analyses.md#the-karstification-index)
 
 **Lead** — Something a trip left open. Collected onto a camp's leads board, with a promise
 grade and a state (open, checked, dead end, continues).
@@ -131,6 +171,8 @@ computed from the outline (area, circularity, long-axis bearing…).
 
 **Own basemap** — The installation's own vector basemap: OpenStreetMap shapes of a region an
 administrator downloaded, served by the installation alone. → [Own basemap](admin/messaging.md#own-basemap)
+
+**Passage network** — A cave's survey read as stations joined by passage legs, counted for junctions, dead ends, independent loops and the ratios of karst studies. → [Karst analyses](features/karst-analyses.md#passage-network)
 
 **Permission group** — A named ruleset with members. Not a caving group.
 → [Permissions](admin/permissions.md)
@@ -159,6 +201,12 @@ odometry, thinning, tiling); personal, a caving group's or the installation's.
 **Quick filter** — A saved filter pinned as a one-click chip on the map, the cave registry and
 the feature list. Up to twelve; they follow your account.
 → [Search and filters](features/search-and-filters.md#quick-filters)
+
+**Rate curve** — How well a map learnt from known entrances ranks them: taking the ground from the
+most favourable cell down, the share of entrances found against the share of ground taken. The
+**success rate** is drawn against the entrances the model learnt from and always flatters; the
+**prediction rate** is drawn against entrances kept back and is the one to read. Summed up by the
+*AUC*. → [Cave potential](features/cave-potential.md#the-two-curves-and-the-auc)
 
 **Relations graph** — A page that draws one item and everything related to it, one step at a time,
 with filters per kind of relation. Shows, never edits. → [Relations graph](features/relations-graph.md)
@@ -206,6 +254,14 @@ of reports names somebody by it. Empty, the full name is used.
 not the person: somebody in two roles, or somebody who left and came back, has two stays.
 → [Camps](features/camps.md#who-was-there)
 
+**Stereonet** — A circle on which many structural readings are plotted at once, each as the pole
+of its plane (equal-area, lower hemisphere), shaded by how densely the poles crowd.
+→ [Geology](features/geology.md#the-stereonet)
+
+**Structural measurement** — One reading of a plane taken at a point — bedding, a joint, a fault
+plane — stored as dip direction and dip, and enterable as strike and dip by the right-hand rule.
+→ [Geology](features/geology.md#structural-measurements)
+
 **Survey source** — The `.th`, `.svx`, `.thconfig`, `.log` or survey-app `.zip` a compiled
 survey was made from. Archived, never read.
 → [Surveys and models](features/surveys-and-models.md#survey-sources)
@@ -219,6 +275,16 @@ from finished pictures: sharp at every zoom, labels in your language. Carries no
 
 **Visibility** — A record's own audience: private, caving group, authenticated users, public.
 One of the three things that decide access.
+
+**Watson's U²** — The test that compares a cave's passage directions with the strikes of the
+structural readings around it, giving a probability that the two come from one distribution.
+→ [Geology](features/geology.md)
+
+**Weights of evidence** — A way of counting, from known entrances, what each class of an evidence
+layer says: a positive weight **W+**, a negative weight **W−**, their **contrast** C, and the
+*studentised* contrast C / s(C) that says how far the contrast can be trusted (above about 2, with
+some confidence). The map drawn from them is a probability per cell, too high where layers repeat
+each other. → [Cave potential](features/cave-potential.md#weights-of-evidence)
 
 **Work area** — Ground your club works, drawn as an area and nested, shown with what contains
 it so two passages of the same name are told apart. → [Work areas](features/work-areas.md)

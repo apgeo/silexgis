@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-or-later
 import type { PublicTripParticipant, PublicTripTeam } from '../../api/hooks.ts';
 
 /** How a published party divides up: underground, back out, or not yet heard of. */

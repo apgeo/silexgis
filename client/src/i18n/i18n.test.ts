@@ -32,6 +32,8 @@ import type {
   TripTrackingState,
   SurveyModelInfo,
   TerrainDerivativeLayerInfo,
+  CavePotentialModelInfo,
+  CavePotentialResultInfo,
 } from '../api/hooks.ts';
 import type { components } from '../api/schema';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
@@ -234,6 +236,28 @@ const uploadSources: Record<components['schemas']['UploadSource'], true> = {
   surveyUpload: true,
 };
 
+/**
+ * Everything a Blender bundle of a flyby can be said to leave out. The movie panel lists each by a
+ * key built from the name the server knows it by, so a name added there would show as its own
+ * lookup key in the list a reader is told to check before making the file.
+ */
+const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'], true> = {
+  ground: true,
+  timedChanges: true,
+  reliefChanges: true,
+  wallColours: true,
+  surfaceOpening: true,
+  entrances: true,
+  surfaceFeatures: true,
+  scans: true,
+  photos: true,
+  mapLayers: true,
+  tracks: true,
+  layerOpacity: true,
+  wallsNotDownloaded: true,
+  moreCavesInView: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -366,6 +390,7 @@ const terrainDerivativeKinds: Record<TerrainDerivativeKind, true> = {
   roughness: true,
   colourRelief: true,
   contours: true,
+  geomorphons: true,
 };
 
 const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], true> = {
@@ -373,6 +398,22 @@ const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], tr
   computing: true,
   ready: true,
   failed: true,
+};
+
+/** Where a run of a cave-potential model has got to; the badge beside a result is looked up from it. */
+const cavePotentialStatuses: Record<CavePotentialResultInfo['status'], true> = {
+  queued: true,
+  computing: true,
+  ready: true,
+  failed: true,
+};
+
+/** How a cave-potential model comes by its weights; the method's name is looked up from the value sent. */
+const cavePotentialMethods: Record<CavePotentialModelInfo['method'], true> = {
+  directWeights: true,
+  pairwiseComparison: true,
+  frequencyRatio: true,
+  weightsOfEvidence: true,
 };
 
 /** Why a picture is out of date; the hint under the badge is looked up from the reason sent. */
@@ -413,6 +454,7 @@ type ClosestApproachAbsent = Exclude<ClosestApproach['absence'], 'none'>;
 const closestApproachAbsences: Record<ClosestApproachAbsent, true> = {
   noLineWork: true,
   noAltitudes: true,
+  altitudesRelative: true,
 };
 
 /**
@@ -430,9 +472,10 @@ const entranceAltitudeVerdicts: Record<components['schemas']['EntranceAltitudeVe
  * The terrain measures and their class codes, as the server's terrain statistics name them. Both
  * cross the boundary as plain strings, so this is the only place they are closed: a class or a
  * measure added there would reach the charts and tables as its own lookup key. Keep in step with
- * the server's list of class codes per measure.
+ * the server's list of class codes per measure. Landform classes are the exception: they are named
+ * by the landform picture's own legend keys, which are not repeated here.
  */
-const TERRAIN_STAT_MEASURES = ['slope', 'aspect', 'position'];
+const TERRAIN_STAT_MEASURES = ['slope', 'aspect', 'position', 'landform'];
 const TERRAIN_STAT_CLASSES = [
   ...['lt5', '5to15', '15to30', '30to45', 'gt45'],
   ...['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'],
@@ -681,6 +724,18 @@ describe('i18n locales', () => {
     }
   });
 
+  it('every state of a cave-potential run is named in both locales', () => {
+    const names = Object.keys(cavePotentialStatuses);
+    expect(Object.keys(en.cavePotential.statuses).sort()).toEqual([...names].sort());
+    expect(Object.keys(ro.cavePotential.statuses).sort()).toEqual([...names].sort());
+  });
+
+  it('every method of a cave-potential model is named in both locales', () => {
+    const names = Object.keys(cavePotentialMethods);
+    expect(Object.keys(en.cavePotential.methods).sort()).toEqual([...names].sort());
+    expect(Object.keys(ro.cavePotential.methods).sort()).toEqual([...names].sort());
+  });
+
   it('every kind of derived picture, its states and its choices are named in both locales', () => {
     const kinds = Object.keys(terrainDerivativeKinds);
     // The form offers exactly the kinds the server knows: one it stopped offering would keep its
@@ -777,6 +832,16 @@ describe('i18n locales', () => {
     expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
     expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
     expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
+  });
+
+  it('everything a Blender bundle can leave out is worded in both locales, and none is left over', () => {
+    const omissions = Object.keys(flybyBundleOmissions);
+    const enOmissions: Record<string, string> = en.flyby.bundle.leftOut;
+    const roOmissions: Record<string, string> = ro.flyby.bundle.leftOut;
+    expect(omissions.filter((name) => !enOmissions[name])).toEqual([]);
+    expect(omissions.filter((name) => !roOmissions[name])).toEqual([]);
+    expect(Object.keys(enOmissions).sort()).toEqual(omissions.sort());
+    expect(Object.keys(roOmissions).sort()).toEqual(omissions.sort());
   });
 
   it('every source an upload batch can come from is named in both locales, and none is left over', () => {

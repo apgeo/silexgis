@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { App, ConfigProvider } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import en from '../../i18n/locales/en.json';
 
 import type { RegistryRegionBreakdown } from '../../api/hooks.ts';
@@ -110,7 +111,7 @@ describe('the registry regions page', () => {
    * installation whose data happens to hold one.
    */
   it('gives the unrecorded region and an empty one keys the list can tell apart', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error');
     regionsSpy.mockReturnValue({
       data: breakdown({
         caveCount: 30,
@@ -173,5 +174,24 @@ describe('the registry regions page', () => {
     renderPage();
 
     expect(await screen.findByTestId('registry-regions-export')).toHaveProperty('disabled', true);
+  });
+});
+
+describe('a failed read of the registry figures', () => {
+  it('offers to read again after a dropped connection, and not after a refusal that would only repeat', async () => {
+    const refetch = vi.fn();
+    regionsSpy.mockReturnValue({ data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch });
+    const first = renderPage();
+
+    expect(await screen.findByText(i18n.t('registryStats.regionsFailed'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    regionsSpy.mockReturnValue({ data: undefined, isError: true, error: new ApiError(400, 'validation.failed', 'Invented reason.'), refetch });
+    renderPage();
+
+    expect(await screen.findByText('Invented reason.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).toBeNull();
   });
 });

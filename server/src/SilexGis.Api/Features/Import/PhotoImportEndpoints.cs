@@ -206,6 +206,9 @@ public static class PhotoImportEndpoints
                 "feature.photo_not_attached", "That picture is not attached to this object.");
         }
 
+        // One transaction, the hierarchy lock first: the recompute below reads the containment
+        // edges and flags, and outside a transaction its lock would end with its own statement.
+        await using var hierarchy = await writer.BeginHierarchyWriteAsync(ct);
         feature.Geom = file.Geom;
 
         // An entrance carries the altitude as well as the point, and a cave's own geometry is a
@@ -228,6 +231,7 @@ public static class PhotoImportEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
         return TypedResults.Ok(ToDto(file));
     }
 
@@ -345,7 +349,7 @@ public static class PhotoImportEndpoints
 
         var filtered = Filter(candidates, request).ToList();
         var (page, pageSize) = Paging.Normalize(request.Page, request.PageSize);
-        var pageItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageItems = filtered.Skip(Paging.Offset(page, pageSize)).Take(pageSize).ToList();
 
         return TypedResults.Ok(new PhotoPreviewDto(
             [.. pageItems.Select(c => ToDto(c, decisions, tokens))],

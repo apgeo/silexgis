@@ -60,6 +60,17 @@ public static class CenterlineEndpoints
     /// <summary>Centerline uploads are small line files; whole systems stay well under this.</summary>
     private const long MaxUploadBytes = 20L * 1024 * 1024;
 
+    /// <summary>
+    /// The largest altitude, up or down, a centerline position may carry. Generous past any cave
+    /// or mountain; what it stops is a stray number that would measure the passage longer than its
+    /// length column can hold.
+    /// </summary>
+    private const double MaxAltitudeMagnitudeM = 100_000;
+
+    private static bool PlausiblePosition(Coordinate c) =>
+        c.X is >= -180 and <= 180 && c.Y is >= -90 and <= 90
+        && (double.IsNaN(c.Z) || Math.Abs(c.Z) <= MaxAltitudeMagnitudeM);
+
     /// <summary>Bound of the feature name column; an over-long upload file name is cut, not rejected.</summary>
     private const int MaxNameLength = 255;
 
@@ -187,6 +198,14 @@ public static class CenterlineEndpoints
                 "centerline.no_lines", "The file contains no line geometries.");
         }
 
+        if (!geom.Coordinates.All(PlausiblePosition))
+        {
+            return ApiProblems.BadRequest(
+                "centerline.unreadable",
+                "The file has a position outside longitude ±180 and latitude ±90, or an altitude "
+                + $"beyond ±{MaxAltitudeMagnitudeM:N0} m; no survey holds one, so the file was not read as a survey.");
+        }
+
         // The display skeleton is built once, on the way in, from the geometry as surveyed: a
         // survey export is mostly splays, and drawing one canvas path per splay is what makes the
         // map overlay unusable. Rebuilding it later from an existing skeleton would keep pruning,
@@ -220,6 +239,9 @@ public static class CenterlineEndpoints
             LengthM = await CenterlineSql.GeodesicLengthMetersAsync(db, CenterlineSkeleton.Build3D(geom), ct),
         };
 
+        // In a transaction of its own that takes the hierarchy lock first: a protection switched on
+        // above the new row waits for it to commit, or commits before it and is seen.
+        await using var hierarchy = await writes.BeginHierarchyWriteAsync(ct);
         try
         {
             await writes.CreateCenterlineAsync(feature, centerline, ct: ct);
@@ -230,6 +252,7 @@ public static class CenterlineEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await hierarchy.CommitAsync(ct);
         return TypedResults.Created($"/api/v1/caves/{caveId}/centerlines", ToDto(feature, centerline));
     }
 

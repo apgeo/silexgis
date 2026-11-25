@@ -50,6 +50,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Spațiul de lucru al hărții](features/map-workspace.md) ·
 [Servicii de hărți (WMS și WMTS)](features/map-services.md) ·
 [Vizualizarea 3D](features/3d-view.md) ·
+[Survoluri în vizualizarea 3D](features/flybys.md) ·
 [Relief](features/terrain.md) ·
 [Zone de lucru](features/work-areas.md) ·
 [Vederi salvate, panouri și ferestre multiple](features/saved-views-and-windows.md)
@@ -60,6 +61,9 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Topografii, drumuiri și modele 3D](features/surveys-and-models.md) ·
 [Nori de puncte (scanări LiDAR)](features/point-clouds.md) ·
 [Măsurători și statistici](features/measurements-and-statistics.md) ·
+[Analize carstice](features/karst-analyses.md) ·
+[Geologie și stereograma](features/geology.md) ·
+[Potențial speologic](features/cave-potential.md) ·
 [Fișiere de geodate](features/geodata.md) ·
 [Hărți raster georeferențiate](features/georeferenced-maps.md) ·
 [Catalogul național al peșterilor](features/cave-catalogue.md) ·

@@ -54,7 +54,7 @@ public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, ICla
             .Find(DocumentFilterWorld.Key)!;
 
         // A feature anybody may read, and a document nobody may read on its own account.
-        var featureId = await SeedPublicFeatureAsync(db, ownerId);
+        var featureId = await SeedFeatureAsync(db, ownerId);
         var documentId = await SeedAttachedDocumentAsync(db, ownerId, featureId, $"Survey {tag}");
 
         var reader = new AccessContext(readerId, isFullAdmin: false, [], []);
@@ -74,9 +74,8 @@ public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, ICla
     [Fact]
     public async Task A_document_hung_on_nothing_stays_out_of_reach()
     {
-        // The control for the case above: what admits the document is the cave it hangs on, not the
-        // mere fact of being attached to something. Without this, the test above would pass just as
-        // happily if the reach admitted every attached document to everybody.
+        // A document attached to nothing is reached through nothing: only its own rules, its owner
+        // and its audience can admit it, and this reader has none of those.
         var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dw-own2-{tag}@t.local");
         var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"dw-read2-{tag}@t.local");
 
@@ -99,7 +98,38 @@ public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, ICla
         answer.Total.ShouldBe(0);
     }
 
-    private static async Task<Guid> SeedPublicFeatureAsync(SilexGisDbContext db, Guid ownerId)
+    [Fact]
+    public async Task A_document_hung_on_a_cave_the_reader_may_not_read_stays_out_of_reach()
+    {
+        // The control for the first case: what admits the document is that the reader may read the
+        // cave it hangs on, not the mere fact of being attached to something. Without this, the
+        // first test would pass just as happily if the reach admitted every attached document to
+        // everybody.
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"dw-own3-{tag}@t.local");
+        var readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"dw-read3-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var world = scope.ServiceProvider.GetRequiredService<FilterWorldRegistry>()
+            .Find(DocumentFilterWorld.Key)!;
+
+        var hidden = await SeedFeatureAsync(db, ownerId, Visibility.Private);
+        await SeedAttachedDocumentAsync(db, ownerId, hidden, $"Behind {tag}");
+
+        var reader = new AccessContext(readerId, isFullAdmin: false, [], []);
+        var answer = await world.QueryAsync(
+            new WorldQuery(
+                reader,
+                new ConditionNode(DocumentFilterFields.Title, FilterOp.Contains, [new TextValue(tag)]),
+                SortKey.Updated, true, null, 0, 20, true),
+            default);
+
+        answer.Hits.ShouldBeEmpty();
+        answer.Total.ShouldBe(0);
+    }
+
+    private static async Task<Guid> SeedFeatureAsync(
+        SilexGisDbContext db, Guid ownerId, Visibility visibility = Visibility.Public)
     {
         var typeId = await db.FeatureTypes.AsNoTracking().Where(t => t.BoundKind == FeatureKind.Generic).Select(t => t.Id).FirstAsync();
         var id = Guid.NewGuid();
@@ -110,7 +140,7 @@ public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, ICla
             Kind = FeatureKind.Generic,
             FeatureTypeId = typeId,
             OwnerUserId = ownerId,
-            Visibility = Visibility.Public,
+            Visibility = visibility,
             // Both halves of the ancestry, as the write service stamps them.
             AncestorIds = [id],
         });

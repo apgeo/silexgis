@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { flushAccountPreferences } from '../api/hooks/accountPrefs.ts';
-import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
-import { userManager } from './auth.tsx';
-import { endSession } from './endSession.ts';
+import { signOutOfThisBrowser } from './signOut.ts';
 
 /** The address the sign-in page reads to say why the reader is there. */
 export const PASSWORD_CHANGED_LOGIN = '/login?passwordChanged=1';
@@ -25,11 +22,6 @@ export const PASSWORD_CHANGED_LOGIN = '/login?passwordChanged=1';
  * them first, in place, would let the guard on the page still open notice the missing session and
  * start a sign-in redirect of its own before the navigation had happened.
  */
-export async function signOutAfterPasswordChange(): Promise<void> {
-  // A sign-out like any other for the preferences this browser holds for the account: what is
-  // still waiting is written while the access token still works, then the cache is released, so
-  // the sign-in page — and whoever signs in next — starts from the defaults.
-  await flushAccountPreferences();
-  useUiPrefsStore.getState().releaseAccount();
-  await endSession(userManager, PASSWORD_CHANGED_LOGIN);
+export function signOutAfterPasswordChange(): Promise<void> {
+  return signOutOfThisBrowser(PASSWORD_CHANGED_LOGIN);
 }

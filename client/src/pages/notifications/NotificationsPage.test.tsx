@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { NotificationItem, NotificationListParams } from '../../api/hooks.ts';
 
 const markReadMutate = vi.fn();
@@ -26,6 +27,9 @@ function line(overrides: Partial<NotificationItem> & { id: number }): Notificati
 let items: NotificationItem[] = [];
 // What the envelope claims exists, which is not what this page is holding.
 let totalItems = 0;
+// A read that did not land: no answer at all, or an earlier answer kept through a failed re-read.
+let readFailed: 'none' | 'empty-handed' | 'holding' = 'none';
+const refetch = vi.fn();
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -33,7 +37,12 @@ vi.mock('../../api/hooks.ts', async () => {
     ...actual,
     useNotifications: (params: NotificationListParams) => {
       asked.push(params);
+      if (readFailed === 'empty-handed') {
+        return { data: undefined, isFetching: false, isError: true, error: new TypeError('offline'), refetch };
+      }
       return {
+        isError: readFailed === 'holding',
+        refetch,
         data: {
           items,
           page: params.page ?? 1,
@@ -56,14 +65,18 @@ beforeEach(() => {
   asked.length = 0;
   items = [];
   totalItems = 0;
+  readFailed = 'none';
+  refetch.mockReset();
 });
 afterEach(cleanup);
 
 function show() {
   return render(
-    <MemoryRouter>
-      <NotificationsPage />
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter>
+        <NotificationsPage />
+      </MemoryRouter>
+    </App>,
   );
 }
 
@@ -73,6 +86,39 @@ function lastAsked() {
 }
 
 describe('NotificationsPage', () => {
+  it('says a failed read failed, not that there is nothing to read, and offers to ask again', () => {
+    readFailed = 'empty-handed';
+    show();
+    expect(screen.getByTestId('notifications-load-failed')).toBeTruthy();
+    expect(screen.queryByText(i18n.t('notifications.empty'))).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the lines it holds when a later read fails, and says they may be out of date', () => {
+    items = [line({ id: 7 })];
+    readFailed = 'holding';
+    show();
+    expect(screen.getByRole('link', { name: 'Ana shared Bat Cave with you' })).toBeTruthy();
+    expect(screen.getByText(i18n.t('common.refreshFailed'))).toBeTruthy();
+  });
+
+  it('says so when marking one line or every line as read fails', async () => {
+    items = [line({ id: 7 })];
+    show();
+
+    fireEvent.click(screen.getByText('Ana shared Bat Cave with you').closest('tr')!);
+    expect(markReadMutate).toHaveBeenCalledWith(7, expect.anything());
+    markReadMutate.mock.calls[0][1].onError(new Error('offline'));
+    expect(await screen.findByText(i18n.t('notifications.markFailed'))).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mark all as read/ }));
+    expect(markAllMutate).toHaveBeenCalledWith(undefined, expect.anything());
+    markAllMutate.mock.calls[0][1].onError(new Error('offline'));
+    await waitFor(() =>
+      expect(screen.getAllByText(i18n.t('notifications.markFailed')).length).toBeGreaterThan(0));
+  });
+
   it('lists what happened, with a link to the thing it happened to', () => {
     items = [line({ id: 7 })];
     show();
@@ -154,7 +200,7 @@ describe('NotificationsPage', () => {
     show();
 
     fireEvent.click(screen.getByRole('link', { name: 'Ana shared Bat Cave with you' }));
-    expect(markReadMutate).toHaveBeenCalledWith(7);
+    expect(markReadMutate).toHaveBeenCalledWith(7, expect.anything());
 
     // Reading an already-read line again would rewrite nothing on the server, but asking is noise.
     markReadMutate.mockReset();
@@ -166,7 +212,7 @@ describe('NotificationsPage', () => {
     items = [line({ id: 21, targetWithheld: true, title: null, url: null })];
     show();
     fireEvent.click(screen.getByTestId('notification-withheld'));
-    expect(markReadMutate).toHaveBeenCalledWith(21);
+    expect(markReadMutate).toHaveBeenCalledWith(21, expect.anything());
   });
 
   it('marks everything read in one act', () => {

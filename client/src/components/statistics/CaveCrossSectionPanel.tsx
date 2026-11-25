@@ -7,6 +7,7 @@ import { useCaveCrossSection } from '../../api/hooks.ts';
 import { SummaryBoxChart } from './DistributionCharts.tsx';
 import type { FiveNumber } from './distributions.ts';
 import SurveyBasisNote from './SurveyBasisNote.tsx';
+import StatisticsCardReadFailed from './StatisticsCardReadFailed.tsx';
 
 /**
  * How big a cave's passages are, from the wall distances recorded at its stations.
@@ -27,9 +28,13 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  */
 export default function CaveCrossSectionPanel({ caveId }: { caveId: string }) {
   const { t } = useTranslation();
-  const { data, isLoading, isError } = useCaveCrossSection(caveId);
+  const { data, isLoading, isError, error, refetch } = useCaveCrossSection(caveId);
 
-  if (isError) return null;
+  if (isError) {
+    return (
+      <StatisticsCardReadFailed title={t('crossSection.title')} error={error} onRetry={refetch} testId="cave-cross-section-read-failed" />
+    );
+  }
 
   const dash = t('crossSection.notMeasured');
   const metres = (value: number | null | undefined) =>

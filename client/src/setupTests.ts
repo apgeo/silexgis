@@ -2,6 +2,12 @@
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterAll, afterEach, vi } from 'vitest';
+import { installConsoleErrorReport, noteConsoleError } from './testConsoleErrors.ts';
+
+// Every other console.error a test provokes is recorded and summed up at the end of the run (see
+// `testConsoleErrors.ts`). Registered first so that its "after" hooks run last and also hear what
+// the unmount below provokes.
+installConsoleErrorReport();
 
 // Testing Library registers its own automatic unmount only when the runner exposes its hooks
 // as globals, and this project keeps them as explicit imports. Without that unmount, every
@@ -52,11 +58,17 @@ const unlabelledIconButtons: string[] = [];
 const reportError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const line = args.map(String).join(' ');
-  if (/\[antd: [^\]]+\].*deprecated/.test(line)) {
+  const deprecated = /\[antd: [^\]]+\].*deprecated/.test(line);
+  if (deprecated) {
     antdDeprecations.push(line);
   }
-  if (line.startsWith(ICON_ONLY_UNLABELLED)) {
+  const unlabelled = line.startsWith(ICON_ONLY_UNLABELLED);
+  if (unlabelled) {
     unlabelledIconButtons.push(line);
+  }
+  // Those two already fail the test; everything else goes to the report-only record.
+  if (!deprecated && !unlabelled) {
+    noteConsoleError(args);
   }
   reportError(...args);
 };
@@ -121,6 +133,27 @@ if (!window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// A text box that grows with its text sizes itself from its own computed padding and border
+// widths. jsdom answers a computed border width with its initial keyword, "medium", and a padding
+// declared through a style variable with the variable, so the sum the box makes of them is NaN and
+// React says on the console that NaN is no height — once in every file that renders such a box,
+// whatever the test is about. A browser always answers those four in pixels; for a text box, a
+// width jsdom cannot give as a number is answered as zero instead. Nothing else is changed.
+{
+  const computeStyle = window.getComputedStyle.bind(window);
+  const SIZED_BY = /^(padding-(top|bottom)|border-(top|bottom)-width)$/;
+  window.getComputedStyle = (element: Element, pseudo?: string | null) => {
+    const style = computeStyle(element, pseudo);
+    if (!(element instanceof HTMLTextAreaElement)) return style;
+    const read = style.getPropertyValue.bind(style);
+    style.getPropertyValue = (name: string) => {
+      const value = read(name);
+      return SIZED_BY.test(name) && Number.isNaN(Number.parseFloat(value)) ? '0px' : value;
+    };
+    return style;
+  };
+}
+
 // jsdom lays nothing out, so nothing in it scrolls: an element can be asked where it is scrolled
 // to and has no way to be told to move. The table component moves its own body through this
 // call, and without it a list that opens on a particular row throws the moment it is mounted.
@@ -144,7 +177,8 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
 // that did depend on a true width would be depending on which fonts happen to be
 // installed on the machine running the tests.
 //
-// The drawing no-ops below cover the same need for a component that paints a QR square.
+// The drawing no-ops below cover the same need for a component that paints a QR square, and
+// for the texts a flyby writes over the 3D scene.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };
@@ -162,6 +196,9 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       closePath() {},
       moveTo() {},
       lineTo() {},
+      arcTo() {},
+      arc() {},
+      fillText() {},
       stroke() {},
       fill() {},
       translate() {},

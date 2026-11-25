@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain.Catalogue;
+using SilexGis.Infrastructure.Outbound;
 
 namespace SilexGis.Infrastructure.Catalogue;
 
@@ -81,6 +82,13 @@ public sealed class SpeologieClient(
     /// because each of these carries a description and descriptions are occasionally enormous.
     /// </summary>
     private const int DetailChunkSize = 10;
+
+    /// <summary>
+    /// The most of one answer this client will hold. A page of ten detail records, descriptions
+    /// included, is well under a megabyte; the bound is far above that and exists so an answer that
+    /// does not end — or a small compressed one that expands without end — cannot fill memory.
+    /// </summary>
+    private const long MaxAnswerBytes = 32L * 1024 * 1024;
 
     /// <summary>
     /// Fields read when listing. Deliberately without <c>descriere</c>: measured over the
@@ -438,7 +446,28 @@ public sealed class SpeologieClient(
                 JsonElement body;
                 try
                 {
-                    body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
+                    // Bounded in time and in size. The client's time limit stopped counting when
+                    // the headers arrived, and a detail answer carries descriptions of up to
+                    // megabytes, so a connection dropped part-way through a body is the likeliest
+                    // failure on this path: it is retried like an answer that never came.
+                    using var deadline = OutboundBody.Deadline(CallLimit, ct);
+                    using var buffered = await OutboundBody.ReadBoundedAsync(response.Content, MaxAnswerBytes, deadline.Token)
+                        ?? throw new SpeologieException(
+                            SpeologieException.RejectedCode,
+                            $"The cave catalogue's answer is larger than the {MaxAnswerBytes / (1024 * 1024)} MB this installation reads.");
+                    body = await JsonSerializer.DeserializeAsync<JsonElement>(buffered, Json, deadline.Token);
+                }
+                catch (Exception e) when (OutboundBody.IsLost(e, ct))
+                {
+                    if (attempt >= attempts)
+                    {
+                        throw new SpeologieException(
+                            SpeologieException.UnavailableCode,
+                            "The cave catalogue's answer was cut off or did not finish arriving in time.", e);
+                    }
+
+                    logger.LogWarning(e, "speologie.org's answer did not arrive whole (attempt {Attempt} of {Attempts}).", attempt, attempts);
+                    continue;
                 }
                 catch (JsonException)
                 {
@@ -497,7 +526,7 @@ public sealed class SpeologieClient(
     private async Task<HttpResponseMessage> SendThrottledAsync(object payload, CancellationToken ct)
     {
         var client = httpClientFactory.CreateClient(HttpClientName);
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 120));
+        client.Timeout = CallLimit;
 
         await gate.WaitAsync(ct);
         try
@@ -530,6 +559,13 @@ public sealed class SpeologieClient(
             gate.Release();
         }
     }
+
+    /// <summary>
+    /// How long one call may take, clamped so a nonsensical configured value cannot disable it. It
+    /// bounds the headers through the client and the body separately, because the client's own
+    /// limit stops counting once the headers have arrived.
+    /// </summary>
+    private TimeSpan CallLimit => TimeSpan.FromSeconds(Math.Clamp(Options.TimeoutSeconds, 5, 120));
 
     private static TimeSpan? RetryAfter(HttpResponseMessage response)
     {

@@ -20,6 +20,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import { ReadFailedLine } from '../../components/ReadFailedAlert.tsx';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
@@ -48,6 +49,8 @@ import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts
 // replaced by its written form — so it is shared rather than copied under a second name.
 import '../../components/trips/TripReport.css';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
+import { readFailureEndsPage } from '../../components/readFailure.ts';
+import ExpeditionReadFailed from './ExpeditionReadFailed.tsx';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionTripAccounts from './ExpeditionTripAccounts.tsx';
@@ -101,7 +104,7 @@ export default function ExpeditionReportPage() {
   const coordinateFormat = useUiPrefsStore((s) => s.coordinateFormat);
   const coordinateSettings = useUiPrefsStore((s) => s.coordinateSettings);
   const { id } = useParams<{ id: string }>();
-  const { data: camp, isPending } = useExpedition(id);
+  const { data: camp, isPending, isError, error, refetch } = useExpedition(id);
   const { data: cavingGroups } = useCavingGroups();
   const { data: templates } = useReportTemplatesOfKind('expedition');
   // Per-object capabilities once they arrive; the domain check only bridges the first render.
@@ -133,6 +136,12 @@ export default function ExpeditionReportPage() {
     document.body.classList.add('trip-report-page');
     return () => document.body.classList.remove('trip-report-page');
   }, []);
+
+  // The camp read is not retried, so a refusal settles at once with no camp: without this branch
+  // the spinner below would stay for good on a bookmarked write-up of a camp that is gone.
+  if (readFailureEndsPage(isError, camp, error)) {
+    return <ExpeditionReadFailed error={error} onRetry={() => void refetch()} />;
+  }
 
   if (isPending || !camp) {
     return (
@@ -335,7 +344,14 @@ export default function ExpeditionReportPage() {
 
         {mayReadPhotos && (
           <Part title={t('trips.gallery')}>
-            {photosQuery.isPending ? (
+            {photosQuery.isError && photosQuery.data === undefined ? (
+              <ReadFailedLine
+                error={photosQuery.error}
+                onRetry={photosQuery.refetch}
+                text={t('trips.photographsUnread')}
+                testId="expedition-report-photographs-unread"
+              />
+            ) : photosQuery.isPending ? (
               <Spin />
             ) : photos.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noPhotographs')} />
@@ -355,7 +371,7 @@ export default function ExpeditionReportPage() {
                         <img src={photo.thumbnailUrl} alt={photo.credit.caption ?? photo.title} />
                       )}
                       <figcaption>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        <Typography.Text type="secondary" className="hint-text">
                           {[photo.credit.caption ?? photo.title, photo.credit.photographerName]
                             .filter(Boolean)
                             .join(' — ')}

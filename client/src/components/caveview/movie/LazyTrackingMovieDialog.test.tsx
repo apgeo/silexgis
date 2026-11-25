@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../i18n';
+import { consoleErrors } from '../../../testConsoleErrors.ts';
 
 // What the dialog's code does when it arrives, as each test sets it: held back, failing to load, or
 // failing as it is drawn.
@@ -44,7 +45,12 @@ function Page({ surveyModelId }: { surveyModelId: string | null }) {
 beforeEach(() => {
   dialog.behaviour = 'draws';
   dialog.arrived = null;
-  vi.spyOn(console, 'error').mockImplementation(() => {});
+  // Some of these tests make the dialog throw on purpose, and React reports the error its boundary
+  // caught on the console. Those two are expected; anything else the dialog says is recorded.
+  consoleErrors.allow(
+    /the dialog failed while it was drawn|Failed to fetch dynamically imported module/,
+    'the dialog is made to throw on purpose to show how its failure is told',
+  );
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -67,10 +73,10 @@ describe('LazyTrackingMovieDialog', () => {
     expect(screen.getByTestId('trip-page')).toBeInTheDocument();
   });
 
-  it('says a page opened before an update has to be reloaded, rather than quoting the browser', async () => {
+  it('says the code did not arrive and the page has to be reloaded, rather than quoting the browser', async () => {
     dialog.behaviour = 'stale';
     render(<Page surveyModelId="model-1" />);
-    expect(await screen.findByText(/The application was updated after this page was opened/)).toBeInTheDocument();
+    expect(await screen.findByText(/The movie maker did not finish downloading/)).toBeInTheDocument();
     expect(screen.queryByText(/Failed to fetch dynamically imported module/)).not.toBeInTheDocument();
   });
 

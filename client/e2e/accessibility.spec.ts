@@ -698,7 +698,9 @@ for (const scheme of ['light', 'dark'] as const) {
     test('the trip list', async ({ page }) => {
       await login(page);
       await gotoRoute(page, '/trip-logs');
-      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30_000 });
+      // A data row, not the table: the table is drawn with a spinner and no rows while the first
+      // answer is on its way, and a scan of that state would miss every row's own controls.
+      await expect(page.locator('.ant-table-row').first()).toBeVisible({ timeout: 30_000 });
       await scan(page, 'the trip list');
     });
 
@@ -709,7 +711,8 @@ for (const scheme of ['light', 'dark'] as const) {
       await scan(page, 'the profile settings');
 
       await gotoRoute(page, '/settings/accessibility');
-      await expect(page.getByRole('main')).toBeVisible();
+      // A control of the page itself, so the scan reads the settings rather than their loading state.
+      await expect(page.getByRole('switch', { name: 'Reduce motion' })).toBeVisible({ timeout: 30_000 });
       await scan(page, 'the accessibility settings');
 
       await gotoRoute(page, '/settings/filters');

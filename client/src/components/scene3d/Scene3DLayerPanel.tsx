@@ -26,11 +26,19 @@ import type {
   SurveyWalls3DMode,
 } from '../../scene3d/surveyMeshesInView3d.ts';
 import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
+import {
+  EXAGGERATION_STEP,
+  formatExaggeration,
+  MAX_EXAGGERATION,
+  MIN_EXAGGERATION,
+} from '../../scene3d/exaggeration3d.ts';
+import Button from '../Button.tsx';
 import { meshesInViewMessage, meshProgressMessage, scansInViewMessage } from './meshMessages.ts';
 import type { ScansInView3DState } from '../../scene3d/scansInView3d.ts';
 import { formatSize } from '../attachments/fileFormat.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
+import { FONT_SIZE } from '../../theme.ts';
 
 // What a viewer can turn on, fade and cut into, in the same order and with the same words the
 // flat map uses for the same things: basemap first, then the layers drawn on it. The third
@@ -135,6 +143,9 @@ export interface Scene3DLayerPanelProps {
   onSurfaceModeChange: (mode: Scene3DSurfaceMode) => void;
   /** What the scene is actually doing about the ground; undefined until it has started. */
   surfaceState: Scene3DSurfaceState | undefined;
+  /** How many times taller than true the scene is drawn; 1 is true height. */
+  exaggeration: number;
+  onExaggerationChange: (factor: number) => void;
 }
 
 /**
@@ -189,8 +200,12 @@ export default function Scene3DLayerPanel({
   surfaceMode,
   onSurfaceModeChange,
   surfaceState,
+  exaggeration,
+  onExaggerationChange,
 }: Scene3DLayerPanelProps) {
   const { t, i18n } = useTranslation();
+  const factorLabel = (factor: number) =>
+    t('scene3d.relief.value', { factor: formatExaggeration(factor, i18n.language) });
 
   const overlayName = (layer: CaveData3DLayer) => {
     if (layer === CENTERLINE_SOURCE_ID) {
@@ -495,7 +510,7 @@ export default function Scene3DLayerPanel({
               views and a viewer comparing them WILL notice: on the globe each sheet is flattened
               to a single picture, so it softens under close zoom where the flat map keeps reading
               the file's own pyramid. */}
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.rasterOverlayHint')}
           </Typography.Paragraph>
           <div className="scene3d-layer-rows">
@@ -726,7 +741,7 @@ export default function Scene3DLayerPanel({
               What differs is said once underneath: on the globe a file is its lines, and a track
               that recorded no altitude lies on the ground rather than at sea level. */}
           <Typography.Text strong>{t('map.geofiles')}</Typography.Text>
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.geofileTracksHint')}
           </Typography.Paragraph>
           <div className="scene3d-layer-rows" data-testid="scene3d-geofile-rows">
@@ -765,7 +780,7 @@ export default function Scene3DLayerPanel({
               address, and neither is a choice. A switch is a real reload of the ground, so the
               hint says so: the viewer should expect the surveys to move with it. */}
           <Typography.Text strong>{t('scene3d.terrainTitle')}</Typography.Text>
-          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: FONT_SIZE.sm }}>
             {t('scene3d.terrainBuildsHint')}
           </Typography.Paragraph>
           <Radio.Group
@@ -788,6 +803,40 @@ export default function Scene3DLayerPanel({
           </Radio.Group>
         </>
       )}
+
+      <Divider style={{ margin: '12px 0' }} />
+
+      {/* How tall the scene is drawn. A setting of the whole view rather than of the ground alone:
+          everything that has a height is stretched with it, so it sits beside the ground and not
+          inside the elevation models, which only an installation with builds has. */}
+      <div className="scene3d-relief-head">
+        <Typography.Text strong>{t('scene3d.relief.title')}</Typography.Text>
+        <Typography.Text data-testid="scene3d-relief-value">{factorLabel(exaggeration)}</Typography.Text>
+      </div>
+      <div className="scene3d-relief-row" data-testid="scene3d-relief">
+        <Slider
+          className="scene3d-relief-slider"
+          min={MIN_EXAGGERATION}
+          max={MAX_EXAGGERATION}
+          step={EXAGGERATION_STEP}
+          value={exaggeration}
+          onChange={(value: number) => onExaggerationChange(value)}
+          tooltip={{ formatter: (value) => (value === undefined ? '' : factorLabel(value)) }}
+          ariaLabelForHandle={t('scene3d.relief.label')}
+          ariaValueTextFormatterForHandle={(value) => (value === undefined ? '' : factorLabel(value))}
+        />
+        <Button
+          size="small"
+          disabled={exaggeration === 1}
+          onClick={() => onExaggerationChange(1)}
+          data-testid="scene3d-relief-reset"
+        >
+          {t('scene3d.relief.reset')}
+        </Button>
+      </div>
+      <Typography.Text type="secondary" className="scene3d-surface-hint">
+        {t('scene3d.relief.hint')}
+      </Typography.Text>
 
       <Divider style={{ margin: '12px 0' }} />
 

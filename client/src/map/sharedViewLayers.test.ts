@@ -57,6 +57,27 @@ describe('the data layers of a shared view', () => {
     detach();
   });
 
+  it('says when a read after the first one fails, and clears it once a retry answers', async () => {
+    fetchSharedViewEntrances
+      .mockResolvedValueOnce(collection([]))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(collection([]));
+    const failures: boolean[] = [];
+    const { attach, reload } = createSharedViewLayers('token-5', { entrances: true, features: false }, (failed) =>
+      failures.push(failed),
+    );
+    const map = mapAt(12.4, 61.2, 15);
+    const detach = attach(map);
+    await vi.waitFor(() => expect(failures).toEqual([false]));
+
+    map.dispatchEvent('moveend');
+    await vi.waitFor(() => expect(failures).toEqual([false, true]), { timeout: 2_000 });
+
+    reload();
+    await vi.waitFor(() => expect(failures).toEqual([false, true, false]));
+    detach();
+  });
+
   it('draws nothing when the link draws no data', () => {
     expect(createSharedViewLayers('token-2', { entrances: false, features: false }).layers).toEqual([]);
   });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -479,15 +480,37 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
         // way; a body carrying the same text must be read the same way, not refused.
         using var client = await ClientAsync(GlobalRoles.Viewer, "fe-order");
 
-        const string body = """
-            {"document":{"scope":[{"world":"feature","where":{"of":[{"op":"contains","field":"name","values":[{"value":"urs","type":"text"}],"node":"condition"}],"node":"allOf"}}],"version":1},"pageSize":1}
+        // Two rows, of which the condition names one: a reader that dropped the condition, or read
+        // it as some other one, answers with both or with neither.
+        var ownerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, OwnerEmail);
+        var seeded = await SeedAsync(ownerId, Visibility.Public, 2);
+        var wanted = $"Row 1 {tag}";
+
+        var sorted = $$$"""
+            {"document":{"scope":[{"world":"feature","where":{"of":[{"op":"contains","field":"name","values":[{"value":"{{{wanted}}}","type":"text"}],"node":"condition"}],"node":"allOf"}}],"version":1}}
+            """;
+        var canonical = $$$"""
+            {"document":{"version":1,"scope":[{"world":"feature","where":{"node":"allOf","of":[{"node":"condition","field":"name","op":"contains","values":[{"type":"text","value":"{{{wanted}}}"}]}]}}]}}
             """;
 
-        var response = await client.PostAsync(
-            "/api/v1/filters/query",
-            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+        var fromStore = await PostRawAsync(client, sorted);
+        var asWritten = await PostRawAsync(client, canonical);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        HitIds(fromStore).ShouldBe([seeded[1]]);
+        HitIds(asWritten).ShouldBe(HitIds(fromStore));
+
+        static async Task<JsonElement> PostRawAsync(HttpClient client, string body)
+        {
+            var response = await client.PostAsync(
+                "/api/v1/filters/query",
+                new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+            return JsonDocument.Parse(payload).RootElement;
+        }
+
+        static Guid[] HitIds(JsonElement answer) =>
+            [.. answer.GetProperty("worlds")[0].GetProperty("hits").EnumerateArray().Select(h => h.GetProperty("id").GetGuid())];
     }
 
     private static async Task<string?> CodeOfAsync(HttpResponseMessage response)
@@ -851,8 +874,36 @@ public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFix
             "/api/v1/filters/resolve", new FilterResolveRequest("feature", ids));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await response.Content.ReadAsStringAsync()).ShouldContain("filter.too_many_ids");
+        ResolveCode(await response.Content.ReadAsStringAsync()).ShouldBe("filter.too_many_ids");
+
+        // The same id named many times is one id, and a list at the limit is answered.
+        var repeated = Enumerable.Repeat(Guid.NewGuid(), FilterValidation.MaxValuesPerCondition + 1).ToList();
+        (await client.PostAsJsonAsync("/api/v1/filters/resolve", new FilterResolveRequest("feature", repeated)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await client.PostAsJsonAsync("/api/v1/filters/resolve",
+            new FilterResolveRequest("feature", ids.Take(FilterValidation.MaxValuesPerCondition).ToList())))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task Resolving_in_a_kind_of_object_that_does_not_exist_is_refused_with_its_own_code()
+    {
+        using var client = await ClientAsync(GlobalRoles.Viewer, "fe-noworld");
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/filters/resolve", new FilterResolveRequest("no-such-world", [Guid.NewGuid()]));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        ResolveCode(await response.Content.ReadAsStringAsync()).ShouldBe("filter.unknown_world");
+
+        // Not a refusal of every resolve: the kind the vocabulary offers is answered.
+        (await client.PostAsJsonAsync(
+            "/api/v1/filters/resolve", new FilterResolveRequest("feature", [Guid.NewGuid()])))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static string? ResolveCode(string body) =>
+        System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("code").GetString();
 
     // ---------- the context line under a hit ----------
 

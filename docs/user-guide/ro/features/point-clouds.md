@@ -188,7 +188,8 @@ Există patru feluri, de la cel mai puțin la cel mai mult de lucru:
    fișierului*.
 2. **Din pozițiile prin satelit ale înregistrării.** O înregistrare brută cu un jurnal `.gnss` și
    fără altă plasare primește o **primă plasare** din pozițiile ei și din traiectorie: unde era și
-   încotro era îndreptată. Un jurnal `.nmea` singur nu ajunge, pentru că nu poate fi potrivit cu
+   încotro era îndreptată, potrivită pe mersul de dinainte ca scanerul să piardă cerul la intrare,
+   pentru că traseul propriu al scanerului deviază pe un drum lung. Un jurnal `.nmea` singur nu ajunge, pentru că nu poate fi potrivit cu
    ceasul propriu al scanerului. *Plasată după pozițiile prin satelit ale înregistrării* — un punct
    de pornire pe care punctele de control îl rafinează apoi.
 3. **După intrare și azimut.** **Plasează pe hartă** pune punctul zero propriu al scanării într-o

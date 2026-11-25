@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, confirmOk } from './helpers.ts';
+import { login, confirmOk, pickCaveType } from './helpers.ts';
 
 /**
  * The two human surfaces a printed cave code has: the page a visitor with no account reaches by
@@ -19,7 +19,7 @@ test.describe('printed cave codes', () => {
     // code nobody issued must answer exactly as an unpublished or revoked one does, so the
     // failing fetch is the behaviour being proved, not a symptom of a broken page.
     consoleErrors.allow(
-      /Failed to load resource.*404/,
+      /\/api\/v1\/public\/qr\/[^/?:\s]+(\?|:|$)/,
       'the not-found answer this test navigates to on purpose',
     );
     // Signed out on purpose: this is the whole point of the route.
@@ -34,7 +34,7 @@ test.describe('printed cave codes', () => {
 
   test('a malformed code answers exactly as an unknown one does', async ({ page, consoleErrors }) => {
     consoleErrors.allow(
-      /Failed to load resource.*404/,
+      /\/api\/v1\/public\/qr\/[^/?:\s]+(\?|:|$)/,
       'the not-found answer this test navigates to on purpose',
     );
     // Over the longest code the device can store — a different fact about the world, and
@@ -56,8 +56,7 @@ test.describe('printed cave codes', () => {
     const caveName = `E2E Printed Codes Cave ${Date.now()}`;
     await page.goto('/caves/new');
     await page.getByLabel('Name', { exact: true }).fill(caveName);
-    await page.getByLabel('Type', { exact: true }).click();
-    await page.locator('.ant-select-item-option').first().click();
+    await pickCaveType(page);
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Printed codes' })).toBeVisible({ timeout: 20_000 });

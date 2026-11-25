@@ -127,7 +127,7 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
     [Fact]
     public async Task An_archives_report_names_every_file_so_a_failure_is_something_to_act_on()
     {
-        // Bodies are unique per run: these suites share one database, so identical content in
+        // Bodies are unique per run: the tests of this class share one database, so identical content in
         // two tests would be recognised as a duplicate — correctly — and skipped.
         var archive = Zip(("survey.txt", $"a survey {Guid.NewGuid()}"), ("empty.txt", string.Empty));
         var batchId = await ExpandAsync(archive, cabinetId: null);
@@ -273,6 +273,104 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
             if (Directory.Exists(tinyRoot))
             {
                 Directory.Delete(tinyRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// An honest entry that compresses unusually well — a nearly blank scan, a log of repeated
+    /// lines — is a document like any other. It used to stop the whole archive as a suspected
+    /// bomb after it had already been filed, leaving everything behind it unfiled.
+    /// </summary>
+    [Fact]
+    public async Task An_honest_entry_that_compresses_very_well_is_filed_and_the_rest_still_lands()
+    {
+        var run = Guid.NewGuid();
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, body, level) in new[]
+            {
+                ("first.txt", Encoding.UTF8.GetBytes($"first {run}"), CompressionLevel.NoCompression),
+                ("blank-scan.bmp", Blank(1024 * 1024, run), CompressionLevel.Optimal),
+                ("third.txt", Encoding.UTF8.GetBytes($"third {run}"), CompressionLevel.NoCompression),
+            })
+            {
+                using var stream = zip.CreateEntry(name, level).Open();
+                stream.Write(body);
+            }
+        }
+
+        // The fixture really is past the ratio the old check refused at.
+        using (var check = new ZipArchive(new MemoryStream(buffer.ToArray()), ZipArchiveMode.Read))
+        {
+            var blank = check.GetEntry("blank-scan.bmp")!;
+            (blank.Length / blank.CompressedLength).ShouldBeGreaterThan(200);
+        }
+
+        var batchId = await ExpandAsync(buffer.ToArray(), cabinetId: null);
+
+        var batch = await admin.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}");
+        batch.GetProperty("status").GetString().ShouldBe("completed");
+        batch.GetProperty("error").ValueKind.ShouldBe(JsonValueKind.Null);
+        batch.GetProperty("storedCount").GetInt32().ShouldBe(3);
+
+        static byte[] Blank(int length, Guid run)
+        {
+            var bytes = new byte[length];
+            Encoding.UTF8.GetBytes(run.ToString()).CopyTo(bytes, 0);
+            return bytes;
+        }
+    }
+
+    /// <summary>
+    /// An archive stating more entries than the cap allows is refused before it is opened —
+    /// opening it builds an object for every entry, which is the cost such an archive is built
+    /// to impose — so nothing of it is filed. Before, the walk filed entries up to the cap and
+    /// only then stopped.
+    /// </summary>
+    [Fact]
+    public async Task An_archive_stating_far_more_entries_than_the_cap_is_refused_before_anything_is_filed()
+    {
+        var capRoot = Path.Combine(TestScratch.Root, $"silexgis-test-entries-{Guid.NewGuid():N}");
+        using var capFactory = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = capRoot,
+                ["Keys:Path"] = Path.Combine(capRoot, "keys"),
+                ["Files:MaxArchiveEntries"] = "2",
+                // Same reason as the shared factory above: this test drives the handler itself.
+                ["Jobs:PollSeconds"] = "0",
+            });
+
+        var email = $"cap-{Guid.NewGuid():N}"[..14] + "@t.local";
+        await AuthHelper.CreateUserAsync(capFactory, GlobalRoles.Admin, email);
+        using var client = await AuthHelper.BearerClientAsync(capFactory, email);
+
+        try
+        {
+            var run = Guid.NewGuid();
+            var archive = Zip(Enumerable.Range(0, 5).Select(i => ($"e{i}.txt", $"entry {i} {run}")).ToArray());
+            var batchId = await ExpandAsync(archive, cabinetId: null, client: client, api: capFactory);
+
+            var batch = await client.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{batchId}");
+            batch.GetProperty("status").GetString().ShouldBe("failed");
+            batch.GetProperty("error").GetString().ShouldBe(ArchiveExpansionRules.TooManyEntriesCode);
+            batch.GetProperty("storedCount").GetInt32().ShouldBe(0);
+
+            // An archive within the cap still expands under the same settings.
+            var within = Zip(("one.txt", $"one {run}"), ("two.txt", $"two {run}"));
+            var withinId = await ExpandAsync(within, cabinetId: null, client: client, api: capFactory);
+            var withinBatch = await client.GetFromJsonAsync<JsonElement>($"/api/v1/upload-batches/{withinId}");
+            withinBatch.GetProperty("status").GetString().ShouldBe("completed");
+            withinBatch.GetProperty("storedCount").GetInt32().ShouldBe(2);
+        }
+        finally
+        {
+            if (Directory.Exists(capRoot))
+            {
+                Directory.Delete(capRoot, recursive: true);
             }
         }
     }

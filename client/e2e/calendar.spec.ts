@@ -833,7 +833,7 @@ test('choosing kinds narrows the events, leaves the trips listed, and travels in
     // one draws the sentence for a calendar that could not be read — not a calendar quietly
     // showing every kind. The browser writes a console error for any request answered 400.
     consoleErrors.allow(
-      /status of 400/,
+      /\/api\/v1\/calendar(\?|:|$)/,
       'this flow opens a link naming a kind the server does not have, which it refuses',
     );
     await gotoRoute(page, `/calendar?from=${first}&to=${last}&kind=banana`);
@@ -854,8 +854,12 @@ test('choosing kinds narrows the events, leaves the trips listed, and travels in
  *
  * Read off records written for this run on days of their own, far enough ahead that the window
  * holds them and nothing else — so a heading's count is exact and "the only row under it" means
- * what it says. The grouping is carried in the address like every other choice, and the flow
- * opens that address afresh to show the same headings come back.
+ * what it says. The days are drawn at random from several years ahead rather than fixed: the
+ * records are readable by every account, so a fixed window is shared with this same test running
+ * at the same moment in another project of the suite, or left behind by a run that died before
+ * its clean-up, and either turns an exact count red for a reason that is not this page's. The
+ * grouping is carried in the address like every other choice, and the flow opens that address
+ * afresh to show the same headings come back.
  */
 test('the record groups its rows under headings that count them, fold away, and travel in the address', async ({
   page,
@@ -865,9 +869,10 @@ test('the record groups its rows under headings that count them, fold away, and 
   let tripId: string | undefined;
   await login(page);
 
-  const first = localDay(90);
-  const second = localDay(91);
-  const third = localDay(92);
+  const offset = 120 + Math.floor(Math.random() * 3000);
+  const first = localDay(offset);
+  const second = localDay(offset + 1);
+  const third = localDay(offset + 2);
 
   try {
     const training = await writeEvent(page, written, `E2E Group Training ${stamp}`, first, {

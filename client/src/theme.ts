@@ -289,3 +289,27 @@ export function buildThemeConfig(appearance: Appearance): ThemeConfig {
     components: { ...themeConfig.components, ...overrides.components },
   };
 }
+
+/**
+ * The theme's font-size tokens, for a style object that also sets other properties (plain small
+ * text takes the `hint-text` class instead). They read the tokens antd publishes as CSS variables,
+ * so a component needs no token hook of its own; the fallbacks are antd's default values.
+ */
+export const FONT_SIZE = {
+  sm: 'var(--ant-font-size-sm, 12px)',
+  xl: 'var(--ant-font-size-xl, 20px)',
+  heading3: 'var(--ant-font-size-heading-3, 24px)',
+} as const;
+
+/**
+ * A theme colour made see-through, for the fill under a drawn outline whose stroke is the same
+ * colour. antd hands its colour tokens out as `#rrggbb`; anything else is returned as it is, which
+ * keeps the shape visible rather than dropping its fill.
+ */
+export function translucent(colour: string, alpha: number): string {
+  if (!/^#[0-9a-f]{6}$/i.test(colour)) {
+    return colour;
+  }
+  const value = Number.parseInt(colour.slice(1), 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}

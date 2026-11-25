@@ -110,5 +110,7 @@ test('the density grid and the karstification index draw, explain themselves and
     .filter({ hasText: viewName })
     .getByRole('button', { name: `Delete the view ${viewName}`, exact: true })
     .click();
+  // Deleting a saved view asks first.
+  await page.locator('.ant-popconfirm').getByRole('button', { name: 'OK', exact: true }).click();
   await expect(dockAgain.getByRole('button', { name: viewName, exact: true })).toHaveCount(0, { timeout: 15_000 });
 });

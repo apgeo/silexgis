@@ -3,9 +3,19 @@ import { App } from 'antd';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Collection from 'ol/Collection';
+import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import { Translate } from 'ol/interaction';
+import { TranslateEvent } from 'ol/interaction/Translate';
+import { fromLonLat } from 'ol/proj';
 import '../../i18n';
+import { createFeature, fetchFeature, fetchFeatureVersion, updateFeature } from '../../api/hooks.ts';
+import { ApiError } from '../../api/client.ts';
+import { getSurfaceFeatureSource, SAVE_REFUSED } from '../../map/featureLayer.ts';
+import { MapEditController as RealMapEditController } from '../../map/mapEdit.ts';
 import type { EditState, MapEditController } from '../../map/mapEdit.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import EditToolbar from './EditToolbar.tsx';
@@ -45,6 +55,7 @@ vi.mock('../../api/hooks.ts', () => ({
   }),
   createFeature: vi.fn(),
   fetchFeature: vi.fn(),
+  fetchFeatureVersion: vi.fn(),
   updateFeature: vi.fn(),
 }));
 
@@ -239,5 +250,309 @@ describe('EditToolbar for a selected feature the person may not change', () => {
     expect(screen.getByRole('button', { name: /^Modify/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Move geometry' })).toBeEnabled();
     expect(controller.setMode).not.toHaveBeenCalledWith('none');
+  });
+});
+
+describe('EditToolbar save', () => {
+  // The server as the save loop sees it: every accepted create lands here, by its coordinate.
+  let created: { id: string; coordinates: number[] }[];
+
+  function renderWith(real: MapEditController) {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    return render(
+      <MapContext.Provider value={map}>
+        <App>
+          <EditToolbar controller={real} />
+        </App>
+      </MapContext.Provider>,
+    );
+  }
+
+  beforeEach(() => {
+    created = [];
+    vi.mocked(createFeature).mockReset();
+    vi.mocked(fetchFeature).mockReset();
+    vi.mocked(updateFeature).mockReset();
+    // The version a saved feature is at when a gesture first takes hold of it.
+    vi.mocked(fetchFeatureVersion).mockReset().mockResolvedValue('"opened"');
+  });
+
+  /** A saved feature on the map, moved once with the move tool. */
+  function moveSaved(map: OlMap, real: MapEditController, id = 'saved-1'): Feature {
+    const saved = new Feature(new Point(fromLonLat([25, 46])));
+    saved.set('id', id);
+    getSurfaceFeatureSource().addFeature(saved);
+    act(() => real.setMode('translate'));
+    const translate = map.getInteractions().getArray().find((i) => i instanceof Translate)!;
+    const moved = new Collection([saved]);
+    act(() => {
+      translate.dispatchEvent(new TranslateEvent('translatestart', moved, [0, 0], [0, 0], undefined as never));
+      saved.getGeometry()!.translate(1000, 1000);
+      translate.dispatchEvent(new TranslateEvent('translateend', moved, [0, 0], [0, 0], undefined as never));
+    });
+    act(() => real.setMode('none'));
+    return saved;
+  }
+
+  const storedSaved1 = {
+    feature: { id: 'saved-1', name: 'x', featureTypeCode: 'sinkhole', description: null, properties: null,
+      locationProtected: false, cavingGroupId: null, visibility: 'private' },
+  } as never;
+
+  it('names the version the reshaping began from, not the one read as the save goes out', async () => {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    const real = new RealMapEditController(map);
+    renderWith(real);
+    moveSaved(map, real);
+    expect(fetchFeatureVersion).toHaveBeenCalledWith('saved-1');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+    // Somebody else saves the feature meanwhile: what is read now is at their newer version.
+    vi.mocked(fetchFeatureVersion).mockResolvedValue('"theirs"');
+    vi.mocked(fetchFeature).mockResolvedValue(storedSaved1);
+    vi.mocked(updateFeature).mockResolvedValue({} as never);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+
+    expect(vi.mocked(updateFeature).mock.calls[0][2]).toBe('"opened"');
+  });
+
+  it('turns a refusal for a newer version into the changed-since sentence, and a retry still names the old version', async () => {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    const real = new RealMapEditController(map);
+    renderWith(real);
+    const saved = moveSaved(map, real);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+    vi.mocked(fetchFeature).mockResolvedValue(storedSaved1);
+    vi.mocked(updateFeature).mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    expect(await screen.findByText(/Someone else changed this since you loaded it/)).toBeInTheDocument();
+    expect(real.getPendingEdits().modified.size).toBe(1);
+    expect(saved.get(SAVE_REFUSED)).toBe(true);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).not.toHaveClass('ant-btn-loading'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(updateFeature).mock.calls.map((call) => call[2])).toEqual(['"opened"', '"opened"']);
+    expect(real.getPendingEdits().modified.size).toBe(1);
+  });
+
+  afterEach(() => {
+    getSurfaceFeatureSource().clear();
+  });
+
+  it('retries only what a partly failed save did not save, so nothing is created twice', async () => {
+    // placePointAt never reaches into the map, so a bare object stands in for it.
+    const real = new RealMapEditController({} as OlMap);
+    renderWith(real);
+    act(() => {
+      real.placePointAt([24, 45], 1);
+      real.placePointAt([24.1, 45.1], 1);
+      real.placePointAt([24.2, 45.2], 1);
+    });
+    const drawings = real.getPendingEdits().created.map((c) => c.feature);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+
+    let calls = 0;
+    vi.mocked(createFeature).mockImplementation(async (body) => {
+      calls += 1;
+      // The second create of the first attempt is refused; every other one is accepted.
+      if (calls === 2) throw new ApiError(422, 'validation');
+      const id = `f${calls}`;
+      created.push({ id, coordinates: (body.geometry as unknown as { coordinates: number[] }).coordinates });
+      return { id } as never;
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(created).toHaveLength(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).not.toHaveClass('ant-btn-loading'));
+    // What was not saved is still pending, and only that — and it is the one marked on the map.
+    expect(real.getPendingEdits().created).toHaveLength(1);
+    expect(drawings.map((f) => f.get(SAVE_REFUSED) === true)).toEqual([false, true, false]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(created).toHaveLength(3));
+    await waitFor(() => expect(drawings.some((f) => f.get(SAVE_REFUSED) === true)).toBe(false));
+
+    const longitudes = created.map((c) => Number(c.coordinates[0].toFixed(3))).sort();
+    expect(longitudes).toEqual([24, 24.1, 24.2]);
+    await waitFor(() => expect(real.getPendingEdits().created).toHaveLength(0));
+  });
+
+  it('does not create again what was created before a geometry update failed', async () => {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    const real = new RealMapEditController(map);
+    renderWith(real);
+    act(() => real.placePointAt([24, 45], 1));
+    // A saved feature moved with the move tool: its gesture events are what record the change.
+    const saved = new Feature(new Point(fromLonLat([25, 46])));
+    saved.set('id', 'saved-1');
+    getSurfaceFeatureSource().addFeature(saved);
+    act(() => real.setMode('translate'));
+    const translate = map.getInteractions().getArray().find((i) => i instanceof Translate)!;
+    const moved = new Collection([saved]);
+    act(() => {
+      translate.dispatchEvent(new TranslateEvent('translatestart', moved, [0, 0], [0, 0], undefined as never));
+      saved.getGeometry()!.translate(1000, 1000);
+      translate.dispatchEvent(new TranslateEvent('translateend', moved, [0, 0], [0, 0], undefined as never));
+    });
+    act(() => real.setMode('none'));
+    expect(real.getPendingEdits().modified.size).toBe(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+
+    vi.mocked(createFeature).mockImplementation(async () => {
+      created.push({ id: 'new-1', coordinates: [] });
+      return { id: 'new-1' } as never;
+    });
+    vi.mocked(fetchFeature).mockResolvedValue({
+      feature: { id: 'saved-1', name: 'x', featureTypeCode: 'sinkhole', description: null, properties: null,
+        locationProtected: false, cavingGroupId: null, visibility: 'private' },
+    } as never);
+    vi.mocked(updateFeature).mockRejectedValueOnce(new ApiError(503)).mockResolvedValue({} as never);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).not.toHaveClass('ant-btn-loading'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(updateFeature).toHaveBeenCalledTimes(2));
+    expect(createFeature).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(real.getPendingEdits().modified.size).toBe(0));
+  });
+
+  it('sends what the editor filled in for a drawing, the safe defaults for the rest, and keeps a reshaped feature’s own fields', async () => {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    const real = new RealMapEditController(map);
+    renderWith(real);
+    act(() => {
+      real.placePointAt([24, 45], 1);
+      real.placePointAt([24.5, 45.5], 1);
+    });
+    const [described] = real.getPendingEdits().created;
+    described.feature.set('pendingAttrs', {
+      name: 'Doline 4',
+      featureTypeId: 1,
+      description: 'rim collapsed',
+      properties: { depth: 3 },
+      primaryParentId: 'parent-1',
+      locationProtected: true,
+      visibility: 'authenticated',
+    });
+    const saved = new Feature(new Point(fromLonLat([25, 46])));
+    saved.set('id', 'saved-1');
+    getSurfaceFeatureSource().addFeature(saved);
+    act(() => real.setMode('translate'));
+    const translate = map.getInteractions().getArray().find((i) => i instanceof Translate)!;
+    const moved = new Collection([saved]);
+    act(() => {
+      translate.dispatchEvent(new TranslateEvent('translatestart', moved, [0, 0], [0, 0], undefined as never));
+      saved.getGeometry()!.translate(1000, 1000);
+      translate.dispatchEvent(new TranslateEvent('translateend', moved, [0, 0], [0, 0], undefined as never));
+    });
+    act(() => real.setMode('none'));
+    const reshaped = real.getPendingEdits().modified.get('saved-1');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+
+    let n = 0;
+    vi.mocked(createFeature).mockImplementation(async () => ({ id: `new-${++n}` }) as never);
+    vi.mocked(fetchFeature).mockResolvedValue({
+      feature: { id: 'saved-1', name: 'Old sink', featureTypeCode: 'sinkhole', description: 'kept text',
+        properties: { kept: true }, locationProtected: true, cavingGroupId: 'group-7', visibility: 'cavingGroup' },
+    } as never);
+    vi.mocked(updateFeature).mockResolvedValue({} as never);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+
+    expect(createFeature).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(createFeature).mock.calls[0][0]).toMatchObject({
+      kind: 'generic', name: 'Doline 4', featureTypeId: 1, description: 'rim collapsed',
+      properties: { depth: 3 }, parents: [{ parentId: 'parent-1', isPrimary: true }],
+      locationProtected: true, cavingGroupId: null, visibility: 'authenticated',
+      geometry: { type: 'Point' },
+    });
+    // A drawing nobody described is created private, unprotected, unnamed and parentless.
+    expect(vi.mocked(createFeature).mock.calls[1][0]).toMatchObject({
+      name: null, featureTypeId: 1, description: null, properties: null, parents: null,
+      locationProtected: false, visibility: 'private',
+    });
+    // An update replaces the whole feature, so everything but the geometry is what the server holds.
+    expect(updateFeature).toHaveBeenCalledWith('saved-1', {
+      name: 'Old sink', featureTypeId: 1, geometry: reshaped, description: 'kept text',
+      properties: { kept: true }, locationProtected: true, cavingGroupId: 'group-7', visibility: 'cavingGroup',
+    }, '"opened"');
+    expect(real.getPendingEdits().created).toHaveLength(0);
+    expect(real.getPendingEdits().modified.size).toBe(0);
+  });
+
+  it('says which rule a refused drawing broke, rather than only that the save failed', async () => {
+    const real = new RealMapEditController({} as OlMap);
+    renderWith(real);
+    act(() => real.placePointAt([24, 45], 1));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+    vi.mocked(createFeature).mockRejectedValue(new ApiError(400, 'feature.geometry_invalid'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+
+    expect(
+      await screen.findByText(/0 saved, 1 not saved\..*A shape is not one the server accepts/),
+    ).toBeInTheDocument();
+    expect(real.getPendingEdits().created).toHaveLength(1);
+  });
+
+  it('does not send a drawing that names no type, and keeps it pending', async () => {
+    const real = new RealMapEditController({} as OlMap);
+    renderWith(real);
+    act(() => real.placePointAt([24, 45], 0));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+
+    expect(await screen.findByText(/A feature has no type/)).toBeInTheDocument();
+    expect(createFeature).not.toHaveBeenCalled();
+    expect(real.getPendingEdits().created).toHaveLength(1);
+  });
+
+  it('does not guess a type for a reshaped feature whose type is not in the catalogue', async () => {
+    const map = new OlMap({ view: new View({ center: [0, 0], zoom: 2 }) });
+    const real = new RealMapEditController(map);
+    renderWith(real);
+    const saved = new Feature(new Point(fromLonLat([25, 46])));
+    saved.set('id', 'saved-1');
+    getSurfaceFeatureSource().addFeature(saved);
+    act(() => real.setMode('translate'));
+    const translate = map.getInteractions().getArray().find((i) => i instanceof Translate)!;
+    const moved = new Collection([saved]);
+    act(() => {
+      translate.dispatchEvent(new TranslateEvent('translatestart', moved, [0, 0], [0, 0], undefined as never));
+      saved.getGeometry()!.translate(1000, 1000);
+      translate.dispatchEvent(new TranslateEvent('translateend', moved, [0, 0], [0, 0], undefined as never));
+    });
+    act(() => real.setMode('none'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/ })).toBeEnabled());
+    vi.mocked(fetchFeature).mockResolvedValue({
+      feature: { id: 'saved-1', name: 'x', featureTypeCode: 'no-such-type', description: null, properties: null,
+        locationProtected: false, cavingGroupId: null, visibility: 'private' },
+    } as never);
+
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+
+    expect(await screen.findByText(/could not be found in the list of feature types/)).toBeInTheDocument();
+    expect(updateFeature).not.toHaveBeenCalled();
+    expect(real.getPendingEdits().modified.size).toBe(1);
+  });
+});
+
+describe('EditToolbar discard', () => {
+  it('asks before throwing unsaved edits away, and names how many', async () => {
+    renderToolbar({ dirty: 2 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+    expect(await screen.findByText(/Throw away 2 unsaved edits\?/)).toBeInTheDocument();
+    expect(controller.reset).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(controller.reset).toHaveBeenCalledTimes(1);
   });
 });

@@ -228,10 +228,150 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
 
         // An empty question needs no answer and no round trip.
         (await FileAccessRules.ReadableFileIdsAsync(db, ctx, [], default)).ShouldBeEmpty();
+
+        // The commands themselves: asked through a context that counts them, the same question
+        // over twice as many files costs exactly as many. The extra files are real and hang on
+        // exactly what the fixture's files hang on — the same worlds, the same objects, the same
+        // depth of chains through other files — so a form that did work per file, or per object
+        // a file hangs on, would pay again for each of them. (Ids of files that do not exist
+        // would hang on nothing and catch only the first of those.)
+        var twins = await TwinsAsync(fileIds);
+
+        // Read again: the viewer is now in a twin club as well, which the context has to know.
+        ctx = await RosterHelper.AccessContextOfAsync(db, viewerId);
+        var counter = new CommandCounter();
+        var countedOptions = new DbContextOptionsBuilder<SilexGisDbContext>(
+                scope.ServiceProvider.GetRequiredService<DbContextOptions<SilexGisDbContext>>())
+            .AddInterceptors(counter)
+            .Options;
+        await using var counted = new SilexGisDbContext(countedOptions);
+        var doubled = fileIds.Concat(twins.Values).ToList();
+
+        _ = await FileAccessRules.ReadableFileIdsAsync(counted, ctx, fileIds, default);
+        counter.Reset();
+        _ = await FileAccessRules.ReadableFileIdsAsync(counted, ctx, fileIds, default);
+        var asked = counter.Count;
+        counter.Reset();
+        var doubledAnswer = await FileAccessRules.ReadableFileIdsAsync(counted, ctx, doubled, default);
+        var askedDoubled = counter.Count;
+        counter.Reset();
+
+        // Each twin is answered as its original is, so the bigger question really is the same
+        // question asked twice over and not one the batched form could settle more cheaply.
+        foreach (var (original, twin) in twins)
+        {
+            doubledAnswer.Contains(twin).ShouldBe(all.Contains(original), NameOf(original));
+        }
+
+        doubledAnswer.Where(fileIds.Contains).ToHashSet().SetEquals(all).ShouldBeTrue();
+        (await FileAccessRules.ReadableFileIdsAsync(counted, ctx, [], default)).ShouldBeEmpty();
+
+        // Zero on both sides would mean the counter was never attached.
+        asked.ShouldBeGreaterThan(0);
+        askedDoubled.ShouldBe(asked);
+        counter.Count.ShouldBe(0, "an empty question makes no round trip");
     }
 
     private string NameOf(Guid fileId) =>
         files.FirstOrDefault(kv => kv.Value == fileId).Key ?? fileId.ToString();
+
+    /// <summary>
+    /// A second file for each of these, uploaded the same way and attached to objects of its own
+    /// that answer as the original's do: a cave of the same visibility, a trip of the same
+    /// visibility, a club the viewer is or is not in as with the original's, a target that is not
+    /// there for one that was not there. A twin of a file that hangs on another fixture file hangs
+    /// on that file's twin, so the chains are as deep as the originals'. Kept in the fixture's list
+    /// so that the clean-up takes their rows away too.
+    /// </summary>
+    private async Task<Dictionary<Guid, Guid>> TwinsAsync(IReadOnlyList<Guid> originals)
+    {
+        var twins = new Dictionary<Guid, Guid>();
+        foreach (var original in originals)
+        {
+            twins[original] = await UploadAsync($"twin-{NameOf(original)}.txt");
+        }
+
+        foreach (var (original, twin) in twins)
+        {
+            files[$"twin of {NameOf(original)}"] = twin;
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.Attachments.AsNoTracking().Where(a => originals.Contains(a.FileId)).ToListAsync();
+        var objects = new Dictionary<Guid, Guid>();
+        foreach (var row in rows)
+        {
+            var copy = new Attachment { FileId = twins[row.FileId] };
+            if (row.FeatureId is { } featureId)
+            {
+                copy.FeatureId = await TwinObjectAsync(featureId, async () =>
+                {
+                    var visibility = await db.Features.AsNoTracking()
+                        .Where(f => f.Id == featureId).Select(f => f.Visibility).SingleAsync();
+                    return await CreateCaveAsync("Twin", JsonNamingPolicy.CamelCase.ConvertName(visibility.ToString()));
+                });
+            }
+            else if (row.EntityId is { } entityId)
+            {
+                copy.EntityType = row.EntityType;
+                var trip = await db.TripLogs.AsNoTracking()
+                    .Where(t => t.Id == entityId).Select(t => (Visibility?)t.Visibility).FirstOrDefaultAsync();
+                var group = await db.CavingGroups.AsNoTracking().AnyAsync(g => g.Id == entityId);
+                if (row.EntityType == AttachedEntityType.StoredFile && twins.TryGetValue(entityId, out var twinTarget))
+                {
+                    copy.EntityId = twinTarget;
+                }
+                else if (row.EntityType == AttachedEntityType.TripLog && trip is { } tripVisibility)
+                {
+                    copy.EntityId = await TwinObjectAsync(entityId, () => CreateTripAsync("Twin Trip", tripVisibility));
+                }
+                else if (row.EntityType == AttachedEntityType.CavingGroup && group)
+                {
+                    copy.EntityId = await TwinObjectAsync(entityId, () => TwinGroupAsync(db, entityId));
+                }
+                else
+                {
+                    // A target that was not there has a twin that is not there either.
+                    copy.EntityId = await TwinObjectAsync(entityId, () => Task.FromResult(Guid.CreateVersion7()));
+                }
+            }
+
+            await AddAttachmentAsync(copy);
+        }
+
+        return twins;
+
+        async Task<Guid> TwinObjectAsync(Guid original, Func<Task<Guid>> create)
+        {
+            if (!objects.TryGetValue(original, out var twin))
+            {
+                twin = await create();
+                objects[original] = twin;
+            }
+
+            return twin;
+        }
+    }
+
+    private async Task<Guid> TwinGroupAsync(SilexGisDbContext db, Guid original)
+    {
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var group = new CavingGroup { Name = $"Batch Twin {stamp}", Slug = $"batch-twin-{stamp}" };
+        db.CavingGroups.Add(group);
+        await db.SaveChangesAsync();
+        var viewerIsIn = await (
+            from membership in db.CavingGroupMemberships
+            join caver in db.Cavers on membership.CaverId equals caver.Id
+            where membership.CavingGroupId == original && caver.UserId == viewerId
+            select membership.Id).AnyAsync();
+        if (viewerIsIn)
+        {
+            await RosterHelper.AddMemberAsync(db, group.Id, viewerId);
+        }
+
+        return group.Id;
+    }
 
     // ---- fixture helpers ----
 
@@ -310,8 +450,8 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
     /// <summary>
     /// Removes the rows above, the dangling ones especially. They name targets that were never
     /// there, which is the state this class exists to pin — and also exactly what the integrity
-    /// checks look for. The database is shared with every other class in this collection, so a
-    /// row left behind here does not fail this test, it fails theirs.
+    /// checks look for. The other tests of this class share its database, so a row left behind
+    /// here does not fail this test, it fails theirs.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -321,7 +461,7 @@ public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IC
         await db.Attachments.Where(a => fileIds.Contains(a.FileId)).ExecuteDeleteAsync();
 
         // One of these is visible to every signed-in account, which would put it in the
-        // listings other classes in this collection are counting.
+        // listings the other tests of this class are counting.
         await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ExecuteDeleteAsync();
         Dispose();
     }

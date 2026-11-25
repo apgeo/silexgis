@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { App, Alert, Card, Flex, Form, Input, Spin, Tag, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -13,6 +14,7 @@ import {
   useVerifyEmail,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import { meProblemMessage } from './meProblems.ts';
 
 /**
  * The account's email address and the verified flow for changing it.
@@ -25,7 +27,7 @@ export default function EmailSettingsPage() {
   const { message } = App.useApp();
   const [form] = Form.useForm<{ newEmail: string }>();
   const [params, setParams] = useSearchParams();
-  const { data: me, isPending } = useMe();
+  const { data: me, isPending, isError, error: readError, refetch } = useMe();
   const { refreshSession } = useAuth();
 
   const request = useRequestEmailChange();
@@ -62,6 +64,18 @@ export default function EmailSettingsPage() {
       });
   }, [params, setParams, confirm, message, t, refreshSession]);
 
+  if (isError && !me) {
+    return (
+      <ReadFailedAlert
+        error={readError}
+        isError
+        held={false}
+        onRetry={refetch}
+        title={t('settings.meLoadFailed')}
+        testId="email-settings-load-failed"
+      />
+    );
+  }
   if (isPending || !me) {
     return <Spin />;
   }
@@ -73,8 +87,8 @@ export default function EmailSettingsPage() {
       // Deliberately non-committal: the server does not say whether the address is already in
       // use, because answering would let anyone test which addresses have an account here.
       message.success(t('settings.emails.requested'));
-    } catch {
-      message.error(t('settings.emails.requestFailed'));
+    } catch (error) {
+      message.error(meProblemMessage(error, t, 'settings.emails.requestFailed'));
     }
   };
 
@@ -99,7 +113,7 @@ export default function EmailSettingsPage() {
               onClick={() => {
                 verify.mutate(undefined, {
                   onSuccess: () => message.success(t('settings.emails.verifySent')),
-                  onError: () => message.error(t('settings.emails.tooSoon')),
+                  onError: (error) => message.error(meProblemMessage(error, t)),
                 });
               }}
             >
@@ -124,7 +138,7 @@ export default function EmailSettingsPage() {
                   onClick={() => {
                     resend.mutate(undefined, {
                       onSuccess: () => message.success(t('settings.emails.resent')),
-                      onError: () => message.error(t('settings.emails.tooSoon')),
+                      onError: (error) => message.error(meProblemMessage(error, t)),
                     });
                   }}
                 >

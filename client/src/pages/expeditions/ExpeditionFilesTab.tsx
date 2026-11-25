@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Card, Empty, Flex, Typography } from 'antd';
+import { App, Card, Empty, Flex, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -11,6 +12,7 @@ import {
   useCreateAlbum,
 } from '../../api/hooks.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What is filed against the camp: the permit, the plan, the photographs somebody attached to the
@@ -54,6 +56,7 @@ function ExpeditionAlbums({
   expeditionName: string;
 }) {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { data: capabilities } = useCapabilities();
@@ -105,7 +108,15 @@ function ExpeditionAlbums({
         )
       }
     >
-      {albums.length === 0 ? (
+      <ReadFailedAlert
+        isError={albumsQuery.isError}
+        error={albumsQuery.error}
+        held={albumsQuery.data !== undefined}
+        onRetry={albumsQuery.refetch}
+        title={t('expeditions.albumsLoadFailed')}
+        testId="expedition-albums-load-failed"
+      />
+      {albumsQuery.isError && albumsQuery.data === undefined ? null : albums.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noAlbums')} />
       ) : (
         <Flex wrap gap={12}>
@@ -126,9 +137,9 @@ function ExpeditionAlbums({
                   <Flex
                     align="center"
                     justify="center"
-                    style={{ height: 100, background: 'rgba(0,0,0,0.04)' }}
+                    style={{ height: 100, background: token.colorFillQuaternary }}
                   >
-                    <PictureOutlined style={{ fontSize: 24, opacity: 0.4 }} />
+                    <PictureOutlined style={{ fontSize: FONT_SIZE.heading3, opacity: 0.4 }} />
                   </Flex>
                 )
               }

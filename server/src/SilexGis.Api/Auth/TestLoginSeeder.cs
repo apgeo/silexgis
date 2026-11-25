@@ -11,7 +11,9 @@ namespace SilexGis.Api.Auth;
 /// <summary>
 /// Seeds the three demo accounts a test installation announces on its sign-in page: a full
 /// administrator, an editor and a viewer. Runs at every start and does nothing unless
-/// <see cref="TestLoginOptions.Enabled"/> is set.
+/// <see cref="TestLoginOptions.Enabled"/> is set; when it is, the start fails if the database
+/// holds accounts or content these accounts did not create, unless
+/// <see cref="TestLoginOptions.AllowOnRealData"/> says that is known and wanted.
 /// </summary>
 /// <remarks>
 /// The three are chosen to make the permission model observable to a stranger trying the
@@ -49,6 +51,24 @@ public static class TestLoginSeeder
         }
 
         var db = services.GetRequiredService<SilexGisDbContext>();
+        if (!options.AllowOnRealData)
+        {
+            var bootstrapEmail = services.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value.Email;
+            var foreign = await RealDataGuard.ForTestLoginsAsync(db, bootstrapEmail, ct);
+            if (foreign.Any)
+            {
+                // Refused outright rather than skipped: skipping would leave any test account an
+                // earlier start created holding its public password, and announce nothing about it.
+                throw new InvalidOperationException(
+                    "Test logins are switched on, but this database holds "
+                    + foreign.Describe()
+                    + " that neither the test logins nor the other built-in development accounts created. "
+                    + "The sign-in page would print a full administrator's password on an installation with "
+                    + "real data. Switch the test logins off (SILEXGIS__TestLogins__Enabled=false), or set "
+                    + "SILEXGIS__TestLogins__AllowOnRealData=true if this installation really is meant to have them.");
+            }
+        }
+
         var userManager = services.GetRequiredService<UserManager<SilexGisUser>>();
         foreach (var account in Accounts)
         {

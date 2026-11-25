@@ -22,7 +22,8 @@
 # against an older one, tables written since the backup differ, which is expected and reported.
 # The verdict is PASS when the dump loads with no error, every table's count and checksum agree,
 # the uploads archive reads back with the files the installation holds, and so does the archive of
-# browser-uploaded terrain rasters (absent from a backup of an installation that has none).
+# browser-uploaded terrain rasters and the one of computed cave-potential maps (each absent from a
+# backup of an installation that has none).
 set -eu
 
 say() { printf '\n==> %s\n' "$*"; }
@@ -180,6 +181,20 @@ set -- $t_archived; t_a_files=$1; t_a_bytes=$2
 set -- $t_running; t_r_files=$1; t_r_bytes=$2
 echo "    archive: $t_a_files files, $t_a_bytes bytes   running: $t_r_files files, $t_r_bytes bytes"
 
+say "Reading the computed cave-potential maps"
+# Same comparison as the uploads: an archive that is absent holds nothing.
+if [ -f "$SRC_ABS/cave-potential.tar.gz" ]; then
+	c_archived=$(docker run --rm -v "$SRC_ABS":/backup:ro alpine \
+		sh -c 'tar tzvf /backup/cave-potential.tar.gz | awk '\''$1 ~ /^-/ { n++; b += $3 } END { print n + 0, b + 0 }'\''')
+else
+	c_archived="0 0"
+fi
+c_running=$(docker run --rm -v "${PROJECT}_silexgis-terrain":/data:ro alpine \
+	sh -c 'if [ -d /data/builds/cave-potential ]; then find /data/builds/cave-potential -type f -exec stat -c %s {} + | awk '\''{ n++; b += $1 } END { print n + 0, b + 0 }'\''; else echo "0 0"; fi')
+set -- $c_archived; c_a_files=$1; c_a_bytes=$2
+set -- $c_running; c_r_files=$1; c_r_bytes=$2
+echo "    archive: $c_a_files files, $c_a_bytes bytes   running: $c_r_files files, $c_r_bytes bytes"
+
 say "Verdict"
 verdict=PASS
 [ "$errors" -eq 0 ] || verdict=FAIL
@@ -187,6 +202,7 @@ verdict=PASS
 [ "$checksums" = agree ] || verdict=FAIL
 [ "$a_files" = "$r_files" ] || verdict=FAIL
 [ "$t_a_files" = "$t_r_files" ] || verdict=FAIL
+[ "$c_a_files" = "$c_r_files" ] || verdict=FAIL
 if [ "$verdict" = FAIL ] && [ "$FRESH" = no ]; then
 	echo "    FAIL against an older backup: differences may be what was written since it was taken."
 	echo "    Run with no argument to rehearse a fresh one, where everything should agree."

@@ -9,11 +9,12 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
-using Therion.Blender;
-using CaveSurvey = Therion.Blender.CaveSurvey;
-using Therion.Blender.Parsing;
+using Therion.Cave3D;
+using CaveSurvey = Therion.Cave3D.CaveSurvey;
+using Therion.Cave3D.Parsing;
 
 namespace SilexGis.Api.Tests;
 
@@ -165,6 +166,74 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
         var shape = centerlines.Where(c => c.IsDefault).ShouldHaveSingleItem();
         (await db.SurveyModels.AsNoTracking().Where(m => m.CaveFeatureId == caveId && m.IsCurrent).Select(m => (Guid?)m.Id).ToListAsync())
             .ShouldBe([shape.SurveyModelId]);
+    }
+
+    /// <summary>
+    /// The installation-wide hierarchy lock is held by the reading that creates a cave's
+    /// centerline, and by no other. The first reading waits for it, because the new centerline's
+    /// protection is derived from the cave's; a reading again only rewrites that centerline, and
+    /// if it took the lock every feature creation and protection change anywhere would queue
+    /// behind the whole delete and insert of a large survey.
+    /// </summary>
+    [Fact]
+    public async Task Only_the_reading_that_creates_the_centerline_waits_for_the_hierarchy_lock()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, NamedRootCave());
+
+        var first = (await QueuedForAsync(ProcessingJobKinds.SurveyGraph, modelId)).ShouldHaveSingleItem();
+        await using (var holder = factory.Services.CreateAsyncScope())
+        {
+            var db = holder.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await HierarchyLockSql.TakeAsync(db, TestContext.Current.CancellationToken);
+            var reading = Task.Run(() => QueuedJob.RunAsync(factory.Services, first.Id), TestContext.Current.CancellationToken);
+            await LockWaits.UntilParkedAsync(db, 1, reading, "the first reading of the model");
+            await tx.CommitAsync(TestContext.Current.CancellationToken);
+            await reading;
+        }
+
+        (await StatusAsync(modelId)).ShouldBe(SurveyModelStatus.Ready);
+        (await CenterlinesOfAsync(caveId)).ShouldHaveSingleItem();
+
+        (await owner.PostAsync($"/api/v1/survey-models/{modelId}/reading", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var again = (await QueuedForAsync(ProcessingJobKinds.SurveyGraph, modelId)).ShouldHaveSingleItem();
+        var parked = false;
+        await using (var holder = factory.Services.CreateAsyncScope())
+        {
+            var db = holder.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+            await HierarchyLockSql.TakeAsync(db, TestContext.Current.CancellationToken);
+            var reading = Task.Run(() => QueuedJob.RunAsync(factory.Services, again.Id), TestContext.Current.CancellationToken);
+
+            // Done while the lock is still held, or seen waiting for it; the lock is let go either
+            // way, so a reading that does wait finishes and the test fails on what it saw.
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (!reading.IsCompleted && DateTime.UtcNow < deadline)
+            {
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_stat_clear_snapshot()", TestContext.Current.CancellationToken);
+                var waiting = await db.Database.SqlQueryRaw<long>(
+                    "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
+                    + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
+                    + "AND pid <> pg_backend_pid()").SingleAsync(TestContext.Current.CancellationToken);
+                if (waiting > 0)
+                {
+                    parked = true;
+                    break;
+                }
+
+                await Task.Delay(50, TestContext.Current.CancellationToken);
+            }
+
+            var doneWhileHeld = reading.IsCompleted;
+            await tx.CommitAsync(TestContext.Current.CancellationToken);
+            await reading;
+            parked.ShouldBeFalse("reading a model again must not wait for the hierarchy lock");
+            doneWhileHeld.ShouldBeTrue("reading a model again must finish while the hierarchy lock is held elsewhere");
+        }
+
+        (await StatusAsync(modelId)).ShouldBe(SurveyModelStatus.Ready);
+        (await CenterlinesOfAsync(caveId)).ShouldHaveSingleItem();
     }
 
     [Fact]

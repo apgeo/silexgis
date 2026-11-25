@@ -76,6 +76,17 @@ public sealed class DocumentConversionHandler(
                 await converter.ConvertToPortableAsync(source, upload.OriginalName, work, ct);
             }
 
+            // A success status is not proof of a portable document: a proxy in front of a
+            // restarting converter answers 200 with its own page. Filed as the converted copy,
+            // that page would be served as the document's pages and, because a copy already
+            // exists, never converted again. Anything that does not open like a portable
+            // document is therefore a converter that did not answer properly, and is retried.
+            if (!await StartsAsPortableDocumentAsync(workPath, ct))
+            {
+                throw new InvalidOperationException(
+                    "The conversion service answered with something that is not a portable document.");
+            }
+
             string storagePath;
             string sha256;
             await using (var produced = File.OpenRead(workPath))
@@ -128,5 +139,22 @@ public sealed class DocumentConversionHandler(
                 File.Delete(workPath);
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the file opens with the signature every portable document starts with. Writers
+    /// may put a little junk ahead of it, which readers tolerate, so the first kilobyte is
+    /// searched rather than only its first five bytes.
+    /// </summary>
+    private static async Task<bool> StartsAsPortableDocumentAsync(string path, CancellationToken ct)
+    {
+        var head = new byte[1024];
+        int read;
+        await using (var file = File.OpenRead(path))
+        {
+            read = await file.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct);
+        }
+
+        return head.AsSpan(0, read).IndexOf("%PDF-"u8) >= 0;
     }
 }

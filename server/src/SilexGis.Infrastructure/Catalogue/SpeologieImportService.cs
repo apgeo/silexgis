@@ -129,7 +129,6 @@ public sealed class SpeologieImportService(
         // not something to hold a database transaction open across, and the throttle means this
         // takes seconds rather than milliseconds by design.
         var records = (await client.GetManyAsync(wanted, ct)).ToDictionary(r => r.Id);
-        var existing = await ExistingByCatalogueIdAsync(wanted, ct);
 
         var taxonomies = await CaveTaxonomies.LoadAsync(db, ct);
         var rules = TermRuleSeeds.Default;
@@ -161,6 +160,21 @@ public sealed class SpeologieImportService(
 
         await using var transaction = into is null ? await db.Database.BeginTransactionAsync(ct) : null;
 
+        // The hierarchy lock before the entries' locks and before any row: the caves and
+        // entrances created below derive their protection under it, so it is held from here to
+        // the commit — a protection switched on above them waits, or commits first and is seen —
+        // and taken first, so this transaction never holds a lock another hierarchy writer is
+        // waiting on while it waits for this one. A held confirmation joins a decision that has
+        // already taken it; taking it again in the same transaction costs nothing.
+        await writer.HoldHierarchyAsync(ct);
+
+        // Which entries already have a cave is asked only once this confirmation holds every entry
+        // it names, and inside the transaction that writes: asked earlier, a confirmation of the
+        // same entry running alongside could commit a cave in between, and this one would create
+        // a second.
+        await SpeologieSql.LockEntriesAsync(db, wanted, ct);
+        var existing = await ExistingByCatalogueIdAsync(wanted, ct);
+
         foreach (var id in wanted)
         {
             if (!records.TryGetValue(id, out var record))
@@ -191,6 +205,13 @@ public sealed class SpeologieImportService(
                 {
                     SpeologieAction.Update when already is not null => await UpdateAsync(
                         already, record, decision, retrievedAt, taxonomies, ctx, placed, ct),
+
+                    // Asked for in so many words by a screen that thought the entry new: a second
+                    // cave for the same entry is never what was meant, and the person is told so
+                    // rather than having it quietly turned into a refresh they did not choose.
+                    SpeologieAction.Create when already is not null => throw new SpeologieImportException(
+                        SpeologieImportException.AlreadyImportedCode,
+                        "This catalogue cave is already in the register; refresh it instead of creating a second copy."),
                     _ => await CreateAsync(
                         record, decision, importOptions, parents, retrievedAt, taxonomies, rules, ctx, placed, ct),
                 };
@@ -577,5 +598,8 @@ public sealed class SpeologieImportService(
 /// <summary>Refusal of one row, or of a whole confirmation before anything was written.</summary>
 public sealed class SpeologieImportException(string code, string message) : InvalidOperationException(message)
 {
+    /// <summary>A cave was to be created for a catalogue entry that already has one here.</summary>
+    public const string AlreadyImportedCode = "speologie.already_imported";
+
     public string Code { get; } = code;
 }

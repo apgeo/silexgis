@@ -201,6 +201,7 @@ class FakeEngine implements CaveData3DEngine {
   onSurfaceStateChanged() {
     return () => {};
   }
+  setBackgroundColor() {}
   setCutawayFootprint(footprint: Scene3DCutawayFootprint | undefined) {
     this.footprint = footprint;
     this.footprintCalls += 1;
@@ -323,6 +324,49 @@ describe('attachCaveData3d', () => {
     handle.detach();
   });
 
+  it('says a load failed, and stops saying so once one goes through', async () => {
+    const engine = new FakeEngine();
+    responses.entrances = () => Promise.reject(new Error('Request failed with status 500'));
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    await vi.waitFor(() => expect(handle.getState().loadFailed).toBe(true));
+
+    responses.entrances = () => Promise.resolve(entranceCollection());
+    handle.reload();
+    await vi.waitFor(() => expect(calls.entrances).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(handle.getState().loadFailed).toBe(false);
+    handle.detach();
+  });
+
+  it('empties every layer the map filter governs when the filter is refused, and says it was refused', async () => {
+    const { onMapFilterRefusal } = await import('../map/mapFilters.ts');
+    const heard: string[] = [];
+    const off = onMapFilterRefusal((code) => heard.push(code));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(1));
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1);
+
+    // What was drawn before is not what the refused filter selects, so it cannot stay.
+    const refusal = { code: 'saved_filter.not_found', status: 404 };
+    responses.centerlines = () => Promise.reject(refusal);
+    responses.entrances = () => Promise.reject(refusal);
+    responses.features = () => Promise.reject(refusal);
+    handle.reload();
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(0));
+
+    expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(engine.sources.get(SURFACE_FEATURE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(engine.sources.get(SURFACE_FEATURE_LINE_SOURCE_ID)!.items).toHaveLength(0);
+    expect(heard).toEqual(Array(3).fill('saved_filter.not_found'));
+    // Refused is not failed: trying again would only be refused again.
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(handle.getState().loadFailed).toBe(false);
+    off();
+    handle.detach();
+  });
+
   it('reports what the server held back and what it could only send flat', async () => {
     responses.centerlines = () =>
       Promise.resolve(centerlineCollection({ withheldCount: 3, flatCount: 2, detail: false }));
@@ -341,6 +385,7 @@ describe('attachCaveData3d', () => {
       // Neither capped layer reached a limit, and here none has been published to reach.
       surfaceFeaturesCappedAt: 0,
       entrancesCappedAt: 0,
+      loadFailed: false,
     });
     // Loading is announced as well as finished, so chrome can say the view is still filling in.
     expect(seen.length).toBeGreaterThan(1);
@@ -519,6 +564,153 @@ describe('the ground the survey is under', () => {
     await vi.waitFor(() => expect(engine.footprintCalls).toBe(1));
 
     expect(engine.footprint).toBeUndefined();
+    handle.detach();
+  });
+});
+
+describe('the caves a view is drawing', () => {
+  it('lists each cave with the ground box and the heights its survey lines fill', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+
+    const caves = handle.cavesInView();
+    expect(caves.map((cave) => cave.caveId)).toEqual(['cave-1', 'cave-2']);
+    expect(caves[0].bounds).toEqual([25.44, 45.53, 25.441, 45.53]);
+    // Hung from its own top with no relief under it: ten metres from its highest point to its lowest.
+    expect(caves[0].top! - caves[0].bottom!).toBe(10);
+    expect(caves[1].top! - caves[1].bottom!).toBe(20);
+    // And where those two points are, so a camera can be pointed at the survey rather than at its box.
+    expect([caves[0].topAt?.longitude, caves[0].bottomAt?.longitude]).toEqual([25.44, 25.441]);
+    expect(caves[0].topAt?.height).toBe(caves[0].top);
+    expect(caves[0].bottomAt?.height).toBe(caves[0].bottom);
+    handle.detach();
+  });
+
+  it('lists a cave by its entrances when none of its lines are drawn', async () => {
+    responses.centerlines = () => Promise.resolve({ type: 'FeatureCollection', features: [], withheldCount: 0, detail: true, flatCount: 0 });
+    responses.entrances = () =>
+      Promise.resolve({
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [25.4472, 45.5312] }, properties: { id: 'e-1', caveId: 'cave-9', approximate: false } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [25.4492, 45.5302] }, properties: { id: 'e-2', caveId: 'cave-9', approximate: false } },
+        ],
+      });
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(2));
+
+    const caves = handle.cavesInView();
+    expect(caves).toHaveLength(1);
+    expect(caves[0].caveId).toBe('cave-9');
+    // The box of its two entrances, and no heights: an entrance says where a cave is, not how deep.
+    expect(caves[0].bounds).toEqual([25.4472, 45.5302, 25.4492, 45.5312]);
+    expect(caves[0].top).toBeUndefined();
+    handle.detach();
+  });
+
+  it('does not list a cave twice when both its lines and its entrance are drawn', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(ENTRANCE_SOURCE_ID)!.items).toHaveLength(1));
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1));
+    expect(handle.cavesInView().map((cave) => cave.caveId)).toEqual(['cave-1']);
+    handle.detach();
+  });
+
+  it('gives one cave\'s survey lines at the heights they are drawn at, for a camera to follow down', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+
+    const lines = handle.caveLines('cave-2');
+    expect(lines).toHaveLength(1);
+    expect(lines[0].map((position) => [position.longitude, position.latitude])).toEqual([
+      [26.44, 45.53],
+      [26.441, 45.53],
+    ]);
+    // The heights the scene draws, which is what cavesInView reports as the top and bottom.
+    const cave = handle.cavesInView().find((candidate) => candidate.caveId === 'cave-2')!;
+    expect(lines[0].map((position) => position.height)).toEqual([cave.top, cave.bottom]);
+    expect(handle.caveLines('cave-9')).toEqual([]);
+    handle.detach();
+  });
+
+  it('gives no lines to follow for a survey laid on the ground', async () => {
+    const flat = twoCaveCollection();
+    flat.features[0].properties.hasZ = false;
+    responses.centerlines = () => Promise.resolve(flat);
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    expect(handle.caveLines('cave-1')).toEqual([]);
+    expect(handle.caveLines('cave-2')).toHaveLength(1);
+    handle.detach();
+  });
+
+  it('lists nothing once the survey and entrance layers are off', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(1));
+    handle.setLayerVisible(CENTERLINE_SOURCE_ID, false);
+    handle.setLayerVisible(ENTRANCE_SOURCE_ID, false);
+    expect(handle.cavesInView()).toEqual([]);
+    handle.detach();
+  });
+});
+
+describe('the survey lines in one colour', () => {
+  /** The colour of every line drawn now. */
+  const colours = (engine: FakeEngine) =>
+    new Set((engine.sources.get(CENTERLINE_SOURCE_ID)!.items as { color: string }[]).map((line) => line.color));
+
+  it('redraws the lines in one colour at once, keeps it through a load, and gives the depths back', async () => {
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items.length).toBeGreaterThan(0));
+    const own = colours(engine);
+    expect(own.has('#ffcc00')).toBe(false);
+
+    handle.setLineColour('#ffcc00');
+    expect(colours(engine)).toEqual(new Set(['#ffcc00']));
+    // Nothing fetched: the lines held are recoloured.
+    expect(calls.centerlines).toHaveLength(1);
+
+    handle.reload();
+    await vi.waitFor(() => expect(calls.centerlines).toHaveLength(2));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    expect(colours(engine)).toEqual(new Set(['#ffcc00']));
+
+    handle.setLineColour(undefined);
+    expect(colours(engine)).toEqual(own);
+    handle.detach();
+  });
+
+  it('gives one cave\'s lines a colour of their own over the colour of the rest, and hands them back', async () => {
+    responses.centerlines = () => Promise.resolve(twoCaveCollection());
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(engine.sources.get(CENTERLINE_SOURCE_ID)!.items).toHaveLength(2));
+    const byCave = () =>
+      Object.fromEntries(
+        (engine.sources.get(CENTERLINE_SOURCE_ID)!.items as { color: string; id: { caveId: string } }[]).map((line) => [
+          line.id.caveId,
+          line.color,
+        ]),
+      );
+    const own = byCave();
+    handle.setLineColour('#808080');
+    handle.setLineColour('#ff0000', 'cave-2');
+    expect(byCave()).toEqual({ 'cave-1': '#808080', 'cave-2': '#ff0000' });
+    handle.setLineColour(undefined, 'cave-2');
+    expect(byCave()).toEqual({ 'cave-1': '#808080', 'cave-2': '#808080' });
+    handle.setLineColour('#ff0000', 'cave-2');
+    handle.setLineColour(undefined);
+    expect(byCave()).toEqual({ 'cave-1': own['cave-1'], 'cave-2': '#ff0000' });
     handle.detach();
   });
 });

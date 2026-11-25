@@ -83,4 +83,19 @@ public static class FeatureTypeSeeds
     /// area kinds are resolved by code, so the two answer alike.
     /// </summary>
     public const string Hill = "hill";
+
+    /// <summary>
+    /// A mapped geological unit: an outline of one rock class, as a geology map draws it. Resolved
+    /// by this code wherever an area's statistics are split by lithology, so a rename of the shipped
+    /// kind fails the build rather than turning that split into "no geology mapped" everywhere.
+    /// </summary>
+    public const string GeologicalUnit = "geological_unit";
+
+    /// <summary>
+    /// A structural reading — bedding, a joint, a fault plane — taken at a point. Resolved by this
+    /// code where its orientation is converted on entry, drawn as a dip tick, and gathered for a
+    /// stereonet or a comparison against passage directions; a literal would let a rename turn each
+    /// of those into "no readings here" without failing anything.
+    /// </summary>
+    public const string StructuralMeasurement = "structural_measurement";
 }

@@ -96,6 +96,14 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     public const string OdometryDefaultsFile = "hdmapping.odometry.json";
     private const string PartialSuffix = ".part";
 
+    // The most of each worker-written file the application reads. A worker's honest files are a
+    // few kilobytes; a bound keeps one that is not from costing the application its memory.
+    private const int MaxCapabilitiesBytes = 1024 * 1024;
+    private const int MaxDefaultsBytes = 4 * 1024 * 1024;
+    private const int MaxProgressBytes = 64 * 1024;
+    private const int MaxResultBytes = 1024 * 1024;
+    private const int MaxLogTailBytes = 64 * 1024;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -108,26 +116,77 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// <summary>How long a called-off job is given to confirm it stopped before its directory is removed anyway.</summary>
     public TimeSpan WithdrawalWait { get; set; } = TimeSpan.FromSeconds(15);
 
+    /// <summary>The tiler's hand-off directory, and the only one when the HDMapping worker has none of its own.</summary>
     public string Root { get; } = Path.GetFullPath(options.Value.HandoffRoot, AppContext.BaseDirectory);
+
+    /// <summary>
+    /// The HDMapping worker's hand-off directory: its own when one is set, otherwise the same as
+    /// <see cref="Root"/>.
+    /// </summary>
+    public string HdmappingRoot { get; } = Path.GetFullPath(
+        string.IsNullOrWhiteSpace(options.Value.HdmappingHandoffRoot) ? options.Value.HandoffRoot : options.Value.HdmappingHandoffRoot,
+        AppContext.BaseDirectory);
+
+    /// <summary>Every hand-off directory, each once.</summary>
+    public IReadOnlyList<string> Roots => HdmappingSeparate ? [Root, HdmappingRoot] : [Root];
+
+    private bool HdmappingSeparate => !string.Equals(Root, HdmappingRoot, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The steps the HDMapping worker runs. With a directory of its own, their jobs go there and
+    /// only there, and only these steps are believed when that directory's announcement names
+    /// them — a worker given raw uploads to parse does not get to claim the tiler's work, nor the
+    /// tiler its.
+    /// </summary>
+    public static readonly IReadOnlySet<string> HdmappingWorkerSteps = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "hdmapping.preflight",
+        Domain.Scans.HdmappingOdometryStep.StepId,
+        Domain.Scans.HdmappingExportStep.StepId,
+        Domain.Scans.PointCloudCheckStep.StepId,
+    };
+
+    /// <summary>The hand-off directory of the worker that runs <paramref name="stepId"/>.</summary>
+    public string RootFor(string stepId) => HdmappingWorkerSteps.Contains(stepId) ? HdmappingRoot : Root;
 
     /// <summary>Whether this installation says it has a worker at all.</summary>
     public bool Enabled => options.Value.ProcessingEnabled;
 
     /// <summary>
-    /// What the worker last announced, or null when nothing has: no file, or one that does not
-    /// read, which from here looks the same as no worker.
+    /// What the workers last announced, or null when nothing has: no file, or one that does not
+    /// read, which from here looks the same as no worker. With a directory for each worker, each
+    /// announcement is read from its own, and only for the steps that worker runs.
     /// </summary>
     public ScanWorkerCapabilities? ReadCapabilities()
     {
-        var path = Path.Combine(Root, CapabilitiesFile);
+        if (!HdmappingSeparate)
+        {
+            return ReadCapabilitiesAt(Root, _ => true);
+        }
+
+        var tiler = ReadCapabilitiesAt(Root, id => !HdmappingWorkerSteps.Contains(id));
+        var hdmapping = ReadCapabilitiesAt(HdmappingRoot, HdmappingWorkerSteps.Contains);
+        if (tiler is null && hdmapping is null)
+        {
+            return null;
+        }
+
+        return new ScanWorkerCapabilities(
+            string.Join(" + ", new[] { tiler?.Worker, hdmapping?.Worker }.Where(w => !string.IsNullOrEmpty(w))),
+            [.. tiler?.Steps ?? [], .. hdmapping?.Steps ?? []]);
+    }
+
+    private ScanWorkerCapabilities? ReadCapabilitiesAt(string directory, Func<string, bool> runsHere)
+    {
+        var path = Path.Combine(directory, CapabilitiesFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(directory, CapabilitiesFile, MaxCapabilitiesBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             var steps = new List<ScanWorkerStep>();
             if (root.TryGetProperty("steps", out var announced) && announced.ValueKind == JsonValueKind.Array)
@@ -135,7 +194,7 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
                 foreach (var step in announced.EnumerateArray())
                 {
                     var id = Text(step, "id");
-                    if (!string.IsNullOrEmpty(id))
+                    if (!string.IsNullOrEmpty(id) && runsHere(id))
                     {
                         steps.Add(new ScanWorkerStep(id, Text(step, "tool") ?? "", Text(step, "version") ?? ""));
                     }
@@ -158,15 +217,15 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// </summary>
     public JsonElement? ReadOdometryDefaults()
     {
-        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        var path = Path.Combine(HdmappingRoot, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(HdmappingRoot, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             return document.RootElement.TryGetProperty("values", out var values)
                 && values.ValueKind == JsonValueKind.Object
                 && values.EnumerateObject().Any()
@@ -187,15 +246,15 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
     /// </summary>
     public ScanWorkerDefaults? ReadOdometryDefaultsDocument()
     {
-        var path = Path.Combine(Root, DefaultsDirectory, OdometryDefaultsFile);
+        var path = Path.Combine(HdmappingRoot, DefaultsDirectory, OdometryDefaultsFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(Path.Combine(HdmappingRoot, DefaultsDirectory), OdometryDefaultsFile, MaxDefaultsBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("values", out var values)
@@ -251,17 +310,17 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         }
     }
 
-    /// <summary>The directory a job of this name runs in.</summary>
-    public string JobDirectory(string jobName) => Path.Combine(Root, JobsDirectory, jobName);
+    /// <summary>The directory a job of this name runs in, in the hand-off directory of the worker that runs <paramref name="stepId"/>.</summary>
+    public string JobDirectory(string stepId, string jobName) => Path.Combine(RootFor(stepId), JobsDirectory, jobName);
 
     /// <summary>
     /// Makes the job directory afresh. A directory left by an earlier attempt is cleared first;
     /// if the worker is still on it, the job is called off and the worker given a moment to
     /// confirm, so the directory is not pulled out from under a running tool.
     /// </summary>
-    public async Task<string> BeginAsync(string jobName, CancellationToken ct)
+    public async Task<string> BeginAsync(string stepId, string jobName, CancellationToken ct)
     {
-        var directory = JobDirectory(jobName);
+        var directory = JobDirectory(stepId, jobName);
         if (Directory.Exists(directory))
         {
             if (InFlight(directory))
@@ -276,12 +335,23 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         return directory;
     }
 
-    /// <summary>Copies an input file into the job directory under a plain name.</summary>
+    /// <summary>
+    /// Copies an input file into the job directory under a plain name. The file is created new:
+    /// anything already at the name, a link the worker left included, refuses the copy rather than
+    /// be written through.
+    /// </summary>
     public static async Task CopyInAsync(string directory, string absoluteSource, string fileName, CancellationToken ct)
     {
         await using var source = File.OpenRead(absoluteSource);
-        await using var target = File.Create(Path.Combine(directory, fileName));
+        await using var target = ScanHandoffFiles.CreateNew(directory, fileName);
         await source.CopyToAsync(target, ct);
+    }
+
+    /// <summary>Writes a small file the application makes into the job directory, created new as <see cref="CopyInAsync"/> creates its copies.</summary>
+    public static async Task WriteNewAsync(string directory, string fileName, byte[] bytes, CancellationToken ct)
+    {
+        await using var target = ScanHandoffFiles.CreateNew(directory, fileName);
+        await target.WriteAsync(bytes, ct);
     }
 
     /// <summary>Writes the request last, under a temporary name and then renamed into place, which is what makes the job visible to the worker.</summary>
@@ -295,9 +365,9 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
             ["inputs"] = inputs,
             ["timeoutSeconds"] = (int)timeout.TotalSeconds,
         };
-        var part = Path.Combine(directory, RequestFile + PartialSuffix);
-        await File.WriteAllBytesAsync(part, JsonSerializer.SerializeToUtf8Bytes(request, Json), ct);
-        File.Move(part, Path.Combine(directory, RequestFile), overwrite: true);
+        // Renaming replaces whatever is at the final name, a link included, without following it.
+        await WriteNewAsync(directory, RequestFile + PartialSuffix, JsonSerializer.SerializeToUtf8Bytes(request, Json), ct);
+        File.Move(Path.Combine(directory, RequestFile + PartialSuffix), Path.Combine(directory, RequestFile), overwrite: true);
     }
 
     /// <summary>
@@ -364,7 +434,13 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
 
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(directory, CancelFile), clock.GetUtcNow().ToString("O"), ct);
+            // Called off once already (the time limit, then a fresh attempt at the same job): the
+            // marker stands, and is not written again through whatever may be at its name now.
+            var marker = new FileInfo(Path.Combine(directory, CancelFile));
+            if (!(marker.Exists && marker.LinkTarget is null))
+            {
+                await WriteNewAsync(directory, CancelFile, System.Text.Encoding.UTF8.GetBytes(clock.GetUtcNow().ToString("O")), ct);
+            }
         }
         catch (IOException e)
         {
@@ -407,15 +483,14 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
 
     private static (double Fraction, string? Message)? ReadProgress(string directory)
     {
-        var path = Path.Combine(directory, ProgressFile);
         try
         {
-            if (!File.Exists(path))
+            if (ScanHandoffFiles.ReadBounded(directory, ProgressFile, MaxProgressBytes) is not { } bytes)
             {
                 return null;
             }
 
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(bytes);
             var root = document.RootElement;
             var fraction = root.TryGetProperty("fraction", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetDouble() : 0;
             return (Math.Clamp(fraction, 0, 1), Text(root, "message"));
@@ -427,25 +502,24 @@ public sealed class ScanWorkerHandoff(IOptions<ScanOptions> options, TimeProvide
         }
     }
 
-    private static IReadOnlyList<string> LogTailOf(string directory)
-    {
-        try
-        {
-            var path = Path.Combine(directory, LogFile);
-            return File.Exists(path) ? File.ReadAllLines(path).TakeLast(15).ToList() : [];
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
+    // The end of the worker's log only: a log can run to gigabytes over a long job.
+    private static IReadOnlyList<string> LogTailOf(string directory) =>
+        ScanHandoffFiles.TailLines(directory, LogFile, MaxLogTailBytes, 15);
 
     private static async Task<ScanJobResult> ReadResultAsync(string directory, CancellationToken ct)
     {
         byte[] bytes;
         try
         {
-            bytes = await File.ReadAllBytesAsync(Path.Combine(directory, ResultFile), ct);
+            await using var stream = ScanHandoffFiles.OpenPlain(directory, ResultFile)
+                ?? throw new FileNotFoundException("the result file is gone");
+            if (stream.Length > MaxResultBytes)
+            {
+                return Unreadable($"the result file is larger than the {MaxResultBytes} bytes a result may be");
+            }
+
+            bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, ct);
         }
         catch (IOException e)
         {

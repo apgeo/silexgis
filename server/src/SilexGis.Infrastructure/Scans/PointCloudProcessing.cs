@@ -268,11 +268,11 @@ public sealed class PointCloudProcessing(
                         $"The point-cloud worker could not {definition.DisplayName.ToLowerInvariant()}: {Words(result)}");
                 }
 
-                var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, ct);
+                var made = await StoreOutputsAsync(upload, model, versionId, step, definition, result, inputs, directory, stepNeed, ct);
                 Take(made, kept: false);
                 if (step.StepId == MeshSurfaceStep.StepId)
                 {
-                    await surfaces.SaveAsync(upload, model, recipe, made, directory, ct);
+                    await surfaces.SaveAsync(upload, model, recipe, made, ct);
                 }
                 facts = step.StepId switch
                 {
@@ -777,7 +777,7 @@ public sealed class PointCloudProcessing(
         SurveyUpload upload, ScanRecipeStep step, IScanStep definition, ScanArtifact[] inputs, SurveyUploadStage stage, JsonElement parameters, CancellationToken ct)
     {
         var jobName = $"{upload.Id:N}-{step.StepId.Replace('.', '-')}";
-        var directory = await handoff.BeginAsync(jobName, ct);
+        var directory = await handoff.BeginAsync(step.StepId, jobName, ct);
         var named = new Dictionary<string, string>(StringComparer.Ordinal);
         if (step.StepId == HdmappingOdometryStep.StepId)
         {
@@ -854,8 +854,9 @@ public sealed class PointCloudProcessing(
             names.Add(found.OriginalName);
         }
 
-        await File.WriteAllBytesAsync(
-            Path.Combine(directory, RecordingManifest),
+        await ScanWorkerHandoff.WriteNewAsync(
+            directory,
+            RecordingManifest,
             JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, object> { ["files"] = names }),
             ct);
         named[InputName(ScanArtifactKind.RawRecording)] = RecordingManifest;
@@ -867,6 +868,13 @@ public sealed class PointCloudProcessing(
     /// is removed after the new one is in — the worker's answer is checked (a product it did not
     /// write, a digest that does not match) before anything of the earlier run is touched.
     /// </summary>
+    /// <remarks>
+    /// The worker's answer is taken as a claim, not as the truth: it may name each kind the step
+    /// makes once, a product must be a plain file in the job directory (never a link, which would
+    /// resolve inside the application's own container), no product may be larger than the whole
+    /// room the step was allowed on the worker's volume, and the stored file's format is the one
+    /// its kind is made in, whatever name the worker gave it.
+    /// </remarks>
     private async Task<List<ScanArtifact>> StoreOutputsAsync(
         SurveyUpload upload,
         SurveyModel model,
@@ -876,12 +884,15 @@ public sealed class PointCloudProcessing(
         ScanJobResult result,
         ScanArtifact[] inputs,
         string directory,
+        ScanStepNeed need,
         CancellationToken ct)
     {
         var made = new List<ScanArtifact>();
         var now = DateTimeOffset.UtcNow;
+        var largest = Math.Max(need.WorkerBytes, MinOutputBoundBytes);
 
         var earlier = await db.ScanArtifacts.Where(a => a.SurveyUploadId == upload.Id && a.StepId == step.StepId).ToListAsync(ct);
+        var named = new HashSet<ScanArtifactKind>();
 
         foreach (var output in result.Outputs)
         {
@@ -893,35 +904,49 @@ public sealed class PointCloudProcessing(
                 continue;
             }
 
-            var path = Path.Combine(directory, output.File);
-            if (!File.Exists(path))
+            if (!named.Add(kind.Value))
             {
                 throw new SurveyPipelineException(
-                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named a product it did not write: {output.File}.");
+                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named more than one product of the kind {output.Kind}.");
             }
 
             string sha256;
             long size;
-            await using (var read = File.OpenRead(path))
+            string storagePath;
+            var format = StoredFormatOf(kind.Value);
+            try
             {
+                await using var read = ScanHandoffFiles.OpenPlain(directory, output.File, requireContent: true)
+                    ?? throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed, $"The point-cloud worker named a product it did not write: {output.File}.");
                 size = read.Length;
-                sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
-            }
+                var bound = kind == ScanArtifactKind.Report ? Math.Min(largest, MaxReportBytes) : largest;
+                if (size > bound)
+                {
+                    throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed,
+                        $"The point-cloud worker's product {output.File} is {size} bytes, more than the {bound} this step could have written.");
+                }
 
-            if (!string.IsNullOrEmpty(output.Sha256) && !string.Equals(output.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
+                sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
+                if (!string.IsNullOrEmpty(output.Sha256) && !string.Equals(output.Sha256, sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SurveyPipelineException(
+                        SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} does not match the digest it reported.");
+                }
+
+                // Stored from the same open file that was measured and digested, so nothing put at
+                // the name in between is what gets kept.
+                read.Position = 0;
+                storagePath = await fileStore.SaveAsync(read, "." + format, ct);
+            }
+            catch (ScanHandoffTamperedException e)
             {
                 throw new SurveyPipelineException(
-                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} does not match the digest it reported.");
+                    SurveyPipelineFailures.StoreFailed, $"The point-cloud worker's product {output.File} is not a plain file in its job directory: {e.Message}");
             }
 
-            var extension = Path.GetExtension(output.File);
-            string storagePath;
-            await using (var read = File.OpenRead(path))
-            {
-                storagePath = await fileStore.SaveAsync(read, extension, ct);
-            }
-
-            var format = extension.TrimStart('.').ToLowerInvariant();
+            var extension = "." + format;
             var stored = documents.AddFile(
                 versionId,
                 new StoredContent(
@@ -1023,28 +1048,12 @@ public sealed class PointCloudProcessing(
                     return null;
 
                 case ScanArtifactKind.HdmSession:
-                    using (var archive = System.IO.Compression.ZipFile.OpenRead(path))
-                    {
-                        if (archive.Entries.Any(e => !ScanExternalOutputs.IsContainedMember(e.FullName)))
-                        {
-                            return "The session archive names a file outside itself.";
-                        }
-
-                        return archive.Entries.Any(e => e.FullName.Replace('\\', '/') == "session.mjs")
-                            ? null
-                            : "The session archive holds no session.mjs at its root: zip the contents of the session folder, not the folder.";
-                    }
+                    return await SessionProblemAsync(path, ct);
 
                 case ScanArtifactKind.Trajectory:
-                    using (var reader = new StreamReader(path))
-                    {
-                        var line = await reader.ReadLineAsync(ct);
-                        // HDMapping writes its trajectory with spaces between the columns; other
-                        // tools use commas, tabs or semicolons. Any of them is a table of numbers.
-                        return line is { Length: > 0 and < 65_536 } && line.IndexOfAny([',', ' ', '\t', ';']) > 0
-                            ? null
-                            : "The trajectory is not a text table of columns.";
-                    }
+                    return await TrajectoryProblemAsync(path, ct)
+                        ? "The trajectory is not a text table of columns."
+                        : null;
 
                 case ScanArtifactKind.Report:
                     if (new FileInfo(path).Length > MaxReportBytes)
@@ -1078,6 +1087,120 @@ public sealed class PointCloudProcessing(
     }
 
     private const long MaxReportBytes = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// The least a product may be bounded to, whatever the step's estimated room: 64 MiB, so an
+    /// estimate for a small job, which can be out by the size of a header or two, never refuses an
+    /// honest product. The bound is there to stop a product the size of a disk.
+    /// </summary>
+    private const long MinOutputBoundBytes = 64L * 1024 * 1024;
+
+    /// <summary>The format a worker's product of each kind is made in, and stored as.</summary>
+    private static string StoredFormatOf(ScanArtifactKind kind) => kind switch
+    {
+        ScanArtifactKind.PointCloudLaz or ScanArtifactKind.PointCloudLazDisplay => "laz",
+        ScanArtifactKind.PointCloudTiles or ScanArtifactKind.HdmSession => "zip",
+        ScanArtifactKind.Trajectory => "csv",
+        ScanArtifactKind.Report => "json",
+        ScanArtifactKind.Centreline => "geojson",
+        ScanArtifactKind.PlanImage or ScanArtifactKind.ProfileImage => "png",
+        ScanArtifactKind.MeshStl => "stl",
+        _ => "bin",
+    };
+
+    /// <summary>The most of a trajectory read to find its first line: 64 KiB, far past any header row of numbers.</summary>
+    private const int TrajectoryHeadBytes = 64 * 1024;
+
+    /// <summary>
+    /// Why a session archive may not be handed to the export: a member outside the archive, more
+    /// unpacked than the archive could honestly hold, no <c>session.mjs</c> at the root, or one
+    /// that names a file outside the session folder.
+    /// </summary>
+    private static async Task<string?> SessionProblemAsync(string path, CancellationToken ct)
+    {
+        using var archive = await System.IO.Compression.ZipFile.OpenReadAsync(path, ct);
+        if (archive.Entries.Any(e => !ScanExternalOutputs.IsContainedMember(e.FullName)))
+        {
+            return "The session archive names a file outside itself.";
+        }
+
+        // The sizes the archive declares are what unpacking it writes: the worker stops each member
+        // at its declared size, so their sum bounds the folder it unpacks to.
+        long unpacked = 0;
+        foreach (var entry in archive.Entries)
+        {
+            unpacked = entry.Length > long.MaxValue - unpacked ? long.MaxValue : unpacked + entry.Length;
+        }
+
+        if (!HdmappingSessionRules.UnpackedFits(new FileInfo(path).Length, unpacked))
+        {
+            return $"The session archive unpacks to more than {HdmappingSessionRules.MaxUnpackedFactor} times its own size; a session is mostly point files that do not compress.";
+        }
+
+        var description = archive.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/') == HdmappingSessionRules.SessionFile);
+        if (description is null)
+        {
+            return "The session archive holds no session.mjs at its root: zip the contents of the session folder, not the folder.";
+        }
+
+        if (description.Length > HdmappingSessionRules.MaxSessionFileBytes)
+        {
+            return "The session's session.mjs is too large to be a session description.";
+        }
+
+        // Read to one byte past the limit, whatever the entry declares: what is read is what counts.
+        using var text = new MemoryStream();
+        await using (var stream = await description.OpenAsync(ct))
+        {
+            var buffer = new byte[81_920];
+            int got;
+            while ((got = await stream.ReadAsync(buffer, ct)) > 0)
+            {
+                text.Write(buffer, 0, got);
+                if (text.Length > HdmappingSessionRules.MaxSessionFileBytes)
+                {
+                    return "The session's session.mjs is too large to be a session description.";
+                }
+            }
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(text.GetBuffer().AsMemory(0, (int)text.Length));
+            return HdmappingSessionRules.SessionProblem(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return "The session's session.mjs does not read as JSON.";
+        }
+    }
+
+    /// <summary>
+    /// Whether a trajectory is not a text table: its first line, looked for within the first
+    /// block only, is empty, longer than the block, or has no separator between columns.
+    /// </summary>
+    private static async Task<bool> TrajectoryProblemAsync(string path, CancellationToken ct)
+    {
+        var block = new byte[TrajectoryHeadBytes];
+        int read;
+        await using (var stream = File.OpenRead(path))
+        {
+            read = await stream.ReadAtLeastAsync(block, block.Length, throwOnEndOfStream: false, ct);
+        }
+
+        var head = block.AsSpan(0, read);
+        var end = head.IndexOfAny((byte)'\n', (byte)'\r');
+        if (end < 0 && read == block.Length)
+        {
+            // No line ends inside the block: not the first line of a table.
+            return true;
+        }
+
+        var line = end < 0 ? head : head[..end];
+        // HDMapping writes its trajectory with spaces between the columns; other tools use
+        // commas, tabs or semicolons. Any of them is a table of numbers.
+        return line.Length == 0 || line.IndexOfAny([(byte)',', (byte)' ', (byte)'\t', (byte)';']) <= 0;
+    }
 
     /// <summary>
     /// Records a file sent back for a step done elsewhere as that step's product: a file of the

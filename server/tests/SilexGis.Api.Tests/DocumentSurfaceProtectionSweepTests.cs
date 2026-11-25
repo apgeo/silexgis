@@ -39,7 +39,7 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
 {
     // Far enough from any obfuscation grid that a rounded position cannot contain these
     // digits by accident, and distinctive enough to find in a payload as text. They must also
-    // belong to this test alone: the database is shared, the sweep reads whole collections,
+    // belong to this test alone: the tests of this class share one database, the sweep reads whole collections,
     // and a cave some other test placed at the same point — legitimately unprotected there —
     // would put these digits in a payload and be read here as a disclosure.
     //

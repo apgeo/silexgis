@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftOutlined, EnvironmentOutlined, InboxOutlined } from '@ant-design/icons';
 import { App, Alert, Card, Flex, Space, Spin, Tag, Typography, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
@@ -19,7 +19,11 @@ import ImportResultModal from '../../components/import/ImportResultModal.tsx';
 import PhotoCandidateMap from '../../components/import/PhotoCandidateMap.tsx';
 import PhotoCandidateTable from '../../components/import/PhotoCandidateTable.tsx';
 import PhotoImportOptionsPanel from '../../components/import/PhotoImportOptionsPanel.tsx';
+import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
+import { refusalText } from '../../components/geodata/refusalText.ts';
+import { uploadErrorText } from '../../components/geodata/uploadErrorText.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import { useSavedReview } from './useSavedReview.ts';
 
 /** What a review starts from before the server's session has arrived. */
 const BLANK_OPTIONS: PhotoImportOptions = {
@@ -64,26 +68,25 @@ export default function PhotoImportWorkspacePage() {
   const [pageSize, setPageSize] = useState(25);
   const [uploading, setUploading] = useState(0);
   const [result, setResult] = useState<Awaited<ReturnType<typeof commit.mutateAsync>> | null>(null);
-  const loaded = useRef(false);
 
-  // The saved review arrives once and then the browser owns it: refetching over the top would
-  // undo whatever the reviewer changed while the request was in flight.
-  useEffect(() => {
-    if (session.data && !loaded.current) {
-      loaded.current = true;
-      setFileIds(session.data.fileIds);
-      setOptions(session.data.options);
-      setDecisions({ ...session.data.decisions });
-    }
-  }, [session.data]);
+  const review = useSavedReview({
+    saved: session.data,
+    apply: (saved) => {
+      setFileIds(saved.fileIds);
+      setOptions(saved.options);
+      setDecisions({ ...saved.decisions });
+    },
+    body: useMemo(() => ({ fileIds, options, decisions }), [fileIds, options, decisions]),
+    save: (body) => saveSession.mutate(body),
+  });
 
   // A drop opened from a trip is filed under it. Applied after the session has loaded so it
   // wins over whatever the last review was filed under, which is the point of arriving this way.
   useEffect(() => {
-    if (loaded.current && tripLogId && options.tripLogId !== tripLogId) {
+    if (review.loaded && tripLogId && options.tripLogId !== tripLogId) {
       setOptions((current) => ({ ...current, tripLogId }));
     }
-  }, [tripLogId, options.tripLogId]);
+  }, [review.loaded, tripLogId, options.tripLogId]);
 
   const previewRequest = useMemo<PhotoPreviewRequest>(
     () => ({
@@ -97,24 +100,33 @@ export default function PhotoImportWorkspacePage() {
     }),
     [options, fileIds, decisions, page, pageSize],
   );
-  const preview = usePhotoImportPreview(previewRequest, loaded.current);
+  // Grouping a drop into places is real work on the server, and the decisions travel with it, so
+  // it is asked for once the reviewer pauses rather than on every letter typed into a name or
+  // every step of a radius slider. Nothing is asked for until the saved review is in hand.
+  const settled = useDebouncedValue(
+    useMemo(() => ({ hydration: review.hydration, request: previewRequest }), [review.hydration, previewRequest]),
+  );
+  const preview = usePhotoImportPreview(
+    settled.request,
+    review.loaded && settled.hydration === review.hydration,
+  );
 
-  // Autosave, debounced so a reviewer ticking through twenty rows sends one request.
-  const pending = useDebouncedValue(JSON.stringify({ fileIds, options, decisions }), 800);
+  // The table shows the answer for the settings on screen or nothing: a refused grouping must not
+  // leave the previous one's places and counts looking current.
+  const answer = preview.isError ? undefined : preview.data;
+
+  // A place the settings no longer let be confirmed — or that a new grouping no longer has —
+  // drops out of the selection, so the button counts what would be sent.
   useEffect(() => {
-    if (!loaded.current) {
+    if (!answer || preview.isPlaceholderData) {
       return;
     }
-    saveSession.mutate(
-      JSON.parse(pending) as {
-        fileIds: string[];
-        options: PhotoImportOptions;
-        decisions: Record<string, PhotoDecision>;
-      },
-    );
-    // saveSession is a stable mutation object; including it would resend on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
+    const selectable = new Set(answer.selectableKeys);
+    setSelected((current) =>
+      [...current].every((key) => selectable.has(key))
+        ? current
+        : new Set([...current].filter((key) => selectable.has(key))));
+  }, [answer, preview.isPlaceholderData]);
 
   const setDecision = (key: string, decision: PhotoDecision | null) =>
     setDecisions((current) => {
@@ -142,8 +154,10 @@ export default function PhotoImportWorkspacePage() {
       // is how a half-finished review is resumed, so a second copy is what was asked for.
       const stored = await upload.mutateAsync({ file, allowDuplicate: true });
       setFileIds((current) => (current.includes(stored.id) ? current : [...current, stored.id]));
-    } catch {
-      message.error(t('photoImport.uploadFailed'));
+    } catch (error) {
+      // Per file and by name: in a drop of forty, "the pictures could not be uploaded" does not
+      // say which one to drop again.
+      message.error(t('photoImport.uploadFailedNamed', { name: file.name, reason: uploadErrorText(error, t) }));
     } finally {
       setUploading((count) => Math.max(0, count - 1));
     }
@@ -173,14 +187,14 @@ export default function PhotoImportWorkspacePage() {
       setSelected(new Set());
       setDecisions({});
       setFileIds([]);
-      loaded.current = false;
-    } catch {
-      message.error(t('photoImport.commitFailed'));
+      review.restart();
+    } catch (error) {
+      message.error(refusalText(error, t, 'photoImport.commitFailed'));
     }
   };
 
-  const items = preview.data?.items ?? [];
-  const unreadable = preview.data?.unreadableFileIds ?? [];
+  const items = answer?.items ?? [];
+  const unreadable = answer?.unreadableFileIds ?? [];
 
   return (
     <div style={{ padding: 24 }}>
@@ -196,7 +210,7 @@ export default function PhotoImportWorkspacePage() {
         </Space>
         <Button
           type="primary"
-          disabled={selected.size === 0}
+          disabled={selected.size === 0 || preview.isError || saveSession.isError}
           loading={commit.isPending}
           onClick={() => void onCommit()}
           data-testid="photo-import-commit"
@@ -204,6 +218,12 @@ export default function PhotoImportWorkspacePage() {
           {t('photoImport.createSelected', { count: selected.size })}
         </Button>
       </Flex>
+
+      <ReviewSaveFailed
+        failed={saveSession.isError}
+        saving={saveSession.isPending}
+        onRetry={() => saveSession.variables && saveSession.mutate(saveSession.variables)}
+      />
 
       {/* The identifier sits on a wrapper because the dragger does not forward it to its own
           element — and an unscoped file-input locator on this page would find whichever other
@@ -229,6 +249,37 @@ export default function PhotoImportWorkspacePage() {
         </Upload.Dragger>
       </div>
 
+      {session.isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={refusalText(session.error, t, 'photoImport.sessionFailed')}
+          action={
+            <Button size="small" onClick={() => void session.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+          data-testid="photo-import-session-error"
+        />
+      )}
+
+      {preview.isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('photoImport.previewFailed')}
+          description={refusalText(preview.error, t, 'photoImport.previewFailed')}
+          action={
+            <Button size="small" onClick={() => void preview.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+          data-testid="photo-import-preview-error"
+        />
+      )}
+
       {uploading > 0 && (
         <Alert
           type="info"
@@ -247,12 +298,12 @@ export default function PhotoImportWorkspacePage() {
         />
       )}
 
-      {preview.data && preview.data.unplacedCount > 0 && (
+      {answer && answer.unplacedCount > 0 && (
         <Alert
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          title={t('photoImport.unplacedTitle', { count: preview.data.unplacedCount })}
+          title={t('photoImport.unplacedTitle', { count: answer.unplacedCount })}
           description={t('photoImport.unplacedHint')}
         />
       )}
@@ -274,21 +325,21 @@ export default function PhotoImportWorkspacePage() {
 
       <Flex gap={16} align="start" wrap>
         <Flex vertical gap={16} style={{ flex: '1 1 700px', minWidth: 460 }}>
-          <PhotoImportOptionsPanel options={options} onChange={setOptions} preview={preview.data} />
+          <PhotoImportOptionsPanel options={options} onChange={setOptions} preview={answer} />
 
-          <Spin spinning={preview.isFetching && !preview.data}>
+          <Spin spinning={preview.isFetching && (!preview.data || preview.isPlaceholderData)}>
             <PhotoCandidateTable
               items={items}
               defaultKind={options.defaultKind}
               decisions={decisions}
               selected={selected}
-              selectableKeys={preview.data?.selectableKeys ?? []}
+              selectableKeys={answer?.selectableKeys ?? []}
               onSelectedChange={setSelected}
               onDecision={setDecision}
               onFocus={setFocused}
-              page={preview.data?.page ?? 1}
-              pageSize={preview.data?.pageSize ?? pageSize}
-              total={preview.data?.totalItems ?? 0}
+              page={answer?.page ?? 1}
+              pageSize={answer?.pageSize ?? pageSize}
+              total={answer?.totalItems ?? 0}
               onPageChange={(nextPage, nextSize) => {
                 setPage(nextPage);
                 setPageSize(nextSize);

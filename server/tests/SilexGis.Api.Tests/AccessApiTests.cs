@@ -1014,6 +1014,71 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
     }
 
     /// <summary>
+    /// The rules authored on an object are read with the version of that set and saved under it:
+    /// a save made from a reading another save has changed since is refused instead of taking the
+    /// other save's grant off, and one naming no version still lands. Somebody holding nothing over
+    /// the object is told it does not exist whatever version they name.
+    /// </summary>
+    [Fact]
+    public async Task An_object_rules_save_is_held_to_the_version_of_the_rules_it_was_read_at()
+    {
+        var strangerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-ver-{suffix}@t.local");
+        using var stranger = await AuthHelper.BearerClientAsync(factory, $"acc-api-ver-{suffix}@t.local");
+
+        // Owned by a Viewer, so owning the row is the only thing that lets anybody manage it.
+        Guid tripId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var trip = new TripLog
+            {
+                Title = $"Versioned Rules Trip {suffix}",
+                TripDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = viewerId,
+                Visibility = Visibility.Private,
+            };
+            db.TripLogs.Add(trip);
+            await db.SaveChangesAsync();
+            tripId = trip.Id;
+        }
+
+        var url = $"/api/v1/objects/tripLog/{tripId}/access";
+        object Grant(Guid subject, string actions) => new
+        {
+            entries = new[] { new { subjectKind = "user", subjectId = subject, effect = "allow", actions, scopeKind = "object" } },
+        };
+
+        var read = await viewer.GetAsync(url);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK, await read.Content.ReadAsStringAsync());
+        var opened = read.Headers.ETag?.ToString();
+        opened.ShouldNotBeNull("the rules are read with their version");
+
+        var first = await viewer.PutWithIfMatchAsync(url, Grant(strangerId, "read"), opened);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        var produced = first.Headers.ETag?.ToString();
+        produced.ShouldNotBeNull();
+        produced.ShouldNotBe(opened);
+        (await viewer.GetAsync(url)).Headers.ETag?.ToString().ShouldBe(produced);
+
+        // The same reading saved again would take the grant just made off: refused, and kept.
+        var stale = await viewer.PutWithIfMatchAsync(url, Grant(editorId, "read"), opened);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed, await stale.Content.ReadAsStringAsync());
+        (await stale.Content.ReadAsStringAsync()).ShouldContain("concurrency.version_mismatch");
+        (await viewer.GetFromJsonAsync<JsonElement>(url)).EnumerateArray()
+            .Select(e => e.GetProperty("subjectId").GetGuid()).ShouldBe([strangerId]);
+
+        // The grantee reads the trip and manages nothing on it, stale version or current.
+        (await stranger.PutWithIfMatchAsync(url, Grant(strangerId, "read, write"), produced))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        (await viewer.PutWithIfMatchAsync(url, Grant(strangerId, "read, write"), produced))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await viewer.PutAsJsonAsync(url, Grant(strangerId, "read")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
     /// Owning a row is a reason to hold every action on it, and sharing it is one of them —
     /// on a trip, a saved view and every other row that is not a feature, exactly as it
     /// already was on features. Both halves are here because only the pair proves anything:
@@ -1300,11 +1365,11 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         var write = mine.GetProperty("explain").EnumerateArray()
             .First(e => e.GetProperty("action").GetString() == "write");
         write.GetProperty("allowed").GetBoolean().ShouldBeTrue();
-        if (write.GetProperty("source").GetString() == "entries")
-        {
-            write.GetProperty("ruleName").ValueKind.ShouldBe(JsonValueKind.Null);
-            write.GetProperty("redacted").GetBoolean().ShouldBeTrue();
-        }
+        // A rule decides before ownership does, so the write is the ruleset's — which is what
+        // gives this test a rule name to withhold at all.
+        write.GetProperty("source").GetString().ShouldBe("entries");
+        write.GetProperty("ruleName").ValueKind.ShouldBe(JsonValueKind.Null);
+        write.GetProperty("redacted").GetBoolean().ShouldBeTrue();
 
         // Somebody who may read the permission model gets the name instead.
         var asAdmin = await admin.GetFromJsonAsync<JsonElement>(
@@ -1463,7 +1528,168 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
         (await exceeds.Content.ReadAsStringAsync()).ShouldContain(AccessEntryRules.ExceedsOwnRightsCode);
     }
 
+    /// <summary>
+    /// Dropping a deny from a ruleset hands its members back what it withheld, so it is bounded
+    /// exactly like granting that would be: a delegated editor of the ruleset who does not hold
+    /// the denied actions may neither leave the deny out of a replace nor delete the whole
+    /// ruleset with it, and neither refusal changes anything. The same delegate is let through
+    /// once they hold what the deny withholds, and a Full Administrator always is.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_rulesets_deny_takes_the_rights_it_withholds()
+    {
+        var delegateId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-drm-{suffix}@t.local");
+        using var delegated = await AuthHelper.BearerClientAsync(factory, $"acc-api-drm-{suffix}@t.local");
+
+        var allow = new { effect = "allow", domain = "features", actions = "read", scopeKind = "all" };
+        var deny = new { effect = "deny", domain = "features", actions = "read, write", scopeKind = "all" };
+        var groupId = await CreatePermissionGroupAsync($"Visitors {suffix}");
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", new { entries = new[] { allow, deny } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The delegate may edit and delete this ruleset and read every feature — so the allow
+        // they keep is within their bounds — and holds no right to write features.
+        await AddDirectRuleAsync(delegateId, AccessDomain.PermissionGroups,
+            AccessAction.Read | AccessAction.Write | AccessAction.Delete, AccessScopeKind.Object, groupId);
+        await AddDirectRuleAsync(delegateId, AccessDomain.Features, AccessAction.Read, AccessScopeKind.All, null);
+
+        var dropped = await delegated.PutAsJsonAsync(
+            $"/api/v1/permission-groups/{groupId}/entries", new { entries = new[] { allow } });
+        var droppedBody = await dropped.Content.ReadAsStringAsync();
+        dropped.StatusCode.ShouldBe(HttpStatusCode.Forbidden, droppedBody);
+        droppedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+
+        var deleted = await delegated.DeleteAsync($"/api/v1/permission-groups/{groupId}");
+        var deletedBody = await deleted.Content.ReadAsStringAsync();
+        deleted.StatusCode.ShouldBe(HttpStatusCode.Forbidden, deletedBody);
+        deletedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+
+        (await admin.GetFromJsonAsync<JsonElement>($"/api/v1/permission-groups/{groupId}/entries"))
+            .GetArrayLength().ShouldBe(2, "a refused replace or delete leaves the ruleset as it stood");
+
+        // Holding what the deny withholds is what lets the same delegate lift it.
+        await AddDirectRuleAsync(delegateId, AccessDomain.Features, AccessAction.Write, AccessScopeKind.All, null);
+        var lifted = await delegated.PutAsJsonAsync(
+            $"/api/v1/permission-groups/{groupId}/entries", new { entries = new[] { allow } });
+        lifted.StatusCode.ShouldBe(HttpStatusCode.OK, await lifted.Content.ReadAsStringAsync());
+
+        // And a Full Administrator deletes a ruleset whatever its denies.
+        var other = await CreatePermissionGroupAsync($"Visitors two {suffix}");
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{other}/entries", new
+        {
+            entries = new[] { new { effect = "deny", domain = "users", actions = "read, write", scopeKind = "all" } },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.DeleteAsync($"/api/v1/permission-groups/{other}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// Taking a trustee out of a ruleset that carries a deny lifts that deny for them, so it is
+    /// bounded like dropping the deny: a delegate who may edit the ruleset's members but does not
+    /// hold what the deny withholds may not take anybody out — themselves included — and the
+    /// refusal leaves the trustee in place. Once the delegate holds the denied actions, the same
+    /// removal goes through.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_trustee_from_a_ruleset_with_a_deny_takes_the_rights_it_withholds()
+    {
+        var delegateId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-dmr-{suffix}@t.local");
+        using var delegated = await AuthHelper.BearerClientAsync(factory, $"acc-api-dmr-{suffix}@t.local");
+
+        var deny = new { effect = "deny", domain = "features", actions = "write", scopeKind = "all" };
+        var groupId = await CreatePermissionGroupAsync($"Restricted {suffix}");
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{groupId}/entries", new { entries = new[] { deny } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        foreach (var member in new[] { viewerId, delegateId })
+        {
+            (await admin.PostAsJsonAsync($"/api/v1/permission-groups/{groupId}/members", new
+            {
+                memberKind = "user",
+                memberId = member,
+            })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        // The delegate may edit this ruleset's members and holds no right to write features
+        // that the ruleset's own deny does not cancel.
+        await AddDirectRuleAsync(delegateId, AccessDomain.PermissionGroups,
+            AccessAction.Read | AccessAction.Write, AccessScopeKind.Object, groupId);
+
+        foreach (var member in new[] { viewerId, delegateId })
+        {
+            var refused = await delegated.DeleteAsync($"/api/v1/permission-groups/{groupId}/members/user/{member}");
+            var refusedBody = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, refusedBody);
+            refusedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+        }
+
+        (await admin.GetFromJsonAsync<JsonElement>($"/api/v1/permission-groups/{groupId}/members"))
+            .GetArrayLength().ShouldBe(2, "a refused removal leaves every trustee in place");
+
+        // Holding what the deny withholds is what lets the same delegate take a trustee out. A
+        // right the deny itself cancels is not held, so the delegate stops being a trustee first.
+        await AddDirectRuleAsync(delegateId, AccessDomain.Features, AccessAction.Write, AccessScopeKind.All, null);
+        (await admin.DeleteAsync($"/api/v1/permission-groups/{groupId}/members/user/{delegateId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        var removed = await delegated.DeleteAsync($"/api/v1/permission-groups/{groupId}/members/user/{viewerId}");
+        removed.StatusCode.ShouldBe(HttpStatusCode.NoContent, await removed.Content.ReadAsStringAsync());
+        (await admin.GetFromJsonAsync<JsonElement>($"/api/v1/permission-groups/{groupId}/members"))
+            .GetArrayLength().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The same bound on the per-object tab: somebody handed the administering of a cave may
+    /// not drop a deny that keeps another account from writing it when they cannot write it
+    /// themselves. The cave's owner, who holds everything on it, can.
+    /// </summary>
+    [Fact]
+    public async Task Removing_a_deny_on_one_object_takes_the_rights_it_withholds()
+    {
+        var delegateId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-odr-{suffix}@t.local");
+        using var delegated = await AuthHelper.BearerClientAsync(factory, $"acc-api-odr-{suffix}@t.local");
+
+        var caveId = await CreateCaveAsync(editor, $"Denied Cave {suffix}", "authenticated");
+        var manage = new { subjectKind = "user", subjectId = delegateId, effect = "allow", actions = "managePermissions", scopeKind = "object" };
+        var deny = new { subjectKind = "user", subjectId = viewerId, effect = "deny", actions = "read, write", scopeKind = "object" };
+        (await editor.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new { entries = new[] { manage, deny } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var dropped = await delegated.PutAsJsonAsync(
+            $"/api/v1/objects/feature/{caveId}/access", new { entries = new[] { manage } });
+        var droppedBody = await dropped.Content.ReadAsStringAsync();
+        dropped.StatusCode.ShouldBe(HttpStatusCode.Forbidden, droppedBody);
+        droppedBody.ShouldContain(AccessEntryRules.RemovalExceedsOwnRightsCode);
+
+        (await editor.GetFromJsonAsync<JsonElement>($"/api/v1/objects/feature/{caveId}/access"))
+            .EnumerateArray().Count(e => e.GetProperty("effect").GetString() == "deny").ShouldBe(1);
+
+        (await editor.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new { entries = new[] { manage } }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await editor.GetFromJsonAsync<JsonElement>($"/api/v1/objects/feature/{caveId}/access"))
+            .EnumerateArray().Count(e => e.GetProperty("effect").GetString() == "deny").ShouldBe(0);
+    }
+
     // ---- helpers ----
+
+    /// <summary>A rule naming one account directly, written straight into the table.</summary>
+    private async Task AddDirectRuleAsync(
+        Guid userId, AccessDomain domain, AccessAction actions, AccessScopeKind scopeKind, Guid? scopeId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = userId,
+            Effect = AccessEffect.Allow,
+            Domain = domain,
+            Actions = actions,
+            ScopeKind = scopeKind,
+            ScopeId = scopeId,
+        });
+        await db.SaveChangesAsync();
+    }
 
     /// <summary>
     /// A caving group made through its route rather than written into the table: creating a

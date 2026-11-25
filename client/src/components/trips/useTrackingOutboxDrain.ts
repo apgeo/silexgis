@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { onServerAnswered } from '../../api/client.ts';
 import { useSendHeldTrackingReport } from '../../api/hooks.ts';
-import { onSignInRenewed, renewSignIn } from '../../auth/renewSignIn.ts';
+import { onSignInRenewed } from '../../auth/renewSignIn.ts';
 import { heldReportsOf } from './trackingOutbox.ts';
 import {
   drainHeldReports,
@@ -58,7 +58,7 @@ export function useTrackingOutboxDrain(
       // Signed in as nobody this tab can name: nobody's reports to send.
       if (accountId === null) return null;
       const knownLapsed = isHeldReportsSignInLapsed();
-      const result = await drainHeldReports(accountId, send, renewSignIn);
+      const result = await drainHeldReports(accountId, send);
       if (!result.joined) {
         if (result.sent > 0) {
           void message.success(t('trips.tracking.outbox.sent', { count: result.sent }));

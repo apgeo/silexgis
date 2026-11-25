@@ -54,6 +54,19 @@ export default function ExpeditionPhotosTab({ expeditionId }: { expeditionId: st
 
       {photosQuery.isPending ? (
         <Spin />
+      ) : photosQuery.isError && !photosQuery.data ? (
+        // A read that failed says nothing about what is filed here, so it is never drawn as none.
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="expedition-photos-unavailable"
+          title={t('expeditions.photosUnavailable')}
+          action={
+            <Button size="small" onClick={() => void photosQuery.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : photos.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noPhotographs')} />
       ) : (

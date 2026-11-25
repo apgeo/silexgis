@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, Card, Descriptions, Empty, Flex, Progress, Skeleton, Steps, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import Button from '../../../components/Button.tsx';
 import { useTerrainBuild } from '../../../api/hooks.ts';
 import type { TerrainBuildSource } from '../../../api/hooks.ts';
 import {
@@ -13,6 +14,7 @@ import {
 } from './terrainBuild.ts';
 import { TerrainBakeDegraded, TerrainBakeTimedOut } from './TerrainBakeLimits.tsx';
 import TerrainWorkerMissing from './TerrainWorkerMissing.tsx';
+import { FONT_SIZE } from '../../../theme.ts';
 
 interface Props {
   buildId: string;
@@ -33,7 +35,26 @@ interface Props {
  */
 export default function TerrainBuildProgress({ buildId }: Props) {
   const { t } = useTranslation();
-  const { data, isLoading } = useTerrainBuild(buildId);
+  const { data, isLoading, isError, refetch } = useTerrainBuild(buildId);
+
+  // A build deleted elsewhere while it is still the one chosen here answers not found; without
+  // this the skeleton below would wait for it for ever.
+  if (isError && !data) {
+    return (
+      <Card size="small" data-testid="terrain-build-detail">
+        <Alert
+          type="error"
+          showIcon
+          title={t('terrain.buildLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      </Card>
+    );
+  }
 
   if (isLoading || !data) {
     return (
@@ -187,7 +208,7 @@ export default function TerrainBuildProgress({ buildId }: Props) {
               data-testid="terrain-log-tail"
               style={{
                 margin: '8px 0 0',
-                fontSize: 12,
+                fontSize: FONT_SIZE.sm,
                 whiteSpace: 'pre-wrap',
                 maxHeight: 240,
                 overflow: 'auto',

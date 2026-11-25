@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type Key } from 'react';
+import { useEffect, useMemo, useRef, useState, type Key } from 'react';
 import FeatureGrid from '@terrestris/react-geo/dist/Grid/FeatureGrid/FeatureGrid';
 import { AimOutlined } from '@ant-design/icons';
 import { Alert, Flex, Typography } from 'antd';
@@ -44,6 +44,19 @@ const SELECT_STYLE = new Style({
 
 const keyOf = (feature: Feature<Geometry>) => String(feature.get('id'));
 
+/**
+ * Gives a listed feature its row marker only when it does not already have it. Setting a style
+ * announces a change on the feature, which its source passes on as a change of the source — and
+ * a source change is what makes this panel re-derive its lists and mark the rows again. Marking
+ * unconditionally therefore kept the panel restyling every feature and re-sorting every list a
+ * few times a second for as long as it was open.
+ */
+function markRow(feature: Feature<Geometry>, style: Style | undefined): void {
+  if ((feature.getStyle() ?? undefined) !== style) {
+    feature.setStyle(style);
+  }
+}
+
 interface InViewGridProps {
   features: Feature<Geometry>[];
   attributeFilter: string[];
@@ -87,14 +100,32 @@ function InViewGrid({ features, attributeFilter, nameTitle, columns = [], onPick
   // the fresh instances (and clear any stale hover overrides).
   useEffect(() => {
     for (const [key, feature] of byKey) {
-      feature.setStyle(selectedKeys.includes(key) ? SELECT_STYLE : undefined);
+      markRow(feature, selectedKeys.includes(key) ? SELECT_STYLE : undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate: only on instance turnover
   }, [byKey]);
 
+  // The features are the map's own, so a marker left on one when the list closes stays drawn on
+  // the map until the next reload replaces it. Closing takes off every marker this list put on.
+  const listed = useRef(byKey);
+  useEffect(() => {
+    listed.current = byKey;
+  }, [byKey]);
+  useEffect(
+    () => () => {
+      for (const feature of listed.current.values()) {
+        const style = feature.getStyle();
+        if (style === SELECT_STYLE || style === HOVER_STYLE) {
+          feature.setStyle(undefined);
+        }
+      }
+    },
+    [],
+  );
+
   const setChecked = (keys: Key[]) => {
     for (const [key, feature] of byKey) {
-      feature.setStyle(keys.includes(key) ? SELECT_STYLE : undefined);
+      markRow(feature, keys.includes(key) ? SELECT_STYLE : undefined);
     }
     setSelectedKeys(keys);
   };
@@ -129,17 +160,16 @@ function InViewGrid({ features, attributeFilter, nameTitle, columns = [], onPick
           const feature = byKey.get(String(record.key));
           return {
             onClick: () => feature && onPick(feature),
-            onMouseOver: () => feature?.setStyle(HOVER_STYLE),
+            onMouseOver: () => feature && markRow(feature, HOVER_STYLE),
             onMouseOut: () =>
-              feature?.setStyle(
-                selectedKeys.includes(String(record.key)) ? SELECT_STYLE : undefined,
-              ),
+              feature &&
+              markRow(feature, selectedKeys.includes(String(record.key)) ? SELECT_STYLE : undefined),
           };
         }}
       />
       {selectedKeys.length > 0 && (
         <Flex align="center" justify="space-between" style={{ padding: '4px 8px' }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t('map.selectedCount', { count: selectedKeys.length })}
           </Typography.Text>
           <Button size="small" icon={<AimOutlined />} onClick={zoomToSelected}>

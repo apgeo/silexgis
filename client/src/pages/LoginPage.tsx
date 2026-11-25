@@ -4,7 +4,10 @@ import { GithubOutlined, GoogleOutlined, InfoCircleOutlined, LoginOutlined } fro
 import { Alert, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
 import Button from '../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import type { TFunction } from 'i18next';
+import { authTransportProblem, fetchOrNull } from '../auth/authTransportProblem.ts';
+import { useAuthConfig } from '../auth/useAuthConfig.ts';
 
 type TwoFactorMethod = 'authenticator' | 'email' | 'sms';
 
@@ -12,25 +15,6 @@ interface LoginFormValues {
   email: string;
   password: string;
   twoFactorCode?: string;
-}
-
-interface ExternalProvider {
-  name: string;
-  displayName: string;
-}
-
-/** A demo account a test installation announces on this page, credentials included. */
-interface TestLogin {
-  email: string;
-  password: string;
-  role: string;
-}
-
-interface AuthConfig {
-  openRegistration: boolean;
-  externalOnly: boolean;
-  providers: ExternalProvider[];
-  testLogins?: TestLogin[] | null;
 }
 
 /** The second-factor step the server asked for, as described by the 401 that started it. */
@@ -95,6 +79,36 @@ function TwoFactorFields({ challenge, method, useRecovery, sending, onMethod, on
   );
 }
 
+/**
+ * The sentence for a provider sign-in the server bounced back with `?error=<code>`.
+ *
+ * Several of these can never succeed by trying again — the provider may not open accounts here,
+ * or has not verified the address — so each says what would let the person in. Literal keys, not
+ * composed ones, so the translation guard can read every key out of the source.
+ */
+function externalSignInProblem(code: string, t: TFunction): string {
+  switch (code) {
+    // A locked account is said as such: "try again or use your password" would send the person
+    // to a password sign-in that the same lock refuses.
+    case 'auth.locked_out':
+      return t('auth.lockedOut');
+    case 'auth.external_no_account':
+      return t('auth.externalNoAccount');
+    case 'auth.external_email_unverified':
+      return t('auth.externalEmailUnverified');
+    case 'auth.external_link_required':
+      return t('auth.externalLinkRequired');
+    case 'auth.external_no_email':
+      return t('auth.externalNoEmail');
+    case 'auth.external_not_allowed':
+      return t('auth.externalNotAllowed');
+    case 'auth.external_provider_unknown':
+      return t('auth.externalProviderUnknown');
+    default:
+      return t('auth.externalFailed');
+  }
+}
+
 function providerIcon(name: string) {
   if (name === 'google') return <GoogleOutlined />;
   if (name === 'github') return <GithubOutlined />;
@@ -128,7 +142,9 @@ export default function LoginPage() {
   const [method, setMethod] = useState<TwoFactorMethod | null>(null);
   const [useRecovery, setUseRecovery] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  const [config, setConfig] = useState<AuthConfig | null>(null);
+  // A failed read of the sign-in options is said, not passed off as an installation that offers
+  // only the password: on one that signs in elsewhere, the form shown would be a dead end.
+  const { config, failed: configFailed, reload: reloadConfig } = useAuthConfig();
 
   const returnUrl = params.get('returnUrl');
   // An external provider vouched for the account and the server is holding the sign-in at its
@@ -137,13 +153,10 @@ export default function LoginPage() {
 
   useEffect(() => {
     // A failed external sign-in bounces back with ?error=<code>.
-    if (params.get('error')) {
-      setError(t('auth.externalFailed'));
+    const bounced = params.get('error');
+    if (bounced) {
+      setError(externalSignInProblem(bounced, t));
     }
-    void fetch('/api/v1/auth/config')
-      .then((r) => (r.ok ? (r.json() as Promise<AuthConfig>) : null))
-      .then((c) => setConfig(c))
-      .catch(() => setConfig(null));
   }, [params, t]);
 
   // Asked once, not on every render: with an emailed or texted code as the preferred method the
@@ -155,12 +168,20 @@ export default function LoginPage() {
     }
     pendingAsked.current = true;
     void (async () => {
-      const response = await fetch('/api/v1/auth/2fa/verify', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
-      }).catch(() => null);
-      const problem = (await response?.json().catch(() => null)) as AuthProblemBody | null;
+      });
+      // No answer, a full rate window or a failed server says nothing about the waiting sign-in:
+      // calling it expired would send the person to start over, spending another request against
+      // the same window.
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
+      const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
       if (problem?.code === 'auth.mfa_required') {
         beginChallenge(problem);
       } else {
@@ -194,24 +215,36 @@ export default function LoginPage() {
     return t('auth.mfaInvalid');
   };
 
+  // A send refused for a reason it names is said in those words: a method the account does not
+  // have, or a sign-in no longer waiting for a code, is not cured by trying another method.
+  const sendError = (status: number, code: string | undefined) => {
+    if (status === 401) return t('auth.mfaPendingExpired');
+    if (code === 'auth.mfa_resend_too_soon') return t('auth.mfaResendTooSoon');
+    if (code === 'auth.mfa_method_unavailable') return t('auth.mfaMethodUnavailable');
+    return t('auth.mfaSendFailed');
+  };
+
   const sendCode = async (target: TwoFactorMethod) => {
     setSending(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch('/api/v1/auth/2fa/send', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ method: target }),
       });
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
       const body = (await response.json().catch(() => null)) as
         | { destination?: string; expiresMinutes?: number; code?: string }
         | null;
 
       if (!response.ok) {
-        setError(
-          body?.code === 'auth.mfa_resend_too_soon' ? t('auth.mfaResendTooSoon') : t('auth.mfaSendFailed'),
-        );
+        setError(sendError(response.status, body?.code));
         return;
       }
       setNotice(t('auth.mfaCodeSent', { destination: body?.destination ?? '' }));
@@ -245,11 +278,18 @@ export default function LoginPage() {
   const resendConfirmation = async (email: string) => {
     setSending(true);
     try {
-      await fetch('/api/v1/auth/email/resend', {
+      const response = await fetchOrNull('/api/v1/auth/email/resend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      // A request that never reached the server, or that it could not complete, sent nothing:
+      // saying "on its way" then would have the person wait for a mail that is not coming.
+      const transportProblem = authTransportProblem(response, t);
+      if (transportProblem) {
+        setError(transportProblem);
+        return;
+      }
       // Always reported as sent: the endpoint deliberately does not say whether the address has
       // an account, and the page must not leak what the API withholds.
       setNotice(t('auth.confirmationResent'));
@@ -264,7 +304,7 @@ export default function LoginPage() {
     setNotice(null);
     try {
       const code = values.twoFactorCode?.trim();
-      const response = await fetch('/api/v1/auth/login', {
+      const response = await fetchOrNull('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,6 +314,14 @@ export default function LoginPage() {
           twoFactorMethod: code && !useRecovery ? (method ?? 'authenticator') : undefined,
         }),
       });
+
+      // No answer, a full rate window or a failed server says nothing about the password, so it
+      // must not be reported as a wrong one.
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
@@ -308,7 +356,7 @@ export default function LoginPage() {
     setNotice(null);
     try {
       const code = values.twoFactorCode?.trim();
-      const response = await fetch('/api/v1/auth/2fa/verify', {
+      const response = await fetchOrNull('/api/v1/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -316,6 +364,11 @@ export default function LoginPage() {
           method: code && !useRecovery ? (method ?? 'authenticator') : undefined,
         }),
       });
+      const transportProblem = authTransportProblem(response, t);
+      if (response === null || transportProblem) {
+        setError(transportProblem ?? t('auth.unreachable'));
+        return;
+      }
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as AuthProblemBody | null;
         setError(verifyError(problem?.code));
@@ -376,6 +429,20 @@ export default function LoginPage() {
           {t('app.name')}
         </Typography.Title>
         {error && <Alert type="error" title={error} style={{ marginBottom: 16 }} />}
+        {configFailed && (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="login-config-failed"
+            title={t('auth.configFailed')}
+            style={{ marginBottom: 16 }}
+            action={
+              <Button size="small" onClick={reloadConfig}>
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        )}
         {notice && <Alert type="success" title={notice} style={{ marginBottom: 16 }} />}
         {unconfirmedEmail && (
           <Button
@@ -395,7 +462,7 @@ export default function LoginPage() {
             style={{ marginBottom: 16 }}
             description={
               <Flex vertical gap={8}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" className="hint-text">
                   {t('auth.testLogins.hint')}
                 </Typography.Text>
                 {testLogins.map((login) => (
@@ -428,7 +495,7 @@ export default function LoginPage() {
                         </Popover>
                       )}
                     </Flex>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="hint-text">
                       {login.email} · {login.password}
                     </Typography.Text>
                   </Flex>
@@ -443,7 +510,16 @@ export default function LoginPage() {
             <Form.Item name="email" label={t('auth.email')} rules={[{ required: true }, { type: 'email' }]}>
               <Input autoComplete="username" autoFocus disabled={challenge !== null} />
             </Form.Item>
-            <Form.Item name="password" label={t('auth.password')} rules={[{ required: true }]}>
+            <Form.Item
+              name="password"
+              label={t('auth.password')}
+              rules={[{ required: true }]}
+              extra={
+                // The server answers a reset request the same way whether or not the address has an
+                // account, so the link is offered to everybody who signs in with a password.
+                challenge === null && <Link to="/forgot-password">{t('auth.forgotPassword')}</Link>
+              }
+            >
               <Input.Password autoComplete="current-password" disabled={challenge !== null} />
             </Form.Item>
 
@@ -463,6 +539,12 @@ export default function LoginPage() {
             </Button>
 
             {recoveryToggle}
+
+            {config?.openRegistration && challenge === null && (
+              <Flex justify="center" style={{ marginTop: 12 }}>
+                <Link to="/register">{t('auth.createAccount')}</Link>
+              </Flex>
+            )}
           </Form>
         )}
 

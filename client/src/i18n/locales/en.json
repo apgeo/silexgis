@@ -66,12 +66,16 @@
     "speleolocImport": "Import a recording",
     "registryRegions": "Regions",
     "registryCategories": "Categories",
-    "publishedTrips": "Published trips"
+    "cavePotential": "Cave potential",
+    "publishedTrips": "Published trips",
+    "testData": "Test data"
   },
   "terrain": {
     "title": "Terrain",
     "noBuilds": "No elevation surface has been built for this installation yet.",
     "noBuildsHint": "Draw a rectangle above and start the first one.",
+    "listLoadFailed": "The terrain builds could not be loaded.",
+    "buildLoadFailed": "This build could not be loaded. It may have been deleted.",
     "intro": "Draw a rectangle, say where its elevation data comes from, and the installation builds the ground the 3D scene draws.",
     "area": {
       "draw": "Draw rectangle",
@@ -230,6 +234,7 @@
       "derivativeBuildNotFinished": "That build has not finished, so there is no elevation to draw the ground from yet.",
       "derivativeNotFound": "That picture is no longer here.",
       "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",
+      "derivativeAnalysisUnavailable": "That picture is computed by the terrain-analysis program (WhiteboxTools), which this installation does not run.",
       "baseNotFound": "The build to extend no longer exists.",
       "baseUnchecked": "The build to extend never had its tiles read back and found whole, so there is nothing known-good to add to.",
       "baseNotPublished": "The build to extend has no tiles where terrain is served from any more. Start a fresh build over the whole area instead.",
@@ -245,7 +250,7 @@
       "stale": "Out of date",
       "staleHints": {
         "elevationReplaced": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
-        "methodRevised": "Computed before the way this kind of picture is worked out was corrected. It is still drawn, but it is not what the ground would give today. Ask for the same picture again and it is computed afresh."
+        "methodRevised": "Computed before the way this kind of picture is worked out was corrected, or by an earlier version of the program that works it out. It is still drawn, but it is not what the ground would give today. Ask for the same picture again and it is computed afresh."
       },
       "totalSize": "{{size}} on disk",
       "statuses": {
@@ -262,7 +267,8 @@
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
         "colourRelief": "Coloured relief",
-        "contours": "Contour lines"
+        "contours": "Contour lines",
+        "geomorphons": "Landform classes"
       }
     },
     "derivativeForm": {
@@ -313,6 +319,19 @@
       "contourInterval": "A line every (m)",
       "contourIntervalHint": "Metres of height between one line and the next, counted from sea level. Every fifth line is drawn heavier. The lines are a picture: nothing can be measured along one or selected.",
       "contourIntervalInvalid": "Contour lines are spaced from {{min}} to {{max}} metres of height apart.",
+      "kindUnavailable": "{{kind}} (not available here)",
+      "unavailable": {
+        "not_configured": "Landform classes are computed by WhiteboxTools, which this installation does not run. An administrator can set it up.",
+        "tool_missing": "Landform classes are computed by WhiteboxTools, which this installation is set up to run but cannot find. An administrator can check where it is installed.",
+        "sandbox_missing": "Landform classes are computed by WhiteboxTools, which is installed here but cannot run without its sandbox (bubblewrap). An administrator can install it."
+      },
+      "landformSearch": "Search distance (m)",
+      "landformSearchHint": "How far each cell looks along eight lines of sight. It sets the scale of the landforms: the same hillside is a slope at 100 m and a shoulder at 1 km.",
+      "landformSkip": "Look past (m)",
+      "landformSkipHint": "Bumps nearer than this are looked past. Usually zero.",
+      "landformFlatness": "Flatness angle (°)",
+      "landformFlatnessHint": "A line of sight rising or falling less steeply than this counts as level.",
+      "landformInvalid": "The search distance is above 0 and at most {{search}} m, the distance looked past is shorter than it, and the flatness angle is between 0 and {{flatness}}°.",
       "computeEdges": "Compute the outermost cells from the neighbours they have",
       "computeEdgesHint": "Off, every raster of the build meets its neighbour with a hairline gap. On, the edge is slightly wrong — by less than a missing line is.",
       "colourRamp": "Colour ramp",
@@ -331,6 +350,7 @@
     },
     "derivativeList": {
       "title": "Register of derived pictures",
+      "loadFailed": "The computed pictures could not be read just now. This says nothing about which exist, so compute nothing again until they have been read.",
       "empty": "No picture of the ground has been computed yet.",
       "emptyHint": "Ask for one above, from a finished build.",
       "picture": "Picture",
@@ -350,8 +370,47 @@
         "zFactor": "heights ×{{factor}}",
         "stops": "{{count}} colour stops",
         "interval": "a line every {{metres}} m",
-        "edgesOff": "edges left blank"
+        "edgesOff": "edges left blank",
+        "search": "looking {{metres}} m out",
+        "skip": "past the nearest {{metres}} m",
+        "flatness": "level below {{degrees}}°"
       }
+    },
+    "accuracy": {
+      "column": "Elevation accuracy",
+      "notRecorded": "Not recorded",
+      "edit": "Accuracy",
+      "editTitle": "Elevation accuracy",
+      "editIntro": "State how finely this build's elevation samples the ground and how far its heights may be off. Leave every field empty to record nothing.",
+      "saved": "Accuracy saved.",
+      "formTitle": "Elevation accuracy (optional)",
+      "formIntro": "Left empty, a build made only from the obtained coverage records that dataset's published figures; a build from your own rasters records nothing until you state it here.",
+      "resolution": "Ground spacing (m)",
+      "resolutionHint": "Distance between elevation samples, in metres.",
+      "error": "Vertical error (m)",
+      "errorHint": "How far a height may be from the true ground.",
+      "statistic": "Statistic",
+      "source": "Where the figures come from",
+      "sourceHint": "A publication, a survey report or a vendor's statement.",
+      "spacing": "{{value}} m spacing",
+      "vertical": "{{value}} m {{statistic}}",
+      "statistics": {
+        "RMSE": "RMSE (root-mean-square error)",
+        "LE90": "LE90 (error not exceeded by 90 % of points)",
+        "LE95": "LE95 (error not exceeded by 95 % of points)"
+      }
+    },
+    "landforms": {
+      "flat": "Flat",
+      "peak": "Peak",
+      "ridge": "Ridge",
+      "shoulder": "Shoulder",
+      "spur": "Spur",
+      "slope": "Slope",
+      "hollow": "Hollow",
+      "footslope": "Footslope",
+      "valley": "Valley",
+      "pit": "Pit"
     },
     "configured": {
       "title": "A terrain address in this installation's configuration overrides the chosen build",
@@ -381,6 +440,8 @@
     "noActivity": "Nothing has been added yet.",
     "loadFailed": "The dashboard could not be loaded.",
     "noViews": "No saved views yet.",
+    "viewsFailed": "Your saved views could not be read just now. This says nothing about which you have.",
+    "workAreasFailed": "The work areas could not be read just now. This says nothing about which there are.",
     "untitled": "Untitled",
     "kind": {
       "cave": "Cave",
@@ -396,6 +457,27 @@
     "allMyTrips": "All my trips"
   },
   "auth": {
+    "forgotPassword": "Forgot your password?",
+    "forgotTitle": "Choose a new password",
+    "forgotIntro": "Type the address you sign in with. If it has an account here, a link to choose a new password is mailed to it.",
+    "forgotSubmit": "Send the link",
+    "forgotSent": "If an account exists for that address, a mail is on its way with a link to choose a new password.",
+    "backToSignIn": "Back to sign in",
+    "createAccount": "Create account",
+    "registerTitle": "Create an account",
+    "displayName": "Your name (optional)",
+    "registerMailSent": "Request received. Check your mailbox: a mail with the next step is on its way.",
+    "registerDone": "Request received. If this address was new here, you can now sign in with it and this password. If it already had an account, sign in with that account's password, or choose a new one.",
+    "registerMailNotSent": "Request received, but no mail could be sent to confirm the address. Ask an administrator of this installation to confirm it.",
+    "registerRejected": "The address or the password was not accepted. Use a valid address and a password of at least 10 characters.",
+    "registrationDisabled": "This installation does not open accounts on request. Ask one of its administrators for an invitation.",
+    "configFailed": "The sign-in options could not be read, so sign-in providers may be missing.",
+    "externalNoAccount": "There is no account here for that sign-in, and this installation does not open one from that provider. Ask an administrator to create or invite your account.",
+    "externalEmailUnverified": "The provider has not verified your address. Verify it with the provider, then try again.",
+    "externalLinkRequired": "An account here already uses that address, but the provider has not verified it. Sign in with your password, then link the provider from your security settings.",
+    "externalNoEmail": "The provider did not share an email address, so no account could be matched. Allow it to share your address, or sign in with your password.",
+    "externalNotAllowed": "This account may not sign in yet. Its address may still need confirming; otherwise ask an administrator.",
+    "externalProviderUnknown": "That sign-in provider is not set up on this installation.",
     "email": "Email",
     "password": "Password",
     "signIn": "Sign in",
@@ -411,6 +493,17 @@
     "externalFailed": "External sign-in did not complete. Please try again or use your password.",
     "serverUnreachable": "Cannot reach the server",
     "serverUnreachableHint": "Sign-in could not be started. Check that the server is running, then try again.",
+    "unreachable": "The server could not be reached. Check the connection, then try again.",
+    "serverFailed": "The server could not complete this right now. Try again in a moment.",
+    "tooManyAttempts": "Too many sign-in requests from this network. Wait a minute, then try again.",
+    "tooManyAttemptsWait": "Too many sign-in requests from this network. Try again in {{seconds}} s.",
+    "callbackFailed": "Signing in could not be completed.",
+    "callbackFailedHint": "The return from the sign-in page was not accepted. This can happen when the device's clock is wrong or the sign-in took too long. Check the clock, then try again.",
+    "signInLapsedTitle": "Your sign-in has ended",
+    "signInLapsedBody": "The server no longer accepts this sign-in, so nothing can be read or saved until you sign in again. Signing in leaves this page and comes back to it: copy anything you have typed and not yet saved first.",
+    "signInLapsedSignIn": "Sign in again",
+    "signInLapsedStay": "Stay on this page",
+    "mfaMethodUnavailable": "That method is not available on this account. Choose another.",
     "mfaMethod": "Send the code by",
     "mfaMethod_authenticator": "Authenticator",
     "mfaMethod_email": "Email",
@@ -463,6 +556,10 @@
     "save": "Save",
     "ok": "OK",
     "cancel": "Cancel",
+    "discardTitle": "Discard your changes?",
+    "discardBody": "What you changed here has not been saved and will be lost.",
+    "discardOk": "Discard",
+    "keepEditing": "Keep editing",
     "edit": "Edit",
     "back": "Back",
     "continue": "Continue",
@@ -475,6 +572,11 @@
     "retry": "Retry",
     "conflict": "Someone else changed this since you loaded it. Reload and reapply your changes.",
     "loadFailed": "Could not load this. Please try again.",
+    "readFailedTitle": "This could not be read just now",
+    "readFailedDetail": "The server could not be reached, or did not answer. Nothing here says anything about what was asked for — try again.",
+    "refreshFailed": "This could not be read again; what is shown may be out of date.",
+    "readRefused": "The server refused to show this to you.",
+    "readRefusedHeld": "This can no longer be read by you; what is shown is from an earlier read.",
     "close": "Close",
     "reset": "Reset",
     "clearAnswer": "Clear answer",
@@ -488,7 +590,9 @@
   "errorBoundary": {
     "title": "Something went wrong on this screen",
     "description": "The page stopped rendering. Reloading usually gets it back.",
-    "reload": "Reload the page"
+    "reload": "Reload the page",
+    "downloadTitle": "This screen did not finish downloading",
+    "downloadDescription": "The connection was too slow or dropped before this part of SilexGIS arrived, or SilexGIS was updated since the page was opened. Nothing is wrong with your data. Check the connection and reload the page."
   },
   "map": {
     "baseLayers": "Base layers",
@@ -523,6 +627,10 @@
     "geolocationFailed": "Could not determine your location.",
     "clusterTitle": "{{count}} entrances in this area",
     "zoomHere": "Zoom here",
+    "clusterLoadFailed": "The entrances in this area could not be read.",
+    "selectionLoadFailed": "What was picked on the map could not be read.",
+    "selectionRefused": "This is no longer there, or is not yours to read.",
+    "layerReadsFailed": "Some of the map's layers could not be read; the list may be incomplete.",
     "approximateShort": "approx.",
     "swipeCompare": "Compare raster with the map beneath (swipe)",
     "hideChrome": "Hide map toolbars",
@@ -544,6 +652,23 @@
       "refused": {
         "window": "This view cannot be asked about. Move the map to ask again.",
         "other": "The karstification index was refused for this view."
+      }
+    },
+    "passageDepth": {
+      "layer": "Rock over the passage",
+      "loading": "Reading the passage in view…",
+      "shown": "Caves drawn: {{count}}.",
+      "none": "No cave with altitudes in view that you may place exactly.",
+      "failed": "The passage depth could not be read. Moving the map asks again.",
+      "noTerrain": "No elevation model is built here, so the passage cannot be coloured.",
+      "truncated": "More caves are in view than are drawn at once (at most {{max}}). Zoom in to see the rest.",
+      "legendAbove": "Reads above its ground",
+      "legendBand": "{{from}} – {{to}} m of rock",
+      "legendOver": "More than {{from}} m of rock",
+      "refused": {
+        "window": "This view cannot be asked about. Move the map to ask again.",
+        "terrain": "You do not have the right to read elevation, which this layer needs.",
+        "other": "The passage depth was refused for this view."
       }
     },
     "karstLegend": {
@@ -632,6 +757,7 @@
     "regionPlaceholder": "Region",
     "lengthPlaceholder": "Length (m): 300, >300, 300..500",
     "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "loadFailed": "The cave list could not be read just now. This says nothing about which caves there are.",
     "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
     "savedNotAboutCaves": "That saved filter is not about caves.",
     "saved": "Saved as “{{name}}”.",
@@ -668,6 +794,7 @@
   "featureList": {
     "unreadableLink": "The filter in this link could not be read, so every feature is shown. Ask whoever sent it for a fresh link.",
     "filterRefused": "This filter could not be run with your access. Change or clear the controls above.",
+    "loadFailed": "The feature list could not be read just now. This says nothing about which features there are.",
     "savedNotAboutFeatures": "That saved filter is not about features.",
     "searchLabel": "Search features by name",
     "kindLabel": "Kind of feature",
@@ -699,6 +826,7 @@
     "intro": "A saved filter is a question you keep. Sharing one with a caving group, or with everyone signed in, lets them ask it; each of them is answered with what they themselves may see.",
     "toRegistry": "Cave registry",
     "empty": "No saved filters. Save one from the cave registry.",
+    "loadFailed": "The saved filters could not be read just now.",
     "name": "Name",
     "description": "Description",
     "nothingToSave": "There are no conditions to save — set at least one first.",
@@ -735,6 +863,12 @@
     "notAvailable": "not available to you",
     "otherClubs": "Other clubs — you may not be allowed to share with these",
     "groupNotAllowed": "You may not share filters with this club. Choose one of your own clubs, Only me or Everyone signed in.",
+    "saveRefused": {
+      "forbidden": "You may not save filters on this installation. Ask an administrator for the right to create them.",
+      "holdsPosition": "This filter holds a typed point, a pasted polygon or a place to measure nearest first from, and a saved filter never stores one. Measure from an object or a named area instead.",
+      "notSavable": "The server could not save this filter as it stands. Check its conditions, change the one it cannot use and save again.",
+      "gone": "This saved filter was deleted or is no longer shared with you since you opened it, so the change was not saved. Reload the list to see the filters you can still change."
+    },
     "parts": {
       "search": "Name contains “{{text}}”",
       "region": "Region contains “{{text}}”",
@@ -745,8 +879,14 @@
     }
   },
   "caves": {
+    "problems": {
+      "typeUnknown": "The chosen cave type no longer exists. Pick another one and save again.",
+      "rockTypeUnknown": "The chosen rock type no longer exists. Pick another one and save again."
+    },
     "title": "Caves",
     "newCave": "New cave",
+    "notFound": "No such cave",
+    "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "editCave": "Edit cave",
     "name": "Name",
     "type": "Type",
@@ -826,8 +966,10 @@
       "tripLogs": "{{count}} trip logs"
     },
     "tripLogsEmpty": "No trip logs name this cave.",
+    "tripLogsLoadFailed": "The trips that name this cave could not be read just now. This says nothing about whether there are any.",
     "depthPlaces": {
       "title": "This cave's named places",
+      "loadFailed": "This cave's named places could not be read just now. This says nothing about whether any are declared, so none can be declared until they have been read.",
       "help": "A depth on its own is not a place: turning one into a position means looking for the nearest station, and that cannot tell which of several stations near each other is the place people mean. Declare it once here and every report of that depth lands where you say — typed, corrected or imported — and the name becomes something a caver can report by instead of a number. A place can also be named without a depth — a hall or a junction the club's list of the cave names — with a few words beside the name if one depth does not say enough; such a place is listed and published with the cave's places, and no reported depth is ever placed by it.",
       "declare": "Declare a place",
       "depth": "Depth",
@@ -856,6 +998,7 @@
     }
   },
   "entrances": {
+    "loadFailed": "This cave's entrances could not be read just now. This says nothing about whether it has any.",
     "add": "Add entrance",
     "edit": "Edit entrance",
     "deleteConfirm": "Delete this entrance?",
@@ -874,7 +1017,12 @@
       "map": "From map",
       "estimated": "Estimated"
     },
-    "surveyedAt": "Surveyed"
+    "surveyedAt": "Surveyed",
+    "problems": {
+      "locationForbidden": "You may not choose the main entrance of a cave whose exact location is withheld from you. Save it as a further entrance, or ask somebody who may see the cave’s position.",
+      "notFound": "This entrance is no longer there. It may have been deleted.",
+      "caveNotFound": "The cave this entrance belongs to is no longer there, or you can no longer see it."
+    }
   },
   "features": {
     "title": "Features",
@@ -960,6 +1108,14 @@
     "noParents": "No parents",
     "editParents": "Edit parents",
     "parentFixed": "An entrance or a centreline sits under its own cave and nowhere else. To protect it, protect its cave, or put the cave under the protected area.",
+    "problems": {
+      "typeChangeForbidden": "You may not edit features of the type you are changing this one into, so nothing was saved. Keep its current type, or ask someone who may edit that type.",
+      "linkSelf": "A feature cannot be linked to itself. Choose a different feature.",
+      "linkKindUnknown": "That kind of link is no longer offered. Reload and choose another.",
+      "linkDuplicate": "The same feature is linked twice with the same kind of link. Remove one of the two.",
+      "linkTargetNotFound": "One of the linked features is no longer there, or you can no longer see it. Remove it and save again.",
+      "parentPrimaryHidden": "This feature's main parent is one you cannot see, so you cannot change its parents. Ask someone who can see that parent."
+    },
     "parentFixedNote": "An entrance or a centreline sits under its own cave and nowhere else, so its parent cannot be changed here. To protect it, protect its cave, or put the cave under the protected area.",
     "addParent": "Add parent…",
     "parentSearchPlaceholder": "Search features…",
@@ -993,10 +1149,14 @@
     "uploadPrompt": "Click or drag photos and documents here to attach them",
     "deleteConfirm": "Remove this attachment? The file stays available to its uploader.",
     "empty": "No photos or documents yet.",
+    "loadFailed": "The attachments could not be read just now. This says nothing about what is attached.",
     "versions": "Versions",
     "uploadVersion": "Upload new version",
     "currentVersion": "current",
     "noVersions": "No versions yet.",
+    "versionsLoadFailed": "The versions could not be read just now.",
+    "versionInUse": "This version is still in use, so it cannot be deleted.",
+    "headUndeletable": "The current version cannot be deleted. Upload a new version instead, then delete this one.",
     "deleteVersionConfirm": "Delete this version? Its content is removed permanently.",
     "details": "Details",
     "caption": "Caption",
@@ -1014,7 +1174,9 @@
       "other": "Other"
     },
     "makePrimary": "Use as the headline picture",
-    "clearPrimary": "Stop using as the headline picture"
+    "clearPrimary": "Stop using as the headline picture",
+    "primarySet": "This is now the headline picture.",
+    "primaryCleared": "It is no longer the headline picture."
   },
   "documents": {
     "deletion": {
@@ -1121,6 +1283,7 @@
   },
   "cabinets": {
     "title": "Cabinets",
+    "loadFailed": "The cabinets could not be read just now. Nothing here says whether there are any.",
     "empty": "No cabinets yet.",
     "pickOne": "Choose a cabinet to see what is filed in it.",
     "new": "New",
@@ -1149,6 +1312,8 @@
     "unfiled": "Not filed",
     "unfiledHint": "Everything you have added that is not in a cabinet yet. Filing it is a later decision — select what belongs together and file it in one go.",
     "unfiledEmpty": "Nothing waiting to be filed.",
+    "unfiledLoadFailed": "What is waiting to be filed could not be read just now.",
+    "listLoadFailed": "The documents here could not be read just now. This says nothing about what is filed.",
     "defaults": "What lands here",
     "defaultsHint": "Applied to whatever is uploaded into this cabinet. Left empty, the answer comes from the cabinet above.",
     "defaultType": "Document kind",
@@ -1174,6 +1339,7 @@
     "queueExplain": "Uploads from accounts that are under review wait here. Nothing in them has been written yet: what you accept is written then, and what you turn down never is.",
     "wholeView": "Waiting changes are shown here in full, including the exact positions of protected caves and pictures of caves you could not otherwise open.",
     "queueEmpty": "Nothing is waiting for review.",
+    "queueLoadFailed": "The review queue could not be read just now. This says nothing about whether anything is waiting.",
     "forbidden": "You may not review uploads.",
     "uploader": "Sent by",
     "unknownUploader": "Unknown account",
@@ -1190,6 +1356,7 @@
     "readOnly": "You may read this upload but not decide it.",
     "mine": {
       "title": "Your uploads under review",
+      "loadFailed": "Your uploads under review could not be read just now. This says nothing about whether any are held.",
       "explain": "Your account is held for review: what you send in waits for a reviewer, and is written only when they accept it. Here is where each upload stands.",
       "sentAt": "Sent",
       "decidedAt": "Decided",
@@ -1354,6 +1521,8 @@
     "selectLine": "Select {{name}}",
     "acceptSelected": "Accept selected ({{count}})",
     "rejectSelected": "Reject selected ({{count}})",
+    "rejectSelectedTitle": "Reject {{count}} lines?",
+    "rejectSelectedExplain": "These {{count}} lines are not written, and the uploader is told, with the note below. A rejected line can still be accepted afterwards, with “Accept after all”.",
     "noteLabel": "Note to the uploader (optional, sent with the next decision)",
     "notePlaceholder": "Why, or what to do instead",
     "showDecided": "Show lines already decided",
@@ -1373,6 +1542,7 @@
     "problem": {
       "generic": "The decision could not be made.",
       "review_not_pending": "Something this decision reaches was decided already, or can no longer be changed. The page is showing the latest.",
+      "review_batch_reverted": "This upload has been undone, so a line of it that was turned down can no longer be accepted. Ask the phone's owner to send it again if it is still wanted.",
       "review_own_batch": "Uploads are decided by somebody other than the account that sent them.",
       "review_batch_not_found": "This upload is not waiting for review, or you may not see it.",
       "review_item_not_found": "This line is not there any more.",
@@ -1405,8 +1575,15 @@
     "duplicateUnknown": "These contents are already stored. Store this copy as well?",
     "duplicateStoreAnyway": "Store anyway",
     "duplicateSkip": "Skip it",
+    "stop": "Stop uploading",
+    "stopTitle": "Stop this upload?",
+    "stopContent": "{{stored}} of {{total}} files are stored and stay where they are. The other {{rest}} will not be sent.",
+    "stopConfirm": "Stop",
+    "keepGoing": "Keep uploading",
     "batches": "Uploads",
     "batchesEmpty": "Nothing has been uploaded in a batch yet.",
+    "batchesLoadFailed": "The uploads could not be read just now.",
+    "importRootsLoadFailed": "The import directories could not be read just now. This says nothing about whether any are configured.",
     "batchSource": "From",
     "batchSourceValues": {
       "interactive": "Browser",
@@ -1422,6 +1599,7 @@
       "failed": "Failed"
     },
     "batchCounts": "{{stored}} stored · {{skipped}} skipped · {{failed}} failed",
+    "batchCountsTitle": "Files",
     "batchReport": "Report",
     "importDirectory": "Import from a server directory",
     "importDirectoryHint": "Copies files the server can already reach, without sending them over the network. Folders become cabinets.",
@@ -1438,11 +1616,24 @@
       "pathRefused": "This folder path cannot be filed",
       "filingRefused": "You may not file into that cabinet",
       "unreadable": "The file could not be read",
-      "failed": "Upload failed"
+      "failed": "Upload failed",
+      "lengthRequired": "The server was not told how long a piece was; something between you and it may be removing that",
+      "sessionEnded": "The upload ended before the file was confirmed. It may already be stored: check before sending it again",
+      "outOfStep": "The server's copy and this file got out of step",
+      "connectionLost": "The connection was lost before the file arrived",
+      "serverFault": "The server could not store the file; it may be out of room",
+      "archiveUnreadable": "The archive could not be opened",
+      "archiveTooManyEntries": "The archive holds more files than this installation accepts",
+      "archiveTooLarge": "The archive unpacks to more than this installation accepts",
+      "archiveSuspicious": "The archive is compressed in a way that looks unsafe, so it was not unpacked",
+      "importDirectoryNotFound": "The directory was not found on the server",
+      "importPathNotAllowed": "The directory is outside the ones this installation may import from",
+      "importNoRoots": "No import directories are configured on this installation"
     },
     "batchStarted": "Uploaded"
   },
   "gallery": {
+    "creditLoadFailed": "The photograph could not be read, so its credit cannot be changed yet.",
     "filter": {
       "advanced": "Conditions…",
       "advancedTitle": "Photograph conditions",
@@ -1473,6 +1664,7 @@
     "noAlbums": "No albums yet.",
     "albumCount": "{{count}} photographs",
     "empty": "No photographs match.",
+    "loadFailed": "The photographs could not be read just now. This says nothing about which there are.",
     "publicEmpty": "Nothing has been published yet.",
     "search": "Search captions and places",
     "photographer": "Photographer",
@@ -1503,6 +1695,12 @@
     "shareTitle": "Share link",
     "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. Revoke and mint a new one if it is lost.",
     "revokeConfirm": "Revoke this album’s share link?",
+    "shareAlbum": "Make a share link",
+    "revokeShare": "Revoke the share link",
+    "deleteAlbum": "Delete album",
+    "shareRevoked": "Share link revoked.",
+    "shareForbidden": "You may not publish this album; sharing it takes the Share right on the album.",
+    "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
     "licences": {
       "cc0": "Public domain (CC0)",
@@ -1533,9 +1731,35 @@
     "openInGallery": "Open in the gallery",
     "arrangeHint": "Drag a photograph onto the place you want it, or move it with the arrows.",
     "albumEmpty": "Nothing in this album yet. Add photographs from the gallery.",
-    "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these."
+    "albumNotFound": "No such album",
+    "albumNotFoundDetail": "This album does not exist, or it has been deleted.",
+    "albumPhotosLoadFailed": "The pictures in this album could not be read just now. This says nothing about whether it holds any.",
+    "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these.",
+    "createForbidden": "Your account may not make albums.",
+    "subjectGone": "What this album would be about is no longer there, or you may not see it."
   },
   "geodata": {
+    "refusals": {
+      "connection": "The server could not be reached. Check the connection and try again.",
+      "signedOut": "You are signed out. Sign in again and repeat this.",
+      "forbidden": "Your account may not do this.",
+      "gone": "It is no longer there: somebody may have deleted it. Reload the list.",
+      "server": "The server failed (error {{status}}). Try again in a moment.",
+      "busy": "It is still being processed. Try again once it has finished.",
+      "groupNotAllowed": "You may not give it to that caving group.",
+      "fileNotReady": "The file has not finished being read, so there is nothing to review yet.",
+      "selectionTooLarge": "Too many rows are chosen for one confirmation. Choose fewer and confirm in parts.",
+      "nothingCreated": "Every chosen row was set aside, so nothing would be created.",
+      "reviewRequired": "Imports here are reviewed first: choose the rows and confirm them.",
+      "tooLargeWithoutReview": "The file is too large to create without a review: choose the rows and confirm them.",
+      "noFiles": "None of the chosen pictures could be read.",
+      "ruleSetGone": "The chosen rule set is no longer there. Choose another one."
+    },
+    "deleteFailed": "It was not deleted.",
+    "exportFailed": "The file could not be exported.",
+    "cavingGroup": "Caving group",
+    "cavingGroupRequired": "Choose the caving group that may read it.",
+    "editLoadFailed": "The current settings could not be read, so it cannot be edited now.",
     "title": "Geodata",
     "name": "Name",
     "format": "Format",
@@ -1550,6 +1774,19 @@
     "uploadPrompt": "Click or drag vector files here to upload",
     "uploadHint": "GPX, KML, KMZ, GeoJSON, zipped shapefile, CSV with coordinate columns, WKT — imported in the background. Up to 150 MB per file.",
     "uploadQueued": "{{name}} uploaded — import queued.",
+    "encoding": {
+      "action": "Character encoding",
+      "title": "Character encoding of this table",
+      "hint": "If letters such as ă, ș, à or ñ show up wrong in this file's names, say how the file was saved. The file is then read again from the start with that encoding, keeping its separator and coordinate columns.",
+      "detect": "Detect it from the file",
+      "confirm": "Read it again",
+      "queued": "{{name}} is being read again.",
+      "inProgress": "This file is still being read. Wait until that finishes, then choose the encoding again.",
+      "forbidden": "Your account may not change this file.",
+      "gone": "This file no longer exists, or you may no longer see it.",
+      "failed": "The file could not be read again. Try again in a moment.",
+      "busy": "Available once the file has been read"
+    },
     "upload": {
       "sending": "Uploading — {{sent}} of {{total}}",
       "checking": "Sent — the server is checking the file…",
@@ -1722,6 +1959,7 @@
       "published": "The map is placed and published.",
       "publishing": "Placing the map…",
       "publishFailed": "The map could not be published with this placement.",
+      "publishWatchFailed": "Whether the map has been placed could not be read just now. The placement was saved; read again to see where it stands.",
       "importNotJson": "The file is not a placement file (JSON)."
     },
     "redraw": {
@@ -1741,6 +1979,9 @@
     "tabImports": "Imports"
   },
   "mapEdit": {
+    "entranceNotCreated": "The cave was created but its entrance was not: {{problem}}",
+    "entranceNotCreatedTitle": "The cave was created but its entrance was not.",
+    "entranceRetryHint": "Press OK to add only the entrance to this cave; the cave is not created a second time. Closing keeps the cave without an entrance, and one can be added on its sheet.",
     "featureType": "Feature type",
     "draw": "Draw",
     "modify": "Modify (drag vertices; Alt+click deletes)",
@@ -1752,6 +1993,24 @@
     "measureDistance": "Measure distance",
     "measureArea": "Measure area",
     "discard": "Discard edits",
+    "discardConfirm": "Throw away {{count}} unsaved edits? Drawings disappear and reshaped features go back to their saved shape. This cannot be undone.",
+    "discardConfirmOk": "Discard",
+    "leaveTitle": "Leave the map with unsaved edits?",
+    "leaveBody": "{{count}} edits on the map are not saved. Leaving the map throws them away.",
+    "leaveOk": "Leave and discard",
+    "leaveStay": "Stay on the map",
+    "saveIncomplete": "{{saved}} saved, {{failed}} not saved. What was not saved is still on the map, marked in red; correct it and press Save again. First problem: {{reason}}",
+    "typeUnresolved": "The type of this feature could not be found in the list of feature types, so its new shape was not sent. Reload the page and try again.",
+    "problems": {
+      "geometryInvalid": "A shape is not one the server accepts, for example an outline that crosses itself.",
+      "typeRequired": "A feature has no type, or a type this installation does not have.",
+      "typeNotAllowed": "You may not create or change features of that type.",
+      "propertiesInvalid": "A feature’s attributes do not fit what its type asks for.",
+      "parentRequired": "A feature of this type has to sit inside another feature. Choose the one it belongs to.",
+      "parentUnavailable": "The feature chosen to contain it is no longer there, or you cannot see it.",
+      "forbidden": "You are not allowed to make that change.",
+      "notFound": "That feature is no longer there. It may have been deleted."
+    },
     "finishDrawing": "Finish",
     "finishDrawingHint": "Place more points before finishing this shape.",
     "removeLastPoint": "Point",
@@ -1968,6 +2227,7 @@
       "weather_note": "Weather note",
       "whatsapp_group_url": "Group chat link"
     },
+    "stateTransitionInvalid": "This change is not possible from the state it is in now: somebody may have moved it meanwhile. Reload to see where it stands.",
     "state": "State",
     "stateValues": {
       "draft": "Draft",
@@ -2041,6 +2301,11 @@
     "organizingCavingGroup": "Organizing caving group",
     "gallery": "Photographs",
     "noPhotographs": "No photographs are filed against this trip yet.",
+    "photographsLoadFailed": "The photographs of this trip could not be read just now.",
+    "albumsLoadFailed": "The albums of this trip could not be read just now.",
+    "photographsUnread": "The photographs could not be read when this was printed.",
+    "accountsUnread": "The trip accounts could not be read when this was printed.",
+    "rolesLoadFailed": "The roles could not be read just now.",
     "galleryVisibleToYou": "The photographs you may see. Somebody else may see more, or fewer.",
     "report": {
       "open": "Report view",
@@ -2163,6 +2428,7 @@
     "calloutOverdueBody": "The alarm time passed and nobody had said the party was out. Everyone on the trip has been told.",
     "calloutStandDown": "The party is out",
     "calloutStoodDownSuccess": "Recorded — the callout has been stood down.",
+    "calloutNotArmed": "This trip has no overdue check left to stand down: somebody may have cleared it already.",
     "calloutStandDownFailed": "The callout could not be stood down. Try again, and reach somebody another way if it keeps failing.",
     "calloutArrange": "Arrange a callout",
     "calloutChange": "Change the callout",
@@ -2865,6 +3131,11 @@
     "checklistAdvisory": "This is a reading for the party, not a rule. Nothing is refused because a line is unsettled, and how settled a trip is never changes who may read it.",
     "checklistTickedAt": "Confirmed {{when}}",
     "checklistTickFailed": "That confirmation could not be recorded.",
+    "checklistLoadFailed": "This trip's checklist could not be read just now. Nothing here says whether it has one.",
+    "checklistProblems": {
+      "tickForbidden": "You may not confirm lines on this trip's checklist.",
+      "itemGone": "That line is no longer on the checklist; the list is shown as it is now."
+    },
     "empty": "No trips yet.",
     "emptyFiltered": "No trips match this filter.",
     "listFailed": "The trips could not be loaded.",
@@ -2907,7 +3178,16 @@
     }
   },
   "expeditions": {
+    "problems": {
+      "forbidden": "You may not change this camp.",
+      "createForbidden": "You may not record camps.",
+      "cavingGroupForbidden": "You may not file a camp under that caving group.",
+      "gone": "This camp is no longer there, or no longer yours to see.",
+      "geometryInvalid": "The camp's working area is not a shape that can be stored. Draw it again.",
+      "stayGone": "That stay is no longer on the camp's roster."
+    },
     "notFound": "No such camp",
+    "listUnavailable": "The camps could not be read just now. This says nothing about which camps there are.",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "title": "Camps",
     "searchPlaceholder": "Search camps",
@@ -2952,9 +3232,11 @@
       "personGone": "That person is no longer in the list of cavers. Choose them again, or type their name."
     },
     "mapEmpty": "Nothing to draw for this camp: it has no working area, and none of the trips you may read left a sketch or named a cave you may place.",
+    "mapUnavailable": "This camp's map could not be read just now.",
     "mapCaveat": "Drawn over the trips you may read. The working area is the shape somebody drew on the plan; a trip's sketch is shown exactly as drawn, whatever protection the caves it names carry; and a cave entrance appears only where you may see its exact position.",
     "mapTruncated": "This camp names more cave entrances than one map can carry, so not every entrance is drawn.",
     "noTripsVisible": "No trips in this camp that you may read.",
+    "tripsUnavailable": "This camp's trips could not be read just now. This says nothing about which trips it has.",
     "tripsTruncated": "Showing {{shown}} of {{total}} trips.",
     "watch": {
       "intro": "Who is underground on this camp's trips, as each trip's own tracking tells it — counted over the trips you may read. It records what was reported: it watches no clock and raises no alarm.",
@@ -2970,6 +3252,7 @@
     },
     "albums": "Albums about this camp",
     "noAlbums": "No albums about this camp yet.",
+    "albumsLoadFailed": "The albums about this camp could not be read just now.",
     "rosterRoleValues": {
       "member": "Member",
       "organiser": "Organiser",
@@ -3058,6 +3341,7 @@
     },
     "tabPhotos": "Photographs",
     "noPhotographs": "No photographs are filed against this camp or the trips in it that you may read.",
+    "photosUnavailable": "This camp's photographs could not be read just now. This says nothing about which are filed here.",
     "galleryVisibleToYou": "The photographs you may see, from the camp and the trips in it you may read. Somebody else may see more, or fewer."
   },
   "tags": {
@@ -3067,21 +3351,42 @@
   },
   "audit": {
     "title": "Audit trail",
+    "loadFailed": "The audit trail could not be read just now. This says nothing about what it holds.",
     "at": "When",
     "user": "User",
     "action": "Action",
     "entityType": "Entity",
     "entityId": "Entity id",
+    "actions": {
+      "created": "Created",
+      "updated": "Changed",
+      "deleted": "Deleted",
+      "permission_changed": "Permissions changed",
+      "notification_retried": "Message sent again",
+      "login": "Signed in",
+      "two_factor_reset": "Second factor reset",
+      "upload_review_marked": "Upload review changed",
+      "external_account_linked": "External sign-in took over the account",
+      "exported": "Exported",
+      "storage_reclaimed": "Storage reclaimed"
+    },
     "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
   },
   "history": {
     "title": "History",
     "empty": "No changes recorded yet.",
+    "loadFailed": "The history could not be loaded.",
+    "partial": "Showing the latest {{shown}} of {{total}} changes.",
+    "loadMore": "Show older changes",
+    "loadMoreFailed": "The older changes could not be loaded.",
     "hidden": "Value hidden (protected location)",
     "geometrySummary": "Geometry of {{points}} points (too large to record in full)",
     "systemUser": "System",
     "restoreField": "Restore this value",
     "restoreAll": "Restore all values from before this change",
+    "restoreAllConfirm": "Put back {{count}} values from before this change?",
+    "restoreAllOk": "Put back",
+    "restoreFailed": "The earlier value could not be put back. Try again.",
     "restored": "Value restored.",
     "restoredPartly_one": "{{count}} value was put back. Some were left as they are:",
     "restoredPartly": "{{count}} values were put back. Some were left as they are:",
@@ -3098,7 +3403,8 @@
       "undo": "Undo",
       "reviewDecision": "Review decision",
       "job": "Background job",
-      "tripConversion": "Trip converted from a recording"
+      "tripConversion": "Trip converted from a recording",
+      "generated": "Generated test data"
     },
     "skipReason": {
       "not_restorable": "history cannot put this one back",
@@ -3167,8 +3473,10 @@
     "manage": "Manage",
     "addMember": "Add",
     "removeConfirm": "Remove this member?",
+    "membersLoadFailed": "This roster could not be read just now. This says nothing about who is on it, so nobody can be added until it has been read.",
     "announce": {
       "open": "Announce",
+      "audienceFailed": "The people this would reach could not be counted just now. It cannot be sent until they have been.",
       "title": "Announce to {{name}}",
       "message": "Announcement",
       "placeholder": "One line — a change of time, a meeting place, a closure.",
@@ -3179,6 +3487,8 @@
       "send": "Send",
       "done": "Sent. People told: {{people}}",
       "queued": "Being sent — this club is large enough that the notices are written in the background. People to be told: {{people}}",
+      "tooSoon": "You wrote to a caving group a moment ago. Wait a few minutes before sending another announcement.",
+      "paidCapReached": "This installation has reached what it will spend on text messages today, so the announcement was not sent to anyone. It can be sent tomorrow, or an administrator can raise the daily limit.",
       "failed": "The announcement was not sent. Please try again."
     },
     "roles": {
@@ -3217,6 +3527,9 @@
       "grantsFullAdmin": "Only a full administrator can do this: it would make this person's account a full administrator.",
       "revokesFullAdmin": "Only a full administrator can do this: it would take full administration away from an account.",
       "exceedsOwnRights": "You cannot do this: it would give this person's account rights you do not hold yourself.",
+      "mergeTwoAccounts": "Both entries have an account of their own. Detach the account from one of them before merging.",
+      "mergeSelf": "A person cannot be merged into themselves. Choose a different entry to merge.",
+      "mergeRaced": "Something about one of these people changed while the merge ran, so nothing was merged. Reload and try again.",
       "memberRaced": "Somebody else added this person to the group at the same moment. Reload the group and try again.",
       "lastFullAdmin": "This would leave the installation without a full administrator who can sign in."
     },
@@ -3317,12 +3630,17 @@
     "empty": "No phone has sent anything yet.",
     "forbidden": "The list of phone users is open to accounts that may read the roster of cavers.",
     "loadFailed": "The phone users could not be loaded.",
+    "refreshFailed": "The list of phone users could not be read again; what is shown may be out of date.",
+    "relinkTitle": "Link this phone user to somebody else?",
+    "relinkBody": "{{user}} is linked to {{from}} now. Linking them to {{to}} replaces that link.",
+    "relinkOk": "Link to the new person",
     "errors": {
       "caverNotFound": "That caver is no longer on the roster.",
       "userNotFound": "That phone user is no longer listed."
     }
   },
   "statistics": {
+    "cardReadFailed": "These figures could not be read just now. That says nothing about the cave itself.",
     "title": "Trip statistics",
     "open": "Statistics",
     "asVisibleToYou": "Counted over the trips you may read. Somebody with different access sees different totals for the same subject, and both are right.",
@@ -3473,6 +3791,12 @@
     }
   },
   "permissions": {
+    "subjectKindLabel": "Kind of subject",
+    "userLabel": "Account",
+    "cavingGroupLabel": "Caving group",
+    "actionFor": "{{action}} for {{subject}}",
+    "scopeFor": "Reach of the rule for {{subject}}",
+    "removeRuleFor": "Remove the rule for {{subject}}",
     "title": "Permissions",
     "button": "Permissions",
     "subject": "Subject",
@@ -3482,6 +3806,10 @@
     "pickCavingGroup": "Pick a caving group…",
     "addRule": "Add rule",
     "notManager": "You cannot manage permissions on this object.",
+    "loadFailed": "This object's permissions could not be loaded, so they cannot be changed yet.",
+    "storedRulesMoved": "Someone changed this object's rules since you opened them. Saving now would replace that change with yours.",
+    "loadStoredRules": "Load the stored rules (drops your changes)",
+    "keepMyRules": "Keep my changes and save over theirs",
     "scope": "Applies to",
     "scopeObject": "This object only",
     "scopeSubtree": "This object and everything inside",
@@ -3586,19 +3914,33 @@
     "nameTaken": "A permission group with this name already exists.",
     "nameInvalid": "The name must contain letters or digits.",
     "lastFullAdmin": "Refused: this would leave no active Full Administrator able to sign in.",
+    "defaultMembership": "New accounts join this group. Remove it from the default-membership setting (SILEXGIS__Auth__DefaultPermissionGroups) before deleting it.",
     "exceedsOwnRights": "Refused: a rule cannot hand out rights you do not hold yourself.",
+    "removalExceedsOwnRights": "You cannot remove a deny that withholds rights you do not hold yourself.",
+    "denyFullAdministrators": "Refused: no deny can reach Full Administrators — membership of that group is the grant itself.",
+    "subjectUnknown": "The account or caving group chosen no longer exists. Pick it again and save.",
+    "anchorNotFound": "The object a rule is tied to no longer exists. Pick another one and save again.",
+    "scopeInvalid": "One rule's reach does not fit what it protects. Change the reach or the actions and save again.",
+    "forbidden": "You may not change the rules here.",
+    "rulesLoadFailed": "The group's rules could not be loaded, so they cannot be edited yet.",
+    "loadFailed": "The permission groups could not be loaded.",
+    "membersLoadFailed": "The group's members could not be loaded.",
+    "storedRulesMoved": "The group's rules were changed by someone else since you opened them. Saving now would replace that change with your rules.",
+    "loadStoredRules": "Load the stored rules (drops your changes)",
+    "keepMyRules": "Keep my changes and save over theirs",
+    "savedWithDeny": "Saved. The ruleset holds a deny: open the preview now to see what people affected hold with it in force.",
     "rulesTab": "Rules",
     "membersTab": "Members",
     "previewTab": "Preview",
     "addRule": "Add rule",
     "fullAdminNoRules": "Full Administrators holds no rules: membership itself is the grant, decided before any rule — which is also why no deny can reach it.",
-    "previewRequired": "This ruleset contains a deny. Open the preview and look at what somebody affected would hold before saving — a blind deny can lock people out.",
+    "previewRequired": "This ruleset contains a deny. Open the preview before saving and look at whom this group reaches. The preview answers from the rules already saved, so it shows what people hold today, not what this deny would take away — check it again once the deny is saved, because a deny can lock people out.",
     "openPreview": "Open the preview",
     "addMember": "Add",
     "noMembers": "No members yet.",
     "removeMemberConfirm": "Remove this member?",
     "runPreview": "Preview",
-    "previewIntro": "Pick a user or caving group to see the rights they would hold.",
+    "previewIntro": "Pick a user or caving group to see the rights they hold under the rules saved now. Unsaved changes on the Rules tab are not part of this answer.",
     "previewLegend": "Expand a row to see which rule decided each action.",
     "noRights": "nothing",
     "narrowKind": "Narrow to kind…",
@@ -3624,8 +3966,10 @@
     "searchFeature": "Search features…",
     "addFeature": "Add",
     "noMembers": "No features in this set.",
+    "membersLoadFailed": "The set’s members could not be read, so its membership cannot be changed yet.",
     "deleteConfirm": "Delete this feature set?",
     "inUse": "Rules still point at this feature set; remove them first.",
+    "nameInvalid": "A feature set name needs at least one letter or digit.",
     "nameTaken": "A feature set with this name already exists."
   },
   "cavingGroupPicker": {
@@ -3670,15 +4014,18 @@
     "disableConfirm": "Disable two-factor authentication?",
     "recoveryLeft": "Recovery codes left: {{count}}",
     "recoveryTitle": "Store these recovery codes now — they are shown only once.",
+    "recoveryKept": "I have stored them",
     "linkedAccounts": "Linked accounts",
     "linkedIntro": "Sign in with an external provider in addition to your password.",
     "linkWith": "Link {{provider}}",
     "linkAdded": "Account linked.",
     "linkFailed": "That account could not be linked. It may already be linked elsewhere.",
+    "loginsLoadFailed": "Your sign-in methods could not be read, so the password and linked-account settings are not shown.",
     "unlink": "Unlink",
     "unlinkConfirm": "Remove this linked account?",
     "unlinked": "Account unlinked.",
     "unlinkFailed": "The account could not be unlinked.",
+    "unlinkLastLogin": "Set a password before removing your only sign-in method.",
     "method_authenticator": "Authenticator app",
     "method_email": "Emailed code",
     "method_sms": "Texted code",
@@ -3712,6 +4059,12 @@
     "phoneConfirmed": "Your number is confirmed.",
     "phoneNumber": "Phone number",
     "phonePending": "Waiting for the code texted to {{number}}.",
+    "phoneResend": "Send the code again",
+    "phoneResendTooSoon": "Wait a minute before asking for the code again.",
+    "phoneNothingPending": "No number is waiting for its code any more.",
+    "phoneUseOther": "Use a different number",
+    "phoneCancelPending": "Cancel this number",
+    "phonePendingCancelled": "The number waiting for its code has been dropped.",
     "phoneSendFailed": "The code could not be sent to that number.",
     "phoneTaken": "Another account already uses that number.",
     "phoneHint": "Used only for sign-in codes. Enter it in international form, for example +40712345678.",
@@ -3786,6 +4139,8 @@
     "sharedNotFound": "This shared view does not exist or was revoked.",
     "sharedClusterHint": "{{count}} entrances here — zoom in to see them one by one.",
     "sharedNoBackground": "No background map is available for shared views on this installation.",
+    "loadFailed": "The saved views could not be read just now.",
+    "sharedDataFailed": "The caves or features of this view could not be read; what is drawn may be incomplete.",
     "sharedUnnamed": "Unnamed",
     "sharedClose": "Close",
     "sharedProtectedNote": "Protected caves are never shown on a shared map.",
@@ -3797,7 +4152,15 @@
     "shareExplain": "Anyone with this link can open the view without an account. It shows the area the view looks at over a public background, with the layers the view had on — limited to what is public in its own right, with protected caves and features left out entirely.",
     "shareWithoutData": "This view is narrowed by a saved filter or by a filter from a link, which a link cannot run — so the link shows the area and its background without the caves and features. Layers drawn from saved filters are never shown through a link either.",
     "shareWithoutFilterLayers": "Layers drawn from saved filters are never shown through a link; the link shows the view's other layers.",
-    "shareQr": "The link to the view {{name}} as a QR code"
+    "deleteConfirm": "Delete this saved view? This cannot be undone.",
+    "shareQr": "The link to the view {{name}} as a QR code",
+    "problems": {
+      "createForbidden": "You may not save map views on this installation. Ask an administrator for the right to create them.",
+      "groupForbidden": "You may not share a view with that caving group.",
+      "notFound": "This saved view is no longer there. Somebody may have deleted it.",
+      "invalid": "The view's name is missing or longer than 200 characters.",
+      "forbidden": "You are not allowed to change this saved view."
+    }
   },
   "panel": {
     "unknown": "Unknown panel.",
@@ -3807,6 +4170,7 @@
     "popOutScene3d": "Open the 3D scene in its own window",
     "viewer3dTitle": "3D viewer",
     "viewer3dEmpty": "Select a cave with a 3D model to display it here.",
+    "viewer3dLoadFailed": "The survey models could not be read just now. This says nothing about which there are.",
     "viewer3dUnavailable": "This survey model is no longer available, or you may not see it.",
     "scene3dTitle": "3D scene",
     "sections": {
@@ -3845,6 +4209,7 @@
     "multiMixed": "Mixed",
     "multiHint": "Hold Ctrl or Shift while clicking the map to add to the selection.",
     "multiNothingReadable": "None of the selected objects can be read here.",
+    "multiLoadFailed": "What the picked objects have in common could not be read.",
     "clearSelection": "Clear the selection",
     "zoomToAll": "Zoom to all",
     "bulkTag": "Tag all",
@@ -3872,7 +4237,11 @@
     "unsupportedTitle": "This browser cannot show the 3D view",
     "unsupportedHint": "The 3D view needs WebGL 2, which this browser or its graphics driver does not provide. Try an up-to-date browser, or keep using the 2D map.",
     "openFlatMap": "Open the 2D map",
+    "startFailedHint": "Something in this browser stopped the 3D view from starting. Try again; if it fails the same way, reload the page.",
     "startFailed": "The 3D view could not be started",
+    "downloadFailedTitle": "The 3D view did not finish downloading",
+    "downloadFailedHint": "The 3D view is a large download (about a megabyte), and the connection was too slow or dropped before it arrived. Nothing is wrong with the map or the data. Try again, or reload the page if SilexGIS was updated since you opened it.",
+    "downloadFailedRetry": "Try again",
     "centerlinesFlat": "{{count}} centerline(s) drawn on the surface — no surveyed depths were available for them.",
     "surfaceTitle": "Ground over the cave",
     "surfaceOverlay": "Show the cave through it",
@@ -3952,6 +4321,14 @@
       "vector_unreadable": "This background's style or data could not be loaded, so the 3D view does not draw it.",
       "vector_stand_in": "Drawn in 3D as {{name}}."
     },
+    "relief": {
+      "title": "Relief",
+      "label": "Vertical exaggeration",
+      "value": "×{{factor}}",
+      "reset": "True height",
+      "hint": "Draws every height taller or flatter — the ground, the caves, the camera — all together, so entrances stay on the ground. Altitudes and depths shown stay true.",
+      "notice": "Relief ×{{factor}}"
+    },
     "terrainTitle": "Ground",
     "terrainBuildsHint": "Each build covers one area to one level of detail. Switching re-reads the ground and moves the surveys onto the new surface.",
     "terrainConfiguredEntry": "The configured elevation model",
@@ -3996,7 +4373,12 @@
     "scansInViewNone": "No cave in view has a placed scan to draw.",
     "scansInViewShown": "Scans of {{shown}} of {{total}} caves in view — {{size}}.",
     "scansInViewOverBytes": "Scans of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
-    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once."
+    "scansInViewOverCount": "Scans of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
+    "dataFailed": "The caves of this view could not be loaded.",
+    "tracksFailed": "The lines of an imported file could not be loaded.",
+    "layersFailed": "Some of the layers this view offers could not be read.",
+    "filterLayersFailed": "A layer drawn from a filter could not be loaded.",
+    "tryAgain": "Try again"
   },
   "caveview": {
     "dankezCaveView": {
@@ -4008,6 +4390,16 @@
       "station": "Station clicked: {{name}}"
     },
     "loadError": "Failed to load the 3D model",
+    "loadFailed": {
+      "unreadable": "The survey file could not be read. It may be damaged, or written by a version of the survey program the viewer does not know.",
+      "stalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
+      "missing": "The survey file is no longer on the server.",
+      "refused": "The survey file was refused. Its address may have lapsed while the page was open; try again.",
+      "server": "The server could not hand over the survey file (error {{status}}). Try again in a while.",
+      "viewer": "The 3D viewer could not be loaded. Check the connection and try again.",
+      "network": "The survey file could not be downloaded. Check the connection and try again."
+    },
+    "tryAgain": "Try again",
     "linkThisPart": "Link this…",
     "notInThisModel": "That point is not in this model",
     "labelSize": "Size of station names",
@@ -4084,10 +4476,9 @@
       "previewError": "The model could not be loaded for the preview.",
       "opening": "Opening the movie maker…",
       "openFailed": "The movie maker could not open.",
-      "openFailedStale": "The application was updated after this page was opened, and the page still asks for the old version's files. Reload the page to use the new version.",
+      "openFailedStale": "The movie maker did not finish downloading: the connection was too slow or dropped before it arrived, or the application was updated after this page was opened. Nothing is wrong with your data. Reload the page to try again.",
       "previewLoadingSoFar": "Loading the model for the preview… {{received}} so far",
       "previewLoadingOf": "Loading the model for the preview… {{received}} of {{total}}",
-      "previewStalled": "Nothing of the survey file arrived for {{seconds}} seconds, so the download was given up. The server or the connection may be slow; try again.",
       "previewRetry": "Try again",
       "make": "Make a movie",
       "makeHelp": "Export a movie of this model with its tracked trips moving through it",
@@ -4344,6 +4735,8 @@
     }
   },
   "surveyModels": {
+    "loadFailed": "This cave's 3D survey models could not be read just now. This says nothing about whether any have been uploaded.",
+    "heightlessNudge": "If this file is in local coordinates, give the altitude of its zero level. Without it the survey is still drawn, but its heights stay relative to that point: overburden, spring levels and the vertical gap to other caves will not be computed until it is declared.",
     "uploadPointCloud": "Upload point cloud",
     "scanProcessing": "The scan is being tiled for the 3D view. Its progress is on the survey's status page.",
     "scanFailed": "The scan could not be processed.",
@@ -4524,6 +4917,18 @@
     }
   },
   "centerlines": {
+    "loadFailed": "This cave's centerlines could not be read just now. This says nothing about whether any have been uploaded.",
+    "problems": {
+      "formatUnsupported": "This kind of file is not read as a centerline. Upload a GeoJSON, GPX, KML or KMZ file.",
+      "sizeInvalid": "The file is empty or larger than 20 MB.",
+      "unreadable": "The file could not be read as a centerline: it may be damaged, or not the format its name says.",
+      "noLines": "The file holds no lines. A centerline needs at least one line, not only points.",
+      "surveyModelInvalid": "The chosen survey model does not belong to this cave.",
+      "defaultRequired": "A cave with centerlines always has one as its shape. Make another one the default instead.",
+      "notFound": "This centerline is no longer there: somebody may have deleted it.",
+      "caveNotFound": "This cave is no longer there, or you can no longer see it.",
+      "forbidden": "You may not change this cave's centerlines."
+    },
     "title": "Centerlines",
     "upload": "Upload centerline",
     "uploaded": "Centerline uploaded",
@@ -4542,6 +4947,12 @@
     "paths": "Paths"
   },
   "settings": {
+    "meLoadFailed": "Your account's details could not be read just now. Nothing has been changed.",
+    "problems": {
+      "cavingClubUnknown": "That caving club no longer exists. Choose another one and save again.",
+      "emailNotUsable": "That address cannot be used to sign in here. Choose another one.",
+      "preferencesBusy": "Your preferences are being saved from another window or device at this moment. Try again in a moment."
+    },
     "scanProfiles": {
       "title": "Processing profiles",
       "intro": "Named sets of settings a scan processing step runs with. Keep them for yourself, for a caving group or for the whole installation, choose one when you upload a recording, and carry HDMapping's own parameter files in and out.",
@@ -4761,7 +5172,12 @@
           "running": "Preparing…",
           "ready": "Ready",
           "failed": "Failed"
-        }
+        },
+        "inProgress": "An export is already being prepared. Wait for it to finish.",
+        "expired": "This export has expired. Prepare a new one.",
+        "gone": "This export is no longer available. Prepare a new one.",
+        "requestFailed": "The export could not be requested. Please try again.",
+        "downloadFailed": "The export could not be downloaded. Please try again."
       },
       "calendarFeed": {
         "heading": "Calendar feed",
@@ -4783,6 +5199,7 @@
     },
     "notifications": {
       "categories": "What to notify me about, and where",
+      "loadFailed": "Your notification choices could not be read just now. Nothing has been changed.",
       "category": "Notify me about",
       "channels": {
         "inApp": "In the app",
@@ -4828,7 +5245,8 @@
         "securityAlerts": "Always sent — this one warns you about your own account.",
         "tripCallout": "Always sent, and never held for the daily summary — an overdue party is nobody's news in the morning."
       },
-      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is."
+      "noDelivery": "This installation has no mail server configured, so nothing is sent yet. Your choices are saved and will be used once one is.",
+      "choiceRefused": "One of these choices is not allowed on its channel, so nothing was saved. Reload the page to see what can be chosen."
     },
     "filters": {
       "heading": "Saved filters",
@@ -4945,6 +5363,8 @@
     }
   },
   "admin": {
+    "listLoadFailed": "This list could not be read just now. This says nothing about what it holds, so add nothing again until it has been read.",
+    "settingsLoadFailed": "These settings could not be read just now. Change nothing until they have been read.",
     "forbidden": "You need administrator rights to see this page.",
     "users": {
       "title": "Accounts",
@@ -4958,6 +5378,7 @@
       "createdAt": "Opened",
       "actions": "Actions",
       "you": "you",
+      "loadFailed": "The accounts could not be loaded.",
       "statusActive": "Can sign in",
       "statusLocked": "Locked",
       "statusNoPassword": "No password yet",
@@ -5038,6 +5459,14 @@
         "fullAdministratorAccount": "Only a full administrator can lock, unlock, delete or reset the second factor of a full administrator's account."
       }
     },
+    "settingsProblems": {
+      "invalid": "A value on this form was refused. Check what you entered and save again.",
+      "forbidden": "You may not change these settings.",
+      "smsGatewayInternal": "The gateway address is on this server or an internal network. The installation's configuration must allow that.",
+      "mailPasswordCleared": "The mail server changed, so the saved password was removed. Type it again.",
+      "smsAuthHeaderCleared": "The gateway address changed, so the saved authorisation header was removed. Type it again.",
+      "noticeUnworded": "The settings were saved, but the server noted something about this save that this page cannot put into words. Check the section's values."
+    },
     "messaging": {
       "title": "Messaging",
       "intro": "Where email and text messages go, and what signing in requires. These can also be set from the deployment environment; anything saved here replaces it.",
@@ -5092,6 +5521,9 @@
       "testSent": "Test message sent.",
       "testFailed": "Sending failed: {{error}}",
       "testNotConfigured": "Configure and save the channel first.",
+      "testTooSoon": "A test text was sent a moment ago. Wait a little before sending another.",
+      "testRecipientInvalid": "That recipient cannot be used for a test. Check the address or number.",
+      "testRequestFailed": "The test could not be asked for. Try again.",
       "sendConfirmation": "Send a confirmation message when an account is created",
       "requireConfirmed": "Require a confirmed address to sign in",
       "requireConfirmedHint": "Accounts that have not confirmed their address will be refused at sign-in and offered a new confirmation message.",
@@ -5108,7 +5540,7 @@
       "importIntro": "An imported file is reviewed before anything is created. This is where that step can be removed, and how far duplicate detection looks by default.",
       "allowWithoutReview": "Let a trusted user create objects without reviewing them",
       "allowWithoutReviewHint": "Off by default. Rules are a guess about somebody’s naming habits, and the first import against a set nobody has tuned is where that guess is worst. Turning this on never widens who may create — the importer still needs the right to create features — it only removes the step in between.",
-      "duplicateRadius": "Look for something already there within",
+      "duplicateRadius": "Look for something already there within (metres)",
       "duplicateRadiusHint": "The starting radius for a new review; the importer can change it. Only objects whose exact position the reviewer may see are ever measured against.",
       "duplicateSimilarity": "Names count as the same above",
       "duplicateSimilarityHint": "How alike two names must be, 0 to 1, before a nearby object is called the same thing rather than merely close to it.",
@@ -5138,6 +5570,11 @@
       "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out.",
       "photoLibrariesTab": "Photo libraries",
       "surveyUploadsTab": "Survey uploads",
+      "testDataTab": "Test data",
+      "testDataIntro": "The test-data generator fills this installation with invented, realistic test data and removes it again. It is offered to full administrators while this switch is on and the deployment allows it.",
+      "testDataNotAllowed": "This deployment does not allow the test-data generator (SILEXGIS__TestData__Allowed=false), so this switch changes nothing.",
+      "testDataEnabled": "Offer the test-data generator",
+      "testDataEnabledHint": "Off hides the page from full administrators and refuses its routes. Data already generated stays until it is removed.",
       "surveyUploadsIntro": "Choices about surveys sent from a field device, such as TopoDroid.",
       "firstModelOfCreatedCave": "A cave made by an upload takes its first model",
       "firstModelOfCreatedCaveHint": "When an upload creates a cave, the first model it brings becomes the cave's current model and its centreline the cave's shape. Off: a model from an upload never becomes current on its own; somebody chooses on the web.",
@@ -5181,6 +5618,12 @@
       "latestDownload": "Latest download:",
       "cancel": "Cancel download",
       "loadFailed": "The basemap's state could not be read.",
+      "requestFailed": "The request could not be completed. Try again.",
+      "boxIncomplete": "Fill in all four sides of the box.",
+      "boxInverted": "West must be less than east, and south less than north.",
+      "cancelTitle": "Stop this download?",
+      "cancelBody": "What has been fetched so far is discarded, and the map keeps serving the basemap it has now.",
+      "cancelFailed": "The download could not be stopped. Try again.",
       "state": {
         "queued": "queued",
         "running": "running",
@@ -5454,6 +5897,7 @@
       "name_email_confirm_address": "Confirm your address",
       "name_email_change_address": "Confirm a new address",
       "name_email_password_reset": "Password reset",
+      "name_email_already_registered": "Registration of an address that already has an account",
       "name_email_account_invitation": "Invitation to a new account",
       "name_email_two_factor_code": "Sign-in code by email",
       "name_sms_two_factor_code": "Sign-in code by text",
@@ -5501,6 +5945,7 @@
   "notifications": {
     "bell": "Notifications",
     "title": "Notifications",
+    "markFailed": "The notification could not be marked as read. Try again.",
     "markAllRead": "Mark all as read",
     "allCategories": "All categories",
     "scopeAll": "All",
@@ -5509,6 +5954,7 @@
     "about": "About",
     "when": "When",
     "empty": "Nothing to read.",
+    "loadFailed": "Your notifications could not be read just now. This says nothing about whether there are any.",
     "withheld": "The thing this is about is no longer available to you.",
     "unrenderable": "This notification can no longer be shown."
   },
@@ -5521,6 +5967,7 @@
     "failed": "That link is no longer valid. You can change your notification settings after signing in.",
     "doneDigest": "The daily summary has stopped, and with it every other notification email.",
     "alertsStillSent": "Alerts about your own account are still sent — they warn you when someone changes it.",
+    "unreachable": "The server could not be reached, so nothing has changed yet. Try again in a moment.",
     "manage": "Manage notification settings",
     "inboxUntouched": "Nothing else changed: these notifications still appear in your inbox inside the application, where you can read them whenever you like."
   },
@@ -5531,6 +5978,9 @@
     "centerline": "Centerline"
   },
   "search": {
+    "refused": "The server refused this search.",
+    "failed": "The search could not be run just now. That says nothing about what the archive holds. Press here to try again.",
+    "placesFailed": "Place names could not be looked up just now. Press here to try again.",
     "features": "Features",
     "trips": "Trip logs",
     "expeditions": "Camps",
@@ -5772,10 +6222,12 @@
     "squareFor": "QR code for {{code}}"
   },
   "resLinks": {
+    "targetSearchFailed": "The search for what to link could not be run just now. That says nothing about whether it exists.",
     "titleCount": "Linked items ({{count}})",
     "incomplete": "Incomplete",
     "incompleteHint": "Only one item of this link is visible to you. A link says something once it connects two or more — add another item if there is one to add.",
     "addAction": "Link…",
+    "loadFailed": "The links could not be read just now. This says nothing about which are recorded.",
     "moreMembers": "+{{count}}",
     "rowActions": "Link actions",
     "openPage": "Open link page",
@@ -6085,9 +6537,13 @@
     }
   },
   "importReview": {
+    "saveFailed": "Your latest changes to this review could not be saved.",
+    "saveFailedHint": "Confirming is held until they are, so it creates what you see here. Try again, or make another change to save again.",
     "held": "Your account's imports wait for a reviewer. Nothing has been created yet; it will be once a reviewer accepts it."
   },
   "vectorImport": {
+    "previewFailed": "The review could not be worked out for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Review and import",
     "reviewAndImport": "Review and import into the registry",
     "mapPreview": "Map preview",
@@ -6118,12 +6574,34 @@
     "tracksIgnore": "Leave them in the file",
     "tracksAsLine": "Import as a line feature",
     "trackKind": "Line feature kind",
+    "optionsAreas": "Outlines (areas)",
+    "areas": "What to do with them",
+    "areasHint": "Rules read names, and an outline's name rarely says what it is. Choose the kind every outline in the file becomes — for a geology map, Geological unit — or leave them in the file.",
+    "areasIgnore": "Leave them in the file",
+    "areasAsArea": "Import each as an area feature",
+    "areaKind": "Area feature kind",
     "mappingAuto": "Work it out",
     "mapping": {
       "nameField": "Name",
       "descriptionField": "Description",
       "codeField": "Identification code",
-      "elevationField": "Altitude"
+      "elevationField": "Altitude",
+      "lithologyField": "Rock type (geological units)"
+    },
+    "lithologyStep": {
+      "title": "Rock types in the file",
+      "unmatched": "Rock names matching no class: {{count}}. Pick a class for each, or leave it and those units are created unclassified.",
+      "allMatched": "Every rock name in the file matches a class. Change any you disagree with.",
+      "sourceValue": "In the file",
+      "count": "Outlines",
+      "becomes": "Becomes",
+      "becomesFor": "Class for {{value}}",
+      "how": "How",
+      "match": {
+        "mapped": "Your choice",
+        "recognised": "Recognised",
+        "unmatched": "No match"
+      }
     },
     "selectAll": "All",
     "selectAllPages": "Select all {{count}} across every page",
@@ -6190,6 +6668,8 @@
     "batchFromDevice": "Phone upload",
     "batchMode": "How",
     "batchDetail": "What this import created",
+    "batchDetailLoadFailed": "What this upload did could not be read just now. This says nothing about what it created.",
+    "batchesLoadFailed": "The uploads could not be read just now. This says nothing about which there are, or what can be undone.",
     "confirmedAt": "Confirmed",
     "modes": {
       "reviewed": "Reviewed",
@@ -6232,6 +6712,7 @@
       }
     },
     "revert": "Undo",
+    "revertFailed": "The import could not be undone. Try again.",
     "reverted": "The import was undone.",
     "revertedTag": "Undone",
     "reviewPendingTag": "Waiting for review",
@@ -6260,6 +6741,9 @@
     "saving": "All {{total}} rows reached; saving them"
   },
   "photoImport": {
+    "uploadFailedNamed": "{{name}} was not uploaded: {{reason}}",
+    "previewFailed": "The pictures could not be grouped into places for these settings.",
+    "sessionFailed": "The saved review could not be read.",
     "title": "Features from photographs",
     "openFromGeodata": "From photographs",
     "openFromTrip": "Derive features from this trip's photographs",
@@ -6374,6 +6858,16 @@
     }
   },
   "termRules": {
+    "loadFailed": "The rule set could not be read, so it cannot be changed yet.",
+    "errors": {
+      "seededUndeletable": "The set this installation ships with cannot be deleted: it is what imports fall back to when no other set applies.",
+      "promotionForbidden": "Only an administrator can change what everybody inherits.",
+      "promoteFailed": "The set could not be made the installation default. Try again.",
+      "notEditable": "This set cannot be changed here. Make a copy of your own and change that.",
+      "notFound": "This set is no longer there: somebody may have deleted it.",
+      "groupNotFound": "The caving group this set belongs to is no longer there.",
+      "forbidden": "Your account may not change this set."
+    },
     "title": "Detection rules",
     "intro": "What a waypoint called Peștera, P., aven, izbuc, ponor or doline is proposed to become. Order decides: when two rules claim one candidate, the earlier one wins.",
     "name": "Name",
@@ -6390,7 +6884,6 @@
     "promote": "Make default",
     "makeInstallationDefault": "Make this what every import starts from",
     "promoted": "Every import now starts from this set.",
-    "promoteFailed": "Only an administrator can change what everybody inherits.",
     "deleteConfirm": "Delete this rule set?",
     "default": "Default",
     "shipped": "Shipped",
@@ -6726,6 +7219,7 @@
     }
   },
   "fileStorage": {
+    "remeasureFailed": "The files were deleted, but storage could not be measured again: the figures shown are from before.",
     "title": "Storage",
     "intro": "What fills this installation's file store, how fast it grows, and what could be deleted. Uploaded originals are never offered for deletion.",
     "measure": "Measure now",
@@ -6843,6 +7337,8 @@
   },
   "notificationHealth": {
     "title": "Message delivery",
+    "healthLoadFailed": "The delivery figures could not be read just now; nothing here says whether messages are going out.",
+    "deliveriesLoadFailed": "The deliveries could not be read just now. This says nothing about what is waiting.",
     "intro": "Whether messages are getting out of this installation. Every row here is one somebody was meant to receive: a channel a person has switched off produces no row at all, so a backlog is always a backlog.",
     "stalled": "Nothing has been sent for {{age}}.",
     "stalledHint": "The oldest message still waiting was queued that long ago. Check the mail server settings and the test send on the messaging page.",
@@ -6994,6 +7490,7 @@
     "markDone": "It happened",
     "markDoneSuccess": "The event was recorded as having happened.",
     "notFound": "No such event",
+    "listUnavailable": "The events could not be read just now. This says nothing about which events there are.",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "callOff": "Call it off",
     "callOffConfirm": "Call this event off?",
@@ -7046,6 +7543,11 @@
     "seriesPartlyForbidden": "This run holds an occurrence that is not yours to change, so none of it was changed. A half-applied change would leave the calendar disagreeing with itself.",
     "notInSeries": "This event does not come round again, so there is no run to act on.",
     "seriesMoveOutOfRange": "Moving this occurrence that far would carry a later one of the run off the end of the calendar, so none of them were moved. Pick a nearer day.",
+    "recurrenceOverlapping": "Each occurrence would still be running on the day the next one begins. Make the event shorter than the gap between repeats, or repeat it less often. Nothing was written.",
+    "recurrenceFrequencyInvalid": "That is not a repetition the calendar can step by. Choose one of the repetitions offered. Nothing was written.",
+    "seriesFrequencySeriesOnly": "How often an event repeats belongs to the run, not to one occurrence. To change it, edit this one and every later one.",
+    "stateTransitionInvalid": "The event cannot go from the state it is in now to the one chosen. Somebody may have changed it meanwhile — reload it to see where it stands.",
+    "goneOrUnreadable": "This event is no longer there, or you may no longer see it. Nothing was changed.",
     "responses": {
       "title": "Who is coming",
       "invite": "Ask",
@@ -7107,7 +7609,18 @@
       "authenticated": "Anyone signed in",
       "public": "Everyone"
     },
-    "delete": "Delete this checklist"
+    "delete": "Delete this checklist",
+    "loadFailed": "The checklists could not be loaded.",
+    "changedSinceShown": "Somebody changed this checklist since the page showed it. Look at it again before deleting it.",
+    "problems": {
+      "openFailed": "That checklist could not be opened. Try again.",
+      "deleteFailed": "That checklist could not be deleted.",
+      "notFound": "That checklist is no longer there, or you may no longer see it.",
+      "forbidden": "You may not change this checklist.",
+      "createForbidden": "You may not create a checklist for that caving group. Choose another group, or ask its administrator.",
+      "groupNotAllowed": "You may not hand a checklist to that caving group.",
+      "invalid": "Something in the checklist is not valid: check the title, the description and every line."
+    }
   },
   "workAreas": {
     "title": "Work areas",
@@ -7357,9 +7870,18 @@
       "failed": "The surface was not made. The progress above says why."
     },
     "problems": {
+      "pointCloudInvalid": "The point cloud is not a LAS or LAZ file this server can read: its header is missing, short or does not add up.",
+      "recordingInvalid": "The scanner recording could not be processed: a part of it does not read, a log lacks the columns it should have, or a piece is missing its pair.",
+      "workerUnavailable": "No scan-processing worker is available on this installation, or the one there cannot run a step this upload needs. Ask an administrator.",
+      "workerSilent": "The job was left for the scan-processing worker and nothing took it up in the time allowed. Ask an administrator whether the worker is running, then run it again.",
+      "workerFailed": "The scan-processing worker took the job and reported that it failed or was stopped. Run it again; if it fails the same way, ask an administrator.",
+      "workerTimeout": "Processing took longer than this installation allows one job.",
+      "workerInterrupted": "The scan-processing worker was stopped while it ran, and its half-written results are not used. Run the upload again to start the step afresh.",
+      "exportInvalid": "The point cloud made from the recording failed its check, so nothing was built on it. Run it again; if it fails the same way, the recording may be damaged.",
       "surfaceUnplaced": "The surface was made but not saved: the scan is no longer placed, or the cave chosen for it is gone. Place the scan and make the surface again.",
       "surfaceNeedsTiles": "A surface is made of a scan that has been processed and tiled.",
       "surfaceNeedsPlacement": "Place the scan first: its surface is saved standing where the scan stands.",
+      "surfaceProtectedCave": "The scan's cave is protected and the cave chosen is not: its walls would show where the protected cave's passages are. Save the surface for the scan's own cave, or protect the other cave first.",
       "surfaceProfileStep": "That profile is not one for making a surface.",
       "profileUnknown": "That profile is no longer there, or you cannot use it.",
       "profileValuesInvalid": "That profile's values no longer fit the step. Open it in the settings and save it again.",
@@ -7507,6 +8029,7 @@
     }
   },
   "surveySources": {
+    "loadFailed": "This cave's survey sources could not be read just now. This says nothing about whether any have been archived.",
     "title": "Survey sources",
     "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
@@ -7673,6 +8196,11 @@
     }
   },
   "karstStats": {
+    "axesNone": "The principal axes could not be drawn: too few of the caves in this set record every measure, or the measures that remain do not vary.",
+    "axisDropped": "Left out of the axes because every grouped cave records the same value: {{measures}}.",
+    "axisLoadings": "Axis {{axis}} carries {{share}} % of the variation and is made of {{loadings}}. Only the relative signs mean anything; the axis itself may be read in either direction.",
+    "axisScope": "{{drawn}} of the {{total}} caves on this page are positioned. Axes and colours are worked out over the whole set this list is narrowed to, so caves on other pages are positioned too and are not drawn here.",
+    "axisTitle": "Axis {{axis}} ({{share}} % of the variation)",
     "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
     "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
     "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
@@ -7682,12 +8210,15 @@
     "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
     "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
     "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterPopulationAxes": "Grouped and positioned over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them or position them on the axes, and they are absent from the chart rather than drawn in it.",
     "clusterUngrouped": "Not grouped",
     "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
     "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
+    "modeAxes": "Principal axes",
+    "modeMeasures": "Chosen measures",
     "nothingMeasured": "No cave on this page has a surveyed length.",
     "powerLawFit": "Power-law fit (exponent {{exponent}})",
     "rank": "Rank",
@@ -7803,6 +8334,23 @@
     "box": "10th · 25th · median · 75th · 90th",
     "tooFewForABox": "Too few measured caves to draw"
   },
+  "featurePassages": {
+    "title": "Passages beneath this feature",
+    "intro": "Caves whose passage lies within {{distance}} m of this feature in plan, nearest first. Only caves you may place exactly are considered.",
+    "reach": "Reach (m)",
+    "empty": "No passage you may place lies within this reach.",
+    "noTerrain": "No elevation data has been prepared on this installation, so the rock overhead is not known; the offsets are.",
+    "truncated": "More caves qualify than are listed; the nearest are shown.",
+    "cave": "Cave",
+    "offset": "Offset",
+    "offsetUnder": "Under the outline",
+    "altitude": "Passage altitude",
+    "overburden": "Rock overhead",
+    "notMeasured": "—",
+    "unitMetres": "{{value}} m",
+    "approximate": "approximate",
+    "noAltitudes": "No altitudes surveyed"
+  },
   "morphometry": {
     "title": "Measured shape",
     "area": "Area",
@@ -7833,14 +8381,19 @@
     "between": "From {{from}} to {{to}}.",
     "horizontalIsOfTheSameLine": "The horizontal and vertical figures are the two parts of that same shortest line, not the shortest distance across and the shortest distance down, which are different pairs of points.",
     "unavailable": "No distance for this pair",
+    "tooCostly": "These two caves' surveys are too large to measure against each other in one request.",
     "unavailableWhy": "A distance between two caves places each of them from the other, so it is given only to a reader who may see exactly where both are.",
     "absence": {
+      "altitudesRelative": "At least one of these two caves was surveyed without the altitude of its zero point, so its heights are only relative to that point and the vertical gap between them cannot be measured. Declare that altitude on its survey to compare them.",
       "noLineWork": "At least one of these two caves has no line work to measure from.",
       "noAltitudes": "At least one of these two caves was drawn in plan and recorded no depths, so there is no honest distance in three dimensions."
     },
     "drawnOnMap": "The shortest line is drawn on the map and in the 3D view. On the map you see its plan only; in 3D it runs through the rock at the depths its two ends were surveyed at."
   },
   "viewLinks": {
+    "revealGone": "What this link points at no longer exists, so the view stayed where it was.",
+    "revealForbidden": "You may not see what this link points at, so the view stayed where it was.",
+    "revealFailed": "Where this link points could not be read, so the view stayed where it was. Follow it again in a moment.",
     "controls": {
       "map2d": "Map",
       "scene3d": "3D scene",
@@ -7850,6 +8403,9 @@
   },
   "textLink": {
     "notAnnotated": "This document is not a link-annotated text.",
+    "textLoadFailed": "The text could not be read just now.",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are highlighted in this text.",
+    "linksFailed": "The links of this text could not be loaded, so no passage is highlighted.",
     "empty": "This text has nothing in it yet.",
     "popOut": "Open in a window of its own",
     "controls": {
@@ -7888,6 +8444,8 @@
     "title": "Cave catalogue",
     "subtitle": "Search the Romanian community cave catalogue at speologie.org, and bring caves from it into this installation.",
     "portalLink": "Open speologie.org",
+    "statusLoadFailed": "Whether this installation can ask the catalogue could not be read just now, so nothing can be searched or imported yet.",
+    "caveLoadFailed": "This cave could not be read from the catalogue just now.",
     "openInPortal": "Open on speologie.org",
     "notConfigured": {
       "title": "This installation has no key for the catalogue",
@@ -8000,12 +8558,23 @@
       "searchTooDeep": "This search has more results than can be paged through. Narrow it with a county or a longer name.",
       "caveNotFound": "The catalogue no longer publishes that cave.",
       "selectionTooLarge": "Too many caves were chosen for one import. Bring them in smaller batches — each one can be undone on its own.",
-      "importFailed": "The import could not be completed."
+      "importFailed": "The import could not be completed.",
+      "createForbidden": "Your account may not create caves, so it cannot bring caves in from the catalogue.",
+      "selectionEmpty": "Nothing was chosen to import.",
+      "nothingCreated": "Every chosen cave was set aside, so there was nothing to import.",
+      "recordMissing": "The catalogue no longer publishes this cave.",
+      "updateForbidden": "You may not change the cave this entry was imported as.",
+      "caveMissing": "The cave this entry was imported as is no longer a cave here.",
+      "positionInvalid": "The position given for this cave is not on the earth.",
+      "typeUnknown": "The chosen cave or entrance type does not exist on this installation.",
+      "parentNotFound": "The chosen parent no longer exists, or you may not see it.",
+      "alreadyImported": "This cave is already in the register. Refresh it instead of creating a second copy."
     },
     "paging": {
       "previous": "Previous",
       "next": "Next",
-      "page": "Page {{page}}"
+      "page": "Page {{page}}",
+      "backTo": "Back to page {{page}}"
     }
   },
   "tripImport": {
@@ -8323,6 +8892,7 @@
     }
   },
   "hypsometry": {
+    "altitudesRelative": "The survey was uploaded without the altitude of its zero point: these heights are relative to that point, not above sea level, and spring levels are not shown.",
     "caveTitle": "Passage by height",
     "areaTitle": "Entrances by height",
     "loading": "Measuring…",
@@ -8341,6 +8911,7 @@
     "noProposal": "The measurements do not separate into levels.",
     "notConfirmed": "No reading has been recorded yet",
     "confirm": "Record this reading",
+    "clearFailed": "The reading could not be withdrawn. Try again.",
     "clear": "Withdraw the reading",
     "clearConfirm": "Withdraw the recorded reading of this cave's levels?",
     "saved": "The reading was recorded.",
@@ -8367,13 +8938,19 @@
     "unitDegrees": "°",
     "noDivergence": "One side has nothing in it, so there is no disagreement to report. Nought here would claim agreement with a structure nobody has mapped.",
     "divergenceScale": "Nought means the two lie along each other; one means they lie across each other, a quarter turn apart.",
-    "linesOnly": "Only mapped fracture and fault lines are compared. Bedding and joint readings taken at a station are a different kind of record and this installation stores none.",
+    "linesOnly": "Mapped fracture and fault lines are compared here rose against rose, by length. Structural readings taken at a point — bedding, joints, fault planes — are plotted on a stereonet, and a cave's passages are tested against their strikes.",
     "dolineModeElsewhere": "The comparison of depression long axes against fault strikes is asked of an area, on that area's own page.",
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
+    "truncatedNearest": "More fracture traces lie within reach than one comparison takes; the rose is built from the nearest of them.",
+    "truncatedArea": "This area holds more fracture traces than one comparison takes; the rose is built from part of them.",
+    "unmeasuredDolines_one": "{{count}} outline could not be measured (it crosses itself or has no width) and is left out of the rose.",
+    "unmeasuredDolines": "{{count}} outlines could not be measured (they cross themselves or have no width) and are left out of the rose.",
     "dolineRose": "Depression long axes ({{count}} outlines)"
   },
   "overburden": {
+    "altitudesRelativeTitle": "Heights are relative only",
+    "altitudesRelativeReason": "This cave's survey was uploaded without the altitude of its zero point, so its heights cannot be compared with the terrain. Declare that altitude on the survey to measure the overburden.",
     "title": "Rock overhead",
     "loading": "Measuring the rock overhead…",
     "nothingMeasured": "This cave has no line work to measure along, so there is nowhere to ask how much rock is overhead.",
@@ -8408,7 +8985,12 @@
       "noData": "The elevation data records nothing here"
     },
     "markLabel": "{{value}} of rock overhead",
-    "markLabelAbsent": "Rock overhead not known here"
+    "markLabelAbsent": "Rock overhead not known here",
+    "leastCover": "Least rock cover",
+    "leastCoverAt": "{{value}} at {{distance}} along the passage",
+    "leastCoverNote": "The thinnest of the readings taken along the passage, not the true minimum between them.",
+    "showLeastCover": "Show on the map",
+    "leastCoverMark": "Least cover: {{value}}"
   },
   "altitudeCheck": {
     "title": "Entrance altitudes against the ground",
@@ -8459,8 +9041,31 @@
     "disagreesWithRecord": "differs from the computed figure",
     "unitMetres": "{{value}} m",
     "notMeasured": "—",
+    "altitudesRelative": "The survey was uploaded without the altitude of its zero point, so its heights are relative to that point and cannot be set against the entrances' altitudes: total depth and height are not measured. Declare that altitude on the survey to measure them.",
     "noSurveyAltitudes": "The survey carries no altitudes, so depth and height cannot be measured from it. A plan drawing is not a cave of no depth.",
     "explained": "Depth is measured from the highest entrance down to the lowest point the survey reaches, and height from the lowest entrance up to the highest. The resurgence level is the lowest spring cave entrance in the area that contains this cave, among those you may place; potential depth is the highest entrance less that level."
+  },
+  "areaSystemFigures": {
+    "title": "Depth and height of the system",
+    "loading": "Measuring across the member caves…",
+    "noCaves": "No cave filed under this one is a cave you may place, so there is nothing to measure.",
+    "caves": "Member caves measured",
+    "surveyedCaves": "of them with a survey carrying altitudes",
+    "entrances": "Entrances",
+    "highestEntrance": "Highest entrance of the system",
+    "lowestEntrance": "Lowest entrance of the system",
+    "entranceSpread": "Height between the system's entrances",
+    "totalDepth": "System depth below its highest entrance",
+    "height": "Height above its lowest entrance",
+    "resurgenceLevel": "Resurgence level under this area",
+    "potentialDepth": "Potential depth to the resurgence level",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "basisDeclared": "Taken over the caves declared to be filed under this one, and only those whose position you may see. A cave closed to you adds nothing here, not even to the count.",
+    "truncated": "More caves are filed here than one answer measures, so these figures describe the first {{count}} of them.",
+    "approximate": "At least one cave's depth comes from a shape-based reduction of its drawn line, not from survey legs, so those figures are approximate.",
+    "noSurveyAltitudes": "No member's survey carries altitudes, so depth and height cannot be measured from them.",
+    "explained": "System depth runs from the highest entrance of any member cave down to the lowest point any member's survey reaches; height from the lowest entrance up to the highest surveyed point. The resurgence level is the lowest spring cave entrance under this area that you may place; potential depth is the highest entrance less that level."
   },
   "depthProfile": {
     "title": "Depth profile",
@@ -8500,6 +9105,8 @@
     "noLayer": "No picture of the terrain has been computed for this measure yet. An administrator can compute one from the terrain page.",
     "needsSlope": "Facing is counted only on sloping ground, and that needs the slope picture.",
     "slopeUnit": "The slope picture exists only in percent; the classes are cut in degrees.",
+    "analysisUnavailable": "Landforms are computed by the terrain-analysis program (WhiteboxTools), which this installation does not run, and none were computed earlier. An administrator can set it up.",
+    "landformNote": "Landforms are read from the newest landform picture on the terrain page. Its search distance sets their scale: the same hillside is a slope at 100 m and a shoulder at 1 km. Ground the picture left unclassified, such as its outermost cells, is not counted.",
     "entrances": "Entrances",
     "sinkholes": "Sinkholes",
     "background": "Ground of the area",
@@ -8508,7 +9115,8 @@
     "measure": {
       "slope": "Slope",
       "aspect": "Facing",
-      "position": "Position on the relief"
+      "position": "Position on the relief",
+      "landform": "Landform"
     },
     "classes": {
       "lt5": "under 5°",
@@ -8626,7 +9234,8 @@
     }
   },
   "imageLink": {
-    "regionCount": "Linked parts of this picture: {{count}}"
+    "regionCount": "Linked parts of this picture: {{count}}",
+    "linksCutOff": "Only the first {{shown}} of {{total}} links are drawn on this picture."
   },
   "tripStats": {
     "title": "Trip insights",
@@ -9660,6 +10269,995 @@
       "title": "This upload's survey analysed",
       "note": "Measured over the survey in this upload's own files, not the survey the cave is currently drawn from.",
       "none": "This upload's survey was not read into shots: it could not be placed on a map, or its reading has not finished."
+    }
+  },
+  "testData": {
+    "title": "Test data",
+    "intro": "Generate invented, realistic test data — caves, their entrances and the karst areas around them — and remove it again. Every generated object carries the tag named in the profile; removal takes away exactly what a run wrote and nothing else.",
+    "disabled": "The test-data generator is switched off on this installation.",
+    "loadFailed": "The test-data generator could not be read.",
+    "newRun": "New run",
+    "profile": "Profile",
+    "profiles": {
+      "small": "Small (25 caves)",
+      "default": "Default (500 caves)",
+      "large": "Large (5,000 caves)"
+    },
+    "caveCount": "Caves",
+    "seed": "Seed",
+    "json": "Profile (JSON)",
+    "jsonHelp": "The whole profile. The same profile and seed generate the same data; a section this version does not know yet is ignored.",
+    "jsonInvalid": "The profile is not valid JSON.",
+    "start": "Generate",
+    "started": "The run is queued.",
+    "existingNote": "This installation already holds {{caves}} caves, {{trips}} trips and {{documents}} documents that no test-data run created. A run beside them needs confirming.",
+    "existingTitle": "Generate beside existing data?",
+    "existingBody": "This installation already holds {{caves}} caves, {{trips}} trips and {{documents}} documents that no test-data run created. The generated data will sit beside them; removing the run later takes away only what it generated.",
+    "existingOk": "Generate anyway",
+    "runInProgress": "A run or a removal is already going.",
+    "profileInvalid": "The profile cannot run: {{problems}}",
+    "startFailed": "The run could not be started.",
+    "runs": "Runs",
+    "noRuns": "No runs yet.",
+    "created": "Started",
+    "statusLabel": "Status",
+    "status": {
+      "queued": "Waiting",
+      "running": "Generating",
+      "succeeded": "Done",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "removing": "Removing",
+      "removed": "Removed"
+    },
+    "alongside": "Beside existing data",
+    "progress": "Progress",
+    "countsLabel": "Written",
+    "counts": {
+      "massifs": "massifs",
+      "karstAreas": "karst areas",
+      "caves": "caves",
+      "entrances": "entrances",
+      "protectedCaves": "protected caves",
+      "tags": "tags"
+    },
+    "cancel": "Cancel",
+    "cancelFailed": "The run could not be cancelled.",
+    "remove": "Remove",
+    "removeTitle": "Remove this run's data?",
+    "removeBody": "Everything the run generated is deleted for good. Data the run did not create is left alone, and so is a generated area somebody has since put data of their own in.",
+    "removeFailed": "The removal could not be started.",
+    "notes": "Notes",
+    "noteCodes": {
+      "keptInUse": "{{count}} generated cave(s) or place(s) were kept because they are in use: somebody attached a file, uploaded a survey, linked a trip, a document or another feature, or drew a map for them.",
+      "keptBeneath": "{{count}} generated area(s) or cave(s) were kept because data not created by a test-data run is attached beneath them.",
+      "inventedElevations": "Elevations come from an invented surface; real ground heights from a terrain build come in a later part of the generator.",
+      "clubOnlyAsSignedIn": "Club-only visibility is written as signed-in-only until the generator creates caving groups.",
+      "codesTaken": "{{count}} generated cave(s) were written without an identification code, because a cave on this installation already carries the code planned for them."
+    },
+    "coverage": "What the run wrote, table by table",
+    "table": "Table",
+    "rows": "Rows",
+    "emptyColumns": "Columns left empty",
+    "noEmptyColumns": "none",
+    "tables": "Every table, and how test data reaches it",
+    "roleLabel": "How",
+    "role": {
+      "generated": "Generated",
+      "derived": "Follows from generated data",
+      "planned": "Planned",
+      "exempt": "Never generated"
+    },
+    "part": {
+      "geography": "with the geography",
+      "people": "with people, clubs and access",
+      "underground": "with surveys and the underground",
+      "activity": "with trips, camps and events",
+      "documents": "with documents and media",
+      "geodata": "with geodata, imports and devices",
+      "accounts": "with account exports"
+    },
+    "note": "Note",
+    "runGone": "This run is no longer there. The list shows what is left.",
+    "notRemovable": "Only a finished, failed or cancelled run can be removed, and only once.",
+    "notCancellable": "This run has already finished, so there is nothing to cancel."
+  },
+  "flyby": {
+    "title": "Flyby",
+    "openHint": "Flyby: fly the camera around a cave, several caves or a mountain",
+    "movie": {
+      "open": "Make a movie",
+      "openHint": "Write this flyby to a movie file: MP4, WebM or GIF",
+      "title": "Make a movie",
+      "close": "Close",
+      "framedHint": "The scene is boxed to the movie's frame: what you see is what the file holds. Play or drag the flyby below to look at any moment of it.",
+      "presetsTitle": "Ready-made files",
+      "level": "How each frame is taken",
+      "levels": {
+        "quick": "Quick",
+        "fine": "Fine",
+        "fineLarge": "Fine, larger than the screen",
+        "live": "Live recording"
+      },
+      "levelHelp": {
+        "quick": "Each frame is taken as soon as it is drawn, as a live view shows it: map tiles may still be arriving.",
+        "fine": "Before each frame the scene finishes loading what it shows. Slower: seconds a frame on a computer without a graphics card.",
+        "fineLarge": "As Fine, and the scene is drawn at the movie's own size even where that is larger than the window. The sharpest file, and the slowest to make.",
+        "live": "The flyby plays in real time and the browser's own recorder films it: the file holds what the screen showed, at the speed this computer drew it. On a slow computer the movie stutters, and in some browsers the file has no length and cannot be wound on."
+      },
+      "draft": "Draft",
+      "draftHelp": "Half the size, {{fps}} frames a second, each frame taken quickly: to check the timing in a fraction of the time.",
+      "part": "What to film",
+      "partWhole": "The whole flyby ({{length}})",
+      "partStretch": "A stretch of it",
+      "from": "From (s)",
+      "to": "To (s)",
+      "summary_one": "{{count}} frame of {{size}} · {{length}} · about {{bytes}}",
+      "summary": "{{count}} frames of {{size}} · {{length}} · about {{bytes}}",
+      "summaryLive_one": "Up to {{count}} frame of {{size}} · {{length}} · about {{bytes}}",
+      "summaryLive": "Up to {{count}} frames of {{size}} · {{length}} · about {{bytes}}",
+      "liveFormats": "This browser records live only as {{formats}}: choose that format.",
+      "liveProgress": "Recording live: {{done}} of {{total}}",
+      "liveReport_one": "{{count}} frame recorded in {{time}}: about {{fps}} a second.",
+      "liveReport": "{{count}} frames recorded in {{time}}: about {{fps}} a second.",
+      "liveReportSlow": "Fewer than the {{fps}} a second asked for: the movie will stutter. Quick or Fine makes a smooth file, however slowly the computer draws.",
+      "gifTooLong": "A GIF holds at most {{max}} frames, and this one would have {{frames}}. Film a stretch, lower the frame rate, or make a video.",
+      "gifLarge": "A GIF this long may come to more than {{size}}, which many chats refuse. Film a stretch, make it smaller, or make a video.",
+      "privacy": "The movie shows where these caves are. Share it only with people who may see that.",
+      "notReady": "The flyby could not be got ready to film.",
+      "preparing": "Getting the flyby ready…",
+      "timeLeft": "about {{time}} left",
+      "reportFrames_one": "{{count}} frame, made in {{time}}.",
+      "reportFrames": "{{count}} frames, made in {{time}}.",
+      "reportUnsettled_one": "{{count}} of them was taken before the scene had finished loading.",
+      "reportUnsettled": "{{count}} of them were taken before the scene had finished loading.",
+      "reportSettled": "Every frame was taken with the scene fully loaded."
+    },
+    "bundle": {
+      "format": "Blender bundle (.zip)",
+      "help": "A zip with the scene, the caves and a player. Unpack it and render it on your own machine with Blender {{version}} or newer — nothing is rendered here. It also holds a quick draft of the same scene.",
+      "fps": "A bundle is made at {{fps}} frames a second.",
+      "summary_one": "{{count}} frame of {{size}} · {{length}}",
+      "summary": "{{count}} frames of {{size}} · {{length}}",
+      "fileNamed": "The file is named after the flyby and ends in -blender.zip.",
+      "walls_one": "Include the walls of {{count}} cave that were not downloaded into the view ({{size}})",
+      "walls": "Include the walls of {{count}} caves that were not downloaded into the view ({{size}})",
+      "wallsHelp": "They go straight into the bundle; nothing more is downloaded into the view.",
+      "leftOutTitle": "Not in the bundle",
+      "leftOutHelp": "The bundle is made anyway, and its README says the same.",
+      "leftOut": {
+        "ground": "The ground and the map drawn on it: the caves stand in empty space, under a plain sky.",
+        "timedChanges": "The changes of the look while the flyby plays — layers, colours, backgrounds, the sky: the scene keeps the look of its first frame.",
+        "reliefChanges": "The change of the relief while the flyby plays: the scene keeps the relief of its first frame.",
+        "wallColours": "The colour the walls are tinted with: they are drawn as plain rock.",
+        "surfaceOpening": "The opening cut in the ground over a cave.",
+        "entrances": "The entrance markers.",
+        "surfaceFeatures": "The surface features and the layers of features.",
+        "scans": "The scans.",
+        "photos": "The station photographs.",
+        "mapLayers": "The map overlays and the georeferenced maps.",
+        "tracks": "The lines of imported files.",
+        "layerOpacity": "The strength layers are drawn at: what is shown is drawn in full.",
+        "wallsNotDownloaded": "The walls that were not downloaded into the view: those caves are drawn by their survey lines.",
+        "moreCavesInView": "Some of the caves in view: a bundle takes only so many."
+      },
+      "privacy": "The bundle holds the shape of these caves — their walls and survey lines — and how they lie to one another. It holds no coordinates, no terrain and no map. Still, send it only to people who may see these caves.",
+      "export": "Download the bundle",
+      "refusal": {
+        "tooLong": "A bundle holds at most {{max}} frames, and this one would have {{frames}}. Take a stretch of the flyby.",
+        "noCaves": "A bundle is made of caves, and this flyby is about none. Choose the caves it flies around first.",
+        "nothingShown": "The walls and the survey lines are both hidden in this flyby's look, so nothing would be drawn. Show one of them."
+      },
+      "progress": {
+        "preparing": "Getting the flyby ready…",
+        "asking": "Putting the bundle together…"
+      },
+      "saved": "The bundle was saved.",
+      "reportWalls_one": "{{count}} cave with its walls.",
+      "reportWalls": "{{count}} caves with their walls.",
+      "reportLines_one": "{{count}} cave by its survey lines.",
+      "reportLines": "{{count}} caves by their survey lines.",
+      "reportNotDrawn_one": "{{count}} cave is not in it: nothing of it is available to draw.",
+      "reportNotDrawn": "{{count}} caves are not in it: nothing of them is available to draw.",
+      "reportWallsLeftOut_one": "The walls of {{count}} cave were left out; it is drawn by its survey lines.",
+      "reportWallsLeftOut": "The walls of {{count}} caves were left out; they are drawn by their survey lines.",
+      "reportReadme": "README.txt inside the bundle says how to render it and what it leaves out.",
+      "failed": {
+        "nothingToDraw": "Nothing of this flyby's caves is available to draw, so there is no bundle to make.",
+        "tooLong": "The flyby has more frames than one bundle holds. Take a stretch of it.",
+        "frameRate": "A bundle cannot be made at that frame rate.",
+        "other": "The bundle could not be made."
+      }
+    },
+    "layersHeld": "A flyby has the camera. Stop it to change the layers.",
+    "unnamedCave": "Unnamed cave",
+    "aboutTitle": "What to fly around",
+    "source": {
+      "selected": "What is selected",
+      "inView": "Caves in view",
+      "view": "What the view shows",
+      "nothingSelected": "Select a cave or an area on the map or in the scene first.",
+      "noCaves": "No cave is drawn in the view. Move closer to one, then refresh the list.",
+      "refresh": "Refresh the list",
+      "shortestRoute": "Shortest route",
+      "file": "An imported file",
+      "pickFile": "The file to follow",
+      "noFiles": "No imported file is ready. Import a GPX or KML track under Geodata first.",
+      "filesLoadFailed": "The imported files could not be read just now, so none can be picked."
+    },
+    "subject": {
+      "all": "all together",
+      "feature": "the selected area",
+      "view": "the view",
+      "place": "a pinned place",
+      "file": "an imported file"
+    },
+    "presetTitle": "Preset",
+    "preset": {
+      "aroundCave": {
+        "name": "Around a cave",
+        "hint": "Flies in, circles the cave and, if asked, goes down to its lowest point and back."
+      },
+      "tour": {
+        "name": "Cave tour",
+        "hint": "Visits each cave in turn — over to it, around it — and ends above all of them."
+      },
+      "aroundSeveral": {
+        "name": "Around several caves",
+        "hint": "One circle wide enough to hold all of them."
+      },
+      "aroundArea": {
+        "name": "Around a mountain",
+        "hint": "Circles the area from above its ridges, looking in."
+      },
+      "planToProfile": {
+        "name": "Plan to profile",
+        "hint": "Starts straight above, as on the survey's plan, tilts down to the side view and turns."
+      },
+      "myViews": {
+        "name": "My own views",
+        "hint": "Flies through views you capture from the scene, in the order you list them, as one smooth flight."
+      },
+      "descent": {
+        "name": "Descent",
+        "hint": "From the cave's highest drawn point down its survey to the deepest, the camera a little behind and above, looking along the passage. A cave whose survey is not drawn, or does not join the two, is dived into instead."
+      },
+      "alongLine": {
+        "name": "Along a line",
+        "hint": "Follows the track of an imported file at a height above the ground, looking ahead, then rises to show all of it."
+      }
+    },
+    "editedNote": "These sections were opened or changed by hand. Changing what the flyby is about, its preset or its options builds them again.",
+    "optionsTitle": "Options",
+    "turns": "Turns around each",
+    "secondsPerTurn": "Seconds per turn",
+    "direction": "Direction",
+    "clockwise": "Clockwise",
+    "counterclockwise": "Counter-clockwise",
+    "underground": "Go underground to the cave's lowest point",
+    "speed": "Speed of the whole flyby: ×{{speed}}",
+    "speedLabel": "Speed of the whole flyby",
+    "loadRoute": "Load the route first, so the flight does not show the map arriving",
+    "sectionsTitle_one": "{{count}} section",
+    "sectionsTitle": "{{count}} sections",
+    "section": {
+      "approach": "Approach",
+      "orbit": "Circle",
+      "hop": "Over to",
+      "dive": "Down into",
+      "rise": "Back up",
+      "hold": "Hold",
+      "tilt": "Tilt",
+      "keyframe": "To a view",
+      "descent": "Down the survey",
+      "follow": "Along the line",
+      "fromFar": "From far away"
+    },
+    "secondsUnit": "s",
+    "sectionSeconds": "Seconds — {{section}}",
+    "sectionSpeed": "Speed — {{section}}",
+    "keepTitle": "Keep",
+    "name": "Name of the flyby",
+    "namePlaceholder": "Name",
+    "openSaved": "Open a saved flyby",
+    "deleteSaved": "Delete the saved flyby of this name",
+    "deleteConfirm": "Delete the saved flyby “{{name}}”? It is kept only in this browser, so it cannot be brought back.",
+    "replaceTitle": "Replace the saved flyby “{{name}}”?",
+    "replaceBody": "A flyby is already saved under this name in this browser. Saving replaces it.",
+    "replaceOk": "Replace",
+    "closeTitle": "Close with unsaved changes?",
+    "closeBody": "The flyby is kept for when you open this panel again, but only until the page is reloaded or closed. Save it to keep it in this browser.",
+    "closeOk": "Close",
+    "saveFile": "Save to file",
+    "openFile": "Open from file",
+    "holdsPlace": "This flyby holds a pinned place. Its file shows where that is to anyone it is sent to.",
+    "transportTitle": "Flyby playback",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop and put the camera back",
+    "position": "Position in the flyby",
+    "loop": "Repeat",
+    "loopHint": "Play again from the start when it ends",
+    "cleanScreen": "Clean screen",
+    "cleanScreenHint": "Play on a clean screen, for recording with another program: only the scene and the map credits, after a countdown. Escape returns.",
+    "cleanScreenLeave": "Clean screen. Press Escape to return, Space to pause.",
+    "preparing": "Getting ready…",
+    "preparingSubjects": "Finding the caves: {{done}} of {{total}}",
+    "preparingRoute": "Loading the route: {{done}} of {{total}}",
+    "trouble": {
+      "problems": "This flyby cannot be played as it stands: a section has a length, speed or distance outside what is allowed.",
+      "missing": "Something this flyby flies around could not be found. It may have been deleted, or you may not be able to read it.",
+      "noScene": "The 3D view is not ready yet.",
+      "badFile": "That file is not a flyby this version can open.",
+      "failed": "The flyby could not be prepared: {{detail}}"
+    },
+    "look": {
+      "openingTitle": "Look at the start",
+      "own": "As you have it",
+      "background": "Background map",
+      "backgroundOpacityOn": "Set how strongly the background is drawn",
+      "backgroundOpacity": "Strength of the background",
+      "skyOn": "Sky colour",
+      "sky": "Colour of the sky",
+      "wallsOn": "Colour the cave walls",
+      "wallsColour": "Colour of the walls",
+      "wallsStrength": "Strength of the walls' colour",
+      "linesOn": "Survey lines in one colour",
+      "linesColour": "Colour of the survey lines",
+      "surface": "Ground over the caves",
+      "surfaceOverlay": "Drawn over the caves",
+      "surfaceCutaway": "Cut away above the cave",
+      "recipesTitle": "Ready-made changes",
+      "recipe": {
+        "add": "Add",
+        "secondsEach": "Seconds each",
+        "cycle": {
+          "name": "Cycle the backgrounds",
+          "backgrounds": "Backgrounds, in order",
+          "crossFade": "Cross-fade"
+        },
+        "seeThrough": {
+          "name": "See through the ground while circling",
+          "share": "Strength of the background while circling"
+        },
+        "colour": {
+          "name": "Colour the caves",
+          "colour": "Colour of the caves",
+          "from": "From the section"
+        },
+        "oldMap": {
+          "name": "Old map, new map",
+          "raster": "Georeferenced map",
+          "section": "During the section",
+          "none": "No georeferenced map is listed."
+        },
+        "features": {
+          "name": "Features in turn",
+          "filters": "Layers of features, in order",
+          "none": "There is no layer of features to show. Add one under “Features the flyby shows”, or a filter layer in the flat map's layers."
+        }
+      },
+      "changesTitle_one": "{{count}} change",
+      "changesTitle": "{{count}} changes",
+      "noChanges": "No changes yet. Add some with a ready-made set.",
+      "changeAt": "Seconds into the section — {{what}}, {{section}}",
+      "changeSeconds": "How long, in seconds — {{what}}",
+      "removeChange": "Remove the change — {{what}}",
+      "changeClash": "Changes the same thing as another change at the same time.",
+      "changeBad": "Starts outside its section, or names a section the flyby no longer has.",
+      "change": {
+        "background": "Background: {{name}}",
+        "backgroundOpacity": "Background at {{percent}}%",
+        "layerOn": "Show {{name}}",
+        "layerOff": "Hide {{name}}",
+        "layerOpacity": "{{name}} at {{percent}}%",
+        "walls": "Walls in {{colour}}, {{percent}}%",
+        "wallsOwn": "Walls in their own colours",
+        "lines": "Survey lines in {{colour}}",
+        "linesOwn": "Survey lines coloured by depth",
+        "surfaceOverlay": "Ground drawn over the caves",
+        "surfaceCutaway": "Ground cut away above the cave",
+        "sky": "Sky in {{colour}}",
+        "skyNone": "No sky"
+      },
+      "layer": {
+        "centerlines": "the survey lines",
+        "entrances": "the entrances",
+        "surface-features": "the surface features",
+        "walls": "the walls",
+        "scans": "the scans",
+        "photos": "the station photographs",
+        "unknown": "a layer no longer listed"
+      },
+      "textsTitle": "Texts over the picture",
+      "title": "Title",
+      "subtitle": "Subtitle",
+      "captions": "A caption for each section",
+      "captionFor": "Caption — {{section}}",
+      "end": "End card",
+      "endSubtitle": "End card, second line",
+      "fadeIn": "Rise out of black at the start",
+      "fadeOut": "Sink to black at the end",
+      "trouble": "This flyby cannot be played as it stands: a change or a caption names a section it no longer has, starts outside its section, or changes the same thing as another change at the same time.",
+      "listsLoadFailed": "Some of the lists this panel names layers, filters and feature types from could not be read just now, so a name may show as unknown and a choice may be missing."
+    },
+    "edit": {
+      "open": "Edit what {{section}} does",
+      "up": "Move {{section}} up",
+      "down": "Move {{section}} down",
+      "duplicate": "Duplicate {{section}}",
+      "remove": "Remove {{section}}",
+      "addKind": "Kind of section to add",
+      "add": "Add a section",
+      "legend": "What {{section}} does",
+      "fieldFor": "{{field}} — {{section}}",
+      "kind": "Kind",
+      "subject": "About",
+      "turn": "Turn by",
+      "turnDegrees": "Turn by, in degrees",
+      "turnTurns": "Turn by, in turns",
+      "turnUnit": "Count the turn in",
+      "turnsShort": "turns",
+      "heading": "Facing (degrees from north)",
+      "pitch": "Angle below the horizon",
+      "range": "Distance, in sizes of what it is about",
+      "aim": "Looks at",
+      "aimCentre": "Its middle",
+      "aimTop": "Its highest point",
+      "aimBottom": "Its lowest point",
+      "lift": "Raised by, in half-heights",
+      "clearance": "Above the ground",
+      "clearanceAbove": "At least",
+      "clearanceUnderground": "May go underground",
+      "clearanceMetres": "Metres kept above the ground",
+      "asBefore": "As before",
+      "rest": "Come to rest at its end",
+      "problem": {
+        "badSeconds": "Its length is outside what is allowed.",
+        "badSpeed": "Its speed is outside what is allowed.",
+        "badRange": "Its distance is outside what is allowed.",
+        "badPitch": "Its angle is outside what is allowed.",
+        "badPose": "A turn, a lift or a height above the ground is outside what is allowed.",
+        "unknownSubject": "What it is about is not in this flyby.",
+        "duplicateSection": "Two sections have the same name inside the file.",
+        "badEach": "It is to be flown for each cave of what it is about, and that is not a saved filter."
+      },
+      "rangeM": "Distance, in metres"
+    },
+    "handLook": {
+      "layersTitle": "Layers",
+      "layerShown": "{{name}}: shown or hidden",
+      "layerStrength": "{{name}}: strength",
+      "shown": "Shown",
+      "hidden": "Hidden",
+      "ownStrength": "As you have it",
+      "addTitle": "Add a change",
+      "kind": "What changes",
+      "kinds": {
+        "background": "Background map",
+        "backgroundOpacity": "Strength of the background",
+        "layer": "A layer shown or hidden",
+        "layerOpacity": "Strength of a layer",
+        "walls": "Colour of the walls",
+        "lines": "Colour of the survey lines",
+        "surface": "Ground over the caves",
+        "sky": "Sky",
+        "lens": "Lens",
+        "relief": "Relief (vertical exaggeration)"
+      },
+      "layer": "Layer",
+      "layerTo": "Shown or hidden",
+      "strength": "Strength",
+      "linesByDepth": "By depth again",
+      "noSky": "No sky",
+      "section": "During the section",
+      "at": "Seconds into the section it starts",
+      "seconds": "Seconds it takes",
+      "add": "Add the change",
+      "layerNames": {
+        "centerlines": "Survey lines",
+        "entrances": "Entrances",
+        "surface-features": "Surface features",
+        "walls": "Cave walls",
+        "scans": "Scans",
+        "photos": "Station photographs"
+      }
+    },
+    "views": {
+      "hint": "Move the scene to a picture you want, then press Add this view. Add as many as you like; the flyby flies from each to the next.",
+      "add": "Add this view",
+      "noGround": "The middle of the picture shows no ground. Turn the camera towards the ground and try again.",
+      "name": "View {{number}}",
+      "distance": "{{metres}} m from what it looks at",
+      "underground": "under the ground, {{metres}} m from what it looks at",
+      "seconds": "Seconds to fly to {{view}}",
+      "recapture": "Take {{view}} again from the camera as it is now",
+      "up": "Move {{view}} up",
+      "down": "Move {{view}} down",
+      "remove": "Remove {{view}}"
+    },
+    "routes": {
+      "fallback": "The survey is not drawn, or its lines do not join the cave's highest point to its deepest: the camera dives straight down instead of following it.",
+      "noLine": "The file holds no line to follow: the camera flies straight to it instead."
+    },
+    "fromFar": "Start from far away, at the scale of the country",
+    "atCave": {
+      "seconds": "Stop at each cave for",
+      "say": "Write over the picture",
+      "sayNone": "Nothing",
+      "sayName": "The cave's name",
+      "sayNameAndSize": "Its name, length and depth",
+      "length": "{{metres}} m long",
+      "depth": "{{metres}} m deep"
+    },
+    "frame": {
+      "north": "North arrow in the corner",
+      "corner": "A line of text in the corner"
+    },
+    "lens": {
+      "on": "Set the lens",
+      "degrees": "Lens, in degrees across the picture",
+      "change": "Lens to {{degrees}}°"
+    },
+    "byFilter": {
+      "source": "Caves a saved filter selects",
+      "pick": "The saved filter",
+      "none": "You have no saved filter that can be run. Save one in the filter panel of the map first.",
+      "limit": "At most",
+      "hint": "Which caves, and in what order, is asked when the flyby is played, for whoever plays it: the flyby keeps only the filter and the number.",
+      "subject": "the caves of “{{name}}”",
+      "unknown": "a saved filter",
+      "eachOf": "each of {{name}}",
+      "empty": "The saved filter this flyby is about selects no cave you may see, or can no longer be run.",
+      "search": "Add a cave by name",
+      "searchNone": "No cave by that name",
+      "loadFailed": "Your saved filters could not be read just now, so none can be picked."
+    },
+    "features": {
+      "title_one": "Features the flyby shows ({{count}})",
+      "title": "Features the flyby shows ({{count}})",
+      "hint": "Layers of features this flyby draws itself, by kind or by a saved filter: only in the 3D view and only while it plays. Your own list of layers is not changed. Each is shown from the start unless the look at the start hides it.",
+      "add": "Another layer",
+      "by": "Chosen by",
+      "byTypes": "Kind",
+      "byFilter": "Saved filter",
+      "types": "Kinds of feature",
+      "ofTypes": "Features: {{names}}",
+      "colour": "Colour of {{name}}",
+      "symbol": "Symbol of {{name}}",
+      "remove": "Remove the layer {{name}}"
+    },
+    "lightCave": {
+      "name": "Light the cave being visited",
+      "lit": "Colour of the cave being visited",
+      "dim": "Colour of the other caves",
+      "change": "The cave visited in {{colour}}, {{percent}}%",
+      "changeBack": "The cave visited back to the colour of the others"
+    },
+    "walls": {
+      "title": "Walls on this flyby's route",
+      "question_one": "The walls of {{count}} cave on the route are {{size}} to download. Download them for this flyby?",
+      "question": "The walls of {{count}} caves on the route are {{size}} to download. Download them for this flyby?",
+      "download": "Download them",
+      "without": "Play without them"
+    },
+    "relief": {
+      "on": "Set the vertical exaggeration",
+      "factor": "Vertical exaggeration, times true height",
+      "change": "Relief to ×{{factor}}",
+      "changeBack": "Relief back to how the flyby opened",
+      "backOption": "Back to how the flyby opened",
+      "grow": {
+        "name": "Grow the relief",
+        "factor": "The factor the relief rises to",
+        "during": "When it rises and falls back",
+        "everyCircle": "In every circle"
+      },
+      "mark": "Relief ×{{factor}}",
+      "markOn": "Say “Relief ×2” in a corner while the relief is stretched"
+    }
+  },
+  "mapSymbols": {
+    "names": {
+      "shape_cave": "Cave entrance",
+      "shape_circle": "Circle",
+      "shape_dot": "Dot",
+      "shape_ring": "Ring",
+      "shape_square": "Square",
+      "shape_triangle": "Triangle",
+      "shape_diamond": "Diamond",
+      "shape_star": "Star",
+      "shape_cross": "Cross",
+      "sinkhole": "Sinkhole",
+      "pit": "Pit",
+      "pitch": "Pitch",
+      "chimney": "Chimney",
+      "tunnel": "Tunnel",
+      "continuation": "Continuation",
+      "desobstruction": "Dig",
+      "exploration_point": "Exploration point",
+      "calm": "Calm",
+      "dedritus": "Debris",
+      "fracture_line": "Fracture line",
+      "lake": "Lake",
+      "water_flow": "Water flow",
+      "peak": "Peak",
+      "bivouac": "Bivouac",
+      "driller": "Drill",
+      "flag": "Flag",
+      "arrows": "Arrows",
+      "generic_feature": "Generic feature",
+      "osm_cave": "Cave (OpenStreetMap)",
+      "qgis_poi_cave": "Cave (QGIS)",
+      "osm_spring": "Spring (OpenStreetMap)",
+      "osm_waterfall": "Waterfall",
+      "osm_peak": "Peak (OpenStreetMap)",
+      "qgis_poi_peak": "Peak (QGIS)",
+      "osm_saddle": "Saddle",
+      "qgis_poi_mine": "Mine",
+      "qgis_poi_mine_abandoned": "Abandoned mine",
+      "qgis_survey_point": "Survey point",
+      "qgis_view_point": "Viewpoint",
+      "qgis_archaeological": "Archaeological site",
+      "qgis_alpine_hut": "Mountain hut",
+      "qgis_shelter": "Shelter",
+      "qgis_camping": "Camp site",
+      "qgis_parking": "Parking",
+      "qgis_walker": "Trail",
+      "qgis_information": "Information",
+      "qgis_first_aid": "First aid",
+      "qgis_danger": "Danger",
+      "qgis_flag": "Flag (QGIS)",
+      "qgis_camera": "Photo point",
+      "qgis_tree": "Tree",
+      "qgis_question": "Unknown",
+      "fgdc_spring": "Spring",
+      "fgdc_thermal_spring": "Thermal spring",
+      "fgdc_well": "Well",
+      "fgdc_kettle": "Kettle",
+      "fgdc_fossil_locality": "Fossil locality",
+      "fgdc_bedding_horizontal": "Horizontal bedding",
+      "fgdc_bedding_inclined": "Inclined bedding (strike and dip)",
+      "fgdc_bedding_vertical": "Vertical bedding",
+      "fgdc_joint_vertical": "Vertical joint",
+      "fgdc_dome": "Dome",
+      "fgdc_basin": "Basin",
+      "fgdc_prospect": "Prospect",
+      "fgdc_open_pit": "Open pit or quarry",
+      "fgdc_adit": "Adit",
+      "fgdc_mine_portal": "Mine portal",
+      "fgdc_shaft": "Shaft",
+      "fgdc_survey_station": "Survey station",
+      "fgdc_control_point": "Control point"
+    },
+    "groups": {
+      "shapes": "Drawn shapes",
+      "speleo": "Speleological (SilexGIS)",
+      "cartographic": "Cartographic (OpenStreetMap, QGIS)",
+      "geology": "Geological (USGS FGDC standard)"
+    },
+    "tab": "Map symbols",
+    "intro": "Choose the marker cave entrances are drawn with on the map, in the 3D view and on shared map links. A drawn shape takes a colour of its own; a symbol file is drawn in its own colours.",
+    "entrance": "Entrance at its surveyed position",
+    "entranceHint": "Drawn for every entrance the reader may see exactly.",
+    "approximate": "Entrance shown approximately",
+    "approximateHint": "Drawn for a protected entrance shown to a reader without exact view. Choose something distinct from the first: a drawn shape is also given a dashed outline.",
+    "color": "Colour",
+    "layerColour": "Layer colour",
+    "layerColourHint": "Without a colour of its own a shape is drawn in the colour of the layer that uses it.",
+    "reset": "Back to the defaults",
+    "preview": "Preview",
+    "none": "No symbol (plain dot)",
+    "sources": "Symbol sources: the club’s own speleological set; OpenStreetMap Carto (CC0); QGIS (GPL-2.0-or-later); the FGDC Digital Cartographic Standard for Geologic Map Symbolization (USGS)."
+  },
+  "geology": {
+    "lithology": {
+      "limestone": "Limestone",
+      "dolomite": "Dolomite",
+      "marble": "Marble",
+      "gypsum_anhydrite": "Gypsum / anhydrite",
+      "salt": "Rock salt",
+      "conglomerate_calcareous": "Conglomerate (calcareous)",
+      "sandstone": "Sandstone",
+      "shale_marl": "Shale / marl",
+      "granite": "Granite",
+      "crystalline_schist": "Crystalline schist",
+      "volcanic": "Volcanic rock",
+      "unconsolidated": "Unconsolidated deposits",
+      "other": "Other"
+    },
+    "unclassified": "Unclassified",
+    "karstifiable": "karstifiable",
+    "unrecognised": "not in the vocabulary",
+    "legend": {
+      "title": "Geological units"
+    },
+    "area": {
+      "title": "Geology inside the area",
+      "basisPlaceable": "Measured on the map, over the geological units and entrances you may place exactly — so its entrance counts are not the declared totals above.",
+      "noneMapped": "No geological unit you may place is mapped inside this area.",
+      "lithology": "Lithology",
+      "areaKm2": "Outcrop (km²)",
+      "share": "Share of area",
+      "entrances": "Entrances",
+      "entrancesPerKm2": "Entrances per km²",
+      "notMeasured": "not measured",
+      "karstifiableArea": "Karstifiable outcrop (km²)",
+      "karstifiableDensity": "Entrances per km² of karstifiable outcrop",
+      "unmappedArea": "Ground with no unit mapped (km²)",
+      "unmappedEntrances": "Entrances on unmapped ground"
+    }
+  },
+  "structural": {
+    "types": {
+      "bedding": "Bedding",
+      "joint": "Joint",
+      "fault": "Fault plane",
+      "cleavage": "Cleavage",
+      "fracture": "Fracture",
+      "other": "Other"
+    },
+    "fields": {
+      "measurement_type": "Measured plane",
+      "dip_direction": "Dip direction (°)",
+      "dip": "Dip (°)",
+      "note": "Note",
+      "measured_on": "Measured on (YYYY-MM-DD)"
+    },
+    "entry": {
+      "label": "Orientation entered as",
+      "dipDirection": "Dip direction and dip",
+      "strike": "Strike and dip (right-hand rule)",
+      "strikeField": "Strike (°, right-hand rule: the plane dips to the right of it)"
+    },
+    "stereonet": {
+      "title": "Stereonet of structural readings",
+      "areaTitle": "Structural readings in this area",
+      "loading": "Plotting…",
+      "noReadings": "No structural reading you may place was recorded here.",
+      "readingCount": "{{count}} readings plotted",
+      "caveReach": "{{count}} readings within {{radius}} m of the cave",
+      "measurementType": "Readings of",
+      "allTypes": "every kind",
+      "description": "Equal-area net, lower hemisphere: each dot is the pole of one plane (the line at right angles to it, taken pointing down). A plane dipping gently plots near the centre; a steep one near the rim, on the side opposite its dip.",
+      "densityLegend": "Shading: Kamb density, a band every {{interval}} standard deviations. Readings scattered at random would read {{expected}} everywhere; the densest spot here reads {{max}}.",
+      "poleLabel": "{{type}}: dip {{dip}}° towards {{dipDirection}}°",
+      "north": "N"
+    },
+    "strikeComparison": {
+      "title": "Passage against measured strikes (Watson U²)",
+      "statistic": "U²",
+      "pValue": "Probability",
+      "counts": "{{legs}} survey legs against {{readings}} strikes",
+      "tooFew": "The test needs at least {{min}} survey legs and {{min}} readings with a strike; here there are {{legs}} and {{readings}}.",
+      "different": "The passage trends and the strikes are unlikely to come from one distribution (probability {{p}}).",
+      "alike": "Nothing here shows the passage trends and the strikes to differ (probability {{p}}).",
+      "caveat": "Each survey leg and each reading counts once. Legs along one passage are not independent of each other, so a small probability says less than it reads. U² compares the whole spread of trends, not only the mean direction: a straight passage against scattered strikes with the same mean still differs.",
+      "strikeRose": "Strikes of the readings ({{count}})",
+      "noStrikes": "No reading you may place within reach has a strike."
+    }
+  },
+  "cavePotential": {
+    "layers": {
+      "title": "Cave potential",
+      "hint": "Maps of where the evidence a model weighs is most favourable, each over one area on the date shown.",
+      "cell": "{{meters}} m cells"
+    },
+    "statuses": {
+      "queued": "Queued",
+      "computing": "Computing",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "legend": {
+      "low": "Less favourable",
+      "high": "More favourable",
+      "caveat": "A weighing of evidence as its model describes it, not a finding: nothing here has been checked on the ground. For use inside the group only.",
+      "positionsCaveat": "Made from recorded positions, some of which may be protected; you see it because you may place all of them. Do not pass it on.",
+      "relativeCaveat": "Its colours run from the least to the most favourable ground of this one map; they rank the ground and cannot be set beside another map's."
+    },
+    "page": {
+      "title": "Cave potential",
+      "intro": "A model weighs evidence — the shape of the ground, the rock, what has been recorded — into a map of where caves are more or less likely. The maps are a weighing of that evidence and not a finding, and are for use inside the group only.",
+      "models": "Models",
+      "newModel": "New model",
+      "noModels": "No model yet. Write one to say which evidence counts and how much.",
+      "unreadableModel": "This model cannot be read by this version.",
+      "results": "Maps computed",
+      "noResults": "No map yet. Run a model over an area to compute one.",
+      "needsTerrain": "Running a model and reading its maps need the right to read the terrain, which your account does not hold.",
+      "columns": {
+        "name": "Name",
+        "method": "Weights",
+        "layers": "Evidence and weight",
+        "author": "Written by",
+        "audience": "Shared with",
+        "actions": "Actions",
+        "model": "Model",
+        "area": "Area",
+        "cell": "Cell size",
+        "status": "State",
+        "computed": "Date",
+        "requestedBy": "Asked for by"
+      },
+      "you": "You",
+      "someone": "A club member",
+      "positionsTag": "Uses recorded positions",
+      "positionsTagHint": "Weighs a layer made from recorded positions. A map computed from it is shown only to readers who may place every feature it was computed from.",
+      "run": "Run",
+      "editOf": "Change {{name}}",
+      "copyOf": "Copy {{name}}",
+      "deleteOf": "Delete {{name}}",
+      "deleteResultOf": "Delete the map of {{name}}",
+      "modelHidden": "A model you cannot open",
+      "groundReplaced": "Older ground",
+      "groundReplacedHint": "This map was made from an elevation build that is no longer the active one. Run the model again to read the current ground.",
+      "copyName": "Copy of {{name}}",
+      "copied": "Copied. The copy is yours and private.",
+      "saved": "Model saved.",
+      "deleteModelConfirm": "Delete this model? Maps already computed from it are kept.",
+      "deleteResultConfirm": "Delete this map?",
+      "showOnMap": "Show on the map",
+      "unnamedArea": "Unnamed area",
+      "summary": "{{scored}} of {{cells}} cells scored · mean {{mean}}",
+      "learnsTag": "Learns from known entrances",
+      "learnsTagHint": "Its weights are counted from the cave entrances you may place exactly, on every run. A map computed from it is shown only to readers who may place every entrance it was counted from.",
+      "trainingSummary": "learnt from {{training}} entrances, tested on {{heldOut}} · AUC {{success}} / {{prediction}}",
+      "weightsAndCurves": "Weights and curves"
+    },
+    "methods": {
+      "directWeights": "Weights given outright",
+      "pairwiseComparison": "Pairwise comparisons",
+      "frequencyRatio": "Frequency ratio",
+      "weightsOfEvidence": "Weights of evidence"
+    },
+    "audiences": {
+      "private": "Only me",
+      "authenticated": "Everyone signed in",
+      "cavingGroup": "Members of {{name}}",
+      "someGroup": "A caving group"
+    },
+    "evidence": {
+      "elevation": "Elevation",
+      "slope": "Slope",
+      "aspect": "Aspect",
+      "position_index": "Topographic position",
+      "ruggedness": "Ruggedness",
+      "roughness": "Roughness",
+      "geomorphons": "Landform",
+      "fault_distance": "Distance to faults",
+      "lithology": "Rock type",
+      "sinkhole_distance": "Distance to sinkholes",
+      "entrance_density": "Cave-entrance density"
+    },
+    "units": {
+      "m": "m",
+      "deg": "°",
+      "per_km2": "per km²"
+    },
+    "transforms": {
+      "classes": "A table of classes",
+      "fuzzyLinear": "A ramp between two values",
+      "categories": "A score per class"
+    },
+    "editor": {
+      "titleNew": "New cave-potential model",
+      "titleEdit": "Change the model",
+      "name": "Name",
+      "description": "Description",
+      "audience": "Shared with",
+      "method": "How the layers are weighed",
+      "layers": "Evidence layers",
+      "addLayer": "Evidence layer to add",
+      "addLayerConfirm": "Add the layer",
+      "removeLayer": "Remove {{name}}",
+      "scoring": "Scored by",
+      "scoringOf": "How {{name}} is scored",
+      "weight": "Weight",
+      "weightOf": "Weight of {{name}}",
+      "low": "Value that scores 0",
+      "high": "Value that scores 1",
+      "lowOf": "Value of {{name}} that scores 0",
+      "highOf": "Value of {{name}} that scores 1",
+      "rampHint": "Scores rise in a straight line between the two values. Put the larger value first when smaller values are the favourable ones — from 500 m down to 0 m scores ground on a fault as 1.",
+      "classUpTo": "Up to",
+      "classAbove": "Everything above",
+      "classBoundOf": "Upper bound of class {{row}} of {{name}}",
+      "classScoreOf": "Score of class {{row}} of {{name}}",
+      "score": "score",
+      "addClass": "Add a class",
+      "removeClass": "Remove class {{row}}",
+      "categoryScoreOf": "Score of {{category}} in {{name}}",
+      "categoriesHint": "Scores run from 0 to 1. A class left empty scores 0.",
+      "comparisons": "Comparisons",
+      "comparisonsHint": "For each pair, say how much more important the first layer is than the second. The weights follow from the comparisons.",
+      "compare": "{{first}} compared with {{second}}",
+      "judgment": {
+        "equal": "Equally important",
+        "more": "{{n}} × more important",
+        "less": "{{n}} × less important"
+      },
+      "weights": "Weights",
+      "unfinished": "The weights appear here once every layer is filled in.",
+      "consistency": "Consistency ratio {{ratio}}",
+      "consistencyFine": "The comparisons agree with each other well enough (0.1 or less).",
+      "consistencyWarning": "Above 0.1 the comparisons contradict each other more than is customary; consider revising them. The model can still be saved and run.",
+      "weightsFailed": "The weights could not be worked out.",
+      "positionsNotice": "This model weighs a layer made from recorded positions. A map computed from it shows where those features are, so it is shown only to readers who may place every one of them.",
+      "hintFrequencyRatio": "Nothing is weighed by judgment. Each class of each layer is given the share of the known entrances it holds over the share of the ground it covers, and a cell's index is the sum of the ratios of the classes it falls in.",
+      "hintWeightsOfEvidence": "Nothing is weighed by judgment. Each class of each layer is given the weights of evidence the known entrances come to, and a cell's figure is the probability those weights give it.",
+      "heldOutShare": "Entrances kept back for testing (%)",
+      "seed": "Seed of the draw",
+      "trainingHint": "The entrances kept back are never shown to the model; how well its map finds them is its prediction rate. The same area, entrances, share and seed keep back the same ones on every run.",
+      "circularLayer": "A model that learns from known entrances cannot also weigh how dense they are: it would be shown the entrances it is tested on. Remove this layer.",
+      "categoriesCounted": "Every class of this layer is counted; there is nothing to fill in.",
+      "learningNotice": "This model learns from known cave entrances. A run counts only the entrances you may place exactly, and its map, weight tables and curves are shown only to readers who may place every one of them.",
+      "weightsCounted": "The weights of this model are counted from known entrances when it is run, and are shown with each map."
+    },
+    "run": {
+      "title": "Run {{name}}",
+      "area": "Area",
+      "areaPlaceholder": "Type the name of an area",
+      "noArea": "No area of that name",
+      "cell": "Cell size (m)",
+      "cellHint": "Between {{min}} and {{max}} m. A large area needs a larger cell.",
+      "start": "Run",
+      "queued": "Queued. The map appears in the list when it is ready.",
+      "failed": "The run could not be queued.",
+      "positionsNotice": "This model uses recorded positions. The run reads only the features you may place exactly, and the map is shown only to readers who may place all of them."
+    },
+    "failures": {
+      "access_changed": "The account that asked for it may no longer read what the run needs.",
+      "model_invalid": "The model as it was run is not one that can be run.",
+      "area_unusable": "The area can no longer be covered at that cell size.",
+      "evidence_unavailable": "Some of the model's evidence is not available here",
+      "nothing_scored": "No part of the area had a value from every layer.",
+      "failed": "The map could not be computed.",
+      "too_few_entrances": "Too few known entrances in the area, among those the account may place, to keep some back and learn from the rest.",
+      "too_many_entrances": "The area holds more known entrances, among those the account may place, than a run can learn from. Choose a smaller area.",
+      "nothing_to_learn": "The known entrances leave nothing to tell apart in this area."
+    },
+    "training": {
+      "classNumber": "Class {{n}}",
+      "classBelow": "below {{upper}}",
+      "classFrom": "{{lower}} and above",
+      "classBetween": "{{lower}} up to {{upper}}",
+      "successRate": "Success rate",
+      "predictionRate": "Prediction rate",
+      "chance": "Chance",
+      "areaAxis": "Ground, most favourable first (%)",
+      "occurrenceAxis": "Occupied cells found (%)",
+      "counts": "Learnt from {{training}} entrances in {{trainingCells}} cells; {{heldOut}} entrances in {{heldOutCells}} cells kept back.",
+      "split": "{{percent}} % kept back, seed {{seed}} · {{cells}} cells of ground weighed",
+      "protectedEntrances": "Location-protected entrances among those used: {{n}}. You see this because you may place all of them. Do not pass it on.",
+      "scaleFrequencyRatio": "On the map, 0 stands for a summed ratio of {{minimum}} and 1 for {{maximum}}.",
+      "scaleWeightsOfEvidence": "On the map, 0 stands for a probability of {{minimum}} and 1 for {{maximum}}.",
+      "expected": "The probabilities add up to {{expected}} occupied cells against the {{trainingCells}} learnt from. A sum far above means the layers repeat each other and the probabilities are too high; the ranking is still usable.",
+      "aucSuccess": "Success rate: AUC {{auc}} ({{n}} occupied cells learnt from)",
+      "aucPrediction": "Prediction rate: AUC {{auc}} ({{n}} occupied cells kept back)",
+      "curvesLabel": "Success-rate and prediction-rate curves",
+      "curvesHint": "A curve far above the dashed line finds the entrances on little ground; an area under the curve of 0.5 is no better than chance. The prediction rate is the honest one: it is drawn against entrances the model never saw.",
+      "corrected": "adjusted",
+      "correctedHint": "One of the four counts was nought, so a half was added to each before the weights were worked out.",
+      "studentisedHint": "The contrast over its standard deviation. Above about 2 the class tells the entrances apart from the ground with some confidence.",
+      "tablesHint": "A frequency ratio above 1 and a positive W+ mean entrances are commoner in the class than on the ground as a whole. Cells are counted, not entrances: two entrances in one cell count once.",
+      "columns": {
+        "class": "Class",
+        "cells": "Cells",
+        "occurrences": "With an entrance",
+        "frequencyRatio": "Frequency ratio",
+        "positiveWeight": "W+",
+        "negativeWeight": "W−",
+        "contrast": "Contrast",
+        "contrastDeviation": "s(C)",
+        "studentisedContrast": "C / s(C)"
+      }
+    },
+    "unavailable": {
+      "no_terrain": "no elevation built",
+      "no_layer": "not computed for the current elevation",
+      "slope_unit": "slope computed only as a percentage",
+      "too_many_features": "too many recorded features in reach"
     }
   }
 }

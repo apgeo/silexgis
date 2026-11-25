@@ -179,6 +179,17 @@ describe('the hierarchy card', () => {
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
   });
 
+  it('names the refusal over a primary parent the editor cannot see', async () => {
+    setParentsSpy.mockRejectedValue(new ApiError(409, 'feature.parent_primary_hidden'));
+    show('generic');
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit parents/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(/main parent is one you cannot see/)).toBeTruthy();
+    expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
+  });
+
   it('keeps the general failure for every other refusal', async () => {
     setParentsSpy.mockRejectedValue(new ApiError(400, 'feature.parent_cycle'));
     show('generic');
@@ -187,5 +198,27 @@ describe('the hierarchy card', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
+  });
+});
+
+describe('leaving the parent editor with changes', () => {
+  it('closes at once when nothing was changed', async () => {
+    show('generic');
+    fireEvent.click(screen.getByRole('button', { name: /Edit parents/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    // A guard against over-asking: the list was only looked at, so the dialog closes. Its leaving
+    // animation is the witness: a question would have kept it open.
+    await waitFor(() => expect(document.querySelector('.ant-modal')?.className).toContain('leave'));
+    expect(document.querySelectorAll('.ant-modal')).toHaveLength(1);
+    expect(screen.queryByText('Discard your changes?')).toBeNull();
+  });
+
+  it('asks before throwing an added parent away', async () => {
+    show('generic');
+    await openEditorAndSearch();
+    fireEvent.click(screen.getByRole('button', { name: /Zona Bihor/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect((await screen.findAllByText('Discard your changes?')).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('hierarchy-parent-picker-input')).toBeTruthy();
   });
 });

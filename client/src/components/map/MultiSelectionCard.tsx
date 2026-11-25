@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { AimOutlined, ClearOutlined, SaveOutlined, TagsOutlined } from '@ant-design/icons';
-import { App, Descriptions, Empty, Flex, Form, Input, Modal, Tag, Tooltip, Typography } from 'antd';
+import { App, Descriptions, Empty, Flex, Form, Input, Modal, Spin, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import type { FeatureListItem } from '../../api/hooks.ts';
 import { useCreateSavedFilter } from '../../api/hooks/savedFilters.ts';
 import { useSelectionSummary } from '../../api/hooks/workingSet.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { viewFitGeometry } from '../../workspace/viewCamera.ts';
+import { savedFilterSaveFailedKey } from '../filters/useSavedFilterAudienceChoice.ts';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What several selected objects have in common, and what can be done to all of them.
@@ -40,7 +44,12 @@ export default function MultiSelectionCard() {
   const savable = source?.document ?? null;
   const save = async () => {
     if (savable === null) return;
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),
@@ -51,13 +60,16 @@ export default function MultiSelectionCard() {
       setSaving(false);
       form.resetFields();
       message.success(t('listFilters.saved', { name: created.name }));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      if (!isConcurrencyConflict(error)) {
+        message.error(t(savedFilterSaveFailedKey(error)));
+      }
     }
   };
 
   const ids = selectionSet.map((ref) => ref.id);
-  const { data } = useSelectionSummary(ids);
+  // Until the summary has answered there is nothing to count: a failed read is not "0 readable".
+  const { data, isError, error, refetch } = useSelectionSummary(ids);
   const items = data?.items ?? [];
 
   const shared = <K extends keyof FeatureListItem>(key: K): FeatureListItem[K] | undefined => {
@@ -97,8 +109,17 @@ export default function MultiSelectionCard() {
         </Typography.Text>
       )}
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('panel.multiLoadFailed')}
+        testId="multi-selection-load-failed"
+      />
+
       <Descriptions column={1} size="small">
-        <Descriptions.Item label={t('panel.multiReadable')}>{items.length}</Descriptions.Item>
+        <Descriptions.Item label={t('panel.multiReadable')}>{data === undefined ? '-' : items.length}</Descriptions.Item>
         <Descriptions.Item label={t('features.type')}>
           {sharedType ?? <Typography.Text type="secondary">{t('panel.multiMixed')}</Typography.Text>}
         </Descriptions.Item>
@@ -173,11 +194,13 @@ export default function MultiSelectionCard() {
         </Form>
       </Modal>
 
-      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+      <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, display: 'block', marginTop: 12 }}>
         {t('panel.multiHint')}
       </Typography.Text>
 
-      {items.length === 0 ? (
+      {data === undefined ? (
+        isError ? null : <Spin size="small" style={{ display: 'block', marginTop: 8 }} />
+      ) : items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('panel.multiNothingReadable')} />
       ) : (
         <Flex vertical gap={2} style={{ marginTop: 8 }}>

@@ -7,6 +7,7 @@ const {
   DownloadError,
   downloadFile,
   downloadFileForm,
+  downloadFilePostWithHeaders,
   expeditionReportUrl,
   geofileListExportUrl,
   reportPdfRefusal,
@@ -54,7 +55,7 @@ describe('downloadFileForm', () => {
    */
   it('posts the form as it is, leaves its content type to the browser, and saves what comes back', async () => {
     const fetched = vi.fn(
-      async (_url: string, _init: RequestInit) =>
+      async (_request: Request) =>
         new Response(new Blob(['a document']), {
           status: 200,
           headers: { 'content-disposition': 'attachment; filename="trip-report-1a2b3c4d-20261006.docx"' },
@@ -72,11 +73,12 @@ describe('downloadFileForm', () => {
 
     await downloadFileForm('/api/v1/trip-logs/t/report/download?', form);
 
-    const [url, init] = fetched.mock.calls[0];
-    expect(url).toBe('/api/v1/trip-logs/t/report/download?');
-    expect(init.method).toBe('POST');
-    expect(init.body).toBe(form);
-    expect(init.headers).not.toHaveProperty('Content-Type');
+    const [request] = fetched.mock.calls[0];
+    expect(new URL(request.url).pathname).toBe('/api/v1/trip-logs/t/report/download');
+    expect(request.method).toBe('POST');
+    // The browser wrote the type, with the boundary between the parts in it.
+    expect(request.headers.get('Content-Type')).toMatch(/^multipart\/form-data; boundary=/);
+    expect(await request.text()).toContain('name="map"');
     expect(saved).toEqual(['trip-report-1a2b3c4d-20261006.docx']);
   });
 
@@ -100,6 +102,66 @@ describe('downloadFileForm', () => {
   });
 });
 
+describe('downloadFilePostWithHeaders', () => {
+  /**
+   * A route that writes a file can say something about it beside it — how much of what was asked
+   * for went in — and says it in headers, the body being the file. The caller gets them back.
+   */
+  it('posts the body as JSON, saves the file under the server\'s name and answers its headers', async () => {
+    const fetched = vi.fn(
+      async (_request: Request) =>
+        new Response(new Blob(['a zip']), {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="round-the-cave-blender.zip"',
+            'X-SilexGis-Bundle-Walls': '2',
+            'X-SilexGis-Bundle-Not-Drawn': '1',
+          },
+        }),
+    );
+    vi.stubGlobal('fetch', fetched);
+    URL.createObjectURL = vi.fn(() => 'blob:bundle');
+    URL.revokeObjectURL = vi.fn();
+    const saved: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download);
+    });
+
+    const headers = await downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', { frames: [[1, 2]] });
+
+    const [request] = fetched.mock.calls[0];
+    expect(request.method).toBe('POST');
+    expect(request.headers.get('Content-Type')).toBe('application/json');
+    expect(await request.json()).toEqual({ frames: [[1, 2]] });
+    expect(saved).toEqual(['round-the-cave-blender.zip']);
+    expect(headers.get('X-SilexGis-Bundle-Walls')).toBe('2');
+    expect(headers.get('X-SilexGis-Bundle-Not-Drawn')).toBe('1');
+  });
+
+  it('is called off by its signal, and a refusal comes back with the server\'s code', async () => {
+    const calledOff = new AbortController();
+    const fetched = vi.fn(async (request: Request) => {
+      if (request.signal.aborted) {
+        throw new DOMException('The request was called off.', 'AbortError');
+      }
+      return new Response(JSON.stringify({ code: 'flyby_bundle.nothing_to_draw' }), {
+        status: 422,
+        headers: { 'content-type': 'application/problem+json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetched);
+
+    const refused = await downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', {}).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(DownloadError);
+    expect((refused as InstanceType<typeof DownloadError>).code).toBe('flyby_bundle.nothing_to_draw');
+
+    calledOff.abort();
+    await expect(downloadFilePostWithHeaders('/api/v1/flybys/blender-bundle', {}, calledOff.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+  });
+});
+
 describe('the language a download asks in', () => {
   /**
    * A downloaded file can carry words the server writes, picked by this header. A plain fetch
@@ -108,7 +170,7 @@ describe('the language a download asks in', () => {
    */
   it('is the one the reader chose in the application, on a plain download and on one that sends a form', async () => {
     const fetched = vi.fn(
-      async (_url: string, _init: RequestInit) =>
+      async (_request: Request) =>
         new Response(new Blob(['a document']), {
           status: 200,
           headers: { 'content-disposition': 'attachment; filename="trip-report.docx"' },
@@ -129,9 +191,9 @@ describe('the language a download asks in', () => {
       await i18n.changeLanguage(before);
     }
 
-    const asked = fetched.mock.calls.map(([, init]) => [
-      init.method,
-      (init.headers as Record<string, string>)['Accept-Language'],
+    const asked = fetched.mock.calls.map(([request]) => [
+      request.method,
+      request.headers.get('Accept-Language'),
     ]);
     expect(asked).toEqual([
       ['GET', 'ro'],

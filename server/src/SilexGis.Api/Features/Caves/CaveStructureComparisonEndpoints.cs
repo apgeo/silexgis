@@ -93,10 +93,7 @@ public static class CaveStructureComparisonEndpoints
 
         // A leg the file marks as already surveyed on another trip is the same passage measured
         // twice, and leaving it in would weight its trend twice over because two teams walked it.
-        var passageSamples = set.Segments
-            .Where(s => !s.IsDuplicate && s.AzimuthDegrees is not null)
-            .Select(s => new OrientationSample(s.AzimuthDegrees!.Value, s.SlopeLengthM ?? s.PlanLengthM))
-            .ToList();
+        var passageSamples = SurveySegments.DirectionSamples(set.Segments.Where(s => !s.IsDuplicate)).ToList();
 
         var passage = passageSamples.Count > 0
             ? OrientationStatistics.Summarize(passageSamples)
@@ -143,16 +140,71 @@ public static class CaveStructureComparisonEndpoints
                 structure.ByLength.MeanAxisDegrees)
             : null;
 
+        var measuredStrikes = await MeasuredStrikesAsync(
+            db, ctx, request, radius, passageSamples.Select(p => p.AzimuthDegrees).ToList(), ct);
+
         return TypedResults.Ok(new CaveStructureComparisonDto(
             request.Id,
             set.Basis,
             set.Basis == SurveySegmentBasis.SkeletonHeuristic,
             set.SurveyModelId,
-            radius,
+            request.AreaId is null ? radius : null,
+            request.AreaId,
             structureRows.Select(r => r.FeatureId).Distinct().Count(),
+            structureRows.Any(r => r.Truncated),
             passage,
             structure,
-            divergence));
+            divergence,
+            measuredStrikes));
+    }
+
+    /// <summary>
+    /// The passage trends against the strikes of the readings gathered from the same reach as the
+    /// traces — the buffer, or the named area — by Watson's U² on axes.
+    /// </summary>
+    private static async Task<MeasuredStrikeComparisonDto> MeasuredStrikesAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        CaveStructureComparisonRequest request,
+        double radius,
+        IReadOnlyList<double> passageAzimuths,
+        CancellationToken ct)
+    {
+        var readingTypeId = await db.FeatureTypes.AsNoTracking()
+            .Where(t => t.Code == FeatureTypeSeeds.StructuralMeasurement)
+            .Select(t => (long?)t.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var rows = readingTypeId is null
+            ? []
+            : request.AreaId is { } areaId
+                ? await StructuralMeasurementSql.InAreaAsync(
+                    db, ctx, areaId, readingTypeId.Value, request.MeasurementType,
+                    CaveStructureComparisonLimits.MaxReadings, ct)
+                : await StructuralMeasurementSql.NearCaveAsync(
+                    db, ctx, request.Id, readingTypeId.Value, request.MeasurementType, radius,
+                    CaveStructureComparisonLimits.MaxReadings, ct);
+
+        // A plane lying flat has no strike: the dip direction it was stored with is whatever the
+        // compass happened to show, and turning it into a strike would add a trend the rock does
+        // not have.
+        var strikes = rows
+            .Select(r => StructuralMeasurement.ReadOrientation(r.PropertiesJson))
+            .Where(o => o is { DipDegrees: > 0d })
+            .Select(o => StructuralMeasurement.StrikeFromDipDirection(o!.Value.DipDirectionDegrees))
+            .ToList();
+
+        var rose = strikes.Count > 0
+            ? OrientationStatistics.Summarize(strikes.Select(s => new OrientationSample(s, 1d)))
+            : null;
+
+        return new MeasuredStrikeComparisonDto(
+            request.MeasurementType,
+            strikes.Count,
+            passageAzimuths.Count,
+            rose,
+            WatsonU2.CompareAxial(passageAzimuths, strikes),
+            WatsonU2.MinimumSampleSize);
     }
 
     private static async Task<Results<Ok<AreaStructureComparisonDto>, UnauthorizedHttpResult, ProblemHttpResult>>
@@ -237,7 +289,9 @@ public static class CaveStructureComparisonEndpoints
         return TypedResults.Ok(new AreaStructureComparisonDto(
             request.Id,
             dolineSamples.Count,
+            axisRows.Count(r => r.AxisAzimuthDegrees is null),
             structureRows.Select(r => r.FeatureId).Distinct().Count(),
+            structureRows.Any(r => r.Truncated),
             dolines,
             structure,
             divergence));

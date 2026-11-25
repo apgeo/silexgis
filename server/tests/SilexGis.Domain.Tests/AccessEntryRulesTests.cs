@@ -402,6 +402,43 @@ public class AccessEntryRulesTests
     }
 
     [Fact]
+    public void Removing_a_deny_is_bounded_like_granting_what_it_withheld_and_removing_an_allow_is_not()
+    {
+        var anchor = new AccessTargetFacts { ObjectId = Anchor, OwnerUserId = Guid.CreateVersion7() };
+        var deny = Entry(
+            AccessDomain.Features, AccessAction.Read | AccessAction.ViewExactLocation,
+            AccessScopeKind.Subtree, scopeFeatureId: Anchor, effect: AccessEffect.Deny);
+
+        // An editor holding Read but not exact view at the anchor may not lift a deny of both:
+        // lifting it hands back the exact view they could not have granted.
+        var author = new AccessContext(CallerId, false, [],
+        [
+            new AccessEntrySnapshot(
+                1, Guid.CreateVersion7(), null, null, AccessEffect.Allow, AccessDomain.Features,
+                AccessAction.Read, AccessScopeKind.All, null, null, null, null),
+        ]);
+        AccessEntryRules.ExceededByRemoval(author, deny, anchor).ShouldBe(AccessAction.ViewExactLocation);
+
+        // Holding both, or being a Full Administrator, is enough.
+        var holder = new AccessContext(CallerId, false, [],
+        [
+            new AccessEntrySnapshot(
+                1, Guid.CreateVersion7(), null, null, AccessEffect.Allow, AccessDomain.Features,
+                AccessAction.Read | AccessAction.ViewExactLocation, AccessScopeKind.All, null, null, null, null),
+        ]);
+        AccessEntryRules.ExceededByRemoval(holder, deny, anchor).ShouldBe(AccessAction.None);
+        AccessEntryRules.ExceededByRemoval(new AccessContext(CallerId, true, [], []), deny, anchor)
+            .ShouldBe(AccessAction.None);
+
+        // Removing an allow only ever takes access away, so it is not bounded at all.
+        var allow = Entry(
+            AccessDomain.Features, AccessAction.Read | AccessAction.ViewExactLocation,
+            AccessScopeKind.Subtree, scopeFeatureId: Anchor);
+        AccessEntryRules.ExceededByRemoval(new AccessContext(CallerId, false, [], []), allow, anchor)
+            .ShouldBe(AccessAction.None);
+    }
+
+    [Fact]
     public void A_delegated_editor_cannot_insert_rights_they_lack()
     {
         // The classic case: an editor of one permission group proposing

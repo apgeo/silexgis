@@ -116,6 +116,30 @@ elipsoidului*.
 Pentru înălțimi elipsoidale, dă **înălțimea geoidului** — cât de sus stă acolo suprafața locală
 a nivelului mării față de elipsoid.
 
+**Cât de exactă este elevația (opțional).** Deschide **Acuratețea elevației (opțional)** ca să
+spui cât de des eșantionează elevația terenul și cu cât pot greși înălțimile:
+
+| Câmp | Ce conține |
+|---|---|
+| **Pasul pe teren (m)** | Distanța dintre eșantioanele de elevație, în metri |
+| **Eroare verticală (m)** | Cu cât se poate abate o înălțime de la terenul real |
+| **Statistica** | Ce fel de cifră este eroarea: **RMSE** (eroarea medie pătratică), **LE90** sau **LE95** (eroarea pe care nu o depășesc 90 % sau 95 % dintre puncte) |
+| **De unde provin cifrele** | O publicație, un raport de măsurători sau declarația unui furnizor |
+
+Statistica nu este un amănunt. Un RMSE și un LE90 pentru același teren diferă de aproximativ una
+și jumătate de ori, așa că o cifră fără statistica ei nu poate fi comparată cu alta.
+
+- **Doar acoperirea obținută.** Lasă secțiunea goală și generarea notează cifrele publicate ale
+  setului Copernicus de treizeci de metri: pas de treizeci de metri și o acuratețe verticală
+  absolută mai bună de patru metri la LE90, cu manualul din care provin.
+- **Rastere proprii sau un amestec.** Nu se notează nimic până nu o spui tu. O generare care
+  amestecă surse sau o prelungește pe alta nu are o cifră proprie, iar formularul preferă să arate
+  **Nenotată** decât un număr pe care datele nu îl respectă.
+
+Înregistrarea poate fi corectată oricând, indiferent în ce stare este generarea: apasă
+**Acuratețe** pe rândul generării din lista Generări. Salvarea cu toate câmpurile goale o șterge.
+Nu schimbă niciodată dalele, deci nimic nu se generează din nou.
+
 ### 6. Pornirea
 
 **Pornește generarea.** Se pune la coadă.
@@ -128,6 +152,12 @@ Lângă buton, o notă spune ce hotărăște cât de fin poate ieși rezultatul:
 > rămas fără memorie se oprește și spune asta, iar setarea poate fi apoi mărită."*
 
 ---
+
+> **La ce folosesc cifrele.** Coloana **Acuratețea elevației** din lista Generări arată, pentru
+> fiecare generare, pasul și eroarea ei cu statistica numită (*pas de 30 m, 4 m LE90*); ține
+> cursorul deasupra ei ca să vezi de unde provin cifrele. Aceleași cifre însoțesc orice răspuns
+> care citește terenul — o înălțime cerută într-un loc și fiecare imagine derivată — așa că un
+> număr nu este dat niciodată fără calitatea terenului de sub el.
 
 ## Adăugarea unui raster la o generare pe care o ai deja
 
@@ -273,10 +303,16 @@ alege-o pe aceea.
 ## Imagini derivate ale terenului
 
 Altitudinile unei generări încheiate pot fi transformate și în **imagini ale terenului** — relief
-umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate, un relief colorat sau curbe
-de nivel. Sunt calculate o singură dată de instalare, pe același lucrător care face generările, iar
+umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate, un relief colorat, curbe de
+nivel sau formele de relief. Sunt calculate o singură dată de instalare, pe același lucrător care face generările, iar
 apoi oricine are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale
 terenului**: activează una și se desenează sub peșteri.
+
+Tot din ele își citește dovezile de relief un
+[model de potențial speologic](../features/cave-potential.md#din-forma-terenului): panta (de care
+are nevoie **în grade**), orientarea, poziția topografică, asperitatea, rugozitatea și formele de
+relief. Un model nu calculează singur niciuna, așa că o rulare peste teren a cărui imagine lipsește
+sau este depășită eșuează și numește imaginea.
 
 ### Cum se cere una
 
@@ -316,9 +352,14 @@ rampei), iar una desenată în grade, între 0 și 90.
   apropiată dincolo de circa 1:4.000; mai aproape de atât își arată treptele. O imagine calculată
   înainte de 2026-10-21 a fost desenată de două ori mai fin — cere-o din nou pentru cea mai
   netedă.
-- Orice fel în afară de curbele de nivel: dacă celulele de la margine se calculează din vecinii pe
-  care îi au. Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală
-  prin imagine.
+- **Forme de relief**: **distanța de căutare** în metri (500 dacă nu spui altfel, cel mult
+  10.000), distanța peste care se trece, **Ignoră până la** (de obicei zero), și **unghiul de planeitate** (1° dacă nu spui
+  altfel, cel mult 45°). Ce fac ele, mai jos, la *Formele de relief*. Se oferă doar unde instalarea
+  rulează programul de analiză a terenului; în rest apare ca *(indisponibil aici)*, iar rândul de
+  sub câmp spune de ce.
+- Orice fel în afară de curbele de nivel și formele de relief: dacă celulele de la margine se
+  calculează din vecinii pe care îi au. Oprit, fiecare rastru al generării se întâlnește cu vecinul
+  lui printr-o linie goală prin imagine.
 
 **Cere imaginea** o pune la coadă. Cererea din nou a unei imagini pe care instalarea o are deja —
 aceeași generare, același fel, aceleași setări — răspunde cu cea existentă în loc să o calculeze de
@@ -333,6 +374,48 @@ acoperă cu adevărat un grad la latitudinea acelui rând, iar un versant orient
 fel de abrupt ca același versant orientat spre nord. Nimic nu este reproiectat sau reeșantionat pe
 drum, deci imaginea stă exact peste altitudinile din care a fost desenată, iar relieful umbrit
 este luminat folosind aceleași două distanțe.
+
+### Formele de relief
+
+O imagine a formelor de relief numește **forma terenului** în fiecare celulă — una din zece clase:
+*plan*, *vârf*, *creastă*, *umăr*, *pinten*, *versant*, *scobitură*, *bază de versant*, *vale* și
+*depresiune* (metoda este cea a *geomorfonilor* lui Jasiewicz și Stepinski). Fiecare celulă privește
+de-a lungul celor opt direcții ale busolei, până la distanța de căutare, și notează pe fiecare dacă
+terenul urcă peste unghiul de planeitate, coboară sub el sau rămâne plan; tiparul celor opt
+răspunsuri numește forma. Fundul unei doline iese ca depresiune sau vale, buza ei ca umăr sau
+creastă, o vale seacă ca vale între doi versanți.
+
+- **Distanța de căutare stabilește scara.** Același versant este pantă la 100 m și umăr la 1 km.
+  Valoarea obișnuită de 500 m vede întreagă o dolină sau o vale seacă la pixelul de treizeci de
+  metri al modelelor globale de altitudine; cere una mai scurtă peste altitudini fine, din
+  ridicări, și una mai lungă ca să citești peisajul. O distanță mai lungă se calculează mai greu.
+  Mai multe imagini, la distanțe diferite, pot sta una lângă alta.
+- **Ignoră până la** trece peste denivelările mai apropiate de atât — un bolovan sau o celulă cu
+  zgomot lângă cea clasificată. De obicei zero.
+- **Unghiul de planeitate** decide ce se socotește plan. Mărește-l peste un model de altitudine cu
+  zgomot, în care terenul lin iese ca un roi de mici vârfuri și depresiuni.
+
+Imaginea se desenează pe hartă în zece culori — formele ridicate în culori calde, cele adâncite în
+culori reci, terenul plan și versanții simpli în culori palide — iar **când o activezi în lista de
+straturi, legenda ei apare** sub nume. Este o imagine de clase, nu de înălțimi: nimic nu este
+interpolat, iar o celulă stă exact unde stă celula de altitudine din care a fost clasificată.
+
+Cum se calculează și ce decurge de aici:
+
+- **De un program separat.** Formele de relief sunt calculate de **WhiteboxTools**, pe care
+  instalarea îl rulează doar dacă a ales asta — într-un container închis, al lui, sau direct lângă
+  server. Primește un rastru de altitudini și trei numere, și nimic despre vreo peșteră. Unde nu
+  este configurat, felul apare ca *(indisponibil aici)* și nu poate fi cerut; un administrator îl
+  configurează după ghidul de instalare. O imagine a formelor de relief calculată cât timp programul
+  rula se păstrează și se desenează în continuare după ce este oprit.
+- **Pe o grilă în metri.** Pentru calcul, fiecare rastru de altitudine este transformat într-o grilă
+  ale cărei celule sunt la fel de late ca de înalte pe teren, astfel încât o linie de vizare măsoară
+  același unghi în orice direcție; clasele sunt apoi puse înapoi exact pe grila din care au venit
+  altitudinile.
+- **Rastru cu rastru**, ca orice altă imagine a unei generări. O celulă mai aproape de marginea
+  rastrului ei decât distanța de căutare vede doar o parte din liniile ei de vizare, așa că de-a
+  lungul îmbinării dintre două rastere o bandă cam cât distanța de căutare poate fi clasificată
+  diferit de o parte și de alta.
 
 ### Registrul
 
@@ -358,10 +441,10 @@ aceleași setări — ceea ce o calculează de la capăt, în locul celei vechi.
 Are nevoie de dreptul de **ștergere** asupra reliefului. Fișierele stau sub generarea însăși, deci
 **ștergerea unei generări îi șterge și imaginile**.
 
-**Unele lucruri nu pot fi calculate aici și nu sunt oferite sub un nume împrumutat.** Geomorfonii,
-curbura și direcția scurgerii, acumularea scurgerii și indicele de umiditate nu sunt produse de
-biblioteca de altitudini folosită de această instalare, deci lipsesc în loc să fie aproximate prin
-ceva care le seamănă.
+**Unele lucruri nu pot fi calculate aici și nu sunt oferite sub un nume împrumutat.** Curbura și
+direcția scurgerii, acumularea scurgerii și indicele de umiditate nu sunt produse nici de biblioteca
+de altitudini folosită de această instalare, nici, deocamdată, prin programul de analiză a
+terenului, deci lipsesc în loc să fie aproximate prin ceva care le seamănă.
 
 ---
 
@@ -379,6 +462,9 @@ ceva care le seamănă.
 | *O extensie se construiește la adâncimea generării pe care o extinde* | Cere nivelul bazei sau pornește o generare nouă |
 | *O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele* | Așteaptă ca acea generare să se oprească, indiferent cum, înainte s-o ștergi pe aceasta |
 | *Generarea s-a oprit deja, așa că nu mai este nimic de anulat* | S-a încheiat sau a eșuat singură, mai înainte |
+| *Imaginea este calculată de programul de analiză a terenului (WhiteboxTools), pe care această instalare nu îl rulează.* | Formele de relief au nevoie de acel program; ghidul de instalare spune cum se configurează |
+| *The landform classes of … took longer than this installation allows a run* (mesajul lucrătorului, în engleză) | Cere-o din nou cu o distanță de căutare mai scurtă, sau cere administratorului să îngăduie mai mult timp unei rulări |
+| *The analysis service did not answer; the landform classes will be tried again* (mesajul lucrătorului, în engleză) | Containerul de analiză este oprit sau repornește. Coada mai încearcă de două ori singură; după aceea imaginea este *Eșuată* și poate fi cerută din nou |
 | *Doar o generare oprită poate fi rulată din nou* | Este încă la coadă sau în curs, ori s-a încheiat |
 | *Generarea a fost anulată în timp ce i se făceau dalele, iar unealta care face dalele nu a confirmat încă oprirea* | Pornește serviciul de dale; răspunde imediat, iar apoi generarea poate fi rulată din nou |
 

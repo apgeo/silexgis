@@ -16,9 +16,9 @@ namespace SilexGis.Api.Tests;
 /// merged recent-activity feed. Caves and data-driven features are counted separately (the two
 /// headline numbers must be readable side by side), while every feature kind — entrances
 /// included — is routable activity.
-/// The PostGIS container is shared by the whole collection, so every count assertion here is
-/// a *delta* around a freshly-read baseline — absolute totals would race other test classes'
-/// seeded rows.
+/// The tests of this class share its database, so every count assertion here is a *delta*
+/// around a freshly-read baseline — absolute totals would depend on which other tests of the
+/// class ran first.
 /// </summary>
 public sealed class DashboardTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {

@@ -180,6 +180,7 @@ test('a bookmark reopens where it was left on a starved processor too', async ({
 test('the scene opens beside the flat map, sharing the one scene this window has', async ({
   page,
 }) => {
+  await watchScene3dDrawing(page);
   await login(page);
   await page.goto('/map');
 
@@ -192,8 +193,19 @@ test('the scene opens beside the flat map, sharing the one scene this window has
   // Exactly one drawing surface in the window, whatever is showing it.
   await expect(page.getByTestId('scene3d-surface')).toHaveCount(1);
   // The map keeps the address bar while the scene is only a panel beside it: one window has one
-  // hash, and two writers would overwrite each other on every camera move.
-  await expect.poll(() => page.url(), { timeout: 30_000 }).not.toMatch(/#3d\//);
+  // hash, and two writers would overwrite each other on every camera move. Asked only after the
+  // scene has loaded and its camera has been moved and come to rest — which is when a writer would
+  // write — or the address is read before anything could have been put in it.
+  await waitForScene3dReady(page);
+  const box = (await scene3dSurface(page).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  for (let step = 1; step <= 10; step += 1) {
+    await page.mouse.move(box.x + box.width / 2 - step * 10, box.y + box.height / 2);
+  }
+  await page.mouse.up();
+  await waitForScene3dQuiet(page);
+  expect(page.url()).not.toMatch(/#3d\//);
 });
 
 test('a standing-still scene draws nothing at all', async ({ page }) => {
@@ -245,11 +257,12 @@ test('picking an entrance in the scene names it over the scene, and lets go of i
   await login(page);
 
   // The camera is put directly over a real entrance, looking straight down, so the entrance sits
-  // in the middle of the view by construction and the click needs no projection to find it. "Frame
-  // the cave" cannot be used for this against seeded data: the demo caves have entrances but no
-  // surveys, so there is no drawn geometry to frame and the control is correctly disabled — and
-  // the middle of the opening view is empty Carpathian hillside.
-  const entrance = await entranceToPick(page);
+  // in the middle of the view by construction and the click needs no projection to find it. The
+  // entrance is one with no survey drawn near it: the seeded demo survey's centerline starts at the
+  // demo cave's main entrance, and other specs of a whole run add surveys and walls of their own, so
+  // over a surveyed cave the click can pick the line instead and the test would pass or fail on
+  // which entrance a run happened to choose.
+  const entrance = await entranceToPick(page, { nothingDrawnOver: true });
   await openScene3dAt(page, entrance.lat, entrance.lon);
 
   // Nothing is picked until something is, so the scene starts with no callout over it.

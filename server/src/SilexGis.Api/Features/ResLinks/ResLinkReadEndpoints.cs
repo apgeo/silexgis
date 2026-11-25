@@ -92,7 +92,7 @@ public static partial class ResLinkEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var (rows, total) = await IncidentLinksAsync(
             db, targets, associations, protection, photoPositions, placePoints, placeStations, access, ctx,
-            parsedType, id, relationTypeId, (p - 1) * size, size, ct);
+            parsedType, id, relationTypeId, Paging.Offset(p, size), size, ct);
         return TypedResults.Ok(new PagedResult<ResLinkDto>(rows, p, size, total));
     }
 

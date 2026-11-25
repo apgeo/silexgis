@@ -20,7 +20,7 @@ test('the page behind a public link opens without signing in and draws the envel
   consoleErrors,
 }) => {
   consoleErrors.allow(
-    /Failed to load resource: .*404/,
+    /\/api\/v1\/public\/survey-uploads\/[^/?:\s]+(\/[a-z-]+)?(\?|:|$)/,
     'a token that names no link is answered 404, which the page turns into its own sentence',
   );
   const visitor = await ownContext(browser);
@@ -142,7 +142,7 @@ test.describe('the public result page, against the real route', () => {
     consoleErrors,
   }) => {
     consoleErrors.allow(
-      /Failed to load resource: .*404/,
+      /\/api\/v1\/public\/survey-uploads\/[^/?:\s]+(\/[a-z-]+)?(\?|:|$)/,
       'a token that names no link is answered 404, which the page turns into its own sentence',
     );
     await login(page);
@@ -170,7 +170,7 @@ test.describe('the public result page, against the real route', () => {
     consoleErrors,
   }) => {
     consoleErrors.allow(
-      /Failed to load resource: .*401/,
+      /\/api\/v1\/public\/survey-uploads\/[^/?:\s]+(\/[a-z-]+)?(\?|:|$)/,
       'a link made for the organization is answered 401 to a visitor who has not signed in, which the page turns into a sign-in prompt',
     );
     await login(page);

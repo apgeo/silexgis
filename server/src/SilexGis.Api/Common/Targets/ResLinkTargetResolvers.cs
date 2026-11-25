@@ -390,13 +390,9 @@ public sealed class DocumentTargetResolver(
     public AttachedEntityType? TargetType => AttachedEntityType.Document;
 
     /// <remarks>
-    /// The one world that still decides row by row. Writing a document is decided against
-    /// the file it currently serves as well as the document row, and that walk reaches
-    /// through the file's own rules — it has no set-shaped form today, so the two facts it
-    /// needs are fetched for the whole set (documents in one query, their served files in
-    /// one more) and only the decision repeats. Documents appear here as the main member of
-    /// a link, which is rare beside features and trips; if a listing ever carries many, the
-    /// walk is what to make set-shaped, not this method.
+    /// The documents' own facts are read for the whole set; only the reach through the served
+    /// file's rules, which has no set-shaped form, is still asked one document at a time, and
+    /// only for the documents whose own facts left the question open.
     /// </remarks>
     public async Task<HashSet<Guid>> WritableIdsAsync(
         AccessContext ctx, IReadOnlyCollection<Guid> ids, CancellationToken ct)
@@ -413,17 +409,7 @@ public sealed class DocumentTargetResolver(
         }
 
         var currentFiles = await CurrentFilesAsync(documents.Select(d => d.Id).ToList(), ct);
-        var writable = new HashSet<Guid>();
-        foreach (var document in documents)
-        {
-            if (await DocumentAccessRules.CanWriteAsync(
-                db, access, ctx, document, currentFiles.GetValueOrDefault(document.Id), ct))
-            {
-                writable.Add(document.Id);
-            }
-        }
-
-        return writable;
+        return await DocumentAccessRules.WritableAsync(db, access, ctx, documents, currentFiles, ct);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ResLinkTargetDisplayDto>> ResolveAsync(
@@ -439,11 +425,13 @@ public sealed class DocumentTargetResolver(
         var typeNames = await TypeNamesAsync(documents.Select(d => d.DocumentTypeId), ct);
 
         var currentFiles = await CurrentFilesAsync(documents.Select(d => d.Id).ToList(), ct);
+        // Decided for the whole set at once: one link listing can show many documents.
+        var readable = await DocumentAccessRules.ReadableAsync(db, access, ctx, documents, ct);
 
         foreach (var document in documents)
         {
             var content = currentFiles.GetValueOrDefault(document.Id);
-            if (await DocumentAccessRules.CanReadAsync(db, access, ctx, document, content, ct))
+            if (readable.Contains(document.Id))
             {
                 result[document.Id] = new ResLinkTargetDisplayDto(
                     document.Title,
@@ -650,9 +638,10 @@ public sealed class CaverTargetResolver(
             return [];
         }
 
-        var pattern = $"%{query}%";
+        // The typed text is matched literally: a % or _ in it is not a wildcard.
+        var pattern = LikePatterns.Containing(query);
         var ids = await db.Cavers.AsNoTracking()
-            .Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.FullName), EF.Functions.Unaccent(pattern)))
+            .Where(c => EF.Functions.ILike(EF.Functions.Unaccent(c.FullName), EF.Functions.Unaccent(pattern), LikePatterns.Escape))
             .OrderBy(c => c.FullName)
             .ThenBy(c => c.Id)
             .Take(limit)
@@ -718,9 +707,10 @@ public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTa
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
         AccessContext ctx, string query, int limit, CancellationToken ct)
     {
-        var pattern = $"%{query}%";
+        // The typed text is matched literally: a % or _ in it is not a wildcard.
+        var pattern = LikePatterns.Containing(query);
         var rows = await db.CavingGroups.AsNoTracking()
-            .Where(g => EF.Functions.ILike(EF.Functions.Unaccent(g.Name), EF.Functions.Unaccent(pattern)))
+            .Where(g => EF.Functions.ILike(EF.Functions.Unaccent(g.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape))
             .OrderBy(g => g.Name)
             .ThenBy(g => g.Id)
             .Take(limit)
@@ -1027,9 +1017,10 @@ public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessServic
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
         AccessContext ctx, string query, int limit, CancellationToken ct)
     {
-        var pattern = $"%{query}%";
+        // The typed text is matched literally: a % or _ in it is not a wildcard.
+        var pattern = LikePatterns.Containing(query);
         var rows = await Readable(ctx)
-            .Where(e => EF.Functions.ILike(EF.Functions.Unaccent(e.Name), EF.Functions.Unaccent(pattern)))
+            .Where(e => EF.Functions.ILike(EF.Functions.Unaccent(e.Name), EF.Functions.Unaccent(pattern), LikePatterns.Escape))
             .OrderByDescending(e => e.StartDate)
             .ThenBy(e => e.Id)
             .Take(limit)

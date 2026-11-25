@@ -75,6 +75,40 @@ test('a console error is recorded, and declaring it takes it back out', async ({
   expect(consoleErrors.captured()).toHaveLength(0);
 });
 
+// A failed request is reported by the browser as a bare "status of 404" whose route is only in the
+// line's location. Declaring it by route has to excuse that one request and leave another 404 in
+// the same test standing — otherwise a declaration by route would quietly excuse every refusal.
+test('a console error is declared by the address it was reported from, and only that one', async ({
+  page,
+  consoleErrors,
+}) => {
+  const origin = 'http://console-guard.invalid';
+  await page.route(`${origin}/**`, (route) =>
+    route.request().url().endsWith('/')
+      ? route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stand-in</title>' })
+      : route.fulfill({ status: 404, body: '' }),
+  );
+  await page.goto(`${origin}/`);
+  await page.evaluate(async () => {
+    await fetch('/declared-missing');
+    await fetch('/other-missing');
+  });
+
+  await expect
+    .poll(() => consoleErrors.captured().filter((error) => /status of 404/.test(error.message)).length, {
+      message: 'the browser reported no failed request to the console',
+    })
+    .toBe(2);
+
+  consoleErrors.allow(/\/declared-missing/, 'requested by this test to prove a declaration by address');
+  const left = consoleErrors.captured();
+  expect(left).toHaveLength(1);
+  expect(left[0].message).toMatch(/status of 404/);
+
+  consoleErrors.allow(/\/other-missing/, 'requested by this test to prove a declaration by address');
+  expect(consoleErrors.captured()).toHaveLength(0);
+});
+
 /** A request as the guard reads it, carrying an access token that names `email`. */
 function preferenceRequest(
   email: string,
@@ -115,4 +149,69 @@ test('a write to the shared administrator\'s preferences is told apart from ever
   expect(write(selector({ ...starting, sort: 'name' }))).toBe(true);
   expect(write(selector({ ...starting, activeScopeIds: ['caves'] }))).toBe(true);
   expect(write({ ...selector(starting), pinnedTypeIds: ['a-type'] })).toBe(true);
+});
+
+// The other half of the proof: a guard that records an error but never fails the test for it is
+// as silent as one that records nothing. The test leaves an error undeclared on purpose, so in the
+// enforcing mode its own ending must throw — `test.fail` turns that expected failure into a pass,
+// and a guard whose throw was removed, skipped by an early return or demoted to a log line turns
+// this test red as an unexpected pass. In the reporting mode the same ending must not throw, and
+// the test then passes as an ordinary one.
+test('an error nobody declared fails the test when the gate enforces, and only then', async ({
+  page,
+  consoleErrors,
+}) => {
+  test.fail(
+    process.env.SILEXGIS_CONSOLE_GATE !== 'report',
+    'left undeclared on purpose: the enforcing gate has to fail this test',
+  );
+  const message = 'deliberate undeclared console error, proving the gate fails a test for it';
+  await page.goto('about:blank');
+  await page.evaluate((text) => console.error(text), message);
+
+  // Recorded before the test ends, so that what fails it is the gate and not a race with it.
+  await expect
+    .poll(() => consoleErrors.captured().filter((error) => error.message.includes(message)).length)
+    .toBe(1);
+});
+
+// The refusal of a write to the shared administrator's preferences, proven through the ending that
+// makes it rather than through the predicate above alone: a refusal moved behind the ending's early
+// return, or dropped from it, would leave every spec green while no test was ever refused. The page
+// is a stand-in served from a name that resolves nowhere, so the write reaches no server and changes
+// nobody's preferences; the console stays clean, so the only thing that can fail this test is the
+// refusal — in either mode of the gate, which does not govern it.
+test('a write to the shared administrator\'s preferences fails the test that made it', async ({ page }) => {
+  test.fail(true, 'writes the shared administrator\'s preferences on purpose: the guard has to fail it');
+  const origin = 'http://console-guard.invalid';
+  await page.route(`${origin}/**`, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stand-in</title>' })
+      : route.fulfill({ status: 204 }),
+  );
+  await page.goto(`${origin}/`);
+  const request = preferenceRequest(adminEmail);
+  const status = await page.evaluate(
+    async ({ authorization, body }) =>
+      (
+        await fetch('/api/v1/me/preferences', {
+          method: 'PATCH',
+          headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+          body,
+        })
+      ).status,
+    { authorization: request.headers().authorization, body: request.postData() },
+  );
+  expect(status).toBe(204);
+});
+
+// The global list, proven through the ending too: an error it names is passed over without any
+// declaration, so this test passes in the enforcing mode, and an ending that stopped reading the
+// list would fail it. The line is seen to reach the guard's own listener before the test ends, so a
+// pass cannot come from the error simply arriving too late to be looked at.
+test('an error the global list names passes without being declared', async ({ page }) => {
+  await page.goto('about:blank');
+  const logged = page.waitForEvent('console', (line) => line.text().includes('ERR_NETWORK_CHANGED'));
+  await page.evaluate(() => console.error('net::ERR_NETWORK_CHANGED (raised by this test)'));
+  await logged;
 });

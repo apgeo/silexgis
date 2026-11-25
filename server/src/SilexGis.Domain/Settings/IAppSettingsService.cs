@@ -42,6 +42,19 @@ public interface IAppSettingsService
 
     ValueTask<SurveyUploadSettings> GetSurveyUploadsAsync(CancellationToken ct = default);
 
+    ValueTask<TestDataSettings> GetTestDataAsync(CancellationToken ct = default);
+
+    /// <summary>The entrance markers, every malformed reference already replaced by its default.</summary>
+    ValueTask<MapSymbolSettings> GetMapSymbolsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Drops the cached copy of a section, so that the next read in this process comes from the
+    /// database. A save made inside a transaction calls it again once the transaction has
+    /// committed: a read between the save and the commit would otherwise put the old value back
+    /// in the cache for its whole lifetime.
+    /// </summary>
+    void Forget(string section);
+
     /// <summary>Replaces a section and drops the cached copy across the process.</summary>
     Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class;

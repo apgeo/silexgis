@@ -10,11 +10,14 @@ import { api, lastReadETag } from '../client.ts';
 import type { components } from '../schema';
 import {
   invalidateAfterDelete,
+  invalidateDatedRows,
   unwrap,
+  unwrapVersioned,
   unwrapVoid,
   useInvalidateAttachments,
   useInvalidateHistory,
 } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
 import type {
   ActivityState,
   AttachedEntityType,
@@ -26,6 +29,7 @@ import type {
   TripLogListParams,
 } from './types.ts';
 import { queryKeys } from './queryKeys.ts';
+import { caveQuery } from './caves.ts';
 
 export type TripLogFeatureCollection = components['schemas']['TripLogFeatureCollection'];
 
@@ -180,17 +184,39 @@ export function useMyTripLogs(params: MyTripLogListParams) {
 function tripLogQuery(id: string) {
   return queryOptions({
     queryKey: queryKeys.tripLog(id),
-    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
+    structuralSharing: sharesKeepingVersion,
   });
 }
 
+/**
+ * How often a trip whose callout is live is read again while it is on screen.
+ *
+ * The server moves an armed callout to overdue when its alarm passes and records each time its
+ * watcher looks; a page read once and left open — a coordinator's desk while the party is
+ * underground — would otherwise go on saying "armed" after the alarm had gone off, until somebody
+ * clicked away and back. A minute is well inside the gap between two of the watcher's passes,
+ * and a trip with no live callout is not read again at all.
+ */
+const LIVE_CALLOUT_READ_MS = 60_000;
+
 export function useTripLog(id: string | undefined) {
-  return useQuery({ ...tripLogQuery(id ?? ''), enabled: !!id });
+  return useQuery({
+    ...tripLogQuery(id ?? ''),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const state = query.state.data?.calloutState;
+      return state === 'armed' || state === 'overdue' ? LIVE_CALLOUT_READ_MS : false;
+    },
+  });
 }
 
 function useInvalidateTripLogs() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'trip-logs');
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
 }
 
 /**
@@ -201,14 +227,21 @@ function useInvalidateTripLogs() {
  * trip's path, exactly as it files the one a read carries. So the cache takes the answer as the
  * trip's current reading, every surface holding the trip redraws from it at once, and the next
  * write carries the right version without a read in between. Everything else held under the trip
- * prefix — the lists, the calendar readings, the tracking log — is marked stale and read again in
- * the background; the mutation does not wait for that, because nothing a second save needs
+ * prefix — the lists, the tracking log — is marked stale and read again in the background, and so
+ * are the calendar and the trip map, which are held outside it; the mutation does not wait for that, because nothing a second save needs
  * depends on it.
+ *
+ * A read of the trip already on its way is called off first. It was sent before the write
+ * answered, so it holds the trip from before it, and landing after the answer it would put the
+ * old trip back on screen. Calling it off is awaited: the query restores what it held when that
+ * read began, and only then is the answer put in its place.
  */
 export function useTripLogWritten() {
   const queryClient = useQueryClient();
-  return (trip: TripLogInfo) => {
+  return async (trip: TripLogInfo) => {
+    await queryClient.cancelQueries({ queryKey: queryKeys.tripLog(trip.id), exact: true });
     queryClient.setQueryData(queryKeys.tripLog(trip.id), trip);
+    void invalidateDatedRows(queryClient, 'trip-logs');
     void queryClient.invalidateQueries({
       queryKey: ['trip-logs'],
       // The trip itself was just taken from the answer; asking for it again would read back
@@ -231,7 +264,10 @@ export function useTripLogWritten() {
  */
 function useReadTripLogsBack() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  return () => {
+    void invalidateDatedRows(queryClient, 'trip-logs');
+    return queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
 }
 
 export function useCreateTripLog() {
@@ -281,8 +317,10 @@ export function useUpdateTripLog() {
     // form: it names the version those values came from, so a change somebody else saved in
     // between is refused instead of overwritten. Left out, the save carries the newest version
     // read, which is right for a write made from what the page shows now.
+    // The answer is the trip as saved, and it becomes the held copy with the version it was
+    // answered at, so a form opened on the trip at once saves against that version.
     mutationFn: ({ id, body, ifMatch }: { id: string; body: TripLogWrite; ifMatch?: string }) =>
-      unwrap(
+      unwrapVersioned(
         api.PUT('/api/v1/trip-logs/{id}', {
           params: { path: { id } },
           headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
@@ -291,7 +329,7 @@ export function useUpdateTripLog() {
       ),
     onSuccess: (trip) => {
       invalidateHistory();
-      written(trip);
+      return written(trip);
     },
   });
 }
@@ -300,7 +338,10 @@ export function useDeleteTripLog() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
-    onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['trip-logs'], id),
+    onSuccess: (_, id) => {
+      void invalidateDatedRows(queryClient, 'trip-logs');
+      void invalidateAfterDelete(queryClient, ['trip-logs'], id);
+    },
   });
 }
 
@@ -360,7 +401,7 @@ export function useRestoreTripLog() {
     onSuccess: (trip) => {
       invalidateHistory();
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
-      written(trip);
+      return written(trip);
     },
     onError: () => void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'deleted'] }),
   });
@@ -477,8 +518,7 @@ export function useTripReportMapSources() {
       const answers = await Promise.allSettled(
         ids.map((id) =>
           queryClient.ensureQueryData({
-            queryKey: queryKeys.cave(id),
-            queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+            ...caveQuery(id),
             retry: false,
           }),
         ),
@@ -531,7 +571,7 @@ export function useMoveTripLog() {
     },
     onSuccess: (trip) => {
       invalidateHistory();
-      written(trip);
+      return written(trip);
     },
   });
 }
@@ -550,12 +590,35 @@ export type TripCalloutArrangement = components['schemas']['TripCalloutRequest']
  *
  * The answer is the trip as it now stands, so the page redraws from it directly.
  */
+/**
+ * Reads one trip again now, for a dialog whose save was refused as stale, and hands back the trip
+ * with the version that read was answered at.
+ *
+ * The copy the page holds is the one the refused save was made from, so refilling the dialog from
+ * it would only be refused again. A read already on its way is cancelled first: it was sent before
+ * the refusal, and may speak for the trip as it stood before the change that caused it.
+ */
+export function useReadTripLogAgain() {
+  const queryClient = useQueryClient();
+  return async (id: string) => {
+    await queryClient.cancelQueries({ queryKey: queryKeys.tripLog(id), exact: true });
+    const trip = await queryClient.fetchQuery({ ...tripLogQuery(id), staleTime: 0 });
+    return { trip, version: lastReadETag(`/api/v1/trip-logs/${id}`) };
+  };
+}
+
 export function useArrangeTripCallout() {
   const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string } & TripCalloutArrangement) => {
-      const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
+    // `ifMatch` is the version the dialog's values were read at, taken when it opened; left out,
+    // the version last read is sent, which is right only for a write made from what is on screen.
+    mutationFn: ({
+      id,
+      ifMatch,
+      ...body
+    }: { id: string; ifMatch?: string } & TripCalloutArrangement) => {
+      const etag = ifMatch ?? lastReadETag(`/api/v1/trip-logs/${id}`);
       return unwrap(
         api.POST('/api/v1/trip-logs/{id}/callout', {
           params: { path: { id } },
@@ -566,7 +629,7 @@ export function useArrangeTripCallout() {
     },
     onSuccess: (trip) => {
       invalidateHistory();
-      written(trip);
+      return written(trip);
     },
   });
 }
@@ -865,11 +928,45 @@ export function useCreateChecklist() {
   });
 }
 
+/**
+ * Reads one list as the server holds it now, with the version that answer was given at.
+ *
+ * The listing carries no version per list, so a page about to rewrite or delete a list reads that
+ * list on its own first and sends this version with the change. The version is taken from this
+ * answer's own header rather than from the transport's record of the newest one filed: a read of
+ * the same list landing a moment later would otherwise hand over a version these lines did not
+ * come from.
+ */
+export function useReadChecklistForChange() {
+  const queryClient = useQueryClient();
+  return (id: string) =>
+    queryClient.fetchQuery({
+      queryKey: queryKeys.checklist(id),
+      staleTime: 0,
+      queryFn: async () => {
+        const answer = api.GET('/api/v1/checklists/{id}', { params: { path: { id } } });
+        const list = await unwrap(answer);
+        const { response } = await answer;
+        return { list, version: response.headers.get('ETag') ?? undefined };
+      },
+    });
+}
+
+/**
+ * Rewrites a list whole. `ifMatch` names the version its lines were read at, so a line somebody
+ * added meanwhile is refused as a stale change instead of being taken off without anybody told.
+ */
 export function useUpdateChecklist() {
   const invalidate = useInvalidateChecklists();
   return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: ChecklistWrite }) =>
-      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body })),
+    mutationFn: ({ id, body, ifMatch }: { id: string; body: ChecklistWrite; ifMatch?: string }) =>
+      unwrap(
+        api.PUT('/api/v1/checklists/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+          body,
+        }),
+      ),
     onSuccess: (_data, variables) => invalidate(variables.id),
   });
 }
@@ -878,9 +975,14 @@ export function useDeleteChecklist() {
   const invalidate = useInvalidateChecklists();
   return useMutation({
     // The refusal travels whole — its code, its sentence and its members — as every other
-    // write's does.
-    mutationFn: (id: string) =>
-      unwrapVoid(api.DELETE('/api/v1/checklists/{id}', { params: { path: { id } } })),
+    // write's does. `ifMatch` is the version of the list the person decided to delete.
+    mutationFn: ({ id, ifMatch }: { id: string; ifMatch?: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/checklists/{id}', {
+          params: { path: { id } },
+          headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+        }),
+      ),
     onSuccess: () => invalidate(),
   });
 }

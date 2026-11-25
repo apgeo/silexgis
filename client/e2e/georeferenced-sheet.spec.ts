@@ -85,7 +85,7 @@ test('a PDF sheet is placed by its corners; a geospatial PDF places itself', asy
 
   // A file named as a PDF that is not one is refused, and the drop zone says why on its own row.
   // The refusal is the answer under test, so the browser's line about the failed request is too.
-  consoleErrors.allow(/status of 400/, 'the drop zone is shown a file the server refuses on purpose');
+  consoleErrors.allow(/\/api\/v1\/georeferenced-maps(\?|:|$)/, 'the drop zone is shown a file the server refuses on purpose');
   await page
     .locator('input[type=file][accept=".tif,.tiff,.pdf,.png,.jpg,.jpeg"]')
     .setInputFiles({ name: 'not-a-sheet.pdf', mimeType: 'application/pdf', buffer: Buffer.from('plain words') });

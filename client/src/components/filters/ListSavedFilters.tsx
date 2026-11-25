@@ -8,6 +8,7 @@ import Button from '../Button.tsx';
 import QuickFilterChips from './QuickFilterChips.tsx';
 import { documentOf, useCreateSavedFilter, useSavedFilters, type SavedFilter } from '../../api/hooks/savedFilters.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
+import { savedFilterSaveFailedKey } from './useSavedFilterAudienceChoice.ts';
 
 interface Props<R extends { extra: FilterNode[] }> {
   /** What the list's controls and any extra conditions say now. */
@@ -106,7 +107,12 @@ export default function ListSavedFilters<R extends { extra: FilterNode[] }>({
       message.warning(t('savedFilters.nothingToSave'));
       return;
     }
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     try {
       const created = await create.mutateAsync({
         name: values.name.trim(),
@@ -118,8 +124,8 @@ export default function ListSavedFilters<R extends { extra: FilterNode[] }>({
       form.resetFields();
       message.success(t('listFilters.saved', { name: created.name }));
       onSaved(created.id);
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(savedFilterSaveFailedKey(error)));
     }
   };
 

@@ -11,7 +11,7 @@ import { login } from './helpers.ts';
 // deletes, and that originals are never among it, is settled by the server's own tests.
 test('an administrator reads the storage report and sees what could be deleted', async ({ page, consoleErrors }) => {
   consoleErrors.allow(
-    /status of 404/,
+    /\/api\/v1\/admin\/storage\/report(\?|:|$)/,
     'the report route answers 404 until the first report has been written, and a fresh stack has none',
   );
   await login(page);

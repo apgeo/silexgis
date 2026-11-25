@@ -5,7 +5,16 @@ import { useTranslation } from 'react-i18next';
 import type { EChartsOption } from 'echarts';
 
 import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
-import { ccdf, fiveNumberSummary, histogram, logLogFit, powerLawExponent, type FiveNumber } from './distributions.ts';
+import {
+  ccdf,
+  fiveNumberSummary,
+  histogram,
+  LOG_COUNT_AXIS_MIN,
+  logLogFit,
+  powerLawBinCounts,
+  powerLawExponent,
+  type FiveNumber,
+} from './distributions.ts';
 import { useECharts, type EChartsHandlers } from './useECharts.ts';
 
 /**
@@ -60,7 +69,16 @@ export function HistogramChart({
     if (bins.length === 0) return null;
 
     const palette = paletteFor(token);
-    const exponent = powerLawExponent(values, bins[0].to);
+    const xMin = bins[0].to;
+    const exponent = powerLawExponent(values, xMin);
+    // Where the predicted count falls below a logarithmic axis it is left out, not raised to the
+    // floor: a row of points at the floor would read as a fitted plateau.
+    const fitted = exponent
+      ? powerLawBinCounts(values, bins, xMin, exponent).map((expected) =>
+          expected === null || !Number.isFinite(expected) || (logCount && expected < LOG_COUNT_AXIS_MIN)
+            ? null
+            : expected)
+      : [];
 
     // A logarithmic axis cannot show a count of zero, and an empty bin is a real observation
     // rather than missing data. Drawing it as null leaves a visible gap in the bar row, which is
@@ -79,7 +97,7 @@ export function HistogramChart({
       yAxis: {
         type: logCount ? 'log' : 'value',
         name: t('karstStats.count'),
-        min: logCount ? 1 : 0,
+        min: logCount ? LOG_COUNT_AXIS_MIN : 0,
         ...axisStyle(token),
       },
       series: [
@@ -90,10 +108,7 @@ export function HistogramChart({
               name: t('karstStats.powerLawFit', { exponent: exponent.toFixed(2) }),
               symbol: 'none',
               lineStyle: { color: palette.series[1] },
-              data: bins.map((b, i) => {
-                const expected = bins[0].count * Math.pow(b.from / bins[0].from || 1, -(exponent - 1));
-                return i === 0 || !Number.isFinite(expected) ? null : Math.max(expected, logCount ? 1 : 0);
-              }),
+              data: fitted,
             }]
           : []),
       ],
@@ -210,6 +225,53 @@ export function CorrelationChart({
   }, [pairs, series, xLabel, yLabel, token, t]);
 
   return <Frame option={option} height={height} testId="chart-correlation" />;
+}
+
+/**
+ * Caves laid out on two principal axes, in the standardised units the server worked them out in.
+ *
+ * <p>
+ * Both axes are linear and signed: a principal axis is centred on the average cave, so nought is
+ * the middle of the picture and a negative coordinate is a real place on it. There is deliberately
+ * no fitted line — the axes are already the best straight summary of the spread, and a regression
+ * drawn over them would claim a relationship between two quantities built to be unrelated. Colours
+ * follow the same rule as {@link CorrelationChart}: chosen by group label alone.
+ * </p>
+ */
+export function PrincipalAxesChart({
+  series,
+  xLabel,
+  yLabel,
+  height,
+}: {
+  series: CorrelationSeries[];
+  xLabel: string;
+  yLabel: string;
+} & SizedProps) {
+  const { token } = theme.useToken();
+
+  const option = useMemo<EChartsOption | null>(() => {
+    if (series.every((group) => group.points.length === 0)) return null;
+    const palette = paletteFor(token);
+    const colourFor = (cluster: number | null) =>
+      cluster === null ? palette.unclassified : palette.series[cluster % palette.series.length];
+
+    return {
+      xAxis: { type: 'value', name: xLabel, nameLocation: 'middle', nameGap: 28, scale: true, ...axisStyle(token) },
+      yAxis: { type: 'value', name: yLabel, scale: true, ...axisStyle(token) },
+      series: series.map((group) => ({
+        type: 'scatter' as const,
+        name: group.name,
+        symbolSize: 7,
+        itemStyle: { color: colourFor(group.cluster) },
+        data: group.points,
+      })),
+      legend: { bottom: 0, textStyle: { color: palette.axisLabel } },
+      tooltip: { trigger: 'item' },
+    };
+  }, [series, xLabel, yLabel, token]);
+
+  return <Frame option={option} height={height} testId="chart-principal-axes" />;
 }
 
 /** One box per category — the comparison figure, and the shape no lighter library provides. */

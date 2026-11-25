@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { Profiler, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import {
   getFeatureTypeNameByCode,
   setFeatureTypeCatalog,
@@ -12,11 +12,65 @@ import {
 import type { FeatureType } from '../../api/hooks.ts';
 import { requestReveal3d, takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
-import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
+import {
+  applyViewExaggeration3d,
+  setActiveViewCamera,
+  viewExaggeration3d,
+  viewFlyTo,
+} from '../../workspace/viewCamera.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
 vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
+// The two saved-filter layer loaders the view keeps (its own and a flyby's), real but with a way in:
+// a test can tell the view one of them failed, and see what the view's Try again asks of each.
+const filterLayerLoaders = vi.hoisted(
+  () => [] as { emit(state: { loadFailed: boolean }): void; reload: ReturnType<typeof vi.fn> }[],
+);
+vi.mock('../../scene3d/filterLayers3d.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../scene3d/filterLayers3d.ts')>();
+  return {
+    ...actual,
+    attachFilterLayers3d: (...args: Parameters<typeof actual.attachFilterLayers3d>) => {
+      const handle = actual.attachFilterLayers3d(...args);
+      const listeners = new Set<(state: { loadFailed: boolean }) => void>();
+      const subscribe = handle.subscribe.bind(handle);
+      const reload = vi.fn(handle.reload.bind(handle));
+      Object.assign(handle, {
+        subscribe(listener: (state: { loadFailed: boolean }) => void) {
+          listeners.add(listener);
+          const off = subscribe(listener);
+          return () => {
+            listeners.delete(listener);
+            off();
+          };
+        },
+        reload,
+      });
+      filterLayerLoaders.push({ emit: (state) => listeners.forEach((listener) => listener(state)), reload });
+      return handle;
+    },
+  };
+});
+// How many of the next downloads of the engine's code fail the way a dropped connection makes them
+// fail — after the retrying, which has its own tests. Zero leaves the real loading alone.
+const codeDownload = vi.hoisted(() => ({ failures: 0 }));
+vi.mock('../../codeLoading.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../codeLoading.ts')>();
+  return {
+    ...actual,
+    importWithRetry: <T,>(load: () => Promise<T>): Promise<T> => {
+      if (codeDownload.failures > 0) {
+        codeDownload.failures -= 1;
+        return Promise.reject(
+          new TypeError('error loading dynamically imported module: https://example.test/assets/scene3dContext-x.js'),
+        );
+      }
+      return actual.importWithRetry(load);
+    },
+  };
+});
 // The browser's own save, and the 2D canvas the credits are written with: the runner has neither,
 // and what is under test here is what each of them is handed.
 vi.mock('../../api/download.ts', () => ({
@@ -31,25 +85,38 @@ vi.mock('../../scene3d/sceneImage3d.ts', async (importOriginal) => ({
     return Promise.resolve(pictureWithCredits);
   },
 }));
+/** What the layer catalogue's read failed with, when a test makes it fail. */
+let mapLayersFailure: unknown;
+const mapLayersRefetch = vi.fn();
+// The layer lists the scene offers. This installation has no georeferenced maps in these tests,
+// which is the case the scene must handle without asking for one.
+vi.mock('../../api/hooks/mapLayers.ts', () => ({
+  useRasterMapLayers: () => ({ data: undefined, isError: false, error: null, refetch: vi.fn() }),
+  useGeofileLayers: () => ({ data: geofilePage?.items, isError: false, error: null, refetch: vi.fn() }),
+}));
 vi.mock('../../api/hooks.ts', () => ({
-  useMapLayers: () => ({ data: mapLayers }),
+  useMapLayers: () =>
+    mapLayersFailure === undefined
+      ? { data: mapLayers, isError: false, error: null, refetch: mapLayersRefetch }
+      : { data: undefined, isError: true, error: mapLayersFailure, refetch: mapLayersRefetch },
   useMapConfig: () => ({ data: mapConfig }),
   useFeatureTypes: () => ({ data: featureTypes }),
   // Named for the same reason as fetchSurveyModels below: the factory replaces the whole module,
   // so an unnamed export is not an empty answer but a property access that raises during render.
-  // This installation has no georeferenced maps in these tests, which is the case the scene must
-  // handle without asking for one.
-  useRasterMaps: () => ({ data: undefined }),
-  useGeofiles: () => ({ data: geofilePage }),
   fetchGeofileFeatureCollection: (id: string, bbox: string) => {
     geofileRequests.push([id, bbox]);
-    return Promise.resolve(geofileResponses[id] ?? emptyCollection);
+    const answer = geofileResponses[id] ?? emptyCollection;
+    return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
   },
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);
   },
-  fetchEntranceFeatures: () => Promise.resolve(entranceResponse),
+  fetchEntranceFeatures: () => {
+    entranceRequestCount += 1;
+    const failure = entranceFailures.shift();
+    return failure ? Promise.reject(failure) : Promise.resolve(entranceResponse);
+  },
   fetchMapFeatures: () => Promise.resolve(featureResponse),
   // Named here because leaving it out is not an empty answer: the mock factory replaces the whole
   // module, so the loader's call would raise on the property access, be swallowed by its own
@@ -74,14 +141,14 @@ vi.mock('../../api/hooks.ts', () => ({
   // What a reveal reads to find out where the thing it names is, through the query cache.
   featureQuery: (id: string) => ({
     queryKey: ['features', id],
-    queryFn: () => Promise.resolve(featureRows[id]),
+    queryFn: () => (id in featureFailures ? Promise.reject(featureFailures[id]) : Promise.resolve(featureRows[id])),
   }),
 }));
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
 const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
 const { useUiPrefsStore } = await import('../../stores/uiPrefsStore.ts');
-const { default: Scene3DView } = await import('./Scene3DView.tsx');
+const { default: Scene3DView, TERRAIN_OFFER_SETTLE_MILLISECONDS } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
 /** What was handed to the browser to save, and what the credits were written onto and with. */
@@ -105,6 +172,9 @@ let centerlineResponse: unknown = {
 let featureResponse: unknown = emptyCollection;
 /** What the entrance layer answers with; empty unless a test is about entrances. */
 let entranceResponse: unknown = emptyCollection;
+/** Errors the next entrance requests fail with, in order; once used up they answer again. */
+let entranceFailures: unknown[] = [];
+let entranceRequestCount = 0;
 /** Which caves the wall-mesh loader asked about, and what it was told they hold. */
 let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
@@ -119,6 +189,8 @@ let geofileRequests: [string, string][] = [];
 let geofileResponses: Record<string, unknown> = {};
 /** What a read of one feature answers with, by id — the envelope a reveal reads its geometry from. */
 let featureRows: Record<string, unknown> = {};
+/** What a read of one feature fails with instead, by id. */
+let featureFailures: Record<string, unknown> = {};
 
 /** A rectangle as a build's extent is drawn: [longitude, latitude] corners, closed. */
 function rectangle(west: number, south: number, east: number, north: number) {
@@ -240,13 +312,18 @@ function renderView() {
 
 beforeEach(() => {
   engine.engineState.reset();
+  codeDownload.failures = 0;
   mapLayers = undefined;
+  mapLayersFailure = undefined;
+  mapLayersRefetch.mockReset();
   savedFiles = [];
   composited = [];
   mapConfig = undefined;
   centerlineRequests = [];
   featureResponse = emptyCollection;
   entranceResponse = emptyCollection;
+  entranceFailures = [];
+  entranceRequestCount = 0;
   surveyModelRequests = [];
   surveyModels = [];
   caveMeshRequests = [];
@@ -258,6 +335,7 @@ beforeEach(() => {
   geofileRequests = [];
   geofileResponses = {};
   featureRows = {};
+  featureFailures = {};
   // The slot is module state; a request a test left behind would send the next scene somewhere.
   takePendingReveal3d();
   centerlineResponse = {
@@ -317,6 +395,9 @@ describe('Scene3DView', () => {
     // second drawing context is not merely wasteful — a browser drops the oldest once a handful
     // are alive — so the second view joins this one, and says so rather than showing a blank box.
     withWebGl2(true);
+    // The loaders' settle runs on a clock the test moves; it still moves on its own as well, so
+    // the waits below proceed as they would.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
     const first = render(
       <Around>
         <Scene3DView />
@@ -330,8 +411,18 @@ describe('Scene3DView', () => {
     // The displaced mount is inert: it does not load a second copy of the cave data into the one
     // scene, which would build two batches under each source id and take each other's out of it.
     expect(screen.getAllByTestId('scene3d-camera-controls')).toHaveLength(1);
-    const sourceIds = engine.engineState.widgets[0].scene.primitives.items.length;
-    expect(sourceIds).toBeGreaterThan(0);
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const drawn = engine.engineState.widgets[0].scene.primitives.items.length;
+    expect(drawn).toBeGreaterThan(0);
+    // Past the loaders' settle, nothing more was asked for or added: one view's worth, not two.
+    // The clock is moved past it exactly, so the stretch does not depend on the machine's load.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * TERRAIN_OFFER_SETTLE_MILLISECONDS);
+    });
+    vi.useRealTimers();
+    expect(centerlineRequests).toHaveLength(1);
+    expect(caveMeshRequests.length).toBeLessThanOrEqual(1);
+    expect(engine.engineState.widgets[0].scene.primitives.items.length).toBe(drawn);
     first.unmount();
   });
 
@@ -343,6 +434,50 @@ describe('Scene3DView', () => {
     view.unmount();
 
     await waitFor(() => expect(engine.engineState.widgets[0].isDestroyed()).toBe(true));
+  });
+
+  it('builds the scene again where it was after the browser takes the context, and stops at a second loss', async () => {
+    withWebGl2(true);
+    // The repeat guard reads the clock, and the window's one drawing surface keeps its guard for
+    // the whole file: step past anything an earlier test left in it.
+    const start = Date.now() + 3_600_000;
+    let elapsed = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => start + elapsed);
+    // A docked pane, which owns no address: nothing but the scene itself remembers its camera.
+    useWorkspaceStore.setState({ scene3dCoupledToMap: false });
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const first = engine.engineState.widgets[0];
+    first.scene.camera.positionWC = { longitudeDegrees: 22.7, latitudeDegrees: 46.5, height: 3000 };
+
+    // A second after opening — a phone backgrounded straight away. A first loss is rebuilt from,
+    // however soon after opening it comes.
+    elapsed = 1000;
+    act(() => {
+      (first.canvas as EventTarget).dispatchEvent(new Event('webglcontextlost', { cancelable: true }));
+    });
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(2));
+    expect(first.isDestroyed()).toBe(true);
+    expect(screen.queryByTestId('scene3d-context-lost')).toBeNull();
+    // The rebuilt scene asks for its caves again, and opens where the lost one was looking.
+    await waitFor(() => expect(centerlineRequests).toHaveLength(2));
+    const rebuilt = engine.engineState.widgets[1].scene.camera.positionWC;
+    expect(rebuilt.longitudeDegrees).toBeCloseTo(22.7, 6);
+    expect(rebuilt.latitudeDegrees).toBeCloseTo(46.5, 6);
+    expect(rebuilt.height).toBeCloseTo(3000, 3);
+
+    // Lost again moments after coming back: a rebuild loop is not offered, a reload is.
+    elapsed = 3000;
+    act(() => {
+      (engine.engineState.widgets[1].canvas as EventTarget).dispatchEvent(
+        new Event('webglcontextlost', { cancelable: true }),
+      );
+    });
+    const lost = await screen.findByTestId('scene3d-context-lost');
+    expect(lost).toHaveTextContent('Reload');
+    expect(engine.engineState.widgets).toHaveLength(2);
   });
 
   it('switches coupling to the flat map without reloading the cave it is drawing', async () => {
@@ -546,6 +681,44 @@ describe('Scene3DView', () => {
     expect(await screen.findByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
   });
 
+  it('does not redraw the whole view while the pointer moves over the same thing', async () => {
+    // The hover pick runs once per animation frame while the pointer moves. A new state object on
+    // each one is a full reconciliation of this view per frame, on the same main thread the scene
+    // is drawn on in software — for a name that has not changed.
+    withWebGl2(true);
+    let commits = 0;
+    render(
+      <Profiler id="scene" onRender={() => (commits += 1)}>
+        <Around>
+          <Scene3DView />
+        </Around>
+      </Profiler>,
+    );
+    await waitFor(() => expect(engine.engineState.eventHandlers).toHaveLength(1));
+    const handler = engine.engineState.eventHandlers[0];
+    engine.engineState.widgets[0].scene.pickResult = { id: { kind: 'feature', featureId: 'f1', label: 'Dolina Demo' } };
+    const moveTo = async (x: number) => {
+      handler.raise('mouseMove', { endPosition: new engine.Cartesian2(x, 50) });
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+      });
+    };
+    await moveTo(40);
+    expect(await screen.findByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
+    await waitFor(() => expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'));
+
+    // One move more before counting: React may call a component once more after a state update
+    // that changed nothing, before it learns to skip it — once, not once per frame.
+    await moveTo(41);
+    commits = 0;
+    for (let x = 42; x <= 51; x += 1) {
+      await moveTo(x);
+    }
+
+    expect(commits).toBe(0);
+    expect(screen.getByTestId('scene3d-hover-tooltip')).toHaveTextContent('Dolina Demo');
+  });
+
   it('stops naming what the pointer was on once the pointer has left the scene', async () => {
     withWebGl2(true);
     renderView();
@@ -696,8 +869,33 @@ describe('Scene3DView', () => {
     renderView();
 
     expect(await screen.findByText('The 3D view could not be started')).toBeInTheDocument();
+    // Said in the reader's language first; the browser's own words stay, small, for whoever is
+    // asked about it.
+    expect(screen.getByText(i18n.t('scene3d.startFailedHint'))).toBeInTheDocument();
     expect(await screen.findByText(/different container/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload the page' })).toBeInTheDocument();
+
+    // Once whatever held the scene has let go, trying again starts the view without a reload.
     other.release();
+    fireEvent.click(screen.getByTestId('scene3d-start-retry'));
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    expect(screen.queryByText('The 3D view could not be started')).not.toBeInTheDocument();
+  });
+
+  it('says the view did not finish downloading, not that it broke, and starts it when asked again', async () => {
+    withWebGl2(true);
+    codeDownload.failures = 1;
+
+    renderView();
+
+    expect(await screen.findByText('The 3D view did not finish downloading')).toBeInTheDocument();
+    expect(screen.queryByText('The 3D view could not be started')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload the page' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('scene3d-download-retry'));
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    expect(screen.queryByTestId('scene3d-download-failed')).not.toBeInTheDocument();
   });
 });
 
@@ -1389,10 +1587,14 @@ describe('finer ground under the camera', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
 
-    // Leaving and coming back is the ordinary way a declined offer would nag; it must not.
+    // Leaving and coming back is the ordinary way a declined offer would nag; it must not. On a
+    // clock this test drives: a real wait could end before a starved timer fired, and the absence
+    // checked below would then prove nothing about the offer logic.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     flyAndSettle(26.5, 46.5);
     flyAndSettle(25.3, 45.2);
-    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    await act(() => vi.advanceTimersByTimeAsync(TERRAIN_OFFER_SETTLE_MILLISECONDS));
+    vi.useRealTimers();
     expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
     expect(engine.engineState.terrainRequests).toHaveLength(1);
   });
@@ -1453,6 +1655,44 @@ describe('arriving with a cave to reveal', () => {
     await waitFor(() => expect(engine.engineState.widgets).toHaveLength(2));
     await waitFor(() => expect(centerlineRequests.length).toBeGreaterThanOrEqual(2));
     expect(engine.engineState.widgets[1].scene.camera.framed).toHaveLength(0);
+  });
+
+  it('says a link to something gone or not theirs to see could not be shown, and leaves the camera be', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    const rejections: unknown[] = [];
+    const onRejection = (event: PromiseRejectionEvent | Event) => rejections.push(event);
+    window.addEventListener('unhandledrejection', onRejection);
+    const unhandled = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', unhandled);
+    try {
+      featureFailures = { 'cave-gone': new ApiError(404, 'feature.not_found') };
+      requestReveal3d({ targetType: 'feature', targetId: 'cave-gone', label: 'Coiba Mare' });
+      renderView();
+      await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+      expect(
+        await screen.findByText('What this link points at no longer exists, so the view stayed where it was.'),
+      ).toBeInTheDocument();
+      expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
+      await afterRejectionsAreReported();
+      expect(rejections).toEqual([]);
+    } finally {
+      window.removeEventListener('unhandledrejection', onRejection);
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('says a link to something the reader may not see could not be shown', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    featureFailures = { 'cave-hidden': new ApiError(403, 'acl.forbidden') };
+    requestReveal3d({ targetType: 'feature', targetId: 'cave-hidden', label: 'Coiba Mare' });
+    renderView();
+
+    expect(
+      await screen.findByText('You may not see what this link points at, so the view stayed where it was.'),
+    ).toBeInTheDocument();
   });
 
   it('leaves the camera where the scene opens when nothing was asked for', async () => {
@@ -1672,6 +1912,64 @@ describe('saving the view as an image', () => {
     fireEvent.click(save);
     await waitFor(() => expect(savedFiles).toHaveLength(1));
     expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
+  });
+});
+
+describe('layer lists the server did not give', () => {
+  it('says a failed layer catalogue read on the globe, rather than leaving it bare, and asks again', async () => {
+    withWebGl2(true);
+    mapLayersFailure = new TypeError('Failed to fetch');
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-layers-failed');
+    expect(notice).toHaveTextContent('Some of the layers this view offers could not be read.');
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(mapLayersRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Try again when the server refused the read', async () => {
+    withWebGl2(true);
+    const { ApiError } = await import('../../api/client.ts');
+    mapLayersFailure = new ApiError(403, 'forbidden');
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-layers-failed');
+    expect(within(notice).queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+});
+
+describe('cave data the server would not give', () => {
+  it('says the caves of this view could not be loaded, rather than drawing an area with none, and tries again', async () => {
+    withWebGl2(true);
+    // A server error or a rate limit as the scene opens: the globe draws, the loading flag drops,
+    // and without a word an area full of caves reads as one with none.
+    entranceFailures = [Object.assign(new Error('Request failed with status 500'), { status: 500 })];
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-data-failed');
+    expect(notice).toHaveTextContent('The caves of this view could not be loaded.');
+    expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(entranceRequestCount).toBe(2));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-data-failed')).toBeNull());
+  });
+
+  it('says the map filter was refused, instead of emptying the scene without a reason', async () => {
+    withWebGl2(true);
+    const { setMapFilter } = await import('../../map/mapFilters.ts');
+    setMapFilter({ kind: 'saved', savedFilterId: 'sf-1' });
+    try {
+      entranceFailures = [{ code: 'saved_filter.not_found', status: 404 }];
+      renderView();
+
+      expect(await screen.findByText(/The map's filter could not be run with your access/)).toBeInTheDocument();
+      // A refusal is not a hiccup to retry: the filter has to change.
+      expect(screen.queryByTestId('scene3d-data-failed')).toBeNull();
+    } finally {
+      setMapFilter(null);
+    }
   });
 });
 
@@ -2150,6 +2448,24 @@ describe('tracks from imported files', () => {
     expect(geofileRequests).toHaveLength(1);
   });
 
+  it('says a file could not be loaded rather than showing no track, and tries again', async () => {
+    withWebGl2(true);
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = { 'file-1': Object.assign(new Error('Request failed with status 500'), { status: 500 }) };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1'] });
+    renderView();
+
+    const notice = await screen.findByTestId('scene3d-tracks-failed');
+    expect(notice).toHaveTextContent('The lines of an imported file could not be loaded.');
+    expect(screen.queryByTestId('scene3d-data-failed')).toBeNull();
+
+    geofileResponses = { 'file-1': aHike };
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(trackLines()).toHaveLength(1));
+    expect(screen.queryByTestId('scene3d-tracks-failed')).toBeNull();
+  });
+
   it('lays a track on the smooth globe, where the entrances it walks past also sit', async () => {
     withWebGl2(true);
     geofilePage = { items: [aGeofile] };
@@ -2233,5 +2549,118 @@ describe('tracks from imported files', () => {
       expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
     );
     expect(trackLines()).toHaveLength(1);
+  });
+});
+
+describe('Scene3DView relief', () => {
+  // The factor itself is the engine's business and is proven there; what is proven here is which
+  // factor the view hands it, where the choice is kept, and that the view says it is on.
+  const scene = () => engine.engineState.widgets[0].scene;
+
+  beforeEach(() => {
+    useUiPrefsStore.setState({ scene3dExaggeration: undefined });
+    useWorkspaceStore.setState({ scene3dExaggerationOfView: undefined });
+  });
+
+  it('draws the scene at true height, and says nothing about it', async () => {
+    withWebGl2(true);
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-loading')).not.toBeInTheDocument());
+    expect(scene().verticalExaggeration).toBe(1);
+    expect(screen.queryByText(/^Relief ×/)).not.toBeInTheDocument();
+  });
+
+  it('draws the scene at this browser’s factor, and says so over the scene', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(2));
+    expect(screen.getByText('Relief ×2')).toBeInTheDocument();
+  });
+
+  it('draws a saved view’s factor for the session, until the person chooses one of their own', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    useWorkspaceStore.setState({ scene3dExaggerationOfView: 3 });
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(3));
+    expect(screen.getByText('Relief ×3')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+    fireEvent.click(await screen.findByRole('button', { name: 'True height' }));
+
+    // Chosen here, it is the person's own: kept for the browser, and the view's is let go. (The
+    // library is handed a hair over one once a scene has been stretched: true height to a
+    // millimetre in a thousand metres.)
+    await waitFor(() => expect(scene().verticalExaggeration).toBeCloseTo(1, 5));
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBeUndefined();
+    expect(useWorkspaceStore.getState().scene3dExaggerationOfView).toBeUndefined();
+    expect(screen.queryByText(/^Relief ×/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a factor chosen in the panel for this browser', async () => {
+    withWebGl2(true);
+    renderView();
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+
+    fireEvent.keyDown(await screen.findByRole('slider', { name: 'Vertical exaggeration' }), {
+      key: 'ArrowRight',
+      code: 'ArrowRight',
+      keyCode: 39,
+    });
+
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(1.1);
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(1.1));
+  });
+
+  it('takes a saved view’s factor through the view on screen, and gives the one in force to a view being saved', async () => {
+    withWebGl2(true);
+    useUiPrefsStore.setState({ scene3dExaggeration: 2 });
+    renderView();
+    await waitFor(() => expect(scene().verticalExaggeration).toBe(2));
+    expect(viewExaggeration3d()).toBe(2);
+
+    act(() => applyViewExaggeration3d(4));
+
+    // On the scene at once, before whatever camera the view restores next.
+    expect(scene().verticalExaggeration).toBe(4);
+    expect(useWorkspaceStore.getState().scene3dExaggerationOfView).toBe(4);
+    // The person's own is left as it was.
+    expect(useUiPrefsStore.getState().scene3dExaggeration).toBe(2);
+    expect(viewExaggeration3d()).toBe(4);
+  });
+});
+
+describe('saved-filter layers the scene could not load', () => {
+  afterEach(() => {
+    filterLayerLoaders.length = 0;
+  });
+
+  it.each([
+    ['the scene\'s own', 0],
+    ['a flyby\'s', 1],
+  ])('says %s filter layers could not be loaded, and the retry asks both loaders again', async (_whose, which) => {
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(filterLayerLoaders.length).toBeGreaterThanOrEqual(2));
+    const [listed, flyby] = filterLayerLoaders.slice(-2);
+    const failing = which === 0 ? listed : flyby;
+    expect(screen.queryByTestId('scene3d-filter-layers-failed')).toBeNull();
+
+    act(() => failing.emit({ loadFailed: true }));
+
+    const notice = await screen.findByTestId('scene3d-filter-layers-failed');
+    expect(notice).toHaveTextContent(i18n.t('scene3d.filterLayersFailed'));
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(listed.reload).toHaveBeenCalled();
+    expect(flyby.reload).toHaveBeenCalled();
+
+    act(() => failing.emit({ loadFailed: false }));
+    await waitFor(() => expect(screen.queryByTestId('scene3d-filter-layers-failed')).toBeNull());
   });
 });

@@ -4,7 +4,8 @@ import { DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Alert, Checkbox, Flex, Select, Table, Tag, theme } from 'antd';
 import Button from '../../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../../api/client.ts';
+import { isConcurrencyConflict } from '../../../api/client.ts';
+import { versionReadWith } from '../../../api/readingVersion.ts';
 import {
   parseAccessActions,
   usePermissionGroupEntries,
@@ -12,6 +13,7 @@ import {
   type AccessActionFlag,
   type AccessCatalog,
   type AccessCatalogDomain,
+  type AccessEntry,
   type AccessDomainName,
   type AccessEffect,
   type AccessScopeKind,
@@ -23,6 +25,7 @@ import { joinActions } from '../../../components/permissions/accessDisplay.ts';
 import ReviewRightWarning from '../../../components/permissions/ReviewRightWarning.tsx';
 import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 import RuleAnchorPicker from './RuleAnchorPicker.tsx';
+import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
 
 interface DraftRule {
   key: number;
@@ -42,6 +45,8 @@ interface RulesTabProps {
   previewSeen: boolean;
   /** Any edit invalidates a previously seen preview. */
   onRulesChanged: () => void;
+  /** Told whenever the drafts start or stop holding edits not yet saved. */
+  onDirtyChange?: (dirty: boolean) => void;
   /** "Preview first" affordance jumps to the preview tab. */
   onRequestPreview: () => void;
 }
@@ -52,36 +57,98 @@ interface RulesTabProps {
  * inside each scope — comes from the server's catalog, generated from the validator
  * itself, so this editor cannot offer what the server would refuse.
  *
- * A ruleset containing a deny cannot be saved before its effect has been *looked at*:
- * the preview is the only honest answer to what a deny actually costs, and a blind save
- * is exactly the foot-gun the model warns about.
+ * A ruleset containing a deny cannot be saved before the preview has been opened. The preview
+ * answers from the rules already saved, so it shows whom the group reaches and what they hold
+ * today — not what the unsaved deny would take away — and the warning says exactly that, with a
+ * reminder after the save to look again once the deny is live.
+ *
+ * Saving replaces the whole ruleset, so another administrator's save made while these drafts were
+ * open would be undone without a word. The rules the drafts were built from are therefore
+ * remembered: a read that brings different ones (a background refetch, or the fresh read made just
+ * before every save) stops the save until the administrator either loads the stored rules or says
+ * to keep their own. The save also carries the version of the rules the drafts were built from,
+ * so the server refuses it when a save landed between that last read and this one.
  */
-export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, onRequestPreview }: RulesTabProps) {
+export default function RulesTab({
+  group,
+  catalog,
+  previewSeen,
+  onRulesChanged,
+  onDirtyChange,
+  onRequestPreview,
+}: RulesTabProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { token } = theme.useToken();
-  const { data: entries, isPending } = usePermissionGroupEntries(group.id);
+  const { data: entries, isPending, isError, refetch } = usePermissionGroupEntries(group.id);
   const replaceEntries = useReplacePermissionGroupEntries(group.id);
   const { data: featureTypes } = useGenericFeatureTypes();
   const [drafts, setDrafts] = useState<DraftRule[]>([]);
   const nextKey = useRef(0);
+  // Saving replaces the group's whole ruleset, so nothing may be edited or saved before the
+  // stored rules are known: a save over the empty starting list would wipe them.
+  const loaded = entries !== undefined;
+  // Whether the drafts hold edits not yet saved. A read of the stored rules that arrives
+  // behind an edit (a focus refetch, another administrator's save) must not discard it.
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const markDirty = (value: boolean) => {
+    dirtyRef.current = value;
+    setDirty(value);
+    onDirtyChange?.(value);
+  };
+
+  // The stored rules the drafts were built from, as text, and whether a later read differed.
+  const baselineRef = useRef<string | null>(null);
+  // The version of that reading, which the save is held to: the server refuses a save made from
+  // a ruleset another administrator has saved over since, however the two reads lined up here.
+  const baselineVersionRef = useRef<string | undefined>(undefined);
+  const [storedMoved, setStoredMoved] = useState(false);
 
   const isFullAdministrators = group.isProtected && group.slug === 'full-administrators';
 
+  const fillFrom = (stored: AccessEntry[]) => {
+    baselineRef.current = JSON.stringify(stored);
+    baselineVersionRef.current = versionReadWith(stored);
+    setStoredMoved(false);
+    setDrafts(stored.map((entry) => ({
+      key: nextKey.current++,
+      effect: entry.effect,
+      domain: entry.domain,
+      actions: new Set([...parseAccessActions(entry.actions)]),
+      scopeKind: entry.scopeKind,
+      scopeId: entry.scopeId ?? null,
+      featureKind: entry.featureKind ?? null,
+      featureTypeId: entry.featureTypeId ?? null,
+    })));
+  };
+
   useEffect(() => {
-    if (entries) {
-      setDrafts(entries.map((entry) => ({
-        key: nextKey.current++,
-        effect: entry.effect,
-        domain: entry.domain,
-        actions: new Set([...parseAccessActions(entry.actions)]),
-        scopeKind: entry.scopeKind,
-        scopeId: entry.scopeId ?? null,
-        featureKind: entry.featureKind ?? null,
-        featureTypeId: entry.featureTypeId ?? null,
-      })));
+    if (!entries) {
+      return;
+    }
+    if (!dirtyRef.current) {
+      fillFrom(entries);
+    } else if (JSON.stringify(entries) !== baselineRef.current) {
+      setStoredMoved(true);
     }
   }, [entries]);
+
+  // Drops the drafts for the rules as they are stored now.
+  const loadStored = () => {
+    if (entries) {
+      markDirty(false);
+      fillFrom(entries);
+      onRulesChanged();
+    }
+  };
+
+  // The administrator has seen that the stored rules moved and chooses to replace them anyway.
+  const keepMine = () => {
+    baselineRef.current = JSON.stringify(entries);
+    baselineVersionRef.current = versionReadWith(entries);
+    setStoredMoved(false);
+  };
 
   const domainOf = (name: AccessDomainName): AccessCatalogDomain =>
     catalog.domains.find((d) => d.domain === name)!;
@@ -98,6 +165,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
 
   const patch = (key: number, change: Partial<DraftRule>) => {
     setDrafts(drafts.map((d) => (d.key === key ? { ...d, ...change } : d)));
+    markDirty(true);
     onRulesChanged();
   };
 
@@ -139,6 +207,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
       featureKind: null,
       featureTypeId: null,
     }]);
+    markDirty(true);
     onRulesChanged();
   };
 
@@ -148,22 +217,40 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
   const previewRequired = hasDeny && !previewSeen;
 
   const onSave = async () => {
+    // A last look at what is stored, as close to the save as the client can get without a version:
+    // a ruleset that moved since the drafts were built would be overwritten by this full replace.
+    const fresh = await refetch();
+    if (fresh.data && JSON.stringify(fresh.data) !== baselineRef.current) {
+      setStoredMoved(true);
+      return;
+    }
+    const savedWithDeny = hasDeny;
     try {
-      await replaceEntries.mutateAsync(drafts.map((d) => ({
-        effect: d.effect,
-        domain: d.domain,
-        actions: joinActions(d.actions),
-        scopeKind: d.scopeKind,
-        scopeId: d.scopeId,
-        featureKind: d.featureKind,
-        featureTypeId: d.featureTypeId,
-      })));
-      message.success(t('common.saved'));
+      await replaceEntries.mutateAsync({
+        entries: drafts.map((d) => ({
+          effect: d.effect,
+          domain: d.domain,
+          actions: joinActions(d.actions),
+          scopeKind: d.scopeKind,
+          scopeId: d.scopeId,
+          featureKind: d.featureKind,
+          featureTypeId: d.featureTypeId,
+        })),
+        ifMatch: baselineVersionRef.current,
+      });
+      // The save invalidates the stored rules; the read that follows refills the drafts.
+      markDirty(false);
+      message.success(t(savedWithDeny ? 'permissionGroups.savedWithDeny' : 'common.saved'), savedWithDeny ? 8 : undefined);
     } catch (error) {
+      // Saved over since the drafts were built: the application's conflict warning says so, and
+      // the read that follows brings the stored rules, which holds the save until the
+      // administrator loads them or keeps their own.
+      if (isConcurrencyConflict(error)) {
+        void refetch();
+        return;
+      }
       message.error(
-        error instanceof ApiError && error.code === 'access_entry.exceeds_own_rights'
-          ? t('permissionGroups.exceedsOwnRights')
-          : t('common.saveFailed'),
+        accessRuleProblem(error, t),
       );
     }
   };
@@ -182,6 +269,38 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
           action={
             <Button size="small" icon={<EyeOutlined />} onClick={onRequestPreview}>
               {t('permissionGroups.openPreview')}
+            </Button>
+          }
+        />
+      )}
+
+      {storedMoved && (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="rules-stored-moved"
+          title={t('permissionGroups.storedRulesMoved')}
+          action={
+            <Flex vertical gap={4}>
+              <Button size="small" onClick={loadStored}>
+                {t('permissionGroups.loadStoredRules')}
+              </Button>
+              <Button size="small" danger onClick={keepMine}>
+                {t('permissionGroups.keepMyRules')}
+              </Button>
+            </Flex>
+          }
+        />
+      )}
+
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          title={t('permissionGroups.rulesLoadFailed')}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry')}
             </Button>
           }
         />
@@ -206,6 +325,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
             render: (_, draft) => (
               <Select
                 size="small"
+                aria-label={t('access.effect')}
                 value={draft.effect}
                 style={{ width: 100 }}
                 onChange={(effect: AccessEffect) => patch(draft.key, { effect })}
@@ -228,6 +348,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                 size="small"
                 showSearch
                 optionFilterProp="label"
+                aria-label={t('access.domain')}
                 value={draft.domain}
                 style={{ width: 180 }}
                 onChange={(domain: AccessDomainName) => changeDomain(draft, domain)}
@@ -274,6 +395,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                 <Flex gap={6} wrap align="center">
                   <Select
                     size="small"
+                    aria-label={t('access.scope')}
                     value={draft.scopeKind}
                     style={{ width: 170 }}
                     onChange={(scope: AccessScopeKind) => changeScope(draft, scope)}
@@ -297,6 +419,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                         size="small"
                         allowClear
                         placeholder={t('permissionGroups.narrowKind')}
+                        aria-label={t('permissionGroups.narrowKind')}
                         value={draft.featureKind ?? undefined}
                         style={{ width: 150 }}
                         // Kind AND type on one rule has no faithful flat form — one or the other.
@@ -313,6 +436,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                         showSearch
                         optionFilterProp="label"
                         placeholder={t('permissionGroups.narrowType')}
+                        aria-label={t('permissionGroups.narrowType')}
                         value={draft.featureTypeId ?? undefined}
                         style={{ width: 170 }}
                         disabled={draft.featureKind !== null}
@@ -338,6 +462,7 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
                 aria-label={t('iconButtons.delete')}
                 onClick={() => {
                   setDrafts(drafts.filter((d) => d.key !== draft.key));
+                  markDirty(true);
                   onRulesChanged();
                 }}
               />
@@ -347,14 +472,14 @@ export default function RulesTab({ group, catalog, previewSeen, onRulesChanged, 
       />
 
       <Flex justify="space-between">
-        <Button icon={<PlusOutlined />} onClick={addRule}>
+        <Button icon={<PlusOutlined />} onClick={addRule} disabled={!loaded}>
           {t('permissionGroups.addRule')}
         </Button>
         <Button
           type="primary"
           onClick={() => void onSave()}
           loading={replaceEntries.isPending}
-          disabled={previewRequired || incomplete}
+          disabled={!loaded || !dirty || previewRequired || incomplete || storedMoved}
           data-testid="save-rules"
         >
           {t('common.save')}

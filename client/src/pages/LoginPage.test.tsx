@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import LoginPage from './LoginPage.tsx';
@@ -27,6 +27,28 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('says the ways to sign in could not be read, and reads them again on Retry', async () => {
+    const answers = [
+      Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve(null) } as unknown as Response),
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ openRegistration: false, externalOnly: false, providers: [], testLogins: null }),
+      } as unknown as Response),
+    ];
+    vi.stubGlobal('fetch', vi.fn(() => answers.shift()!));
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId('login-config-failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByTestId('login-config-failed')).not.toBeInTheDocument());
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
 
   it('shows no demo accounts on an ordinary installation', async () => {
@@ -139,6 +161,47 @@ describe('LoginPage', () => {
 
       await waitFor(() => expect(assign).toHaveBeenCalledWith(returnUrl));
       expect(calls.at(-1)).toEqual({ code: '123456', method: 'authenticator' });
+    });
+
+    // Only the authorization server's own resume address is followed after a sign-in: anything
+    // else in returnUrl — another site, a protocol-relative address that the browser reads as
+    // another host, or an ordinary page — lands on the home page instead.
+    it.each([
+      ['another site', 'https://elsewhere.example/connect/authorize'],
+      ['a protocol-relative address', '//host.example/connect/authorize'],
+      ['a backslash address the browser reads as another host', '/\\host.example/connect/authorize'],
+      ['an ordinary page', '/caves'],
+    ])('does not follow %s in returnUrl once the code is accepted', async (_label, foreign) => {
+      const assign = vi.fn();
+      vi.stubGlobal('location', { ...window.location, assign });
+      stubPendingSignIn((body) =>
+        body.code
+          ? { status: 200, body: { userId: 'u', email: 'a@t.local', displayName: null } }
+          : {
+              status: 401,
+              body: {
+                code: 'auth.mfa_required',
+                methods: ['authenticator'],
+                preferredMethod: 'authenticator',
+                recoveryAccepted: true,
+              },
+            },
+      );
+
+      render(
+        <MemoryRouter initialEntries={[`/login?mfa=required&returnUrl=${encodeURIComponent(foreign)}`]}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/" element={<p>home page</p>} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      fireEvent.change(await screen.findByLabelText('Two-factor code'), { target: { value: '123456' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+      expect(await screen.findByText('home page')).toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
     });
 
     it('sends a recovery code with its prefix and says so when the code is wrong', async () => {

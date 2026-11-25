@@ -50,6 +50,26 @@ module.exports = {
       to: { path: '^node_modules/(react|react-dom|antd|@ant-design)/' },
     },
     {
+      name: 'flyby-logic-is-ui-free',
+      comment:
+        'A flyby — its document, the arithmetic of its path, its player — must be usable without '
+        + 'the panel that puts one together: by whatever makes a movie of it, by another view, by '
+        + 'a test with a plain object for a scene. So it may not depend on a page or a component.',
+      severity: 'error',
+      from: { path: '^src/flyby/' },
+      to: { path: '^src/(pages|components)/' },
+    },
+    {
+      name: 'flyby-logic-imports-no-view-library',
+      comment:
+        'The same boundary from the other side: the flyby logic may not reach for React or the '
+        + 'component library, so it cannot grow a hook that only works inside a tree. Type-only '
+        + 'imports count.',
+      severity: 'error',
+      from: { path: '^src/flyby/' },
+      to: { path: '^node_modules/(react|react-dom|antd|@ant-design)/' },
+    },
+    {
       name: 'cesium-only-in-the-3d-scene-module',
       comment:
         'Only src/scene3d/scene3dContext.ts may import the 3D engine library; everything else '

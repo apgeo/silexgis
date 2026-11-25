@@ -19,9 +19,9 @@ namespace SilexGis.Api.Tests;
 ///
 /// <para>
 /// Every request here names a region minted for this class alone. The registry statistics count
-/// every cave in the installation that the caller may read, and this assembly runs its classes
-/// against one shared database — so an unscoped assertion would be a claim about every other
-/// class's fixtures as well, and would pass or fail depending on which of them ran first.
+/// every cave in the installation that the caller may read, and the tests of this class share its
+/// database — so an unscoped assertion would be a claim about every other test's fixtures as well,
+/// and would pass or fail depending on which of them ran first.
 /// </para>
 /// <para>
 /// The withheld caller is always a genuine <c>Viewer</c>, or a caller carrying an explicit deny.
@@ -81,6 +81,24 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         viewer?.Dispose();
         anonymous?.Dispose();
         factory.Dispose();
+    }
+
+    /// <summary>
+    /// Every registry statistic takes the same scope, so every one bounds the region the same way:
+    /// a name wider than regions are stored at is refused on each, not only on some.
+    /// </summary>
+    [Theory]
+    [InlineData("distribution?measure=surveyedLength")]
+    [InlineData("correlation?x=surveyedLength&y=depth")]
+    [InlineData("clustering?measures=surveyedLength")]
+    [InlineData("categories?measure=surveyedLength&category=caveType")]
+    [InlineData("regions?")]
+    public async Task An_over_long_region_is_refused_by_every_statistic(string query)
+    {
+        var response = await viewer.GetAsync($"/api/v1/stats/registry/{query}&region={new string('r', 201)}");
+        var text = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, text);
+        System.Text.Json.JsonDocument.Parse(text).RootElement.GetProperty("code").GetString().ShouldBe("validation.failed");
     }
 
     [Fact]
@@ -311,13 +329,15 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
 
         // A measure correlated with itself fits a perfect line through every cave and says nothing,
         // and two spellings of one measure are still one measure.
-        (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=depth&y=Depth"))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The refusal is the whole-request rule, which names no single field: a refusal of x or y
+        // alone would mean the second spelling was not read as a measure at all.
+        (await (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=depth&y=Depth"))
+            .RefusedFieldsAsync()).ShouldBe([""]);
 
         // And a name the registry does not publish is refused rather than answered as whichever
         // measure happened to be first.
-        (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=altitude&y=depth"))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await (await viewer.GetAsync("/api/v1/stats/registry/correlation?x=altitude&y=depth"))
+            .RefusedFieldsAsync()).ShouldBe(["X"]);
     }
 
     [Fact]
@@ -378,15 +398,17 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     [Fact]
     public async Task A_comparison_names_a_measure_and_a_category_it_knows()
     {
-        foreach (var query in new[]
+        // Each refusal names the one field it is about, so a request refused for another reason
+        // cannot pass for the rule its row pins.
+        foreach (var (query, field) in new[]
                  {
-                     "categories?measure=surveyedLength",
-                     "categories?measure=surveyedLength&category=region",
-                     "categories?measure=colour&category=caveType",
+                     ("categories?measure=surveyedLength", "Category"),
+                     ("categories?measure=surveyedLength&category=region", "Category"),
+                     ("categories?measure=colour&category=caveType", "Measure"),
                  })
         {
             var response = await owner.GetAsync($"/api/v1/stats/registry/{query}");
-            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, query);
+            (await response.RefusedFieldsAsync()).ShouldBe([field], query);
         }
 
         // The positive twin: a well-formed request over the same routes is answered.
@@ -779,6 +801,105 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_grouping_publishes_the_axes_its_caves_are_drawn_on_over_the_grouped_caves_only()
+    {
+        // Twelve caves whose depth does not follow their length, so the two axes are not the
+        // measures themselves under another name. Three of them record no depth: they are not
+        // grouped, so they must not be positioned either.
+        var region = Unique("CLAXES");
+        for (var i = 0; i < 12; i++)
+        {
+            await CreateCaveAsync(
+                region, 100m + (i * 50m), depth: i < 9 ? 10m + ((i * 7) % 5 * 6m) + i : null);
+        }
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={region}");
+
+        var projection = body.GetProperty("projection");
+        projection.GetProperty("measures").EnumerateArray().Select(m => m.GetString())
+            .ShouldBe(["surveyedLength", "depth"]);
+        projection.GetProperty("droppedMeasures").GetArrayLength().ShouldBe(0);
+
+        var first = projection.GetProperty("first");
+        var second = projection.GetProperty("second");
+        first.GetProperty("loadings").GetArrayLength().ShouldBe(2);
+        second.GetProperty("loadings").GetArrayLength().ShouldBe(2);
+
+        // Over two measures the axes between them carry everything, and the first carries at
+        // least as much as the second.
+        var firstShare = first.GetProperty("explainedShare").GetDouble();
+        var secondShare = second.GetProperty("explainedShare").GetDouble();
+        (firstShare + secondShare).ShouldBe(1d, 1e-6);
+        firstShare.ShouldBeGreaterThanOrEqualTo(secondShare);
+
+        // The same nine caves the grouping placed — no more, no fewer — so the picture and the
+        // colours are about one population.
+        var positioned = projection.GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).OrderBy(g => g).ToList();
+        var grouped = body.GetProperty("assignments").EnumerateArray()
+            .Select(a => a.GetProperty("caveId").GetGuid()).OrderBy(g => g).ToList();
+        grouped.Count.ShouldBe(9);
+        positioned.ShouldBe(grouped);
+    }
+
+    [Fact]
+    public async Task No_axes_are_published_where_the_grouping_itself_did_not_run()
+    {
+        // Four caves is under the floor a grouping is attempted over, so there is nothing to
+        // project; the same twelve caves asked over one measure group fine but have no second
+        // axis to draw.
+        var few = await SeedAsync("CLAXFEW", [100m, 200m, 300m, 400m]);
+        var tooFew = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={few}");
+        tooFew.GetProperty("clusters").GetArrayLength().ShouldBe(0);
+        tooFew.GetProperty("projection").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var many = await SeedAsync("CLAXONE", [.. Enumerable.Range(0, 12).Select(i => 100m + (i * 50m))]);
+        var oneMeasure = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=2&region={many}");
+        oneMeasure.GetProperty("clusters").GetArrayLength().ShouldBe(2);
+        oneMeasure.GetProperty("projection").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task The_axes_position_no_cave_the_caller_may_not_read()
+    {
+        // Same shape as the grouping's own visibility test, asked of the projection: the three
+        // denied caves would be positioned for the owner and must be absent for the viewer, and
+        // the owner's answer is read as the positive case so an empty seed cannot pass.
+        var region = Unique("CLAXVIS");
+        var denied = new List<Guid>();
+        for (var i = 0; i < 12; i++)
+        {
+            var id = await CreateCaveAsync(region, 100m + (i * 25m), depth: 5m + ((i * 5) % 7 * 4m) + i);
+            if (i < 3)
+            {
+                denied.Add(id);
+            }
+        }
+
+        foreach (var id in denied)
+        {
+            await DenyReadAsync(owner, id, viewerId);
+        }
+
+        var query = $"clustering?measures=surveyedLength,depth&clusters=2&region={region}";
+        var whole = await ReadJsonAsync(owner, query);
+        var seen = await ReadJsonAsync(viewer, query);
+
+        var wholeIds = whole.GetProperty("projection").GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).ToList();
+        wholeIds.Count.ShouldBe(12);
+        wholeIds.Intersect(denied).Count().ShouldBe(3);
+
+        var seenIds = seen.GetProperty("projection").GetProperty("positions").EnumerateArray()
+            .Select(p => p.GetProperty("caveId").GetGuid()).ToList();
+        seenIds.Count.ShouldBe(9);
+        seenIds.Intersect(denied).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_population_too_small_to_group_is_answered_with_the_account_of_why()
     {
         // Four caves, which is under the floor a grouping is attempted over. The answer is not an
@@ -810,13 +931,14 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Theory]
-    [InlineData("measures=altitude")]
-    [InlineData("measures=2")]
-    [InlineData("measures=surveyedLength,surveyedLength")]
-    [InlineData("measures=")]
-    [InlineData("measures=surveyedLength&clusters=1")]
-    [InlineData("measures=surveyedLength&clusters=99")]
-    public async Task A_grouping_asked_for_in_terms_the_registry_does_not_offer_is_refused(string query)
+    [InlineData("measures=altitude", "Measures")]
+    [InlineData("measures=2", "Measures")]
+    [InlineData("measures=surveyedLength,surveyedLength", "Measures")]
+    [InlineData("measures=", "Measures")]
+    [InlineData("measures=surveyedLength&clusters=1", "Clusters")]
+    [InlineData("measures=surveyedLength&clusters=7", "Clusters")]
+    [InlineData("measures=surveyedLength&clusters=99", "Clusters")]
+    public async Task A_grouping_asked_for_in_terms_the_registry_does_not_offer_is_refused(string query, string field)
     {
         // Altitude is not a measure here at all — a height above sea level is a coordinate — and a
         // measure named by its underlying number is not a name. A measure named twice would be
@@ -825,7 +947,21 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
         // caves.
         var response = await viewer.GetAsync($"/api/v1/stats/registry/clustering?{query}");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        // The refusal names the one field it is about, so a request refused for some other reason
+        // cannot stand in for the rule each row pins.
+        (await response.RefusedFieldsAsync()).ShouldBe([field]);
+    }
+
+    /// <summary>The edges of the accepted group counts are answered, beside the refusals above.</summary>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(6)]
+    public async Task A_grouping_at_either_end_of_the_offered_counts_is_answered(int clusters)
+    {
+        var response = await viewer.GetAsync(
+            $"/api/v1/stats/registry/clustering?measures=surveyedLength&clusters={clusters}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

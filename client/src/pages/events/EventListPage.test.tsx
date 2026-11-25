@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import i18n from '../../i18n';
 import EventListPage from './EventListPage.tsx';
 
 const { eventsSpy, canSpy } = vi.hoisted(() => ({
@@ -81,5 +82,19 @@ describe('the occurrences of one repeating event', () => {
       expect(eventsSpy.mock.calls.at(-1)?.[0]).toMatchObject({ seriesId: undefined }),
     );
     expect(screen.queryByTestId('event-series-filter')).toBeNull();
+  });
+});
+
+describe('a list of events that could not be read', () => {
+  it('says the events could not be read and offers to ask again, rather than drawing an empty table', () => {
+    const refetch = vi.fn();
+    eventsSpy.mockReturnValue({ data: undefined, isFetching: false, isError: true, refetch });
+    renderList('/events');
+
+    expect(screen.getByTestId('event-list-unavailable').textContent).toContain(
+      i18n.t('events.listUnavailable'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(refetch).toHaveBeenCalled();
   });
 });

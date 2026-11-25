@@ -26,11 +26,14 @@ import { fileURLToPath } from 'node:url';
 
 import { answers, judgeApiProxy, judgeDiscovery, judgeHealth, judgeScriptType, judgeWebApp, moduleScripts } from './check.mjs';
 import { resolveDatabase } from './install.mjs';
-import { runRestore } from './restore.mjs';
+import { feedDump, runRestore } from './restore.mjs';
+import { runBackup } from './backup.mjs';
 import {
   Failure,
   acquireLock,
+  fail,
   apiEnvironment,
+  backupKeepFor,
   backupStamp,
   backupsToPrune,
   buildConnectionString,
@@ -170,6 +173,19 @@ describe('the configuration file', () => {
     assert.equal(forced.match(/SILEXGIS__PublicUrl=/g).length, 1);
     // Converged: a second identical run changes nothing.
     assert.equal(mergeEnvFile(forced, { SILEXGIS__PublicUrl: { value: 'https://new.example.org', force: true } }), forced);
+  });
+
+  it('updates the line of a repeated key that is in force — the last — and says the key repeats', () => {
+    const before = 'SILEXGIS__PublicUrl=https://first.example.org\n# later, by hand\nSILEXGIS__PublicUrl=https://last.example.org\n';
+    const repeated = [];
+    const after = mergeEnvFile(
+      before,
+      { SILEXGIS__PublicUrl: { value: 'https://new.example.org', force: true } },
+      { onDuplicate: (key) => repeated.push(key) },
+    );
+    assert.equal(after, 'SILEXGIS__PublicUrl=https://first.example.org\n# later, by hand\nSILEXGIS__PublicUrl=https://new.example.org\n');
+    assert.equal(parseEnvFile(after).values.SILEXGIS__PublicUrl, 'https://new.example.org', 'the update is the value in force');
+    assert.deepEqual(repeated, ['SILEXGIS__PublicUrl']);
   });
 
   it('generates passwords that need no quoting anywhere they are written', () => {
@@ -713,6 +729,16 @@ describe('the Windows service', () => {
     assert.throws(() => windowsServiceEnvironment({ X: 'a\0b' }, winLayout), /cannot carry/);
   });
 
+  it('names another separator when a value holds the two characters reg.exe splits at', async () => {
+    const { windowsServiceEnvironmentRegArgs } = await import('./lib.mjs');
+    const entries = ['SILEXGIS__Files__Root=D:\\0-data\\files', 'B=2'];
+    const reg = windowsServiceEnvironmentRegArgs('silexgis-api', entries);
+    const separator = reg[reg.indexOf('/s') + 1];
+    assert.equal(separator.length, 1);
+    assert.ok(entries.every((entry) => !entry.includes(separator)));
+    assert.deepEqual(reg[reg.indexOf('/d') + 1].split(separator), entries, 'reg.exe gets the entries back whole');
+  });
+
   it('gives the service account its directories and keeps the configuration to administrators', async () => {
     const { windowsGrantArgs, windowsProtectArgs } = await import('./lib.mjs');
     assert.deepEqual(windowsGrantArgs('D:\\data', 'silexgis-api').slice(1, 3), ['/grant', 'NT SERVICE\\silexgis-api:(OI)(CI)M']);
@@ -809,5 +835,80 @@ describe('whether the public address has anything behind it', () => {
       await new Promise((resolve) => server.close(resolve));
     }
     assert.equal(await answers(`http://127.0.0.1:${port}`), false);
+  });
+});
+
+describe('a backup that fails part way', { skip: process.platform === 'win32' && 'uses the platform tar and a POSIX stand-in' }, () => {
+  function installation() {
+    const root = scratch();
+    const filesDir = path.join(root, 'files');
+    const terrainDir = path.join(root, 'terrain');
+    fs.mkdirSync(filesDir, { recursive: true });
+    fs.writeFileSync(path.join(filesDir, 'invented.txt'), 'invented upload\n');
+    return { root, backupDir: path.join(root, 'backups'), layout: { filesDir, terrainDir }, db: {} };
+  }
+
+  it('leaves nothing the rotation would count as a backup', async () => {
+    const { backupDir, layout, db } = installation();
+    const outDir = path.join(backupDir, backupStamp(new Date('2026-11-17T03:15:00Z')));
+    const failing = async (_layout, _db, file) => {
+      fs.writeFileSync(file, 'half a dump');
+      fail('pg_dump exited with 1: could not write (invented)');
+    };
+    await assert.rejects(runBackup({ layout, db }, outDir, { dump: failing }), /pg_dump exited/);
+    const left = fs.existsSync(backupDir) ? fs.readdirSync(backupDir) : [];
+    assert.deepEqual(left, [], `a failed backup left ${left.join(', ')}`);
+    assert.deepEqual(backupsToPrune(left, 1), []);
+  });
+
+  it('gives a backup its timestamped name only once every part is in', async () => {
+    const { backupDir, layout, db } = installation();
+    const outDir = path.join(backupDir, backupStamp(new Date('2026-11-17T03:15:00Z')));
+    let seenDuringDump;
+    const dump = async (_layout, _db, file) => {
+      seenDuringDump = fs.readdirSync(backupDir);
+      fs.writeFileSync(file, gzipSync('-- invented dump\n'));
+    };
+    await runBackup({ layout, db }, outDir, { dump });
+    assert.deepEqual(seenDuringDump, ['20261117T031500Z.incomplete']);
+    assert.deepEqual(fs.readdirSync(backupDir), ['20261117T031500Z']);
+    assert.ok(fs.existsSync(path.join(outDir, 'db.sql.gz')));
+    assert.ok(fs.existsSync(path.join(outDir, 'files.tar.gz')));
+  });
+});
+
+describe('a psql that stops reading the dump', () => {
+  it('is reported with what psql said and the state it leaves, not as a bare broken pipe', async () => {
+    const root = scratch();
+    const file = path.join(root, 'db.sql.gz');
+    // Large enough that the pipe is still being written when the stand-in psql exits.
+    fs.writeFileSync(file, gzipSync(Buffer.from(`${'-- an invented line of a dump\n'.repeat(400_000)}`)));
+    const spec = {
+      command: process.execPath,
+      args: ['-e', "process.stderr.write('psql: error: FATAL:  role \"invented\" does not exist\\n'); process.exit(2)"],
+    };
+    await assert.rejects(feedDump(spec, file), (error) => {
+      assert.match(error.message, /psql stopped reading the dump/);
+      assert.match(error.message, /role "invented" does not exist/);
+      assert.match(error.message, /empty or partly loaded/);
+      return true;
+    });
+  });
+});
+
+describe('how many backups are kept', () => {
+  // The installer bakes its number into the nightly timer; the update used to prune the same folder
+  // to its own default of 10 after every run, deleting backups the operator had chosen to keep.
+  it('is the number the installation recorded, then the installer default, unless the environment says', () => {
+    assert.equal(backupKeepFor({ backupKeep: 30 }, {}), 30);
+    assert.equal(backupKeepFor(null, {}), 14);
+    assert.equal(backupKeepFor({}, {}), 14);
+    assert.equal(backupKeepFor({ backupKeep: 30 }, { SILEXGIS_BACKUP_KEEP: '7' }), 7);
+  });
+
+  it('refuses a number that is not a whole number, 1 or more', () => {
+    assert.throws(() => backupKeepFor({}, { SILEXGIS_BACKUP_KEEP: '0' }), /whole number/);
+    assert.throws(() => backupKeepFor({}, {}, 'many'), /whole number/);
+    assert.equal(backupKeepFor({ backupKeep: 30 }, {}, '5'), 5);
   });
 });

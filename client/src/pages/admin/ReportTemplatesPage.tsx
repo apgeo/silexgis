@@ -16,7 +16,9 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
@@ -73,7 +75,7 @@ export default function ReportTemplatesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: templates, isLoading } = useReportTemplates();
+  const { data: templates, isLoading, isError, error: readError, refetch } = useReportTemplates();
   const { data: tripTypes } = useTripTypes();
   const createTemplate = useCreateReportTemplate();
   const updateTemplate = useUpdateReportTemplate();
@@ -82,6 +84,7 @@ export default function ReportTemplatesPage() {
   const [creating, setCreating] = useState(false);
   const [shippedKind, setShippedKind] = useState<ReportTemplateKind>('trip');
   const [form] = Form.useForm<ReportTemplateWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const kindOptions: { value: ReportTemplateKind; label: string }[] = [
     { value: 'trip', label: t('admin.reportTemplates.kindTrip') },
@@ -102,6 +105,7 @@ export default function ReportTemplatesPage() {
   const draftKind = Form.useWatch('kind', form);
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   useEffect(() => {
     if (open) {
       form.setFieldsValue(
@@ -124,7 +128,12 @@ export default function ReportTemplatesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     const body: ReportTemplateWrite = {
       name: values.name.trim(),
       body: values.body,
@@ -164,6 +173,8 @@ export default function ReportTemplatesPage() {
     // A file edited on Windows comes back with carriage returns and a byte-order mark, neither of
     // which is part of a line the parser is asked to read.
     form.setFieldValue('body', text.replace(/^﻿/, '').replace(/\r\n/g, '\n'));
+    // Set from code, so the form does not count it as an edit by itself.
+    edits.onValuesChange();
   };
 
   if (!capabilities) {
@@ -211,6 +222,14 @@ export default function ReportTemplatesPage() {
         )}
       </Flex>
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={templates !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="report-templates-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}
@@ -269,7 +288,8 @@ export default function ReportTemplatesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.reportTemplates.edit') : t('admin.reportTemplates.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createTemplate.isPending || updateTemplate.isPending}
         okText={t('common.save')}
@@ -277,7 +297,7 @@ export default function ReportTemplatesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item name="name" label={t('admin.reportTemplates.name')} rules={[{ required: true, max: 120 }]}>
             <Input />
           </Form.Item>

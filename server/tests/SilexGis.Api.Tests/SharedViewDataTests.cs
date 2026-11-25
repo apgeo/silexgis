@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Filters;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Map;
@@ -93,6 +94,9 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         var view = await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}");
         view["overlays"]!["entrances"]!.GetValue<bool>().ShouldBeTrue();
         view["overlays"]!["features"]!.GetValue<bool>().ShouldBeTrue();
+        // The installation's entrance markers ride along, so the link draws entrances as the map does.
+        view["overlays"]!["entranceSymbol"]!.GetValue<string>().ShouldBe("shape:cave");
+        view["overlays"]!["approximateEntranceSymbol"]!.GetValue<string>().ShouldBe("shape:cave:d46b08");
         view["background"].ShouldNotBeNull();
 
         // Points: the public cave's entrance, exactly where it is, by its public name — and no
@@ -251,6 +255,31 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             .AsArray().ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A public structural reading is drawn on a link turned to its plane, as on the signed-in map:
+    /// without its orientation the tick would point east and misstate the plane. Every other kind
+    /// carries no orientation.
+    /// </summary>
+    [Fact]
+    public async Task A_link_draws_a_structural_reading_turned_to_its_plane()
+    {
+        await CreateFeatureAsync(
+            "Link Reading", new { type = "Point", coordinates = new[] { 17.111, 64.111 } },
+            FeatureTypeSeeds.StructuralMeasurement, "public", locationProtected: false,
+            properties: new { measurement_type = "bedding", strike = 30, dip = 40 });
+        await CreatePointFeatureAsync("Link Reading Sinkhole", 17.121, 64.111, "public", locationProtected: false);
+
+        var token = await ShareAsync(await CreateViewAsync(entrances: false, features: true, 17.1, 64.1));
+        var features = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/features?bbox=17.0,64.0,17.2,64.2"))["features"]!
+            .AsArray().Select(f => f!["properties"]!.AsObject()).ToList();
+
+        features.Count.ShouldBe(2);
+        var reading = features.Single(f => f["typeCode"]!.GetValue<string>() == FeatureTypeSeeds.StructuralMeasurement);
+        reading["dipDirection"]!.GetValue<double>().ShouldBe(120);
+        reading["dip"]!.GetValue<double>().ShouldBe(40);
+        features.Single(f => f["typeCode"]!.GetValue<string>() == "sinkhole").ContainsKey("dipDirection").ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Revoking_the_link_stops_its_data_at_once()
     {
@@ -282,14 +311,29 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
-    [Fact]
-    public async Task A_window_off_the_globe_is_refused()
+    /// <summary>
+    /// A window that is reversed, or that reaches off the globe, is refused on both drawing routes
+    /// of a shared view. The off-globe arm is the one that matters on these anonymous routes: the
+    /// database accepts such an envelope and would answer it.
+    /// </summary>
+    [Theory]
+    [InlineData("cave-entrances", "26,45,25,46", "&zoom=14")]
+    [InlineData("cave-entrances", "170,45,190,46", "&zoom=14")]
+    [InlineData("cave-entrances", "25,-95,26,46", "&zoom=14")]
+    [InlineData("features", "26,45,25,46", "")]
+    [InlineData("features", "170,45,190,46", "")]
+    [InlineData("features", "25,-95,26,46", "")]
+    public async Task A_window_off_the_globe_is_refused(string route, string bbox, string rest)
     {
         var token = await ShareAsync(await CreateViewAsync(entrances: true, features: true, 25.5, 45.5));
 
-        var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}/cave-entrances?bbox=26,45,25,46&zoom=14");
+        var response = await anonymous.GetAsync($"/api/v1/shared/views/{token}/{route}?bbox={bbox}{rest}");
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         JsonNode.Parse(await response.Content.ReadAsStringAsync())!["code"]!.GetValue<string>().ShouldBe("map.invalid_bbox");
+
+        // The same route and view, asked about a window on the globe, answers.
+        (await anonymous.GetAsync($"/api/v1/shared/views/{token}/{route}?bbox=25.4,45.4,25.6,45.6{rest}"))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     /// <summary>
@@ -532,6 +576,36 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         (await CountAsync(member, $"/api/v1/map/cave-entrances?bbox={window}&zoom=14")).ShouldBe(2);
     }
 
+    /// <summary>
+    /// An entrance is drawn on a link by its cave's level, so a cave that has been deleted takes its
+    /// entrance off the link even where the entrance row itself was left live — at the point zoom,
+    /// whose statement is a query, and at the cluster zoom, whose statement is SQL, alike.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_of_a_deleted_cave_is_not_drawn_on_a_link()
+    {
+        var cave = await CreateCaveAsync("Link Deleted Cave", 20.101, 69.101, "public", locationProtected: false);
+        var token = await ShareAsync(await CreateViewAsync(entrances: true, features: false, 20.1, 69.1));
+        const string window = "20.0,69.0,20.2,69.2";
+
+        // Drawn while the cave stands.
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(1);
+        var standing = (await GetJsonAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=6"))["features"]!.AsArray();
+        standing.ShouldHaveSingleItem()!["properties"]!["count"]!.GetValue<int>().ShouldBe(1);
+
+        // Only the cave is marked deleted; its entrance row stays live.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.Where(f => f.Id == cave.Id)
+                .ExecuteUpdateAsync(u => u.SetProperty(f => f.DeletedAt, DateTimeOffset.UtcNow))).ShouldBe(1);
+            (await db.Features.CountAsync(f => f.Id == cave.EntranceId)).ShouldBe(1);
+        }
+
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=14")).ShouldBe(0);
+        (await CountAsync(anonymous, $"/api/v1/shared/views/{token}/cave-entrances?bbox={window}&zoom=6")).ShouldBe(0);
+    }
+
     /// <summary>A view saved narrowed to a tag is narrowed to it on its link too, on all three statements.</summary>
     [Fact]
     public async Task A_link_is_narrowed_by_the_views_tag_filter()
@@ -682,7 +756,8 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
         CreateFeatureAsync(name, new { type = "Point", coordinates = new[] { lon, lat } }, "sinkhole", visibility, locationProtected);
 
     private async Task<Guid> CreateFeatureAsync(
-        string name, object geometry, string typeCode, string visibility, bool locationProtected, Guid? parentId = null)
+        string name, object geometry, string typeCode, string visibility, bool locationProtected, Guid? parentId = null,
+        object? properties = null)
     {
         long typeId;
         using (var scope = factory.Services.CreateScope())
@@ -702,6 +777,7 @@ public sealed class SharedViewDataTests : IAsyncLifetime, IDisposable, IClassFix
             visibility,
             locationProtected,
             parents = parentId is { } parent ? new[] { new { parentId = parent, isPrimary = true } } : null,
+            properties,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

@@ -15,9 +15,13 @@ import {
 import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
+import { ApiError } from '../../api/client.ts';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
-const { canSpy, doorSpy, cavesSpy, caveItems, downloadSpy, savedFilters, createSpy, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
+const { canSpy, doorSpy, cavesSpy, caveItems, cavesError, cavesRefetch, downloadSpy, savedFilters, createSpy, editorSpy, editorMounts, selectAllSpy, heldWrites } = vi.hoisted(() => ({
   caveItems: { current: [] as unknown[] },
+  cavesError: { current: null as unknown },
+  cavesRefetch: vi.fn(),
   editorSpy: vi.fn(),
   editorMounts: { count: 0 },
   heldWrites: { on: false, queue: [] as (() => void)[] },
@@ -56,7 +60,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaves: (params: unknown) => {
     cavesSpy(params);
     const items = caveItems.current;
-    return { data: { items, page: 1, pageSize: 20, totalItems: items.length }, isFetching: false, error: null };
+    // A failed read holds no answer: the list is left with nothing to draw, as the query leaves it.
+    if (cavesError.current !== null) {
+      return { data: undefined, isFetching: false, error: cavesError.current, refetch: cavesRefetch };
+    }
+    return { data: { items, page: 1, pageSize: 20, totalItems: items.length }, isFetching: false, error: null, refetch: cavesRefetch };
   },
   useCaveTypes: () => ({ data: [{ id: 3, name: 'Karst cave' }] }),
   useTags: () => ({ data: [{ id: 1, slug: 'bats', name: 'Bats' }] }),
@@ -179,6 +187,8 @@ beforeEach(async () => {
   doorSpy.mockReset().mockReturnValue(NO_DOOR);
   cavesSpy.mockReset();
   caveItems.current = [];
+  cavesError.current = null;
+  cavesRefetch.mockReset();
   downloadSpy.mockReset();
   savedFilters.current = [];
   createSpy.mockReset();
@@ -217,6 +227,42 @@ describe('the door from the cave list to the deleted caves and features', () => 
     show();
 
     expect(screen.getByTestId('cave-list-deleted')).toBeTruthy();
+  });
+});
+
+/**
+ * A read that failed is told apart from a filter the server would not run. Only the second may say
+ * the reader's filter was refused; anything else says the list could not be read and offers to
+ * ask again, and neither is ever drawn as a registry with no caves in it.
+ */
+describe('a cave list that could not be read', () => {
+  it('says the list could not be read, with a retry, when an unfiltered list fails', () => {
+    cavesError.current = new ApiError(500);
+    show();
+
+    const failed = screen.getByTestId('cave-registry-load-failed');
+    expect(failed.textContent).toContain(i18n.t('caveRegistry.loadFailed'));
+    expect(screen.queryByTestId('cave-registry-filter-refused')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(cavesRefetch).toHaveBeenCalled();
+  });
+
+  it('does not blame a good filter for a connection that was lost', () => {
+    cavesError.current = new TypeError('Failed to fetch');
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor' })!);
+    show(`/caves?filter=${token}`);
+
+    expect(screen.getByTestId('cave-registry-load-failed')).toBeInTheDocument();
+    expect(screen.queryByTestId('cave-registry-filter-refused')).toBeNull();
+  });
+
+  it('says the filter was refused when the server refused the filter', () => {
+    cavesError.current = new ApiError(400, 'filter.unknown_field');
+    const token = encodeFilter(caveRegistryDocument({ region: 'Bihor' })!);
+    show(`/caves?filter=${token}`);
+
+    expect(screen.getByTestId('cave-registry-filter-refused')).toBeInTheDocument();
+    expect(screen.queryByTestId('cave-registry-load-failed')).toBeNull();
   });
 });
 
@@ -366,6 +412,25 @@ describe('the registry read from its address', () => {
     fireEvent.blur(region);
 
     expect(screen.getByTestId('cave-registry-active-changed')).toBeInTheDocument();
+  });
+
+  it('Save with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      show(`/caves?filter=${encodeFilter(caveRegistryDocument({ region: 'Bihor' })!)}`);
+      fireEvent.click(screen.getByTestId('cave-registry-save-filter'));
+      const name = await screen.findByTestId('saved-filter-name');
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await vi.waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
+      await afterRejectionsAreReported();
+      expect(createSpy).not.toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   it('saves a control just committed that the page has not yet been told of', async () => {

@@ -18,7 +18,9 @@ vi.mock('./client.ts', () => ({
     POST: (...args: unknown[]) => post(...args),
   },
   ApiError: class ApiError extends Error {},
-  lastReadETag: () => '"7"',
+  // Only the trip itself has a version on file, so a lookup under any other path finds none
+  // and the save would go without the header the assertions below look for.
+  lastReadETag: (path: string) => (path === '/api/v1/trip-logs/trip-1' ? '"7"' : undefined),
 }));
 
 const { queryKeys, useImportTripTrack, useMoveTripLog, useTripLog, useUpdateTripLog } = await import('./hooks.ts');
@@ -82,6 +84,37 @@ describe('a write on a trip', () => {
     // the trip itself is not, because asking for it again would read back what is held.
     expect(client.getQueryState(queryKeys.tripLogs({}))?.isInvalidated).toBe(true);
     expect(client.getQueryState(queryKeys.tripLog('trip-1'))?.isInvalidated).toBe(false);
+  });
+
+  it('keeps its answer when a read of the trip that was already on its way lands after it', async () => {
+    // A re-read on returning to the tab goes out; the save is pressed in the same moment and
+    // answers first. The read speaks for the trip from before the save and must not put it back.
+    let landRead: (value: unknown) => void = () => {};
+    get.mockImplementation(() => new Promise((resolve) => (landRead = resolve)));
+    put.mockImplementation(() => answers(after));
+    const { client, wrapper } = harness();
+    const { result } = renderHook(
+      () => ({ save: useUpdateTripLog(), trip: useTripLog('trip-1') }),
+      { wrapper },
+    );
+    void client.refetchQueries({ queryKey: queryKeys.tripLog('trip-1') });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current.save.mutateAsync({
+        id: 'trip-1',
+        body: { title: 'After', tripDate: '2026-07-01' } as TripLogWrite,
+      });
+    });
+    await act(async () => {
+      landRead({ data: before, response: new Response(null, { status: 200 }) });
+    });
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.tripLog('trip-1'))?.fetchStatus).toBe('idle'),
+    );
+
+    expect(result.current.trip.data).toEqual(after);
+    expect(client.getQueryData(queryKeys.tripLog('trip-1'))).toEqual(after);
   });
 
   it('moving the trip carries the version held under the trip and takes the answer the same way', async () => {

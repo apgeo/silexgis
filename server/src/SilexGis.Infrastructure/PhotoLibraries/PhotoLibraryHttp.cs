@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Infrastructure.Outbound;
 
 namespace SilexGis.Infrastructure.PhotoLibraries;
 
@@ -125,6 +126,38 @@ public static class PhotoLibraryHttp
             PhotoLibraryException.RejectedCode,
             $"The {source} photo library answered a question with {mediaType ?? "no content type"} rather than JSON.");
     }
+
+    /// <summary>
+    /// Reads the body of an answer to a question asked in JSON, within <paramref name="limit"/>.
+    /// </summary>
+    /// <remarks>
+    /// These answers are requested with the headers read and the body still open, and the client's
+    /// own time limit stops counting at the headers, so the body is bounded here. A body that
+    /// stalls, or a connection that drops part-way through it, is the library being unavailable,
+    /// and is reported with that code rather than escaping as an unexpected error.
+    /// </remarks>
+    public static async Task<string> ReadBodyAsync(
+        HttpResponseMessage response, TimeSpan limit, PhotoLibrarySource source, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        using var deadline = OutboundBody.Deadline(limit, ct);
+        try
+        {
+            return await response.Content.ReadAsStringAsync(deadline.Token);
+        }
+        catch (Exception e) when (OutboundBody.IsLost(e, ct))
+        {
+            throw LostBody(source, e);
+        }
+    }
+
+    /// <summary>The refusal for an answer whose body stalled or was cut off.</summary>
+    public static PhotoLibraryException LostBody(PhotoLibrarySource source, Exception cause) =>
+        new(
+            PhotoLibraryException.UnavailableCode,
+            $"The {source} photo library's answer was cut off or did not finish arriving in time.",
+            cause);
 
     /// <summary>
     /// Decides whether what came back is a picture.

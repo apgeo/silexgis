@@ -87,6 +87,24 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('EventResponsesTab', () => {
+  it('keeps the list on screen when a later read fails, under a may-be-out-of-date notice', () => {
+    list.mockReturnValue({ data: answers(), isPending: false, error: new TypeError('Failed to fetch'), refetch: vi.fn() });
+    show();
+
+    expect(screen.queryByTestId('event-invitations-unavailable')).toBeNull();
+    expect(screen.getByTestId('event-invitations-refresh-failed')).toBeTruthy();
+  });
+
+  it('offers to read again when nothing could be read', () => {
+    const refetch = vi.fn();
+    list.mockReturnValue({ data: undefined, isPending: false, error: new TypeError('Failed to fetch'), refetch });
+    show();
+
+    expect(screen.getByTestId('event-invitations-unavailable')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   /**
    * The order rows arrive in is the order people answered in, and the place beside each is the
    * server's conclusion about that order against a limit. Re-deriving either here would be a

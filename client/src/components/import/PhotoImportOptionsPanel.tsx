@@ -205,7 +205,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                       min={-86400}
                       max={86400}
                       onChange={(value) => set('cameraClockOffsetSeconds', value ?? 0)}
-                      addonAfter={t('photoImport.seconds')}
+                      suffix={t('photoImport.seconds')}
                     />
                   </Form.Item>
                 </Col>
@@ -222,7 +222,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                       min={0}
                       max={86400}
                       onChange={(value) => set('trackMatchToleranceSeconds', value ?? 120)}
-                      addonAfter={t('photoImport.seconds')}
+                      suffix={t('photoImport.seconds')}
                     />
                   </Form.Item>
                 </Col>

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EditOutlined, ExportOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
 import { Alert, App, Empty, Flex, Popover, Skeleton, Switch, Tooltip, Typography } from 'antd';
 import Button from '../components/Button.tsx';
+import ReadFailedAlert from '../components/ReadFailedAlert.tsx';
+import { isSettledRefusal } from '../api/client.ts';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAnnotatedText, useResLinksForTarget, type ResLink } from '../api/hooks.ts';
@@ -10,14 +12,16 @@ import AddMemberModal, { type LinkOrigin } from '../components/reslinks/AddMembe
 import { memberRoute } from '../components/reslinks/registry.ts';
 import { relationPhraseFor } from '../components/reslinks/relations.ts';
 import { useDeleteResLink } from '../api/hooks.ts';
-import { resolveDark } from '../theme.ts';
+import { isConcurrencyConflict } from '../api/client.ts';
+import { resLinkProblemMessage } from '../components/reslinks/problems.ts';
+import { resolveDark, FONT_SIZE } from '../theme.ts';
 import { useUiPrefsStore } from '../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../stores/workspaceStore.ts';
 import type { ViewControlDescriptor } from '../viewlinks/resourceRef.ts';
-import { refreshRoster, reveal, subscribeToRoster } from '../viewlinks/viewTargets.ts';
+import { allControls, refreshRoster, reveal, subscribeToRoster } from '../viewlinks/viewTargets.ts';
 import AnnotatedTextView from './AnnotatedTextView.tsx';
 import { canonicalText } from './blocks.ts';
-import { highlightsFrom, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
+import { DOCUMENT_LINK_PAGE_SIZE, highlightsFrom, refFor, type Highlight, type HighlightTarget } from './highlights.ts';
 import LinkHoverCard from './LinkHoverCard.tsx';
 import { anchorFor, type GlobalRange } from './ranges.ts';
 
@@ -54,16 +58,22 @@ export default function AnnotatedTextPanel({
   mayPopOut = true,
 }: AnnotatedTextPanelProps) {
   const { t } = useTranslation();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const navigate = useNavigate();
   const dark = useUiPrefsStore((s) => resolveDark(s.appearance.theme));
   const setSelection = useWorkspaceStore((s) => s.setSelection);
 
-  const { data: text, isPending, isError, error } = useAnnotatedText(documentId);
+  const { data: text, isPending, isError, error, refetch: readTextAgain } = useAnnotatedText(documentId);
   // Every link on the document in one read. The panel has no paging of its own: a passage the
   // page did not fetch would be text with no highlight on it, which reads as "nothing is linked
   // here" — the one answer that is worse than a slow load.
-  const { data: linkPage } = useResLinksForTarget('document', documentId, { pageSize: 200 });
+  const {
+    data: linkPage,
+    isError: linksFailed,
+    refetch: readLinksAgain,
+  } = useResLinksForTarget('document', documentId, {
+    pageSize: DOCUMENT_LINK_PAGE_SIZE,
+  });
   const deleteLink = useDeleteResLink();
 
   const [editing, setEditing] = useState(false);
@@ -74,16 +84,14 @@ export default function AnnotatedTextPanel({
 
   useEffect(() => {
     let alive = true;
-    const read = () => {
-      void refreshRoster().then((roster) => {
-        if (alive) {
-          setControls(roster);
-        }
-      });
-    };
-
-    read();
-    const unsubscribe = subscribeToRoster(read);
+    // One roll call when the panel opens; after that the roster announces its own changes, so
+    // following it is a re-read of what is held, not another round of asking every window.
+    void refreshRoster().then((roster) => {
+      if (alive) {
+        setControls(roster);
+      }
+    });
+    const unsubscribe = subscribeToRoster(() => setControls(allControls()));
     return () => {
       alive = false;
       unsubscribe();
@@ -166,17 +174,44 @@ export default function AnnotatedTextPanel({
         title: t('textLink.edit.deleteTitle'),
         content: t('textLink.edit.deleteBody'),
         okButtonProps: { danger: true },
-        onOk: () => deleteLink.mutateAsync(highlight.linkId),
+        // Settles whatever the answer, so the dialog closes rather than hanging on a rejected
+        // promise, and a refusal is said in words. A conflict is already spoken by the
+        // application's own notice.
+        onOk: async () => {
+          try {
+            await deleteLink.mutateAsync(highlight.linkId);
+          } catch (error) {
+            if (!isConcurrencyConflict(error)) {
+              message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
+            }
+          }
+        },
       });
     },
-    [modal, t, deleteLink],
+    [modal, message, t, deleteLink],
   );
 
   if (isPending) {
     return <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />;
   }
 
-  if (isError || text === undefined) {
+  // Only the server's answer says a document is not an annotated text. A read that did not land
+  // says nothing about the document; and a text already on screen stays through a failed re-read.
+  if (isError && text === undefined && !isSettledRefusal(error)) {
+    return (
+      <ReadFailedAlert
+        isError
+        error={error}
+        held={false}
+        onRetry={readTextAgain}
+        title={t('textLink.textLoadFailed')}
+        testId="tl-text-load-failed"
+        style={{ margin: 16 }}
+      />
+    );
+  }
+
+  if (text === undefined) {
     return (
       <Alert
         type="info"
@@ -254,6 +289,30 @@ export default function AnnotatedTextPanel({
         )}
       </Flex>
 
+      {linksFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          data-testid="tl-links-failed"
+          title={t('textLink.linksFailed')}
+          action={
+            <Button size="small" type="link" onClick={() => void readLinksAgain()}>
+              {t('common.retry')}
+            </Button>
+          }
+          style={{ flex: '0 0 auto' }}
+        />
+      )}
+      {linkPage && linkPage.totalItems > linkPage.items.length && (
+        <Typography.Text
+          type="warning"
+          data-testid="tl-links-cut-off"
+          style={{ padding: '0 12px', fontSize: FONT_SIZE.sm, flex: '0 0 auto' }}
+        >
+          {t('textLink.linksCutOff', { shown: linkPage.items.length, total: linkPage.totalItems })}
+        </Typography.Text>
+      )}
       {editing && (
         <Alert
           type="info"
@@ -316,7 +375,7 @@ function ControlList({
     // Said rather than left blank. A reader whose clicks appear to do nothing needs to know that
     // there is no view open to send them to, which is a different problem from a broken link.
     return (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('textLink.controls.none')}
       </Typography.Text>
     );
@@ -324,7 +383,7 @@ function ControlList({
 
   return (
     <Flex vertical gap={6} style={{ minWidth: 220 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('textLink.controls.hint')}
       </Typography.Text>
       {controls.map((control) => (

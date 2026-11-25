@@ -162,6 +162,14 @@ public static partial class SurveyUploadEndpoints
         CaveSurvey? survey = null;
         var createdCave = false;
 
+        // An upload that names neither a survey nor a cave makes its cave. That save runs in a
+        // transaction that takes the hierarchy lock first and holds it until the upload commits:
+        // a protection switched on above the new cave waits for it, or commits before it and is
+        // seen. Held only for the statement that takes it, the lock would protect nothing.
+        await using var hierarchy = request.CaveSurvey is null && request.Cave is null
+            ? await writer.BeginHierarchyWriteAsync(ct)
+            : null;
+
         if (request.CaveSurvey is { } surveyRef)
         {
             survey = await db.CaveSurveys.FirstOrDefaultAsync(s => s.Id == surveyRef.Id, ct);
@@ -330,6 +338,11 @@ public static partial class SurveyUploadEndpoints
             // landed first. Nothing of this one was saved; sent again, it finds what the other
             // made and becomes the next version of it.
             return ApiProblems.Conflict(BusyCode, "Another upload of this survey arrived at the same moment; send it again.");
+        }
+
+        if (hierarchy is not null)
+        {
+            await hierarchy.CommitAsync(ct);
         }
 
         await profiles.RememberAsync(ctx.UserId, chosenProfiles, ct);

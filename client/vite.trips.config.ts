@@ -57,6 +57,13 @@ export default defineConfig({
       // reader should not have to know that: this output must be complete on a page that can
       // resolve no module specifier at all.
       external: [],
+      // The file travels on its own, onto other people's servers and inside a WordPress plugin, so
+      // it says what it is and under which licences. Every source file compiled into it carries
+      // the same pair (the bundle test holds that).
+      output: {
+        postBanner:
+          '/*! SilexGIS published-trip fold | AGPL-3.0-or-later OR GPL-2.0-or-later | source: https://github.com/apgeo/silexgis client/src/publictrips/ */',
+      },
     },
   },
 });

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { CameraOutlined, DeleteOutlined, HomeFilled, LinkOutlined, SaveOutlined } from '@ant-design/icons';
-import { App, Divider, Flex, Input, Tooltip, Typography } from 'antd';
+import { App, Divider, Flex, Input, Popconfirm, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,6 +17,7 @@ import {
 import { documentBackgroundName } from '../../map/baseLayers.ts';
 import { exportMapImage, viewHoldsPosition, viewLinkLeavesOut, type ViewConfig } from '../../map/viewConfig.ts';
 import { saveBlob } from '../../api/download.ts';
+import { mapViewProblem } from './mapViewProblems.ts';
 import ViewShareDialog, { type SharedViewLink } from './ViewShareDialog.tsx';
 
 interface ViewsPanelProps {
@@ -27,7 +29,7 @@ interface ViewsPanelProps {
 export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data: views } = useMapViews();
+  const { data: views, isError: viewsFailed, error: viewsError, refetch: refetchViews } = useMapViews();
   const { data: mapLayers } = useMapLayers();
   const createView = useCreateMapView();
   const deleteView = useDeleteMapView();
@@ -56,8 +58,8 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
       });
       setName('');
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(mapViewProblem(error, t));
     }
   };
 
@@ -71,8 +73,8 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
         url: `${window.location.origin}/shared/view/${updated.shareToken}`,
         leavesOut: viewLinkLeavesOut(view.config),
       });
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(mapViewProblem(error, t));
     }
   };
 
@@ -130,6 +132,15 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
           />
         </Tooltip>
       </Flex>
+      <ReadFailedAlert
+        isError={viewsFailed}
+        error={viewsError}
+        held={views !== undefined}
+        onRetry={refetchViews}
+        title={t('views.loadFailed')}
+        testId="views-load-failed"
+        style={{ marginTop: 8, marginBottom: 0 }}
+      />
       <List
         size="small"
         dataSource={views}
@@ -147,15 +158,26 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
                   onClick={() => void share(view)}
                 />
               </Tooltip>,
-              <Button
+              // Asks first: a deleted view cannot be brought back, and the icon sits beside Share.
+              <Popconfirm
                 key="delete"
-                size="small"
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                aria-label={t('a11y.deleteView', { name: view.name })}
-                onClick={() => deleteView.mutateAsync(view.id).catch(() => message.error(t('common.saveFailed')))}
-              />,
+                title={t('views.deleteConfirm')}
+                okButtonProps={{ danger: true, loading: deleteView.isPending }}
+                onConfirm={() =>
+                  deleteView
+                    .mutateAsync(view.id)
+                    .then(() => message.success(t('common.deleted')))
+                    .catch((error: unknown) => message.error(mapViewProblem(error, t, 'common.deleteFailed')))
+                }
+              >
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  aria-label={t('a11y.deleteView', { name: view.name })}
+                />
+              </Popconfirm>,
             ]}
           >
             {/* A button drawn as a link: an anchor without an address is skipped by Tab, which

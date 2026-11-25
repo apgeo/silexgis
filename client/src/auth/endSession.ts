@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { UserManager } from 'oidc-client-ts';
+import { leaveDeliberately } from './leaving.ts';
 
 /**
  * Ends this browser's session and leaves for `destination` as a new document.
@@ -40,5 +41,7 @@ export async function endSession(
     // A cookie that outlives this only means the next sign-in is answered without the form, which
     // the reader can still sign out of; the tokens go with the page either way.
   }
+  // The session is already over on the server: a "stay on this page?" question cannot undo that.
+  leaveDeliberately();
   window.location.replace(destination);
 }

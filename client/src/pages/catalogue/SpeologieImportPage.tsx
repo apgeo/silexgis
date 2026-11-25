@@ -19,6 +19,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
 import { useCoordinateFormatter } from '../../hooks/useCoordinateFormat.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCaveTypes,
@@ -34,7 +35,12 @@ import {
 import CataloguePlacementMap, {
   type PlacedCave,
 } from '../../components/catalogue/CataloguePlacementMap.tsx';
-import { speologieErrorMessage } from '../../components/catalogue/errorMessage.ts';
+import {
+  speologieErrorMessage,
+  speologieFailureReason,
+  speologieImportErrorMessage,
+} from '../../components/catalogue/errorMessage.ts';
+import SpeologieStatusNotice from '../../components/catalogue/SpeologieStatusNotice.tsx';
 
 /** What one row of the review has been decided to be. */
 interface RowDecision {
@@ -61,6 +67,8 @@ const VISIBILITIES: Visibility[] = ['private', 'cavingGroup', 'authenticated', '
  */
 export default function SpeologieImportPage() {
   const { t } = useTranslation();
+  // At phone width the list and the placement map stack instead of holding their desktop widths.
+  const isMobile = useIsMobile();
   const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { message } = App.useApp();
@@ -89,16 +97,24 @@ export default function SpeologieImportPage() {
 
   const caves = useSpeologieCaves(ids, status.data?.configured === true);
   const loaded = caves.map((q) => q.data).filter((x): x is SpeologieCave => Boolean(x));
-  const loading = caves.some((q) => q.isPending);
+  // isLoading, not isPending: a read that is never sent — no key configured, or a status that could
+  // not be read — stays pending for good, and would hold the table in its spinner for ever.
+  const loading = caves.some((q) => q.isLoading);
   const failed = caves.find((q) => q.error)?.error;
 
-  const decisionOf = (cave: SpeologieCave): RowDecision =>
-    decisions[cave.id] ?? { action: cave.alreadyImported ? 'update' : 'create' };
+  // A row nobody has touched proposes refreshing a cave that is already here and creating one
+  // that is not. The first change to a row (a cave type, a placed or cleared position) starts from
+  // that same proposal, so it never turns a refresh into a second copy of the cave.
+  const proposedDecision = (cave: SpeologieCave): RowDecision => ({
+    action: cave.alreadyImported ? 'update' : 'create',
+  });
 
-  const setDecision = (id: number, patch: Partial<RowDecision>) =>
+  const decisionOf = (cave: SpeologieCave): RowDecision => decisions[cave.id] ?? proposedDecision(cave);
+
+  const setDecision = (cave: SpeologieCave, patch: Partial<RowDecision>) =>
     setDecisions((current) => ({
       ...current,
-      [id]: { ...(current[id] ?? { action: 'create' }), ...patch },
+      [cave.id]: { ...(current[cave.id] ?? proposedDecision(cave)), ...patch },
     }));
 
   const placed: PlacedCave[] = loaded
@@ -141,7 +157,7 @@ export default function SpeologieImportPage() {
         setResult(answer);
       }
     } catch (error) {
-      message.error(speologieErrorMessage(error, t) ?? t('speologie.errors.importFailed'));
+      message.error(speologieImportErrorMessage(error, t));
     }
   };
 
@@ -181,7 +197,7 @@ export default function SpeologieImportPage() {
             size="small"
             style={{ width: 160 }}
             value={decisionOf(cave).action}
-            onChange={(action) => setDecision(cave.id, { action })}
+            onChange={(action) => setDecision(cave, { action })}
             data-testid={`speologie-action-${cave.id}`}
             options={[
               { value: 'create', label: t('speologie.wizard.actionCreate'), disabled: cave.alreadyImported },
@@ -190,7 +206,7 @@ export default function SpeologieImportPage() {
             ]}
           />
           {cave.alreadyImported ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="hint-text">
               {t('speologie.wizard.actionUpdateHint')}
             </Typography.Text>
           ) : null}
@@ -207,8 +223,9 @@ export default function SpeologieImportPage() {
           allowClear
           style={{ width: 170 }}
           value={decisionOf(cave).caveTypeCode}
-          onChange={(caveTypeCode) => setDecision(cave.id, { caveTypeCode })}
+          onChange={(caveTypeCode) => setDecision(cave, { caveTypeCode })}
           placeholder={t('speologie.wizard.caveTypeDerived')}
+          data-testid={`speologie-cave-type-${cave.id}`}
           options={(caveTypes.data ?? []).map((x) => ({ value: x.code, label: x.name }))}
         />
       ),
@@ -242,7 +259,7 @@ export default function SpeologieImportPage() {
               <Button
                 size="small"
                 type="link"
-                onClick={() => setDecision(cave.id, { longitude: undefined, latitude: undefined })}
+                onClick={() => setDecision(cave, { longitude: undefined, latitude: undefined })}
               >
                 {t('speologie.wizard.clearPosition')}
               </Button>
@@ -281,6 +298,7 @@ export default function SpeologieImportPage() {
         </Space>
       </Flex>
 
+      <SpeologieStatusNotice status={status} />
       {failed ? <Alert type="error" showIcon title={speologieErrorMessage(failed, t)} /> : null}
 
       <Alert
@@ -325,7 +343,7 @@ export default function SpeologieImportPage() {
       </Card>
 
       <Flex gap={16} wrap align="start">
-        <div style={{ flex: '1 1 640px', minWidth: 400 }}>
+        <div style={{ flex: isMobile ? '1 1 100%' : '1 1 640px', minWidth: isMobile ? 0 : 400 }}>
           <Table<SpeologieCave>
             rowKey="id"
             size="small"
@@ -337,12 +355,17 @@ export default function SpeologieImportPage() {
             data-testid="speologie-candidates"
           />
         </div>
-        <Card size="small" style={{ flex: '1 1 380px', minWidth: 320 }} title={t('speologie.wizard.position')}>
+        <Card
+          size="small"
+          style={{ flex: isMobile ? '1 1 100%' : '1 1 380px', minWidth: isMobile ? 0 : 320 }}
+          title={t('speologie.wizard.position')}
+        >
           <CataloguePlacementMap
             placed={placed}
             placingId={placingId}
             onPlace={(id, [lon, lat]) => {
-              setDecision(id, { longitude: lon, latitude: lat });
+              const cave = loaded.find((c) => c.id === id);
+              if (cave) setDecision(cave, { longitude: lon, latitude: lat });
               setPlacingId(null);
             }}
           />
@@ -373,7 +396,7 @@ export default function SpeologieImportPage() {
                 <ul>
                   {result.failures.map((f) => (
                     <li key={f.speologieId}>
-                      {f.title ?? f.speologieId}: {f.reason}
+                      {f.title ?? f.speologieId}: {speologieFailureReason(f, t)}
                     </li>
                   ))}
                 </ul>

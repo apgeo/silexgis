@@ -14,6 +14,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.PhotoLibraries;
 using SilexGis.Infrastructure.Persistence;
 
@@ -55,7 +56,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
 
     /// <summary>
     /// A second invented photograph, far enough from the first that nothing created at one is near
-    /// the other. Every test class in this suite shares one database, so a case asserting that
+    /// the other. The tests of this class share one database, so a case asserting that
     /// nothing was already standing nearby has to stand somewhere nothing else builds — otherwise it
     /// passes or fails on which order the tests happened to run in.
     /// </summary>
@@ -92,6 +93,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     private readonly string connectionString;
     private readonly LibraryStub library = new();
     private readonly LogCapture logs = new();
+    private readonly PauseAtCommit commits = new();
     private readonly SilexGisApiFactory factory;
 
     private string tag = string.Empty;
@@ -125,8 +127,8 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
     /// </summary>
     /// <remarks>
     /// Which photo libraries this installation is using is one stored row for the whole
-    /// installation, and every class in this suite shares one database — so a case that stopped a
-    /// library and then failed an assertion would hand the next class a host that quietly refuses
+    /// installation, and the tests of this class share one database — so a case that stopped a
+    /// library and then failed an assertion would hand the next test a host that quietly refuses
     /// every photo-library route, with nothing in its own failure naming the cause. Done here
     /// rather than at the end of each case for exactly that reason: it has to happen on the path
     /// where something went wrong.
@@ -939,7 +941,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         second.Status.ShouldBe(HttpStatusCode.Created, second.Body);
 
         // Information, not a refusal: the object asked for was created, and the answer says what was
-        // already standing there. Named exactly — every class in this suite shares one database, so
+        // already standing there. Named exactly — the tests of this class share one database, so
         // "something came back" would pass on a neighbour some other test left behind.
         var entrances = await JsonAsync(admin, $"/api/v1/caves/{first.Json.GetProperty("featureId").GetString()}/entrances");
         var firstEntranceId = entrances[0].GetProperty("id").GetString();
@@ -999,6 +1001,52 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
         envelope.GetProperty("entrance").GetProperty("positionQuality").GetString().ShouldBe("gps");
         envelope.GetProperty("feature").GetProperty("properties")
             .GetProperty("photoLibraryReference").GetString().ShouldBe("aa11bb22cc33");
+    }
+
+    /// <summary>
+    /// An entrance made from a photograph while its cave is being protected: the protection waits
+    /// for the entrance to commit and then reaches it, instead of reading the cave's children
+    /// before the new entrance is there and leaving the entrance's position unprotected.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_made_from_a_photograph_while_its_cave_is_protected_is_stored_protected()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var cave = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = $"Cave being protected {tag}" });
+        cave.Status.ShouldBe(HttpStatusCode.Created, cave.Body);
+        var caveId = Guid.Parse(cave.Json.GetProperty("featureId").GetString()!);
+
+        commits.Arm(sql => sql.Contains("INSERT INTO features", StringComparison.OrdinalIgnoreCase));
+        var entrance = PostAsync(admin, FeatureUrl, new
+        {
+            kind = "caveEntrance",
+            name = $"Entrance beside the protection {tag}",
+            caveFeatureId = caveId,
+        });
+        await commits.WaitPausedAsync();
+
+        var protect = Task.Run(async () =>
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await writer.SetLocationProtectedAsync(caveId, true);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, protect);
+        commits.Release();
+
+        var created = await entrance;
+        created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
+        await protect;
+
+        var entranceId = Guid.Parse(created.Json.GetProperty("featureId").GetString()!);
+        using var check = factory.Services.CreateScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await read.Features.IgnoreQueryFilters().AsNoTracking().SingleAsync(f => f.Id == entranceId)).IsProtectedEffective
+            .ShouldBeTrue("an entrance written beside its cave's protection must be stored protected");
     }
 
     /// <summary>
@@ -1393,6 +1441,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, ICl
             services =>
             {
                 services.AddSingleton<Serilog.Core.ILogEventSink>(logs);
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(commits));
                 services.AddHttpClient(PhotoPrismClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => stub);
 

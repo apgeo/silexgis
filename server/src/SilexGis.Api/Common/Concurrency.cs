@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Common;
@@ -109,9 +110,15 @@ public static class Concurrency
     /// each hold one and then reach for the other wait on each other until the database aborts one
     /// of them; taken in one order, the second simply waits for the first.
     /// </param>
+    /// <param name="hierarchy">
+    /// The write may move a feature or change a protection: the lock every derivation of hierarchy
+    /// state takes is taken first, before any row, for the same reason — the derivation would
+    /// otherwise take it while holding this row, and a protection switched on above the row by a
+    /// writer that already holds the lock would wait for the row while this waits for the lock.
+    /// </param>
     public static async Task<VersionHold> HoldIfMatchAsync(
         HttpContext http, SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct,
-        bool required = false, Guid? containerId = null)
+        bool required = false, Guid? containerId = null, bool hierarchy = false)
     {
         var header = http.Request.Headers.IfMatch;
         if (header.Count == 0 && required)
@@ -127,6 +134,11 @@ public static class Concurrency
         var hold = new VersionHold(http, db, table, id, owned);
         try
         {
+            if (hierarchy)
+            {
+                await HierarchyLockSql.TakeAsync(db, ct);
+            }
+
             if (containerId is { } container && container != id)
             {
                 await ConcurrencySql.LockVersionAsync(db, table, container, ct);
@@ -211,6 +223,12 @@ public static class Concurrency
     /// both safe.
     /// </remarks>
     public static string WeakETag(string value) => $"W/\"{value}\"";
+
+    /// <summary>
+    /// A row version written as the entity tag a read of that row answers with, for a listing
+    /// that carries each row's version in its body, so that the client sends it back as is.
+    /// </summary>
+    public static string ETagOf(long version) => $"\"{version}\"";
 
     /// <summary>
     /// Whether the request's <c>If-None-Match</c> names <paramref name="currentTag"/> — that is,

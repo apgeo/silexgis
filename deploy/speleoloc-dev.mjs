@@ -339,11 +339,15 @@ export function capabilitiesProblem(body) {
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 /** Runs a command to completion, echoing it first, and fails the script if it does not. */
-function run(command, args, options = {}) {
+function run(command, args, { allowStatus = [], ...options } = {}) {
   console.log(`\n$ ${command} ${args.join(' ')}`);
   const result = spawnSync(command, args, { stdio: 'inherit', ...options });
   if (result.error) {
     fail(`Could not run ${command}: ${result.error.message}`);
+  }
+  if (allowStatus.includes(result.status)) {
+    console.log(`(${command} exited with ${result.status}; continuing — see above for why.)`);
+    return;
   }
   if (result.status !== 0) {
     fail(`${command} ${args[0]} exited with ${result.status}.`);
@@ -1117,9 +1121,12 @@ async function upCommand(options) {
   run('dotnet', ['build', apiProject, '-v', 'quiet', '--nologo'], { cwd: serverDir });
 
   // Three sequential runs, not one: both seeding commands migrate, seed and then exit, so the
-  // serving instance is a third invocation. Their exit code says nothing — each returns zero
-  // after logging its refusal — which is why nothing here is trusted until the sign-in below.
-  run('dotnet', [...dotnetRun(), '--', 'seed-demo'], { cwd: serverDir, env: environment });
+  // serving instance is a third invocation. seed-demo exits 2 when it refuses a database holding
+  // content it did not make — on this harness's own database that is what a phone sync of an
+  // earlier session left, and the demo it needs is already there — so that one code is let
+  // through with a note. seed-speleoloc-dev still returns zero after logging its own refusal,
+  // which is why nothing here is trusted until the sign-in below.
+  run('dotnet', [...dotnetRun(), '--', 'seed-demo'], { cwd: serverDir, env: environment, allowStatus: [2] });
   run('dotnet', [...dotnetRun(), '--', 'seed-speleoloc-dev'], { cwd: serverDir, env: environment });
 
   console.log(`\n$ dotnet run --project ${apiProject} (serving on ${baseUrl})`);

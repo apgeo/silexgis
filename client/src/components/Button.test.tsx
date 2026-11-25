@@ -21,7 +21,12 @@ it('a labelled icon-only button is named by its label alone', () => {
 });
 
 it('an icon-only button with no label is still named, and development says it needs a label', () => {
-  const notices = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  // Only the expected notice is held back (the setup fails any test that lets it through);
+  // anything else said meanwhile still reaches the setup's record of console errors.
+  const passOn = console.error;
+  const notices = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    if (!String(args[0]).startsWith(ICON_ONLY_UNLABELLED)) passOn(...args);
+  });
   try {
     render(<Button icon={<ShareAltOutlined />} />);
 
@@ -37,7 +42,7 @@ it('an icon-only button with no label is still named, and development says it ne
 });
 
 it('says nothing about a button that has a label or words', () => {
-  const notices = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  const notices = vi.spyOn(console, 'error');
   try {
     render(
       <>

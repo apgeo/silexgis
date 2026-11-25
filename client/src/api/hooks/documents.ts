@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
-import { invalidateAfterDelete, unwrap, unwrapVoid, useInvalidateAttachments } from './shared.ts';
+import { sharesKeepingVersion } from '../readingVersion.ts';
+import { invalidateAfterDelete, unwrap, unwrapVersioned, unwrapVoid, useInvalidateAttachments } from './shared.ts';
 import type {
   AnnotatedText,
   AnnotatedTextCreate,
@@ -43,17 +44,53 @@ export function useAttachments(
 
 export type HistoryEvent = components['schemas']['HistoryEventDto'];
 
-/** Change history for an entity (incl. its children's events via audit roots). */
-/** @param enabled false keeps the request from being made — see {@link useAttachments}. */
+const HISTORY_PAGE_SIZE = 100;
+
+/**
+ * Change history for an entity (incl. its children's events via audit roots), newest first, read a
+ * page at a time: the newest page at once, each older one when the reader asks for it.
+ *
+ * The server pages by position, so a change recorded between two reads pushes every row one place
+ * down and the next page starts with a row already shown; rows are therefore kept once by id.
+ * A failed older page leaves the rows already read in place (`moreFailed`), so the reader is told
+ * the older part failed rather than losing the timeline to an error.
+ *
+ * @param enabled false keeps the request from being made — see {@link useAttachments}.
+ */
 export function useHistory(entityType: string, entityId: string | undefined, enabled = true) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.history(entityType, entityId ?? ''),
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       unwrap(api.GET('/api/v1/history', {
-        params: { query: { entityType, entityId: entityId!, pageSize: 100 } },
+        params: { query: { entityType, entityId: entityId!, page: pageParam, pageSize: HISTORY_PAGE_SIZE } },
       })),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.items.length > 0 && last.page * last.pageSize < last.totalItems ? last.page + 1 : undefined,
     enabled: enabled && !!entityId,
   });
+  const pages = query.data?.pages;
+  const data = useMemo(() => {
+    if (!pages) {
+      return undefined;
+    }
+    const seen = new Set<number>();
+    const items = pages.flatMap((page) => page.items).filter((e) => !seen.has(e.id) && !!seen.add(e.id));
+    return { items, totalItems: pages[pages.length - 1].totalItems };
+  }, [pages]);
+  const { fetchNextPage, refetch } = query;
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
+  return {
+    data,
+    isLoading: query.isLoading,
+    // Only a failure of the first page leaves nothing to show; an older page's failure is `moreFailed`.
+    isError: query.isError && !pages,
+    refetch,
+    hasMore: query.hasNextPage,
+    loadMore,
+    loadingMore: query.isFetchingNextPage,
+    moreFailed: query.isFetchNextPageError,
+  };
 }
 
 /**
@@ -245,7 +282,9 @@ export function useFileConfig() {
 export function useDocument(id: string | undefined, enabled = true) {
   return useQuery({
     queryKey: queryKeys.document(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
+    // The details form is filled from this reading and saves under the version it was answered at.
+    queryFn: () => unwrapVersioned(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
+    structuralSharing: sharesKeepingVersion,
     enabled: !!id && enabled,
     // Reading a document's text runs in a background job, so "being read" is a state that
     // resolves on its own while the panel is open. Poll only through that one state: every
@@ -272,15 +311,23 @@ export function useUpdateDocument() {
   const invalidateAttachments = useInvalidateAttachments();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: {
+    // `ifMatch` names the version the form was filled from: the save rewrites every field, so
+    // one filled before another save (or before reading the text set the language) is refused
+    // rather than putting the old values back. Left out, the newest version read is sent.
+    mutationFn: ({ id, ifMatch, ...body }: {
       id: string;
+      ifMatch?: string;
       title: string;
       documentTypeId: number | null;
       metadata: Record<string, unknown> | null;
       visibility: Visibility;
       cavingGroupId: string | null;
       language: string | null;
-    }) => unwrap(api.PUT('/api/v1/documents/{id}', { params: { path: { id } }, body })),
+    }) => unwrap(api.PUT('/api/v1/documents/{id}', {
+      params: { path: { id } },
+      body,
+      headers: ifMatch ? { 'If-Match': ifMatch } : undefined,
+    })),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.document(variables.id) });
       void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
@@ -570,9 +617,14 @@ export function useUploadFileVersion() {
       }));
     },
     // The attachment now points at the new head; both the gallery and any version list refresh.
+    // So does the document behind the file — its current file, version number, size and type
+    // all name the head — and the file records, or a document page open on the old head keeps
+    // showing it until the tab is refocused.
     onSuccess: () => {
       invalidateAttachments();
       void queryClient.invalidateQueries({ queryKey: ['file-versions'] });
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+      void queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 }
@@ -651,11 +703,17 @@ export function useUploadBatches(page = 1, pageSize = 20, enabled = true) {
   });
 }
 
+/** Whether a drop is still taking files: open to more, or being worked through in the background. */
+export function uploadBatchUnsettled(batch: { status: string } | undefined): boolean {
+  return batch?.status === 'open' || batch?.status === 'running';
+}
+
 /**
  * One drop and its counts.
  *
- * Polled while the work is still running, because an archive expansion and a directory import
- * happen in the background and the page has nothing else to learn from.
+ * With `poll`, asked again while the work is still running, because an archive expansion and a
+ * directory import happen in the background and the page has nothing else to learn from — and
+ * no longer once it has settled, since a finished drop does not change.
  */
 export function useUploadBatch(id: string | undefined, poll = false) {
   return useQuery({
@@ -663,16 +721,21 @@ export function useUploadBatch(id: string | undefined, poll = false) {
     queryFn: () =>
       unwrap(api.GET('/api/v1/upload-batches/{id}', { params: { path: { id: id! } } })),
     enabled: Boolean(id),
-    refetchInterval: poll ? 2000 : false,
+    refetchInterval: (query) => (poll && uploadBatchUnsettled(query.state.data) ? 2000 : false),
     retry: false,
   });
 }
 
-/** The per-file report of one drop. */
+/**
+ * The per-file report of one drop. `poll` asks again every two seconds — what a caller passes
+ * while the drop is still running, so the report grows with the work instead of keeping the
+ * first, short answer.
+ */
 export function useUploadBatchItems(
   id: string | undefined,
   params: UploadBatchItemParams = {},
   enabled = true,
+  poll = false,
 ) {
   return useQuery({
     queryKey: queryKeys.uploadBatchItems(id ?? '', params),
@@ -681,6 +744,7 @@ export function useUploadBatchItems(
         params: { path: { id: id! }, query: params },
       })),
     enabled: Boolean(id) && enabled,
+    refetchInterval: poll ? 2000 : false,
     placeholderData: keepPreviousData,
     retry: false,
   });

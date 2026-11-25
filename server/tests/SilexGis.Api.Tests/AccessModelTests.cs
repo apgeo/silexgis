@@ -341,7 +341,7 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixtur
             .Where(g => g.Slug == SeededPermissionGroups.FullAdministratorsSlug)
             .Select(g => g.Id).SingleAsync();
 
-        // The database is shared across suites, so other full administrators exist. Park
+        // Other tests of this class make full administrators of their own. Park
         // every direct membership (including this account's own) for the duration: the
         // group-mediated path must then be the installation's only one.
         var parkedMembers = await db.PermissionGroupMembers
@@ -441,9 +441,9 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixtur
     public async Task The_guard_counts_only_live_unlocked_reachable_accounts()
     {
         // No endpoint deletes or locks a user yet (/users administration is unbuilt), so
-        // the lock/delete arms of the §-style "live membership" rule are pinned against
-        // the guard itself: a locked or deleted account must stop counting, exactly as
-        // the spec words it — live-membership aware, not row-count aware.
+        // the lock and delete arms of the rule are pinned against the guard itself. The
+        // rule: only a live account counts as a member, so a locked or deleted account
+        // must stop counting at once — the guard counts live memberships, not rows.
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var soleId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"acc-live-{suffix}@t.local");
 

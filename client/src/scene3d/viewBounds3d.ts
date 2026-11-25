@@ -75,7 +75,17 @@ export function viewportBounds(view: GroundView): Scene3DBounds | undefined {
  * matching it keeps the two views hitting the same server-side response cache entries.
  */
 export function boundsToBbox(bounds: Scene3DBounds): string {
-  return bounds.map((n) => n.toFixed(5)).join(',');
+  const [west, south, east, north] = bounds.map((n) => Number(n.toFixed(5)));
+  // A box narrower than the rounding — a camera a few metres from what it looks at, following a
+  // passage down a cave — would go out with its two sides equal, which every map endpoint refuses
+  // as no box at all. It is widened to one step of the rounding instead, towards the inside of the
+  // world, which still asks for exactly the place being looked at.
+  const step = 0.00001;
+  const widen = (low: number, high: number, limit: number): [number, number] =>
+    high > low ? [low, high] : low + step <= limit ? [low, low + step] : [high - step, high];
+  const [w, e] = widen(west, east, 180);
+  const [s, n] = widen(south, north, 90);
+  return [w, s, e, n].map((value) => value.toFixed(5)).join(',');
 }
 
 /** The middle of a box, as a ground point at ellipsoid height. */
@@ -110,8 +120,12 @@ export function cameraFramingBounds(
   zoom: number,
   current: Camera3DState,
   heightForZoom: (zoom: number, latitude: number) => number,
+  groundHeight: (longitude: number, latitude: number) => number = () => 0,
 ): Camera3DState | undefined {
-  const target = boundsCenter(bounds);
+  // Aimed at the ground drawn there: a zoom is a height over what is looked at, and measured from
+  // the ellipsoid it would stand the camera inside any hill higher than that height.
+  const center = boundsCenter(bounds);
+  const target = { ...center, height: groundHeight(center.lon, center.lat) };
   const height = heightForZoom(zoom, target.lat);
   if (!Number.isFinite(height) || height <= 0) {
     return undefined;

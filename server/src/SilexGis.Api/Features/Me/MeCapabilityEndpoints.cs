@@ -6,6 +6,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.TestData;
 
 namespace SilexGis.Api.Features.Me;
 
@@ -45,7 +46,8 @@ public sealed record MyPermissionGroupDto(Guid Id, string Name, string Slug, boo
 public sealed record CapabilitiesDto(
     IReadOnlyDictionary<string, AccessAction> Domains,
     bool IsFullAdmin,
-    IReadOnlyDictionary<string, IReadOnlyList<CreatableCavingGroupDto>> CreateInCavingGroups);
+    IReadOnlyDictionary<string, IReadOnlyList<CreatableCavingGroupDto>> CreateInCavingGroups,
+    bool TestDataGenerator);
 
 /// <summary>
 /// One of the caller's own caving groups, named so a form can say which group a new row will
@@ -79,12 +81,12 @@ public static class MeCapabilityEndpoints
     }
 
     private static async Task<Results<Ok<CapabilitiesDto>, UnauthorizedHttpResult>> GetAsync(
-        SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        SilexGisDbContext db, IAccessContextAccessor accessAccessor, TestDataAvailability testData, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         return ctx is null
             ? TypedResults.Unauthorized()
-            : TypedResults.Ok(await CapabilitiesOfAsync(ctx, db, ct));
+            : TypedResults.Ok(await CapabilitiesOfAsync(ctx, db, testData, ct));
     }
 
     /// <summary>
@@ -100,7 +102,7 @@ public static class MeCapabilityEndpoints
     /// by the rule the write itself asks.
     /// </remarks>
     private static async Task<CapabilitiesDto> CapabilitiesOfAsync(
-        AccessContext ctx, SilexGisDbContext db, CancellationToken ct)
+        AccessContext ctx, SilexGisDbContext db, TestDataAvailability testData, CancellationToken ct)
     {
         var creatable = new Dictionary<AccessDomain, IReadOnlyList<Guid>>();
         foreach (var domain in Enum.GetValues<AccessDomain>())
@@ -137,7 +139,11 @@ public static class MeCapabilityEndpoints
             pair => (IReadOnlyList<CreatableCavingGroupDto>)
                 [.. named.Where(group => pair.Value.Contains(group.Id))]);
 
-        return new CapabilitiesDto(DomainRights.Of(ctx), ctx.IsFullAdmin, createIn);
+        // The generator is offered by rank, to full administrators, and only while both halves
+        // of its switch are on; asked only for them, so nobody else's request reads the setting.
+        var testDataGenerator = ctx.IsFullAdmin && await testData.IsAvailableAsync(ct);
+
+        return new CapabilitiesDto(DomainRights.Of(ctx), ctx.IsFullAdmin, createIn, testDataGenerator);
     }
 
     private static async Task<Results<Ok<List<MyPermissionGroupDto>>, UnauthorizedHttpResult>> GetGroupsAsync(

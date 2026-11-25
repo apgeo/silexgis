@@ -44,6 +44,15 @@ const spread = (argv) => (argv.includes(SPREAD) ? argv : [...argv, SPREAD]);
  */
 const DRAWS_A_3D_SCENE = [
   'scene3d.spec.ts',
+  'scene3d-flyby.spec.ts',
+  'scene3d-flyby-movie.spec.ts',
+  'scene3d-flyby-bundle.spec.ts',
+  'scene3d-flyby-look.spec.ts',
+  'scene3d-flyby-edit.spec.ts',
+  'scene3d-flyby-features.spec.ts',
+  'scene3d-flyby-relief.spec.ts',
+  'scene3d-relief.spec.ts',
+  'scene3d-download.spec.ts',
   'scene3d-walls.spec.ts',
   'terrain.spec.ts',
   'terrain-derivatives.spec.ts',

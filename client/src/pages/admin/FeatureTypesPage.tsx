@@ -17,6 +17,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -30,9 +31,10 @@ import {
   type FeatureTypeWrite,
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
-import { bundledFeatureSymbols } from '../../map/featureSymbols.ts';
-import { featureSymbolUrl } from '../../map/markerPalette.ts';
+import { surfaceFeaturePalette } from '../../map/markerPalette.ts';
+import SymbolPicker, { SymbolPreview, SymbolSourcesNote } from '../../components/map/SymbolPicker.tsx';
 
 const categories: FeatureTypeWrite['category'][] = ['surface', 'underground', 'area', 'structure'];
 const shapes: FeatureTypeWrite['acceptedGeometryClasses'] = [
@@ -90,7 +92,7 @@ export default function FeatureTypesPage() {
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
   const canDelete = hasAccessAction(capabilities?.domains.taxonomies, 'delete');
-  const { data: types, isLoading } = useFeatureTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useFeatureTypes();
   const createType = useCreateFeatureType();
   const updateType = useUpdateFeatureType();
   const deleteType = useDeleteFeatureType();
@@ -98,8 +100,10 @@ export default function FeatureTypesPage() {
   const [editing, setEditing] = useState<FeatureType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<FeatureTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   const shipped = editing?.isSeeded === true;
   const bound = editing !== null && editing.boundKind !== 'generic';
 
@@ -136,7 +140,12 @@ export default function FeatureTypesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     // A blank box means "none", which is a different thing from an empty JSON object.
     const body: FeatureTypeWrite = {
       ...values,
@@ -192,6 +201,14 @@ export default function FeatureTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="feature-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}
@@ -206,7 +223,7 @@ export default function FeatureTypesPage() {
             width: 40,
             render: (_: unknown, type: FeatureType) =>
               type.symbolFile ? (
-                <img src={featureSymbolUrl(type.symbolFile)} alt="" width={20} height={20} />
+                <SymbolPreview reference={type.symbolFile} color={surfaceFeaturePalette.point} size={20} />
               ) : null,
           },
           { title: t('admin.featureTypes.name'), dataIndex: 'name' },
@@ -280,7 +297,8 @@ export default function FeatureTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.featureTypes.edit') : t('admin.featureTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -288,7 +306,7 @@ export default function FeatureTypesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           {shipped && (
             <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('admin.featureTypes.shippedNote')} />
           )}
@@ -364,21 +382,12 @@ export default function FeatureTypesPage() {
           >
             <Switch disabled={shipped} />
           </Form.Item>
-          <Form.Item name="symbolFile" label={t('admin.featureTypes.symbol')}>
-            <Select
-              allowClear
-              style={{ width: 280 }}
-              placeholder={t('admin.featureTypes.noSymbol')}
-              options={bundledFeatureSymbols.map((file) => ({
-                value: file,
-                label: (
-                  <Flex gap={8} align="center">
-                    <img src={featureSymbolUrl(file)} alt="" width={16} height={16} />
-                    {file}
-                  </Flex>
-                ),
-              }))}
-            />
+          <Form.Item
+            name="symbolFile"
+            label={t('admin.featureTypes.symbol')}
+            extra={<SymbolSourcesNote />}
+          >
+            <SymbolPicker allowClear layerColor={surfaceFeaturePalette.point} testId="feature-type-symbol" />
           </Form.Item>
           <Form.Item
             name="style"
@@ -411,7 +420,7 @@ function SchemaPreview({ form }: { form: ReturnType<typeof Form.useForm<FeatureT
 
   return (
     <Flex vertical gap={4}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.featureTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (

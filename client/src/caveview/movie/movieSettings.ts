@@ -11,12 +11,12 @@
  */
 
 import type { CaveViewLayerGetter } from '../loadCaveView.ts';
-import { GIF_FRAME_RATES, type MovieFormat, type MovieQuality } from './encode/movieFormats.ts';
+import { GIF_FRAME_RATES, type MovieFormat, type MovieQuality } from '../../movie/encode/movieFormats.ts';
 import { movieShadingId, movieShadingRememberedAs, type MovieShadingId } from './movieShadings.ts';
 
 // The format and quality are the encoders' words, and a GIF's frame rates are a fact about the
 // GIF format; each has its one home beside the encoders, and the settings speak them.
-export type { MovieFormat, MovieQuality } from './encode/movieFormats.ts';
+export type { MovieFormat, MovieQuality } from '../../movie/encode/movieFormats.ts';
 
 /**
  * How a caver's marker names them. A caver record holds one full name, so `first` is its first

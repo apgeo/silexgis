@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Empty, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
 import type { FeatureLike } from 'ol/Feature';
 import type Feature from 'ol/Feature';
-import Map from 'ol/Map';
-import View from 'ol/View';
+import type Map from 'ol/Map';
 import GeoJSON from 'ol/format/GeoJSON';
-import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat, transformExtent } from 'ol/proj';
+import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useCampAreasMap, useTripLogMap, type CalendarEntry } from '../../api/hooks.ts';
 import { surfaceFeaturePalette, tripPalette as palette } from '../../map/markerPalette.ts';
+import { useSmallMap } from '../../components/map/useSmallMap.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
@@ -129,10 +128,7 @@ interface Props {
  */
 export default function CalendarMapPane({ entries, from, to, active, height = 320 }: Props) {
   const { t } = useTranslation();
-  const target = useRef<HTMLDivElement | null>(null);
-  const map = useRef<Map | null>(null);
   const source = useRef(new VectorSource());
-  const fitted = useRef(false);
   const [bbox, setBbox] = useState<string | undefined>(undefined);
   // Counted as records and not as shapes, because one trip can state two of them and a reader
   // comparing this against the record is counting records. Held rather than read off the layer
@@ -152,6 +148,25 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
   // the trip's own identifier, so these are sets of rows and not counts of anything drawable.
   const wantedTrips = new Set(entries.filter((e) => e.source === 'tripLog').map((e) => e.id));
   const wantedCamps = new Set(entries.filter((e) => e.source === 'expedition').map((e) => e.id));
+
+  // Built only while the page says this pane is really on screen, which is after its container
+  // was mounted, and kept through every re-render so the reader's panning survives them.
+  const { targetRef, map, ready, frame } = useSmallMap({
+    center: DEFAULT_CENTER,
+    zoom: 9,
+    active,
+    layers: () => [new VectorLayer({ source: source.current, style: styleFor })],
+    onCreate: (instance) => {
+      // Every rest after a move is a new question. Asking while the view is still moving would
+      // ask several times for rectangles nobody looked at.
+      instance.on('moveend', () => setBbox(viewBbox(instance)));
+      // A map does not know how big it is at the moment it is built — it learns that from the
+      // container once, asynchronously, and then again whenever the window is resized. Until it
+      // knows, there is no rectangle to ask about and the pane asks nothing rather than guessing
+      // one; this is what turns the first measurement into the first question.
+      instance.on('change:size', () => setBbox(viewBbox(instance)));
+    },
+  });
 
   const draw = () => {
     source.current.clear();
@@ -184,79 +199,17 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
     // Framed once, on the first answer that holds anything, and never again: the rectangle asked
     // for is the one on screen, so moving the view is what asks the next question — and a pane
     // that re-framed itself on every answer would chase its own request round the map and would
-    // undo every pan the reader made.
-    if (!fitted.current && features.length > 0) {
-      const extent = source.current.getExtent();
-      // An empty source reports an infinite extent, and fitting one throws.
-      if (extent && Number.isFinite(extent[0])) {
-        fitted.current = true;
-        map.current?.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 14 });
-      }
-    }
+    // undo every pan the reader made. One key for every answer is what makes it once.
+    frame('first-answer', source.current.getExtent(), { padding: [24, 24, 24, 24], maxZoom: 14 });
   };
-
-  const buildMap = () => {
-    if (map.current || !target.current || !active) {
-      return;
-    }
-    const instance = new Map({
-      target: target.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            attributions: '© OpenStreetMap contributors',
-          }),
-        }),
-        new VectorLayer({ source: source.current, style: styleFor }),
-      ],
-      view: new View({ center: fromLonLat(DEFAULT_CENTER), zoom: 9 }),
-    });
-    // Every rest after a move is a new question. Asking while the view is still moving would ask
-    // several times for rectangles nobody looked at.
-    instance.on('moveend', () => setBbox(viewBbox(instance)));
-    // A map does not know how big it is at the moment it is built — it learns that from the
-    // container once, asynchronously, and then again whenever the window is resized. Until it
-    // knows, there is no rectangle to ask about and the pane asks nothing rather than guessing
-    // one; this is what turns the first measurement into the first question.
-    instance.on('change:size', () => setBbox(viewBbox(instance)));
-    map.current = instance;
-    setBbox(viewBbox(instance));
-    draw();
-  };
-
-  const onTargetRef = (el: HTMLDivElement | null) => {
-    target.current = el;
-    buildMap();
-  };
-
-  // The map becomes buildable the moment the page says this pane is really on screen, which is
-  // after its container was mounted.
-  useEffect(() => {
-    if (active) {
-      buildMap();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- building is idempotent and guarded
-  }, [active]);
 
   useEffect(() => {
+    if (ready && map.current) {
+      setBbox(viewBbox(map.current));
+    }
     draw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraws when any answer changes
-  }, [data, campData, entries]);
-
-  // The only teardown site. Doing it from the target ref would run on every re-render, because a
-  // callback ref with a fresh identity is detached and re-attached each time, and the map would
-  // be destroyed and rebuilt — losing wherever the reader had panned to.
-  useEffect(
-    () => () => {
-      map.current?.setTarget(undefined);
-      // Every layer, source and interaction the map owns stays subscribed until the map is
-      // disposed; dropping the reference alone leaks the whole graph for the life of the page.
-      map.current?.dispose();
-      map.current = null;
-    },
-    [],
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraws when the map or any answer changes
+  }, [ready, data, campData, entries]);
 
   /**
    * What the pane says under the map, which is three different sentences because only one of the
@@ -278,7 +231,21 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={t('calendar.mapFailed')}
         data-testid="calendar-map-failed"
-      />
+      >
+        {/* Only the half that failed is asked again; the other one's answer still stands. */}
+        <Button
+          onClick={() => {
+            if (trips.isError) {
+              void trips.refetch();
+            }
+            if (camps.isError) {
+              void camps.refetch();
+            }
+          }}
+        >
+          {t('common.retry')}
+        </Button>
+      </Empty>
     );
   } else if (answered && drawn === 0) {
     caption = (
@@ -303,7 +270,7 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
   return (
     <div data-testid="calendar-map-pane" style={{ marginTop: 12 }}>
       <div
-        ref={onTargetRef}
+        ref={targetRef}
         data-testid="calendar-map"
         style={{ width: '100%', height, borderRadius: 4, overflow: 'hidden' }}
       />

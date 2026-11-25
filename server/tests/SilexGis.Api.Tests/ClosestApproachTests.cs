@@ -55,6 +55,15 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// <summary>Pythagoras over the two above: sqrt(222.3² + 150²).</summary>
     private const double ExpectedDistanceM = 268.2;
 
+    /// <summary>
+    /// A window over every latitude any test here builds at. The table tests do not rely on the
+    /// window being theirs alone — they read the answer through <see cref="Own"/>, which keeps
+    /// only pairs both of whose caves the test itself made — so another test is free to put
+    /// caves anywhere in it. The row limit is at its ceiling so a crowd of other pairs, which
+    /// the table sorts nearest first, cannot push the test's own off the end.
+    /// </summary>
+    private const string Window = "west=23.9&south=45.9&east=24.1&north=46.2&limit=200";
+
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
     private readonly int workingSrid = new SpatialOptions().WorkingSrid;
@@ -75,8 +84,8 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             },
-            // The queue lives in the container every test class shares; a drain started here would
-            // claim work another class queued and fail it against storage this host does not have.
+            // No drain in this host: one would claim the jobs these tests queue and run them on its
+            // own schedule, a second writer beside the tests that run each job by hand.
             JobWorkers.RemoveFrom);
     }
 
@@ -101,6 +110,41 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// A measurement that runs past its budget is stopped by the database and answered as "too
+    /// costly", not left to the command timeout to end as a bare server error. Driven with a
+    /// statement that sleeps, because two surveys large enough to run past twenty seconds are not
+    /// something a test should build; the same wrapper carries both routes' statements. Beside it,
+    /// a statement inside the budget answers its value.
+    /// </summary>
+    [Fact]
+    public async Task A_measurement_that_outruns_its_budget_is_reported_as_too_costly_and_one_inside_it_answers()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var stopped = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            100,
+            (connection, transaction) => connection.ExecuteScalarAsync<int>(
+                new CommandDefinition("SELECT 1 FROM pg_sleep(2)", transaction: transaction)),
+            CancellationToken.None);
+        stopped.TooCostly.ShouldBeTrue();
+
+        var answered = await ClosestApproachSql.WithinBudgetAsync(
+            db,
+            ClosestApproachSql.StatementBudgetMs,
+            (connection, transaction) => connection.ExecuteScalarAsync<int>(
+                new CommandDefinition("SELECT 7", transaction: transaction)),
+            CancellationToken.None);
+        answered.ShouldBe((false, 7));
+
+        // The budget was local to its transaction: the connection the next request borrows has
+        // no timeout left on it.
+        var setting = await db.Database.GetDbConnection().ExecuteScalarAsync<string>("SHOW statement_timeout");
+        setting.ShouldBe("0");
+    }
+
+    /// <summary>
     /// The test this whole feature stands or falls on. Three-dimensional distance is cartesian: it
     /// adds the three ordinates as it finds them, so over stored longitude, latitude and metres of
     /// altitude it returns a number that is mostly the height difference and is not a distance at
@@ -108,6 +152,67 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// transform deliberately made a no-op — and the second must fail every assertion the first
     /// passes, or nothing here would notice degrees being used as metres.
     /// </summary>
+    /// <summary>
+    /// Two neighbouring surveys of thirty thousand legs each — nine hundred million leg pairs,
+    /// which compared whole run past the budget (about forty seconds on the machine this was
+    /// written on) — are measured inside it, to the same distance the whole comparison gives.
+    /// </summary>
+    [Fact]
+    public async Task Two_surveys_of_thirty_thousand_legs_each_are_measured_inside_the_budget()
+    {
+        var (south, north) = await CreatePairAsync();
+        await ReplaceLineWorkAsync(south, eastM: 0, altitudeM: 500);
+        await ReplaceLineWorkAsync(north, eastM: 650, altitudeM: 460);
+
+        var response = await owner.GetAsync($"/api/v1/caves/{south}/closest-approach/{north}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var answer = JsonDocument.Parse(payload).RootElement;
+
+        // The distance the whole comparison of the two generated surveys gives.
+        answer.GetProperty("distanceM").GetDouble().ShouldBe(57.6078, 0.01);
+        answer.GetProperty("from").ValueKind.ShouldBe(JsonValueKind.Object);
+        answer.GetProperty("to").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    /// <summary>
+    /// Replaces a cave's default line work with a generated survey of thirty thousand legs: a snake
+    /// of rows 600 m long, 4 m legs, rows 3 m apart, its height rising and falling 10 m, laid out
+    /// in the working system <paramref name="eastM"/> metres east of a fixed origin — outside the
+    /// window the table tests ask about, as the class shares one database.
+    /// </summary>
+    private async Task ReplaceLineWorkAsync(Guid caveId, double eastM, double altitudeM)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var updated = await connection.ExecuteAsync(
+            """
+            WITH origin AS (
+                SELECT ST_X(o) AS x, ST_Y(o) AS y
+                FROM ST_Transform(ST_SetSRID(ST_MakePoint(24.5, 45.5), 4326), @srid) AS o
+            ),
+            walk AS (
+                SELECT ST_Transform(ST_SetSRID(ST_Collect(ST_MakeLine(
+                    ST_MakePoint(
+                        origin.x + @east + CASE WHEN (i / 150) % 2 = 0 THEN (i % 150) * 4 ELSE (149 - i % 150) * 4 END,
+                        origin.y + (i / 150) * 3,
+                        @altitude + 10 * sin(i / 50.0)),
+                    ST_MakePoint(
+                        origin.x + @east + CASE WHEN ((i + 1) / 150) % 2 = 0 THEN ((i + 1) % 150) * 4 ELSE (149 - (i + 1) % 150) * 4 END,
+                        origin.y + ((i + 1) / 150) * 3,
+                        @altitude + 10 * sin((i + 1) / 50.0))) ORDER BY i), @srid), 4326) AS g
+                FROM origin, generate_series(0, 29999) AS i
+                GROUP BY origin.x, origin.y
+            )
+            UPDATE features f SET geom = walk.g
+            FROM walk, centerlines c
+            WHERE c.id = f.id AND c.cave_feature_id = @cave AND c.is_default
+            """,
+            new { srid = workingSrid, east = eastM, altitude = altitudeM, cave = caveId });
+        updated.ShouldBe(1);
+    }
+
     [Fact]
     public async Task The_distance_is_measured_in_metres_and_a_variant_measured_in_degrees_fails_it()
     {
@@ -260,15 +365,16 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     /// it cannot be used to ask the per-pair question about a cave the per-pair route refuses.
     /// </summary>
     /// <remarks>
-    /// Its caves sit in a band of latitude no other test here uses, and the box is drawn round
-    /// that band. Every test in this class shares one database, so a box wide enough to be
-    /// convenient would list caves another test made and turn an ordering assertion into a race.
+    /// Every test in this class shares one database, and the table route takes a box and no ids,
+    /// so a wide window lists caves other tests made. The assertions are therefore made over the
+    /// pairs among this test's own four caves and nothing else: counts, order and the nearest
+    /// pair are all properties of that subset, and stay true whatever else the window holds.
     /// </remarks>
     [Fact]
     public async Task The_table_lists_the_nearest_pairs_and_only_ones_the_caller_may_place()
     {
         const double band = 46.02;
-        const string box = "west=23.9&south=46.015&east=24.1&north=46.035&maxDistanceM=2000";
+        const string box = $"{Window}&maxDistanceM=2000";
 
         var south = await CreateCaveAsync();
         await UploadCenterlineAsync(south, Passage(band, band + 0.001, SouthAltitude));
@@ -283,25 +389,39 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
         var guarded = await CreateCaveAsync(locationProtected: true);
         await UploadCenterlineAsync(guarded, Passage(band + 0.0042, band + 0.0043, NorthAltitude));
 
+        Guid[] ours = [south, north, near, guarded];
+
         var forOwner = await Read(owner.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
-        var ownerPairs = forOwner.GetProperty("pairs");
+        var ownerPairs = Own(forOwner.GetProperty("pairs"), ours);
 
         // Four caves make six pairs, and the owner may place all of them.
-        ownerPairs.GetArrayLength().ShouldBe(6);
+        ownerPairs.Count.ShouldBe(6);
         CavesIn(ownerPairs).ShouldContain(guarded);
+        // The window also holds caves other tests in this class made, so the count is a floor here.
+        var ownerConsidered = forOwner.GetProperty("cavesConsidered").GetInt32();
+        ownerConsidered.ShouldBeGreaterThanOrEqualTo(4);
+        forOwner.GetProperty("partial").GetBoolean().ShouldBeFalse();
 
         var forViewer = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{box}"));
-        var viewerPairs = forViewer.GetProperty("pairs");
+        var viewerPairs = Own(forViewer.GetProperty("pairs"), ours);
 
         // The guarded cave is in no pair at all for the viewer, on either side of one — and the
         // three pairs among the open caves are all there, so this is a protection rule rather than
         // a table that quietly stopped being built.
         CavesIn(viewerPairs).ShouldNotContain(guarded);
-        viewerPairs.GetArrayLength().ShouldBe(3);
+        viewerPairs.Count.ShouldBe(3);
         CavesIn(viewerPairs).ShouldContain(north);
 
+        // The count of what was paired is a count of what this caller may place, so the guarded
+        // cave is missing from it. Tests in one class run one at a time, so nothing was added
+        // between the two reads and the viewer's count is below the owner's.
+        var viewerConsidered = forViewer.GetProperty("cavesConsidered").GetInt32();
+        viewerConsidered.ShouldBeGreaterThanOrEqualTo(3);
+        viewerConsidered.ShouldBeLessThan(ownerConsidered);
+        forViewer.GetProperty("partial").GetBoolean().ShouldBeFalse();
+
         // Nearest first.
-        var distances = viewerPairs.EnumerateArray()
+        var distances = viewerPairs
             .Select(p => p.GetProperty("distanceM").GetDouble())
             .ToList();
         distances.ShouldBe(distances.OrderBy(d => d).ToList());
@@ -317,9 +437,8 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
 
         // A threshold below every gap in the fixture empties the table rather than shortening it,
         // which is what says the threshold is applied to the distance and not to the row count.
-        var tight = await Read(viewer.GetAsync(
-            "/api/v1/caves/closest-approaches?west=23.9&south=46.015&east=24.1&north=46.035&maxDistanceM=10"));
-        tight.GetProperty("pairs").GetArrayLength().ShouldBe(0);
+        var tight = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=10"));
+        Own(tight.GetProperty("pairs"), ours).ShouldBeEmpty();
         tight.GetProperty("maxDistanceM").GetDouble().ShouldBe(10d);
     }
 
@@ -334,10 +453,9 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     [Fact]
     public async Task The_threshold_cuts_on_the_reported_distance_and_not_on_the_plan_one()
     {
-        // A band of its own: the class shares one database, so a window over another test's
-        // latitudes would count that test's caves.
+        // The window is shared with every other test in the class; what this one asserts is read
+        // from the pairs between its own two caves.
         const double band = 46.05;
-        const string window = "west=23.9&south=46.045&east=24.1&north=46.065";
 
         var south = await CreateCaveAsync();
         await UploadCenterlineAsync(south, Passage(band, band + 0.001, SouthAltitude));
@@ -346,16 +464,15 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
 
         // Between the plan distance (222 m) and the reported one (268 m): the two-dimensional
         // pre-filter admits the pair, so only a cut on the reported figure can remove it.
-        var between = await Read(viewer.GetAsync(
-            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=250"));
-        between.GetProperty("pairs").GetArrayLength().ShouldBe(0);
+        Guid[] ours = [south, north];
+        var between = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=250"));
+        Own(between.GetProperty("pairs"), ours).ShouldBeEmpty();
 
         // Just above the reported distance the pair is back, at the figure the cut is made on —
         // which is what says the empty table above was the threshold and not a broken fixture.
-        var above = await Read(viewer.GetAsync(
-            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=300"));
-        var pairs = above.GetProperty("pairs");
-        pairs.GetArrayLength().ShouldBe(1);
+        var above = await Read(viewer.GetAsync($"/api/v1/caves/closest-approaches?{Window}&maxDistanceM=300"));
+        var pairs = Own(above.GetProperty("pairs"), ours);
+        pairs.Count.ShouldBe(1);
         pairs[0].GetProperty("distanceM").GetDouble().ShouldBe(ExpectedDistanceM, 2d);
         new[] { pairs[0].GetProperty("caveAId").GetGuid(), pairs[0].GetProperty("caveBId").GetGuid() }
             .ShouldBe([south, north], ignoreOrder: true);
@@ -432,6 +549,60 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
             "the candidate ceiling must appear as a limit in the plan");
     }
 
+    /// <summary>
+    /// Above the ceiling on how many caves one table pairs, the table is built from the first
+    /// caves by id and says it is partial, rather than silently answering for part of the box.
+    /// The ceiling is the production constant on the route; here the same two queries are built
+    /// with a ceiling of two, so three caves are enough to cross it.
+    /// </summary>
+    [Fact]
+    public async Task Over_the_ceiling_the_table_pairs_the_first_caves_by_id_and_the_count_says_there_were_more()
+    {
+        // A band of its own, as the class shares one database.
+        const double band = 46.08;
+        var caves = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            var cave = await CreateCaveAsync();
+            await UploadCenterlineAsync(
+                cave, Passage(band + (i * 0.002), band + (i * 0.002) + 0.0005, NorthAltitude));
+            caves.Add(cave);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().Database.GetDbConnection();
+        const double west = 23.9;
+        const double south = 46.075;
+        const double east = 24.1;
+        const double north = 46.095;
+
+        async Task<(IReadOnlyList<ClosestApproachRow> Rows, int Admitted)> AskAsync(int ceiling)
+        {
+            var (sql, parameters) = ClosestApproachSql.BuildForArea(
+                Admin(), west, south, east, north, 2000, ClosestApproachLimits.MaxRows, ceiling, workingSrid);
+            var rows = (await connection.QueryAsync<ClosestApproachRow>(new CommandDefinition(sql, parameters))).ToList();
+            var (countSql, countParameters) = ClosestApproachSql.BuildAreaCoverage(
+                Admin(), west, south, east, north, ceiling);
+            var admitted = await connection.ExecuteScalarAsync<int>(new CommandDefinition(countSql, countParameters));
+            return (rows, admitted);
+        }
+
+        // Under the ceiling: all three caves, three pairs, and the count stops at the whole pool.
+        var whole = await AskAsync(3);
+        whole.Rows.Count.ShouldBe(3);
+        whole.Admitted.ShouldBe(3);
+
+        // At a ceiling of two: one pair, between the two lowest ids — the same cut on every run —
+        // and a count one past the ceiling, which is what the route turns into "partial".
+        var cut = await AskAsync(2);
+        // The database orders identifiers by their bytes, which is the order of their hex text;
+        // .NET's own Guid ordering is not that one.
+        var firstTwo = caves.OrderBy(c => c.ToString("N"), StringComparer.Ordinal).Take(2).ToList();
+        cut.Rows.Count.ShouldBe(1);
+        new[] { cut.Rows[0].CaveAId, cut.Rows[0].CaveBId }.ShouldBe(firstTwo, ignoreOrder: true);
+        cut.Admitted.ShouldBe(3);
+    }
+
     [Fact]
     public async Task The_routes_are_closed_to_a_caller_with_no_account_and_to_a_nonsensical_pair()
     {
@@ -454,9 +625,21 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    private static IReadOnlyList<Guid> CavesIn(JsonElement pairs) =>
+    /// <summary>
+    /// The pairs of an answer that join two caves out of <paramref name="ids"/> — the test's own —
+    /// in the answer's order. A pair with one cave of the test's and one of somebody else's is not
+    /// the test's to assert on.
+    /// </summary>
+    private static List<JsonElement> Own(JsonElement pairs, Guid[] ids) =>
     [
-        .. pairs.EnumerateArray().SelectMany(p => new[]
+        .. pairs.EnumerateArray().Where(p =>
+            ids.Contains(p.GetProperty("caveAId").GetGuid())
+            && ids.Contains(p.GetProperty("caveBId").GetGuid())),
+    ];
+
+    private static IReadOnlyList<Guid> CavesIn(IEnumerable<JsonElement> pairs) =>
+    [
+        .. pairs.SelectMany(p => new[]
         {
             p.GetProperty("caveAId").GetGuid(),
             p.GetProperty("caveBId").GetGuid(),

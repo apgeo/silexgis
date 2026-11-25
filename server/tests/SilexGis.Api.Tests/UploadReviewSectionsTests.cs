@@ -11,6 +11,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
@@ -277,6 +278,12 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
         (await read.Documents.IgnoreQueryFilters().AnyAsync(d => d.Id == lateDocument)).ShouldBeFalse();
     }
 
+    /// <remarks>
+    /// A smoke test: nothing forces the decisions into one another, and taken one after another
+    /// they give the same verdict through the ordinary "already decided" refusal. It can only fail
+    /// when the requests happen to overlap, which is why it is asked three times over. The overlap
+    /// is forced by <see cref="Three_decisions_held_at_the_hierarchy_lock_until_all_wait_decide_the_line_once"/>.
+    /// </remarks>
     [Fact]
     public async Task Two_decisions_racing_for_one_line_decide_it_once()
     {
@@ -301,6 +308,54 @@ public sealed class UploadReviewSectionsTests : IAsyncLifetime, IClassFixture<Po
             (await db.AuditEntries.AsNoTracking().CountAsync(a => a.EntityId == caveId.ToString() && a.Action == AuditActions.Created))
                 .ShouldBe(1);
         }
+    }
+
+    /// <summary>
+    /// The forced twin of the test above. Every decision takes the hierarchy lock before it claims
+    /// its lines, after it has read them as still pending. This test holds that lock until all
+    /// three decisions are seen waiting on it, so all three have read the line as pending and only
+    /// the claim made under the lock can decide it once: one 200, and two refusals naming it.
+    /// </summary>
+    [Fact]
+    public async Task Three_decisions_held_at_the_hierarchy_lock_until_all_wait_decide_the_line_once()
+    {
+        var caveId = Guid.CreateVersion7();
+        var answer = await UploadRowsAsync(Cave(caveId, "Held at the lock"));
+        var reviewId = answer.GetProperty("rows")[0].GetProperty("reviewId").GetGuid();
+        var batchId = answer.GetProperty("importBatchId").GetGuid();
+
+        HttpResponseMessage[] responses;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var holding = await db.Database.BeginTransactionAsync();
+            await HierarchyLockSql.TakeAsync(db, CancellationToken.None);
+
+            var sent = new[]
+            {
+                reviewer.PostAsJsonAsync($"/api/v1/review/items/{reviewId}/accept", new { }),
+                reviewer.PostAsJsonAsync($"/api/v1/review/items/{reviewId}/accept", new { }),
+                reviewer.PostAsJsonAsync($"/api/v1/review/batches/{batchId}/accept", new { }),
+            };
+            await LockWaits.UntilParkedAsync(db, 3, Task.WhenAny(sent), "all three decisions");
+            await holding.CommitAsync();
+            responses = await Task.WhenAll(sent);
+        }
+
+        var statuses = responses.Select(r => r.StatusCode).ToList();
+        statuses.Count(s => s == HttpStatusCode.OK).ShouldBe(1, string.Join(", ", statuses));
+        foreach (var refused in responses.Where(r => r.StatusCode != HttpStatusCode.OK))
+        {
+            refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            (await refused.Content.ReadAsStringAsync()).ShouldContain("review.not_pending");
+        }
+
+        await using var check = factory.Services.CreateAsyncScope();
+        var read = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await DecisionOfAsync(reviewId)).ShouldBe(ImportReviewDecision.Accepted);
+        (await read.Features.IgnoreQueryFilters().CountAsync(f => f.Id == caveId)).ShouldBe(1);
+        (await read.AuditEntries.AsNoTracking().CountAsync(a => a.EntityId == caveId.ToString() && a.Action == AuditActions.Created))
+            .ShouldBe(1);
     }
 
     [Fact]

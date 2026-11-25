@@ -43,6 +43,7 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
 
     private readonly ConversionHooks hooks = new();
     private readonly HoldBothClaims claims = new();
+    private readonly PauseAtCommit commits = new();
 
     private HttpClient uploader = null!; // Editor, club member
     private HttpClient colleague = null!; // Editor, club member: creates nothing here, places no guarded cave
@@ -70,7 +71,7 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
             services =>
             {
                 JobWorkers.RemoveFrom(services);
-                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(hooks, claims));
+                services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(hooks, claims, commits));
             });
     }
 
@@ -1457,6 +1458,51 @@ public sealed class TripRecordingConversionTests : IAsyncLifetime, IDisposable, 
         (await checkDb.TripLogs.IgnoreQueryFilters().AsNoTracking().CountAsync(t => t.Title == title)).ShouldBe(1);
         var tripId = await TripOfAsync(recording);
         (await checkDb.TripPositionEvents.AsNoTracking().CountAsync(e => e.TripLogId == tripId)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// An undo of the upload that made a recording, started while a conversion has claimed the
+    /// recording and not yet committed, waits for the conversion and takes its report back with
+    /// the recording — rather than deciding there is no report, deleting the recording and leaving
+    /// a live report made from it that no later undo can reach.
+    /// </summary>
+    [Fact]
+    public async Task An_undo_meeting_a_conversion_in_flight_takes_back_the_report_it_makes()
+    {
+        var (cave, _) = await CaveWithSurveyAsync();
+        var atFifty = await CreatePlaceAsync(cave, depth: -50);
+        var set = await CreateSetAsync(cave);
+        var recording = Guid.CreateVersion7();
+        var batch = (await UploadAsync(
+                set,
+                [Recording(recording, cave, mappedPhoneUser, title: $"Undone in flight {marker}")],
+                [Point(Guid.CreateVersion7(), recording, atFifty, 10)]))
+            .GetProperty("importBatchId").GetGuid();
+
+        commits.Arm(sql => sql.Contains("UPDATE trip_recordings", StringComparison.OrdinalIgnoreCase)
+            && sql.Contains("converted_trip_log_id", StringComparison.OrdinalIgnoreCase));
+        var conversion = Task.Run(async () =>
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var converter = scope.ServiceProvider.GetRequiredService<TripRecordingConverter>();
+            return await converter.ConvertAsync(recording, batch, [], convertWithProblems: true);
+        }, TestContext.Current.CancellationToken);
+        await commits.WaitPausedAsync();
+
+        var undo = uploader.PostAsync($"/api/v1/import-batches/{batch}/revert", null, TestContext.Current.CancellationToken);
+        await LockWaits.WaitAsync(factory, undo);
+        commits.Release();
+        (await conversion).Outcome.ShouldBe(TripRecordingConversionOutcome.Converted);
+        var undone = await undo;
+        undone.StatusCode.ShouldBe(HttpStatusCode.OK, await undone.Content.ReadAsStringAsync());
+
+        await using var check = factory.Services.CreateAsyncScope();
+        var db = check.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var stored = await db.TripRecordings.IgnoreQueryFilters().AsNoTracking().SingleAsync(r => r.Id == recording);
+        stored.DeletedAt.ShouldNotBeNull();
+        stored.ConvertedTripLogId.ShouldNotBeNull("the conversion committed before the undo looked");
+        (await db.TripLogs.AsNoTracking().AnyAsync(t => t.Id == stored.ConvertedTripLogId))
+            .ShouldBeFalse("a report made from an undone recording must not stay live");
     }
 
     /// <summary>

@@ -65,9 +65,11 @@
 
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -193,6 +195,37 @@ function pidAlive(pid) {
 }
 
 /**
+ * When a process started, as the kernel counts it (clock ticks since boot), or null where that
+ * cannot be read. Recorded with a holder's pid because a pid alone outlives its process: after a
+ * reboot or a long enough wait the number is handed to an unrelated process, and a dead holder's
+ * lock would then be "alive" for as long as that stranger runs.
+ */
+export function processStartTime(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    // The command name is in parentheses and may itself hold spaces and parentheses, so the
+    // fields are counted from the last closing one: the start time is the 22nd field overall.
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+    return fields[19] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the process a lock or ticket names is still the one that wrote it: its pid is running
+ * and, where a start time was recorded on this host, it is the same start time. A record from
+ * another host, or one without a start time (written by an older copy of this script), is judged
+ * by its pid alone, as before.
+ */
+export function holderAlive(owner) {
+  if (!owner || !pidAlive(owner.pid)) return false;
+  if (!owner.start || (owner.host && owner.host !== hostname())) return true;
+  const live = processStartTime(owner.pid);
+  return live === null || live === owner.start;
+}
+
+/**
  * CPU seconds burned by a process and everything under it, or null where that cannot be read.
  *
  * Reads /proc directly rather than shelling out, and answers null on any platform without it —
@@ -301,7 +334,7 @@ export function legacyBlocker() {
  */
 export function blocker(dir) {
   const owner = readOwner(dir);
-  if (owner && pidAlive(owner.pid)) {
+  if (owner && holderAlive(owner)) {
     return {
       kind: 'persistent',
       pid: owner.pid,
@@ -325,6 +358,7 @@ export function tryAcquire(dir, label, { cwd = process.cwd() } = {}) {
   const file = lockFile(dir);
   const record = {
     pid: process.pid,
+    start: processStartTime(process.pid),
     host: hostname(),
     label: label || '',
     since: new Date().toISOString(),
@@ -335,10 +369,20 @@ export function tryAcquire(dir, label, { cwd = process.cwd() } = {}) {
     return true;
   } catch (e) {
     if (e.code !== 'EEXIST') throw e;
-    const owner = readOwner(dir);
-    if (owner && !pidAlive(owner.pid)) {
-      rmSync(file, { force: true });
-      return tryAcquire(dir, label, { cwd });
+    let text;
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      return tryAcquire(dir, label, { cwd }); // vanished between the two calls: free now
+    }
+    let owner = null;
+    try {
+      owner = JSON.parse(text);
+    } catch {
+      owner = null;
+    }
+    if (owner && !holderAlive(owner)) {
+      return takeOverStale(file, text) && tryAcquire(dir, label, { cwd });
     }
     if (!owner) {
       let ageMs = 0;
@@ -348,12 +392,46 @@ export function tryAcquire(dir, label, { cwd = process.cwd() } = {}) {
         return tryAcquire(dir, label, { cwd }); // vanished between the two reads: free now
       }
       if (ageMs > 30_000) {
-        rmSync(file, { force: true });
-        return tryAcquire(dir, label, { cwd });
+        return takeOverStale(file, text) && tryAcquire(dir, label, { cwd });
       }
     }
     return false;
   }
+}
+
+/**
+ * Removes a lock file judged stale — but only the very file that was judged. "Check, then
+ * remove" lets two waiters that both saw the same corpse both remove it, the second one removing
+ * the first one's fresh lock, and both then hold the lock: two whole suites at once, the thing
+ * this lock exists to prevent. So the file is moved aside first, which only one process can do,
+ * and read again; if what was moved is not what was judged, somebody took the lock over in
+ * between, and it is put back. True when the stale file is gone and taking the lock may be tried.
+ */
+export function takeOverStale(file, judged) {
+  const aside = `${file}.${process.pid}.stale`;
+  try {
+    renameSync(file, aside);
+  } catch (e) {
+    if (e.code === 'ENOENT') return true; // somebody else removed it first: try to take it
+    throw e;
+  }
+  let moved;
+  try {
+    moved = readFileSync(aside, 'utf8');
+  } catch {
+    moved = null;
+  }
+  if (moved !== judged) {
+    try {
+      linkSync(aside, file);
+    } catch (back) {
+      if (back.code !== 'EEXIST') throw back;
+    }
+    rmSync(aside, { force: true });
+    return false;
+  }
+  rmSync(aside, { force: true });
+  return true;
 }
 
 /**
@@ -371,7 +449,7 @@ export function tryAcquire(dir, label, { cwd = process.cwd() } = {}) {
  */
 export function release(dir, { heldByPid = process.pid } = {}) {
   const owner = readOwner(dir);
-  if (owner && owner.pid !== heldByPid && pidAlive(owner.pid)) return false;
+  if (owner && owner.pid !== heldByPid && holderAlive(owner)) return false;
   rmSync(lockFile(dir), { force: true });
   return true;
 }
@@ -581,6 +659,30 @@ export function inMode(counts, mode) {
 }
 
 /**
+ * A verdict that also answers to the command's exit code.
+ *
+ * The summary lines alone can read green for a run that failed: the sharded runner prints the
+ * summaries of the shards that finished and exits non-zero for one that died without printing any
+ * (an out-of-memory kill at the suite's peak), for a shard that exited non-zero, or for a run that
+ * did not execute in the mode it was asked for. Each of those is a run whose passing lines describe
+ * only part of what was asked, so a non-zero exit is red whatever the lines said. The counts stay
+ * the runner's own; only the verdict and its reason change. A zero exit changes nothing — a zero
+ * exit with failing counts is already red, and one with no summary is already inconclusive.
+ */
+export function withExit(counts, exitCode) {
+  if (exitCode === 0) return counts;
+  if (counts.verdict === 'red') return counts;
+  const said = counts.verdict === 'inconclusive'
+    ? counts.verdictReason
+    : 'the summary lines it printed show no failure';
+  return {
+    ...counts,
+    verdict: 'red',
+    verdictReason: `the command exited ${exitCode}; ${said}`,
+  };
+}
+
+/**
  * The assemblies a run is about to test, fingerprinted so nobody can swap them out from under it.
  *
  * Two full runs were destroyed this way before this existed, and neither reported anything wrong:
@@ -710,7 +812,7 @@ async function main() {
       console.log(`free (${lockFile(dir)})`);
     }
     if (owner) {
-      const gone = !pidAlive(owner.pid);
+      const gone = !holderAlive(owner);
       let note = gone ? '  [STALE — holder is gone]' : '';
       if (!gone && has('--probe')) {
         const p = await holderProgress(owner.pid);
@@ -904,7 +1006,7 @@ async function main() {
       }
     }
     if (resultFile) {
-      const counts = inMode(summarise(tail), testMode);
+      const counts = withExit(inMode(summarise(tail), testMode), exitCode);
       writeFileSync(
         resultFile,
         JSON.stringify(

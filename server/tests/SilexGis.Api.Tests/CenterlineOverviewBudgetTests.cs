@@ -124,7 +124,7 @@ public sealed class CenterlineOverviewBudgetTests : IAsyncLifetime, IDisposable,
             answer.Detail.ShouldBeFalse($"zoom {zoom} is an overview zoom and is answered with the skeleton");
             cave.Paths.ShouldBeLessThan(
                 SkeletonPiecesTrigger,
-                $"one cave's overview skeleton at zoom {zoom} passed the size at which phase C of the overlay is due");
+                $"one cave's overview skeleton at zoom {zoom} passed the size at which it needs a background parse or a coarser level for low zooms");
         }
     }
 
@@ -148,10 +148,10 @@ public sealed class CenterlineOverviewBudgetTests : IAsyncLifetime, IDisposable,
                 .ShouldBeTrue("the view holds every surveyed cave of the area and nothing else");
             pieces.ShouldBeLessThan(
                 AreaViewPiecesTrigger,
-                $"the area view at zoom {zoom} passed the piece count at which phase C of the overlay is due");
+                $"the area view at zoom {zoom} passed the piece count at which it needs a footprint per cave instead of every cave's lines");
             bytes.ShouldBeLessThan(
                 AreaViewBytesTrigger,
-                $"the area view at zoom {zoom} passed the size at which phase C of the overlay is due");
+                $"the area view at zoom {zoom} passed the size at which the transfer and the parse, not the drawing, are what a member waits for");
         }
     }
 

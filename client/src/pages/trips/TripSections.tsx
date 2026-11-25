@@ -14,7 +14,7 @@ import {
 } from 'antd';
 import Button from '../../components/Button.tsx';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict, lastReadETag } from '../../api/client.ts';
 import {
   useCavers,
   useTripTypes,
@@ -81,6 +81,12 @@ type Bag = Record<string, unknown>;
 
 const asBag = (value: unknown): Bag =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Bag) : {};
+
+/** A block holding unsent text: the version it was typed against, and when it was marked. */
+interface Held {
+  version: string | undefined;
+  order: number;
+}
 
 /**
  * The three per-purpose sections of a trip report: what it found underground, what it took to
@@ -152,24 +158,48 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
    * the server at that point, so a re-read landing afterwards is welcome, and anything typed
    * after that moment marks the block again and is protected in its turn. A save that fails
    * marks it back, because then this card holds the only copy of that work.
+   *
+   * Each held block keeps the version of the trip its text was typed against. Every re-read files
+   * a newer version for the next save, and the re-read leaves held text alone — so a save that
+   * carried the newest version would tell the server this card had seen a change it never showed,
+   * and somebody else's section or counted facts would be replaced by the older copy held here.
+   * A save sends the oldest version among the blocks it carries, and the server refuses it if the
+   * trip has moved on since.
    */
-  const dirty = useRef<{ tripId: string; blocks: Set<SectionKey | 'measured'> }>({
+  const dirty = useRef<{
+    tripId: string;
+    blocks: Map<SectionKey | 'measured', Held>;
+  }>({
     tripId: trip.id,
-    blocks: new Set(),
+    blocks: new Map(),
   });
 
-  const markDirty = (block: SectionKey | 'measured') => {
+  // The version of the trip the blocks nothing is held in were last filled from.
+  const syncedVersion = useRef<string | undefined>(undefined);
+  // Versions are opaque, so which of two is older is told by which block was marked first: a
+  // block is marked from the version last filled, and that only ever moves forward.
+  const markedSoFar = useRef(0);
+
+  const markDirty = (
+    block: SectionKey | 'measured',
+    version = syncedVersion.current,
+    order?: number,
+  ) => {
     if (dirty.current.tripId !== trip.id) {
-      dirty.current = { tripId: trip.id, blocks: new Set() };
+      dirty.current = { tripId: trip.id, blocks: new Map() };
     }
-    dirty.current.blocks.add(block);
+    if (!dirty.current.blocks.has(block)) {
+      markedSoFar.current += 1;
+      dirty.current.blocks.set(block, { version, order: order ?? markedSoFar.current });
+    }
   };
 
   useEffect(() => {
     // A different trip: nothing held here belongs to it, so everything is taken from the new one.
     if (dirty.current.tripId !== trip.id) {
-      dirty.current = { tripId: trip.id, blocks: new Set() };
+      dirty.current = { tripId: trip.id, blocks: new Map() };
     }
+    syncedVersion.current = lastReadETag(`/api/v1/trip-logs/${trip.id}`);
     const held = dirty.current.blocks;
     setValues((current) => {
       const next = { ...current };
@@ -249,25 +279,41 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
     // every save from this card. A section not in the body is untouched by the server and its
     // unsent text is still the only copy there is.
     const sent: (SectionKey | 'measured')[] = section ? [section, 'measured'] : ['measured'];
+    const heldAt = new Map<SectionKey | 'measured', Held>();
     for (const block of sent) {
+      const held = dirty.current.blocks.get(block);
+      if (held) {
+        heldAt.set(block, held);
+      }
       dirty.current.blocks.delete(block);
     }
+    // The oldest version among the held blocks sent; a block not held was filled from the newest.
+    const oldest = [...heldAt.values()]
+      .filter((held) => held.version !== undefined)
+      .sort((a, b) => a.order - b.order)[0];
+    const ifMatch = oldest?.version ?? syncedVersion.current;
     try {
-      await updateTrip.mutateAsync({ id: trip.id, body });
+      await updateTrip.mutateAsync({ id: trip.id, body, ifMatch });
       message.success(t('common.saved'));
     } catch (error) {
       // Nothing reached the server, so this card holds the only copy of what was typed and must
-      // not be overwritten by the next re-read of the trip.
+      // not be overwritten by the next re-read of the trip — and it is still the copy typed
+      // against the version it was, so a refused save stays refused until it is reloaded.
       for (const block of sent) {
-        markDirty(block);
+        const held = heldAt.get(block);
+        markDirty(block, held ? held.version : ifMatch, held?.order);
       }
-      // Worth naming rather than folding into "save failed": a section the purpose's schema
-      // rejects leaves somebody guessing which of the values they typed was at fault.
-      message.error(
-        error instanceof ApiError && section && error.code === INVALID_CODES[section]
-          ? t('trips.sections.invalid', { section: t(`trips.sections.${section}`) })
-          : t('common.saveFailed'),
-      );
+      // A stale version is worded once, by the application's conflict warning; a "save failed"
+      // beside it would contradict it.
+      if (!isConcurrencyConflict(error)) {
+        // Worth naming rather than folding into "save failed": a section the purpose's schema
+        // rejects leaves somebody guessing which of the values they typed was at fault.
+        message.error(
+          error instanceof ApiError && section && error.code === INVALID_CODES[section]
+            ? t('trips.sections.invalid', { section: t(`trips.sections.${section}`) })
+            : t('common.saveFailed'),
+        );
+      }
     }
   };
 
@@ -330,7 +376,7 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
     <Flex vertical gap={12}>
       {MEASURES.map((measure) => (
         <Flex vertical gap={2} key={measure}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {t(`trips.${measure}`)}
           </Typography.Text>
           {canEdit ? (
@@ -423,7 +469,7 @@ function SectionField({
   const { t } = useTranslation();
   return (
     <Flex vertical gap={2}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {field.required ? `${label} *` : label}
       </Typography.Text>
       {/* A person is picked from the roster rather than typed: the field holds an identity, and

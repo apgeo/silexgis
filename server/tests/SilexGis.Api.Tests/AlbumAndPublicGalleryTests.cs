@@ -219,6 +219,87 @@ public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IC
         picture.TryGetProperty("photo", out _).ShouldBeFalse();
     }
 
+    /// <summary>
+    /// A share link publishes, so minting, changing or revoking one takes the Share right on the
+    /// album itself — writing to it is not enough, and the album's answer says which way it is so
+    /// the page can leave the button out. The same member is let through once Share on the album
+    /// is granted. (An album's owner holds every right on it, Share included, as on every owned
+    /// row; the writer here is somebody else's.)
+    /// </summary>
+    [Fact]
+    public async Task Sharing_an_album_takes_the_share_right_on_it_and_writing_is_not_enough()
+    {
+        // The member writes to the owner's album and holds no Share right anywhere.
+        var albumId = await CreateAlbumAsync(Visibility.Authenticated);
+        await GrantAsync(memberId, AccessAction.Read | AccessAction.Write, AccessScopeKind.Object, albumId);
+        (await member.PutAsJsonAsync($"/api/v1/albums/{albumId}", AlbumBody("Shared album, renamed")))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await member.GetFromJsonAsync<JsonElement>($"/api/v1/albums/{albumId}"))
+            .GetProperty("canShare").GetBoolean().ShouldBeFalse();
+
+        using (var refused = await member.PostAsync($"/api/v1/albums/{albumId}/share", null))
+        {
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, body);
+            CodeOf(body).ShouldBe("album.share_forbidden");
+        }
+
+        using (var refused = await member.DeleteAsync($"/api/v1/albums/{albumId}/share"))
+        {
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, body);
+            CodeOf(body).ShouldBe("album.share_forbidden");
+        }
+
+        (await anonymous.PostAsync($"/api/v1/albums/{albumId}/share", null))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonymous.DeleteAsync($"/api/v1/albums/{albumId}/share"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Granted Share on this album, the same member mints, re-mints and revokes.
+        await GrantAsync(memberId, AccessAction.Share, AccessScopeKind.Object, albumId);
+
+        (await member.GetFromJsonAsync<JsonElement>($"/api/v1/albums/{albumId}"))
+            .GetProperty("canShare").GetBoolean().ShouldBeTrue();
+        (await member.GetFromJsonAsync<JsonElement>("/api/v1/albums?pageSize=100"))
+            .GetProperty("items").EnumerateArray()
+            .Single(a => a.GetProperty("id").GetGuid() == albumId)
+            .GetProperty("canShare").GetBoolean().ShouldBeTrue();
+
+        (await member.PostAsync($"/api/v1/albums/{albumId}/share", null))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await member.PostAsync($"/api/v1/albums/{albumId}/share?mode=requiresLogin", null))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await member.DeleteAsync($"/api/v1/albums/{albumId}/share"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// The right is decided on the album, not domain-wide: a member holding Share only on what
+    /// they own cannot publish somebody else's album they can read, and its answer says so. The
+    /// album's owner, who holds Share on it, can.
+    /// </summary>
+    [Fact]
+    public async Task A_share_right_on_ones_own_albums_does_not_reach_another_owners_album()
+    {
+        await GrantAsync(memberId, AccessAction.Share, AccessScopeKind.Own);
+        var albumId = await CreateAlbumAsync(Visibility.Authenticated);
+
+        (await member.GetFromJsonAsync<JsonElement>($"/api/v1/albums/{albumId}"))
+            .GetProperty("canShare").GetBoolean().ShouldBeFalse();
+        using (var refused = await member.PostAsync($"/api/v1/albums/{albumId}/share", null))
+        {
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, body);
+            CodeOf(body).ShouldBe("album.share_forbidden");
+        }
+
+        (await owner.GetFromJsonAsync<JsonElement>($"/api/v1/albums/{albumId}"))
+            .GetProperty("canShare").GetBoolean().ShouldBeTrue();
+        await ShareAsync(albumId);
+    }
+
     [Fact]
     public async Task A_revoked_link_opens_nothing_and_says_no_more_than_an_unknown_one()
     {
@@ -339,6 +420,58 @@ public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IC
         }
 
         (await owner.GetAsync($"/api/v1/albums/{readable}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// One request adds at most as many photographs as the bulk routes take, refused with its own
+    /// code and nothing added; a request within the bound is let through, and only a signed-in
+    /// caller reaches the bound at all.
+    /// </summary>
+    [Fact]
+    public async Task Adding_more_photographs_than_one_request_carries_is_refused_with_its_own_code()
+    {
+        var albumId = await CreateAlbumAsync(Visibility.Authenticated);
+        var photo = await UploadPhotoAsync(owner, "bound.png");
+        var tooMany = Enumerable.Range(0, SilexGis.Api.Features.Photos.AlbumEndpoints.MaxItemsPerRequest)
+            .Select(_ => Guid.NewGuid()).Prepend(photo).ToList();
+
+        using (var refused = await owner.PostAsJsonAsync($"/api/v1/albums/{albumId}/items", tooMany))
+        {
+            var body = await refused.Content.ReadAsStringAsync();
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+            CodeOf(body).ShouldBe("album.too_many_items");
+        }
+
+        (await AlbumOrderAsync(albumId)).ShouldBeEmpty();
+
+        (await anonymous.PostAsJsonAsync($"/api/v1/albums/{albumId}/items", new[] { photo }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        await AddAsync(albumId, photo);
+        (await AlbumOrderAsync(albumId)).ShouldBe([photo]);
+    }
+
+    /// <summary>
+    /// A page number so large that its offset does not fit in a whole number is a page past the
+    /// end: answered empty, never a server fault and never the first page over again.
+    /// </summary>
+    [Theory]
+    [InlineData(int.MaxValue, 500)]
+    [InlineData(4_294_969, 500)]
+    [InlineData(int.MaxValue, 1)]
+    public async Task A_page_of_albums_far_past_the_end_is_empty_and_never_an_error(int page, int pageSize)
+    {
+        await CreateAlbumAsync(Visibility.Authenticated);
+
+        using var response = await owner.GetAsync($"/api/v1/albums?page={page}&pageSize={pageSize}");
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+        var root = JsonDocument.Parse(body).RootElement;
+        root.GetProperty("items").GetArrayLength().ShouldBe(0);
+        root.GetProperty("page").GetInt32().ShouldBe(page);
+
+        (await owner.GetFromJsonAsync<JsonElement>("/api/v1/albums?page=1&pageSize=1"))
+            .GetProperty("items").GetArrayLength().ShouldBe(1);
     }
 
     /// <summary>The writes on one album, in an order the album's owner can carry out one after another.</summary>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../client.ts';
+import { ApiError, api } from '../client.ts';
 import type { components } from '../schema';
 import { invalidateAfterDelete, unwrap, unwrapVoid } from './shared.ts';
 import type { MemberListParams } from './types.ts';
@@ -116,24 +116,32 @@ export function useChangeCaverCavingGroups() {
   return useMutation({
     mutationFn: async ({ caverId, join, leave }: { caverId: string; join: string[]; leave: string[] }) => {
       const refused: string[] = [];
+      // Each refusal as the server coded it, so a reason the person can act on (taking away the
+      // last full administrator, say) can be named rather than folded into "could not be changed".
+      const problems: ApiError[] = [];
+      const note = (id: string, error: unknown, response: Response) => {
+        refused.push(id);
+        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+        problems.push(new ApiError(response.status, code));
+      };
       for (const id of join) {
-        const { error } = await api.POST('/api/v1/caving-groups/{id}/members', {
+        const { error, response } = await api.POST('/api/v1/caving-groups/{id}/members', {
           params: { path: { id } },
           body: { caverId, role: 'member' },
         });
         if (error !== undefined) {
-          refused.push(id);
+          note(id, error, response);
         }
       }
       for (const id of leave) {
-        const { error } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
+        const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
           params: { path: { id, caverId } },
         });
         if (error !== undefined) {
-          refused.push(id);
+          note(id, error, response);
         }
       }
-      return { refused };
+      return { refused, problems };
     },
     // Whatever was refused, the rest was written: every list that shows who is in what is stale.
     onSettled: (_data, _error, { join, leave }) => {

@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { App, Card, Dropdown, Flex, Tag, Tooltip, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import ShowAsGraphButton from '../graph/ShowAsGraphButton.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -18,6 +19,7 @@ import { useDeleteResLink, useResLinksForTarget, type ResLink } from '../../api/
 import AddMemberModal from './AddMemberModal.tsx';
 import MemberChip from './MemberChip.tsx';
 import { mayEditResLink } from './permissions.ts';
+import { resLinkProblemMessage } from './problems.ts';
 import { MAP_PLACE_POINT_CODE } from '../../rastermap/vocabulary.ts';
 import { PLACE_AT_STATION_CODE, relationPhraseFor } from './relations.ts';
 import { linkPageRoute, linkPageUrl, type ResLinkTargetType } from './registry.ts';
@@ -116,9 +118,9 @@ function LinkRow({
       onOk: async () => {
         try {
           await deleteLink.mutateAsync(link.id);
-          message.success(t('common.saved'));
-        } catch {
-          message.error(t('common.saveFailed'));
+          message.success(t('common.deleted'));
+        } catch (error) {
+          message.error(resLinkProblemMessage(error, t, 'common.deleteFailed'));
         }
       },
     });
@@ -207,7 +209,7 @@ export default function LinksSection({
   // which read as the panel forgetting what had just been opened.
   const controlled = open !== undefined;
   const expanded = controlled ? open : selfExpanded;
-  const { data } = useResLinksForTarget(
+  const { data, isError, error, refetch } = useResLinksForTarget(
     entityType,
     entityId,
     { pageSize: MAX_ROWS },
@@ -261,6 +263,23 @@ export default function LinksSection({
       )}
     </Flex>
   );
+
+  // A read that failed is not "nothing recorded": the links it would have found are said to be
+  // unread, where an empty section would otherwise be left out without a word.
+  if (isError && data === undefined) {
+    return (
+      <div style={{ marginTop: 12 }}>
+        <ReadFailedAlert
+          isError
+          error={error}
+          held={false}
+          onRetry={refetch}
+          title={t('resLinks.loadFailed')}
+          testId="links-load-failed"
+        />
+      </div>
+    );
+  }
 
   // Nothing recorded: no empty section, just the quiet invitation to record the first one.
   if (total === 0) {

@@ -104,7 +104,11 @@ export function useNominatim(q: string) {
     queryFn: async (): Promise<NominatimPlace[]> => {
       const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
       const response = await fetch(url, { headers: { Accept: 'application/json' } });
-      return response.ok ? ((await response.json()) as NominatimPlace[]) : [];
+      // A refusal from the geocoder (rate limit, outage) is a failed lookup, not "no such place".
+      if (!response.ok) {
+        throw new Error(`Place-name lookup answered ${response.status}`);
+      }
+      return (await response.json()) as NominatimPlace[];
     },
     enabled: q.trim().length >= 3,
     staleTime: 60_000,

@@ -7,9 +7,13 @@ import '../../i18n';
 import i18n from '../../i18n';
 import { featureListDocument, readFeatureListAddress } from '../../filters/featureList.ts';
 import { decodeFilter, encodeFilter } from '../../filters/url.ts';
+import { ApiError } from '../../api/client.ts';
 
-const { canSpy, doorSpy, featuresSpy, downloadSpy, savedFilters, createSpy, heldWrites } = vi.hoisted(() => ({
+const deleteFeatureSpy = vi.fn();
+const { canSpy, doorSpy, featuresSpy, featuresError, featuresRefetch, downloadSpy, savedFilters, createSpy, heldWrites } = vi.hoisted(() => ({
   canSpy: vi.fn(),
+  featuresError: { current: null as unknown },
+  featuresRefetch: vi.fn(),
   doorSpy: vi.fn(),
   featuresSpy: vi.fn(),
   downloadSpy: vi.fn(),
@@ -55,11 +59,14 @@ const SINKHOLE = {
 vi.mock('../../api/hooks.ts', () => ({
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useCreateDoor: (domain: string) => doorSpy(domain),
-  useDeleteFeature: () => ({ mutateAsync: vi.fn() }),
+  useDeleteFeature: () => ({ mutateAsync: deleteFeatureSpy }),
   useFeatureTypes: () => ({ data: [{ id: 7, code: 'sinkhole', name: 'Sinkhole' }] }),
   useFeatures: (params: unknown) => {
     featuresSpy(params);
-    return { data: { items: [SINKHOLE], page: 1, pageSize: 20, totalItems: 1 }, isFetching: false, error: null };
+    if (featuresError.current !== null) {
+      return { data: undefined, isFetching: false, error: featuresError.current, refetch: featuresRefetch };
+    }
+    return { data: { items: [SINKHOLE], page: 1, pageSize: 20, totalItems: 1 }, isFetching: false, error: null, refetch: featuresRefetch };
   },
   useTags: () => ({ data: [{ id: 1, slug: 'bats', name: 'Bats' }] }),
 }));
@@ -130,11 +137,14 @@ beforeEach(async () => {
   canSpy.mockReset().mockReturnValue(false);
   doorSpy.mockReset().mockReturnValue(NO_DOOR);
   featuresSpy.mockReset();
+  featuresError.current = null;
+  featuresRefetch.mockReset();
   downloadSpy.mockReset();
   savedFilters.current = [];
   createSpy.mockReset();
   heldWrites.on = false;
   heldWrites.queue = [];
+  deleteFeatureSpy.mockReset();
 });
 
 /** The address as the list last wrote it. */
@@ -146,6 +156,54 @@ function writtenAddress() {
  * The list's controls compose one filter document kept in its address, and the list and its
  * export are both asked with that document's token — never with parameters of their own.
  */
+/**
+ * A read that failed is told apart from a filter the server would not run: only the second may
+ * say the reader's filter was refused, and neither is drawn as a list with nothing in it.
+ */
+describe('deleting a feature from the list', () => {
+  it('says a refused delete in the words of a delete, not of a failed save', async () => {
+    canSpy.mockReturnValue(true);
+    deleteFeatureSpy.mockRejectedValue(new ApiError(503, undefined));
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('iconButtons.delete') }));
+    const confirm = await screen.findByRole('tooltip');
+    fireEvent.click(within(confirm).getByRole('button', { name: /OK|Yes/ }));
+
+    expect(await screen.findByText(i18n.t('common.deleteFailed'))).toBeTruthy();
+    expect(screen.queryByText(i18n.t('common.saveFailed'))).toBeNull();
+  });
+});
+
+describe('a feature list that could not be read', () => {
+  it('says the list could not be read, with a retry, when an unfiltered list fails', () => {
+    featuresError.current = new ApiError(500);
+    show();
+
+    const failed = screen.getByTestId('feature-list-load-failed');
+    expect(failed.textContent).toContain(i18n.t('featureList.loadFailed'));
+    expect(screen.queryByTestId('feature-list-filter-refused')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
+    expect(featuresRefetch).toHaveBeenCalled();
+  });
+
+  it('does not blame a good filter for a connection that was lost', () => {
+    featuresError.current = new TypeError('Failed to fetch');
+    show(`/features?filter=${encodeFilter(featureListDocument({ kind: 'generic', search: 'dol' })!)}`);
+
+    expect(screen.getByTestId('feature-list-load-failed')).toBeInTheDocument();
+    expect(screen.queryByTestId('feature-list-filter-refused')).toBeNull();
+  });
+
+  it('says the filter was refused when the server refused the filter', () => {
+    featuresError.current = new ApiError(400, 'filter.unknown_field');
+    show(`/features?filter=${encodeFilter(featureListDocument({ kind: 'generic', search: 'dol' })!)}`);
+
+    expect(screen.getByTestId('feature-list-filter-refused')).toBeInTheDocument();
+    expect(screen.queryByTestId('feature-list-load-failed')).toBeNull();
+  });
+});
+
 describe('the feature list read from and written to its address', () => {
   it('fills the controls from a link and asks the list with that link’s filter', () => {
     const token = encodeFilter(featureListDocument({ kind: 'generic', featureTypeId: 7, tag: 'bats', search: 'dol' })!);

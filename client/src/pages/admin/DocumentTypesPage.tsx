@@ -2,7 +2,9 @@
 import { useEffect, useState } from 'react';
 import { PlusOutlined, ProfileOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -46,15 +48,17 @@ export default function DocumentTypesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: types, isLoading } = useDocumentTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useDocumentTypes();
   const createType = useCreateDocumentType();
   const updateType = useUpdateDocumentType();
 
   const [editing, setEditing] = useState<DocumentType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<DocumentTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
 
   useEffect(() => {
     if (open) {
@@ -68,7 +72,12 @@ export default function DocumentTypesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     // A blank box means "this kind has no schema", which is a different thing from an empty
     // JSON object — the latter would accept anything and stamp a version for no reason.
     const body: DocumentTypeWrite = {
@@ -125,6 +134,14 @@ export default function DocumentTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="document-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}
@@ -180,7 +197,8 @@ export default function DocumentTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.documentTypes.edit') : t('admin.documentTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -188,7 +206,7 @@ export default function DocumentTypesPage() {
         destroyOnHidden
         width={640}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item
             name="name"
             label={t('admin.documentTypes.name')}
@@ -243,7 +261,7 @@ function SchemaPreview({ form }: { form: ReturnType<typeof Form.useForm<Document
 
   return (
     <Flex vertical gap={4}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.documentTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (

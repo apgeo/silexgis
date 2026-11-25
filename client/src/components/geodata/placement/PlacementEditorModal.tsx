@@ -69,6 +69,8 @@ import { chooseBackground, workspaceBackgroundId } from '../../../map/editorBack
 import { fitGeoJsonGeometry } from '../../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../../stores/workspaceStore.ts';
 import Button from '../../Button.tsx';
+import ReadFailedAlert from '../../ReadFailedAlert.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../../useDiscardGuard.ts';
 import CaveLinkWarning from '../CaveLinkWarning.tsx';
 import ControlPointTable from './ControlPointTable.tsx';
 import { CORNER_LABEL_KEYS } from './cornerLabels.ts';
@@ -99,10 +101,14 @@ interface Props {
 export default function PlacementEditorModal({ raster, onClose }: Props) {
   const { t } = useTranslation();
   const [active, setActive] = useState(false);
+  // The editor inside knows whether it holds unsaved work; the dialog's Escape and close cross
+  // ask it, so they take the same way out as its own Cancel button.
+  const cancelEditor = useRef<() => void>(onClose);
   return (
     <Modal
       open={raster !== null}
-      onCancel={onClose}
+      onCancel={() => cancelEditor.current()}
+      mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       afterOpenChange={setActive}
       footer={null}
       width="min(1400px, 96vw)"
@@ -110,7 +116,9 @@ export default function PlacementEditorModal({ raster, onClose }: Props) {
       title={raster ? t('geodata.placement.title', { name: raster.name }) : undefined}
       data-testid="placement-editor"
     >
-      {raster && <PlacementEditor key={raster.id} raster={raster} onClose={onClose} active={active} />}
+      {raster && (
+        <PlacementEditor key={raster.id} raster={raster} onClose={onClose} cancelRef={cancelEditor} active={active} />
+      )}
     </Modal>
   );
 }
@@ -150,8 +158,32 @@ function readText(file: Blob): Promise<string> {
   });
 }
 
-function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; onClose: () => void; active: boolean }) {
+/** The part of the editor's state a save keeps — what "unsaved work" is measured on. */
+function workOf(state: {
+  corners: Corners | null;
+  transformation: CornerTransformation;
+  pairs: PointPair[];
+  crs: string;
+  controlTransformation: PlacementTransformation;
+  mask: Fraction[] | null;
+}): string {
+  return JSON.stringify(state);
+}
+
+function PlacementEditor({
+  raster,
+  onClose,
+  cancelRef,
+  active,
+}: {
+  raster: RasterMapInfo;
+  onClose: () => void;
+  /** Set to this editor's own cancel, so the dialog's Escape and close cross ask as it does. */
+  cancelRef: { current: () => void };
+  active: boolean;
+}) {
   const { t } = useTranslation();
+  const requestDiscard = useDiscardGuard();
   const { message } = App.useApp();
   const preview = usePreviewRasterPlacement();
   const save = useSaveRasterPlacement();
@@ -166,7 +198,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
   const { data: listedSystems } = usePlacementSystems();
   // Set once a write has been accepted: the dialog then watches the map until it is published.
   const [publishing, setPublishing] = useState(false);
-  const { data: watched } = useRasterMap(raster.id, publishing);
+  const { data: watched, isError: watchFailed, error: watchError, refetch: refetchWatched } = useRasterMap(raster.id, publishing);
 
   const existing = raster.placement ?? null;
   const embedded = raster.placementSource === 'embedded';
@@ -190,6 +222,16 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
   const [answer, setAnswer] = useState<RasterMapPlacementPreview | null>(null);
   const [previewState, setPreviewState] = useState<'idle' | 'pending' | 'ready' | 'error'>('idle');
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // What counts as unsaved: any difference from the placement as opened, or as last saved. The
+  // corners the editor lays out by itself for an unplaced sheet are folded into this baseline
+  // when it lays them, so opening and closing an unplaced sheet asks nothing.
+  const work = workOf({ corners, transformation, pairs, crs, controlTransformation, mask });
+  const savedWork = useRef(work);
+  const unsaved = !publishing && work !== savedWork.current;
+  useEffect(() => {
+    cancelRef.current = () => requestDiscard(unsaved, onClose);
+  });
 
   const documentCrs = isWktCrs(crs);
   const pointMode = mode !== 'corners';
@@ -322,6 +364,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
       CORNER_IDS.map((id) => [id, projectedToLonLat(planar[id]) as [number, number]]),
     ) as Corners;
     setCorners(lonLat);
+    savedWork.current = workOf({ corners: lonLat, transformation, pairs, crs, controlTransformation, mask });
   };
 
   /** Where picking goes once a pair has both halves: the two-point mode stops at two. */
@@ -397,6 +440,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
     }
     try {
       await save.mutateAsync({ id: raster.id, body });
+      savedWork.current = work;
       message.success(t('geodata.placement.saved'));
       setPublishing(true);
     } catch (error) {
@@ -532,7 +576,17 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
       />
     ) : (
       <Flex vertical align="center" gap={12} style={{ padding: 48 }} data-testid="placement-publishing">
-        <Spin size="large" />
+        {/* The dialog learns the map was published only by reading it again; a read that did not
+            land is said, rather than left behind a spinner that claims to know what is going on. */}
+        <ReadFailedAlert
+          error={watchError}
+          isError={watchFailed}
+          held={false}
+          onRetry={refetchWatched}
+          title={t('geodata.placement.publishWatchFailed')}
+          testId="placement-watch-failed"
+        />
+        {!watchFailed && <Spin size="large" />}
         <Typography.Text>{t('geodata.placement.publishing')}</Typography.Text>
         <Button onClick={onClose}>{t('common.close')}</Button>
       </Flex>
@@ -812,7 +866,7 @@ function PlacementEditor({ raster, onClose, active }: { raster: RasterMapInfo; o
               </Button>
             </Popconfirm>
           )}
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={() => requestDiscard(unsaved, onClose)}>{t('common.cancel')}</Button>
           <Button
             type="primary"
             disabled={body === null}

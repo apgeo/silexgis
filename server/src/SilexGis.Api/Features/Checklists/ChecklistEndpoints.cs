@@ -11,6 +11,12 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Api.Features.Checklists;
 
 /// <summary>A list of things to settle before a party sets off, and the lines on it.</summary>
+/// <remarks>
+/// <c>Version</c> is filled on the rows of the listing: the entity tag a read of that one list
+/// answers with, so an edit or a delete opened from a row sends it as <c>If-Match</c> without
+/// reading the list again. An answer about one list leaves it empty and carries the version in
+/// its <c>ETag</c> header instead.
+/// </remarks>
 public sealed record ChecklistDto(
     Guid Id,
     string Title,
@@ -20,7 +26,8 @@ public sealed record ChecklistDto(
     Visibility Visibility,
     IReadOnlyList<ChecklistItemDto> Items,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? Version = null);
 
 /// <summary>One line, and the identity a confirmation names.</summary>
 public sealed record ChecklistItemDto(Guid Id, string Text, int SortOrder);
@@ -55,6 +62,9 @@ public sealed class ChecklistWriteRequestValidator : AbstractValidator<Checklist
     /// </summary>
     public const int MaxItems = 200;
 
+    /// <summary>The refusal of a rewrite that names one stored line more than once.</summary>
+    public const string LineRepeatedCode = "checklist.line_repeated";
+
     public ChecklistWriteRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
@@ -72,6 +82,7 @@ public sealed class ChecklistWriteRequestValidator : AbstractValidator<Checklist
         RuleFor(x => x.Items)
             .Must(items => items is null
                 || items.Where(i => i.Id is not null).GroupBy(i => i.Id).All(g => g.Count() == 1))
+            .WithProblemCode(LineRepeatedCode)
             .WithMessage("A line may appear only once in a list.");
     }
 }
@@ -131,6 +142,11 @@ public static class ChecklistEndpoints
             return TypedResults.Unauthorized();
         }
 
+        // One snapshot for the rows, their lines and their versions: read apart, a rewrite landing
+        // between them would pair a list's older lines with its newer version, and an edit opened
+        // from that row would then be taken over the rewrite it never saw.
+        await using var snapshot = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.RepeatableRead, ct);
         var lists = await db.Checklists.AsNoTracking()
             .VisibleTo(ctx, AccessDomain.Checklists)
             .OrderBy(x => x.Title)
@@ -138,9 +154,16 @@ public static class ChecklistEndpoints
 
         // One query for every line of the page rather than one per list: the lines are read for
         // the whole answer at once, the way anything belonging to a page of rows is.
-        var items = await LinesOfAsync(db, [.. lists.Select(x => x.Id)], ct);
-        return TypedResults.Ok(
-            lists.Select(x => ToDto(x, items.GetValueOrDefault(x.Id, []))).ToList());
+        List<Guid> ids = [.. lists.Select(x => x.Id)];
+        var items = await LinesOfAsync(db, ids, ct);
+        var versions = await ConcurrencySql.VersionsAsync(db, VersionedTable.Checklists, ids, ct);
+        await snapshot.CommitAsync(ct);
+        return TypedResults.Ok(lists
+            .Select(x => ToDto(x, items.GetValueOrDefault(x.Id, [])) with
+            {
+                Version = versions.TryGetValue(x.Id, out var version) ? Concurrency.ETagOf(version) : null,
+            })
+            .ToList());
     }
 
     private static async Task<Results<Ok<ChecklistDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(

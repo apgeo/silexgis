@@ -5,7 +5,7 @@ import {
   fetchMapFeatures,
   type MapConfig,
 } from '../api/hooks.ts';
-import { handleMapFilterError, mapFilterParams } from '../map/mapFilters.ts';
+import { handleMapFilterError, isMapFilterRefusal, mapFilterParams } from '../map/mapFilters.ts';
 import { ANCHORED_TO_SURFACE, samePlacement } from './altitude3d.ts';
 import type { Altitude3DPlacement } from './altitude3d.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
@@ -13,12 +13,15 @@ import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
 import { featuresOf, propertiesOf } from './geoJson3d.ts';
 import {
   caveCenterlines,
+  caveIdOf,
+  cavesDrawn,
   centerlineBounds,
   centerlineLoadState,
   centerlinePolylines,
   centerlineTopAltitudes,
   EMPTY_CENTERLINE_LOAD_STATE,
   nearestCaveCenterlines,
+  type CaveInView3D,
   type CenterlineLoad3DState,
 } from './centerlines3d.ts';
 import { mapZoomFor } from './pseudoZoom.ts';
@@ -29,6 +32,7 @@ import type {
   Scene3DCamera,
   Scene3DMarker,
   Scene3DPolyline,
+  Scene3DPosition,
   Scene3DSurface,
   Scene3DVectorSource,
   Scene3DVectorSources,
@@ -136,11 +140,20 @@ export interface CaveData3DState extends CenterlineLoad3DState {
    * nothing about entrances.
    */
   entrancesCappedAt: number;
+  /**
+   * True when a request of the last load failed for a reason other than the map filter being
+   * refused — a server error, a rate limit, a dropped connection — and false again once a load
+   * goes through. What was drawn before stays drawn; this is what tells the viewer that the view
+   * may be missing caves, rather than letting an area whose caves could not be read pass for an
+   * area with none.
+   */
+  loadFailed: boolean;
 }
 
 export const EMPTY_CAVE_DATA_3D_STATE: CaveData3DState = {
   ...EMPTY_CENTERLINE_LOAD_STATE,
   loading: false,
+  loadFailed: false,
   surfaceFeaturesCappedAt: 0,
   entrancesCappedAt: 0,
 };
@@ -166,6 +179,19 @@ export interface CaveData3DHandle {
    * the view, or the compact representation served for it carries no altitudes at all.
    */
   caveSurveyTop(caveId: string): number | undefined;
+  /**
+   * The caves the view is drawing now: each one's survey lines, or its entrances when it has no
+   * lines here. What a camera path around "the caves in view" is built from. A cave whose place
+   * this reader was given only roughly is listed where it was drawn, which is that rough place.
+   */
+  cavesInView(): CaveInView3D[];
+  /**
+   * The survey lines of one cave as they are drawn now, each component's positions at the heights
+   * they are drawn at — what a camera following a cave's survey down follows. Lines laid on the
+   * ground are left out: they carry no heights, and a way down them would be a way along the
+   * surface. Empty when nothing of the cave is drawn.
+   */
+  caveLines(caveId: string): Scene3DPosition[][];
   /**
    * The payload now drawn for the same thing this one named, if it is still in the scene.
    *
@@ -197,6 +223,15 @@ export interface CaveData3DHandle {
   setLayerVisible(layer: CaveData3DLayer, visible: boolean): void;
   /** Fades one layer, 0..1. It survives reloading, because the viewer asked for it. */
   setLayerOpacity(layer: CaveData3DLayer, opacity: number): void;
+  /**
+   * Draws every survey line in one CSS colour instead of its colour by depth; undefined gives the
+   * lines their depth colours back. The lines already drawn are redrawn at once, and the colour
+   * holds through every load after, until it is taken off.
+   *
+   * Given a cave, the colour is that cave's own, over the one for every line: a flyby lights the
+   * cave it is visiting. Undefined then hands that cave back to the colour of the rest.
+   */
+  setLineColour(colour: string | undefined, caveId?: string): void;
   getState(): CaveData3DState;
   /** Subscribes to load-state changes; returns an unsubscribe function. */
   subscribe(listener: (state: CaveData3DState) => void): () => void;
@@ -257,6 +292,19 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let settleTimer: number | undefined;
   let detached = false;
   let drawnCenterlines: readonly Scene3DPolyline[] = [];
+  /** One colour for every survey line, when something asked for it; the drawn copy is what is coloured. */
+  let lineColour: string | undefined;
+  /** Colours of their own for some caves' lines, over the one above. */
+  const caveLineColours = new Map<string, string>();
+  const showCenterlines = (polylines: readonly Scene3DPolyline[]) =>
+    centerlines.replace(
+      lineColour || caveLineColours.size > 0
+        ? polylines.map((polyline) => {
+            const own = caveLineColours.get(caveIdOf(polyline) ?? '') ?? lineColour;
+            return own ? { ...polyline, color: own } : polyline;
+          })
+        : polylines,
+    );
   let drawnCenter = { longitude: 0, latitude: 0 };
   let surveyTops = new Map<string, number>();
   // Everything else that was put into the scene, kept only so a piece of chrome pinned to one of
@@ -296,14 +344,31 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     }
   };
 
+  /**
+   * Whether a request of load `seq` failed in a way worth saying. A refused filter is handled
+   * here — the layer is emptied and the refusal announced — and is not counted: trying again would
+   * be refused again, and what has to change is the filter. A load already overtaken by a newer
+   * one is not counted either; the newer one speaks for the view.
+   */
+  const failed = (error: unknown, seq: number, clear: () => void): boolean => {
+    if (seq !== requestSeq || detached) {
+      return false;
+    }
+    if (isMapFilterRefusal(error)) {
+      handleMapFilterError(error, clear);
+      return false;
+    }
+    return true;
+  };
+
   const loadCenterlines = async (
     bbox: string,
     zoom: number,
     seq: number,
     center: { longitude: number; latitude: number },
-  ) => {
+  ): Promise<boolean> => {
     if (!layerVisible[CENTERLINE_SOURCE_ID]) {
-      return;
+      return false;
     }
     try {
       // Altitudes are the whole point of drawing a survey in three dimensions, so this is the one
@@ -323,10 +388,10 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // viewer has just emptied, and nothing would take them down again — the next load stops at
       // the guard above without publishing anything.
       if (seq !== requestSeq || detached || !layerVisible[CENTERLINE_SOURCE_ID]) {
-        return;
+        return false;
       }
       const polylines = centerlinePolylines(collection, placement);
-      centerlines.replace(polylines);
+      showCenterlines(polylines);
       // Kept so a "frame this cave" action can answer from what is actually drawn rather than
       // fetching the cave again: the two would then disagree whenever the server had withheld
       // part of the survey, and the camera would frame geometry that is not on the screen.
@@ -344,27 +409,26 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       const footprint = caveFootprint(nearestCaveCenterlines(polylines, center));
       engine.setCutawayFootprint(footprint);
       engine.setCameraFloorHeight(cameraFloorFor(footprint));
+      return false;
     } catch (error) {
       // Keep what is already drawn: a dropped request is usually a network hiccup, and blanking
       // the survey the viewer is reading would be a worse answer than showing it a moment stale.
       // A refused filter is the exception, as it is for the entrances.
-      if (seq === requestSeq && !detached) {
-        handleMapFilterError(error, () => {
-          drawnCenterlines = [];
-          centerlines.replace(drawnCenterlines);
-        });
-      }
+      return failed(error, seq, () => {
+        drawnCenterlines = [];
+        centerlines.replace(drawnCenterlines);
+      });
     }
   };
 
-  const loadEntrances = async (bbox: string, zoom: number, seq: number) => {
+  const loadEntrances = async (bbox: string, zoom: number, seq: number): Promise<boolean> => {
     if (!layerVisible[ENTRANCE_SOURCE_ID]) {
-      return;
+      return false;
     }
     try {
       const collection = await fetchEntranceFeatures(bbox, zoom, mapFilterParams());
       if (seq !== requestSeq || detached) {
-        return;
+        return false;
       }
       drawnEntrances = entranceMarkers(collection, zoom);
       entrances.replace(drawnEntrances);
@@ -379,26 +443,25 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
           : answered.length;
         publishCaps();
       }
+      return false;
     } catch (error) {
       // As above — except a refused filter, which is not a hiccup: what was drawn before it was
       // asked for is not what it selects.
-      if (seq === requestSeq && !detached) {
-        handleMapFilterError(error, () => {
-          drawnEntrances = [];
-          entrances.replace(drawnEntrances);
-        });
-      }
+      return failed(error, seq, () => {
+        drawnEntrances = [];
+        entrances.replace(drawnEntrances);
+      });
     }
   };
 
-  const loadFeatures = async (bbox: string, seq: number) => {
+  const loadFeatures = async (bbox: string, seq: number): Promise<boolean> => {
     if (!layerVisible[SURFACE_FEATURE_SOURCE_ID]) {
-      return;
+      return false;
     }
     try {
       const collection = await fetchMapFeatures(bbox, mapFilterParams());
       if (seq !== requestSeq || detached) {
-        return;
+        return false;
       }
       drawnFeatures = surfaceFeatureMarkers(collection);
       drawnFeatureLines = surfaceFeatureLines(collection);
@@ -410,15 +473,14 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
         answeredFeatures = featuresOf(collection).length;
         publishCaps();
       }
+      return false;
     } catch (error) {
-      if (seq === requestSeq && !detached) {
-        handleMapFilterError(error, () => {
-          drawnFeatures = [];
-          drawnFeatureLines = [];
-          features.replace(drawnFeatures);
-          featureLines.replace(drawnFeatureLines);
-        });
-      }
+      return failed(error, seq, () => {
+        drawnFeatures = [];
+        drawnFeatureLines = [];
+        features.replace(drawnFeatures);
+        featureLines.replace(drawnFeatureLines);
+      });
     }
   };
 
@@ -443,13 +505,13 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     const zoom = mapZoomFor(engine.getPseudoZoom());
     const seq = ++requestSeq;
     publish({ loading: true });
-    await Promise.all([
+    const failures = await Promise.all([
       loadCenterlines(bbox, zoom, seq, center),
       loadEntrances(bbox, zoom, seq),
       loadFeatures(bbox, seq),
     ]);
     if (seq === requestSeq && !detached) {
-      publish({ loading: false });
+      publish({ loading: false, loadFailed: failures.some(Boolean) });
     }
   };
 
@@ -473,6 +535,42 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     },
     caveSurveyTop(caveId) {
       return surveyTops.get(caveId);
+    },
+    caveLines(caveId) {
+      return caveCenterlines(drawnCenterlines, caveId)
+        .filter((polyline) => !polyline.clampToGround)
+        .map((polyline) => polyline.positions);
+    },
+    cavesInView() {
+      const caves = cavesDrawn(drawnCenterlines);
+      const listed = new Set(caves.map((cave) => cave.caveId));
+      // An entrance of a cave that has no lines here still says where that cave is — while the
+      // entrances are shown. Turned off they are only hidden, not let go of, and a cave whose one
+      // mark the viewer has taken off the screen is not a cave the view is drawing.
+      const byEntrance = new Map<string, CaveInView3D>();
+      for (const marker of layerVisible[ENTRANCE_SOURCE_ID] ? drawnEntrances : []) {
+        const pick = pickPayload({ id: marker.id });
+        if (pick?.kind !== 'entrance' || listed.has(pick.caveId)) {
+          continue;
+        }
+        const { longitude, latitude } = marker.position;
+        const cave = byEntrance.get(pick.caveId);
+        if (cave) {
+          cave.bounds = [
+            Math.min(cave.bounds[0], longitude),
+            Math.min(cave.bounds[1], latitude),
+            Math.max(cave.bounds[2], longitude),
+            Math.max(cave.bounds[3], latitude),
+          ];
+        } else {
+          byEntrance.set(pick.caveId, {
+            caveId: pick.caveId,
+            ...(pick.label ? { label: pick.label } : {}),
+            bounds: [longitude, latitude, longitude, latitude],
+          });
+        }
+      }
+      return [...caves, ...byEntrance.values()];
     },
     currentPick(payload) {
       for (const batch of [drawnEntrances, drawnFeatures, drawnFeatureLines, drawnCenterlines]) {
@@ -569,6 +667,23 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       // thrown away, so this is a catch-up rather than a cold start — and it is also what puts
       // back the note of which cave is drawn that hiding the survey layer dropped.
       void load();
+    },
+    setLineColour(colour, caveId) {
+      if (caveId !== undefined) {
+        if (caveLineColours.get(caveId) === colour) {
+          return;
+        }
+        if (colour === undefined) {
+          caveLineColours.delete(caveId);
+        } else {
+          caveLineColours.set(caveId, colour);
+        }
+      } else if (colour === lineColour) {
+        return;
+      } else {
+        lineColour = colour;
+      }
+      showCenterlines(drawnCenterlines);
     },
     setLayerOpacity(layer, opacity) {
       if (layerOpacity[layer] === opacity) {

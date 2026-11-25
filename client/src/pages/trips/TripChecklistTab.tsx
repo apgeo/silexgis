@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, App, Checkbox, Empty, Flex, Progress, Skeleton, Space, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '../../api/client.ts';
 import {
   useSetTripChecklistItem,
   useTripChecklist,
   type TripLogInfo,
 } from '../../api/hooks.ts';
+import Button from '../../components/Button.tsx';
 import List from '../../components/List.tsx';
+import { tripChecklistTickProblem } from './tripChecklistProblems.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 /**
  * What this trip settles before it sets off, and how much of it is settled.
@@ -30,11 +32,31 @@ export default function TripChecklistTab({
 }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
-  const { data, isLoading } = useTripChecklist(trip.id);
+  const { data, isLoading, isError, refetch } = useTripChecklist(trip.id);
   const setItem = useSetTripChecklistItem();
 
   if (isLoading) {
     return <Skeleton active />;
+  }
+
+  const retry = (
+    <Button size="small" onClick={() => void refetch()}>
+      {t('common.retry')}
+    </Button>
+  );
+
+  // A read that did not land says nothing about whether the trip has a list, so it is never shown
+  // as "no list": a party told there is nothing to settle would set off without settling it.
+  if (isError && !data) {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        data-testid="trip-checklist-load-failed"
+        title={t('trips.checklistLoadFailed')}
+        action={retry}
+      />
+    );
   }
 
   if (!data?.checklistId) {
@@ -48,9 +70,13 @@ export default function TripChecklistTab({
       { tripLogId: trip.id, itemId, ticked },
       {
         onError: (error) => {
-          void message.error(
-            error instanceof ApiError ? error.detail : t('trips.checklistTickFailed'),
-          );
+          const problem = tripChecklistTickProblem(error, t);
+          if (problem !== null) {
+            void message.error(problem);
+          }
+          // Whatever the refusal was, the lines on screen may no longer be the lines on the
+          // server — a line removed since the tab was drawn is the commonest — so read them again.
+          void refetch();
         },
       },
     );
@@ -58,6 +84,15 @@ export default function TripChecklistTab({
 
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      {isError ? (
+        <Alert
+          type="warning"
+          showIcon
+          data-testid="trip-checklist-refresh-failed"
+          title={t('common.refreshFailed')}
+          action={retry}
+        />
+      ) : null}
       <Typography.Title level={5} style={{ marginBottom: 0 }}>
         {data.title}
       </Typography.Title>
@@ -93,7 +128,7 @@ export default function TripChecklistTab({
               </Checkbox>
               {item.ticked && item.tickedAt ? (
                 <Tooltip title={new Date(item.tickedAt).toLocaleString()}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 24 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: FONT_SIZE.sm, marginLeft: 24 }}>
                     {t('trips.checklistTickedAt', {
                       when: new Date(item.tickedAt).toLocaleDateString(),
                     })}

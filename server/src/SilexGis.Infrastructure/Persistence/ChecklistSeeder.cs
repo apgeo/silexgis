@@ -15,13 +15,15 @@ namespace SilexGis.Infrastructure.Persistence;
 /// audience. Guarded on the list as a whole and not on its lines, deliberately unlike the demo
 /// dataset: the list is the administrator's to adapt, and a seeder that put a deleted line back
 /// would overrule an edit it cannot tell from a loss. Deleting the whole list is the way to get the
-/// shipped one back on the next start.
+/// shipped one back on the next start. The list is recognised by its seeded mark rather than by its
+/// title, so renaming it does not make a second one appear, and a list of somebody's own with the
+/// same title does not keep the shipped one away.
 /// </remarks>
 public static class ChecklistSeeder
 {
     public static async Task SeedAsync(SilexGisDbContext db, Guid adminUserId, CancellationToken ct = default)
     {
-        if (await db.Checklists.AnyAsync(c => c.Title == ChecklistSeeds.DefaultTitle, ct))
+        if (await db.Checklists.IgnoreQueryFilters().AnyAsync(c => c.IsSeeded, ct))
         {
             return;
         }
@@ -32,6 +34,7 @@ public static class ChecklistSeeder
             Description = ChecklistSeeds.DefaultDescription,
             OwnerUserId = adminUserId,
             Visibility = Visibility.Authenticated,
+            IsSeeded = true,
         };
         db.Checklists.Add(list);
 

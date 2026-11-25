@@ -5,11 +5,14 @@ using System.Text.Json;
 using MaxRev.Gdal.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OSGeo.GDAL;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -25,6 +28,7 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private PreviewsThatWaitForTheirCaller previews = null!;
 
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
@@ -33,11 +37,23 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
     public GeoreferencedMapSheetTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
-        factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
-        {
-            ["Files:Root"] = filesRoot,
-            ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-        });
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = filesRoot,
+                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+                // One preview at a time, so that a preview still holding its slot is seen by the
+                // next one as every slot busy. The previews in this class are asked one after the
+                // other, so no other case notices.
+                ["GeoreferencedMaps:PreviewConcurrency"] = "1",
+            },
+            services =>
+            {
+                services.RemoveAll<MapWarpService>();
+                services.AddSingleton<MapWarpService>(provider =>
+                    previews = new PreviewsThatWaitForTheirCaller(provider.GetRequiredService<ICrsRegistry>()));
+            });
     }
 
     public async ValueTask InitializeAsync()
@@ -245,6 +261,58 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// A preview whose caller has gone gives its slot back at once. The editor asks for a preview
+    /// at every change of the points and aborts the request the change supersedes; a drawing that
+    /// went on to the end regardless would hold its slot for nobody, and a person typing corners
+    /// quickly would be told every slot is busy. With one slot: the abandoned preview holds it
+    /// while it draws — the next is refused as busy — and once its request is aborted it stops,
+    /// and the next preview is answered.
+    /// </summary>
+    [Fact]
+    public async Task An_abandoned_preview_stops_and_the_next_preview_is_answered_at_once()
+    {
+        var id = (await UploadAsync(owner, "abandoned.pdf", PdfSheetFixtures.PlainPdf())).GetProperty("id").GetGuid();
+        await WaitAsync(owner, id, "unplaced");
+        var url = $"/api/v1/georeferenced-maps/{id}/placement/preview";
+        var corners = Corners("affine", 24.000, 45.502, 24.004, 45.500);
+
+        _ = factory.Services.GetRequiredService<MapWarpService>();
+        var drawing = previews.HoldNext();
+        using var editor = new CancellationTokenSource();
+        var abandoned = owner.PostAsJsonAsync(url, corners, editor.Token);
+        await drawing.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // The slot is taken while the drawing runs.
+        var busy = await owner.PostAsJsonAsync(url, corners, TestContext.Current.CancellationToken);
+        busy.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, await busy.Content.ReadAsStringAsync());
+        (await busy.Content.ReadAsStringAsync()).ShouldContain("georeferenced_map.preview_busy");
+
+        // The editor moves a corner: the request is aborted, and the drawing stops long before the
+        // half minute it would otherwise have gone on for.
+        await editor.CancelAsync();
+        await Should.ThrowAsync<OperationCanceledException>(abandoned);
+        await drawing.Ended.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        drawing.Stopped.ShouldBeTrue("the drawing must have been told its caller had gone, not run to its end");
+
+        // The slot is handed back in the same step that ends the drawing, a moment after the
+        // drawing itself returns; the next preview is asked for until that moment has passed.
+        HttpResponseMessage next;
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (true)
+        {
+            next = await owner.PostAsJsonAsync(url, corners, TestContext.Current.CancellationToken);
+            if (next.StatusCode != HttpStatusCode.ServiceUnavailable || DateTime.UtcNow >= deadline)
+            {
+                break;
+            }
+
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        next.StatusCode.ShouldBe(HttpStatusCode.OK, await next.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
     /// A sheet's layers are read and can be chosen; another page can be drawn; a page or a layer
     /// the document does not have is refused.
     /// </summary>
@@ -442,6 +510,48 @@ public sealed class GeoreferencedMapSheetTests : IAsyncLifetime, IDisposable
     }
 
     // ---- helpers ----
+
+    /// <summary>
+    /// The preview service, with the next preview held as if its drawing took half a minute: it
+    /// waits for its caller's token to fire, or for the half minute to pass, and then draws as
+    /// usual with that token — so a preview whose token never reaches it holds its slot for the
+    /// whole half minute, and one whose token fired is stopped by the drawing itself.
+    /// </summary>
+    private sealed class PreviewsThatWaitForTheirCaller(ICrsRegistry crs) : MapWarpService(crs)
+    {
+        private HeldPreview? next;
+
+        public HeldPreview HoldNext() => next = new HeldPreview();
+
+        public override PreviewOutcome Preview(
+            string previewPath, MapPlacement placement, string workDirectory, int maxPixels, CancellationToken ct)
+        {
+            if (Interlocked.Exchange(ref next, null) is not { } held)
+            {
+                return base.Preview(previewPath, placement, workDirectory, maxPixels, ct);
+            }
+
+            held.Started.TrySetResult();
+            try
+            {
+                held.Stopped = ct.WaitHandle.WaitOne(TimeSpan.FromSeconds(30));
+                return base.Preview(previewPath, placement, workDirectory, maxPixels, ct);
+            }
+            finally
+            {
+                held.Ended.TrySetResult();
+            }
+        }
+    }
+
+    private sealed class HeldPreview
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Stopped { get; set; }
+    }
 
     /// <summary>A placement by the four corners of the picture, north-west first, clockwise.</summary>
     private static object Corners(

@@ -6,7 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { UnsubscribeResult } from '../api/hooks.ts';
 
-type State = 'working' | 'done' | 'failed';
+/**
+ * `failed` is the server's answer that the link is no good; `unreachable` is no answer at all — a
+ * dropped connection, a server restarting, a request refused for coming too often — which says
+ * nothing about the link and is worth asking again.
+ */
+type State = 'working' | 'done' | 'failed' | 'unreachable';
 
 /**
  * Where the opt-out link at the foot of a notification lands.
@@ -20,15 +25,16 @@ export default function UnsubscribePage() {
   const [params] = useSearchParams();
   const [state, setState] = useState<State>('working');
   const [result, setResult] = useState<UnsubscribeResult | null>(null);
-  const attempted = useRef(false);
+  const [attempt, setAttempt] = useState(0);
+  const attempted = useRef(-1);
 
   const token = params.get('token');
 
   useEffect(() => {
     // React runs effects twice in development; without this the second run reports a failure for
     // an opt-out that worked.
-    if (attempted.current) return;
-    attempted.current = true;
+    if (attempted.current === attempt) return;
+    attempted.current = attempt;
 
     if (!token) {
       setState('failed');
@@ -42,18 +48,24 @@ export default function UnsubscribePage() {
     })
       .then(async (response) => {
         if (!response.ok) {
-          setState('failed');
+          const settled = response.status >= 400 && response.status < 500 && response.status !== 429;
+          setState(settled ? 'failed' : 'unreachable');
           return;
         }
         setResult((await response.json()) as UnsubscribeResult);
         setState('done');
       })
-      .catch(() => setState('failed'));
-  }, [token]);
+      .catch(() => setState('unreachable'));
+  }, [token, attempt]);
+
+  const retry = () => {
+    setState('working');
+    setAttempt((n) => n + 1);
+  };
 
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
-      <Card style={{ width: 420 }}>
+      <Card style={{ width: 420, maxWidth: '100%' }}>
         <Typography.Title level={3} style={{ textAlign: 'center' }}>
           {t('unsubscribe.title')}
         </Typography.Title>
@@ -94,6 +106,17 @@ export default function UnsubscribePage() {
 
         {state === 'failed' && (
           <Alert type="error" showIcon title={t('unsubscribe.failed')} style={{ marginBottom: 16 }} />
+        )}
+
+        {state === 'unreachable' && (
+          <Alert
+            type="warning"
+            showIcon
+            data-testid="unsubscribe-unreachable"
+            title={t('unsubscribe.unreachable')}
+            style={{ marginBottom: 16 }}
+            action={<Button onClick={retry}>{t('common.retry')}</Button>}
+          />
         )}
 
         {state !== 'working' && (

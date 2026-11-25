@@ -147,7 +147,7 @@ public static class ExpeditionEndpoints
         // that start together, which is the answer somebody paging a list expects.
         var rows = await query
             .OrderByDescending(x => x.StartDate).ThenByDescending(x => x.Id)
-            .Skip((p - 1) * size).Take(size).ToListAsync(ct);
+            .Skip(Paging.Offset(p, size)).Take(size).ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResult<ExpeditionDto>([.. rows.Select(Map)], p, size, total));
     }
@@ -262,6 +262,7 @@ public static class ExpeditionEndpoints
         IAccessContextAccessor accessAccessor,
         DocumentWriteService documents,
         StoredContentRemover content,
+        IRuleRemovalBound removalBound,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -292,6 +293,19 @@ public static class ExpeditionEndpoints
         // never by matching, so an identical rule somebody authored by hand on one of those trips
         // stays. Both are taken by the persistence rule that removes, through the audit trail,
         // every rule naming a row removed for good.
+        //
+        // The trips outlive the camp, so a deny its sharing wrote on one of them is lifted by the
+        // delete, and lifting it hands the denied account back what it withheld. That is bounded
+        // exactly as withdrawing the sharing is, and asked before anything is staged, so a refused
+        // delete leaves the camp, its trips and its rules as they were. A rule anchored on the camp
+        // itself is not asked about: it withholds nothing once the camp it names is gone.
+        var lifted = await db.AccessEntries.AsNoTracking()
+            .Where(e => e.GrantedViaExpeditionId == expedition.Id && e.Effect == AccessEffect.Deny)
+            .ToListAsync(ct);
+        if (await removalBound.RefuseRemovalAsync(ctx, lifted, ct) is { } exceeds)
+        {
+            return exceeds;
+        }
 
         // The write-up this application generated for the camp and filed on it goes with the
         // camp, by the rule a trip's follows: it is a derivative of the camp — built from it,
@@ -427,6 +441,7 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IRuleRemovalBound removalBound,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -452,7 +467,8 @@ public static class ExpeditionEndpoints
             return tripRefusal;
         }
 
-        var (row, conflict) = await JoinAsync(db, expedition.Id, trip.Id, ct);
+        // Both checks above refuse a caller with no access context, so there is one here.
+        var (row, conflict) = await JoinAsync(db, removalBound, ctx!, expedition.Id, trip.Id, ct);
         return conflict ?? (Results<Ok<ExpeditionTripDto>, ProblemHttpResult>)TypedResults.Ok(row!);
     }
 
@@ -478,6 +494,7 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IRuleRemovalBound removalBound,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -507,8 +524,12 @@ public static class ExpeditionEndpoints
             return ApiProblems.Forbidden();
         }
 
+        if (await ReleaseCampRulesAsync(db, removalBound, ctx, id, tripLogId, ct) is { } exceeds)
+        {
+            return exceeds;
+        }
+
         db.ExpeditionTrips.Remove(row);
-        await ReleaseCampRulesAsync(db, id, tripLogId, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
@@ -531,17 +552,35 @@ public static class ExpeditionEndpoints
     /// Loaded and removed rather than deleted in one statement, because a rule disappearing is a
     /// change to who may reach what and the trail has to carry it; a set-based delete never reaches
     /// the change tracker.
+    ///
+    /// A deny among them is lifted by the leaving, which hands the denied account back what it
+    /// withheld on the trip — so the leaving is bounded exactly as withdrawing the camp's sharing
+    /// is: the caller must hold, on the trip, every action the deny withholds. The answer is the
+    /// refusal when they do not, and nothing has been staged then; callers ask before they take
+    /// the membership row away, so a refused leaving keeps the trip in its camp.
     /// </remarks>
-    private static async Task ReleaseCampRulesAsync(
-        SilexGisDbContext db, Guid expeditionId, Guid tripLogId, CancellationToken ct)
+    private static async Task<ProblemHttpResult?> ReleaseCampRulesAsync(
+        SilexGisDbContext db,
+        IRuleRemovalBound removalBound,
+        AccessContext ctx,
+        Guid expeditionId,
+        Guid tripLogId,
+        CancellationToken ct)
     {
         var granted = await db.AccessEntries
             .Where(e => e.GrantedViaExpeditionId == expeditionId && e.ScopeId == tripLogId)
             .ToListAsync(ct);
+        if (await removalBound.RefuseRemovalAsync(ctx, granted, ct) is { } exceeds)
+        {
+            return exceeds;
+        }
+
         if (granted.Count > 0)
         {
             db.AccessEntries.RemoveRange(granted);
         }
+
+        return null;
     }
 
     /// <summary>
@@ -558,6 +597,7 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IRuleRemovalBound removalBound,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -578,8 +618,13 @@ public static class ExpeditionEndpoints
             var current = await db.ExpeditionTrips.FirstOrDefaultAsync(x => x.TripLogId == trip.Id, ct);
             if (current is not null)
             {
+                // The check above refuses a caller with no access context, so there is one here.
+                if (await ReleaseCampRulesAsync(db, removalBound, ctx!, current.ExpeditionId, trip.Id, ct) is { } exceeds)
+                {
+                    return exceeds;
+                }
+
                 db.ExpeditionTrips.Remove(current);
-                await ReleaseCampRulesAsync(db, current.ExpeditionId, trip.Id, ct);
                 await db.SaveChangesAsync(ct);
             }
 
@@ -597,7 +642,7 @@ public static class ExpeditionEndpoints
             return campRefusal;
         }
 
-        var (row, conflict) = await JoinAsync(db, expedition.Id, trip.Id, ct);
+        var (row, conflict) = await JoinAsync(db, removalBound, ctx!, expedition.Id, trip.Id, ct);
         return conflict
             ?? (Results<Ok<ExpeditionTripDto>, NoContent, ProblemHttpResult>)TypedResults.Ok(row!);
     }
@@ -615,7 +660,12 @@ public static class ExpeditionEndpoints
     /// with no code on it. The caller's remedy is to re-read the trip and ask again.
     /// </remarks>
     private static async Task<(ExpeditionTripDto? Row, ProblemHttpResult? Problem)> JoinAsync(
-        SilexGisDbContext db, Guid expeditionId, Guid tripLogId, CancellationToken ct)
+        SilexGisDbContext db,
+        IRuleRemovalBound removalBound,
+        AccessContext ctx,
+        Guid expeditionId,
+        Guid tripLogId,
+        CancellationToken ct)
     {
         var existing = await db.ExpeditionTrips.FirstOrDefaultAsync(x => x.TripLogId == tripLogId, ct);
         if (existing is not null && existing.ExpeditionId == expeditionId)
@@ -624,6 +674,16 @@ public static class ExpeditionEndpoints
             // fact does not make it new, and something later asks that date what the camp held
             // at a moment in the past.
             return (Map(existing, movedFromAnother: false), null);
+        }
+
+        // A move is a departure as well as an arrival, so what the camp it left had granted on
+        // this trip goes with the leaving — the new camp grants nothing by gaining a member, and
+        // the old one's grant has lost what justified it. Asked, and the removal staged, before
+        // anything is written, so a refusal leaves the trip where it was.
+        if (existing is not null
+            && await ReleaseCampRulesAsync(db, removalBound, ctx, existing.ExpeditionId, tripLogId, ct) is { } exceeds)
+        {
+            return (null, exceeds);
         }
 
         // Left and rejoined in two acts rather than repointed in one. The unique index is on the
@@ -645,11 +705,6 @@ public static class ExpeditionEndpoints
             if (existing is not null)
             {
                 db.ExpeditionTrips.Remove(existing);
-
-                // A move is a departure as well as an arrival, so what the camp it left had
-                // granted on this trip goes with the leaving — the new camp grants nothing by
-                // gaining a member, and the old one's grant has lost what justified it.
-                await ReleaseCampRulesAsync(db, existing.ExpeditionId, tripLogId, ct);
                 await db.SaveChangesAsync(ct);
             }
 

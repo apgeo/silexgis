@@ -4,6 +4,7 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
+using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
@@ -792,6 +793,47 @@ public sealed class FeatureWriteService(
 
     public void BeginDeferredDerivedState() => deferredDerivedState ??= [];
 
+    /// <summary>
+    /// Takes, for the rest of the surrounding transaction, the lock every derivation of hierarchy
+    /// state takes — for a transaction that may create a feature, move one or change a protection,
+    /// at its start, before it locks any feature row.
+    /// </summary>
+    /// <remarks>
+    /// The derivation takes the lock itself, but only when it runs, and by then the transaction
+    /// usually holds its own row: an edit's version hold, an entrance's cave. A protection switched
+    /// on above that row by a transaction that already holds the lock then waits for the row while
+    /// the row's holder waits for the lock, and the database aborts one of them. Taken first, the
+    /// lock is always waited for before any row, so the second of the two simply waits.
+    /// </remarks>
+    public Task HoldHierarchyAsync(CancellationToken ct = default) => HierarchyLockSql.TakeAsync(db, ct);
+
+    /// <summary>
+    /// Opens a transaction for a creation that would otherwise save on its own, unless one is
+    /// already open, and takes the hierarchy lock at its start. The lock held only for the
+    /// statement that takes it protects nothing: a protection switched on above the new row could
+    /// read the containment edges before the new row's edge commits, and the new row would be
+    /// stored unprotected under a protected area.
+    /// </summary>
+    public async Task<HierarchyWrite> BeginHierarchyWriteAsync(CancellationToken ct = default)
+    {
+        var owned = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
+        try
+        {
+            await HierarchyLockSql.TakeAsync(db, ct);
+        }
+        catch
+        {
+            if (owned is not null)
+            {
+                await owned.DisposeAsync();
+            }
+
+            throw;
+        }
+
+        return new HierarchyWrite(owned);
+    }
+
     /// <summary>Runs the deferred recompute, once, for everything collected since it began.</summary>
     public async Task FlushDerivedStateAsync(CancellationToken ct = default)
     {
@@ -812,6 +854,11 @@ public sealed class FeatureWriteService(
             return;
         }
 
+        // Held before the edges and flags are read, so that a protection switched on, or a move
+        // made, by a transaction committing beside this one is either seen here or sees what this
+        // one stores — never neither, which is how rows came to be stored as unprotected under a
+        // protected area.
+        await HierarchyLockSql.TakeAsync(db, ct);
         var allEdges = await AllEdgesAsync(excludeChildId: null, ct);
         var parentsByChild = FeatureHierarchyRules.ParentsByChild(allEdges);
         var childrenByParent = FeatureHierarchyRules.ChildrenByParent(allEdges);
@@ -935,6 +982,9 @@ public sealed class FeatureWriteService(
             else
             {
                 // Cycle check against the edge set minus this child's edges (they are being replaced).
+                // Held before the read: two moves that would each close the other's loop must not
+                // both read the edges as they were before either committed.
+                await HierarchyLockSql.TakeAsync(db, ct);
                 var otherEdges = await AllEdgesAsync(excludeChildId: featureId, ct);
                 var lookup = FeatureHierarchyRules.ParentsByChild(otherEdges);
                 foreach (var parent in parents)
@@ -1050,6 +1100,19 @@ public sealed class FeatureWriteService(
             return;
         }
 
+        if (featureType.Code == FeatureTypeSeeds.StructuralMeasurement)
+        {
+            // A reading may arrive as a right-hand-rule strike from any door — the form, an import,
+            // the API — and is stored as its dip direction, so the conversion happens here, once.
+            var (normalized, problems) = StructuralMeasurement.NormalizeProperties(feature.Properties);
+            if (problems.Count > 0)
+            {
+                throw new FeatureWriteException("feature.properties_invalid", problems);
+            }
+
+            feature.Properties = normalized!;
+        }
+
         var errors = propertiesValidator.Validate(featureType.PropertiesSchema, feature.Properties);
         if (errors.Count > 0)
         {
@@ -1139,3 +1202,4 @@ public sealed class FeatureWriteService(
         return byId.Values.Where(e => !deletedFeatureIds.Contains(e.Id)).ToList();
     }
 }
+

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons';
 import { Alert, Flex, Table, Tag, Typography } from 'antd';
 import Button from '../Button.tsx';
+import ReadFailedAlert from '../ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useUnfiledDocuments, type CabinetInfo } from '../../api/hooks.ts';
@@ -36,7 +37,8 @@ export default function UnfiledDocuments({ cabinets, canWrite }: UnfiledDocument
   const [selected, setSelected] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  const { data, isFetching } = useUnfiledDocuments({ page, pageSize });
+  const { data, isFetching, isError, error, refetch } = useUnfiledDocuments({ page, pageSize });
+  const readFailed = isError && data === undefined;
 
   return (
     <>
@@ -66,13 +68,22 @@ export default function UnfiledDocuments({ cabinets, canWrite }: UnfiledDocument
         />
       )}
 
+      <ReadFailedAlert
+        isError={isError}
+        error={error}
+        held={data !== undefined}
+        onRetry={refetch}
+        title={t('cabinets.unfiledLoadFailed')}
+        testId="unfiled-load-failed"
+      />
       <Table
         scroll={{ x: 'max-content' }}
         rowKey="id"
         size="middle"
         loading={isFetching && !data}
         dataSource={data?.items}
-        locale={{ emptyText: t('cabinets.unfiledEmpty') }}
+        // "Nothing waiting to be filed" only after a read that answered.
+        locale={{ emptyText: readFailed ? <span /> : t('cabinets.unfiledEmpty') }}
         rowSelection={
           canWrite
             ? {

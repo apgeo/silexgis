@@ -53,6 +53,7 @@ public static class FilterEndpoints
                 + "too large or not an outline.");
 
         filters.MapPost("/resolve", ResolveAsync)
+            .WithValidation<FilterResolveRequest>()
             .WithSummary("Describes rows named by id, for a control showing an existing choice.");
 
         return api;
@@ -186,23 +187,17 @@ public static class FilterEndpoints
             return ApiProblems.Forbidden();
         }
 
+        // The validator has refused a world that does not exist and a list over the bound.
         var world = registry.Find(request.World ?? string.Empty);
         if (world is null)
         {
-            return ApiProblems.BadRequest("filter.unknown_world");
+            return ApiProblems.BadRequest(FilterResolveRequestValidator.UnknownWorldCode);
         }
 
         var ids = (request.Ids ?? []).Distinct().ToArray();
         if (ids.Length == 0)
         {
             return TypedResults.Ok<IReadOnlyList<FilterHitDto>>([]);
-        }
-
-        if (ids.Length > FilterValidation.MaxValuesPerCondition)
-        {
-            return ApiProblems.BadRequest(
-                "filter.too_many_ids",
-                $"At most {FilterValidation.MaxValuesPerCondition} at a time.");
         }
 
         var answer = await world.QueryAsync(

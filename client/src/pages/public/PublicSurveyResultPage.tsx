@@ -18,7 +18,7 @@ import {
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
 import { useSendersLanguage } from '../../i18n/languageChoice.ts';
-import { DOWNLOAD_BUTTON } from '../../theme.ts';
+import { DOWNLOAD_BUTTON, FONT_SIZE } from '../../theme.ts';
 
 /**
  * The page behind a survey upload's public link: how far the run has got and what it produced,
@@ -44,6 +44,13 @@ export default function PublicSurveyResultPage() {
   useSendersLanguage(view?.language);
   const { signIn } = useAuth();
   const location = useLocation();
+  // Beginning the sign-in first reads the sign-in server's own description, so it fails when that
+  // server cannot be reached; said here, because the button would otherwise seem to do nothing.
+  const [signInUnreachable, setSignInUnreachable] = useState(false);
+  const startSignIn = () => {
+    setSignInUnreachable(false);
+    signIn(location.pathname + location.search + location.hash).catch(() => setSignInUnreachable(true));
+  };
 
   if (isPending && !error) {
     return (
@@ -61,13 +68,9 @@ export default function PublicSurveyResultPage() {
           showIcon
           data-testid="public-survey-sign-in"
           title={t('publicSurvey.signInRequired')}
-          description={t('publicSurvey.signInRequiredHint')}
+          description={signInUnreachable ? t('auth.serverUnreachable') : t('publicSurvey.signInRequiredHint')}
           action={
-            <Button
-              type="primary"
-              data-testid="public-survey-sign-in-button"
-              onClick={() => void signIn(location.pathname + location.search + location.hash)}
-            >
+            <Button type="primary" data-testid="public-survey-sign-in-button" onClick={startSignIn}>
               {t('publicSurvey.signIn')}
             </Button>
           }
@@ -157,7 +160,7 @@ function LogCard({ view }: { view: PublicResultView }) {
         {view.logTail && (
           <pre
             data-testid="public-survey-log-tail"
-            style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
+            style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}
           >
             {view.logTail}
           </pre>

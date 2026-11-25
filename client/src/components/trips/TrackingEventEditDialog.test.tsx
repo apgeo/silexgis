@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
+import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const update = vi.fn();
 /** The places the watch's cave has declared, as the server sends them — or its refusal to say. */
@@ -263,7 +264,7 @@ describe('TrackingEventEditDialog', () => {
       expect(await screen.findByText(/say which station/i)).toBeInTheDocument();
       // A rejection is reported on a later turn of the event loop than the click that caused it,
       // so one is waited out before the absence of one is taken to mean anything.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await afterRejectionsAreReported();
       expect(update).not.toHaveBeenCalled();
       expect(escaped).not.toHaveBeenCalled();
     } finally {

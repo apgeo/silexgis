@@ -168,6 +168,16 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
         (await folderZipped.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
         var escaping = await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("../outside.laz", "x")));
         (await escaping.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
+        // A session whose own description points the export at another job's cloud.
+        var pointing = await PutAsync(owner, id, "session.zip", Zip(
+            ("session.mjs", """{"laz_file_names": [{"file_name": "../0000-hdmapping-export/pointCloudLaz.laz"}]}"""), ("scan_lio_0.laz", "x")));
+        pointing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var pointingProblem = await pointing.Content.ReadFromJsonAsync<JsonElement>();
+        pointingProblem.GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
+        pointingProblem.GetProperty("detail").GetString().ShouldNotBeNull().ShouldContain("file_name");
+        // An archive that unpacks to far more than it holds.
+        var swelling = await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("scan_lio_0.laz", new string('0', 8 * 1024 * 1024))));
+        (await swelling.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("survey_upload.external_output_invalid");
         (await ArtefactsAsync(id)).ShouldNotContain(a => a.Kind == ScanArtifactKind.HdmSession);
 
         // The session: the run is queued again, and goes on from the export.
@@ -241,6 +251,45 @@ public sealed class SurveyUploadExternalStepTests : IAsyncLifetime, IDisposable,
         (await reader.GetAsync($"/api/v1/survey-uploads/{id}/external/bundle")).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await PutAsync(reader, id, "session.zip", Zip(("session.mjs", "{}")))).StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
+
+    [Fact]
+    public async Task A_product_sent_without_a_length_is_still_refused_when_the_senders_room_is_gone()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var id = await SendAsync(owner, "Full laptop scan", caveId, Recording(), externalSteps: [HdmappingOdometryStep.StepId]);
+        await RunPipelineAsync(id);
+        await SetOwnerQuotaAsync(1);
+        var storedBefore = StoredFileCount();
+
+        // Sent chunked: no Content-Length, so nothing about its size is known before it arrives.
+        var content = new ByteArrayContent(Zip(("session.mjs", "{}"), ("scan_lio_0.laz", "x")));
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/survey-uploads/{id}/external/session.zip") { Content = content };
+        request.Headers.TransferEncodingChunked = true;
+        var refused = await owner.SendAsync(request);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString().ShouldBe("storage.insufficient");
+        (await ArtefactsAsync(id)).ShouldNotContain(a => a.Kind == ScanArtifactKind.HdmSession);
+        // What arrived was removed from the store again.
+        StoredFileCount().ShouldBe(storedBefore);
+
+        // With the room back, the same file is taken.
+        await SetOwnerQuotaAsync(null);
+        (await PutAsync(owner, id, "session.zip", Zip(("session.mjs", "{}"), ("scan_lio_0.laz", "x")))).StatusCode.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    private async Task SetOwnerQuotaAsync(long? bytes)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.Users.Where(u => u.Email == $"suext-own-{suffix}@t.local")
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.StorageQuotaBytes, bytes));
+    }
+
+    private int StoredFileCount() =>
+        Directory.EnumerateFiles(filesRoot, "*", SearchOption.AllDirectories)
+            .Count(f => !f.StartsWith(handoffRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal));
 
     [Fact]
     public async Task An_upload_that_waits_for_nothing_offers_no_download()

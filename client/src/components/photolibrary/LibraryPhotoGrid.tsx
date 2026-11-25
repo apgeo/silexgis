@@ -9,6 +9,7 @@ import {
   libraryPictureUrl,
   markLibraryPictureFailed,
 } from '../../photolibrary/pictureUrl.ts';
+import { FONT_SIZE } from '../../theme.ts';
 
 export interface LibraryPhotoGridProps {
   source: LibraryPhotoSource;
@@ -222,12 +223,12 @@ function LibraryPhotoTile({
       <figcaption style={{ maxWidth: TileSize }}>
         <Typography.Paragraph
           ellipsis={{ rows: 2 }}
-          style={{ fontSize: 12, margin: '4px 0 0' }}
+          style={{ fontSize: FONT_SIZE.sm, margin: '4px 0 0' }}
         >
           {title}
         </Typography.Paragraph>
         {takenAt && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="hint-text">
             {takenAt.toLocaleDateString(i18n.resolvedLanguage)}
           </Typography.Text>
         )}

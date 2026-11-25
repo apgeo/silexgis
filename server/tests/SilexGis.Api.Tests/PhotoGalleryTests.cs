@@ -123,7 +123,10 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task A_grid_tile_is_a_rendering_and_never_the_upload()
     {
-        var photo = await UploadPhotoAsync(owner, "picture.png");
+        // Large enough that a rendering is smaller, and carrying a comment for a rendering to drop.
+        var marker = $"kept in the upload only {Guid.NewGuid()}";
+        var uploaded = MakePng(1600, 1200, marker);
+        var photo = await UploadPhotoAsync(owner, "picture.png", uploaded);
 
         var tile = (await GalleryAsync(owner))
             .Single(p => p.GetProperty("documentId").GetGuid() == photo.DocumentId);
@@ -133,6 +136,15 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
         tile.GetProperty("thumbnailUrl").GetString()!.ShouldContain("/thumbnail?");
         tile.GetProperty("previewUrl").GetString()!.ShouldContain("/thumbnail?");
         tile.GetProperty("contentUrl").GetString()!.ShouldContain("/content?");
+
+        // And it is one: fetched, the tile is not the upload's bytes, is smaller, and has lost the
+        // upload's metadata — while the content route does hand over the upload itself.
+        var tileBytes = await owner.GetByteArrayAsync(tile.GetProperty("thumbnailUrl").GetString());
+        (await owner.GetByteArrayAsync(tile.GetProperty("contentUrl").GetString())).ShouldBe(uploaded);
+        tileBytes.ShouldNotBe(uploaded);
+        using var rendition = new MagickImage(tileBytes);
+        rendition.Width.ShouldBeLessThan(1600u);
+        rendition.Comment.ShouldNotBe(marker);
     }
 
     [Fact]
@@ -200,15 +212,35 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
     [Fact]
     public async Task Naming_a_cave_nobody_may_read_answers_empty_rather_than_forbidden()
     {
-        var caveId = await CreateCaveAsync();
+        // A cave only its owner reads, with a photograph on it: the filter has something to find.
+        var caveId = await CreatePrivateCaveAsync();
+        var photo = await UploadPhotoAsync(owner, "hidden-cave.png");
+        await AttachAsync(photo.FileId, caveId);
 
-        // A filter is a term of the same visibility-filtered query, so naming an object the
-        // caller cannot read is indistinguishable from naming one that is not there — which is
-        // what stops the filters becoming a way to test whether something exists.
+        (await GalleryAsync(owner, $"caveId={caveId}"))
+            .Select(p => p.GetProperty("documentId").GetGuid())
+            .ShouldBe([photo.DocumentId]);
+
+        // The member may read the photograph itself, through a grant on it. Without this the
+        // empty answer below would come from the picture's own read rule and would say nothing
+        // about the cave filter.
+        await GrantAsync(memberId, AccessAction.Read, AccessScopeKind.Object, photo.DocumentId);
+        (await GalleryAsync(member))
+            .Select(p => p.GetProperty("documentId").GetGuid())
+            .ShouldContain(photo.DocumentId);
+
+        // Naming a cave the caller cannot read is indistinguishable from naming one that is not
+        // there. Otherwise the filter would say which of the pictures they can see hang on it, and
+        // so that the cave exists at all.
         var response = await member.GetAsync($"/api/v1/photos?caveId={caveId}");
+        var nowhere = await member.GetAsync($"/api/v1/photos?caveId={Guid.NewGuid()}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await ReadJsonAsync(response)).GetProperty("items").GetArrayLength().ShouldBe(0);
+        nowhere.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var named = await ReadJsonAsync(response);
+        named.GetProperty("items").GetArrayLength().ShouldBe(0);
+        named.GetProperty("totalItems").GetInt32().ShouldBe(0);
+        (await ReadJsonAsync(nowhere)).GetProperty("items").GetArrayLength().ShouldBe(0);
     }
 
     [Fact]
@@ -1022,7 +1054,7 @@ public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixtu
         HttpClient client, string name, byte[]? bytes = null, bool allowDuplicate = false)
     {
         // Unique bytes unless a test is deliberately making a copy: the store warns about
-        // content it already holds, and these suites share one database.
+        // content it already holds, and the tests of this class share its database.
         var content = bytes ?? MakePng(64, 64, $"{name} {Guid.NewGuid()}");
         var file = await UploadAsync(client, name, content, "image/png", allowDuplicate);
         return new UploadedPhoto(file, await DocumentIdOfAsync(file));

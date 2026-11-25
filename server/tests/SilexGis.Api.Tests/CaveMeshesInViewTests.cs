@@ -23,9 +23,9 @@ namespace SilexGis.Api.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every test works in a box of its own, drawn somewhere on open ocean at random. The database is
-/// the one every class shares and a box is a query over all of it, so a fixed position would count
-/// whatever another class — or another test here — had anchored nearby.
+/// Every test works in a box of its own, drawn somewhere on open ocean at random. The tests of
+/// this class share one database and a box is a query over all of it, so a fixed position would
+/// count whatever another test here had anchored nearby.
 /// </para>
 /// <para>
 /// Two hosts over that one database, because one of the things asserted is a limit and a limit is
@@ -66,9 +66,8 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
         };
 
-        // No background worker in either host: the queue lives in the shared database, and a
-        // drain started here would claim conversions another class queued and fail them against
-        // storage this host does not have. Each test runs the jobs it queued itself.
+        // No background worker in either host: a drain would claim the conversions these tests
+        // queue and run them on its own schedule. Each test runs the jobs it queued itself.
         factory = new SilexGisApiFactory(postgres.ConnectionString, storage, JobWorkers.RemoveFrom);
         capped = new SilexGisApiFactory(
             postgres.ConnectionString,

@@ -254,6 +254,56 @@ describe('setActiveBaseImagery', () => {
   });
 });
 
+describe('catalogue edits reaching a scene that is already open', () => {
+  const overlay = (id: number, overrides: Partial<MapLayerInfo> = {}) => layer({ id, isBase: false, ...overrides });
+
+  it('takes an overlay the catalogue no longer lists off the globe', () => {
+    // An administrator deletes an overlay while somebody has it switched on. Left draped, it has
+    // no entry in the layer list any more, so there would be no switch left to turn it off.
+    const engine = new FakeImagery();
+    syncTileOverlayImagery(engine, inScene([overlay(7), overlay(8)]), new Set([7, 8]), {});
+    syncTileOverlayImagery(engine, inScene([overlay(8)]), new Set([7, 8]), {});
+
+    expect(engine.getImageryLayerIds()).toEqual([tileOverlayImageryLayerId(8)]);
+  });
+
+  it('takes a basemap the catalogue no longer lists off the globe, and leaves other layers alone', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, inScene([layer({ id: 1 }), layer({ id: 2 })]), 1);
+    engine.addImageryLayer('raster:sheet', { urlTemplate: 'x', visible: true });
+    syncBaseImagery(engine, inScene([layer({ id: 1 })]), 1);
+
+    expect(engine.getImageryLayerIds()).toEqual([baseImageryLayerId(1), 'raster:sheet']);
+  });
+
+  it('draws an entry again from its new address once the catalogue changes it, keeping how it was shown', () => {
+    const engine = new FakeImagery();
+    syncTileOverlayImagery(engine, inScene([overlay(7)]), new Set([7]), { 7: 0.4 });
+    syncTileOverlayImagery(
+      engine,
+      inScene([overlay(7, { urlTemplate: 'https://moved.example/{z}/{x}/{y}.png' })]),
+      new Set([7]),
+      { 7: 0.4 },
+    );
+
+    const drawn = engine.layers.get(tileOverlayImageryLayerId(7))!;
+    expect(drawn.urlTemplate).toBe('https://moved.example/{z}/{x}/{y}.png');
+    expect(drawn.visible).toBe(true);
+    expect(drawn.opacity).toBe(0.4);
+  });
+
+  it('moves an entry that stopped being a basemap over to the overlays', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, inScene([layer({ id: 1 }), layer({ id: 3 })]), 1);
+    const edited = [layer({ id: 1 }), overlay(3)];
+    syncBaseImagery(engine, inScene(edited), 1);
+    syncTileOverlayImagery(engine, inScene(edited), new Set(), {});
+
+    expect(engine.hasImageryLayer(baseImageryLayerId(3))).toBe(false);
+    expect(engine.hasImageryLayer(tileOverlayImageryLayerId(3))).toBe(true);
+  });
+});
+
 describe('syncTileOverlayImagery', () => {
   const overlay = (id: number) => layer({ id, isBase: false });
 

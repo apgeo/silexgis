@@ -32,6 +32,7 @@ import {
   type NodePath,
 } from '../../filters/editorTree.ts';
 import { preflight } from '../../filters/preflight.ts';
+import { ANCHOR_REFUSALS, WHOLE_REFUSALS, filterRefusalKey } from '../../filters/refusal.ts';
 import type {
   FilterDocument,
   FilterField,
@@ -92,23 +93,6 @@ export interface FilterEditorProps {
   hiddenFields?: readonly string[];
 }
 
-const ANCHOR_REFUSALS: Record<string, string> = {
-  'filter.anchor_not_found': 'filters.editor.spatial.refused.notFound',
-  'filter.study_area_not_an_outline': 'filters.editor.spatial.refused.notAnArea',
-  'filter.anchor_nested': 'filters.editor.spatial.refused.nested',
-  'filter.anchor_too_large': 'filters.editor.spatial.refused.tooLarge',
-};
-
-/**
- * Refusals of the filter as a whole, which name no row and carry no problem list: a body the
- * server could not read at all, and a saved filter this reader's access cannot read. Worded from
- * the code, like every other refusal here.
- */
-const WHOLE_REFUSALS: Record<string, string> = {
-  'filter.malformed': 'filters.editor.wholeRefusal.malformed',
-  'saved_filter.unreadable': 'filters.editor.wholeRefusal.unreadable',
-};
-
 function wholeRefusalKey(error: unknown): string | null {
   return error instanceof ApiError && error.code !== undefined ? (WHOLE_REFUSALS[error.code] ?? null) : null;
 }
@@ -143,7 +127,7 @@ interface EditorContext {
  * sentence is never shown. A code this client does not know yet reads as the general sentence.
  */
 function problemText(t: TFunction, problem: FilterProblem): string {
-  const anchorKey = ANCHOR_REFUSALS[problem.code] ?? WHOLE_REFUSALS[problem.code];
+  const anchorKey = filterRefusalKey(problem.code);
   if (anchorKey !== undefined) {
     return t(anchorKey);
   }

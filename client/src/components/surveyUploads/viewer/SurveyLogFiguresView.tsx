@@ -39,7 +39,7 @@ export default function SurveyLogFiguresView({ figures }: { figures: SurveyLogFi
       <span data-testid={testId}>
         {metres(range.lengthM)}
         <br />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" className="hint-text">
           {t('surveyViewer.figures.extentEnds', {
             from: range.fromStation,
             fromValue: formatFigure(range.fromValueM, lang),

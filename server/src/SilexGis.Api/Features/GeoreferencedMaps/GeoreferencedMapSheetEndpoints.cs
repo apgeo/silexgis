@@ -621,10 +621,15 @@ public static class GeoreferencedMapSheetEndpoints
                 "georeferenced_map.preview_busy", "Too many previews are being worked out; try again in a moment.");
         }
 
+        // The request's own token reaches the drawing: the editor aborts a preview as soon as a newer
+        // arrangement of the points supersedes it, and a drawing nobody waits for must give its
+        // slot back then, not when it is done — otherwise a person typing corners quickly fills
+        // every slot with pictures nobody will see. The slot is given back below however the
+        // drawing ends: finished, failed, or stopped.
         var work = publisher.WorkDirectory(0);
         try
         {
-            var outcome = warper.Preview(fileStore.GetAbsolutePath(preview.StoragePath), placement, work, o.PreviewMaxPixels);
+            var outcome = warper.Preview(fileStore.GetAbsolutePath(preview.StoragePath), placement, work, o.PreviewMaxPixels, ct);
             return TypedResults.Ok(new MapPlacementPreviewDto(
                 "data:image/png;base64," + Convert.ToBase64String(outcome.Png),
                 outcome.Extent3857,

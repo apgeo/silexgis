@@ -193,7 +193,8 @@ describe('TrackingPlaceFields, the station', () => {
     const { unmount } = show({ kind: 'atStation', surveyModelId: null });
 
     fireEvent.change(screen.getByTestId('surface-station'), { target: { value: 'cave.u' } });
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    // The witness that the typing settled: the search is handed what was typed — with no survey.
+    await waitFor(() => expect(stationSearch).toHaveBeenCalledWith(undefined, 'cave.u'));
     expect(stationSearch.mock.calls.every(([model]) => model === undefined)).toBe(true);
     expect(held().stationName).toBe('cave.u');
     unmount();

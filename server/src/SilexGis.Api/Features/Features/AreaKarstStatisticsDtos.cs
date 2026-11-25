@@ -10,6 +10,44 @@ public sealed record AreaCaveExtremeDto(Guid FeatureId, string? Name, double Val
 /// <param name="RockTypeId">Null for the caves whose rock type has never been recorded.</param>
 public sealed record AreaRockTypeCountDto(long? RockTypeId, string? Code, string? Name, int CaveCount);
 
+/// <summary>One lithology's ground inside the area and the entrances on it.</summary>
+/// <param name="Code">The stored class code; null for units nobody classified.</param>
+/// <param name="Recognised">False for a stored code outside the shipped vocabulary.</param>
+/// <param name="Karstifiable">Whether the class hosts karst; null when the class is unknown.</param>
+/// <param name="AreaShare">The class's share of the area outline.</param>
+/// <param name="EntrancesPerKm2">Entrances over the class's own outcrop; null when it has no ground.</param>
+public sealed record AreaLithologyDto(
+    string? Code,
+    bool Recognised,
+    bool? Karstifiable,
+    double AreaKm2,
+    double? AreaShare,
+    int EntranceCount,
+    double? EntrancesPerKm2);
+
+/// <summary>
+/// The area split by the geological units mapped over it.
+/// </summary>
+/// <param name="Basis">
+/// Always <c>placeable</c>: the split is spatial, so it runs only over the units and entrances this
+/// caller may place exactly, and its entrance counts are not the declared totals above.
+/// </param>
+/// <param name="UnmappedAreaKm2">Outline ground no unit covers.</param>
+/// <param name="UnmappedEntranceCount">Entrances on that ground.</param>
+/// <param name="KarstifiableEntrancesPerKm2">
+/// Entrances on karstifiable outcrop over that outcrop — the outcrop-normalised density. Null when
+/// no karstifiable ground is mapped.
+/// </param>
+public sealed record AreaLithologyBreakdownDto(
+    string Basis,
+    IReadOnlyList<AreaLithologyDto> Classes,
+    double MappedAreaKm2,
+    double UnmappedAreaKm2,
+    int UnmappedEntranceCount,
+    double KarstifiableAreaKm2,
+    int KarstifiableEntranceCount,
+    double? KarstifiableEntrancesPerKm2);
+
 /// <summary>One reading behind the karstification index.</summary>
 /// <param name="Value">The measurement in its own units, or null when it could not be taken.</param>
 /// <param name="Normalised">The same reading on a nought-to-one scale, or null when absent.</param>
@@ -61,6 +99,9 @@ public sealed record KarstificationIndexDto(
 /// test is a spatial one and running it against a position they may not see would make the hint a
 /// way of asking where a cave is.
 /// </param>
+/// <param name="Lithology">
+/// The outline split by mapped geology, over the placeable set — see its own basis.
+/// </param>
 /// <param name="PlaceableCaveCount">
 /// How many of the area's own caves this caller may place exactly. It is the calibration the drift
 /// hint has to be read against: the hint is a spatial test that can only run over positions the
@@ -86,7 +127,8 @@ public sealed record AreaKarstStatisticsDto(
     IReadOnlyList<AreaRockTypeCountDto> RockTypes,
     KarstificationIndexDto Karstification,
     int UnparentedInsideCount,
-    int PlaceableCaveCount);
+    int PlaceableCaveCount,
+    AreaLithologyBreakdownDto Lithology);
 
 /// <summary>
 /// The bounds on an area-statistics request, in one place so the handler and anything that reads it
@@ -99,4 +141,7 @@ public static class AreaKarstStatisticsLimits
 
     /// <summary>The membership basis this endpoint answers over, as it appears on the wire.</summary>
     public const string DeclaredBasis = "declared";
+
+    /// <summary>The basis the spatial lithology split answers over, as it appears on the wire.</summary>
+    public const string PlaceableBasis = "placeable";
 }

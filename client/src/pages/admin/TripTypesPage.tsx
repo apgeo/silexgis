@@ -2,7 +2,9 @@
 import { useEffect, useState } from 'react';
 import { CompassOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
+import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import Button from '../../components/Button.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
@@ -59,7 +61,7 @@ export default function TripTypesPage() {
   const { data: capabilities } = useCapabilities();
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
-  const { data: types, isLoading } = useTripTypes();
+  const { data: types, isLoading, isError, error: readError, refetch } = useTripTypes();
   const { data: checklists } = useChecklists();
   const createType = useCreateTripType();
   const updateType = useUpdateTripType();
@@ -67,8 +69,10 @@ export default function TripTypesPage() {
   const [editing, setEditing] = useState<TripType | null>(null);
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<TripTypeWrite>();
+  const requestDiscard = useDiscardGuard();
 
   const open = editing !== null || creating;
+  const edits = useFormEdits(open);
   useEffect(() => {
     if (open) {
       form.setFieldsValue(editing ? { ...editing } : emptyDraft);
@@ -81,7 +85,12 @@ export default function TripTypesPage() {
   };
 
   const save = async () => {
-    const values = await form.validateFields();
+    // A rule that fails is already marked on its field, and the rejection has nothing more to say;
+    // left unhandled it would be reported as an uncaught error for an ordinary validation miss.
+    const values = await form.validateFields().catch(() => null);
+    if (values === null) {
+      return;
+    }
     // A blank box means "this section asks for nothing", which is a different thing from an
     // empty JSON object — the latter would accept anything and publish a version for no reason.
     const body: TripTypeWrite = {
@@ -138,6 +147,14 @@ export default function TripTypesPage() {
         </Flex>
       )}
 
+      <ReadFailedAlert
+        error={readError}
+        isError={isError}
+        held={types !== undefined}
+        onRetry={refetch}
+        title={t('admin.listLoadFailed')}
+        testId="trip-types-load-failed"
+      />
       <Table
         rowKey="id"
         loading={isLoading}
@@ -213,7 +230,8 @@ export default function TripTypesPage() {
       <Modal
         open={open}
         title={editing ? t('admin.tripTypes.edit') : t('admin.tripTypes.add')}
-        onCancel={close}
+        onCancel={() => requestDiscard(edits.edited, close)}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         onOk={() => void save()}
         confirmLoading={createType.isPending || updateType.isPending}
         okText={t('common.save')}
@@ -221,7 +239,7 @@ export default function TripTypesPage() {
         destroyOnHidden
         width={720}
       >
-        <Form form={form} layout="vertical" initialValues={emptyDraft}>
+        <Form form={form} layout="vertical" initialValues={emptyDraft} onValuesChange={edits.onValuesChange}>
           <Form.Item name="name" label={t('admin.tripTypes.name')} rules={[{ required: true, max: 100 }]}>
             <Input />
           </Form.Item>
@@ -306,7 +324,7 @@ function SchemaPreview({
 
   return (
     <Flex vertical gap={4} style={{ marginBottom: 16 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="hint-text">
         {t('admin.tripTypes.preview')}
       </Typography.Text>
       {fields.length === 0 ? (
@@ -324,7 +342,7 @@ function SchemaPreview({
           report is written, so a field this schema demands has nowhere to be answered when the
           trip is created and every new trip of this purpose is refused. */}
       {fields.some((schemaField) => schemaField.required) && (
-        <Typography.Text type="warning" style={{ fontSize: 12 }} data-testid={`schema-required-warning-${field}`}>
+        <Typography.Text type="warning" className="hint-text" data-testid={`schema-required-warning-${field}`}>
           {t('admin.tripTypes.requiredWarning')}
         </Typography.Text>
       )}

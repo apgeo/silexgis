@@ -104,7 +104,14 @@ export default function SurveyModelEstimatedPassagesModal({
       destroyOnHidden
     >
       {model && (
-        <Form form={form} layout="vertical" data-testid="survey-model-estimated-form">
+        <Form
+          form={form}
+          layout="vertical"
+          // Until the model's values are put in below, the colour picker would otherwise hold no
+          // colour, start from a transparent one, and say its alpha-less setting cannot keep it.
+          initialValues={{ color: DEFAULT_ESTIMATED_COLOR }}
+          data-testid="survey-model-estimated-form"
+        >
           <Typography.Paragraph strong style={{ marginBottom: 4 }}>
             {model.name}
           </Typography.Paragraph>

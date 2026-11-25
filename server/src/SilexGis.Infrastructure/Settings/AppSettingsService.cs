@@ -74,6 +74,14 @@ public sealed class AppSettingsService(
     public ValueTask<SurveyUploadSettings> GetSurveyUploadsAsync(CancellationToken ct = default) =>
         GetAsync<SurveyUploadSettings>(AppSettingSections.SurveyUploads, "SurveyUploads", ct);
 
+    // The same configuration section as the deployment's permission (TestDataOptions.Allowed);
+    // the two share no member name, so neither reads the other's key.
+    public ValueTask<TestDataSettings> GetTestDataAsync(CancellationToken ct = default) =>
+        GetAsync<TestDataSettings>(AppSettingSections.TestData, "TestData", ct);
+
+    public async ValueTask<MapSymbolSettings> GetMapSymbolsAsync(CancellationToken ct = default) =>
+        (await GetAsync<MapSymbolSettings>(AppSettingSections.MapSymbols, "MapSymbols", ct)).Sanitised();
+
     /// <summary>
     /// The brakes on the neighbouring photo libraries.
     /// </summary>
@@ -97,6 +105,8 @@ public sealed class AppSettingsService(
             // what recovers it.
             () => PhotoLibrarySuspensionSettings.EverythingStopped,
             ct);
+
+    public void Forget(string section) => cache.Remove(CacheKey(section));
 
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ArrowLeftOutlined, ArrowRightOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Card, Flex, Input, Modal, Select, Table, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -11,8 +11,11 @@ import {
   useSetFeatureLinks,
   type FeatureLink,
 } from '../../api/hooks.ts';
+import { isConcurrencyConflict } from '../../api/client.ts';
 import Button from '../../components/Button.tsx';
+import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../../components/useDiscardGuard.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
 
 /** A typed relation may point at a feature of any kind, so the target is the whole feature world. */
@@ -74,22 +77,29 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
   const [draftToName, setDraftToName] = useState<string | null>(null);
   const [draftKind, setDraftKind] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState('');
+  const requestDiscard = useDiscardGuard();
+  // The links as the editor opened them, to tell an edited list from one only looked at.
+  const openedRows = useRef('');
+  const rowsPrint = (list: LinkRow[]) =>
+    JSON.stringify(list.map((r) => [r.toId, r.linkKindCode, r.note]));
+  const edited = () =>
+    rowsPrint(rows) !== openedRows.current || draftToId !== null || draftNote.trim() !== '';
   // A feature is not linked to itself. The server refuses that too; leaving it out here only
   // spares somebody the refusal.
   const notOffered = useMemo(() => [featureId], [featureId]);
 
   const openEditor = () => {
-    setRows(
-      (links ?? [])
-        .filter((l) => l.fromId === featureId)
-        .map((l) => ({
-          key: nextRowKey++,
-          toId: l.toId,
-          toName: null,
-          linkKindCode: l.linkKindCode,
-          note: l.note,
-        })),
-    );
+    const opened = (links ?? [])
+      .filter((l) => l.fromId === featureId)
+      .map((l) => ({
+        key: nextRowKey++,
+        toId: l.toId,
+        toName: null,
+        linkKindCode: l.linkKindCode,
+        note: l.note,
+      }));
+    openedRows.current = rowsPrint(opened);
+    setRows(opened);
     setDraftToId(null);
     setDraftToName(null);
     setDraftKind(null);
@@ -125,8 +135,11 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
       });
       setEditing(false);
       message.success(t('common.saved'));
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      // A conflict is already spoken by the application's own notice.
+      if (!isConcurrencyConflict(error)) {
+        message.error(featureProblemMessage(error, t));
+      }
     }
   };
 
@@ -181,9 +194,10 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
       <Modal
         title={t('features.editLinks')}
         open={editing}
-        onCancel={() => setEditing(false)}
+        onCancel={() => requestDiscard(edited, () => setEditing(false))}
         onOk={() => void onSave()}
         confirmLoading={setLinks.isPending}
+        mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
         width={640}
         destroyOnHidden
       >

@@ -520,11 +520,37 @@ public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
 
         // "Present and empty" is how OpenAPI says "no requirement on this operation", and it is
         // what overrides the document-level entry. An absent property would inherit it instead.
+        // Every route the anonymous-surface census records is checked, not one of them: a sign-in
+        // route exempted while a delivery-token route still demanded a bearer would leave a
+        // generated client asking for a token the browser cannot send.
         var login = paths.GetProperty("/api/v1/auth/login").GetProperty("post");
         login.TryGetProperty("security", out var loginSecurity).ShouldBeTrue(
             "The sign-in route must state that it needs no token, or a generated client will "
             + "demand one before it can obtain one.");
         loginSecurity.EnumerateArray().ShouldBeEmpty();
+
+        var undescribed = new List<string>();
+        var demanding = new List<string>();
+        foreach (var (method, route, _) in AnonymousSurfaceTests.Recorded)
+        {
+            // The document writes a route parameter without its constraint or catch-all marker.
+            var path = System.Text.RegularExpressions.Regex.Replace(
+                route, @"\{\*{0,2}([A-Za-z0-9_]+)(:[^}]*)?\}", "{$1}");
+            if (!paths.TryGetProperty(path, out var item)
+                || !item.TryGetProperty(method.ToLowerInvariant(), out var operation))
+            {
+                undescribed.Add($"{method} {path}");
+                continue;
+            }
+
+            if (!operation.TryGetProperty("security", out var security) || security.GetArrayLength() != 0)
+            {
+                demanding.Add($"{method} {path}");
+            }
+        }
+
+        undescribed.ShouldBeEmpty("every recorded open route is described, or it cannot be checked here");
+        demanding.ShouldBeEmpty("an open route described as needing a bearer token");
 
         // A guarded route says nothing of its own and inherits the document's requirement. Both
         // halves of the mobile contract are named, the write half included: a generated client

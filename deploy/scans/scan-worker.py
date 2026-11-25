@@ -140,6 +140,17 @@ EXPORT_PROGRAM = os.environ.get("SILEXGIS_SCANS_HDM_EXPORT", "multi_view_tls_reg
 # real recordings: step 1's cache peaks at 17–20 times the raw size inside the job directory before
 # it is removed, and the session and the export add about one more each.
 ODOMETRY_DISK_FACTOR = 22
+# What a session archive may unpack to: at most this many times the archive's size plus a small
+# allowance (a session is mostly LAZ, stored as it is because it is compressed already), and never
+# more than the volume's free space less a reserve for the cloud the export then writes. The
+# application refuses an archive at its door on the same factor and allowance; a change here is a
+# change there.
+SESSION_UNPACK_FACTOR = 4
+SESSION_UNPACK_ALLOWANCE = 1024 * 1024
+SESSION_UNPACK_RESERVE = 1024 * 1024 * 1024
+SESSION_FILE_MAX_BYTES = 16 * 1024 * 1024
+# The keys of session.mjs that hold a file or folder name, by how they end.
+SESSION_PATH_KEY_ENDINGS = ("file_name", "file_names", "folder_name", "_folder", "_path", "_directory")
 # HDMapping's default parameters, dumped by the program itself at start and kept beside
 # capabilities.json, so the application can store a run's parameters resolved against the exact
 # version that will run them.
@@ -1305,27 +1316,107 @@ def pack_folder(job: "Job", folder: Path, archive: Path, skip: tuple[str, ...] =
     os.replace(part, archive)
 
 
+def contained_name(name: str) -> bool:
+    """Whether a name stays inside the folder it is read against: empty, or relative with no parent
+    step, no drive or scheme and no NUL. Both separators count, since a session written on Windows
+    uses either."""
+    if name == "":
+        return True
+    if name.startswith(("/", "\\")) or ":" in name or "\0" in name:
+        return False
+    return all(part.strip() != ".." for part in name.replace("\\", "/").split("/"))
+
+
+def session_path_key(key: str) -> bool:
+    """Whether a key of session.mjs holds a file or folder name: file_name, poses_file_name,
+    folder_name, out_folder_name and their kin, found wherever they sit in the document."""
+    lower = key.lower()
+    return lower.endswith(SESSION_PATH_KEY_ENDINGS)
+
+
+def escaping_session_key(value, folder: Path, key: str | None = None) -> str | None:
+    """The first key of a parsed session.mjs whose name would be read from outside the folder, or
+    None. HDMapping reads a relative name against the session's folder and an absolute one as it
+    stands, so one absolute or climbing name would have the export read a file of another job."""
+    if isinstance(value, dict):
+        for name, item in value.items():
+            found = escaping_session_key(item, folder, str(name))
+            if found:
+                return found
+        return None
+    if isinstance(value, list):
+        for item in value:
+            found = escaping_session_key(item, folder, key)
+            if found:
+                return found
+        return None
+    if isinstance(value, str) and key is not None and session_path_key(key):
+        if not contained_name(value):
+            return key
+        resolved = (folder / value.replace("\\", "/")).resolve()
+        if resolved != folder.resolve() and folder.resolve() not in resolved.parents:
+            return key
+    return None
+
+
+def check_session_paths(folder: Path) -> None:
+    """Refuses a session whose session.mjs names any file or folder outside the session folder."""
+    path = folder / "session.mjs"
+    if path.stat().st_size > SESSION_FILE_MAX_BYTES:
+        raise CheckFailed("the session's session.mjs is too large to be a session description")
+    try:
+        session = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise CheckFailed(f"the session file does not read: {error}") from error
+    if not isinstance(session, dict):
+        raise CheckFailed("the session file is not a JSON object")
+    key = escaping_session_key(session, folder)
+    if key:
+        raise CheckFailed(f"the session file names a file outside the session folder (under {key[:64]!r})")
+
+
 def unpack_session(job: "Job", archive: Path, folder: Path) -> None:
-    """Unpacks a session archive, refusing any member that would land outside the folder."""
+    """Unpacks a session archive, refusing any member that would land outside the folder, and an
+    archive whose members add up to more than it could honestly hold or than the volume has room
+    for. The sizes are the ones the archive declares; each member is read no further than its own,
+    so their sum bounds what is written."""
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir()
     try:
         with zipfile.ZipFile(archive) as pack:
-            for member in pack.infolist():
-                job.check()
+            members = pack.infolist()
+            for member in members:
                 name = member.filename
-                parts = name.replace("\\", "/").split("/")
-                if name.startswith(("/", "\\")) or ".." in parts or ":" in name or "\0" in name:
+                if not contained_name(name) or name == "":
                     raise CheckFailed("the session archive names a file outside itself")
+            unpacked = sum(member.file_size for member in members)
+            archive_bytes = archive.stat().st_size
+            if unpacked > archive_bytes * SESSION_UNPACK_FACTOR + SESSION_UNPACK_ALLOWANCE:
+                raise CheckFailed(f"the session archive unpacks to more than {SESSION_UNPACK_FACTOR} times its own size")
+            free = shutil.disk_usage(job.directory).free
+            if unpacked > free - SESSION_UNPACK_RESERVE:
+                raise CheckFailed(f"the session unpacks to {unpacked} bytes and the volume has {free} free, "
+                                  f"less {SESSION_UNPACK_RESERVE} kept back for the export")
+            for member in members:
+                job.check()
                 if member.is_dir():
                     continue
+                parts = member.filename.replace("\\", "/").split("/")
                 target = folder.joinpath(*[p for p in parts if p])
                 target.parent.mkdir(parents=True, exist_ok=True)
-                with pack.open(member) as source, target.open("wb") as out:
-                    shutil.copyfileobj(source, out, 1 << 20)
+                with pack.open(member) as source, target.open("xb") as out:
+                    remaining = member.file_size
+                    while remaining > 0:
+                        chunk = source.read(min(1 << 20, remaining))
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        remaining -= len(chunk)
     except zipfile.BadZipFile as error:
         raise CheckFailed(f"the session archive does not read: {error}") from error
+    except FileExistsError as error:
+        raise CheckFailed("the session archive holds the same file twice") from error
 
 
 def step_export(job: "Job") -> None:
@@ -1342,6 +1433,7 @@ def step_export(job: "Job") -> None:
         unpack_session(job, archive, folder)
         if not (folder / "session.mjs").is_file():
             raise CheckFailed("the session archive holds no session.mjs")
+        check_session_paths(folder)
         job.data["session"] = session_facts(folder / "session.mjs")
 
     def export() -> None:

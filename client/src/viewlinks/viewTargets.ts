@@ -70,6 +70,22 @@ function announce(): void {
   publish({ kind: 'controls-here', windowId, controls: [...controls.values()].map(descriptorFor) });
 }
 
+function sameDescriptors(
+  before: readonly ViewControlDescriptor[] | undefined,
+  after: readonly ViewControlDescriptor[],
+): boolean {
+  return (
+    before !== undefined &&
+    before.length === after.length &&
+    before.every(
+      (descriptor, i) =>
+        descriptor.address === after[i].address &&
+        descriptor.kind === after[i].kind &&
+        descriptor.labelKey === after[i].labelKey,
+    )
+  );
+}
+
 function rosterChanged(): void {
   for (const listener of rosterListeners) {
     listener();
@@ -118,8 +134,14 @@ function attach(): void {
         return;
       }
 
+      // Every roll call is answered by every window, so most answers repeat what is already
+      // held. Telling listeners only when a window's list actually changed is what keeps a
+      // reader that re-reads on change from turning each answer into another roll call.
+      const before = remote.get(event.windowId);
       remote.set(event.windowId, [...event.controls]);
-      rosterChanged();
+      if (!sameDescriptors(before, event.controls)) {
+        rosterChanged();
+      }
       return;
     }
 
@@ -199,6 +221,12 @@ export async function refreshRoster(): Promise<ViewControlDescriptor[]> {
 /** How long a roll call waits for answers. */
 export const ROLL_CALL_MS = 120;
 
+/**
+ * Calls the listener whenever the held roster changes — a view here registers or goes, another
+ * window answers with a different list, or a window closes. The listener should re-read with
+ * {@link allControls}, not {@link refreshRoster}: the change has already arrived, and a fresh roll
+ * call from inside the listener only asks every window to repeat it.
+ */
 export function subscribeToRoster(listener: () => void): () => void {
   attach();
   rosterListeners.add(listener);

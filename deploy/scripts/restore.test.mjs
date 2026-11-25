@@ -107,7 +107,7 @@ function tarGz(dir, archive, member = '.') {
   assert.equal(r.status, 0, r.stderr);
 }
 
-function sandbox({ dump = gzipSync(DUMP), filesArchive, failingGunzip = false } = {}) {
+function sandbox({ dump = gzipSync(DUMP), filesArchive, failingGunzip = false, cavePotential = true } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'silexgis-restore-'));
   const bin = join(root, 'bin');
   const log = join(root, 'log');
@@ -135,6 +135,12 @@ function sandbox({ dump = gzipSync(DUMP), filesArchive, failingGunzip = false } 
   mkdirSync(join(archivedTerrain, 'builds', 'uploads'), { recursive: true });
   writeFileSync(join(archivedTerrain, 'builds', 'uploads', 'generated.tif'), Buffer.from([0x49, 0x49, 0x2a, 0]));
   tarGz(archivedTerrain, join(src, 'terrain-uploads.tar.gz'), 'builds/uploads');
+  if (cavePotential) {
+    const archivedMaps = join(root, 'archived-maps');
+    mkdirSync(join(archivedMaps, 'builds', 'cave-potential', 'aaaa'), { recursive: true });
+    writeFileSync(join(archivedMaps, 'builds', 'cave-potential', 'aaaa', 'favourability.tif'), Buffer.from([0x49, 0x49, 0x2a, 0]));
+    tarGz(archivedMaps, join(src, 'cave-potential.tar.gz'), 'builds/cave-potential');
+  }
 
   // What the installation holds now, which a refused restore must leave exactly as it is.
   const volumes = join(root, 'volumes');
@@ -142,6 +148,10 @@ function sandbox({ dump = gzipSync(DUMP), filesArchive, failingGunzip = false } 
   mkdirSync(join(files, 'cd'), { recursive: true });
   writeFileSync(join(files, 'cd', 'current-file'), 'current content\n');
   mkdirSync(join(volumes, 'standin_silexgis-terrain', 'builds', 'uploads'), { recursive: true });
+  // A map the installation holds now that the backup does not: replaced, like the uploads are.
+  mkdirSync(join(volumes, 'standin_silexgis-terrain', 'builds', 'cave-potential', 'zzzz'), { recursive: true });
+  // A build beside them, which a restore must never touch.
+  mkdirSync(join(volumes, 'standin_silexgis-terrain', 'builds', 'b1'), { recursive: true });
   return { root, bin, log, src, volumes, files };
 }
 
@@ -181,6 +191,33 @@ describe('restore.sh', { skip: SKIP_ON_WINDOWS }, () => {
       assert.deepEqual(readdirSync(uploads), ['generated.tif']);
       assert.ok(seen.includes(`chown -R 1654:1654 ${box.files}`), `the files volume is handed to the app user:\n${seen.join('\n')}`);
       assert.ok(seen.includes(`chown -R 1654:1654 ${uploads}`), 'the restored rasters are handed to the app user');
+      const maps = join(box.volumes, 'standin_silexgis-terrain', 'builds', 'cave-potential');
+      assert.deepEqual(readdirSync(maps, { recursive: true }).sort(), ['aaaa', 'aaaa/favourability.tif']);
+      assert.ok(seen.includes(`chown -R 1654:1654 ${maps}`), 'the restored maps are handed to the app user');
+      assert.ok(existsSync(join(box.volumes, 'standin_silexgis-terrain', 'builds', 'b1')), 'a build beside them is left alone');
+    } finally {
+      cleanUp(box);
+    }
+  });
+
+  it('restores a backup that has no cave-potential archive and leaves the maps folder as it is', () => {
+    const box = sandbox({ cavePotential: false });
+    try {
+      const result = restore(box);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /No cave-potential\.tar\.gz in this backup/);
+      const maps = join(box.volumes, 'standin_silexgis-terrain', 'builds', 'cave-potential');
+      assert.deepEqual(readdirSync(maps), ['zzzz']);
+    } finally {
+      cleanUp(box);
+    }
+  });
+
+  it('refuses a broken cave-potential.tar.gz before dropping anything', () => {
+    const box = sandbox();
+    try {
+      writeFileSync(join(box.src, 'cave-potential.tar.gz'), gzipSync(Buffer.from('not a tar archive, and cut short')).subarray(0, 12));
+      assertUntouched(box, restore(box), 'broken cave-potential archive');
     } finally {
       cleanUp(box);
     }

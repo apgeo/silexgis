@@ -70,6 +70,7 @@ let searchResult: {
   data?: unknown;
   isFetching: boolean;
   error?: unknown;
+  refetch?: () => void;
 } = { isFetching: false };
 
 let configured = true;
@@ -89,10 +90,19 @@ const basins = [
   },
 ];
 
+/** Whether the status read itself fails. */
+let statusFails = false;
+
 vi.mock('../../api/hooks.ts', () => ({
-  useSpeologieStatus: () => ({
-    data: { configured, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
-  }),
+  useSpeologieStatus: () =>
+    statusFails
+      ? { data: undefined, isError: true, error: new TypeError('Failed to fetch'), refetch: vi.fn() }
+      : {
+          data: { configured, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
+          isError: false,
+          error: null,
+          refetch: vi.fn(),
+        },
   useSpeologieSearch: (params: unknown) => {
     searchCalls.push(params);
     return searchResult;
@@ -123,6 +133,7 @@ afterEach(cleanup);
 describe('SpeologieSearchPage', () => {
   beforeEach(() => {
     configured = true;
+    statusFails = false;
     searchCalls.length = 0;
     navigate.mockReset();
     searchResult = {
@@ -144,6 +155,15 @@ describe('SpeologieSearchPage', () => {
     show();
 
     expect(screen.getByTestId('speologie-not-configured')).toBeTruthy();
+    expect(screen.getByTestId('speologie-search').closest('button')?.disabled).toBe(true);
+  });
+
+  it('says why Search is off when the status could not be read', () => {
+    statusFails = true;
+    searchResult = { isFetching: false };
+    show();
+
+    expect(screen.getByTestId('speologie-status-failed')).toBeTruthy();
     expect(screen.getByTestId('speologie-search').closest('button')?.disabled).toBe(true);
   });
 
@@ -226,6 +246,70 @@ describe('SpeologieSearchPage', () => {
     searchResult = { isFetching: false, error: new ApiError(503, 'speologie.unauthorized') };
     show();
     expect(screen.getByText(/did not accept this installation's API key/)).toBeTruthy();
+  });
+
+  it('refuses a page beyond what the search can reach with a way back, not with an empty table', async () => {
+    searchResult = { ...searchResult, data: { ...(searchResult.data as object), hasMore: true } };
+    show();
+    fireEvent.change(screen.getByTestId('speologie-term'), { target: { value: 'pestera' } });
+    fireEvent.click(screen.getByTestId('speologie-search'));
+
+    // The next page is past what a several-spelling search can page through.
+    searchResult = { isFetching: false, error: new ApiError(400, 'speologie.search_too_deep') };
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(searchCalls.at(-1)).toMatchObject({ q: 'pestera', page: 2 }));
+
+    expect(screen.getByText(/Narrow it with a county or a longer name/)).toBeTruthy();
+    // A refusal is not an empty answer: no "no data" table stands under it.
+    expect(screen.queryByTestId('speologie-results')).toBeNull();
+    expect(screen.queryByText('No data')).toBeNull();
+
+    // Asking the same page again cannot help; going back to the last page that answered can.
+    expect(screen.queryByTestId('speologie-search-retry')).toBeNull();
+    fireEvent.click(screen.getByTestId('speologie-search-back'));
+    await waitFor(() => expect(searchCalls.at(-1)).toMatchObject({ q: 'pestera', page: 1 }));
+  });
+
+  it('keeps caves ticked on an earlier page in what it imports, as the count says', async () => {
+    searchResult = { ...searchResult, data: { ...(searchResult.data as object), hasMore: true } };
+    show();
+    fireEvent.change(screen.getByTestId('speologie-term'), { target: { value: 'pestera' } });
+    fireEvent.click(screen.getByTestId('speologie-search'));
+    const tick = (id: number) =>
+      fireEvent.click(
+        within(screen.getByTestId('speologie-results'))
+          .getAllByRole('checkbox')
+          .find((box) => box.closest('tr')?.getAttribute('data-row-key') === String(id))!,
+      );
+    tick(63);
+
+    searchResult = {
+      isFetching: false,
+      data: {
+        items: [{ ...notHere, id: 70, title: 'Peștera de pe pagina doi', slug: 'p2' }],
+        page: 2,
+        pageSize: 25,
+        hasMore: false,
+        spellings: ['pestera'],
+        scannedCount: 1,
+      },
+    };
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(searchCalls.at(-1)).toMatchObject({ page: 2 }));
+    tick(70);
+
+    fireEvent.click(screen.getByTestId('speologie-import-selected'));
+    expect(navigate).toHaveBeenLastCalledWith('/catalogue/speologie/import?ids=63,70');
+  });
+
+  it('offers to ask again when the catalogue could not be reached', () => {
+    const refetch = vi.fn();
+    searchResult = { isFetching: false, error: new ApiError(503, 'speologie.unavailable'), refetch };
+    show();
+
+    expect(screen.getByText(/The catalogue could not be reached/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId('speologie-search-retry'));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('names a few of the spellings it used rather than all of a wide expansion', () => {

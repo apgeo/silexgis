@@ -6,6 +6,7 @@ import { PicCenterOutlined, PicRightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { useUiPrefsStore, type DialogKind } from '../stores/uiPrefsStore.ts';
+import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, type DirtySource } from './useDiscardGuard.ts';
 
 interface DialogHostProps {
   kind: DialogKind;
@@ -20,6 +21,12 @@ interface DialogHostProps {
   width?: number;
   /** Fires after the open/close transition — same contract on Modal and Drawer. */
   afterOpenChange?: (open: boolean) => void;
+  /**
+   * Whether the user typed something into the hosted form. When given, the user's own ways out
+   * (Escape, the close cross, Cancel) ask before throwing that away, and a click beside the modal
+   * never closes it. Leave it out for a dialog that holds nothing worth asking about.
+   */
+  dirty?: DirtySource;
   children: ReactNode;
 }
 
@@ -41,9 +48,12 @@ export default function DialogHost({
   okDisabled,
   width,
   afterOpenChange,
+  dirty,
   children,
 }: DialogHostProps) {
   const { t } = useTranslation();
+  const requestDiscard = useDiscardGuard();
+  const cancel = dirty === undefined ? onCancel : () => requestDiscard(dirty, onCancel);
   const isMobile = useIsMobile();
   const placement = useUiPrefsStore((s) => s.dialogPlacement[kind] ?? 'modal');
   const setDialogPlacement = useUiPrefsStore((s) => s.setDialogPlacement);
@@ -67,7 +77,7 @@ export default function DialogHost({
       <Drawer
         title={title}
         open={open}
-        onClose={onCancel}
+        onClose={cancel}
         afterOpenChange={afterOpenChange}
         // A side panel next to the map is the point on desktop; on a phone there is no
         // "next to", so the drawer takes the screen and the placement preference survives
@@ -79,7 +89,7 @@ export default function DialogHost({
         extra={flipButton}
         footer={
           <Flex justify="flex-end" gap={8}>
-            <Button onClick={onCancel}>{t('common.cancel')}</Button>
+            <Button onClick={cancel}>{t('common.cancel')}</Button>
             {onOk && (
               <Button type="primary" loading={okLoading} disabled={okDisabled} onClick={onOk}>
                 {t('common.ok')}
@@ -103,12 +113,13 @@ export default function DialogHost({
         </Flex>
       }
       open={open}
-      onCancel={onCancel}
+      onCancel={cancel}
       onOk={onOk}
       confirmLoading={okLoading}
       okButtonProps={onOk ? { disabled: okDisabled } : { style: { display: 'none' } }}
       afterOpenChange={afterOpenChange}
       width={width}
+      mask={dirty === undefined ? undefined : KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
     >
       {children}

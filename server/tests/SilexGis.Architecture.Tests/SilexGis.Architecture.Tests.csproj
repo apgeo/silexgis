@@ -33,6 +33,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SilexGis.Api\SilexGis.Api.csproj" />
     <ProjectReference Include="..\..\src\SilexGis.TherionService\SilexGis.TherionService.csproj" />
+    <ProjectReference Include="..\..\src\SilexGis.WhiteboxService\SilexGis.WhiteboxService.csproj" />
   </ItemGroup>
 
 </Project>

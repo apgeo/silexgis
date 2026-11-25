@@ -65,6 +65,10 @@ public sealed record TerrainBuildSourceDto(
 /// the build is being cancelled and will stop at the first point it can; on a stopped one it says
 /// when the request was made. Null when nobody has asked, and again once the build is run again.
 /// </param>
+/// <param name="Accuracy">
+/// How finely the elevation samples the ground and how far off its heights may be, as recorded for
+/// this build; null when nothing is recorded, which is not the same as exact.
+/// </param>
 /// <param name="BakeTimeLimit">
 /// For a build stopped because its bake reached this installation's time limit, how long the bake
 /// had run and what the limit was, so a screen can say so in its reader's language; null for any
@@ -93,7 +97,8 @@ public sealed record TerrainBuildDto(
     DateTimeOffset UpdatedAt,
     Guid? BaseBuildId,
     DateTimeOffset? CancelRequestedAt,
-    TerrainBakeTimeLimitDto? BakeTimeLimit);
+    TerrainBakeTimeLimitDto? BakeTimeLimit,
+    TerrainAccuracyDto? Accuracy);
 
 /// <summary>A bake stopped at the time limit: how long it ran and the limit, in seconds.</summary>
 public sealed record TerrainBakeTimeLimitDto(long ElapsedSeconds, long LimitSeconds);
@@ -163,6 +168,11 @@ public sealed record TerrainBuildSourceRequest(
 /// Rasters this installation already has — uploaded, or in a directory the operator listed as
 /// readable — to build from as well as, or instead of, the obtained coverage.
 /// </param>
+/// <param name="Accuracy">
+/// What the operator states about the accuracy of the elevation. Left out, a build made only from
+/// the obtained coverage takes that dataset's published figures; any other build records nothing
+/// until somebody states it, because the figure of a mixture is not any one source's.
+/// </param>
 /// <param name="BaseBuildId">
 /// A finished build to add these rasters to, instead of meshing a pyramid from nothing. The new
 /// build starts from a copy of that build's pyramid and the tile-maker adds to it without
@@ -185,7 +195,8 @@ public sealed record TerrainBuildSubmitRequest(
     double? GeoidHeightM,
     bool? FetchCoverage = null,
     IReadOnlyList<TerrainBuildSourceRequest>? Sources = null,
-    Guid? BaseBuildId = null);
+    Guid? BaseBuildId = null,
+    TerrainAccuracyRequest? Accuracy = null);
 
 /// <summary>What an upload of one raster answers with.</summary>
 /// <param name="Reference">What a build quotes to say it is made from this raster.</param>
@@ -219,6 +230,7 @@ public sealed class TerrainBuildSubmitRequestValidator : AbstractValidator<Terra
         RuleFor(x => x.Sources)
             .Must(s => s is null || s.Count <= 100)
             .WithMessage("A build may name at most 100 sources.");
+        RuleFor(x => x.Accuracy!).SetValidator(new TerrainAccuracyRequestValidator()).When(x => x.Accuracy is not null);
         RuleFor(x => x.BaseBuildId)
             .NotEqual(Guid.Empty)
             .When(x => x.BaseBuildId.HasValue)
@@ -429,6 +441,10 @@ public static class TerrainBuildEndpoints
         api.MapDelete("/terrain/builds/{id:guid}/active", DeactivateAsync)
             .WithTags("Terrain")
             .WithSummary("Stops drawing this build's terrain, leaving the scene on bare ground; requires Execute on the Terrain domain.");
+        api.MapPut("/terrain/builds/{id:guid}/accuracy", SetAccuracyAsync)
+            .WithValidation<TerrainAccuracyRequest>()
+            .WithTags("Terrain")
+            .WithSummary("Records or corrects how accurate the elevation of a build is; requires Execute on the Terrain domain.");
         api.MapPost("/terrain/builds/{id:guid}/cancel", CancelAsync)
             .WithTags("Terrain")
             .WithSummary("Calls off a queued or running build; requires Execute on the Terrain domain.");
@@ -663,6 +679,22 @@ public static class TerrainBuildEndpoints
             BaseBuildId = baseBuild?.Id,
         };
 
+        // What the operator typed wins. Otherwise a build made only from the obtained coverage
+        // takes that dataset's published figures; one that mixes sources, or extends another,
+        // records nothing — its error is not any single source's, and a stated figure the data
+        // does not meet is worse than an empty one.
+        if (!TerrainAccuracy.IsEmpty(request.Accuracy))
+        {
+            TerrainAccuracy.Apply(build, request.Accuracy);
+        }
+        else if (fetchCoverage && declared.Count == 0 && baseBuild is null)
+        {
+            build.SourceResolutionM = CopernicusCoverage.SourceResolutionM;
+            build.VerticalAccuracyM = CopernicusCoverage.VerticalAccuracyM;
+            build.VerticalAccuracyStatistic = CopernicusCoverage.VerticalAccuracyStatistic;
+            build.AccuracySource = CopernicusCoverage.AccuracySource;
+        }
+
         db.TerrainBuilds.Add(build);
 
         // An extension carries its base's sources as its own, first and marked as inherited: the
@@ -756,7 +788,7 @@ public static class TerrainBuildEndpoints
         // it breaks them in the direction the timestamp was already going.
         var rows = await query
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
-            .Skip((p - 1) * size).Take(size)
+            .Skip(Paging.Offset(p, size)).Take(size)
             .ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResult<TerrainBuildDto>([.. rows.Select(ToDto)], p, size, total));
@@ -1042,6 +1074,46 @@ public static class TerrainBuildEndpoints
             await db.SaveChangesAsync(ct);
         }
 
+        return TypedResults.Ok(ToDto(build));
+    }
+
+    /// <summary>
+    /// Replaces the accuracy record of a build with what the caller states, whatever state the
+    /// build is in.
+    /// </summary>
+    /// <remarks>
+    /// Allowed at every status because it is a statement about the data and touches nothing the
+    /// pipeline reads: an operator who typed a figure wrongly, or learnt the real one after a
+    /// survey vendor replied, must be able to put it right without building again. Sending nothing
+    /// clears the record, which a screen then shows as "not recorded".
+    /// </remarks>
+    private static async Task<Results<Ok<TerrainBuildDto>, UnauthorizedHttpResult, ProblemHttpResult>> SetAccuracyAsync(
+        Guid id,
+        TerrainAccuracyRequest request,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Terrain, AccessAction.Execute, null).Allowed)
+        {
+            return ApiProblems.Forbidden(ForbiddenCode);
+        }
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (build is null)
+        {
+            return ApiProblems.NotFound(NotFoundCode);
+        }
+
+        TerrainAccuracy.Apply(build, request);
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToDto(build));
     }
 
@@ -1500,5 +1572,6 @@ public static class TerrainBuildEndpoints
         build.ErrorCode == TerrainBuildFailures.BakeTimedOut
             && TerrainBakeTimeLimit.TryRead(build.Message) is { } stop
                 ? new TerrainBakeTimeLimitDto(stop.ElapsedSeconds, stop.LimitSeconds)
-                : null);
+                : null,
+        TerrainAccuracyReader.From(build));
 }

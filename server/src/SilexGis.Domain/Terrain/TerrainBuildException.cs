@@ -104,6 +104,24 @@ public static class TerrainBuildFailures
     public const string DerivativeFailed = "terrain_build.derivative_failed";
 
     /// <summary>
+    /// A picture that only the separate terrain-analysis program computes was asked for, and this
+    /// installation does not run that program, or cannot at the moment.
+    /// </summary>
+    /// <remarks>
+    /// A fact about the installation rather than the elevation: asking again once the operator has
+    /// set the program up computes it.
+    /// </remarks>
+    public const string AnalysisUnavailable = "terrain_build.analysis_unavailable";
+
+    /// <summary>The terrain-analysis program did not finish within the time the installation allows a run.</summary>
+    /// <remarks>
+    /// Not tried again by itself: the same elevation and the same settings take the same time, so a
+    /// second run would only hold the terrain queue as long again. A shorter search distance, or a
+    /// longer limit, is the remedy.
+    /// </remarks>
+    public const string AnalysisTimedOut = "terrain_build.analysis_timed_out";
+
+    /// <summary>
     /// This installation has nothing that can turn rasters into tiles.
     /// </summary>
     /// <remarks>

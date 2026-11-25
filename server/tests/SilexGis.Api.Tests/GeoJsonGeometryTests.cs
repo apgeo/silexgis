@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Text.Json;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -44,6 +45,39 @@ public sealed class GeoJsonGeometryTests
         // A position without the third ordinate stays 2D rather than gaining a zero.
         Geo("Point", "[25.5, 45.25]").ToGeometryOrNull()
             .ShouldBeOfType<Point>().Z.ShouldBe(double.NaN);
+    }
+
+    [Theory]
+    [InlineData("[180, 90]")]
+    [InlineData("[-180, -90]")]
+    [InlineData("[25.5, 45.25, -1500]")]
+    public void A_position_at_the_edge_of_the_world_is_read(string coordinates) =>
+        Geo("Point", coordinates).ToGeometryOrNull().ShouldNotBeNull();
+
+    [Theory]
+    [InlineData("[500, 45]")]
+    [InlineData("[25, 95]")]
+    [InlineData("[180.000001, 0]")]
+    [InlineData("[0, -90.000001]")]
+    [InlineData("[1e400, 0]")]
+    [InlineData("[25, 45, 1e400]")]
+    public void A_position_outside_the_world_or_past_a_double_is_not_read(string coordinates) =>
+        Geo("Point", coordinates).ToGeometryOrNull().ShouldBeNull();
+
+    [Fact]
+    public void A_shape_outside_the_world_is_not_read_whichever_part_carries_it() =>
+        Geo("MultiPolygon", "[[[[25,45],[26,45],[26,46],[25,45]]],[[[200,45],[201,45],[201,46],[200,45]]]]")
+            .ToGeometryOrNull().ShouldBeNull();
+
+    [Fact]
+    public void A_line_of_the_most_positions_allowed_is_read_and_one_more_is_not()
+    {
+        static GeoJsonGeometry LineOf(int positions) => Geo(
+            "LineString",
+            "[" + string.Join(",", Enumerable.Range(0, positions).Select(i => $"[{(20 + (i * 1e-5)).ToString("R", CultureInfo.InvariantCulture)},45]")) + "]");
+
+        LineOf(GeoJsonGeometry.MaxPositions).ToGeometryOrNull().ShouldNotBeNull();
+        LineOf(GeoJsonGeometry.MaxPositions + 1).ToGeometryOrNull().ShouldBeNull();
     }
 
     [Fact]

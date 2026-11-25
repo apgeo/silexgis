@@ -484,6 +484,44 @@ public sealed record SurveyUploadSettings
     public bool FirstModelOfCreatedCave { get; init; } = true;
 }
 
+/// <summary>
+/// Whether the administrators' test-data generator is switched on. It works only where the
+/// deployment also allows it (<c>TestData:Allowed</c>); this is the administrators' half of the
+/// switch, on by default so that a deployment which allows the generator offers it at once.
+/// </summary>
+public sealed record TestDataSettings
+{
+    public bool Enabled { get; init; } = true;
+}
+
+/// <summary>
+/// How the installation draws its cave entrances on the map and in the 3D scene.
+/// </summary>
+/// <remarks>
+/// Two references in the shape <see cref="Map.MapSymbol"/> describes: the marker of an entrance
+/// drawn where it was surveyed, and the marker of one drawn only approximately (snapped to the
+/// protection grid for a reader without exact view). Two choices rather than one with a variant,
+/// because a symbol file cannot be recoloured and the reader still has to be able to tell the two
+/// states apart. The server stores them and serves them with the map's configuration; it never
+/// draws them. A value that is not a well-formed reference — an environment variable mistyped —
+/// falls back to the default rather than reaching the client.
+/// </remarks>
+public sealed record MapSymbolSettings
+{
+    public string EntranceSymbol { get; init; } = Map.MapSymbol.DefaultEntrance;
+
+    public string ApproximateEntranceSymbol { get; init; } = Map.MapSymbol.DefaultApproximateEntrance;
+
+    /// <summary>This section with every malformed reference replaced by its default.</summary>
+    public MapSymbolSettings Sanitised() => new()
+    {
+        EntranceSymbol = Map.MapSymbol.IsValid(EntranceSymbol) ? EntranceSymbol : Map.MapSymbol.DefaultEntrance,
+        ApproximateEntranceSymbol = Map.MapSymbol.IsValid(ApproximateEntranceSymbol)
+            ? ApproximateEntranceSymbol
+            : Map.MapSymbol.DefaultApproximateEntrance,
+    };
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -512,9 +550,22 @@ public static class AppSettingSections
     /// <summary>What the installation has decided about the mobile contract.</summary>
     public const string Sync = "sync";
 
+    /// <summary>
+    /// Not a settings form: the slugs of the shipped permission groups this installation has
+    /// already been given, as a JSON array. A group named here is never created again, so one an
+    /// operator deleted stays deleted across restarts and updates.
+    /// </summary>
+    public const string SeededPermissionGroups = "seededPermissionGroups";
+
     /// <summary>What the installation has decided about surveys sent from a field device.</summary>
     public const string SurveyUploads = "surveyUploads";
 
+    /// <summary>The administrators' half of the test-data generator's switch.</summary>
+    public const string TestData = "testData";
+
+    /// <summary>The markers entrances are drawn with.</summary>
+    public const string MapSymbols = "mapSymbols";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync, SurveyUploads];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension, Sync, SurveyUploads, TestData, MapSymbols];
 }

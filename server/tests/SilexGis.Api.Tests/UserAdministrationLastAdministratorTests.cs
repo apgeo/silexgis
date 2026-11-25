@@ -226,21 +226,11 @@ public sealed class UserAdministrationLastAdministratorTests
 
             var pending = lockedAdmin.PutAsJsonAsync($"/api/v1/users/{secondId}", new { locked = true });
 
-            // Until the request either answers or is seen waiting on a lock — the request is
-            // given its moment to reach its check while the other transaction is still open.
-            for (var attempt = 0; attempt < 200 && !pending.IsCompleted; attempt++)
-            {
-                var waiting = await other.Database.SqlQueryRaw<long>(
-                    "SELECT count(*) AS \"Value\" FROM pg_stat_activity "
-                    + "WHERE datname = current_database() AND wait_event_type = 'Lock' "
-                    + "AND pid <> pg_backend_pid()").SingleAsync();
-                if (waiting > 0)
-                {
-                    break;
-                }
-
-                await Task.Delay(50);
-            }
+            // The request must be seen parked on the last-administrator lock the other transaction
+            // holds before that transaction commits. Otherwise a request that arrived late would
+            // meet the first lock already committed and answer 409 by ordinary counting, and the
+            // test would pass with no serialisation in the guard at all.
+            await LockWaits.UntilParkedAsync(other, 1, pending, "the second administrator's lock");
 
             await transaction.CommitAsync();
             lockSecond = await pending;
