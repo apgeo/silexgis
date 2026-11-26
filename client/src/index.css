@@ -196,3 +196,11 @@ html[data-reduce-motion='true'] *::after {
 .hint-text {
   font-size: var(--ant-font-size-sm, 12px);
 }
+
+/* Below about 400px the header has no room for the product's name beside the menu button, the
+   bell, the language switch and the account: the mark alone stands for the application there. */
+@media (max-width: 399.98px) {
+  .app-wordmark {
+    display: none;
+  }
+}
