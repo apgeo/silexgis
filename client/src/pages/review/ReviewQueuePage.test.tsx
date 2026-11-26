@@ -97,7 +97,7 @@ describe('the queue of uploads awaiting review', () => {
     expect(rows[0].textContent).toContain('Phone');
     expect(rows[0].textContent).toContain('Places: 2');
     expect(rows[0].textContent).toContain('Photos and documents: 2');
-    expect(rows[0].textContent).toContain('3.0 MB');
+    expect(rows[0].textContent).toContain('3 MB');
     expect(rows[1].textContent).toContain('Second Uploader');
     expect(rows[1].textContent).toContain('File import (SpeleoLoc archive)');
     expect(rows[1].textContent).toContain('Trip sheet: 5');
@@ -110,6 +110,14 @@ describe('the queue of uploads awaiting review', () => {
     show();
     fireEvent.click(screen.getByTestId('review-queue-row'));
     expect(screen.getByTestId('opened-batch')).toBeTruthy();
+  });
+
+  it('shows the whole-view warning as the same alert the batch page uses', () => {
+    queueSpy.mockReturnValue({ data: { items: [], page: 1, pageSize: 25, totalItems: 0 }, isFetching: false });
+    show();
+    const warning = screen.getByTestId('review-whole-view');
+    expect(warning.classList.contains('ant-alert-warning')).toBe(true);
+    expect(within(warning).getByText(i18n.t('review.wholeView'))).toBeTruthy();
   });
 
   it('says when nothing is waiting', () => {

@@ -30,8 +30,8 @@ function show(state: ActivityState, canEdit = true, visibility: Visibility = 'pr
 const publishButton = () => screen.queryByRole('button', { name: 'Publish' });
 const draftButton = () => screen.queryByRole('button', { name: 'Back to draft' });
 const doneButton = () => screen.queryByRole('button', { name: 'Mark as done' });
-const callOffButton = () => screen.queryByRole('button', { name: 'Call it off' });
-const floatButton = () => screen.queryByRole('button', { name: 'Float it' });
+const callOffButton = () => screen.queryByRole('button', { name: 'Cancel trip' });
+const floatButton = () => screen.queryByRole('button', { name: 'Propose' });
 const organiseButton = () => screen.queryByRole('button', { name: 'Start organising' });
 const goingAheadButton = () => screen.queryByRole('button', { name: 'It is going ahead' });
 const putBackButton = () => screen.queryByRole('button', { name: 'Put it back' });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Result, Table, Typography } from 'antd';
+import { Alert, Result, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
@@ -43,9 +43,7 @@ export default function ReviewQueuePage() {
         {t('review.queueTitle')}
       </Typography.Title>
       <Typography.Paragraph type="secondary">{t('review.queueExplain')}</Typography.Paragraph>
-      <Typography.Paragraph type="warning" data-testid="review-whole-view">
-        {t('review.wholeView')}
-      </Typography.Paragraph>
+      <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={t('review.wholeView')} data-testid="review-whole-view" />
       <ReadFailedAlert
         error={queue.error}
         isError={queue.isError}

@@ -125,6 +125,7 @@ export default function RegisterPage() {
             name="password"
             label={t('auth.password')}
             rules={[{ required: true }, { min: 10, message: t('auth.passwordTooShort') }]}
+            extra={t('auth.passwordRule')}
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>

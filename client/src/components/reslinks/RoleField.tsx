@@ -49,6 +49,12 @@ export interface RoleFieldProps {
    * say, while a lead is a described continuation and unreadable without the description.
    */
   showNotes?: boolean;
+  /**
+   * A read-out, such as the printable trip report: chips are plain and notes are text, even
+   * for a caller who may curate the link. Taking something off a trip is done where the trip
+   * is edited, not on a page that reads as a document.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -90,6 +96,7 @@ export default function RoleField({
   canAdd,
   showPath,
   showNotes,
+  readOnly,
 }: RoleFieldProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -193,7 +200,7 @@ export default function RoleField({
             <MemberChip
               member={member}
               showPath={showPath}
-              onRemove={mayEditResLink(link) ? () => void remove(link, member.id) : undefined}
+              onRemove={!readOnly && mayEditResLink(link) ? () => void remove(link, member.id) : undefined}
             />
             {/* Never beside a restricted chip: a note is an author's description of the
                 thing, and describing something whose name was withheld undoes the
@@ -201,7 +208,7 @@ export default function RoleField({
                 else reads it, and an empty one takes no room at all. */}
             {showNotes &&
               member.display &&
-              (mayEditResLink(link) ? (
+              (!readOnly && mayEditResLink(link) ? (
                 <Typography.Text
                   type="secondary"
                   editable={{

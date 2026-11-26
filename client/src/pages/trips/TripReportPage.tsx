@@ -515,7 +515,7 @@ export default function TripReportPage() {
         {/* What the trip did to what it names — the same reading of the links list the trip page
             draws, with nothing on it to write with. */}
         <div className="trip-report-section">
-          <TripRoleFields tripId={trip.id} tripTitle={trip.title} canEdit={false} />
+          <TripRoleFields tripId={trip.id} tripTitle={trip.title} canEdit={false} readOnly />
         </div>
 
         {measured.length > 0 && (

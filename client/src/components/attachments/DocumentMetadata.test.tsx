@@ -99,7 +99,7 @@ afterEach(() => {
 const sentences = [
   'This document has no text layer: it is pictures of pages, so there are no words in it to read.',
   'Reading the text…',
-  'The text has been read.',
+  'Searchable text extracted.',
   'The text could not be read.',
   "Nothing here can read this format's text yet.",
   'This kind of file holds no text to read.',
@@ -306,7 +306,7 @@ describe('DocumentMetadata', () => {
   it.each([
     ['noText', 'This document has no text layer: it is pictures of pages, so there are no words in it to read.'],
     ['pending', 'Reading the text…'],
-    ['extracted', 'The text has been read.'],
+    ['extracted', 'Searchable text extracted.'],
     ['failed', 'The text could not be read.'],
     ['unsupported', "Nothing here can read this format's text yet."],
     ['notApplicable', 'This kind of file holds no text to read.'],
