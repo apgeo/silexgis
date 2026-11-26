@@ -205,7 +205,7 @@ async function deleteLinkRow(page: Page, rowText: string | RegExp) {
   await linkRow(linksCard(page), rowText).getByRole('button', { name: 'Link actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete link' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete link' }).click();
-  await accepted(page, 'Saved.');
+  await accepted(page, 'Deleted.');
 }
 
 test('a link is recorded from a feature page and reached again by its own address', async ({
