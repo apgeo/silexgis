@@ -165,7 +165,7 @@ async function saveThrough(
     (response) =>
       response.request().method() === 'POST' && new URL(response.url()).pathname === door,
   );
-  await dialog.getByRole('button', { name: 'OK' }).click();
+  await dialog.getByRole('button', { name: /^(Create|Save plan)$/ }).click();
   const response = await created;
   expect(response.status(), await response.text()).toBe(201);
   const trip = (await response.json()) as { id: string };
@@ -340,7 +340,7 @@ test('a member of two clubs whose only right is theirs is asked which one a plan
     );
     await expect(chosenAudience(dialog)).toContainText('Caving group');
 
-    // Pressing OK before choosing is refused on the field, and nothing reaches the server: a
+    // Pressing Save plan before choosing is refused on the field, and nothing reaches the server: a
     // plan with no club behind it is the one request this person would be turned down for.
     const posts: string[] = [];
     page.on('request', (sent) => {
@@ -349,7 +349,7 @@ test('a member of two clubs whose only right is theirs is asked which one a plan
       }
     });
     await dialog.getByLabel('Title', { exact: true }).fill(title);
-    await dialog.getByRole('button', { name: 'OK' }).click();
+    await dialog.getByRole('button', { name: /^(Create|Save plan)$/ }).click();
     await expect(dialog.getByText('Choose the caving group this trip belongs to.')).toBeVisible();
     expect(posts).toEqual([]);
 

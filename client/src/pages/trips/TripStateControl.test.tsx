@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -172,7 +172,11 @@ describe('TripStateControl', () => {
     fireEvent.click(publishButton()!);
     expect(move).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    // The confirming button says what it does, not a bare OK, and the question is a normal width.
+    const confirm = await screen.findByRole('button', { name: 'Publish and notify' });
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
+    expect((confirm.closest('.ant-popover') as HTMLElement).style.maxWidth).toBe('min(400px, 100vw)');
+    fireEvent.click(confirm);
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'published' }));
   });
 
@@ -203,7 +207,7 @@ describe('TripStateControl', () => {
     show('draft', true, 'cavingGroup');
 
     fireEvent.click(publishButton()!);
-    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish and notify' }));
 
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'published' }));
     expect(move).toHaveBeenCalledTimes(1);
@@ -215,7 +219,9 @@ describe('TripStateControl', () => {
     fireEvent.click(callOffButton()!);
     expect(move).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    const question = (await screen.findByText(/Call this trip off\?/)).closest('.ant-popover') as HTMLElement;
+    expect(within(question).queryByRole('button', { name: 'OK' })).toBeNull();
+    fireEvent.click(within(question).getByRole('button', { name: 'Call it off' }));
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'cancelled' }));
   });
 

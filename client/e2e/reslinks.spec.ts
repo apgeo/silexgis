@@ -567,7 +567,7 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
     .getByRole('dialog', { name: 'New trip log' })
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
 
   // A trip keeps its links behind their own tab, unlike a feature page where the dock carries

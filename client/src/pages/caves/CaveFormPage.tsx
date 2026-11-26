@@ -21,8 +21,13 @@ import TypedField from '../../components/typedProperties/TypedField.tsx';
 import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ReadFailedResult from '../../components/ReadFailedResult.tsx';
 import { readFailureEndsPage } from '../../components/readFailure.ts';
+import FieldsNeedAttention from '../../components/FieldsNeedAttention.tsx';
+import { useFieldsNeedingAttention } from '../../components/useFieldsNeedingAttention.ts';
 
 type CaveFormValues = Omit<CaveWrite, 'cavingGroupId'>;
+
+/** The sections a new form opens with; the rest start folded. */
+const OPEN_SECTIONS = ['identification', 'localization', 'access', 'clubFields'];
 
 /** Create/edit form, sectioned to mirror the cave sheet. CavingGroup binding arrives with teams UI. */
 export default function CaveFormPage() {
@@ -32,6 +37,35 @@ export default function CaveFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
   const [form] = Form.useForm<CaveFormValues>();
+  const attention = useFieldsNeedingAttention(form);
+  const [openSections, setOpenSections] = useState<string[]>(OPEN_SECTIONS);
+  const sectionsRef = useRef<HTMLDivElement>(null);
+  // The field a refused save is to show once the section holding it has opened. Scrolling to a
+  // field inside a folded section reaches nothing, and the refusal then looks like no answer.
+  const [fieldToReveal, setFieldToReveal] = useState<(string | number)[] | null>(null);
+  useEffect(() => {
+    if (fieldToReveal) {
+      form.scrollToField(fieldToReveal, { block: 'center', focus: true });
+      setFieldToReveal(null);
+    }
+  }, [fieldToReveal, form]);
+
+  const onFinishFailed = (info: { errorFields: { name: (string | number)[]; errors: string[] }[] }) => {
+    attention.onFinishFailed(info);
+    const first = info.errorFields[0];
+    if (!first) {
+      return;
+    }
+    // antd names a field's control by its path joined with underscores (the form has no name).
+    const section = sectionsRef.current
+      ?.querySelector(`[id="${first.name.join('_')}"]`)
+      ?.closest('[data-cave-section]')
+      ?.getAttribute('data-cave-section');
+    if (section) {
+      setOpenSections((open) => (open.includes(section) ? open : [...open, section]));
+    }
+    setFieldToReveal(first.name);
+  };
 
   const { data: cave, isError, error: readError, refetch } = useCave(id);
   const { data: caveTypes } = useCaveTypes();
@@ -173,200 +207,210 @@ export default function CaveFormPage() {
           form={form}
           layout="vertical"
           onFinish={(v) => void onFinish(v)}
+          onFinishFailed={onFinishFailed}
+          onFieldsChange={attention.onFieldsChange}
           onValuesChange={edits.onValuesChange}
           requiredMark
         >
-          <Collapse
-            defaultActiveKey={['identification', 'localization', 'access', 'clubFields']}
-            items={[
-              {
-                key: 'identification',
-                label: t('caves.sections.identification'),
-                children: (
-                  <>
-                    <Form.Item name="name" label={t('caves.name')} rules={[{ required: true }, { max: 255 }]}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="otherToponyms" label={t('caves.fields.otherToponyms')} rules={[{ max: 250 }]}>
-                      <Input />
-                    </Form.Item>
-                    <Flex gap={16} wrap>
-                      <Form.Item
-                        name="identificationCode"
-                        label={t('caves.identificationCode')}
-                        rules={[{ max: 50 }]}
-                        style={{ width: 220 }}
-                      >
+          <div ref={sectionsRef}>
+            <Collapse
+              activeKey={openSections}
+              onChange={(keys) => setOpenSections(Array.isArray(keys) ? keys : [keys])}
+              items={[
+                {
+                  key: 'identification',
+                  label: t('caves.sections.identification'),
+                  children: (
+                    <>
+                      <Form.Item name="name" label={t('caves.name')} rules={[{ required: true }, { max: 255 }]}>
                         <Input />
                       </Form.Item>
-                      <Form.Item
-                        name="caveTypeId"
-                        label={t('caves.type')}
-                        rules={[{ required: true }]}
-                        style={{ width: 240 }}
-                      >
-                        <Select options={caveTypes?.map((x) => ({ value: x.id, label: x.name }))} />
+                      <Form.Item name="otherToponyms" label={t('caves.fields.otherToponyms')} rules={[{ max: 250 }]}>
+                        <Input />
                       </Form.Item>
-                      <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280, maxWidth: '100%' }}>
+                      <Flex gap={16} wrap>
+                        <Form.Item
+                          name="identificationCode"
+                          label={t('caves.identificationCode')}
+                          rules={[{ max: 50 }]}
+                          style={{ width: 220 }}
+                        >
+                          <Input />
+                        </Form.Item>
+                        <Form.Item
+                          name="caveTypeId"
+                          label={t('caves.type')}
+                          rules={[{ required: true }]}
+                          style={{ width: 240 }}
+                        >
+                          <Select options={caveTypes?.map((x) => ({ value: x.id, label: x.name }))} />
+                        </Form.Item>
+                        <Form.Item name="website" label={t('caves.fields.website')} style={{ width: 280, maxWidth: '100%' }}>
+                          <Input />
+                        </Form.Item>
+                      </Flex>
+                      <Form.Item name="description" label={t('caves.fields.description')}>
+                        <Input.TextArea rows={4} />
+                      </Form.Item>
+                    </>
+                  ),
+                },
+                {
+                  key: 'localization',
+                  label: t('caves.sections.localization'),
+                  children: (
+                    <Flex gap={16} wrap>
+                      <Form.Item name="region" label={t('caves.region')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="hydrographicBasin" label={t('caves.fields.hydrographicBasin')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="valley" label={t('caves.fields.valley')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="tributaryRiver" label={t('caves.fields.tributaryRiver')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340, maxWidth: '100%' }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="landRegistryNumber" label={t('caves.fields.landRegistryNumber')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="locationNotes" label={t('caves.fields.locationNotes')} style={{ width: '100%' }}>
+                        <Input.TextArea rows={2} />
+                      </Form.Item>
+                    </Flex>
+                  ),
+                },
+                {
+                  key: 'geology',
+                  label: t('caves.sections.geology'),
+                  children: (
+                    <Flex gap={16} wrap>
+                      <Form.Item name="rockTypeId" label={t('caves.fields.rockType')} style={{ width: 240 }}>
+                        <Select allowClear options={rockTypes?.map((x) => ({ value: x.id, label: x.name }))} />
+                      </Form.Item>
+                      <Form.Item name="rockAge" label={t('caves.fields.rockAge')} style={{ width: 220 }}>
                         <Input />
                       </Form.Item>
                     </Flex>
-                    <Form.Item name="description" label={t('caves.fields.description')}>
-                      <Input.TextArea rows={4} />
-                    </Form.Item>
-                  </>
-                ),
-              },
-              {
-                key: 'localization',
-                label: t('caves.sections.localization'),
-                children: (
-                  <Flex gap={16} wrap>
-                    <Form.Item name="region" label={t('caves.region')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="hydrographicBasin" label={t('caves.fields.hydrographicBasin')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="valley" label={t('caves.fields.valley')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="tributaryRiver" label={t('caves.fields.tributaryRiver')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="closestAddress" label={t('caves.fields.closestAddress')} style={{ width: 340, maxWidth: '100%' }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="landRegistryNumber" label={t('caves.fields.landRegistryNumber')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="locationNotes" label={t('caves.fields.locationNotes')} style={{ width: '100%' }}>
-                      <Input.TextArea rows={2} />
-                    </Form.Item>
-                  </Flex>
-                ),
-              },
-              {
-                key: 'geology',
-                label: t('caves.sections.geology'),
-                children: (
-                  <Flex gap={16} wrap>
-                    <Form.Item name="rockTypeId" label={t('caves.fields.rockType')} style={{ width: 240 }}>
-                      <Select allowClear options={rockTypes?.map((x) => ({ value: x.id, label: x.name }))} />
-                    </Form.Item>
-                    <Form.Item name="rockAge" label={t('caves.fields.rockAge')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                  </Flex>
-                ),
-              },
-              {
-                key: 'morphometry',
-                label: t('caves.sections.morphometry'),
-                children: (
-                  <Flex gap={16} wrap>
-                    {numberField('surveyedLength', t('caves.fields.surveyedLength'))}
-                    {numberField('estimatedLength', t('caves.fields.estimatedLength'))}
-                    {numberField('realExtension', t('caves.fields.realExtension'))}
-                    {numberField('projectedExtension', t('caves.fields.projectedExtension'))}
-                    {numberField('depth', t('caves.depth'))}
-                    {numberField('positiveDepth', t('caves.fields.positiveDepth'))}
-                    {numberField('negativeDepth', t('caves.fields.negativeDepth'))}
-                    {numberField('potentialDepth', t('caves.fields.potentialDepth'))}
-                    {numberField('altitude', t('caves.fields.altitude'))}
-                    {numberField('volume', t('caves.fields.volume'))}
-                    {numberField('area', t('caves.fields.area'))}
-                    {numberField('ramificationIndex', t('caves.fields.ramificationIndex'))}
-                    {numberField('caveAge', t('caves.fields.caveAge'))}
-                  </Flex>
-                ),
-              },
-              {
-                key: 'status',
-                label: t('caves.sections.status'),
-                children: (
-                  <Flex gap={16} wrap align="end">
-                    <Form.Item name="explorationStatus" label={t('caves.fields.explorationStatus')} style={{ width: 220 }}>
-                      <Select
-                        options={['unknown', 'ongoing', 'finished', 'abandoned'].map((v) => ({
-                          value: v,
-                          label: t(`caves.explorationValues.${v}`),
-                        }))}
-                      />
-                    </Form.Item>
-                    <Form.Item name="protectionClass" label={t('caves.fields.protectionClass')} style={{ width: 220 }}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="isShowCave" label={t('caves.fields.isShowCave')} valuePropName="checked">
-                      <Switch />
-                    </Form.Item>
-                    {numberField('showCaveLength', t('caves.fields.showCaveLength'))}
-                  </Flex>
-                ),
-              },
-              {
-                key: 'discovery',
-                label: t('caves.sections.discovery'),
-                children: (
-                  <Flex gap={16} wrap>
-                    <Form.Item name="discoveryDate" label={t('caves.fields.discoveryDate')} style={{ width: 220 }}>
-                      <Input placeholder="1952 / 1952-07 / 1952-07-14" />
-                    </Form.Item>
-                    <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340, maxWidth: '100%' }}>
-                      <Input />
-                    </Form.Item>
-                  </Flex>
-                ),
-              },
-              {
-                key: 'access',
-                label: t('caves.sections.access'),
-                children: (
-                  <Flex gap={24} wrap align="end">
-                    <Form.Item name="visibility" label={t('caves.visibility')} initialValue="private" style={{ width: 240 }}>
-                      <Select
-                        options={['private', 'authenticated', 'public'].map((v) => ({
-                          value: v,
-                          label: t(`caves.visibilityValues.${v}`),
-                        }))}
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      name="locationProtected"
-                      label={t('caves.fields.locationProtected')}
-                      tooltip={t('caves.fields.locationProtectedHint')}
-                      valuePropName="checked"
-                    >
-                      <Switch />
-                    </Form.Item>
-                  </Flex>
-                ),
-              },
-              ...(clubFields.length > 0
-                ? [
-                    {
-                      key: 'clubFields',
-                      label: t('caves.sections.clubFields'),
-                      children: (
-                        <Flex gap={16} wrap data-testid="cave-club-fields">
-                          {clubFields.map((field) => (
-                            <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280, maxWidth: '100%' }}>
-                              <TypedField
-                                field={field}
-                                value={extra[field.key]}
-                                onChange={(value) => setExtraValue(field.key, value)}
-                                data-testid={`cave-club-field-${field.key}`}
-                              />
-                            </Form.Item>
-                          ))}
-                        </Flex>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-          <Flex gap={8} justify="end" style={{ marginTop: 16 }}>
+                  ),
+                },
+                {
+                  key: 'morphometry',
+                  label: t('caves.sections.morphometry'),
+                  children: (
+                    <Flex gap={16} wrap>
+                      {numberField('surveyedLength', t('caves.fields.surveyedLength'))}
+                      {numberField('estimatedLength', t('caves.fields.estimatedLength'))}
+                      {numberField('realExtension', t('caves.fields.realExtension'))}
+                      {numberField('projectedExtension', t('caves.fields.projectedExtension'))}
+                      {numberField('depth', t('caves.depth'))}
+                      {numberField('positiveDepth', t('caves.fields.positiveDepth'))}
+                      {numberField('negativeDepth', t('caves.fields.negativeDepth'))}
+                      {numberField('potentialDepth', t('caves.fields.potentialDepth'))}
+                      {numberField('altitude', t('caves.fields.altitude'))}
+                      {numberField('volume', t('caves.fields.volume'))}
+                      {numberField('area', t('caves.fields.area'))}
+                      {numberField('ramificationIndex', t('caves.fields.ramificationIndex'))}
+                      {numberField('caveAge', t('caves.fields.caveAge'))}
+                    </Flex>
+                  ),
+                },
+                {
+                  key: 'status',
+                  label: t('caves.sections.status'),
+                  children: (
+                    <Flex gap={16} wrap align="end">
+                      <Form.Item name="explorationStatus" label={t('caves.fields.explorationStatus')} style={{ width: 220 }}>
+                        <Select
+                          options={['unknown', 'ongoing', 'finished', 'abandoned'].map((v) => ({
+                            value: v,
+                            label: t(`caves.explorationValues.${v}`),
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item name="protectionClass" label={t('caves.fields.protectionClass')} style={{ width: 220 }}>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="isShowCave" label={t('caves.fields.isShowCave')} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                      {numberField('showCaveLength', t('caves.fields.showCaveLength'))}
+                    </Flex>
+                  ),
+                },
+                {
+                  key: 'discovery',
+                  label: t('caves.sections.discovery'),
+                  children: (
+                    <Flex gap={16} wrap>
+                      <Form.Item name="discoveryDate" label={t('caves.fields.discoveryDate')} style={{ width: 220 }}>
+                        <Input placeholder="1952 / 1952-07 / 1952-07-14" />
+                      </Form.Item>
+                      <Form.Item name="discoverer" label={t('caves.fields.discoverer')} style={{ width: 340, maxWidth: '100%' }}>
+                        <Input />
+                      </Form.Item>
+                    </Flex>
+                  ),
+                },
+                {
+                  key: 'access',
+                  label: t('caves.sections.access'),
+                  children: (
+                    <Flex gap={24} wrap align="end">
+                      <Form.Item name="visibility" label={t('caves.visibility')} initialValue="private" style={{ width: 240 }}>
+                        <Select
+                          options={['private', 'authenticated', 'public'].map((v) => ({
+                            value: v,
+                            label: t(`caves.visibilityValues.${v}`),
+                          }))}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="locationProtected"
+                        label={t('caves.fields.locationProtected')}
+                        tooltip={t('caves.fields.locationProtectedHint')}
+                        valuePropName="checked"
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </Flex>
+                  ),
+                },
+                ...(clubFields.length > 0
+                  ? [
+                      {
+                        key: 'clubFields',
+                        label: t('caves.sections.clubFields'),
+                        children: (
+                          <Flex gap={16} wrap data-testid="cave-club-fields">
+                            {clubFields.map((field) => (
+                              <Form.Item key={field.key} label={field.label} required={field.required} style={{ width: 280, maxWidth: '100%' }}>
+                                <TypedField
+                                  field={field}
+                                  value={extra[field.key]}
+                                  onChange={(value) => setExtraValue(field.key, value)}
+                                  data-testid={`cave-club-field-${field.key}`}
+                                />
+                              </Form.Item>
+                            ))}
+                          </Flex>
+                        ),
+                      },
+                    ]
+                  : []),
+              ].map((section) => ({
+                ...section,
+                // Marks which section a field lives in, for the refused save to open it.
+                children: <div data-cave-section={section.key}>{section.children}</div>,
+              }))}
+            />
+          </div>
+          <Flex gap={8} justify="end" align="center" wrap style={{ marginTop: 16 }}>
+            <FieldsNeedAttention count={attention.count} />
             <Button
               onClick={() =>
                 requestDiscard(typed, () => {

@@ -369,7 +369,7 @@ test('trip log with participants, tags and the audit trail', async ({ page }) =>
   await page.getByPlaceholder('Participant name').fill('Guest Caver');
   await page.getByRole('button', { name: /Add proposer/ }).click();
   await page.getByPlaceholder('Proposer name').fill('Ana Proposer');
-  await confirmOk(page, { exact: true });
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   // Scope to the detail-page tags — the names also surface in the history timeline below.
   await expect(page.locator('.ant-tag', { hasText: 'Guest Caver' })).toBeVisible();

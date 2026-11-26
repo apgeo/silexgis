@@ -130,7 +130,7 @@ test('a trip records what it worked in, and the record survives a reload and can
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -221,7 +221,7 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
     .fill(title);
   await fillRange(page, start, end);
   await drawPoint(page);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -265,7 +265,7 @@ test('a trip is written as a draft and stays one until it is published', async (
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -275,7 +275,7 @@ test('a trip is written as a draft and stays one until it is published', async (
 
   // Publishing is confirmed first: it is the moment the people on the trip are told.
   await page.getByRole('button', { name: 'Publish', exact: true }).click();
-  await confirmOk(page);
+  await confirmOk(page, { name: 'Publish and notify' });
   await expect(page.getByTestId('trip-state')).toHaveText('Published', { timeout: 15_000 });
   await expect(page.getByTestId('trip-draft-notice')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Publish$/ })).toHaveCount(0);
@@ -318,7 +318,7 @@ test('a trip logged without touching the date control is a day trip today', asyn
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Date', { exact: true })).toBeVisible();
@@ -352,7 +352,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   // "more than before", which would pass on a page that had stopped filtering entirely.
   await page.getByRole('button', { name: /Add participant/ }).click();
   await page.getByPlaceholder('Participant name').first().fill(person);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
@@ -455,7 +455,7 @@ test('what a trip measured and what it found are stored on it, not held by the p
   const purpose = page.getByTitle('Survey / mapping', { exact: true });
   await expect(purpose).toBeVisible({ timeout: 15_000 });
   await purpose.click();
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   // Checked here, where the answer is still on screen: the questions a section asks are the ones
   // the purpose carries, so a trip that lost its purpose on the way in fails much later and
@@ -540,7 +540,7 @@ test('a trip records who was there, what one of them did, and when they came out
   // who cannot open this form at all — which is what the assertion after the reload checks.
   await details.getByPlaceholder('Note').fill('turned back at the pitch head');
 
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();
 
@@ -576,7 +576,7 @@ test('a trip is written up as a document, and the document is filed against the 
     .getByRole('dialog')
     .getByRole('textbox', { name: /^\*?\s*Title$/ })
     .fill(title);
-  await confirmOk(page);
+  await confirmOk(page, { scope: page.getByRole('dialog'), name: 'Create', exact: true });
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
   const tripUrl = page.url();

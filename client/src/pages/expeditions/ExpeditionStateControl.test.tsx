@@ -54,6 +54,9 @@ describe('ExpeditionStateControl', () => {
     expect(question.textContent).toContain('Nobody is notified');
     expect(question.textContent).toContain('your caving group');
     expect(move).not.toHaveBeenCalled();
+    // Its button names the act in the camp's words, which promise nobody a notification.
+    expect(screen.getByRole('button', { name: 'Announce' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
   });
 
   it('offers a called-off camp only the way back to the workshop', () => {

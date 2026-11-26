@@ -42,7 +42,8 @@ export type MoveWording =
   | 'markDoneSuccess'
   | 'callOff'
   | 'callOffSuccess'
-  | 'callOffConfirm';
+  | 'callOffConfirm'
+  | 'publishConfirmOk';
 
 interface Move {
   /** The state the activity moves to — the whole of what the request says. */
@@ -57,6 +58,8 @@ interface Move {
    * along — and it is the last moment before anything that goes out cannot be recalled.
    */
   confirm?: MoveWording;
+  /** The confirming button's name: the act it commits to, never a bare OK. */
+  confirmOk?: MoveWording;
   primary?: boolean;
 }
 
@@ -66,6 +69,7 @@ const ANNOUNCE: Move = {
   success: 'publishSuccess',
   icon: <NotificationOutlined />,
   confirm: 'publishConfirm',
+  confirmOk: 'publishConfirmOk',
   primary: true,
 };
 
@@ -130,6 +134,7 @@ const CALL_OFF: Move = {
   success: 'callOffSuccess',
   icon: <StopOutlined />,
   confirm: 'callOffConfirm',
+  confirmOk: 'callOff',
 };
 
 /**
@@ -252,6 +257,9 @@ export default function ActivityStateControl({
           <Popconfirm
             key={choice.to}
             title={t(key(choice.confirm), { audience: t(`trips.publishAudience.${visibility}`) })}
+            okText={choice.confirmOk ? t(key(choice.confirmOk)) : undefined}
+            // A long question otherwise stretches the popover across the whole page.
+            styles={{ root: { maxWidth: 'min(400px, 100vw)' } }}
             onConfirm={() => void run(choice)}
           >
             {button}

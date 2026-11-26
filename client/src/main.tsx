@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SearchOutlined } from '@ant-design/icons';
 import { App as AntApp, ConfigProvider } from 'antd';
@@ -12,6 +12,7 @@ import './index.css';
 import App from './App.tsx';
 import { QueryProvider } from './api/QueryProvider.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { buildFormConfig } from './components/formConfig.ts';
 import { installErrorReporting } from './diagnostics/reporter.ts';
 import { useUiPrefsStore } from './stores/uiPrefsStore.ts';
 import { buildThemeConfig, resolveDark } from './theme.ts';
@@ -32,6 +33,8 @@ function Root() {
   const { i18n, t } = useTranslation();
   const appearance = useUiPrefsStore((s) => s.appearance);
   const [, setSystemTick] = useState(0);
+  // Rebuilt when the language changes, which hands out a new `t`.
+  const formConfig = useMemo(() => buildFormConfig(t), [t]);
 
   // Following the system theme means reacting when the system changes it, not only at load.
   useEffect(() => {
@@ -61,6 +64,7 @@ function Root() {
       // A search field's button holds nothing but its icon, so it was named by the icon's English
       // glyph name, "search", in either language. Named here once for every search field.
       inputSearch={{ searchIcon: <SearchOutlined aria-label={t('a11y.search')} /> }}
+      form={formConfig}
     >
       {/* antd App provides the context consumed by App.useApp() (message/modal/notification). */}
       <AntApp style={{ height: '100%' }}>
