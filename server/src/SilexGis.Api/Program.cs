@@ -977,39 +977,6 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         }
     }
 
-    // `dotnet run -- seed-graph-demo`: a large invented network of relations for exploring the
-    // graph view, with visibility that differs per account. Counts only are printed. It lays down
-    // the base demo dataset first, and makes the test logins members of the invented clubs.
-    if (args.Contains("seed-graph-demo"))
-    {
-        using var scope = app.Services.CreateScope();
-        var result = await GraphDemoSeeder.SeedAsync(scope.ServiceProvider);
-        switch (result.Outcome)
-        {
-            case GraphDemoSeedOutcome.NotPermitted:
-                // It writes hundreds of rows and changes the test logins' memberships, so it is
-                // refused rather than trusted to the operator having read the warning.
-                Log.Error(
-                    "seed-graph-demo writes a large invented dataset and runs only on a "
-                    + "development host (set SILEXGIS__GraphDemo__Allow=true to override)");
-                return;
-            case GraphDemoSeedOutcome.NoAdministrator:
-                Log.Error(
-                    "seed-graph-demo requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
-                return;
-            default:
-                Log.Information(
-                    "Graph demo network seeded: {Counts}",
-                    string.Join(", ", result.Counts.Select(kv => $"{kv.Key}={kv.Value}")));
-                foreach (var note in result.Notes)
-                {
-                    Log.Warning("seed-graph-demo: {Note}", note);
-                }
-
-                return;
-        }
-    }
-
     await app.RunAsync();
 }
 catch (Exception ex)

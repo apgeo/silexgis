@@ -144,20 +144,6 @@ installation that wants it anyway has to set `SILEXGIS__SpeleoLocDev__Allow=true
 also set `SILEXGIS__SpeleoLocDev__MemberPassword` rather than take the default printed in this
 guide.
 
-### A large invented network for the graph view
-
-```bash
-docker compose exec api dotnet SilexGis.Api.dll seed-graph-demo
-```
-
-Lays down about 150 caves, 60 other features, 400 resource links, 130 trips, six
-expeditions, a cabinet tree with 120 documents, tags and three invented clubs (`Clubul Graf
-Alfa`, `Beta`, `Gama`), all visibly made up and found again by their codes, so a second run
-adds nothing. It runs the base demo seed first, makes `viewer@test.local` a member of Beta and
-`editor@test.local` of Alfa and Beta when those accounts exist, and prints counts only. Like the
-command above it refuses to run on anything but a development host unless
-`SILEXGIS__GraphDemo__Allow=true` is set.
-
 The account holds the Viewer role and belongs to Demo Caving Club, so it can read everything
 public, everything visible to signed-in accounts, and everything that club may see. Treat it as
 what it is: a second party that exists so location protection can be watched working.
@@ -2934,7 +2920,6 @@ the reasoning beside each one.
 | `SILEXGIS__TripPastTracks__PublishReportWords` | `false` | whether the replay of a **finished** published trip says, of each report, what the party was doing and what was noted with it. Off unless you turn it on: a note is free text a coordinator typed about a person, for the people running the trip — whether people without an account read it is yours to decide. A report whose place is withheld carries neither text. Read as each replay is opened, so it applies to links already handed out |
 | `SILEXGIS__TripPastTracks__OfferMomentLinks` | `true` | whether a replay of a **finished** published trip offers an address that opens it again at the moment on screen, and honours such a moment when a link gives it one (`at=`, `play=`). **On unless you switch it off:** what somebody wants to pass on about a replay is a moment of it — "this is where they turned back" — and without this the only thing they can send is the trip, leaving whoever opens it to find the moment again by hand. Set it to `false` and no such address is offered and a moment in an address is ignored: the link opens the replay at its beginning, stopped, as a link that named no moment always has. Which past trip to replay, and which team or person to keep the camera on, are not part of this — they are how the archive itself is linked to |
 | `SILEXGIS__TripPastTracks__CompactReplayBarInFrame` | `true` | whether a replay's controls split into a single line, with the rest on a sheet opened from it, when the page is drawn inside a frame too small for the whole strip. **On unless you switch it off:** the frame a club's article gives this page is often the width of a phone, and the whole strip in that width either takes the height the drawing needed or wraps into something nobody can press. Set it to `false` and every frame gets the whole strip, as every frame did before the split existed. The controls are the same ones either way; this decides only how they are laid out in a small frame |
-| `SILEXGIS__GraphDemo__Allow` | `false` | permits `seed-graph-demo` on a host that is not in development. That command writes a few thousand invented rows (caves, trips, documents, links, clubs) and, when the test logins exist, makes them members of the invented clubs, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
 | `SILEXGIS__TestData__Allowed` | `true` | whether this deployment offers the **test-data generator**: a page for full administrators (*Administration → Test data*) that fills the database with invented but realistic caves, entrances and areas — and, as it grows, people, trips, documents and files — and removes them again. `false` hides the page, refuses its routes as if they did not exist, and refuses the `generate-test-data` command |
