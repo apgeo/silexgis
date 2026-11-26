@@ -10,12 +10,13 @@ import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { encodeFilter } from '../../filters/url.ts';
 
-const { photosSpy, editorSpy, savedFilters, extentCutShort, photosFailure } = vi.hoisted(() => ({
+const { photosSpy, editorSpy, savedFilters, extentCutShort, photosFailure, photoItems } = vi.hoisted(() => ({
   photosFailure: { current: undefined as unknown },
   photosSpy: vi.fn(),
   editorSpy: vi.fn(),
   savedFilters: { current: [] as unknown[] },
   extentCutShort: { current: false },
+  photoItems: { current: [] as unknown[] },
 }));
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -35,7 +36,13 @@ vi.mock('../../api/hooks.ts', () => ({
       return { data: undefined, isFetching: false, isError: true, error: photosFailure.current, refetch: vi.fn() };
     }
     return {
-      data: { items: [], page: 1, pageSize: 60, totalItems: 0, extentCutShort: extentCutShort.current },
+      data: {
+        items: photoItems.current,
+        page: 1,
+        pageSize: 60,
+        totalItems: photoItems.current.length,
+        extentCutShort: extentCutShort.current,
+      },
       isFetching: false,
       isError: false,
     };
@@ -128,6 +135,30 @@ beforeEach(async () => {
   savedFilters.current = [];
   extentCutShort.current = false;
   photosFailure.current = undefined;
+});
+
+describe('a gallery with nothing, or with some, to show', () => {
+  it('says a narrowed gallery matched nothing and offers to clear what narrowed it', () => {
+    show('/gallery?caveId=c1');
+    expect(screen.getByText('No photographs match these filters.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(address().get('caveId')).toBeNull();
+  });
+
+  it('keeps the plain empty text, with nothing to clear, for a gallery nothing narrows', () => {
+    show('/gallery');
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('says how many photographs the question found', () => {
+    photoItems.current = ['a', 'b'].map((documentId) => ({ documentId, credit: {} }));
+    try {
+      show('/gallery');
+      expect(screen.getByTestId('gallery-count')).toHaveTextContent('2 photographs');
+    } finally {
+      photoItems.current = [];
+    }
+  });
 });
 
 describe('a failed read of the photographs', () => {

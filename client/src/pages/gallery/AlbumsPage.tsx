@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import {
-  DeleteOutlined, EditOutlined, PictureOutlined, PlusOutlined, ShareAltOutlined,
+  CopyOutlined, DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PictureOutlined, PlusOutlined,
+  ShareAltOutlined,
 } from '@ant-design/icons';
 import {
   Alert, App, Card, Empty, Flex, Form, Input, Modal, Popconfirm, Select, Space, Spin, Tooltip,
@@ -10,7 +11,7 @@ import {
 import Button from '../../components/Button.tsx';
 import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   hasAccessAction,
   useAlbums,
@@ -50,6 +51,7 @@ export default function AlbumsPage() {
   const albumsQuery = useAlbums({ pageSize: 100 }, canRead);
   const { data, isPending } = albumsQuery;
   const createAlbum = useCreateAlbum();
+  const navigate = useNavigate();
   const updateAlbum = useUpdateAlbum();
   const deleteAlbum = useDeleteAlbum();
   const share = useShareAlbum();
@@ -68,8 +70,14 @@ export default function AlbumsPage() {
   const submit = async (body: AlbumWrite) => {
     try {
       if (editing === 'new') {
-        await createAlbum.mutateAsync(body);
-      } else if (editing) {
+        // A new album is empty, and what comes next is filling it: it is opened at once.
+        const created = await createAlbum.mutateAsync(body);
+        setEditing(null);
+        message.success(t('gallery.albumCreated'));
+        void navigate(`/albums/${created.id}`);
+        return;
+      }
+      if (editing) {
         await updateAlbum.mutateAsync({ id: editing.id, ...body });
       }
 
@@ -77,6 +85,15 @@ export default function AlbumsPage() {
       message.success(t('common.saved'));
     } catch {
       message.error(t('common.saveFailed'));
+    }
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success(t('gallery.linkCopied'));
+    } catch {
+      message.warning(t('gallery.copyFailed'));
     }
   };
 
@@ -93,7 +110,12 @@ export default function AlbumsPage() {
         content: (
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Typography.Paragraph type="secondary">{t('gallery.shareOnce')}</Typography.Paragraph>
-            <Input readOnly value={url} onFocus={(e) => e.target.select()} />
+            <Space.Compact style={{ width: '100%' }}>
+              <Input readOnly value={url} onFocus={(e) => e.target.select()} />
+              <Button icon={<CopyOutlined />} onClick={() => void copyLink(url)}>
+                {t('gallery.copyLink')}
+              </Button>
+            </Space.Compact>
           </Space>
         ),
         width: 560,
@@ -140,13 +162,11 @@ export default function AlbumsPage() {
       actions.push(
         <Popconfirm key="revoke" title={t('gallery.revokeConfirm')} onConfirm={() => revokeLink(album)}>
           <Tooltip title={t('gallery.revokeShare')}>
-            {/* Coloured as the one action that is "on": the album has a live link. */}
+            {/* A glyph of its own: the share glyph means "make a link", never "take it back". */}
             <Button
               type="text"
               size="small"
-              color="primary"
-              variant="text"
-              icon={<ShareAltOutlined />}
+              icon={<DisconnectOutlined />}
               aria-label={t('gallery.revokeShare')}
             />
           </Tooltip>
@@ -228,20 +248,39 @@ export default function AlbumsPage() {
                     style={{ height: 150, objectFit: 'cover' }}
                   />
                 ) : (
-                  <Flex
-                    align="center"
-                    justify="center"
-                    style={{ height: 150, background: token.colorFillQuaternary }}
-                  >
-                    <PictureOutlined style={{ fontSize: 28, opacity: 0.4 }} />
-                  </Flex>
+                  // Wrapped, because the card styles its cover's own child as a block, which
+                  // undid the centring and left the glyph in the corner like a broken picture.
+                  <div>
+                    <Flex
+                      vertical
+                      align="center"
+                      justify="center"
+                      gap={4}
+                      style={{ height: 150, background: token.colorFillQuaternary }}
+                      data-testid="album-cover-placeholder"
+                    >
+                      <PictureOutlined style={{ fontSize: 28, opacity: 0.4 }} />
+                      {album.photoCount === 0 && (
+                        <Typography.Text type="secondary">{t('gallery.albumEmpty')}</Typography.Text>
+                      )}
+                    </Flex>
+                  </div>
                 )
               }
               actions={cardActions(album)}
             >
               <Card.Meta
                 title={<Link to={`/albums/${album.id}`}>{album.title}</Link>}
-                description={t('gallery.albumCount', { count: album.photoCount })}
+                description={
+                  <Space orientation="vertical" size={0}>
+                    <span>{t('gallery.albumCount', { count: album.photoCount })}</span>
+                    {album.hasActiveShare && (
+                      <Typography.Text type="success">
+                        <LinkOutlined /> {t('gallery.sharedByLink')}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                }
               />
             </Card>
           ))}

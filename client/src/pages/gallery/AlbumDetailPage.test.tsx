@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
+import en from '../../i18n/locales/en.json';
+import ro from '../../i18n/locales/ro.json';
 import { ApiError } from '../../api/client.ts';
 import { afterRejectionsAreReported } from '../../testEventLoop.ts';
 
 const state = vi.hoisted(() => ({
   setCover: vi.fn(),
+  removeItem: vi.fn(),
+  addItems: vi.fn(),
   /** What the album's own read failed with, when a test makes it fail. */
   albumError: null as unknown,
   photosFailed: false,
@@ -60,7 +64,8 @@ vi.mock('../../api/hooks.ts', async (importActual) => {
           },
     useReorderAlbum: () => ({ mutateAsync: vi.fn() }),
     useSetAlbumCover: () => ({ mutateAsync: state.setCover }),
-    useRemoveAlbumItem: () => ({ mutateAsync: vi.fn() }),
+    useRemoveAlbumItem: () => ({ mutateAsync: state.removeItem }),
+    useAddAlbumItems: () => ({ mutateAsync: state.addItems }),
   };
 });
 
@@ -78,6 +83,8 @@ const { default: AlbumDetailPage } = await import('./AlbumDetailPage.tsx');
 const unhandled = vi.fn();
 beforeEach(() => {
   state.setCover.mockReset();
+  state.removeItem.mockReset();
+  state.addItems.mockReset();
   state.albumError = null;
   state.photosFailed = false;
   state.refetchAlbum.mockReset();
@@ -118,6 +125,23 @@ describe('AlbumDetailPage', () => {
     expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
     await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
+  });
+});
+
+describe('taking a picture out of the album', () => {
+  it('does not wear the delete glyph, and can be undone', async () => {
+    state.removeItem.mockResolvedValue(undefined);
+    state.addItems.mockResolvedValue(undefined);
+    draw();
+    const takeOut = screen.getByRole('button', { name: en.gallery.removeFromAlbum });
+    // The trash can means deleting the photograph, which this does not do.
+    expect(takeOut.querySelector('.anticon-delete')).toBeNull();
+
+    fireEvent.click(takeOut);
+    await waitFor(() => expect(state.removeItem).toHaveBeenCalledWith({ id: 'album-1', documentId: 'p1' }));
+    fireEvent.click(await screen.findByRole('button', { name: en.gallery.undoRemove }));
+    await waitFor(() => expect(state.addItems).toHaveBeenCalledWith({ id: 'album-1', documentIds: ['p1'] }));
+    expect(ro.gallery.undoRemove).toBeTruthy();
   });
 });
 
