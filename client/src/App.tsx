@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Suspense, type ReactNode } from 'react';
-import { Spin } from 'antd';
 import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 'react-router-dom';
 import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
 import PanelShell from './pages/panel/PanelShell.tsx';
 import RouteErrorPage from './components/RouteErrorPage.tsx';
+import RouteLoading from './components/RouteLoading.tsx';
 import { lazyRetrying } from './codeLoading.ts';
 import CallbackPage from './pages/CallbackPage.tsx';
 import LandingRoute from './pages/LandingRoute.tsx';
@@ -131,7 +131,7 @@ const AdvancedSettingsPage = lazyRetrying(() => import('./pages/settings/Advance
 
 function Loadable({ children }: { children: ReactNode }) {
   return (
-    <Suspense fallback={<Spin style={{ display: 'block', marginTop: '20vh' }} />}>
+    <Suspense fallback={<RouteLoading />}>
       {children}
     </Suspense>
   );

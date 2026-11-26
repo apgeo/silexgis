@@ -1,0 +1,7 @@
+/* Centred in the space the page will take, with room enough above and below that it is not read
+   as a fault pinned to the top of the screen. */
+.route-loading {
+  min-height: 40vh;
+  width: 100%;
+  padding: 16px;
+}

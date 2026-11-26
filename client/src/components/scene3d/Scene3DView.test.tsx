@@ -2322,7 +2322,7 @@ describe('the walls of every cave in view', () => {
     // The count sent is the ceiling, not the number typed; the budget in force is the person's.
     await waitFor(() => expect(caveMeshCounts).toEqual([20]));
     expect(
-      await screen.findByText(/Walls of 1 of 2 caves in view — the rest would exceed 1\.0 MB\./),
+      await screen.findByText(/Walls of 1 of 2 caves in view — the rest would exceed 1 MB\./),
     ).toBeInTheDocument();
     expect(engine.engineState.modelRequests.map((request) => request.url)).toEqual([
       '/files/cave-1.glb',

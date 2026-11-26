@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutOutlined } from '@ant-design/icons';
-import { Alert, Popover, Result, Spin, Typography } from 'antd';
+import { Alert, Popover, Result, Typography } from 'antd';
 import Button from '../Button.tsx';
+import Scene3DLoading from './Scene3DLoading.tsx';
 import { importWithRetry, isCodeDownloadFailure } from '../../codeLoading.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -1719,9 +1720,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   return (
     <div className="scene3d-wrap" ref={wrapRef} style={{ height }}>
-      {status === 'loading' && (
-        <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="scene3d-loading" />
-      )}
+      {status === 'loading' && <Scene3DLoading />}
       {/* Said in the reader's language, with the browser's own words kept small beneath for
           whoever is asked about it. Trying again starts the view afresh, as after a failed
           download: what refused it may have let go meanwhile. */}
