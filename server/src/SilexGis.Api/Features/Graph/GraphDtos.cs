@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using SilexGis.Api.Common;
 using SilexGis.Api.Common.Graph;
 
 namespace SilexGis.Api.Features.Graph;
@@ -72,8 +73,9 @@ public sealed record GraphNeighbourhoodRequest(
 }
 
 /// <summary>
-/// Each rule carries the stable code its refusal is answered with; the route answers the first
-/// failing rule's code.
+/// Each rule carries the stable code its refusal is answered with. The route runs this through the
+/// shared validation filter, which answers with that code when every failing rule names the same
+/// one, and with the generic validation code when a request is wrong in more than one way.
 /// </summary>
 public sealed class GraphNeighbourhoodRequestValidator : AbstractValidator<GraphNeighbourhoodRequest>
 {
@@ -86,29 +88,29 @@ public sealed class GraphNeighbourhoodRequestValidator : AbstractValidator<Graph
     {
         RuleFor(x => x.Type)
             .Must(t => GraphWire.TryParseType(t, out var type) && GraphWire.IsSeedType(type))
-            .WithErrorCode(TypeUnknownCode)
+            .WithProblemCode(TypeUnknownCode)
             .WithMessage("type must name a graph node type that can be explored.");
         RuleFor(x => x.Id)
             .Must((request, id) => IsValidId(request.Type, id))
             .When(x => GraphWire.TryParseType(x.Type, out _))
-            .WithErrorCode(IdInvalidCode)
+            .WithProblemCode(IdInvalidCode)
             .WithMessage("id must be a uuid, or a positive integer for a tag.");
         RuleFor(x => x.Categories)
             .Must(c => c is null || SplitCategories(c) is not null)
-            .WithErrorCode(CategoryUnknownCode)
+            .WithProblemCode(CategoryUnknownCode)
             .WithMessage("categories must be a comma-separated list of graph categories.");
         RuleFor(x => x.Category)
             .Must(c => c is null || GraphWire.TryParseCategory(c, out _))
-            .WithErrorCode(CategoryUnknownCode)
+            .WithProblemCode(CategoryUnknownCode)
             .WithMessage("category must name a graph category.");
         RuleFor(x => x.Offset)
             .Must((request, offset) => offset is null || (offset >= 0 && request.Category is not null))
-            .WithErrorCode(PagingInvalidCode)
+            .WithProblemCode(PagingInvalidCode)
             .WithMessage("offset must be zero or more, and is only accepted together with category.");
         RuleFor(x => x.Limit)
             .InclusiveBetween(1, GraphNeighbourhoodRequest.MaxLimit)
             .When(x => x.Limit is not null)
-            .WithErrorCode(PagingInvalidCode)
+            .WithProblemCode(PagingInvalidCode)
             .WithMessage($"limit must be between 1 and {GraphNeighbourhoodRequest.MaxLimit}.");
     }
 
@@ -178,16 +180,16 @@ public sealed class GraphSearchRequestValidator : AbstractValidator<GraphSearchR
     {
         RuleFor(x => x.Q)
             .Must(q => q is null || q.Trim().Length <= GraphSearchRequest.MaxQueryLength)
-            .WithErrorCode(QueryTooLongCode)
+            .WithProblemCode(QueryTooLongCode)
             .WithMessage($"q must be at most {GraphSearchRequest.MaxQueryLength} characters.");
         RuleFor(x => x.Types)
             .Must(t => t is null || SplitTypes(t) is not null)
-            .WithErrorCode(GraphNeighbourhoodRequestValidator.TypeUnknownCode)
+            .WithProblemCode(GraphNeighbourhoodRequestValidator.TypeUnknownCode)
             .WithMessage("types must be a comma-separated list of graph node types that can be searched.");
         RuleFor(x => x.Limit)
             .InclusiveBetween(1, GraphSearchRequest.MaxLimit)
             .When(x => x.Limit is not null)
-            .WithErrorCode(GraphNeighbourhoodRequestValidator.PagingInvalidCode)
+            .WithProblemCode(GraphNeighbourhoodRequestValidator.PagingInvalidCode)
             .WithMessage($"limit must be between 1 and {GraphSearchRequest.MaxLimit}.");
     }
 

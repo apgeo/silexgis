@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using SilexGis.Api.Common;
 using SilexGis.Api.Common.Graph;
@@ -22,6 +21,7 @@ public static class GraphEndpoints
         var graph = api.MapGroup("/graph").WithTags("Graph");
 
         graph.MapGet("/neighbourhood", NeighbourhoodAsync)
+            .WithValidation<GraphNeighbourhoodRequest>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary(
@@ -30,6 +30,7 @@ public static class GraphEndpoints
                 + "category + offset pages one family; limit (1-200, default 40) caps each family's top-level items.");
 
         graph.MapGet("/search", SearchAsync)
+            .WithValidation<GraphSearchRequest>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithSummary(
                 "Items to start exploring from, found by name and offered only when the caller may read them. "
@@ -41,7 +42,6 @@ public static class GraphEndpoints
 
     private static async Task<Results<Ok<GraphNeighbourhoodDto>, UnauthorizedHttpResult, ProblemHttpResult>> NeighbourhoodAsync(
         [AsParameters] GraphNeighbourhoodRequest request,
-        IValidator<GraphNeighbourhoodRequest> validator,
         GraphNeighbourhoodService graph,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -50,13 +50,6 @@ public static class GraphEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        var validation = await validator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            var first = validation.Errors[0];
-            return ApiProblems.BadRequest(first.ErrorCode, first.ErrorMessage);
         }
 
         // Ids are compared as text from here on, so they are put in the one spelling every
@@ -92,7 +85,6 @@ public static class GraphEndpoints
 
     private static async Task<Results<Ok<List<GraphSearchHitDto>>, UnauthorizedHttpResult, ProblemHttpResult>> SearchAsync(
         [AsParameters] GraphSearchRequest request,
-        IValidator<GraphSearchRequest> validator,
         GraphSearchService search,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -101,13 +93,6 @@ public static class GraphEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
-        }
-
-        var validation = await validator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-        {
-            var first = validation.Errors[0];
-            return ApiProblems.BadRequest(first.ErrorCode, first.ErrorMessage);
         }
 
         if (string.IsNullOrWhiteSpace(request.Q))
