@@ -86,6 +86,35 @@ vi.mock('../../../api/download.ts', async (original) => ({
     return server.answer();
   },
 }));
+/** Whether a render node is there, the reader's renders, and what the render route was asked. */
+const renders = {
+  available: false,
+  list: [] as unknown[],
+  asked: [] as { url: string; body: { bundle: FlybyBundleRequest; plan: string; container: string } }[],
+};
+vi.mock('../../../api/hooks/flybyRenders.ts', async (original) => ({
+  ...(await original<typeof import('../../../api/hooks/flybyRenders.ts')>()),
+  useFlybyRenderAvailability: () => ({ data: { available: renders.available } }),
+  useFlybyRenders: () => ({ data: renders.list }),
+  useCancelFlybyRender: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock('../../../api/client.ts', async (original) => {
+  const actual = await original<typeof import('../../../api/client.ts')>();
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      POST: async (url: string, init: { body: (typeof renders.asked)[number]['body'] }) => {
+        renders.asked.push({ url, body: init.body });
+        const render = { id: 'r1', name: 'An invented flyby', status: 'queued', files: [] };
+        return {
+          data: { render, walls: 1, lines: 0, notDrawn: 0, wallsLeftOut: 0, markers: 0, markersNotDrawn: 0, photos: 0, undatedLegs: 0, cavesOnSurveyDate: 0, undatedCaves: 0 },
+          response: new Response(null, { status: 201 }),
+        };
+      },
+    },
+  };
+});
 const formats: MovieFormatSupport[] = [
   { format: 'gif', supported: true, codec: null },
   { format: 'webm', supported: true, codec: 'vp09.00.10.08' },
@@ -228,6 +257,9 @@ beforeEach(() => {
   useFlybyStore.setState({ library: [], loadRoute: false, movie: { ...DEFAULT_FLYBY_MOVIE_SETTINGS, fps: 12.5 } });
   useFlybyDraftStore.setState({ draft: null });
   server.asked = [];
+  renders.available = false;
+  renders.list = [];
+  renders.asked = [];
   server.answer = () =>
     new Headers({ 'X-SilexGis-Bundle-Walls': '1', 'X-SilexGis-Bundle-Lines': '1', 'X-SilexGis-Bundle-Not-Drawn': '0', 'X-SilexGis-Bundle-Walls-Left-Out': '0' });
 });
@@ -551,5 +583,31 @@ describe('a flyby as a bundle for Blender', () => {
     );
     expect(screen.getByTestId('flyby-movie-export')).toBeDisabled();
     expect(server.asked).toHaveLength(0);
+  });
+  it('offers rendering on the server only while a node is there, and sends it the bundle the download would get', async () => {
+    renderFlyby();
+    await openBundle();
+    expect(screen.queryByTestId('flyby-render-server')).not.toBeInTheDocument();
+    cleanup();
+    document.body.replaceChildren();
+
+    renders.available = true;
+    renderFlyby();
+    await openBundle();
+    expect(screen.getByTestId('flyby-render-server')).toHaveTextContent('Render on the server');
+
+    await download();
+    const downloaded = server.asked[0].body;
+
+    fireEvent.click(within(screen.getByTestId('flyby-render-plan')).getByText('Full'));
+    fireEvent.click(screen.getByTestId('flyby-render-start'));
+    for (let tries = 0; tries < 100 && renders.asked.length === 0 && !screen.queryByTestId('flyby-movie-failed'); tries += 1) {
+      await pass(50);
+    }
+    expect(renders.asked).toHaveLength(1);
+    expect(renders.asked[0].url).toBe('/api/v1/flybys/blender-renders');
+    expect(renders.asked[0].body.plan).toBe('full');
+    expect(renders.asked[0].body.container).toBe('mp4');
+    expect(renders.asked[0].body.bundle).toEqual(downloaded);
   });
 });

@@ -68,7 +68,8 @@
     "registryCategories": "Categorii",
     "cavePotential": "Potențial speologic",
     "publishedTrips": "Ture publicate",
-    "testData": "Date de test"
+    "testData": "Date de test",
+    "renderNodes": "Noduri de randare"
   },
   "terrain": {
     "title": "Relief",
@@ -10882,6 +10883,46 @@
       },
       "mark": "Relief ×{{factor}}",
       "markOn": "Scrie „Relief ×2” într-un colț cât timp relieful este exagerat"
+    },
+    "render": {
+      "title": "Randare pe server",
+      "help": "Același pachet, randat într-un film de un nod de randare — un calculator al acestei instalări, cu Blender — în loc de calculatorul tău. Descarci filmul de aici când e gata.",
+      "plan": "Ce se randează",
+      "planDraft": "Ciornă",
+      "planFull": "Complet",
+      "container": "Formatul filmului",
+      "start": "Randează pe server",
+      "started": "Randarea a fost pusă în coadă.",
+      "stop": "Oprește",
+      "stopping": "Se oprește…",
+      "queued": "„{{name}}” așteaptă un nod de randare.",
+      "phase": {
+        "claimed": "Un nod de randare a preluat-o",
+        "downloading": "Nodul de randare descarcă pachetul",
+        "checking": "Nodul de randare verifică pachetul",
+        "rendering": "Se randează",
+        "composing": "Se asamblează filmul",
+        "collectingOutputs": "Se adună filmul",
+        "uploading": "Se trimite filmul înapoi",
+        "done": "Se încheie",
+        "working": "Se lucrează"
+      },
+      "frames": "cadrul {{done}} din {{total}}",
+      "timeLeft": "mai sunt circa {{time}}",
+      "succeeded": "„{{name}}” este randat.",
+      "file": {
+        "movie": "Descarcă filmul",
+        "still": "Descarcă imaginea",
+        "subtitles": "Subtitrări",
+        "log": "Jurnalul Blender",
+        "status": "Fișa randării"
+      },
+      "kept": "Filmul se păstrează aici până la {{date}}.",
+      "cancelled": "Randarea a fost oprită.",
+      "failed": "Randarea a eșuat.",
+      "failedToStart": "Randarea nu a putut fi pusă în coadă.",
+      "alreadyActive": "Ai deja o randare care așteaptă sau rulează. Oprește-o sau așteaps-o mai întâi.",
+      "storageFull": "Spațiul păstrat pe server pentru randări este plin. Încearcă din nou după ce filmele mai vechi au fost șterse."
     }
   },
   "mapSymbols": {
@@ -11285,6 +11326,37 @@
       "no_layer": "necalculat pentru elevația curentă",
       "slope_unit": "panta calculată doar în procente",
       "too_many_features": "prea multe obiecte înregistrate în rază"
+    }
+  },
+  "renderNodes": {
+    "title": "Noduri de randare",
+    "intro": "Un nod de randare este un calculator — de obicei unul cu placă grafică — pe care rulezi programul de randare al ThIDE. Preia survolurile pe care cititorii cer să fie randate pe server, le randează cu Blender și trimite filmele înapoi. Serverul nu pornește nimic pe nod și nu se conectează niciodată la el: nodul se anunță singur, cu tokenul său. Emite câte un token pentru fiecare calculator.",
+    "form": {
+      "name": "Calculator",
+      "namePlaceholder": "de ex. stația clubului"
+    },
+    "issue": "Emite un token",
+    "issuedTitle": "Tokenul pentru „{{name}}”",
+    "issuedWarning": "Pune-l într-un fișier pe acel calculator, pe care să-l poată citi doar proprietarul. După ce închizi acest mesaj nu-l mai poate citi nimeni, nici tu; dacă se pierde, retrage nodul și emite altul.",
+    "howToRun": "Apoi pornește programul pe acel calculator:",
+    "nameTaken": "Există deja un nod cu acest nume.",
+    "revoke": "Retrage",
+    "revokeConfirm": "Retragi „{{name}}”? Următorul lui apel este refuzat, iar o randare pe care o ține revine în coadă.",
+    "revoked": "Nodul a fost retras.",
+    "loadFailed": "Nodurile de randare nu au putut fi încărcate.",
+    "empty": "Nu este emis niciun nod de randare.",
+    "never": "Niciodată",
+    "columns": {
+      "name": "Calculator",
+      "token": "Token",
+      "state": "Stare",
+      "lastSeen": "Ultimul apel",
+      "machine": "Dispozitiv și Blender"
+    },
+    "states": {
+      "online": "Așteaptă lucru",
+      "quiet": "Nu se anunță",
+      "revoked": "Retras"
     }
   }
 }

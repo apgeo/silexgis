@@ -251,6 +251,15 @@
   font-size: 12px;
 }
 
+/* Rendering on the server: the same bundle, rendered by a render node, and the latest render. */
+.scene3d-flyby-movie-server {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06));
+}
+
 /* Held while a movie is being made: the flyby is the recorder's, not the bar's. */
 .scene3d-flyby-held .scene3d-flyby-transport {
   opacity: 0.6;

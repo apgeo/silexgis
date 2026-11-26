@@ -15,6 +15,7 @@ import {
   CameraOutlined,
   CarOutlined,
   CheckSquareOutlined,
+  CloudServerOutlined,
   CloudUploadOutlined,
   ClusterOutlined,
   CodeSandboxOutlined,
@@ -167,6 +168,11 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       : []),
     ...(gates.can('settings')
       ? [{ key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') }]
+      : []),
+    // The machines that render flybys for this server. Admitting one is configuring the
+    // installation, so it goes with the settings.
+    ...(gates.can('settings')
+      ? [{ key: 'admin/render-nodes', icon: <CloudServerOutlined />, label: t('nav.renderNodes') }]
       : []),
     ...(gates.can('settings')
       ? [{

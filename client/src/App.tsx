@@ -75,6 +75,7 @@ const MessagingSettingsPage = lazyRetrying(() => import('./pages/admin/Messaging
 const MessageTemplatesPage = lazyRetrying(() => import('./pages/admin/MessageTemplatesPage.tsx'));
 const NotificationHealthPage = lazyRetrying(() => import('./pages/admin/NotificationHealthPage.tsx'));
 const StoragePage = lazyRetrying(() => import('./pages/admin/StoragePage.tsx'));
+const RenderNodesPage = lazyRetrying(() => import('./pages/admin/RenderNodesPage.tsx'));
 const TestDataPage = lazyRetrying(() => import('./pages/admin/TestDataPage.tsx'));
 const PublishedTripsPage = lazyRetrying(() => import('./pages/admin/PublishedTripsPage.tsx'));
 const PermissionGroupsPage = lazyRetrying(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
@@ -260,6 +261,7 @@ export const routes: RouteObject[] = guarded([
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },
           { path: '/admin/storage', element: <Loadable><StoragePage /></Loadable> },
+          { path: '/admin/render-nodes', element: <Loadable><RenderNodesPage /></Loadable> },
           { path: '/admin/test-data', element: <Loadable><TestDataPage /></Loadable> },
           { path: '/admin/published-trips', element: <Loadable><PublishedTripsPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
