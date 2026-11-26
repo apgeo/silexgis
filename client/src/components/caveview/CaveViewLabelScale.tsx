@@ -44,7 +44,8 @@ export default function CaveViewLabelScale({
         aria-label={t('caveview.labelSize')}
         data-testid="caveview-label-scale"
       >
-        Aa
+        {/* "Aa" alone named nothing to somebody who had not met the control before. */}
+        Aa {t('caveview.labelSizeShort')}
       </Button>
     </Dropdown>
   );

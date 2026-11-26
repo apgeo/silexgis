@@ -197,6 +197,16 @@ function show(model: SurveyModelInfo | null = MODEL) {
 }
 
 describe('SurveyModelViewerModal', () => {
+  it('titles the dialog by the cave and the model, and names its add-a-map control in words', () => {
+    render(
+      <App>
+        <SurveyModelViewerModal model={MODEL} caveName="Peștera Invented" onClose={vi.fn()} />
+      </App>,
+    );
+    expect(screen.getByText('Peștera Invented — P8_Master')).toBeInTheDocument();
+    expect(screen.getByTestId('rastermap-add-map')).toHaveTextContent('Add map');
+  });
+
   it('shows the strip with only the viewer tabs and the add-map doorway while no maps are declared', () => {
     linksAnswer = [];
     show();

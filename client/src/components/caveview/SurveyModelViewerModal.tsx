@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, App, AutoComplete, Flex, Modal, Space, Tabs, Tooltip } from 'antd';
+import { Alert, App, AutoComplete, Flex, Modal, Space, Tabs } from 'antd';
 import Button from '../Button.tsx';
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,8 @@ import { surveyModelTabItems, TAB_3D, TAB_DANKEZ } from './surveyModelTabItems.t
 interface SurveyModelViewerModalProps {
   /** The model to show, or null for a closed modal. */
   model: SurveyModelInfo | null;
+  /** The cave the model belongs to, where the page knows it: the dialog is titled by both. */
+  caveName?: string;
   onClose(): void;
 }
 
@@ -53,7 +55,7 @@ interface SurveyModelViewerModalProps {
  * until something else is picked, because a click that immediately opened a dialog would make
  * looking around the model impossible.
  */
-export default function SurveyModelViewerModal({ model, onClose }: SurveyModelViewerModalProps) {
+export default function SurveyModelViewerModal({ model, caveName, onClose }: SurveyModelViewerModalProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [picked, setPicked] = useState<PickedModelPart | null>(null);
@@ -179,7 +181,7 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
 
   return (
     <Modal
-      title={model?.name}
+      title={model && caveName ? `${caveName} — ${model.name}` : model?.name}
       open={model !== null}
       onCancel={onClose}
       footer={null}
@@ -253,15 +255,14 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
             // that gets a model its first map. The Tabs element stays in the tree either
             // way, so the 3D pane's place never changes when declarations arrive.
             tabBarExtraContent={
-              <Tooltip title={t('rastermap.addMap')}>
-                <Button
-                  type="text"
-                  icon={<PlusOutlined />}
-                  aria-label={t('rastermap.addMap')}
-                  data-testid="rastermap-add-map"
-                  onClick={() => setDeclaring(true)}
-                />
-              </Tooltip>
+              <Button
+                type="text"
+                icon={<PlusOutlined />}
+                data-testid="rastermap-add-map"
+                onClick={() => setDeclaring(true)}
+              >
+                {t('rastermap.addMap')}
+              </Button>
             }
             items={[
               ...surveyModelTabItems({

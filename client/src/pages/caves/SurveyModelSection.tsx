@@ -63,7 +63,16 @@ const FORMAT_LABEL_KEYS: Record<SurveyModelInfo['format'], string> = {
  * fail — so this list says where each one has got to, and keeps asking until nothing is left to
  * wait for.
  */
-export default function SurveyModelSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
+export default function SurveyModelSection({
+  caveId,
+  caveName,
+  canEdit,
+}: {
+  caveId: string;
+  /** Titles the viewer dialog together with the model's own name. */
+  caveName?: string;
+  canEdit: boolean;
+}) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -517,7 +526,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         />
       )}
 
-      <SurveyModelViewerModal model={viewing} onClose={() => setViewingId(null)} />
+      <SurveyModelViewerModal model={viewing} caveName={caveName} onClose={() => setViewingId(null)} />
       <LazyTrackingMovieDialog surveyModelId={movieModelId} onClose={() => setMovieModelId(null)} />
     </Card>
   );

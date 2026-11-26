@@ -10,7 +10,7 @@ import StorageRoomSummary from '../storage/StorageRoomSummary.tsx';
 import { ExternalStepPanel, RefineOnDesktopPanel } from './ScanExternalSteps.tsx';
 import ScanPictures from './ScanPictures.tsx';
 import ScanSurfacePanel from './ScanSurfacePanel.tsx';
-import { formatBytes, originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
+import { originalBytesOf, runAddsBytes } from '../storage/storageFigures.ts';
 import {
   displayChoiceUsed,
   pointCloudChoiceNeeded,
@@ -288,7 +288,7 @@ function RecordingFacts({ recording, language }: { recording: SurveyUploadRecord
       <Descriptions.Item label={t('surveyUploads.recording.duration')}>
         {duration === null ? t('surveyUploads.recording.unknown') : formatSeconds(duration, t)}
       </Descriptions.Item>
-      <Descriptions.Item label={t('surveyUploads.recording.size')}>{formatBytes(recording.bytes)}</Descriptions.Item>
+      <Descriptions.Item label={t('surveyUploads.recording.size')}>{formatSize(recording.bytes)}</Descriptions.Item>
       <Descriptions.Item label={t('surveyUploads.recording.calibration')}>{yesNo(recording.hasCalibration)}</Descriptions.Item>
       <Descriptions.Item label={t('surveyUploads.recording.gnss')}>
         <span data-testid="point-cloud-recording-gnss">{yesNo(recording.hasGnss)}</span>

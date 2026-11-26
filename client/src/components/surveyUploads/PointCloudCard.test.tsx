@@ -217,7 +217,9 @@ describe('the point-cloud card', () => {
     const block = screen.getByTestId('point-cloud-recording');
     expect(screen.getByTestId('point-cloud-recording-chunks')).toHaveTextContent('12');
     expect(block).toHaveTextContent('2 minutes');
-    expect(block).toHaveTextContent('3.0 GB');
+    // Written the way every list of files writes a size, as the card's tile sizes are.
+    expect(block).toHaveTextContent('3 GB');
+    expect(block).not.toHaveTextContent('3.0 GB');
     expect(screen.getByTestId('point-cloud-recording-gnss')).toHaveTextContent('No');
     cleanup();
 
