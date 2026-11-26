@@ -30,6 +30,8 @@ let totalItems = 0;
 // A read that did not land: no answer at all, or an earlier answer kept through a failed re-read.
 let readFailed: 'none' | 'empty-handed' | 'holding' = 'none';
 const refetch = vi.fn();
+// The inbox's unread count as the header reads it; undefined while it has not answered.
+let unread: number | undefined = 3;
 
 vi.mock('../../api/hooks.ts', async () => {
   const actual = await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts');
@@ -54,6 +56,7 @@ vi.mock('../../api/hooks.ts', async () => {
     },
     useMarkNotificationRead: () => ({ mutate: markReadMutate, isPending: false }),
     useMarkAllNotificationsRead: () => ({ mutate: markAllMutate, isPending: false }),
+    useUnreadNotificationCount: () => ({ data: unread === undefined ? undefined : { unread } }),
   };
 });
 
@@ -67,6 +70,7 @@ beforeEach(() => {
   totalItems = 0;
   readFailed = 'none';
   refetch.mockReset();
+  unread = 3;
 });
 afterEach(cleanup);
 
@@ -86,6 +90,32 @@ function lastAsked() {
 }
 
 describe('NotificationsPage', () => {
+  it('offers marking everything read only when something is unread', () => {
+    unread = 0;
+    show();
+    expect(screen.getByRole('button', { name: /Mark all as read/ })).toBeDisabled();
+    cleanup();
+
+    unread = 2;
+    show();
+    expect(screen.getByRole('button', { name: /Mark all as read/ })).toBeEnabled();
+    cleanup();
+
+    // A count that has not answered withholds nothing.
+    unread = undefined;
+    show();
+    expect(screen.getByRole('button', { name: /Mark all as read/ })).toBeEnabled();
+  });
+
+  it('says what arrives here when there is nothing, and where to choose it', () => {
+    show();
+    expect(screen.getByText(i18n.t('notifications.emptyBody'))).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: i18n.t('notifications.emptySettings') })).toHaveAttribute(
+      'href',
+      '/settings/notifications',
+    );
+  });
+
   it('says a failed read failed, not that there is nothing to read, and offers to ask again', () => {
     readFailed = 'empty-handed';
     show();

@@ -458,7 +458,7 @@
   },
   "auth": {
     "forgotPassword": "Ai uitat parola?",
-    "forgotTitle": "Alege o parolă nouă",
+    "forgotTitle": "Resetează parola",
     "forgotIntro": "Scrie adresa cu care te autentifici. Dacă are un cont aici, i se trimite prin e-mail un link pentru alegerea unei parole noi.",
     "forgotSubmit": "Trimite linkul",
     "forgotSent": "Dacă există un cont pentru această adresă, un e-mail cu un link pentru alegerea unei parole noi este pe drum.",
@@ -535,6 +535,7 @@
     "confirmPassword": "Repetă parola",
     "passwordsDiffer": "Cele două parole nu coincid.",
     "passwordTooShort": "Folosește cel puțin 10 caractere.",
+    "passwordRule": "Cel puțin 10 caractere.",
     "invitePasswordTitle": "Alege-ți parola",
     "invitePasswordIntro": "Ți-a fost deschis un cont. Alege parola cu care te vei autentifica.",
     "invitePasswordDone": "Parola a fost setată. Te poți autentifica acum.",
@@ -735,7 +736,7 @@
     "features": "Obiecte",
     "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
     "closestApproach": "Cea mai mică distanță",
-    "overburdenHighlight": "Citirea rocii de deasupra",
+    "overburdenHighlight": "Grosimea rocii de deasupra peșterii",
     "georeferencedMaps": "Hărți georeferențiate",
     "popup": {
       "photo": "Fotografie",
@@ -746,7 +747,8 @@
       "libraryPhotoUnnamed": "Fotografie dintr-o bibliotecă foto"
     },
     "scaleInvalid": "Scrie o scară, de exemplu 1:25000 sau 25000.",
-    "overviewMap": "Hartă de ansamblu"
+    "overviewMap": "Hartă de ansamblu",
+    "noSelectionInScene": "Apasă pe un obiect din scenă pentru detalii."
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -774,7 +776,11 @@
     "editExtra": "Editează-le",
     "advanced": "Filtru avansat…",
     "advancedTitle": "Filtru avansat",
-    "saveTitle": "Salvează aceste condiții ca filtru"
+    "saveTitle": "Salvează aceste condiții ca filtru",
+    "noMatchSearch": "Nicio peșteră nu se potrivește cu „{{search}}”.",
+    "noMatch": "Nicio peșteră nu se potrivește cu aceste filtre.",
+    "clearAll": "Șterge căutarea și filtrele",
+    "empty": "Nicio peșteră în registru încă."
   },
   "listFilters": {
     "savedUnreadable": "Filtrul salvat nu poate fi citit cu drepturile tale, așa că nu a fost aplicat.",
@@ -809,7 +815,7 @@
     "inMapWindow": "Doar peșterile din vederea hărții",
     "clearWindow": "Arată peșterile de peste tot",
     "unreadableWindow": "Legătura numea o vedere a hărții care nu este o zonă validă, așa că lista arată peșterile de peste tot.",
-    "highlightLayer": "Rândul indicat într-o listă"
+    "highlightLayer": "Evidențierea rândului din tabel"
   },
   "workingSet": {
     "selectAll": "Selectează pe hartă tot ce s-a găsit ({{count}})",
@@ -995,7 +1001,8 @@
       "withdrawConfirm": "Retragi declarația pentru {{depth}} m? Rapoartele deja înregistrate păstrează stația primită; cele noi vor reveni la stația cea mai apropiată.",
       "withdrawNamedConfirm": "Retragi numele „{{label}}” pentru stația {{station}}? Nicio adâncime raportată nu este plasată după el; doar iese din lista locurilor peșterii.",
       "unnamed": "Fără nume"
-    }
+    },
+    "nothingIn3d": "Nimic de arătat în 3D încă: peștera nu are nicio intrare și niciun model topografic."
   },
   "entrances": {
     "loadFailed": "Intrările acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
@@ -1022,7 +1029,8 @@
       "locationForbidden": "Nu poți alege intrarea principală a unei peșteri a cărei locație exactă îți este ascunsă. Salveaz-o ca intrare suplimentară sau roagă pe cineva care poate vedea poziția peșterii.",
       "notFound": "Această intrare nu mai există. Poate a fost ștearsă.",
       "caveNotFound": "Peștera căreia îi aparține această intrare nu mai există sau nu o mai poți vedea."
-    }
+    },
+    "emptyNoPosition": "Peștera nu are încă nicio intrare, deci nu are o poziție pe hartă."
   },
   "features": {
     "title": "Obiecte",
@@ -1176,7 +1184,8 @@
     "makePrimary": "Folosește ca fotografie reprezentativă",
     "clearPrimary": "Nu mai folosi ca fotografie reprezentativă",
     "primarySet": "Aceasta este acum fotografia reprezentativă.",
-    "primaryCleared": "Nu mai este fotografia reprezentativă."
+    "primaryCleared": "Nu mai este fotografia reprezentativă.",
+    "emptyBesideReport": "Încă nu există fotografii sau alte documente."
   },
   "documents": {
     "deletion": {
@@ -1275,7 +1284,7 @@
     "textStates": {
       "notApplicable": "Acest fel de fișier nu conține text de citit.",
       "pending": "Se citește textul…",
-      "extracted": "Textul a fost citit.",
+      "extracted": "Textul pentru căutare a fost extras.",
       "noText": "Documentul nu are strat de text: sunt poze ale paginilor, așa că nu există cuvinte de citit în el.",
       "failed": "Textul nu a putut fi citit.",
       "unsupported": "Nimic de aici nu știe încă să citească textul acestui format."
@@ -1548,9 +1557,12 @@
       "review_item_not_found": "Această linie nu mai există.",
       "review_fields_unsupported": "Doar o modificare a unui loc poate fi acceptată câmp cu câmp.",
       "review_source_unsupported": "Acest fel de încărcare nu poate fi încă decis de acest server."
-    }
+    },
+    "noneDecided": "Nicio linie nu a fost decisă încă."
   },
   "uploads": {
+    "duplicateFiledIn": "așezat în {{cabinets}}",
+    "duplicateUnfiled": "neașezat în niciun dulap",
     "title": "Încarcă",
     "titleInto": "Încarcă în {{cabinet}}",
     "upload": "Încarcă",
@@ -1570,9 +1582,9 @@
     "expectsMetadata": "Documentele depuse aici trebuie să conțină:",
     "summary": "{{stored}} din {{total}} salvate · {{skipped}} sărite · {{failed}} eșuate",
     "retryFailed": "Reîncearcă {{count}} eșuate",
-    "duplicateTitle": "Fișierul există deja",
-    "duplicateKnown": "Un document cu exact acest conținut este deja salvat. Salvezi și această copie?",
-    "duplicateUnknown": "Acest conținut este deja salvat. Salvezi și această copie?",
+    "duplicateTitle": "Există deja în arhivă",
+    "duplicateKnown": "„{{file}}” are exact conținutul unui document deja salvat. Salvezi și această copie?",
+    "duplicateUnknown": "Conținutul fișierului „{{file}}” este deja salvat. Salvezi și această copie?",
     "duplicateStoreAnyway": "Salvează oricum",
     "duplicateSkip": "Sari peste",
     "stop": "Oprește încărcarea",
@@ -1693,12 +1705,16 @@
     "mapExtent": "Se arată fotografiile din zona hărții de unde ai venit.",
     "mapExtentCutShort": "Nu sunt listate aici toate fotografiile din această zonă a hărții — sunt mai multe decât poate cuprinde o căutare. Apropie harta pentru a le vedea pe celelalte.",
     "shareTitle": "Link de partajare",
-    "shareOnce": "Copiază-l acum — linkul se arată o singură dată și nu mai poate fi recuperat. Dacă se pierde, revocă-l și creează altul.",
-    "revokeConfirm": "Revoci linkul de partajare al acestui album?",
+    "shareOnce": "Copiază-l acum — linkul se arată o singură dată și nu mai poate fi recuperat. Dacă se pierde, oprește partajarea și creează un link nou.",
+    "revokeConfirm": "Oprești partajarea acestui album? Cine are linkul nu îl va mai putea deschide.",
     "shareAlbum": "Creează un link de partajare",
-    "revokeShare": "Revocă linkul de partajare",
+    "revokeShare": "Oprește partajarea",
     "deleteAlbum": "Șterge albumul",
-    "shareRevoked": "Linkul de partajare a fost revocat.",
+    "shareRevoked": "Albumul nu mai este partajat.",
+    "sharedByLink": "Partajat prin link",
+    "copyLink": "Copiază",
+    "linkCopied": "Linkul de partajare a fost copiat.",
+    "copyFailed": "Browserul nu a permis paginii să scrie în clipboard. Linkul este selectat — copiază-l manual.",
     "shareForbidden": "Nu poți publica acest album: partajarea lui cere dreptul de partajare asupra albumului.",
     "albumsLoadFailed": "Albumele nu au putut fi încărcate.",
     "linkNotFound": "Acest link nu deschide nimic. Este posibil să fi fost revocat.",
@@ -1728,15 +1744,23 @@
     "makeCover": "Folosește ca și copertă",
     "removeFromAlbum": "Scoate din album",
     "removedFromAlbum": "Scoasă din album.",
+    "undoRemove": "Anulează",
+    "putBackInAlbum": "Pusă înapoi în album.",
     "openInGallery": "Deschide în galerie",
     "arrangeHint": "Trage o fotografie peste locul unde o vrei, sau mut-o cu săgețile.",
-    "albumEmpty": "Încă nimic în acest album. Adaugă fotografii din galerie.",
+    "albumEmpty": "Încă nu are fotografii",
     "albumNotFound": "Albumul nu există",
     "albumNotFoundDetail": "Acest album nu există sau a fost șters.",
     "albumPhotosLoadFailed": "Fotografiile din acest album nu au putut fi citite acum. Asta nu spune nimic despre dacă are vreuna.",
     "albumPartial": "Se arată primele {{shown}} din {{total}} fotografii. Rearanjarea se aplică acestora.",
     "createForbidden": "Contul tău nu poate crea albume.",
-    "subjectGone": "Subiectul acestui album nu mai există sau nu îl poți vedea."
+    "subjectGone": "Subiectul acestui album nu mai există sau nu îl poți vedea.",
+    "noMatch": "Nicio fotografie nu se potrivește cu aceste filtre.",
+    "clearFilters": "Șterge filtrele",
+    "count_one": "{{count}} fotografie",
+    "count_few": "{{count}} fotografii",
+    "count_other": "{{count}} de fotografii",
+    "albumCreated": "Albumul a fost creat."
   },
   "geodata": {
     "refusals": {
@@ -2249,7 +2273,7 @@
     },
     "publishSuccess": "Publicat. Persoanele menționate în această tură au fost anunțate.",
     "publishedAt": "Publicat la",
-    "propose": "Propune ideea",
+    "propose": "Propune",
     "proposeSuccess": "Propusă ca idee.",
     "organise": "Începe organizarea",
     "organiseSuccess": "În curs de organizare.",
@@ -3239,6 +3263,8 @@
     "tripsUnavailable": "Turele acestei tabere nu au putut fi citite acum. Asta nu spune nimic despre ce ture are.",
     "tripsTruncated": "Se afișează {{shown}} din {{total}} ture.",
     "watch": {
+      "updated": "Pagină împrospătată {{since}}",
+      "lastRead": "Ce se vede a fost citit {{since}}.",
       "intro": "Cine este în peșteră în turele acestei tabere, așa cum o spune urmărirea fiecărei ture — numărat peste turele pe care le poți citi. Înregistrează ce s-a raportat: nu urmărește niciun ceas și nu dă nicio alarmă.",
       "empty": "Nicio tură a acestei tabere nu este în urmărire și niciuna nu a avut urmărirea încheiată de curând — sau niciuna pe care să o poți citi. O tură apare aici după ce urmărirea este pornită din fila ei Urmărire și rămâne o vreme după ce urmărirea este încheiată.",
       "unavailable": "Numărătoarea nu a putut fi citită.",
@@ -3370,7 +3396,8 @@
       "exported": "Exportat",
       "storage_reclaimed": "Spațiu de stocare eliberat"
     },
-    "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…"
+    "entityTypePlaceholder": "Filtrează după tipul entității (ex. Cave)…",
+    "system": "Sistem"
   },
   "history": {
     "title": "Istoric",
@@ -4216,6 +4243,8 @@
     "bulkTagHint": "Etichetarea în masă vine odată cu filtrul comun."
   },
   "scene3d": {
+    "loading": "Se încarcă scena 3D…",
+    "loadingSlow": "Durează mai mult. Pe un calculator fără accelerare grafică scena este desenată software și poate dura până la un minut.",
     "pointCloud": {
       "viewerTitle": "Scanare: {{name}}",
       "loading": "Se citește scanarea…",
@@ -4745,7 +4774,8 @@
       "times": "×{{value}}",
       "percent": "{{value}} %",
       "zScaleHelp": "×1, la marcaj, este înălțimea reală."
-    }
+    },
+    "labelSizeShort": "Etichete"
   },
   "surveyModels": {
     "loadFailed": "Modelele 3D ale acestei peșteri nu au putut fi citite acum. Asta nu spune nimic despre dacă a fost încărcat vreunul.",
@@ -5969,7 +5999,9 @@
     "empty": "Nu ai nimic de citit.",
     "loadFailed": "Notificările tale nu au putut fi citite acum. Asta nu spune nimic despre dacă există.",
     "withheld": "Lucrul la care se referă aceasta nu îți mai este disponibil.",
-    "unrenderable": "Această notificare nu mai poate fi afișată."
+    "unrenderable": "Această notificare nu mai poate fi afișată.",
+    "emptyBody": "Aici sosesc invitațiile, partajările, mențiunile, deciziile de revizuire și importurile încheiate.",
+    "emptySettings": "Alege despre ce ești anunțat"
   },
   "unsubscribe": {
     "title": "Setări notificări",
@@ -6049,6 +6081,8 @@
     "logDownloadFailed": "Jurnalul nu a putut fi descărcat. Încearcă din nou."
   },
   "publicTrip": {
+    "embedNotLive": "Ultimele locuri raportate, nu în timp real",
+    "peopleOnTrip": "Participanți",
     "notFoundTitle": "Nimic de arătat pentru acest link",
     "notFoundBody": "Acest link nu deschide nicio tură. Se poate să nu fi existat niciodată, să fi fost retras sau tura să nu mai fie publicată.",
     "caverOrdinal": "Speolog {{ordinal}}",
@@ -6204,7 +6238,10 @@
       "watchEndedClose": "Închide această notă",
       "watchLine": "Altă echipă din această peșteră: {{title}}",
       "watchEndedLine": "{{title}} nu mai este în lista echipelor urmărite. Aceasta este din nou tura acestui link."
-    }
+    },
+    "loading": "Se încarcă tura…",
+    "positionAndHeardAt": "Raportată la {{clock}}, tot atunci ultima veste",
+    "positionAndHeardSince": "Raportată {{since}}, tot atunci ultima veste"
   },
   "qr": {
     "button": "Coduri tipărite",
@@ -7490,7 +7527,7 @@
     "announceSuccess": "Evenimentul a fost anunțat.",
     "unannounce": "Înapoi la ciornă",
     "unannounceSuccess": "Evenimentul s-a întors la ciornă.",
-    "propose": "Lansează ideea",
+    "propose": "Propune",
     "proposeSuccess": "Evenimentul a fost propus.",
     "organise": "Începe organizarea",
     "organiseSuccess": "Evenimentul se organizează.",
@@ -7505,7 +7542,7 @@
     "notFound": "Niciun astfel de eveniment",
     "listUnavailable": "Evenimentele nu au putut fi citite acum. Asta nu spune nimic despre ce evenimente există.",
     "notFoundDetail": "Fie nu există, fie nu îl poți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
-    "callOff": "Anulează",
+    "callOff": "Anulează evenimentul",
     "callOffConfirm": "Anulezi acest eveniment?",
     "callOffSuccess": "Evenimentul a fost anulat.",
     "maxParticipants": "Locuri",

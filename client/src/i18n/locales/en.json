@@ -458,7 +458,7 @@
   },
   "auth": {
     "forgotPassword": "Forgot your password?",
-    "forgotTitle": "Choose a new password",
+    "forgotTitle": "Reset your password",
     "forgotIntro": "Type the address you sign in with. If it has an account here, a link to choose a new password is mailed to it.",
     "forgotSubmit": "Send the link",
     "forgotSent": "If an account exists for that address, a mail is on its way with a link to choose a new password.",
@@ -535,6 +535,7 @@
     "confirmPassword": "Repeat password",
     "passwordsDiffer": "The two passwords do not match.",
     "passwordTooShort": "Use at least 10 characters.",
+    "passwordRule": "At least 10 characters.",
     "invitePasswordTitle": "Choose your password",
     "invitePasswordIntro": "An account has been opened for you. Choose the password you will sign in with.",
     "invitePasswordDone": "Your password is set. You can sign in now.",
@@ -735,7 +736,7 @@
     "features": "Features",
     "locationWithheld": "Location withheld — exact geometry is protected.",
     "closestApproach": "Closest approach",
-    "overburdenHighlight": "Overburden reading",
+    "overburdenHighlight": "Rock thickness above the cave",
     "georeferencedMaps": "Georeferenced maps",
     "popup": {
       "photo": "Photo",
@@ -746,7 +747,8 @@
       "libraryPhotoUnnamed": "Photograph from a photo library"
     },
     "scaleInvalid": "Type a scale such as 1:25000 or 25000.",
-    "overviewMap": "Overview map"
+    "overviewMap": "Overview map",
+    "noSelectionInScene": "Click a feature in the scene to see details."
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -774,7 +776,11 @@
     "editExtra": "Edit them",
     "advanced": "Advanced filter…",
     "advancedTitle": "Advanced filter",
-    "saveTitle": "Save these conditions as a filter"
+    "saveTitle": "Save these conditions as a filter",
+    "noMatchSearch": "No caves match “{{search}}”.",
+    "noMatch": "No caves match these filters.",
+    "clearAll": "Clear search and filters",
+    "empty": "No caves in the register yet."
   },
   "listFilters": {
     "savedUnreadable": "That saved filter cannot be read with your access, so it was not applied.",
@@ -809,7 +815,7 @@
     "inMapWindow": "Only caves in the map's view",
     "clearWindow": "Show caves everywhere",
     "unreadableWindow": "The link named a map view that is not a valid area, so the list shows caves everywhere.",
-    "highlightLayer": "Row pointed at in a list"
+    "highlightLayer": "Highlight of the table row under the pointer"
   },
   "workingSet": {
     "selectAll": "Select all found ({{count}}) on the map",
@@ -995,7 +1001,8 @@
       "withdrawConfirm": "Withdraw the declaration for {{depth}} m? Reports already recorded keep the station they were given; new ones will fall back to the nearest station.",
       "withdrawNamedConfirm": "Withdraw the name “{{label}}” for station {{station}}? No reported depth is placed by it; it only leaves the cave's list of places.",
       "unnamed": "Unnamed"
-    }
+    },
+    "nothingIn3d": "Nothing to show in 3D yet: this cave has no entrance and no survey model."
   },
   "entrances": {
     "loadFailed": "This cave's entrances could not be read just now. This says nothing about whether it has any.",
@@ -1022,7 +1029,8 @@
       "locationForbidden": "You may not choose the main entrance of a cave whose exact location is withheld from you. Save it as a further entrance, or ask somebody who may see the cave’s position.",
       "notFound": "This entrance is no longer there. It may have been deleted.",
       "caveNotFound": "The cave this entrance belongs to is no longer there, or you can no longer see it."
-    }
+    },
+    "emptyNoPosition": "This cave has no entrance yet, so it has no position on the map."
   },
   "features": {
     "title": "Features",
@@ -1176,7 +1184,8 @@
     "makePrimary": "Use as the headline picture",
     "clearPrimary": "Stop using as the headline picture",
     "primarySet": "This is now the headline picture.",
-    "primaryCleared": "It is no longer the headline picture."
+    "primaryCleared": "It is no longer the headline picture.",
+    "emptyBesideReport": "No photos or other documents yet."
   },
   "documents": {
     "deletion": {
@@ -1275,7 +1284,7 @@
     "textStates": {
       "notApplicable": "This kind of file holds no text to read.",
       "pending": "Reading the text…",
-      "extracted": "The text has been read.",
+      "extracted": "Searchable text extracted.",
       "noText": "This document has no text layer: it is pictures of pages, so there are no words in it to read.",
       "failed": "The text could not be read.",
       "unsupported": "Nothing here can read this format's text yet."
@@ -1548,9 +1557,12 @@
       "review_item_not_found": "This line is not there any more.",
       "review_fields_unsupported": "Only a change to a place can be accepted field by field.",
       "review_source_unsupported": "This kind of upload cannot be decided by this server yet."
-    }
+    },
+    "noneDecided": "No line decided yet."
   },
   "uploads": {
+    "duplicateFiledIn": "filed in {{cabinets}}",
+    "duplicateUnfiled": "not filed in any cabinet",
     "title": "Upload",
     "titleInto": "Upload into {{cabinet}}",
     "upload": "Upload",
@@ -1570,9 +1582,9 @@
     "expectsMetadata": "Documents filed here are expected to carry:",
     "summary": "{{stored}} of {{total}} stored · {{skipped}} skipped · {{failed}} failed",
     "retryFailed": "Retry {{count}} failed",
-    "duplicateTitle": "This file is already here",
-    "duplicateKnown": "A document with exactly these contents is already stored. Store this copy as well?",
-    "duplicateUnknown": "These contents are already stored. Store this copy as well?",
+    "duplicateTitle": "Already in the archive",
+    "duplicateKnown": "“{{file}}” has exactly the contents of a document already stored. Store this copy as well?",
+    "duplicateUnknown": "“{{file}}” has contents that are already stored. Store this copy as well?",
     "duplicateStoreAnyway": "Store anyway",
     "duplicateSkip": "Skip it",
     "stop": "Stop uploading",
@@ -1693,12 +1705,16 @@
     "mapExtent": "Showing photographs inside the map extent you came from.",
     "mapExtentCutShort": "Not every photo in this map extent is listed here — it holds more than one search can carry. Zoom in on the map to see the rest.",
     "shareTitle": "Share link",
-    "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. Revoke and mint a new one if it is lost.",
-    "revokeConfirm": "Revoke this album’s share link?",
+    "shareOnce": "Copy it now — the link is shown once and cannot be recovered afterwards. If it is lost, stop sharing and make a new link.",
+    "revokeConfirm": "Stop sharing this album? Anybody holding its link can no longer open it.",
     "shareAlbum": "Make a share link",
-    "revokeShare": "Revoke the share link",
+    "revokeShare": "Stop sharing",
     "deleteAlbum": "Delete album",
-    "shareRevoked": "Share link revoked.",
+    "shareRevoked": "The album is no longer shared.",
+    "sharedByLink": "Shared by link",
+    "copyLink": "Copy",
+    "linkCopied": "Share link copied.",
+    "copyFailed": "This browser would not let the page write to the clipboard. The link is selected — copy it by hand.",
     "shareForbidden": "You may not publish this album; sharing it takes the Share right on the album.",
     "albumsLoadFailed": "The albums could not be loaded.",
     "linkNotFound": "This link does not open anything. It may have been revoked.",
@@ -1728,15 +1744,22 @@
     "makeCover": "Use as the cover",
     "removeFromAlbum": "Take out of the album",
     "removedFromAlbum": "Taken out of the album.",
+    "undoRemove": "Undo",
+    "putBackInAlbum": "Put back in the album.",
     "openInGallery": "Open in the gallery",
     "arrangeHint": "Drag a photograph onto the place you want it, or move it with the arrows.",
-    "albumEmpty": "Nothing in this album yet. Add photographs from the gallery.",
+    "albumEmpty": "No photographs yet",
     "albumNotFound": "No such album",
     "albumNotFoundDetail": "This album does not exist, or it has been deleted.",
     "albumPhotosLoadFailed": "The pictures in this album could not be read just now. This says nothing about whether it holds any.",
     "albumPartial": "Showing the first {{shown}} of {{total}} photographs. Arranging applies to these.",
     "createForbidden": "Your account may not make albums.",
-    "subjectGone": "What this album would be about is no longer there, or you may not see it."
+    "subjectGone": "What this album would be about is no longer there, or you may not see it.",
+    "noMatch": "No photographs match these filters.",
+    "clearFilters": "Clear filters",
+    "count_one": "{{count}} photograph",
+    "count_other": "{{count}} photographs",
+    "albumCreated": "Album created."
   },
   "geodata": {
     "refusals": {
@@ -2249,8 +2272,8 @@
     },
     "publishSuccess": "Published. The people named on this trip have been notified.",
     "publishedAt": "Published on",
-    "propose": "Float it",
-    "proposeSuccess": "Floated as an idea.",
+    "propose": "Propose",
+    "proposeSuccess": "Proposed as an idea.",
     "organise": "Start organising",
     "organiseSuccess": "Being organised.",
     "confirmGoing": "It is going ahead",
@@ -2261,9 +2284,9 @@
     "rescheduleSuccess": "Back to being organised.",
     "markDone": "Mark as done",
     "markDoneSuccess": "Recorded as done.",
-    "callOff": "Call it off",
-    "callOffConfirm": "Call this trip off? It is kept, and it can be reinstated as a draft.",
-    "callOffSuccess": "Called off.",
+    "callOff": "Cancel trip",
+    "callOffConfirm": "Cancel this trip? It is kept, and it can be reinstated as a draft.",
+    "callOffSuccess": "Trip cancelled.",
     "unpublish": "Back to draft",
     "unpublishSuccess": "Back to draft.",
     "draftNotice": "This is a draft. Nobody has been notified about it yet — publish it when the write-up is ready.",
@@ -3239,6 +3262,8 @@
     "tripsUnavailable": "This camp's trips could not be read just now. This says nothing about which trips it has.",
     "tripsTruncated": "Showing {{shown}} of {{total}} trips.",
     "watch": {
+      "updated": "Page updated {{since}}",
+      "lastRead": "What is shown was read {{since}}.",
       "intro": "Who is underground on this camp's trips, as each trip's own tracking tells it — counted over the trips you may read. It records what was reported: it watches no clock and raises no alarm.",
       "empty": "No trip of this camp is being tracked, and none had its tracking closed recently — or none you may read. A trip appears here once tracking is started on its Tracking tab, and stays for a while after tracking is closed.",
       "unavailable": "The head count could not be read.",
@@ -3287,8 +3312,8 @@
     "workingAreaWarningDetail": "The working area carries no location protection — it is the shape somebody drew on the plan. Draw it roughly, and never tightly around an entrance that must stay protected.",
     "publishConfirm": "Announce this camp? Nobody is notified by this; it marks the camp as announced. Who may read it does not change: it stays readable by {{audience}}. Widening that is a separate edit.",
     "publishSuccess": "Announced.",
-    "callOff": "Call it off",
-    "callOffConfirm": "Call this camp off? It is kept, and it can be reinstated as a draft.",
+    "callOff": "Cancel camp",
+    "callOffConfirm": "Cancel this camp? It is kept, and it can be reinstated as a draft.",
     "deleteConfirm": "Delete this camp? The trips it gathered stay; the camp goes, with its own rules and any write-up saved to it.",
     "draftNotice": "This is a draft. It has not been announced yet — announce it when the plan is settled, or record it as done once it has happened.",
     "sharing": {
@@ -3370,7 +3395,8 @@
       "exported": "Exported",
       "storage_reclaimed": "Storage reclaimed"
     },
-    "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…"
+    "entityTypePlaceholder": "Filter by entity type (e.g. Cave)…",
+    "system": "System"
   },
   "history": {
     "title": "History",
@@ -4216,6 +4242,8 @@
     "bulkTagHint": "Bulk tagging arrives with the shared filter."
   },
   "scene3d": {
+    "loading": "Loading the 3D scene…",
+    "loadingSlow": "This is taking a while. On a computer without graphics acceleration the scene is drawn in software and can take up to a minute.",
     "pointCloud": {
       "viewerTitle": "Scan: {{name}}",
       "loading": "Reading the scan…",
@@ -4732,7 +4760,8 @@
       "times": "×{{value}}",
       "percent": "{{value}} %",
       "zScaleHelp": "×1, at the mark, is true height."
-    }
+    },
+    "labelSizeShort": "Labels"
   },
   "surveyModels": {
     "loadFailed": "This cave's 3D survey models could not be read just now. This says nothing about whether any have been uploaded.",
@@ -5956,7 +5985,9 @@
     "empty": "Nothing to read.",
     "loadFailed": "Your notifications could not be read just now. This says nothing about whether there are any.",
     "withheld": "The thing this is about is no longer available to you.",
-    "unrenderable": "This notification can no longer be shown."
+    "unrenderable": "This notification can no longer be shown.",
+    "emptyBody": "Invitations, shares, mentions, review decisions and finished imports arrive here.",
+    "emptySettings": "Choose what you are told about"
   },
   "unsubscribe": {
     "title": "Notification settings",
@@ -6036,6 +6067,8 @@
     "logDownloadFailed": "The log could not be downloaded. Please try again."
   },
   "publicTrip": {
+    "embedNotLive": "Last reported places, not live",
+    "peopleOnTrip": "People on this trip",
     "notFoundTitle": "Nothing to show for this link",
     "notFoundBody": "This link does not open a trip. It may never have existed, it may have been taken back, or the trip may no longer be published.",
     "caverOrdinal": "Caver {{ordinal}}",
@@ -6191,7 +6224,10 @@
       "watchEndedClose": "Close this notice",
       "watchLine": "Another party of this cave: {{title}}",
       "watchEndedLine": "{{title}} is no longer in the list of parties being followed. This is this link's trip again."
-    }
+    },
+    "loading": "Loading the trip…",
+    "positionAndHeardAt": "Reported and last heard at {{clock}}",
+    "positionAndHeardSince": "Reported and last heard {{since}}"
   },
   "qr": {
     "button": "Printed codes",
@@ -7397,7 +7433,7 @@
     "kindFilter": "Any kind of event",
     "kindFilterOff": "Events are turned off, so there is nothing for a kind to narrow. Turn Events on to choose.",
     "kindFilterNote": "Kinds narrow the events only. Trips and camps have no kind, so they are still listed — turn them off beside it to see the events alone.",
-    "toggleCancelled": "Called off",
+    "toggleCancelled": "Cancelled",
     "toggleMine": "Only mine",
     "groupFilter": "Any group",
     "omitted": "{{count}} more rows fall in these days than this page can carry. Ask for fewer days.",
@@ -7477,8 +7513,8 @@
     "announceSuccess": "The event was announced.",
     "unannounce": "Back to draft",
     "unannounceSuccess": "The event went back to the workshop.",
-    "propose": "Float the idea",
-    "proposeSuccess": "The event was floated.",
+    "propose": "Propose",
+    "proposeSuccess": "The event was proposed.",
     "organise": "Start organising",
     "organiseSuccess": "The event is being organised.",
     "confirm": "It is going ahead",
@@ -7492,9 +7528,9 @@
     "notFound": "No such event",
     "listUnavailable": "The events could not be read just now. This says nothing about which events there are.",
     "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
-    "callOff": "Call it off",
-    "callOffConfirm": "Call this event off?",
-    "callOffSuccess": "The event was called off.",
+    "callOff": "Cancel event",
+    "callOffConfirm": "Cancel this event?",
+    "callOffSuccess": "The event was cancelled.",
     "maxParticipants": "Places",
     "maxParticipantsHelp": "How many people the event has room for. Leave empty for no limit; anybody past the limit waits in the order they answered in.",
     "tabResponses": "Who is coming",

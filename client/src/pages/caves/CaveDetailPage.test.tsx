@@ -220,7 +220,36 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe('CaveDetailPage breadcrumb', () => {
+  it('starts with the register, whether or not the cave sits inside another feature', () => {
+    entrances = [];
+    show();
+    const crumbs = document.querySelector('.ant-breadcrumb') as HTMLElement;
+    expect(crumbs).toHaveTextContent(/^Caves.*Test cave$/);
+    fireEvent.click(screen.getByText('Caves', { selector: '.ant-breadcrumb a' }));
+    expect(navigate).toHaveBeenCalledWith('/caves');
+  });
+});
+
 describe('CaveDetailPage open in 3D', () => {
+  it('offers nothing to open in 3D for a cave with no entrance and no survey model, and says why', () => {
+    entrances = [];
+    summary = summaryAnswering(false);
+    show();
+
+    expect(screen.getByRole('button', { name: /Open in 3D/ })).toBeDisabled();
+    expect(
+      screen.getByText('This cave has no entrance yet, so it has no position on the map.'),
+    ).toBeInTheDocument();
+  });
+
+  it('opens in 3D a cave that has a survey model but no entrance yet', () => {
+    entrances = [];
+    summary = { ...summaryAnswering(false), surveyModelCount: 1 } as CaveSummary;
+    show();
+    expect(screen.getByRole('button', { name: /Open in 3D/ })).toBeEnabled();
+  });
+
   it('selects the cave, leaves the scene a place to fly to, and goes there', () => {
     entrances = [];
     show();

@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   useMarkAllNotificationsRead,
+  useUnreadNotificationCount,
   useMarkNotificationRead,
   useNotifications,
   type NotificationCategoryName,
@@ -65,6 +66,9 @@ export default function NotificationsPage() {
   });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  // Nothing unread is nothing to mark; a count that has not answered withholds nothing.
+  const { data: unread } = useUnreadNotificationCount();
+  const nothingUnread = unread?.unread === 0;
 
   /**
    * Reading a line is opening it, whether or not there is anywhere to go: a line whose subject
@@ -111,6 +115,7 @@ export default function NotificationsPage() {
             markAllRead.mutate(undefined, { onError: () => message.error(t('notifications.markFailed')) })
           }
           loading={markAllRead.isPending}
+          disabled={nothingUnread}
         >
           {t('notifications.markAllRead')}
         </Button>
@@ -159,7 +164,18 @@ export default function NotificationsPage() {
         size="small"
         loading={isFetching && !data}
         dataSource={data?.items}
-        locale={{ emptyText: isError && !data ? ' ' : t('notifications.empty') }}
+        locale={{
+          emptyText:
+            isError && !data ? (
+              ' '
+            ) : (
+              <Flex vertical align="center" gap={4} style={{ padding: 16 }}>
+                <Typography.Text strong>{t('notifications.empty')}</Typography.Text>
+                <Typography.Text type="secondary">{t('notifications.emptyBody')}</Typography.Text>
+                <Link to="/settings/notifications">{t('notifications.emptySettings')}</Link>
+              </Flex>
+            ),
+        }}
         onRow={(record) => ({ onClick: () => open(record) })}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);

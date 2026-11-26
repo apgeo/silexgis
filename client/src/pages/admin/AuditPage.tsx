@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Flex, Input, Table, Tag, Typography } from 'antd';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { entityLabelKey, humanize } from '../../components/history/historyModel.ts';
 import { api, ApiError } from '../../api/client.ts';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import type { AuditEntry } from '../../api/hooks.ts';
@@ -91,7 +92,14 @@ export default function AuditPage() {
             width: 180,
             render: (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage),
           },
-          { title: t('audit.user'), dataIndex: 'userName', width: 180 },
+          {
+            title: t('audit.user'),
+            dataIndex: 'userName',
+            width: 180,
+            // A row with nobody behind it was written by the server itself: a job, a sweep.
+            render: (value: string | null, record) =>
+              value ?? (record.userId === null ? t('audit.system') : '—'),
+          },
           {
             title: t('audit.action'),
             dataIndex: 'action',
@@ -100,7 +108,19 @@ export default function AuditPage() {
               <Tag color={actionColor[value]}>{AUDIT_ACTION_KEYS[value] ? t(AUDIT_ACTION_KEYS[value]) : value}</Tag>
             ),
           },
-          { title: t('audit.entityType'), dataIndex: 'entityType', width: 160 },
+          {
+            title: t('audit.entityType'),
+            dataIndex: 'entityType',
+            width: 160,
+            // Worded as the history panel words it; a kind nobody has worded is spelt out.
+            render: (value: string | null) => {
+              if (value === null) {
+                return '—';
+              }
+              const key = entityLabelKey(value);
+              return t(`history.entity.${key}`, { defaultValue: humanize(key) });
+            },
+          },
           { title: t('audit.entityId'), dataIndex: 'entityId', ellipsis: true },
         ]}
       />

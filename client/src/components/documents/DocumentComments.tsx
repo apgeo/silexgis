@@ -17,6 +17,18 @@ import { useIsMobile } from '../../hooks/useIsMobile.ts';
 const MAX_BODY = 4000;
 
 /**
+ * How much of a remark's room is used, on the row of the button that sends it. The text area's own
+ * count is drawn under the box, on top of whatever comes next — here the Post button.
+ */
+function CharacterCount({ text }: { text: string }) {
+  return (
+    <Typography.Text type="secondary" className="hint-text">
+      {`${text.length} / ${MAX_BODY}`}
+    </Typography.Text>
+  );
+}
+
+/**
  * The discussion on a document.
  *
  * Two things about this panel are load-bearing and easy to undo by accident.
@@ -132,10 +144,10 @@ export default function DocumentComments({ documentId }: { documentId: string })
             onChange={(e) => setEditDraft(e.target.value)}
             rows={3}
             maxLength={MAX_BODY}
-            showCount
             aria-label={t('documents.comments.body')}
           />
-          <Space style={{ marginTop: 8 }}>
+          <Space style={{ marginTop: 8 }} wrap>
+            <CharacterCount text={editDraft} />
             {/* Loading while the first save is out, so a second press cannot send it twice;
                 an emptied remark has nothing to save (deleting is its own button). */}
             <Button
@@ -226,11 +238,11 @@ export default function DocumentComments({ documentId }: { documentId: string })
                     onChange={(e) => setReplyDraft(e.target.value)}
                     rows={2}
                     maxLength={MAX_BODY}
-                    showCount
                     placeholder={t('documents.comments.replyPlaceholder')}
                     aria-label={t('documents.comments.replyPlaceholder')}
                   />
-                  <Space style={{ marginTop: 8 }}>
+                  <Space style={{ marginTop: 8 }} wrap>
+                    <CharacterCount text={replyDraft} />
                     <Button
                       size="small"
                       type="primary"
@@ -257,11 +269,16 @@ export default function DocumentComments({ documentId }: { documentId: string })
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
           maxLength={MAX_BODY}
-          showCount
           placeholder={t('documents.comments.placeholder')}
           aria-label={t('documents.comments.placeholder')}
         />
-        <Flex justify={isMobile ? 'stretch' : 'end'}>
+        <Flex
+          vertical={isMobile}
+          justify={isMobile ? 'stretch' : 'space-between'}
+          align={isMobile ? 'stretch' : 'center'}
+          gap={8}
+        >
+          <CharacterCount text={draft} />
           <Button
             type="primary"
             block={isMobile}

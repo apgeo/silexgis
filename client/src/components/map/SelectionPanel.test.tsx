@@ -274,6 +274,21 @@ describe('the shared detail panel', () => {
     expect(screen.queryByAltText('The entrance')).toBeNull();
   });
 
+  it('writes a cave\'s length and depth in the page\'s language, as the scale beside them is', async () => {
+    const { default: i18n } = await import('../../i18n');
+    Object.assign(cave, { surveyedLength: 12345.5, depth: 87.2 });
+    await i18n.changeLanguage('ro');
+    try {
+      renderPanel({ kind: 'cave', caveId: 'cave-1' });
+
+      expect(await screen.findByText('12.345,5')).toBeInTheDocument();
+      expect(screen.getByText('87,2')).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+      Object.assign(cave, { surveyedLength: null, depth: null });
+    }
+  });
+
   it('writes a snapped entrance position no finer than the grid it was snapped to', async () => {
     entrances[0] = { ...entrances[0], approximateLocation: true } as (typeof entrances)[number];
     try {
@@ -365,6 +380,31 @@ describe('the shared detail panel', () => {
  * A right can be granted or withheld on one object, so what the panel offers for a selected
  * feature follows the feature's own answer, not the installation-wide one.
  */
+describe('the panel with nothing selected', () => {
+  it('points at the map beside the map, and at the scene beside the 3D scene', () => {
+    useWorkspaceStore.getState().setSelection(null);
+    render(
+      <MemoryRouter>
+        <App>
+          <SelectionPanel />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Click a feature on the map to see details.')).toBeInTheDocument();
+    cleanup();
+
+    render(
+      <MemoryRouter>
+        <App>
+          <SelectionPanel inScene />
+        </App>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Click a feature in the scene to see details.')).toBeInTheDocument();
+    expect(screen.queryByText('Click a feature on the map to see details.')).toBeNull();
+  });
+});
+
 describe('the edit affordances of a selected feature', () => {
   const editAffordances = () => ({
     edit: screen.queryByRole('button', { name: 'Edit' }) !== null,

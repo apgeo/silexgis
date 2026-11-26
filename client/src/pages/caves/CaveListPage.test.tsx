@@ -11,6 +11,7 @@ import {
   caveRegistryDocument,
   caveRegistryToken,
   readCaveRegistryAddress,
+  writeCaveRegistryAddress,
 } from '../../filters/caveRegistry.ts';
 import { whereOf, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
@@ -206,6 +207,28 @@ beforeEach(async () => {
  * a cave" is half of the answer — and that half is the create door's, not the right over caves as
  * such, because somebody who records caves only for their caving group owns them like anybody.
  */
+describe('a register with nothing to list', () => {
+  it('names the search that matched nothing and offers to clear it', () => {
+    const params = writeCaveRegistryAddress({
+      controls: { search: 'zzqx' },
+      extra: [],
+      page: 1,
+      pageSize: 20,
+    });
+    show(`/caves?${params.toString()}`);
+
+    expect(screen.getByText('No caves match “zzqx”.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search and filters' }));
+    expect(screen.getByTestId('search')).not.toHaveTextContent('filter=');
+  });
+
+  it('says the register is empty, with nothing to clear, when nothing narrows it', () => {
+    show('/caves');
+    expect(screen.getByText('No caves in the register yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear search and filters' })).toBeNull();
+  });
+});
+
 describe('the door from the cave list to the deleted caves and features', () => {
   it('is not shown to somebody who may neither record a cave nor delete one', () => {
     show();
