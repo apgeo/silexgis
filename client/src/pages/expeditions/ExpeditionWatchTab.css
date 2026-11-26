@@ -35,9 +35,9 @@
   font-size: 12px;
 }
 
-/* One person: the name takes what room there is and breaks inside itself rather than pushing the
-   standing off the edge of a phone; the standing and the age keep their width and wrap under the
-   name together when the row is too narrow for all three. */
+/* One person, always two lines: the name on the first, breaking inside itself rather than pushing
+   anything off the edge of a phone, and the standing with the age on the second — so every row of
+   the list reads the same way whatever the name's length. */
 .expedition-watch-party {
   list-style: none;
   margin: 0;
@@ -46,14 +46,19 @@
 
 .expedition-watch-person {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
+  flex-direction: column;
+  gap: 2px;
   padding: 4px 0;
 }
 
 .expedition-watch-person-name {
-  flex: 1 1 10em;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.expedition-watch-person-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
 }

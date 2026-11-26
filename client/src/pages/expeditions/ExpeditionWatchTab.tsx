@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Alert, Card, Empty, Flex, Spin, Tag, Typography } from 'antd';
+import Button from '../../components/Button.tsx';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import type { ExpeditionSurfaceLogPerson, ExpeditionSurfaceLogTrip } from '../../api/hooks.ts';
 import { useExpeditionSurfaceLog } from '../../api/hooks.ts';
 import {
   lastHeardInWords,
+  readAgeInWords,
   trackingStandingOf,
   trackingStandings,
   type TrackingStanding,
@@ -43,7 +46,15 @@ export default function ExpeditionWatchTab({
   active: boolean;
 }) {
   const { t } = useTranslation();
-  const { data, isPending, error } = useExpeditionSurfaceLog(expeditionId, active);
+  const { data, isPending, error, dataUpdatedAt, refetch } = useExpeditionSurfaceLog(
+    expeditionId,
+    active,
+  );
+  const retry = (
+    <Button size="small" onClick={() => void refetch()}>
+      {t('common.retry')}
+    </Button>
+  );
 
   if (!active) {
     return <div data-testid="expedition-watch-tab" />;
@@ -60,6 +71,7 @@ export default function ExpeditionWatchTab({
           showIcon
           data-testid="expedition-watch-unavailable"
           title={t('expeditions.watch.unavailable')}
+          action={retry}
         />
       </div>
     );
@@ -76,15 +88,7 @@ export default function ExpeditionWatchTab({
   return (
     <div data-testid="expedition-watch-tab">
       <Typography.Paragraph type="secondary">{t('expeditions.watch.intro')}</Typography.Paragraph>
-      {error && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 12 }}
-          data-testid="expedition-watch-refresh-failed"
-          title={t('common.refreshFailed')}
-        />
-      )}
+      <WatchFreshness readAt={dataUpdatedAt} failed={Boolean(error)} retry={retry} />
       {data.truncated && (
         <Alert
           type="info"
@@ -248,6 +252,48 @@ function WatchedTrip({ trip, now }: { trip: ExpeditionSurfaceLogTrip; now: numbe
   );
 }
 
+/**
+ * How old the count on screen is, and whether the last attempt to refresh it failed.
+ *
+ * "Last heard 8 minutes ago" on a person is only true if the page itself is current: on a patchy
+ * connection it may be what the page said half an hour ago. So the page's own age is always shown,
+ * as the followed page shows it, and a failed refresh says so with that age and a way to read
+ * again — the count stays on screen beneath it, because it is still the best count there is.
+ *
+ * Its own component so the clock that ages the line ticks only while the section is on screen.
+ */
+function WatchFreshness({
+  readAt,
+  failed,
+  retry,
+}: {
+  readAt: number;
+  failed: boolean;
+  retry: ReactNode;
+}) {
+  const { t, i18n } = useTranslation();
+  const now = useNow();
+  const since = readAt > 0 ? readAgeInWords(readAt, now, i18n.language) : null;
+  if (failed) {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 12 }}
+        data-testid="expedition-watch-refresh-failed"
+        title={t('common.refreshFailed')}
+        description={since === null ? undefined : t('expeditions.watch.lastRead', { since })}
+        action={retry}
+      />
+    );
+  }
+  return since === null ? null : (
+    <Typography.Paragraph type="secondary" data-testid="expedition-watch-updated">
+      {t('expeditions.watch.updated', { since })}
+    </Typography.Paragraph>
+  );
+}
+
 function WatchedPerson({
   person,
   now,
@@ -275,6 +321,9 @@ function WatchedPerson({
             count; an empty line beside "Underground" would read as a drawing fault. */}
         {person.name || t('expeditions.watch.unnamed')}
       </span>
+      {/* The standing and the age always on the line under the name, so every row reads alike
+          whatever the length of the name or the width of the phone. */}
+      <span className="expedition-watch-person-state">
       <Tag
         color={standing === 'underground' ? 'blue' : standing === 'out' ? 'green' : 'default'}
         data-testid={`expedition-watch-standing-${standing}`}
@@ -291,6 +340,7 @@ function WatchedPerson({
           {heard}
         </Typography.Text>
       )}
+      </span>
     </li>
   );
 }
