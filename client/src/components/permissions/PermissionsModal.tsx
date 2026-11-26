@@ -21,6 +21,7 @@ import AccessExplanationList from './AccessExplanationList.tsx';
 import ViaExpeditionTag from './ViaExpeditionTag.tsx';
 import SubjectPicker from './SubjectPicker.tsx';
 import { ACTION_ORDER, joinActions } from './accessDisplay.ts';
+import HiddenTitle from '../a11y/HiddenTitle.tsx';
 
 // Create is rejected at object scope (nothing is created "into" one row) and valid at
 // subtree scope (create under this feature) — mirroring the server's scope table.
@@ -556,7 +557,7 @@ export default function PermissionsModal({
                 ),
               })),
               {
-                title: '',
+                title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                 key: 'remove',
                 width: 50,
                 render: (_, entry, index) => (

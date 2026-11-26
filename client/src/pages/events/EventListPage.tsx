@@ -110,6 +110,7 @@ export default function EventListPage() {
         <Select<EventKind | undefined>
           allowClear
           placeholder={t('events.kindFilter')}
+          aria-label={t('events.kind')}
           style={{ minWidth: 180 }}
           data-testid="event-kind-filter"
           value={params.kind as EventKind | undefined}
@@ -122,6 +123,7 @@ export default function EventListPage() {
         <Select<ActivityState | undefined>
           allowClear
           placeholder={t('events.stateFilter')}
+          aria-label={t('events.state')}
           style={{ minWidth: 180 }}
           data-testid="event-state-filter"
           value={params.state as ActivityState | undefined}

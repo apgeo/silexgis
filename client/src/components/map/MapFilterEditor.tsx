@@ -133,6 +133,7 @@ export default function MapFilterEditor({ filter, onChange }: Props) {
             <Select
               style={{ width: 260 }}
               placeholder={t('mapFilter.applySaved')}
+              aria-label={t('mapFilter.applySaved')}
               value={null}
               data-testid="map-filter-apply-saved"
               showSearch

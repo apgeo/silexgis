@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
 import EventListPage from './EventListPage.tsx';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const { eventsSpy, canSpy } = vi.hoisted(() => ({
   eventsSpy: vi.fn(),
@@ -96,5 +97,13 @@ describe('a list of events that could not be read', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
     expect(refetch).toHaveBeenCalled();
+  });
+});
+
+describe('the filter row for a screen reader', () => {
+  it('names every field, the kind and state filters among them', () => {
+    const { container } = renderList('/events');
+
+    expectEveryFieldNamed(container);
   });
 });

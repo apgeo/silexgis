@@ -15,6 +15,7 @@ import {
   type StorageReclaimable,
 } from '../../api/hooks.ts';
 import { formatBytes, kindKey, levelAlertType, percentOfCap, reclaimGroupKeys } from '../../components/storage/storageFigures.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * What fills this installation's file store, how fast it grows, and what could be deleted.
@@ -274,7 +275,7 @@ export default function StoragePage() {
             ...(canAct
               ? [
                   {
-                    title: '',
+                    title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                     key: 'act',
                     align: 'right' as const,
                     render: (_: unknown, row: StorageReclaimable) => (

@@ -17,6 +17,7 @@ import {
   type TripParticipantRoleWrite,
 } from '../../api/hooks.ts';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const emptyDraft: TripParticipantRoleWrite = {
   code: '',
@@ -183,7 +184,7 @@ export default function TripParticipantRolesPage() {
           ...(canWrite
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, role: TripParticipantRole) => (
                     <Flex gap={8}>

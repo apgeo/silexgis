@@ -203,6 +203,7 @@ export default function GalleryPage() {
           showSearch
           optionFilterProp="label"
           placeholder={t('gallery.photographer')}
+          aria-label={t('gallery.photographer')}
           value={params.get('caverId') ?? undefined}
           onChange={(value) => setFilter('caverId', value)}
           options={(cavers ?? []).map((c) => ({ value: c.id, label: c.name }))}
@@ -225,6 +226,7 @@ export default function GalleryPage() {
           showSearch
           optionFilterProp="label"
           placeholder={t('gallery.album')}
+          aria-label={t('gallery.album')}
           value={params.get('albumId') ?? undefined}
           onChange={(value) => setFilter('albumId', value)}
           options={(albums?.items ?? []).map((a) => ({ value: a.id, label: a.title }))}
@@ -245,6 +247,7 @@ export default function GalleryPage() {
         <Select
           allowClear
           placeholder={t('gallery.placed')}
+          aria-label={t('gallery.placed')}
           value={params.get('unplaced') ?? undefined}
           onChange={(value) => setFilter('unplaced', value)}
           options={[{ value: 'true', label: t('gallery.unplaced') }]}
@@ -364,6 +367,7 @@ export default function GalleryPage() {
             </Button>
             <Select
               placeholder={t('gallery.addToAlbum')}
+              aria-label={t('gallery.addToAlbum')}
               style={{ width: 200 }}
               value={null}
               onChange={(albumId: string) =>

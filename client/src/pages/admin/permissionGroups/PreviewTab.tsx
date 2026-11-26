@@ -13,6 +13,7 @@ import {
 import SubjectPicker from '../../../components/permissions/SubjectPicker.tsx';
 import AccessExplanationList from '../../../components/permissions/AccessExplanationList.tsx';
 import { actionSetLabels } from '../../../components/permissions/accessDisplay.ts';
+import HiddenTitle from '../../../components/a11y/HiddenTitle.tsx';
 
 interface PreviewTabProps {
   catalog: AccessCatalog;
@@ -100,6 +101,7 @@ export default function PreviewTab({ catalog, onPreviewed }: PreviewTabProps) {
             pagination={false}
             dataSource={rows}
             expandable={{
+              columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
               // The per-action explanations, straight from the server.
               expandedRowRender: (row) => <AccessExplanationList explanations={row.explanations} />,
             }}

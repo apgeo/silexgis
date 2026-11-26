@@ -84,6 +84,7 @@ import CaveSurveysSection from './CaveSurveysSection.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
 import SurveyQualityPanel from './SurveyQualityPanel.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 export default function CaveDetailPage() {
   const { t } = useTranslation();
@@ -479,6 +480,7 @@ export default function CaveDetailPage() {
             ...(canEdit
               ? [
                   {
+                    title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                     key: 'actions',
                     width: 110,
                     render: (_: unknown, e: Entrance) => (

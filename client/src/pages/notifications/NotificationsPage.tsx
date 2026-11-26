@@ -13,6 +13,7 @@ import {
   type NotificationCategoryName,
   type NotificationItem,
 } from '../../api/hooks.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * Every category the server can send, written out so the filter cannot silently miss one: the
@@ -173,7 +174,7 @@ export default function NotificationsPage() {
         }}
         columns={[
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.unreadColumn')}</HiddenTitle>,
             dataIndex: 'readAt',
             width: 32,
             render: (readAt: NotificationItem['readAt']) =>

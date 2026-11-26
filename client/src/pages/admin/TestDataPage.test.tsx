@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
 import type { TestDataOverview, TestDataProfile, TestDataRun } from '../../api/hooks.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const profile: TestDataProfile = {
   seed: 20261111,
@@ -99,6 +100,13 @@ describe('TestDataPage', () => {
     cancel.mockReset();
   });
   afterEach(cleanup);
+
+  it('names every field for a screen reader, the seed and the cave count among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
+    expect(screen.getByTestId('test-data-seed')).toHaveAccessibleName('Seed');
+  });
 
   it('starts the chosen profile as edited, and asks before generating beside existing data', async () => {
     start
@@ -194,3 +202,4 @@ describe('TestDataPage', () => {
     await waitFor(() => expect(remove).toHaveBeenCalledWith('r1'));
   });
 });
+

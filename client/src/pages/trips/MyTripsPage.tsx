@@ -118,6 +118,7 @@ export default function MyTripsPage() {
         <Select<ActivityState | undefined>
           allowClear
           placeholder={t('trips.mine.stateFilter')}
+          aria-label={t('trips.state')}
           style={{ minWidth: 180 }}
           data-testid="my-trips-state-filter"
           value={params.state}

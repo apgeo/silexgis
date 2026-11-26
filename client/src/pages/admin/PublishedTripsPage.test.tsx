@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import type { PublishedLink, PublishedLinks, PublishedLinksParams } from '../../api/hooks.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const LIVE = '11111111-1111-1111-1111-111111111111';
 const PAST = '22222222-2222-2222-2222-222222222222';
@@ -145,6 +146,12 @@ describe('the page of everything published', () => {
   });
 
   afterEach(cleanup);
+
+  it('names every field for a screen reader, the status filter among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
+  });
 
   it('shows it is reading before there is an answer, and offers nothing to withdraw meanwhile', () => {
     list = { data: undefined, error: null, isPending: true, isFetching: true, refetch: vi.fn() };

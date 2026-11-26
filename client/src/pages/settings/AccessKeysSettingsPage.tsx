@@ -15,6 +15,7 @@ import {
   type AccessKey,
   type AccessKeyCreated,
 } from '../../api/hooks.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** The longest name the server accepts for a key. */
 const NAME_MAX_LENGTH = 100;
@@ -97,7 +98,7 @@ export default function AccessKeysSettingsPage() {
       render: (_, key) => <Tag color={STATE_COLOURS[key.state]}>{t(`accessKeys.states.${key.state}`)}</Tag>,
     },
     {
-      title: '',
+      title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
       key: 'actions',
       render: (_, key) =>
         accessKeyIsUsable(key) ? (

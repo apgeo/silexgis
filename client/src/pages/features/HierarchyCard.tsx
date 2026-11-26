@@ -17,6 +17,7 @@ import Button from '../../components/Button.tsx';
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../../components/useDiscardGuard.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 interface HierarchyCardProps {
   featureId: string;
@@ -224,6 +225,7 @@ export default function HierarchyCard({ featureId, kind, canEdit }: HierarchyCar
               ),
             },
             {
+              title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
               key: 'remove',
               width: 50,
               render: (_, record) => (

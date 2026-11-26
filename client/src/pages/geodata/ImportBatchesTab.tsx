@@ -20,6 +20,7 @@ import MyReviewUploads from '../../components/review/MyReviewUploads.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
 import { UndoOutcome, UploadRowChanges } from './PhoneUploadParts.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The confirmations this account has made, newest first, each with the one action a
@@ -229,7 +230,7 @@ export default function ImportBatchesTab() {
             render: (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 170,
             render: (_: unknown, row) =>
@@ -336,6 +337,7 @@ export default function ImportBatchesTab() {
           expandable={
             phone
               ? {
+                  columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
                   rowExpandable: (row) => (row.attachedToFeatureId ?? row.featureId) != null,
                   expandedRowRender: (row) => (
                     <UploadRowChanges
@@ -447,7 +449,7 @@ export default function ImportBatchesTab() {
             ...(phone && detail.data?.batch.canRevert
               ? [
                   {
-                    title: '',
+                    title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                     key: 'undoRow',
                     width: 140,
                     render: (_: unknown, row: ImportBatchItem) =>

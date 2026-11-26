@@ -32,6 +32,7 @@ import {
 import { ACTION_ORDER, actionSetLabels, joinActions } from '../../components/permissions/accessDisplay.ts';
 import { accessRuleProblem } from '../../components/permissions/accessRuleProblem.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The rights a camp may share down to its trips.
@@ -492,7 +493,7 @@ export default function ExpeditionSharingModal({ expeditionId, open, onClose }: 
                     ),
                   })),
                   {
-                    title: '',
+                    title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                     key: 'remove',
                     width: 50,
                     render: (_, _draft, index) => (

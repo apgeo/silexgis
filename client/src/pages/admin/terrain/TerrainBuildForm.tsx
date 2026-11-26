@@ -428,6 +428,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
         <Flex gap={16} align="start">
           <Form.Item name="maxDepth" style={{ flex: 1, marginBottom: 0 }}>
             <Slider
+              ariaLabelForHandle={t('terrain.form.depth')}
               disabled={!!base}
               min={MIN_DEPTH}
               max={MAX_DEPTH}

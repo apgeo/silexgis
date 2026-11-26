@@ -17,6 +17,7 @@ import {
   type DocumentTypeWrite,
 } from '../../api/hooks.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** The blank kind a "new" click starts from. */
 const emptyDraft: DocumentTypeWrite = {
@@ -181,7 +182,7 @@ export default function DocumentTypesPage() {
           ...(canWrite
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, type: DocumentType) => (
                     <Button size="small" onClick={() => setEditing(type)}>

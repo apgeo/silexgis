@@ -9,6 +9,7 @@ import { galleryDocument, galleryToken, galleryWhere, readGalleryFilter } from '
 import { emptyDocument, withWhere } from '../../filters/document.ts';
 import type { FilterDocument, FilterNode } from '../../filters/types.ts';
 import { encodeFilter } from '../../filters/url.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const { photosSpy, editorSpy, savedFilters, extentCutShort, photosFailure } = vi.hoisted(() => ({
   photosFailure: { current: undefined as unknown },
@@ -269,5 +270,13 @@ describe('a map extent with more photographs than one search carries', () => {
     extentCutShort.current = true;
     show('/gallery');
     expect(screen.queryByTestId('gallery-extent-cut-short')).not.toBeInTheDocument();
+  });
+});
+
+describe('the filter row for a screen reader', () => {
+  it('names every field, the photographer, album and position filters among them', () => {
+    const { container } = show('/gallery');
+
+    expectEveryFieldNamed(container);
   });
 });

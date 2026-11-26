@@ -36,6 +36,7 @@ import FreshFollowLink from '../../components/trips/FreshFollowLink.tsx';
 import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
 import PublishedLinkSettingsNote from './PublishedLinkSettingsNote.tsx';
 import { PUBLISHED_LINK_STATUSES } from './publishedLinkStatuses.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * Colour says one thing only: whether the address opens something for whoever holds it. The three
@@ -353,6 +354,7 @@ export default function PublishedTripsPage() {
             allowClear
             style={{ minWidth: 220 }}
             placeholder={t('publishedTrips.anyStatus')}
+            aria-label={t('publishedTrips.statusFilter')}
             value={status}
             onChange={(value) => {
               setStatus(value);
@@ -581,8 +583,8 @@ export default function PublishedTripsPage() {
             render: (_: unknown, link) => <Typography.Text code>{link.handle}</Typography.Text>,
           },
           {
-            // No heading: the only things in this column are buttons that name themselves.
-            title: '',
+            // No visible heading: the only things in this column are buttons that name themselves.
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'action',
             render: (_: unknown, link) =>
               // A link that was taken back has nothing left to exchange or withdraw. Every other

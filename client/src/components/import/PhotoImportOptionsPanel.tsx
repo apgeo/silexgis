@@ -50,6 +50,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                 <Col xs={24} md={12}>
                   <Form.Item label={t('photoImport.defaultKind')} style={{ marginBottom: 8 }}>
                     <Select<ImportTargetKind>
+                      aria-label={t('photoImport.defaultKind')}
                       value={options.defaultKind ?? 'caveEntrance'}
                       onChange={(value) => set('defaultKind', value)}
                       data-testid="photo-default-kind"
@@ -63,6 +64,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                 <Col xs={24} md={12}>
                   <Form.Item label={t('photoImport.namePrefix')} style={{ marginBottom: 8 }}>
                     <Input
+                      aria-label={t('photoImport.namePrefix')}
                       value={options.namePrefix ?? ''}
                       maxLength={100}
                       onChange={(e) => set('namePrefix', e.target.value || null)}
@@ -76,6 +78,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                     style={{ marginBottom: 8 }}
                   >
                     <Slider
+                      ariaLabelForHandle={t('photoImport.clusterRadius')}
                       min={0}
                       max={200}
                       value={options.clusterRadiusMeters ?? 25}
@@ -91,6 +94,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                     style={{ marginBottom: 8 }}
                   >
                     <Slider
+                      ariaLabelForHandle={t('photoImport.proximityRadius')}
                       min={0}
                       max={500}
                       value={options.proximityRadiusMeters ?? 80}
@@ -110,6 +114,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                 <Col xs={24} md={12}>
                   <Form.Item label={t('features.visibility')} style={{ marginBottom: 8 }}>
                     <Select
+                      aria-label={t('features.visibility')}
                       value={options.visibility ?? 'private'}
                       onChange={(value) => set('visibility', value)}
                       data-testid="photo-visibility"
@@ -123,6 +128,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                 <Col xs={24} md={12}>
                   <Form.Item label={t('documents.cavingGroup')} style={{ marginBottom: 8 }}>
                     <Select
+                      aria-label={t('documents.cavingGroup')}
                       allowClear
                       value={options.cavingGroupId ?? undefined}
                       onChange={(value: string | undefined) => set('cavingGroupId', value ?? null)}
@@ -141,6 +147,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                     style={{ marginBottom: 8 }}
                   >
                     <Select
+                      aria-label={t('photoImport.elevation')}
                       value={options.elevation ?? 'discard'}
                       onChange={(value) => set('elevation', value)}
                       options={[
@@ -179,6 +186,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                 <Col xs={24} md={12}>
                   <Form.Item label={t('photoImport.track')} style={{ marginBottom: 8 }}>
                     <Select
+                      aria-label={t('photoImport.track')}
                       allowClear
                       value={options.trackGeofileId ?? undefined}
                       onChange={(value: string | undefined) => set('trackGeofileId', value ?? null)}
@@ -199,6 +207,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                     style={{ marginBottom: 8 }}
                   >
                     <InputNumber
+                      aria-label={t('photoImport.clockOffset')}
                       style={{ width: '100%' }}
                       value={options.cameraClockOffsetSeconds ?? 0}
                       step={60}
@@ -216,6 +225,7 @@ export default function PhotoImportOptionsPanel({ options, onChange, preview }: 
                     style={{ marginBottom: 8 }}
                   >
                     <InputNumber
+                      aria-label={t('photoImport.matchTolerance')}
                       style={{ width: '100%' }}
                       value={options.trackMatchToleranceSeconds ?? 120}
                       step={30}

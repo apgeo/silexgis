@@ -24,6 +24,7 @@ import {
 import { downloadFile } from '../../api/download.ts';
 import TermRuleSetEditor from '../../components/import/TermRuleSetEditor.tsx';
 import { termRuleProblem, termRuleSaveProblem } from '../../components/import/termRuleProblems.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The club's naming habits, configured once.
@@ -170,7 +171,7 @@ export default function TermRulesPage() {
             align: 'right',
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 230,
             render: (_: unknown, row) => (

@@ -338,6 +338,7 @@ export default function CalendarPage() {
             optionFilterProp="label"
             maxTagCount="responsive"
             placeholder={t('calendar.kindFilter')}
+            aria-label={t('calendar.kind')}
             style={{ minWidth: 200, maxWidth: 320 }}
             data-testid="calendar-kind-filter"
             disabled={!eventsWanted}
@@ -373,6 +374,7 @@ export default function CalendarPage() {
         <Select<string | undefined>
           allowClear
           placeholder={t('calendar.groupFilter')}
+          aria-label={t('events.cavingGroup')}
           style={{ minWidth: 200 }}
           data-testid="calendar-group-filter"
           value={address.cavingGroupId}

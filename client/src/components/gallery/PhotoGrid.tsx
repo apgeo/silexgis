@@ -173,6 +173,12 @@ export default function PhotoGrid({
                   cursor: 'pointer',
                   padding: 0,
                   lineHeight: 0,
+                  // A pointer target of at least 24 px each way, whichever icon is drawn.
+                  minWidth: 24,
+                  minHeight: 24,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 {isSelected ? (

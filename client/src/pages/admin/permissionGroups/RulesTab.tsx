@@ -26,6 +26,7 @@ import ReviewRightWarning from '../../../components/permissions/ReviewRightWarni
 import { grantsUploadReview } from '../../../components/permissions/reviewRight.ts';
 import RuleAnchorPicker from './RuleAnchorPicker.tsx';
 import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
+import HiddenTitle from '../../../components/a11y/HiddenTitle.tsx';
 
 interface DraftRule {
   key: number;
@@ -450,7 +451,7 @@ export default function RulesTab({
             },
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'remove',
             width: 50,
             render: (_, draft) => (

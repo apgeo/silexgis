@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import i18n from '../../i18n';
 import type { ExpeditionInfo, ExpeditionListParams } from '../../api/hooks.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const { listSpy, canCreate } = vi.hoisted(() => ({ listSpy: vi.fn(), canCreate: { value: false } }));
 
@@ -139,5 +140,13 @@ describe('a list of camps that could not be read', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
     expect(refetch).toHaveBeenCalled();
+  });
+});
+
+describe('the filter row for a screen reader', () => {
+  it('names every field, the state filter among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
   });
 });

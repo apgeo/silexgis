@@ -102,6 +102,7 @@ export default function ExpeditionListPage() {
         <Select<ActivityState | undefined>
           allowClear
           placeholder={t('expeditions.stateFilter')}
+          aria-label={t('expeditions.state')}
           style={{ minWidth: 180 }}
           data-testid="expedition-state-filter"
           value={params.state as ActivityState | undefined}

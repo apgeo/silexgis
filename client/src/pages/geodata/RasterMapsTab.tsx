@@ -47,6 +47,7 @@ import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const statusColor: Record<string, string> = {
   uploaded: 'default',
@@ -286,7 +287,7 @@ export default function RasterMapsTab() {
             render: (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 200,
             render: (_, record) => (

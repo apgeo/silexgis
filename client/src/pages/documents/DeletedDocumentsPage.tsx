@@ -14,6 +14,7 @@ import {
   type DeletedDocument,
 } from '../../api/hooks.ts';
 import { daysLeft, formatDays } from '../../components/trips/tripRestoreWindow.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The deleted documents this reader may put back, most recently deleted first.
@@ -129,7 +130,7 @@ export default function DeletedDocumentsPage() {
             render: (_, document) => removedText(document),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 130,
             render: (_, document) => (

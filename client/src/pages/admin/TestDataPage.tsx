@@ -34,6 +34,7 @@ import {
   type TestDataRun,
   type TestDataTable,
 } from '../../api/hooks.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 type RunStatus = TestDataRun['status'];
 type TableRole = TestDataTable['role'];
@@ -279,6 +280,7 @@ export default function TestDataPage() {
           <Space wrap size="large" align="start">
             <Form.Item label={t('testData.profile')} style={{ minWidth: 220 }}>
               <Select<ProfileName>
+                aria-label={t('testData.profile')}
                 value={profileName}
                 onChange={choose}
                 options={PROFILE_NAMES.map((name) => ({ value: name, label: t(PROFILE_KEYS[name]) }))}
@@ -287,6 +289,7 @@ export default function TestDataPage() {
             </Form.Item>
             <Form.Item label={t('testData.caveCount')}>
               <InputNumber
+                aria-label={t('testData.caveCount')}
                 min={1}
                 max={data.maxCaves}
                 value={parsed?.caves?.count}
@@ -297,6 +300,7 @@ export default function TestDataPage() {
             </Form.Item>
             <Form.Item label={t('testData.seed')}>
               <InputNumber
+                aria-label={t('testData.seed')}
                 value={parsed?.seed}
                 disabled={!parsed}
                 onChange={(value) => value !== null && patch((p) => ({ ...p, seed: value }))}
@@ -311,6 +315,7 @@ export default function TestDataPage() {
             help={parsed ? undefined : t('testData.jsonInvalid')}
           >
             <Input.TextArea
+              aria-label={t('testData.json')}
               value={profileText}
               onChange={(event) => setProfileText(event.target.value)}
               autoSize={{ minRows: 6, maxRows: 12 }}
@@ -342,6 +347,7 @@ export default function TestDataPage() {
             pagination={false}
             dataSource={data.runs}
             expandable={{
+              columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
               expandedRowKeys: expanded,
               onExpandedRowsChange: (keys) => setExpanded(keys as string[]),
               expandedRowRender: (row) => <RunDetails run={row} />,
@@ -381,7 +387,7 @@ export default function TestDataPage() {
               },
               { title: t('testData.seed'), dataIndex: 'seed' },
               {
-                title: '',
+                title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                 render: (_, row) => (
                   <Space>
                     {(row.status === 'queued' || row.status === 'running') && (

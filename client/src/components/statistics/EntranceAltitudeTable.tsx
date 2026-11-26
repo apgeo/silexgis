@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import type { EntranceAltitudeRow, EntranceAltitudeVerdict } from '../../api/hooks/entranceAltitudes.ts';
 import Button from '../Button.tsx';
+import HiddenTitle from '../a11y/HiddenTitle.tsx';
 
 const VERDICT_COLOUR: Record<EntranceAltitudeVerdict, string | undefined> = {
   agrees: 'green',
@@ -81,7 +82,7 @@ export default function EntranceAltitudeTable({
 
   if (canFill) {
     columns.push({
-      title: '',
+      title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
       key: 'fill',
       render: (_: unknown, row) =>
         row.fillableFromTerrain ? (

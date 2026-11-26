@@ -43,6 +43,7 @@ import {
   type CavingGroupInfo,
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 function MemberDrawer({ group, onClose }: { group: CavingGroupInfo; onClose: () => void }) {
   const { t } = useTranslation();
@@ -398,7 +399,7 @@ export default function CavingGroupsPage() {
             render: (count: number) => <Tag icon={<TeamOutlined />}>{count}</Tag>,
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 380,
             render: (_, group) => (

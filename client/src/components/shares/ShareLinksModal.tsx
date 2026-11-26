@@ -12,6 +12,7 @@ import {
   type FeatureShare,
   type FeatureShareCreated,
 } from '../../api/hooks.ts';
+import HiddenTitle from '../a11y/HiddenTitle.tsx';
 
 interface ShareLinksModalProps {
   /** The shared entity's feature id (a cave, entrance, centerline or generic feature). */
@@ -170,6 +171,7 @@ export default function ShareLinksModal({ featureId, open, onClose }: ShareLinks
                   ),
               },
               {
+                title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                 key: 'actions',
                 width: 100,
                 render: (_, share) =>

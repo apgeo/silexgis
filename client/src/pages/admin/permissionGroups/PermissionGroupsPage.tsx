@@ -17,6 +17,7 @@ import {
 import { accessRuleProblem } from '../../../components/permissions/accessRuleProblem.ts';
 import { permissionGroupNameProblem } from './permissionGroupProblems.ts';
 import PermissionGroupEditor from './PermissionGroupEditor.tsx';
+import HiddenTitle from '../../../components/a11y/HiddenTitle.tsx';
 
 /**
  * Rulesets and their trustees — the concept that replaced global roles. The list is
@@ -164,7 +165,7 @@ export default function PermissionGroupsPage() {
             align: 'right',
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 150,
             render: (_, group) => (

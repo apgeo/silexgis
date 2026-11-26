@@ -17,6 +17,7 @@ import { featureProblemMessage } from '../../components/features/featureProblems
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard } from '../../components/useDiscardGuard.ts';
 import type { SelectorScope } from '../../filters/selection.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** A typed relation may point at a feature of any kind, so the target is the whole feature world. */
 const TARGET_SCOPES: readonly SelectorScope[] = [
@@ -221,6 +222,7 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
             },
             { title: t('features.linkNote'), dataIndex: 'note', ellipsis: true },
             {
+              title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
               key: 'remove',
               width: 50,
               render: (_, r) => (

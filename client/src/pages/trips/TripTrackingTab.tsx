@@ -84,6 +84,7 @@ import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { useNow } from '../../hooks/useNow.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 // The position's age is worded by the followed page's own rule, called rather than copied — the
 // same reason the standing and the "last heard" age above are. A coordinator and a family read the
 // same position, and two roundings of one gap would have them disagreeing about it.
@@ -1696,7 +1697,7 @@ export default function TripTrackingTab({
                   ...(rowsWritable
                     ? [
                         {
-                          title: '',
+                          title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                           key: 'personActions',
                           width: 48,
                           render: (_value: unknown, row: TrackingParticipant) => personActions(row),
@@ -2011,7 +2012,7 @@ export default function TripTrackingTab({
                   ...(rowsHaveControls
                     ? [
                         {
-                          title: '',
+                          title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                           key: 'actions',
                           render: (_value: unknown, row: TrackingEvent) => (
                             <Flex gap={4} align="center">

@@ -40,6 +40,7 @@ import SurveyModelEstimatedPassagesModal from './SurveyModelEstimatedPassagesMod
 import { formatKm, formatPassageLength, hasPlacementSuggestion } from './surveyPlacement.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 import { FONT_SIZE } from '../../theme.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * What each format is called in the list. The two line-plot names are product names and read the
@@ -332,6 +333,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             render: (_, model) => stateCell(model),
           },
           {
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 320,
             render: (_, model) => (
