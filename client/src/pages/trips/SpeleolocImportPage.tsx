@@ -30,6 +30,7 @@ import SpeleolocImportSummary, {
 import SpeleolocPeoplePanel from '../../components/import/SpeleolocPeoplePanel.tsx';
 import SpeleolocPointTable from '../../components/import/SpeleolocPointTable.tsx';
 import ReviewSaveFailed from '../../components/import/ReviewSaveFailed.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import {
   clampCandidateCount,
   couldBeRecorded,
@@ -63,6 +64,11 @@ function duplicateDocumentId(error: unknown): string | null {
     return null;
   }
   return error.member('duplicateOfDocumentId') ?? null;
+}
+
+/** Whether a refusal says the stored file is not a SpeleoLoc archive the server can read. */
+function isUnreadable(error: unknown) {
+  return error instanceof ApiError && error.code === 'speleoloc_import.archive_unreadable';
 }
 
 /** Two references to the same upload, whichever spelling of the identifier each arrived in. */
@@ -422,31 +428,47 @@ export default function SpeleolocImportPage() {
     );
   }
 
+  // A file that is not a readable archive holds nothing to review. Drawing the review form over it
+  // anyway — options, empty tables and a Confirm button — invites somebody to fill in a review of
+  // nothing; what helps is saying what was wrong and taking another file in the same place.
+  if (isUnreadable(recordings.error) || isUnreadable(previewError)) {
+    return (
+      <UploadArm
+        duplicateOf={duplicateOf}
+        onUpload={uploadArchive}
+        pending={upload.isPending}
+        unreadable={{ fileName: session.data?.fileName ?? null }}
+      />
+    );
+  }
+
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
-        <Space wrap>
+      <PageHeader
+        title={t('speleolocImport.title')}
+        before={
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trip-logs')}>
             {t('common.back')}
           </Button>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {t('speleolocImport.title')}
-          </Typography.Title>
-          {session.data?.fileName && <Tag>{session.data.fileName}</Tag>}
-        </Space>
-        {/* Dead until everything the confirmation demands has been settled, and dead again once it
-            has succeeded: the selection recomputes itself from the preview the moment the result
-            appears, so a live button would offer to record the same scans a second time. */}
-        <Button
-          type="primary"
-          disabled={blockers.length > 0 || result !== null || saveSession.isError}
-          loading={commit.isPending}
-          onClick={() => void onCommit()}
-          data-testid="speleoloc-import-commit"
-        >
-          {t('speleolocImport.recordSelected', { count: takenIds.length })}
-        </Button>
-      </Flex>
+        }
+        after={session.data?.fileName && <Tag>{session.data.fileName}</Tag>}
+        actions={
+          <>
+          {/* Dead until everything the confirmation demands has been settled, and dead again once it
+              has succeeded: the selection recomputes itself from the preview the moment the result
+              appears, so a live button would offer to record the same scans a second time. */}
+          <Button
+            type="primary"
+            disabled={blockers.length > 0 || result !== null || saveSession.isError}
+            loading={commit.isPending}
+            onClick={() => void onCommit()}
+            data-testid="speleoloc-import-commit"
+          >
+            {t('speleolocImport.recordSelected', { count: takenIds.length })}
+          </Button>
+          </>
+        }
+      />
 
       <ReviewSaveFailed
         failed={saveSession.isError}
@@ -575,10 +597,13 @@ function UploadArm({
   duplicateOf,
   onUpload,
   pending,
+  unreadable,
 }: {
   duplicateOf: string | null;
   onUpload: (file: File, allowDuplicate: boolean) => Promise<void>;
   pending: boolean;
+  /** Set when the file this page was opened on could not be read as an archive. */
+  unreadable?: { fileName: string | null };
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -586,19 +611,55 @@ function UploadArm({
   // The refusal names a document; the review is about the file inside it. Reading the document is
   // how one becomes the other, and it is why the duplicate is an offer rather than a wall.
   const existing = useDocument(duplicateOf ?? undefined);
+  // The store matches bytes, not readability: the same broken file dropped twice is a duplicate of
+  // the first copy, and "Resume that review" would lead straight back into the error. Asking for the
+  // earlier copy's recordings is what tells the two apart.
+  const existingRecordings = useSpeleolocRecordings(
+    duplicateOf ? (existing.data?.currentFileId ?? undefined) : undefined,
+  );
+  const duplicateUnreadable = isUnreadable(existingRecordings.error);
+  // Resume waits for that answer: offered while it is still on its way, a prompt press would lead
+  // into the very review that may turn out unreadable. Any other failure of the read leaves Resume
+  // offered, since the review page says for itself what went wrong and offers to read it again.
+  const resumable =
+    Boolean(existing.data) &&
+    (existingRecordings.isSuccess || (existingRecordings.isError && !duplicateUnreadable));
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex align="center" gap={12} style={{ marginBottom: 16 }} wrap>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trip-logs')}>
-          {t('common.back')}
-        </Button>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          {t('speleolocImport.uploadTitle')}
-        </Typography.Title>
-      </Flex>
+      <PageHeader
+        title={t('speleolocImport.uploadTitle')}
+        before={
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trip-logs')}>
+            {t('common.back')}
+          </Button>
+        }
+        after={unreadable?.fileName && <Tag>{unreadable.fileName}</Tag>}
+      />
 
-      {duplicateOf && (
+      {unreadable && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="speleoloc-import-unreadable"
+          title={t('speleolocImport.errors.archiveUnreadable')}
+          description={t('speleolocImport.unreadableBody')}
+        />
+      )}
+
+      {duplicateOf && duplicateUnreadable && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="speleoloc-import-duplicate-unreadable"
+          title={t('speleolocImport.duplicateUnreadableTitle')}
+          description={t('speleolocImport.unreadableBody')}
+        />
+      )}
+
+      {duplicateOf && !duplicateUnreadable && (
         <Alert
           type="info"
           showIcon
@@ -613,7 +674,8 @@ function UploadArm({
               <Space wrap>
                 <Button
                   type="primary"
-                  disabled={!existing.data}
+                  disabled={!resumable}
+                  loading={Boolean(existing.data) && existingRecordings.isPending}
                   onClick={() =>
                     navigate(`/trip-logs/speleoloc-import/${existing.data!.currentFileId}`)
                   }
