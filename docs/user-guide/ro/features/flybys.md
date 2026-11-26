@@ -507,6 +507,28 @@ altfel, și spune și cum este așezată scena, cum este luminată și ce lasă 
 - Playerul din pachet face parte din ThIDE și vine sub licența lui (MPL-2.0); fișierele `LICENSE`
   și `NOTICE` din pachet o spun.
 
+#### Randarea pe server
+
+Acolo unde instalarea are un **nod de randare** — un calculator al clubului, de obicei unul cu
+placă grafică, pe care un administrator rulează programul de randare al ThIDE — pachetul poate fi
+randat și acolo, în loc de calculatorul tău. Secțiunea **Randare pe server** apare sub opțiunile
+pachetului doar cât timp un nod s-a anunțat în ultimele minute; fără niciunul, nu este oferită.
+
+- Alege **Ciornă** (jumătate din mărimea cadrului și mai puține eșantioane — o privire rapidă) sau
+  **Complet**, și formatul filmului (MP4, WebM sau MKV), apoi **Randează pe server**. Pachetul
+  este făcut exact ca pentru descărcare — aceleași peșteri, după aceleași reguli despre cine ce
+  are voie să vadă — și dat nodului; nimic altceva din SilexGIS nu ajunge la el.
+- Panoul o urmărește: *așteaptă un nod de randare*, apoi ce face nodul — descarcă pachetul,
+  randează cadru cu cadru cu timpul rămas, trimite filmul înapoi. **Oprește** încheie pe loc o
+  randare care așteaptă, iar una care rulează în cel mult un minut, când nodul spune din nou cât a
+  ajuns.
+- Când e gata, **Descarcă filmul** — și jurnalul Blender alături. Filmul este doar al tău și se
+  păstrează pe server două săptămâni (panoul spune până când), apoi se șterge. Primești și o
+  notificare când o randare se încheie sau eșuează.
+- O singură randare a ta rulează odată. O randare care eșuează din cauza nodului (nu mai răspunde,
+  i s-a umplut discul, Blender s-a oprit) este reîncercată de câteva ori, pe acel nod sau pe altul;
+  una care eșuează din cauza scenei nu, iar panoul spune de ce.
+
 ## Păstrarea unui survol
 
 | Control | Face |

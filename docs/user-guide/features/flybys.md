@@ -483,6 +483,28 @@ English otherwise, and also says how the scene is laid out, how it is lit and wh
 - The player in the bundle is part of ThIDE and comes under its own licence (MPL-2.0); the
   bundle's `LICENSE` and `NOTICE` say so.
 
+#### Rendering on the server
+
+Where the installation has a **render node** — a machine of the club's, usually one with a
+graphics card, on which an administrator runs ThIDE's render worker — the bundle can also be
+rendered there instead of on your own computer. The section **Render on the server** appears under
+the bundle's choices only while a node has called in the last few minutes; with none, it is not
+offered.
+
+- Choose **Draft** (half the frame size and fewer samples — a quick look) or **Full**, and the
+  film's format (MP4, WebM or MKV), then **Render on the server**. The bundle is made exactly as
+  for the download — the same caves, under the same rules about who may see what — and handed to
+  the node; nothing else of SilexGIS goes to it.
+- The panel follows it: *waiting for a render node*, then what the node is doing — downloading the
+  bundle, rendering frame by frame with the time left, sending the film back. **Stop** ends a
+  waiting render at once and a running one within a minute, when the node next says how far it got.
+- When it is done, **Download the film** — and Blender's log beside it. The film is yours alone
+  and is kept on the server for two weeks (the panel says until when), then deleted. You also get a
+  notification when a render finishes or fails.
+- One render of yours runs at a time. A render that fails because of the node (it stopped
+  answering, its disk was full, Blender crashed) is tried again, on that node or another, a few
+  times; one that fails because of the scene is not, and the panel says why.
+
 ## Keeping a flyby
 
 | Control | Does |
