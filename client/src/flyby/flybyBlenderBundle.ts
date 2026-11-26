@@ -80,8 +80,12 @@ export const FLYBY_BUNDLE_PHOTOS_LAYER: FlybyLayerKey = 'photos';
  */
 export const FLYBY_BUNDLE_REVEAL_SHARE = 0.8;
 
-/** What a bundle's caves can appear part by part by. */
-export type FlybyBundleRevealBy = 'distance';
+/**
+ * What a bundle's caves can appear part by part by: the distance along the passages from their
+ * entrances, each cave over the whole reveal; or the day each survey leg was surveyed, every cave
+ * on one clock of years with the year counted on the picture.
+ */
+export type FlybyBundleRevealBy = 'distance' | 'date';
 
 /** One entrance or feature a layer of the view draws, as a bundle names it. */
 export interface FlybyBundleMarkerAsk {

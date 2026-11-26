@@ -8,35 +8,59 @@ namespace SilexGis.Infrastructure.Flybys;
 
 /// <summary>
 /// In what order a cave appears where a bundle reveals it: a number for every place along its
-/// survey — the distance along the passages, in true metres, from its entrances — which the
-/// renderer compares with a threshold that rises while the clip runs.
+/// survey, which the renderer compares with a threshold that rises while the clip runs. By
+/// distance, the distance along the passages, in true metres, from its entrances; by date, the
+/// day each leg was surveyed, as a year with its fraction.
 ///
 /// <para>
-/// <b>The rule is the survey library's.</b> The cave's stored legs are handed to it as a model of
-/// its own kind and it measures them: from the stations the survey flags as entrances; a part of
-/// the cave joined to no entrance from the first station of its first leg. It also gives a wall
-/// its numbers — every vertex takes the number of the nearest place on the centreline — so what
-/// is worked out here is only which leg meets which.
+/// <b>The rule is the survey library's.</b> The cave's stored legs are handed to it as a graph of
+/// named stations and it measures them: from the stations the survey flags as entrances; a part of
+/// the cave joined to no entrance from the first station of its first leg. By date it reads each
+/// leg's day, and a leg with none takes the earliest there is. It also gives a wall its numbers —
+/// every vertex takes the number of the nearest place on the centreline — so what is worked out
+/// here is only which leg meets which, and, by date, what a cave falls back on.
 /// </para>
 ///
 /// <para>
-/// <b>There is no reveal by date, because no leg here has a date.</b> A survey file may say on
-/// which day each leg was measured; what is kept of a survey is where its legs run, and one date
-/// for the whole model. A cave's history cannot be told from that.
+/// <b>By date, a cave none of whose legs has a day</b> appears whole on the one date its survey
+/// was given, where it was given one; with neither it has no numbers and is there from the start.
+/// The caves of one scene share one clock of years, so a leg with no day is put at the earliest
+/// day of the whole scene (<see cref="From"/>): it is there from the start of the reveal.
 /// </para>
 /// </summary>
 public sealed class FlybyBundleRevealValues
 {
     private readonly IReadOnlyList<FlybyBundleLeg> legs;
     private readonly IReadOnlyList<(double From, double To)> values;
+    private readonly IReadOnlyList<bool> undated;
     private readonly Dictionary<string, double> atStation = new(StringComparer.Ordinal);
+    private readonly Dictionary<FlybyBundleLeg, (double From, double To)>? ofLeg;
 
-    private FlybyBundleRevealValues(IReadOnlyList<FlybyBundleLeg> legs, IReadOnlyList<(double From, double To)> values, double min, double max)
+    private FlybyBundleRevealValues(
+        IReadOnlyList<FlybyBundleLeg> legs,
+        IReadOnlyList<(double From, double To)> values,
+        IReadOnlyList<bool> undated,
+        double min,
+        double max,
+        bool wholeOnTheSurveyDate,
+        bool byLeg)
     {
         this.legs = legs;
         this.values = values;
+        this.undated = undated;
         Min = min;
         Max = max;
+        WholeOnTheSurveyDate = wholeOnTheSurveyDate;
+        if (byLeg)
+        {
+            // By date a station is not one number: legs surveyed on two days meet at it.
+            ofLeg = [];
+            for (var i = 0; i < legs.Count; i++)
+            {
+                ofLeg.TryAdd(legs[i], values[i]);
+            }
+        }
+
         for (var i = 0; i < legs.Count; i++)
         {
             atStation.TryAdd(StartOf(legs[i]), values[i].From);
@@ -50,10 +74,17 @@ public sealed class FlybyBundleRevealValues
     /// <summary>The highest number: all of the cave is there once the threshold is past it.</summary>
     public double Max { get; }
 
+    /// <summary>By date: how many of the legs measured have no day of their own.</summary>
+    public int LegsWithoutDate => WholeOnTheSurveyDate ? 0 : undated.Count(u => u);
+
+    /// <summary>By date: the cave has no leg with a day, and appears whole on its survey's date.</summary>
+    public bool WholeOnTheSurveyDate { get; }
+
     /// <summary>
-    /// The numbers of a cave, or null for one with no leg to measure along.
+    /// The numbers of a cave, or null for one with nothing to reveal it by: no leg to measure
+    /// along, or, by date, no day on any leg and no date for its survey.
     /// </summary>
-    public static FlybyBundleRevealValues? Of(FlybyBundleCave cave)
+    public static FlybyBundleRevealValues? Of(FlybyBundleCave cave, FlybyBundleRevealBy by = FlybyBundleRevealBy.Distance)
     {
         ArgumentNullException.ThrowIfNull(cave);
         if (cave.SurveyLegs.Count == 0)
@@ -79,11 +110,12 @@ public sealed class FlybyBundleRevealValues
         }
 
         var kept = new List<FlybyBundleLeg>();
-        var shots = new List<CaveShot>();
+        var graph = new List<RevealGraphLeg>();
         foreach (var leg in cave.SurveyLegs)
         {
-            var from = Place(StartOf(leg), leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM);
-            var to = Place(EndOf(leg), leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM);
+            var (start, end) = (StartOf(leg), EndOf(leg));
+            var from = Place(start, leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM);
+            var to = Place(end, leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM);
 
             // The library measures along the legs it would draw: one shorter than a millimetre is none.
             if ((to - from).Length < 1e-3)
@@ -92,37 +124,78 @@ public sealed class FlybyBundleRevealValues
             }
 
             kept.Add(leg);
-            shots.Add(new CaveShot { FromPosition = from, ToPosition = to });
+            graph.Add(new RevealGraphLeg(start, end, from, to, leg.SurveyedOn));
         }
 
-        if (shots.Count == 0)
+        if (graph.Count == 0)
         {
             return null;
         }
 
-        var entrances = cave.EntranceStations.ToHashSet(StringComparer.Ordinal);
-        uint id = 0;
-        var model = new CaveModel
+        var undated = kept.Select(leg => leg.SurveyedOn is null).ToList();
+        var source = by == FlybyBundleRevealBy.Date ? RevealSource.Date : RevealSource.Distance;
+        var field = RevealField.FromLegs(graph, new RevealOptions { Source = source }, cave.EntranceStations);
+        if (field is not null && field.Legs.Count == kept.Count)
         {
-            Shots = shots,
-            Stations =
-            [
-                .. places.Select(place => new CaveStation
-                {
-                    Id = id++,
-                    Name = place.Key,
-                    Position = place.Value,
-                    Flags = entrances.Contains(place.Key) ? CaveStationFlags.Entrance : 0,
-                }),
-            ],
-        };
-        var field = RevealField.Build(model, new RevealOptions { Source = RevealSource.Distance });
-        if (field is null || field.Legs.Count != kept.Count)
-        {
-            return null;
+            return new FlybyBundleRevealValues(
+                kept, [.. field.Legs.Select(leg => (leg.FromValue, leg.ToValue))], undated, field.Min, field.Max, wholeOnTheSurveyDate: false, byLeg: by == FlybyBundleRevealBy.Date);
         }
 
-        return new FlybyBundleRevealValues(kept, [.. field.Legs.Select(leg => (leg.FromValue, leg.ToValue))], field.Min, field.Max);
+        // By date with no day on any leg: the whole cave on its survey's one date, where it has one.
+        if (by == FlybyBundleRevealBy.Date && field is null && cave.SurveyDate is { } day)
+        {
+            var year = RevealField.DecimalYear(day);
+            return new FlybyBundleRevealValues(
+                kept, [.. kept.Select(_ => (year, year))], [.. kept.Select(_ => false)], year, year, wholeOnTheSurveyDate: true, byLeg: true);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// What a reveal by date of <paramref name="caves"/> has to go on: how many legs of caves that
+    /// have dated legs have none of their own (there from the start), how many caves appear whole
+    /// on their survey's date, and how many have no date at all (there from the start). Caves with
+    /// no survey to reveal are not counted: they are there from the start by any reveal.
+    /// </summary>
+    public static FlybyBundleRevealDates DatesOf(IReadOnlyList<FlybyBundleCave> caves)
+    {
+        ArgumentNullException.ThrowIfNull(caves);
+        int legs = 0, whole = 0, none = 0;
+        foreach (var cave in caves.Where(cave => cave.SurveyLegs.Count > 0))
+        {
+            switch (Of(cave, FlybyBundleRevealBy.Date))
+            {
+                case null:
+                    none++;
+                    break;
+                case { WholeOnTheSurveyDate: true }:
+                    whole++;
+                    break;
+                case var values:
+                    legs += values.LegsWithoutDate;
+                    break;
+            }
+        }
+
+        return new FlybyBundleRevealDates(legs, whole, none);
+    }
+
+    /// <summary>
+    /// By date, these numbers on the clock of a whole scene whose earliest day is
+    /// <paramref name="earliest"/>: a leg with no day of its own is there from the start of the
+    /// reveal rather than from the start of its own cave. Unchanged where every leg has a day.
+    /// </summary>
+    public FlybyBundleRevealValues From(double earliest)
+    {
+        if (LegsWithoutDate == 0)
+        {
+            return this;
+        }
+
+        var moved = values.Select((value, i) => undated[i] ? (earliest, earliest) : value).ToList();
+        return new FlybyBundleRevealValues(
+            legs, moved, undated, Math.Min(Min, earliest), Math.Max(Max, earliest), wholeOnTheSurveyDate: false, byLeg: true);
     }
 
     /// <summary>
@@ -163,10 +236,18 @@ public sealed class FlybyBundleRevealValues
         return field.OnWalls(new CaveMesh { Vertices = vertices, Triangles = [] }).Reveal!;
     }
 
-    /// <summary>The numbers at the two ends of a leg the cave's lines are drawn of.</summary>
+    /// <summary>
+    /// The numbers at the two ends of a leg the cave's lines are drawn of: by distance, those of
+    /// the stations it joins; by date, the leg's own, where it is one of the legs measured.
+    /// </summary>
     public (double From, double To) Of(FlybyBundleLeg leg)
     {
         ArgumentNullException.ThrowIfNull(leg);
+        if (ofLeg is not null && ofLeg.TryGetValue(leg, out var own))
+        {
+            return own;
+        }
+
         var from = atStation.TryGetValue(StartOf(leg), out var a) ? a : (double?)null;
         var to = atStation.TryGetValue(EndOf(leg), out var b) ? b : (double?)null;
 
@@ -184,4 +265,14 @@ public sealed class FlybyBundleRevealValues
     /// </summary>
     private static string Spot(double longitude, double latitude, double altitudeM) =>
         FormattableString.Invariant($"@{longitude:F8},{latitude:F8},{altitudeM:F3}");
+}
+
+/// <summary>What a reveal by date of a scene's caves has to go on; see <see cref="FlybyBundleRevealValues.DatesOf"/>.</summary>
+/// <param name="LegsWithoutDate">Legs with no day of their own, of caves some of whose legs have one.</param>
+/// <param name="CavesOnTheSurveyDate">Caves with no dated leg that appear whole on their survey's date.</param>
+/// <param name="CavesWithoutDate">Caves with no date at all.</param>
+public sealed record FlybyBundleRevealDates(int LegsWithoutDate, int CavesOnTheSurveyDate, int CavesWithoutDate)
+{
+    /// <summary>Nothing to say: every leg of every cave has a day.</summary>
+    public static FlybyBundleRevealDates None { get; } = new(0, 0, 0);
 }

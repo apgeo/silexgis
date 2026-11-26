@@ -407,6 +407,8 @@ export const groups = {
     'FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'GlbReaderTests',
     // The order a cave appears in, measured along its stored legs from the stations flagged as entrances.
     'FlybyBundlePointedTests',
+    // The order a cave appears in by the day each stored leg was surveyed.
+    'FlybyBundleRevealDateTests',
     // A cave's surveys and the uploads that are versions of them, and the run that reads them.
     'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests', 'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests', 'SurveyUploadSurfaceTests',
     'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests',
@@ -543,6 +545,8 @@ export const groups = {
     'FlybyBundlePointedTests',
     // The lamp on a bundle's camera where its sun does not reach, and lines no light changes.
     'FlybyBundleLampTests',
+    // A bundle's caves appearing by survey date, on one clock of years, with the year counted.
+    'FlybyBundleRevealDateTests',
   ],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],

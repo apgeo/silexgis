@@ -416,7 +416,9 @@ describe('a flyby as a bundle for Blender', () => {
     // Said before the file is made: what is pointed out, and what a reveal is.
     expect(leftOut()).toEqual(['ground', 'featureOutlines']);
     const reveal = screen.getByTestId('flyby-bundle-reveal');
-    expect(reveal.closest('label')).toHaveTextContent('Let the caves appear part by part, from their entrances inwards');
+    expect(reveal.closest('label')).toHaveTextContent('Let the caves appear part by part');
+    // The choice of what they appear by is there once they do.
+    expect(screen.queryByTestId('flyby-bundle-reveal-by')).toBeNull();
     expect(reveal).not.toBeChecked();
     fireEvent.click(reveal);
     await pass(20);
@@ -469,6 +471,38 @@ describe('a flyby as a bundle for Blender', () => {
     expect(screen.getByTestId('flyby-bundle-report-markers-not-drawn')).toHaveTextContent(
       '1 entrance or feature is not in it: nothing of it is available to draw.',
     );
+  });
+
+  it('reveals the caves by survey date when asked, and says what had no date', async () => {
+    server.answer = () =>
+      new Headers({
+        'X-SilexGis-Bundle-Walls': '1',
+        'X-SilexGis-Bundle-Lines': '1',
+        'X-SilexGis-Bundle-Not-Drawn': '0',
+        'X-SilexGis-Bundle-Walls-Left-Out': '0',
+        'X-SilexGis-Bundle-Undated-Legs': '3',
+        'X-SilexGis-Bundle-Caves-On-Survey-Date': '1',
+        'X-SilexGis-Bundle-Undated-Caves': '0',
+      });
+    renderFlyby(fakeScene({}, { layers: { walls: true, centerlines: true } }));
+    await openBundle();
+
+    fireEvent.click(screen.getByTestId('flyby-bundle-reveal'));
+    await pass(5);
+    expect(screen.getByTestId('flyby-bundle-reveal-by-distance')).toBeChecked();
+    fireEvent.click(screen.getByTestId('flyby-bundle-reveal-by-date'));
+    await pass(5);
+    expect(screen.getByText(/each survey leg on the day it was surveyed/)).toBeInTheDocument();
+    await download();
+
+    expect(server.asked[0].body.reveal).toMatchObject({ by: 'date', startS: 0 });
+    expect(screen.getByTestId('flyby-bundle-report-undated-legs')).toHaveTextContent(
+      '3 survey legs have no date: they are there from the start.',
+    );
+    expect(screen.getByTestId('flyby-bundle-report-caves-on-survey-date')).toHaveTextContent(
+      '1 cave has a date only for its whole survey: it appears whole on that date.',
+    );
+    expect(screen.queryByTestId('flyby-bundle-report-undated-caves')).toBeNull();
   });
 
   it('says what the server left out of the bundle it made', async () => {

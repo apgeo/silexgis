@@ -94,6 +94,15 @@ public static class FlybyBlenderBundleEndpoints
     /// <summary>How many photographs the scene shows.</summary>
     public const string PhotosHeader = "X-SilexGis-Bundle-Photos";
 
+    /// <summary>By date: how many survey legs of the caves drawn have no date, and are there from the start.</summary>
+    public const string UndatedLegsHeader = "X-SilexGis-Bundle-Undated-Legs";
+
+    /// <summary>By date: how many caves have a date only for their whole survey, and appear whole on it.</summary>
+    public const string CavesOnSurveyDateHeader = "X-SilexGis-Bundle-Caves-On-Survey-Date";
+
+    /// <summary>By date: how many caves have no survey date at all, and are there from the start.</summary>
+    public const string UndatedCavesHeader = "X-SilexGis-Bundle-Undated-Caves";
+
     /// <summary>
     /// The longest side of a photograph in a bundle, in pixels: enough to fill a frame of the
     /// largest movie a bundle is ordinarily made at, and a twentieth of the memory a renderer
@@ -283,7 +292,7 @@ public static class FlybyBlenderBundleEndpoints
                             s.FromLongitude, s.FromLatitude, mid - ((s.DeltaZM ?? 0) / 2),
                             s.ToLongitude, s.ToLatitude, mid + ((s.DeltaZM ?? 0) / 2))
                         : new FlybyBundleLeg(s.FromLongitude, s.FromLatitude, flat, s.ToLongitude, s.ToLatitude, flat))
-                    with { FromStation = s.FromStationName, ToStation = s.ToStationName };
+                    with { FromStation = s.FromStationName, ToStation = s.ToStationName, SurveyedOn = s.SurveyedOn };
 
                 var legs = segments.Select(Leg).ToList();
 
@@ -299,6 +308,14 @@ public static class FlybyBlenderBundleEndpoints
                         .Select(s => s.Name)
                         .ToListAsync(ct);
 
+                // By date, the one date of the survey the legs came from: what a cave none of
+                // whose legs has a day of its own appears on.
+                var surveyDate = request.Reveal?.By != FlybyBundleRevealBy.Date || surveyModelIds.Count == 0
+                    ? null
+                    : await db.SurveyModels.AsNoTracking()
+                        .Where(m => surveyModelIds.Contains(m.Id) && m.SurveyedAt != null)
+                        .MinAsync(m => m.SurveyedAt, ct);
+
                 // A colour of this cave's own, where the flyby gives it one; and lines that are all
                 // there is of a cave — because its walls were wanted and are not there, or because
                 // the look draws no lines at all — are shown and hidden as the walls are.
@@ -308,6 +325,7 @@ public static class FlybyBlenderBundleEndpoints
                 {
                     SurveyLegs = surveyLegs,
                     EntranceStations = entranceStations,
+                    SurveyDate = surveyDate,
                     WallsTint = apart?.Walls is { } wallsTint ? Tints(wallsTint) : null,
                     LinesTint = apart?.Lines is { } linesTint ? Tints(linesTint) : null,
                     LinesStandIn = walls is null && estimated is null && (wallsFellBack || !request.Look.Lines),
@@ -379,7 +397,9 @@ public static class FlybyBlenderBundleEndpoints
                 Language = request.Language,
                 MarkerLayers = markerLayers,
                 Photos = photos,
-                Reveal = request.Reveal is { } reveal ? new FlybyBundleReveal(reveal.StartS, reveal.EndS) : null,
+                Reveal = request.Reveal is { } reveal
+                    ? new FlybyBundleReveal(reveal.StartS, reveal.EndS, reveal.By ?? FlybyBundleRevealBy.Distance)
+                    : null,
             };
 
             // Written into memory first: which photographs the scene shows is known once its plan
@@ -406,7 +426,12 @@ public static class FlybyBlenderBundleEndpoints
                     ["markerFeatureIds"] = Sorted(markerIds),
                     ["markersNotDrawnCount"] = markersNotDrawn,
                     ["photoDocumentIds"] = Sorted(summary.PhotosShown.Select(index => photoDocumentIds[index]).Distinct()),
-                    ["reveal"] = request.Reveal is null ? null : "distance",
+                    ["reveal"] = request.Reveal?.By switch
+                    {
+                        null => null,
+                        FlybyBundleRevealBy.Date => "date",
+                        _ => "distance",
+                    },
                 }),
             });
             await db.SaveChangesAsync(ct);
@@ -418,6 +443,9 @@ public static class FlybyBlenderBundleEndpoints
             http.Response.Headers[LinesHeader] = Count(withLines.Count);
             http.Response.Headers[NotDrawnHeader] = Count(notDrawn);
             http.Response.Headers[WallsLeftOutHeader] = Count(wallsUnavailable + wallsOverBudget);
+            http.Response.Headers[UndatedLegsHeader] = Count(summary.RevealDates.LegsWithoutDate);
+            http.Response.Headers[CavesOnSurveyDateHeader] = Count(summary.RevealDates.CavesOnTheSurveyDate);
+            http.Response.Headers[UndatedCavesHeader] = Count(summary.RevealDates.CavesWithoutDate);
             return TypedResults.File(zip.ToArray(), "application/zip", summary.FolderName + ".zip");
         }
         finally

@@ -13116,7 +13116,7 @@ export interface components {
         /** @enum {unknown} */
         FlybyBundleQuality: "low" | "medium" | "high";
         /** @enum {unknown} */
-        FlybyBundleRevealBy: "distance";
+        FlybyBundleRevealBy: "distance" | "date";
         FlybyBundleRevealRequest: {
             by: null | components["schemas"]["FlybyBundleRevealBy"];
             /** Format: double */

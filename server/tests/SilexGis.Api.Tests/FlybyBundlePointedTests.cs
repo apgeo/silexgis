@@ -322,11 +322,11 @@ public class FlybyBundlePointedTests
     {
         foreach (var romanian in (bool[])[false, true])
         {
-            var sections = FlybyBundleNotes.Sections(romanian, daylightGoes: false, markers: 21, photos: 1, revealed: true);
+            var sections = FlybyBundleNotes.Sections(romanian, daylightGoes: false, markers: 21, photos: 1, reveal: new FlybyBundleNotesReveal(ByDate: false));
             sections.Count.ShouldBe(4);
             sections.SelectMany(section => section.Text.Split('\n')).ShouldAllBe(line => line.Length <= 96);
             sections[2].Text.ShouldContain(romanian ? "21 de marcaje și 1 fotografie" : "21 markers and 1 photograph");
-            sections[3].Text.ShouldContain("SilexGIS");
+            sections[3].Text.ShouldContain("\"revealFront\"");
             FlybyBundleNotes.Sections(romanian, false, markers: 0, photos: 3)[2].Text
                 .ShouldContain(romanian ? "Scena are 3 fotografii," : "The scene has 3 photographs,");
             FlybyBundleNotes.Sections(romanian, false).Count.ShouldBe(2);

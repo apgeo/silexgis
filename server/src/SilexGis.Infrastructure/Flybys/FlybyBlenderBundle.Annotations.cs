@@ -384,34 +384,21 @@ public static partial class FlybyBlenderBundle
     }
 
     /// <summary>
-    /// The threshold a cave appears by, and how its edge looks: from the lowest of its numbers,
-    /// where nothing is there, to past the highest by the edge and the glow, where all of it is
-    /// and nothing glows any more. The softness of the edge and the glow are the survey library's.
+    /// The threshold a model appears by, and how its edge looks: the survey library's rule for a
+    /// reveal's keys — from the lowest number, where nothing is there, to past the highest by the
+    /// edge and the glow, where all of it is and nothing glows any more — with the softness of the
+    /// edge and the colour of the glow the library gives a reveal of its own.
     /// </summary>
-    private static (IReadOnlyList<PlanNumberKey> Threshold, PlanRevealFront Front) Revealing(
-        FlybyBundleRevealValues values, double fromSeconds, double toSeconds)
+    /// <param name="range">The lowest and the highest number the threshold runs over: the cave's
+    /// own, or, by date, those of every cave of the scene.</param>
+    private static (IReadOnlyList<PlanNumberKey>? Threshold, PlanRevealFront? Front) Revealing(
+        PlanChangeTarget target, (double Min, double Max) range, double fromSeconds, double toSeconds, int fps)
     {
         var library = new RevealSpec();
-        var range = values.Max - values.Min;
-
-        // A little past the end, so the last part is not left a hair short by rounding on the way.
-        var little = Math.Max(range, 1.0) * 1e-3;
-        var edge = Rounded(library.Edge * range);
-        var glow = Rounded(Math.Max(RevealPlanner.GlowShare * range, little));
-        return (
-            [
-                new PlanNumberKey(fromSeconds, Rounded(values.Min)),
-                new PlanNumberKey(toSeconds, Rounded(values.Max + Math.Max(edge, glow) + little)),
-            ],
-            new PlanRevealFront
-            {
-                Edge = edge,
-                Glow = new PlanRevealGlow
-                {
-                    Color = new ColorRgb(Rounded(library.GlowColor.R), Rounded(library.GlowColor.G), Rounded(library.GlowColor.B)),
-                    Strength = RevealPlanner.GlowStrength,
-                    Width = glow,
-                },
-            });
+        var change = RevealPlanner.Change(
+            target, range.Min, range.Max, fromSeconds, toSeconds, library.Edge, glow: true, library.GlowColor, fps);
+        return (change.Reveal, change.RevealFront);
     }
+
+    private static PlanChangeTarget PlanTarget(string id) => new() { Id = id };
 }

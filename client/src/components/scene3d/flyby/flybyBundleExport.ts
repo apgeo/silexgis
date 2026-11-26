@@ -52,6 +52,12 @@ export interface FlybyBundleMade {
   markersNotDrawn: number;
   /** Photographs the scene shows. */
   photos: number;
+  /** By survey date: survey legs with no date, which are there from the start. */
+  undatedLegs: number;
+  /** By survey date: caves whose survey has one date only, and which appear whole on it. */
+  cavesOnSurveyDate: number;
+  /** By survey date: caves with no date at all, which are there from the start. */
+  undatedCaves: number;
 }
 
 /** What a view with no look to ask has: everything as a bare scene draws it. */
@@ -338,5 +344,8 @@ export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<Flyb
     markers: count(headers, 'X-SilexGis-Bundle-Markers'),
     markersNotDrawn: count(headers, 'X-SilexGis-Bundle-Markers-Not-Drawn'),
     photos: count(headers, 'X-SilexGis-Bundle-Photos'),
+    undatedLegs: count(headers, 'X-SilexGis-Bundle-Undated-Legs'),
+    cavesOnSurveyDate: count(headers, 'X-SilexGis-Bundle-Caves-On-Survey-Date'),
+    undatedCaves: count(headers, 'X-SilexGis-Bundle-Undated-Caves'),
   };
 }

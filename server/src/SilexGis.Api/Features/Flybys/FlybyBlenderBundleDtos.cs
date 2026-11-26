@@ -188,9 +188,16 @@ public sealed record FlybyBundlePhotosRequest(
     IReadOnlyList<FlybyBundleShownKeyRequest>? Shown = null);
 
 /// <summary>
-/// The caves appear part by part while the clip runs, from their entrances inwards.
+/// The caves appear part by part while the clip runs: from their entrances inwards, or in the
+/// order they were explored.
 /// </summary>
-/// <param name="By">What they appear by. Only the distance along the passages: no leg of a stored survey has a date.</param>
+/// <param name="By">
+/// What they appear by: the distance along the passages from the entrances, each cave over the
+/// whole of the reveal; or the day each leg was surveyed, every cave on one clock of years with
+/// the year counted on the screen. By date, a leg with no day is there from the start; a cave none
+/// of whose legs has a day appears whole on its survey's date, and one with no date at all is there
+/// from the start.
+/// </param>
 /// <param name="StartS">When the first of each cave appears, in seconds from the clip's first frame.</param>
 /// <param name="EndS">When all of every cave is there.</param>
 public sealed record FlybyBundleRevealRequest(FlybyBundleRevealBy? By, double StartS, double EndS);

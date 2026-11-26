@@ -449,7 +449,10 @@ public class DependencyRuleTests
         // the entrances over a model's legs (shortest paths over a graph in memory) and gives each
         // vertex of a wall the number of the nearest place on the centreline (a search tree in
         // memory). A model in, numbers out; nothing is read and nothing is started.
+        // A plain graph of legs — two station names, two places and, optionally, the day it was
+        // surveyed — handed to the same measuring; a date is a number of years, nothing more.
         "Therion.CaveGeometry.RevealField",
+        "Therion.CaveGeometry.RevealGraphLeg",
         "Therion.CaveGeometry.RevealLeg",
         "Therion.CaveGeometry.RevealOptions",
         "Therion.CaveGeometry.RevealSource",
@@ -528,6 +531,13 @@ public class DependencyRuleTests
         // between their neighbours stands in for left out — returning a plan with those keys
         // on its lamp. Read to its last line: it opens nothing and starts nothing.
         "Therion.Blender.Plan.LampReach",
+
+        // The rule for a reveal's keys — its first and its last, the edge and the glow — and the
+        // text item that counts the year a reveal by date has got to: both arithmetic on the
+        // numbers given, returning plan records. Read to its last line for this entry: the one
+        // method that opens a file (`GeometryFor`, which reads a survey file named in a scene
+        // description for its dates) is not called here, and nothing in the type starts anything.
+        "Therion.Blender.Plan.RevealPlanner",
 
         // How soft the edge of a reveal is and what colour it glows in, as the library's own
         // defaults: a record made with `new` and read, so the numbers stay the library's.

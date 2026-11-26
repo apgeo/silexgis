@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using SilexGis.Domain.Export;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Surveys;
@@ -24,6 +25,9 @@ namespace SilexGis.Infrastructure.Flybys;
 public sealed record FlybyBundleSummary(string FolderName, int Frames, int Models, int Markers = 0, int Photos = 0)
 {
     public IReadOnlyList<int> PhotosShown { get; init; } = [];
+
+    /// <summary>By date: what the reveal had no date for. <see cref="FlybyBundleRevealDates.None"/> for any other reveal.</summary>
+    public FlybyBundleRevealDates RevealDates { get; init; } = FlybyBundleRevealDates.None;
 }
 
 /// <summary>
@@ -127,6 +131,9 @@ public static partial class FlybyBlenderBundle
             (path, picture) => meshes[path] = () => new MemoryStream(picture, writable: false));
 
         var romanian = FlybyBundleNotes.IsRomanian(scene.Language);
+        var revealed = (plan.Changes ?? []).Any(change => change.Reveal is not null);
+        var byDate = scene.Reveal?.By == FlybyBundleRevealBy.Date;
+        var dates = byDate ? FlybyBundleRevealValues.DatesOf(scene.Caves) : FlybyBundleRevealDates.None;
         var content = new RenderBundleContent
         {
             Plan = plan,
@@ -141,7 +148,9 @@ public static partial class FlybyBlenderBundle
                         daylightGoes: scene.Changes.Daylight.Any(key => key.Value < 1),
                         markers: (plan.Annotations ?? []).Count(a => a.Kind == PlanAnnotationKind.Marker),
                         photos: (plan.Annotations ?? []).Count(a => a.Kind == PlanAnnotationKind.Photo),
-                        revealed: (plan.Changes ?? []).Any(change => change.Reveal is not null),
+                        reveal: byDate
+                            ? new FlybyBundleNotesReveal(ByDate: true, dates.LegsWithoutDate, dates.CavesOnTheSurveyDate, dates.CavesWithoutDate, revealed)
+                            : revealed ? new FlybyBundleNotesReveal(ByDate: false) : null,
                         lampReaches: (plan.Changes ?? []).Any(change =>
                             change is { Energy: not null, Target.Id: { } lit }
                             && plan.Look.Lights.Any(light => light.Id == lit && light.Kind == PlanLightKind.Headlamp)))
@@ -164,6 +173,7 @@ public static partial class FlybyBlenderBundle
             photosShown.Count)
         {
             PhotosShown = photosShown,
+            RevealDates = dates,
         };
     }
 
@@ -239,9 +249,24 @@ public static partial class FlybyBlenderBundle
         // What changes of one model: the layer it belongs to shown and hidden — coming and going
         // eased, as a flyby eases everything —, how much of it is there, the colour laid over
         // it, its stretch, and the threshold it appears by where the scene reveals its cave.
+        // Which number each cave appears by. By distance each cave has its own, from its entrances,
+        // and appears over the whole of the reveal; by date they all run on one clock of years,
+        // from the earliest day of any of them to the latest, so that the counter on the screen
+        // says one year of all of them.
+        var by = scene.Reveal?.By ?? FlybyBundleRevealBy.Distance;
+        var revealed = scene.Caves.Select(cave => scene.Reveal is null ? null : FlybyBundleRevealValues.Of(cave, by)).ToList();
+        (double Min, double Max)? clock = null;
+        if (by == FlybyBundleRevealBy.Date && revealed.OfType<FlybyBundleRevealValues>().ToList() is { Count: > 0 } dated)
+        {
+            clock = (dated.Min(values => values.Min), dated.Max(values => values.Max));
+            revealed = [.. revealed.Select(values => values?.From(clock.Value.Min))];
+        }
+
         void Changing(string id, FlybyBundleLayerChanges layer, IReadOnlyList<FlybyBundleTintKey>? tint, FlybyBundleRevealValues? reveal)
         {
-            var (threshold, front) = reveal is null ? (null, null) : Revealing(reveal, revealFrom, revealTo);
+            var (threshold, front) = reveal is null
+                ? (null, null)
+                : Revealing(PlanTarget(id), clock ?? (reveal.Min, reveal.Max), revealFrom, revealTo, fps);
             var change = new PlanChange
             {
                 Target = new PlanChangeTarget { Id = id },
@@ -275,7 +300,7 @@ public static partial class FlybyBlenderBundle
         {
             var cave = scene.Caves[i];
             var number = (i + 1).ToString("00", CultureInfo.InvariantCulture);
-            var reveal = scene.Reveal is null ? null : FlybyBundleRevealValues.Of(cave);
+            var reveal = revealed[i];
 
             // A colour over the walls is a track only where it is ever seen.
             var wallsTint = cave.WallsTint ?? changes.Walls.Tint;
@@ -470,7 +495,20 @@ public static partial class FlybyBlenderBundle
 
         // The modules its sections need, and what is written over the picture — laid out for the
         // plan as it stands, so the north arrow turns by the plan's own poses.
-        plan = ScenePlanBuilder.WithTexts(ScenePlanBuilder.WithNeededFeatures(plan), Texts(scene, plan));
+        var texts = Texts(scene, plan);
+
+        // By date, the year the reveal has got to, counted on the screen from the threshold of a
+        // model that keys it: every revealed model is keyed on the one clock, so any of them says it.
+        if (clock is { } years && timed.FirstOrDefault(change => change.Reveal is not null)?.Target is { } counted)
+        {
+            texts = (texts ?? new PlanScreenTexts()) with
+            {
+                Items = [.. texts?.Items ?? [], RevealPlanner.Counter(counted, years.Min, years.Max)],
+            };
+        }
+
+        plan = ScenePlanBuilder.WithTexts(ScenePlanBuilder.WithNeededFeatures(plan), texts);
+        RefuseOnePropertyChangedByIdAndByRole(plan);
 
         var errors = ScenePlanValidator.Validate(plan);
         if (errors.Count > 0)
@@ -930,6 +968,72 @@ public static partial class FlybyBlenderBundle
     private static CaveVector3 Vector(SceneVector v) => new(v.X, v.Y, v.Z);
 
     private static CaveVector3 Rounded(SceneVector v) => new(Rounded(v.X), Rounded(v.Y), Rounded(v.Z));
+
+    /// <summary>
+    /// Refuses a plan in which one property of one thing is changed both by a change that names
+    /// it and by one that names its role. The renderer lets the change by name win, so such a
+    /// plan plays — but this code never means it: each property of a model is keyed by its name
+    /// and each of a layer of markers by its role, and a property keyed both ways is two rules
+    /// saying two things, one of which would be silently lost. Two changes by name, or two by
+    /// role, the plan's own validator refuses.
+    /// </summary>
+    internal static void RefuseOnePropertyChangedByIdAndByRole(ScenePlan plan)
+    {
+        if (plan.Changes is not { Count: > 0 })
+        {
+            return;
+        }
+
+        using var json = JsonDocument.Parse(ScenePlanSerializer.Write(plan));
+        var root = json.RootElement;
+        var ofRole = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var section in new[] { "models", "lines", "annotations" })
+        {
+            if (!root.TryGetProperty(section, out var things) || things.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var thing in things.EnumerateArray())
+            {
+                if (thing.TryGetProperty("role", out var role) && role.GetString() is { } named
+                    && thing.TryGetProperty("id", out var id) && id.GetString() is { } name)
+                {
+                    (ofRole.TryGetValue(named, out var members) ? members : ofRole[named] = []).Add(name);
+                }
+            }
+        }
+
+        var byId = new HashSet<(string Id, string Property)>();
+        var byRole = new HashSet<(string Id, string Property)>();
+        foreach (var change in root.GetProperty("changes").EnumerateArray())
+        {
+            if (!change.TryGetProperty("target", out var target))
+            {
+                continue;
+            }
+
+            var named = target.TryGetProperty("id", out var id) ? id.GetString() : null;
+            IReadOnlyList<string> things = named is not null
+                ? [named]
+                : target.TryGetProperty("role", out var role) && role.GetString() is { } r && ofRole.TryGetValue(r, out var members)
+                    ? members
+                    : [];
+            foreach (var property in change.EnumerateObject().Where(p => p.Name != "target"))
+            {
+                foreach (var thing in things)
+                {
+                    (named is not null ? byId : byRole).Add((thing, property.Name));
+                }
+            }
+        }
+
+        if (byId.FirstOrDefault(byRole.Contains) is { Id: not null } twice)
+        {
+            throw new InvalidOperationException(
+                $"The scene plan of a flyby changes '{twice.Property}' of '{twice.Id}' both by its id and by its role.");
+        }
+    }
 
     private static double Rounded(double value) => Math.Round(value, 6);
 

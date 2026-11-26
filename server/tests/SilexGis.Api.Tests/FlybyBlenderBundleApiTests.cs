@@ -17,6 +17,7 @@ using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Flybys;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 using Therion.Cave3D;
 using Therion.Cave3D.Parsing;
 
@@ -986,6 +987,62 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
     }
 
     [Fact]
+    public async Task A_bundle_that_reveals_its_caves_by_date_keys_them_on_one_clock_of_the_days_their_legs_were_surveyed()
+    {
+        var spot = Spot.Somewhere();
+        var dated = await CreateSurveyedCaveAsync(spot, heightM: 900, dated: true);
+        var wholeSurvey = await CreateSurveyedCaveAsync(spot.East(0.01), heightM: 900);
+        await DateTheSurveyAsync(wholeSurvey, new DateOnly(1995, 1, 1));
+        var undated = await CreateSurveyedCaveAsync(spot.East(0.02), heightM: 900);
+
+        var answer = await owner.PostAsJsonAsync(Route, Request(
+            spot,
+            [Cave(dated, walls: false), Cave(wholeSurvey, walls: false), Cave(undated, walls: false)],
+            reveal: new { by = "date", startS = 0.04, endS = 0.32 }));
+        var bundle = await Bundle.ReadAsync(answer);
+
+        // The two caves with a date on one clock, from the first day of the first to the date of
+        // the second's survey; the third, with none, is there from the start.
+        var changes = bundle.Plan.GetProperty("changes").EnumerateArray()
+            .Where(c => c.TryGetProperty("reveal", out _))
+            .ToDictionary(c => c.GetProperty("target").GetProperty("id").GetString()!);
+        changes.Keys.ShouldBe(["cave-01-lines", "cave-02-lines"], ignoreOrder: true);
+        changes.Values.Select(c => c.GetProperty("reveal").GetRawText()).Distinct().ShouldHaveSingleItem();
+        var keys = changes["cave-01-lines"].GetProperty("reveal");
+        keys[0].GetProperty("value").GetDouble().ShouldBe(Therion.CaveGeometry.RevealField.DecimalYear(FirstDay), 1e-6);
+        keys[1].GetProperty("value").GetDouble().ShouldBeGreaterThan(1995);
+
+        // The days the file gave its legs, on the lines; the undated third leg at the earliest.
+        var years = BundlePly.Reveal(bundle.Entries["cave-01-lines.ply"]).ShouldNotBeNull();
+        years.Min().ShouldBe(Therion.CaveGeometry.RevealField.DecimalYear(FirstDay), 1e-4);
+        years.Max().ShouldBe(1990, 1e-4);
+        years.Count(value => Math.Abs(value - 1990) < 1e-4).ShouldBe(8);
+        BundlePly.Reveal(bundle.Entries["cave-02-lines.ply"]).ShouldNotBeNull().ShouldAllBe(value => Math.Abs(value - 1995) < 1e-4);
+        BundlePly.Reveal(bundle.Entries["cave-03-lines.ply"]).ShouldBeNull();
+
+        bundle.Plan.GetProperty("texts").GetProperty("items").EnumerateArray()
+            .Count(item => item.GetProperty("id").GetString() == "reveal-counter").ShouldBe(1);
+        Header(answer, FlybyBlenderBundleEndpoints.UndatedLegsHeader).ShouldBe(1);
+        Header(answer, FlybyBlenderBundleEndpoints.CavesOnSurveyDateHeader).ShouldBe(1);
+        Header(answer, FlybyBlenderBundleEndpoints.UndatedCavesHeader).ShouldBe(1);
+        Encoding.UTF8.GetString(bundle.Entries["README.txt"]).ShouldContain("THE REVEAL BY SURVEY DATE");
+        (await LastRecordAsync(dated)).GetProperty("reveal").GetString().ShouldBe("date");
+
+        // A caller who may not place the dated cave exactly is given nothing of it: no lines, so
+        // no days either.
+        var guarded = await CreateSurveyedCaveAsync(spot, heightM: 900, locationProtected: true, dated: true);
+        var withheld = await reader.PostAsJsonAsync(Route, Request(
+            spot,
+            [Cave(guarded, walls: false), Cave(wholeSurvey, walls: false)],
+            reveal: new { by = "date", startS = 0.04, endS = 0.32 }));
+        var seen = await Bundle.ReadAsync(withheld);
+        Header(withheld, FlybyBlenderBundleEndpoints.NotDrawnHeader).ShouldBe(1);
+        Header(withheld, FlybyBlenderBundleEndpoints.UndatedLegsHeader).ShouldBe(0);
+        seen.Entries.Keys.ShouldNotContain("cave-02-lines.ply");
+        BundlePly.Reveal(seen.Entries["cave-01-lines.ply"]).ShouldNotBeNull().ShouldAllBe(value => Math.Abs(value - 1995) < 1e-4);
+    }
+
+    [Fact]
     public async Task Markers_photographs_and_a_reveal_that_are_not_what_a_request_may_say_are_refused()
     {
         var spot = Spot.Somewhere();
@@ -1021,7 +1078,7 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
 
         await Refused(Request(spot, [cave], reveal: new { by = "distance", startS = 0.3, endS = 0.1 }), "a reveal that ends before it starts");
         await Refused(Request(spot, [cave], reveal: new { by = (string?)null, startS = 0d, endS = 0.2 }), "a reveal by nothing");
-        await Refused(Request(spot, [cave], reveal: new { by = "date", startS = 0d, endS = 0.2 }), "a reveal by a date no leg has", "validation.invalid_enum");
+        await Refused(Request(spot, [cave], reveal: new { by = "order", startS = 0d, endS = 0.2 }), "a reveal by the order of the legs, which a bundle does not have", "validation.invalid_enum");
     }
 
     // ---- what the tests above stand up ----
@@ -1338,15 +1395,16 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
         bool locationProtected = false,
         Guid? parentId = null,
         bool measured = true,
-        bool entranceAtTheBottom = false)
+        bool entranceAtTheBottom = false,
+        bool dated = false)
     {
         var caveId = await CreateCaveAsync(visibility, locationProtected, parentId);
 
-        var content = new ByteArrayContent(Survey(measured, entranceAtTheBottom));
+        var content = new ByteArrayContent(dated ? DatedSurvey() : Survey(measured, entranceAtTheBottom));
         content.Headers.ContentType = new("application/octet-stream");
         using var form = new MultipartFormDataContent
         {
-            { content, "file", "Invented.lox" },
+            { content, "file", dated ? "Invented.3d" : "Invented.lox" },
             { new StringContent(at.Longitude.ToString("R", CultureInfo.InvariantCulture)), "originLongitude" },
             { new StringContent(at.Latitude.ToString("R", CultureInfo.InvariantCulture)), "originLatitude" },
             { new StringContent(heightM.ToString("R", CultureInfo.InvariantCulture)), "originHeightM" },
@@ -1400,6 +1458,33 @@ public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IC
             ],
             Shots = [Shot(1, 2, atA, atB), Shot(2, 3, null, null), Shot(3, 4, null, null)],
         });
+    }
+
+    /// <summary>The first leg's day and the second's of <see cref="DatedSurvey"/>; its third has none.</summary>
+    private static readonly DateOnly FirstDay = new(1985, 6, 1);
+    private static readonly DateOnly SecondDay = new(1990, 1, 1);
+
+    /// <summary>
+    /// The four stations of <see cref="Survey"/> as a Survex file, whose legs say when they were
+    /// surveyed: the first and the second on two invented days, the third on none.
+    /// </summary>
+    private static byte[] DatedSurvey()
+    {
+        InventedSurveyFile.Station[] stations =
+        [
+            new("A", 0, 0, 0), new("B", 12, 5, -3), new("C", 20, 5, -30), new("D", 31, 9, -64),
+        ];
+        InventedSurveyFile.Leg Leg(int from, int to, DateOnly? day) =>
+            new((stations[from].X, stations[from].Y, stations[from].Z), (stations[to].X, stations[to].Y, stations[to].Z), Date: day);
+        return SurveyFileSamples.Survex3d(stations, [Leg(0, 1, FirstDay), Leg(1, 2, SecondDay), Leg(2, 3, null)], []);
+    }
+
+    /// <summary>Gives the survey models of a cave one date for the whole survey, as its page does.</summary>
+    private async Task DateTheSurveyAsync(Guid caveId, DateOnly day)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.SurveyModels.Where(m => m.CaveFeatureId == caveId).ExecuteUpdateAsync(set => set.SetProperty(m => m.SurveyedAt, day));
     }
 
     /// <summary>Grants the reader Read + ViewExactLocation on one feature, whatever its kind.</summary>

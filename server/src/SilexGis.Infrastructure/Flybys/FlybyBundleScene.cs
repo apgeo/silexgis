@@ -45,6 +45,9 @@ public sealed record FlybyBundleLeg(
 
     /// <summary>The station the leg ends at.</summary>
     public string? ToStation { get; init; }
+
+    /// <summary>The day the survey says the leg was surveyed, where it says.</summary>
+    public DateOnly? SurveyedOn { get; init; }
 }
 
 /// <summary>
@@ -91,6 +94,12 @@ public sealed record FlybyBundleCave(
 
     /// <summary>The stations of the survey that are entrances, by name: a reveal starts from them.</summary>
     public IReadOnlyList<string> EntranceStations { get; init; } = [];
+
+    /// <summary>
+    /// The one date the survey these legs came from was given as a whole, where it has one: what a
+    /// reveal by date shows the cave on when none of its legs has a day of its own.
+    /// </summary>
+    public DateOnly? SurveyDate { get; init; }
 }
 
 /// <summary>How a value gets to a key from the key before it.</summary>
@@ -249,11 +258,13 @@ public sealed record FlybyBundlePhotos(
 
 /// <summary>
 /// The caves appear part by part while the clip runs: each from its entrances inwards, along its
-/// passages, by the distance from them.
+/// passages, by the distance from them; or all of them on one clock of years, each leg on the day
+/// it was surveyed, with the year counted on the screen.
 /// </summary>
 /// <param name="StartS">When the first of each cave appears, in seconds from the clip's first frame.</param>
 /// <param name="EndS">When all of every cave is there.</param>
-public sealed record FlybyBundleReveal(double StartS, double EndS);
+/// <param name="By">What the caves appear by.</param>
+public sealed record FlybyBundleReveal(double StartS, double EndS, FlybyBundleRevealBy By = FlybyBundleRevealBy.Distance);
 
 /// <summary>A card of words over the picture.</summary>
 /// <param name="Seconds">
@@ -311,6 +322,13 @@ public enum FlybyBundleRevealBy
 {
     /// <summary>The distance along the passages from the entrances.</summary>
     Distance = 0,
+
+    /// <summary>
+    /// The day each leg was surveyed: the history of the exploration. A cave none of whose legs
+    /// has a date appears whole on the date of its survey; one with no date at all is there from
+    /// the start.
+    /// </summary>
+    Date = 1,
 }
 
 /// <summary>How long a render may take a frame: the more samples, the cleaner the picture.</summary>

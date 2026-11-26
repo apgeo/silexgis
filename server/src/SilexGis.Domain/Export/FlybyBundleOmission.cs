@@ -158,7 +158,7 @@ public static class FlybyBundleOmissions
     /// A count before a Romanian noun: from twenty on, and for every number whose last two digits
     /// are not one to nineteen, the noun is joined to it by "de" ("20 de peșteri", "101 peșteri").
     /// </summary>
-    private static string Counted(int count)
+    internal static string Counted(int count)
     {
         var number = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return count % 100 is >= 1 and <= 19 ? number : number + " de";
@@ -167,6 +167,15 @@ public static class FlybyBundleOmissions
 
 /// <summary>A section of a bundle's notes: its heading and its lines.</summary>
 public sealed record FlybyBundleNotesSection(string Title, string Text);
+
+/// <summary>How a bundle's caves appear part by part, as its notes say it.</summary>
+/// <param name="ByDate">By the day each leg was surveyed, rather than by the distance from the entrances.</param>
+/// <param name="LegsWithoutDate">By date: legs with no day of their own, which are there from the start.</param>
+/// <param name="CavesOnTheSurveyDate">By date: caves that appear whole on their survey's one date.</param>
+/// <param name="CavesWithoutDate">By date: caves with no date at all, which are there from the start.</param>
+/// <param name="Revealed">Whether anything appears part by part at all: by date, whether any cave has a date.</param>
+public sealed record FlybyBundleNotesReveal(
+    bool ByDate, int LegsWithoutDate = 0, int CavesOnTheSurveyDate = 0, int CavesWithoutDate = 0, bool Revealed = true);
 
 /// <summary>
 /// What a bundle's notes say that is this application's own to say: what the folder is, and how
@@ -197,13 +206,13 @@ public static class FlybyBundleNotes
     /// <param name="lampReaches">Whether the lamp on the camera is turned up as they go: there are walls for it to light.</param>
     /// <param name="markers">How many markers stand in the scene.</param>
     /// <param name="photos">How many photographs it shows.</param>
-    /// <param name="revealed">Whether the caves appear part by part.</param>
+    /// <param name="reveal">How the caves appear part by part; null where they are there from the start.</param>
     public static IReadOnlyList<FlybyBundleNotesSection> Sections(
-        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, bool revealed = false, bool lampReaches = false) =>
+        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, FlybyBundleNotesReveal? reveal = null, bool lampReaches = false) =>
     [
         .. LaidOutAndLit(romanian, daylightGoes, lampReaches),
         .. markers > 0 || photos > 0 ? [PointedOut(romanian, markers, photos)] : Array.Empty<FlybyBundleNotesSection>(),
-        .. revealed ? [Reveal(romanian)] : Array.Empty<FlybyBundleNotesSection>(),
+        .. reveal is null ? Array.Empty<FlybyBundleNotesSection>() : [reveal.ByDate ? RevealByDate(romanian, reveal) : Reveal(romanian)],
     ];
 
     private static FlybyBundleNotesSection PointedOut(bool romanian, int markers, int photos) => romanian
@@ -242,8 +251,7 @@ public static class FlybyBundleNotes
             + "fiecărui .ply), iar cheile \"reveal\" din \"changes\" ridică un prag peste ele. O peșteră\n"
             + "fără nicio intrare marcată în ridicare pornește de la prima stație a primei vize. Pentru\n"
             + "a vedea peșterile întregi de la început, ștergeți din \"changes\" membrii \"reveal\" și\n"
-            + "\"revealFront\". Nu există apariție după data ridicării: SilexGIS nu păstrează o dată\n"
-            + "pentru fiecare viză a unei ridicări.")
+            + "\"revealFront\".")
         : new(
             "THE REVEAL",
             "Each cave appears part by part, from its entrances inwards, by the distance along its\n"
@@ -251,8 +259,107 @@ public static class FlybyBundleNotes
             + ".ply), and the \"reveal\" keys in \"changes\" raise a threshold over them. A cave with no\n"
             + "entrance marked in its survey starts at the first station of its first leg. To see the\n"
             + "caves whole from the start, remove the \"reveal\" and \"revealFront\" members from\n"
-            + "\"changes\". There is no reveal by survey date: SilexGIS keeps no date for each leg of a\n"
-            + "survey.");
+            + "\"changes\".");
+
+    private static FlybyBundleNotesSection RevealByDate(bool romanian, FlybyBundleNotesReveal reveal)
+    {
+        var anyDated = reveal.Revealed;
+        var said = new List<string>();
+        if (romanian)
+        {
+            said.Add(anyDated
+                ? "Peșterile apar parte cu parte în ordinea în care au fost explorate: fiecare vârf are ziua "
+                  + "în care a fost ridicată viza lui, ca an cu fracțiunea lui (atributul \"reveal\" al fiecărui "
+                  + ".ply), iar cheile \"reveal\" din \"changes\" ridică un singur prag peste anii tuturor "
+                  + "peșterilor, de la cel mai vechi la cel mai nou. Contorul din stânga arată anul la care a "
+                  + "ajuns (elementul \"reveal-counter\" din \"texts\")."
+                : "Niciuna dintre peșteri nu are o dată a ridicării, așa că toate sunt acolo de la început.");
+            if (reveal.LegsWithoutDate > 0)
+            {
+                said.Add(reveal.LegsWithoutDate == 1
+                    ? "1 viză nu are dată: este acolo de la început."
+                    : $"{FlybyBundleOmissions.Counted(reveal.LegsWithoutDate)} vize nu au dată: sunt acolo de la început.");
+            }
+
+            if (reveal.CavesOnTheSurveyDate > 0)
+            {
+                said.Add(reveal.CavesOnTheSurveyDate == 1
+                    ? "1 peșteră are o dată doar pentru întreaga ridicare: apare întreagă la acea dată."
+                    : $"{FlybyBundleOmissions.Counted(reveal.CavesOnTheSurveyDate)} peșteri au o dată doar pentru întreaga ridicare: fiecare apare întreagă la acea dată.");
+            }
+
+            if (anyDated && reveal.CavesWithoutDate > 0)
+            {
+                said.Add(reveal.CavesWithoutDate == 1
+                    ? "1 peșteră nu are nicio dată a ridicării: este acolo de la început."
+                    : $"{FlybyBundleOmissions.Counted(reveal.CavesWithoutDate)} peșteri nu au nicio dată a ridicării: sunt acolo de la început.");
+            }
+
+            if (anyDated)
+            {
+                said.Add("Pentru a vedea peșterile întregi de la început, ștergeți din \"changes\" membrii "
+                    + "\"reveal\" și \"revealFront\", iar din \"texts\" contorul.");
+            }
+
+            return new("APARIȚIA DUPĂ DATA RIDICĂRII", Wrapped(string.Join(" ", said)));
+        }
+
+        said.Add(anyDated
+            ? "The caves appear part by part in the order they were explored: every vertex has the day "
+              + "its leg was surveyed, as a year with its fraction (the attribute \"reveal\" of each .ply), "
+              + "and the \"reveal\" keys in \"changes\" raise one threshold over the years of all the caves, "
+              + "from the earliest to the latest. The counter at the left says the year it has got to (the "
+              + "item \"reveal-counter\" in \"texts\")."
+            : "None of the caves has a survey date, so all of them are there from the start.");
+        if (reveal.LegsWithoutDate > 0)
+        {
+            said.Add(reveal.LegsWithoutDate == 1
+                ? "1 survey leg has no date: it is there from the start."
+                : $"{reveal.LegsWithoutDate} survey legs have no date: they are there from the start.");
+        }
+
+        if (reveal.CavesOnTheSurveyDate > 0)
+        {
+            said.Add(reveal.CavesOnTheSurveyDate == 1
+                ? "1 cave has a date only for its whole survey: it appears whole on that date."
+                : $"{reveal.CavesOnTheSurveyDate} caves have a date only for the whole survey: each appears whole on that date.");
+        }
+
+        if (anyDated && reveal.CavesWithoutDate > 0)
+        {
+            said.Add(reveal.CavesWithoutDate == 1
+                ? "1 cave has no survey date at all: it is there from the start."
+                : $"{reveal.CavesWithoutDate} caves have no survey date at all: they are there from the start.");
+        }
+
+        if (anyDated)
+        {
+            said.Add("To see the caves whole from the start, remove the \"reveal\" and \"revealFront\" "
+                + "members from \"changes\" and the counter from \"texts\".");
+        }
+
+        return new("THE REVEAL BY SURVEY DATE", Wrapped(string.Join(" ", said)));
+    }
+
+    /// <summary>Words in lines of at most ninety characters, as the rest of the notes are.</summary>
+    private static string Wrapped(string text)
+    {
+        var lines = new List<string>();
+        var line = new System.Text.StringBuilder();
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > 90)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+
+            line.Append(line.Length > 0 ? " " : string.Empty).Append(word);
+        }
+
+        lines.Add(line.ToString());
+        return string.Join("\n", lines);
+    }
 
     /// <summary>A count with its noun, in the number the count asks for; nothing for none.</summary>
     private static string? Of(int count, string one, string many, bool romanian)

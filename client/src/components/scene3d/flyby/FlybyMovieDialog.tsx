@@ -7,7 +7,7 @@ import { DownloadError, saveBlob } from '../../../api/download.ts';
 import { localIsoDate, MOVIE_GIF_SIZE_BUDGET, movieFileName, movieFileSizeEstimate, movieSlug } from '../../../caveview/movie/movieOutput.ts';
 import { MOVIE_SOCIAL_OUTPUT, moviePresetOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import { MOVIE_GIF_MAX_WIDTH, MOVIE_SIZES, MOVIE_VIDEO_FRAME_RATES } from '../../../caveview/movie/movieSettings.ts';
-import { FLYBY_BUNDLE_FPS, FLYBY_BUNDLE_MIN_BLENDER, type FlybyBundleRefusal } from '../../../flyby/flybyBlenderBundle.ts';
+import { FLYBY_BUNDLE_FPS, FLYBY_BUNDLE_MIN_BLENDER, type FlybyBundleRefusal, type FlybyBundleRevealBy } from '../../../flyby/flybyBlenderBundle.ts';
 import { flybyLength } from '../../../flyby/flybyDocument.ts';
 import {
   FLYBY_DRAFT_FPS,
@@ -176,8 +176,9 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const [asBundle, setAsBundle] = useState(false);
   // Whether walls the view is still waiting for a yes about go into a bundle all the same.
   const [includeWalls, setIncludeWalls] = useState(false);
-  // Whether the caves of a bundle appear part by part while the clip runs.
+  // Whether the caves of a bundle appear part by part while the clip runs, and by what.
   const [reveal, setReveal] = useState(false);
+  const [revealBy, setRevealBy] = useState<FlybyBundleRevealBy>('distance');
   const schedule = flybyFrameSchedule(
     length,
     asBundle ? FLYBY_BUNDLE_FPS : output.fps,
@@ -507,7 +508,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         groundHeight: flyby.stage.groundHeight,
         routeCaves: flyby.preparedCaves(),
         includeWalls,
-        reveal: reveal ? 'distance' : null,
+        reveal: reveal ? revealBy : null,
         reliefWords: (factor) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
         language: i18n.language,
         signal: controller.signal,
@@ -886,8 +887,24 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           >
             {t('flyby.bundle.reveal')}
           </Checkbox>
+          {reveal && (
+            <Radio.Group
+              size="small"
+              value={revealBy}
+              disabled={exporting}
+              onChange={(event) => setRevealBy(event.target.value as FlybyBundleRevealBy)}
+              data-testid="flyby-bundle-reveal-by"
+            >
+              <Radio.Button value="distance" data-testid="flyby-bundle-reveal-by-distance">
+                {t('flyby.bundle.revealByDistance')}
+              </Radio.Button>
+              <Radio.Button value="date" data-testid="flyby-bundle-reveal-by-date">
+                {t('flyby.bundle.revealByDate')}
+              </Radio.Button>
+            </Radio.Group>
+          )}
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
-            {t('flyby.bundle.revealHelp')}
+            {t(reveal && revealBy === 'date' ? 'flyby.bundle.revealDateHelp' : 'flyby.bundle.revealHelp')}
           </Typography.Text>
         </div>
       )}
@@ -1036,6 +1053,21 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
               )}
               {bundleMade.notDrawn > 0 && (
                 <li data-testid="flyby-bundle-report-not-drawn">{t('flyby.bundle.reportNotDrawn', { count: bundleMade.notDrawn })}</li>
+              )}
+              {bundleMade.undatedLegs > 0 && (
+                <li data-testid="flyby-bundle-report-undated-legs">
+                  {t('flyby.bundle.reportUndatedLegs', { count: bundleMade.undatedLegs })}
+                </li>
+              )}
+              {bundleMade.cavesOnSurveyDate > 0 && (
+                <li data-testid="flyby-bundle-report-caves-on-survey-date">
+                  {t('flyby.bundle.reportCavesOnSurveyDate', { count: bundleMade.cavesOnSurveyDate })}
+                </li>
+              )}
+              {bundleMade.undatedCaves > 0 && (
+                <li data-testid="flyby-bundle-report-undated-caves">
+                  {t('flyby.bundle.reportUndatedCaves', { count: bundleMade.undatedCaves })}
+                </li>
               )}
               <li>{t('flyby.bundle.reportReadme')}</li>
             </ul>

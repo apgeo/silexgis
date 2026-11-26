@@ -396,6 +396,10 @@ describe('what a bundle points out', () => {
     const carded = flyby({ texts: { title: { text: 'A cave', seconds: 2 }, end: { text: 'The end', seconds: 1.5 } } });
     expect(flybyBundleRequest(ask(carded, { reveal: 'distance' })).request.reveal).toEqual({ by: 'distance', startS: 2, endS: 7.2 });
   });
+
+  it('reveals by survey date over the same part of the flight', () => {
+    expect(flybyBundleRequest(ask(flyby(), { reveal: 'date' })).request.reveal).toEqual({ by: 'date', startS: 0, endS: 8 });
+  });
 });
 
 describe('what of a cave a bundle draws', () => {
