@@ -356,8 +356,8 @@ What goes into it:
   flyby shows that layer. Each goes in **as the picture itself**, standing above its station
   with a line down to it, and is shown **while the camera is near**. One photograph a station
   (the first of the newest link), at most 40 a bundle — the ones the camera passes nearest.
-- **The caves appearing part by part**, if you tick *Let the caves appear part by part, from
-  their entrances inwards* — see below.
+- **The caves appearing part by part**, if you tick *Let the caves appear part by part* —
+  from their entrances, or by survey date; see below.
 
 What does not: the panel lists it under **Not in the bundle** before you make the file, and the
 bundle's own `README.txt` says the same. Always the ground and the map drawn on it — the caves
@@ -417,22 +417,44 @@ A few things are carried a little differently from what the 3D view draws:
 
 #### The caves appearing part by part
 
-Ticked, **every cave of the bundle grows from its entrances inwards** while the clip runs: what
-is nearer to an entrance, measured **along the passages**, appears first, with a soft glowing
-edge. It starts when the title has gone (at the first frame without one) and the caves are whole
-when four fifths of the flight to the end card are over, so the last fifth shows them complete.
-Every cave takes the same time, whatever its length.
+Ticked, the caves of the bundle appear while the clip runs, with a soft glowing edge. It starts
+when the title has gone (at the first frame without one) and the caves are whole when four
+fifths of the flight to the end card are over, so the last fifth shows them complete. Below the
+tick you choose what they appear by.
+
+**From the entrances** (the first choice): **every cave grows from its entrances inwards** —
+what is nearer to an entrance, measured **along the passages**, appears first. Every cave takes
+the same time, whatever its length.
 
 - The entrances are the stations **the survey itself marks as entrances**. A cave whose survey
   marks none starts at the first station of its first leg, and a part of a cave joined to no
   entrance at its own first station.
 - A cave that has walls but no survey to measure along is there from the first frame.
-- **There is no reveal by survey date, and so no year counter.** Blender's player can show a
-  cave in the order it was explored, with the year counting up over the picture — but SilexGIS
-  keeps where the legs of a survey run and one date for the whole model, not the day each leg
-  was measured. Until it keeps that, distance is what a cave can be revealed by.
-- To see the caves whole after all, remove the `reveal` and `revealFront` members from `changes`
-  in the bundle's `scene-plan.json`; the README says so.
+
+**By survey date**: the caves appear **in the order they were explored**. Each survey leg
+appears on the day it was surveyed, and **all the caves run on one clock of years**, from the
+earliest day of any of them to the latest, with **the year counted at the lower left** of the
+picture. Two caves explored twenty years apart appear twenty years apart on that clock.
+
+- **Where the days come from.** A Survex `.3d` file says on which day each leg was surveyed, and
+  SilexGIS keeps that day with the leg when it reads the file. A Therion `.lox` file has no such
+  dates; upload the `.3d` of the same survey if you want them.
+- **A leg with no date** is there from the start of the reveal. So is **a cave with no date at
+  all**.
+- **A cave none of whose legs has a date, but whose survey model has one date** — the *Surveyed*
+  date on the model's row — **appears whole on that date**.
+- After the download the panel counts the legs with no date, the caves that appeared whole on
+  their survey's date and the caves with no date at all; the bundle's `README.txt` says the same.
+- A survey uploaded **before this version** holds its legs without their days. An administrator
+  reads every such Survex survey again once, with the survey-dates sweep — see
+  [Maintenance sweeps](../admin/maintenance.md#survey-dates). Until then those caves appear as a
+  cave with no leg dates does.
+- A date says when a passage was surveyed, not where it is. It travels with the legs, so a cave
+  you may not see the exact place of has neither in the bundle.
+
+Either way, to see the caves whole after all, remove the `reveal` and `revealFront` members from
+`changes` in the bundle's `scene-plan.json` (and, by date, the `reveal-counter` item from
+`texts`); the README says so.
 
 **Download the bundle** gets the flyby ready as for a careful movie, reads the camera and asks
 the server for the zip, which is saved as `<the flyby's name>-blender.zip`. Afterwards the panel

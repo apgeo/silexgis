@@ -2233,6 +2233,22 @@ With the old worker still running, a cancelled or timed-out bake is not stopped:
 end, and the build can be run again only once it has. A bake that is running while you update
 finishes on the old worker either way; update between bakes if you can.
 
+### Upgrading across the release that keeps the day each survey leg was surveyed
+
+From this release a Survex `.3d` survey keeps, for each leg, the day the file says it was surveyed
+— what a Blender bundle shows the caves by when it reveals them *by survey date*. The update adds
+one empty column to the survey legs and changes no stored row; every survey goes on being drawn
+and measured as before.
+
+Surveys read before the update hold their legs without the days, and a bundle revealed by date
+shows such a cave as one with no leg dates: whole on its survey model's date if it has one, else
+from the start. To give them their days, an administrator runs the survey-dates sweep once after
+the update (`POST /api/v1/jobs/survey-leg-dates-backfill`, which needs the job-execution right; see
+[Maintenance sweeps](user-guide/admin/maintenance.md#survey-dates)). It reads again only the Survex
+surveys whose legs have no date — not the `.lox` files, which carry none — and each survey goes on
+answering from its earlier reading until the new one has replaced it. Nothing has to be uploaded
+again. The update does not start the sweep by itself.
+
 ### Upgrading across the release that replaces the migration history with one baseline
 
 The database schema used to be written by a long chain of migrations, about a hundred of them; from

@@ -13,7 +13,7 @@ reading, a photograph's position is taken off its camera data.
 Which leaves a question every growing archive eventually asks: *what about everything that
 arrived before that worked?*
 
-Four **backfill sweeps** answer it. Each one walks the installation's existing rows and does
+Five **backfill sweeps** answer it. Each one walks the installation's existing rows and does
 the work that was not done at the time.
 
 ---
@@ -24,7 +24,7 @@ the work that was not done at the time.
 
 ---
 
-## The four sweeps
+## The five sweeps
 
 ### Text extraction
 
@@ -95,6 +95,22 @@ waits its turn and while it is read: its cave keeps its figures and a watch foll
 it keeps its drawing, from the earlier reading, until the new one replaces it in one step. If a
 survey cannot be read this time, it keeps the reading it had.
 
+### Survey dates
+
+Reads again **every Survex survey (`.3d`) whose legs carry no survey date**, so that each leg gains
+the day the file says it was surveyed — what a Blender bundle's reveal *by survey date* shows the
+caves by (see [Flybys](../features/flybys.md)).
+
+**Run it once** after upgrading to the version that keeps those days. Surveys uploaded from then
+on keep them as they are read; surveys read before keep their legs without them until this runs.
+
+It is the survey-reading sweep above narrowed to the surveys that can gain something: Therion
+`.lox` files have no dates to gain and are left alone, and so is a Survex survey any of whose legs
+already has a date. A Survex file that gives none of its legs a date is read again each time the
+sweep runs, to the same result — nothing stored can tell such a file from one read before the
+dates were kept. A survey that could not be read is left to the survey-reading sweep, which is the
+one that tries those again. Nothing is out of use while it runs, as above.
+
 ---
 
 ## What they have in common
@@ -113,7 +129,8 @@ survey cannot be read this time, it keeps the reading it had.
 - **They are safe to run more than once.** A sweep does work that has not been done; it does
   not redo work that has. The survey-reading sweep is the exception in cost only: it has no way
   to tell which surveys an older version read, so each run reads them all again — to the same
-  result. Run twice in a row, it queues nothing for a survey whose reading is still waiting.
+  result; the survey-dates sweep reads again the Survex surveys with no date on any leg each time.
+  Run twice in a row, neither queues anything for a survey whose reading is still waiting.
 
 ## Watching one
 

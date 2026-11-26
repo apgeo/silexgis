@@ -368,8 +368,8 @@ Ce intră în el:
   stației ei, cu o linie până la ea, și se vede **cât timp camera este aproape**. O fotografie
   de stație (prima din cea mai nouă legătură), cel mult 40 într-un pachet — cele de care camera
   trece cel mai aproape.
-- **Peșterile apărând parte cu parte**, dacă bifezi *Peșterile apar parte cu parte, de la intrări
-  spre interior* — vezi mai jos.
+- **Peșterile apărând parte cu parte**, dacă bifezi *Peșterile apar parte cu parte* — de la
+  intrări sau după data ridicării; vezi mai jos.
 
 Ce nu intră: panoul le enumeră la **Nu sunt în pachet** înainte să faci fișierul, iar fișierul
 `README.txt` din pachet spune același lucru. Întotdeauna terenul și harta desenată pe el —
@@ -436,24 +436,47 @@ Câteva lucruri ajung puțin altfel decât le desenează vizualizarea 3D:
 
 #### Peșterile apărând parte cu parte
 
-Bifat, **fiecare peșteră a pachetului crește de la intrări spre interior** cât rulează clipul:
-ce este mai aproape de o intrare, măsurat **de-a lungul galeriilor**, apare primul, cu o margine
-moale, luminoasă. Pornește când titlul a dispărut (la primul cadru, dacă nu există titlu), iar
-peșterile sunt întregi când au trecut patru cincimi din zborul până la cartonul de final, astfel
-că ultima cincime le arată complete. Fiecare peșteră ia același timp, oricare i-ar fi lungimea.
+Bifat, peșterile pachetului apar cât rulează clipul, cu o margine moale, luminoasă. Pornește
+când titlul a dispărut (la primul cadru, dacă nu există titlu), iar peșterile sunt întregi când
+au trecut patru cincimi din zborul până la cartonul de final, astfel că ultima cincime le arată
+complete. Sub bifă alegi după ce apar.
+
+**De la intrări** (prima alegere): **fiecare peșteră crește de la intrări spre interior** — ce
+este mai aproape de o intrare, măsurat **de-a lungul galeriilor**, apare primul. Fiecare peșteră
+ia același timp, oricare i-ar fi lungimea.
 
 - Intrările sunt stațiile pe care **ridicarea însăși le marchează ca intrări**. O peșteră a
   cărei ridicare nu marchează niciuna pornește de la prima stație a primei vize, iar o parte de
   peșteră care nu este legată de nicio intrare, de la propria ei primă stație.
 - O peșteră care are pereți, dar nicio ridicare de-a lungul căreia să se măsoare, este prezentă
   de la primul cadru.
-- **Nu există apariție după data ridicării, deci nici contor de ani.** Playerul din Blender
-  poate arăta o peșteră în ordinea în care a fost explorată, cu anul numărând peste imagine —
-  dar SilexGIS păstrează pe unde merg vizele unei ridicări și o singură dată pentru tot modelul,
-  nu ziua în care a fost măsurată fiecare viză. Până atunci, distanța este cea după care poate
-  apărea o peșteră.
-- Ca să vezi totuși peșterile întregi, șterge membrii `reveal` și `revealFront` din `changes`,
-  în `scene-plan.json` din pachet; README-ul o spune.
+
+**După data ridicării**: peșterile apar **în ordinea în care au fost explorate**. Fiecare viză
+apare în ziua în care a fost ridicată, iar **toate peșterile merg pe același ceas al anilor**, de
+la cea mai veche zi a oricăreia la cea mai nouă, cu **anul numărat în stânga jos** a imaginii.
+Două peșteri explorate la douăzeci de ani una de alta apar la douăzeci de ani una de alta pe
+acel ceas.
+
+- **De unde vin zilele.** Un fișier Survex `.3d` spune în ce zi a fost ridicată fiecare viză, iar
+  SilexGIS păstrează ziua odată cu viza când citește fișierul. Un fișier Therion `.lox` nu are
+  astfel de date; încarcă fișierul `.3d` al aceleiași ridicări dacă le vrei.
+- **O viză fără dată** este acolo de la începutul apariției. La fel **o peșteră fără nicio
+  dată**.
+- **O peșteră ale cărei vize nu au dată, dar al cărei model de ridicare are o dată** — data
+  *Cartat la* de pe rândul modelului — **apare întreagă la acea dată**.
+- După descărcare, panoul numără vizele fără dată, peșterile care au apărut întregi la data
+  ridicării lor și peșterile fără nicio dată; fișierul `README.txt` din pachet spune același
+  lucru.
+- O ridicare încărcată **înainte de această versiune** își ține vizele fără zilele lor. Un
+  administrator recitește o dată fiecare astfel de ridicare Survex, cu operația de mentenanță
+  pentru datele ridicărilor — vezi [Operații de mentenanță](../admin/maintenance.md#datele-topografiilor).
+  Până atunci, acele peșteri apar ca o peșteră fără date pe vize.
+- O dată spune când a fost ridicată o galerie, nu unde se află. Merge împreună cu vizele, deci o
+  peșteră al cărei loc exact nu ai voie să-l vezi nu are în pachet nici vize, nici date.
+
+În ambele cazuri, ca să vezi totuși peșterile întregi, șterge membrii `reveal` și `revealFront`
+din `changes`, în `scene-plan.json` din pachet (iar, după dată, elementul `reveal-counter` din
+`texts`); README-ul o spune.
 
 **Descarcă pachetul** pregătește survolul ca pentru un film făcut cu grijă, citește camera și
 cere serverului zip-ul, care este salvat ca `<numele survolului>-blender.zip`. Apoi panoul spune

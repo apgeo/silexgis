@@ -13,7 +13,7 @@ este paginat pentru citire, poziția unei fotografii este scoasă din datele apa
 Ceea ce ridică o întrebare pe care orice arhivă în creștere ajunge s-o pună: *dar cu tot ce a
 sosit înainte ca acelea să funcționeze?*
 
-Patru **operațiuni de recuperare** răspund. Fiecare parcurge rândurile existente ale instalării și
+Cinci **operațiuni de recuperare** răspund. Fiecare parcurge rândurile existente ale instalării și
 face munca ce nu s-a făcut la vremea ei.
 
 ---
@@ -25,7 +25,7 @@ face munca ce nu s-a făcut la vremea ei.
 
 ---
 
-## Cele patru operațiuni
+## Cele cinci operațiuni
 
 ### Citirea textului
 
@@ -98,6 +98,24 @@ așteaptă rândul și cât este citită: peștera își păstrează cifrele, ia
 ea își păstrează desenul, din citirea anterioară, până când cea nouă o înlocuiește într-un singur
 pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea pe care o avea.
 
+### Datele topografiilor
+
+Citește din nou **fiecare topografie Survex (`.3d`) ale cărei vize nu au dată**, ca fiecare viză
+să capete ziua în care fișierul spune că a fost ridicată — după care apar peșterile într-un pachet
+Blender cu apariția *după data ridicării* (vezi [Survoluri](../features/flybys.md)).
+
+**Rulează-o o dată** după actualizarea la versiunea care păstrează aceste zile. Topografiile
+încărcate de atunci încolo le păstrează când sunt citite; cele citite înainte își țin vizele fără
+ele până rulează aceasta.
+
+Este operațiunea de citire a topografiilor de mai sus, restrânsă la topografiile care au ce
+câștiga: fișierele Therion `.lox` nu au date de câștigat și sunt lăsate în pace, la fel o
+topografie Survex care are deja o dată pe vreo viză. Un fișier Survex care nu dă nicio dată
+vizelor lui este citit din nou la fiecare rulare, cu același rezultat — nimic din ce e păstrat nu
+poate deosebi un asemenea fișier de unul citit înainte ca datele să fie păstrate. O topografie
+care nu a putut fi citită este lăsată operațiunii de citire a topografiilor, care este cea care
+le reîncearcă. Nimic nu iese din uz cât rulează, ca mai sus.
+
 ---
 
 ## Ce au în comun
@@ -116,8 +134,10 @@ pas. Dacă o topografie nu poate fi citită de data aceasta, păstrează citirea
 - **Se pot rula de mai multe ori în siguranță.** O operațiune face munca nefăcută; nu reface munca
   făcută. Operațiunea de citire a topografiilor este excepția
   doar la cost: nu are cum să știe ce topografii a citit o versiune mai veche, așa că fiecare
-  rulare le citește pe toate din nou — cu același rezultat. Rulată de două ori la rând, nu pune
-  nimic la coadă pentru o topografie a cărei citire încă așteaptă.
+  rulare le citește pe toate din nou — cu același rezultat; operațiunea pentru datele
+  topografiilor citește din nou de fiecare dată topografiile Survex fără nicio dată pe vize.
+  Rulate de două ori la rând, niciuna nu pune nimic la coadă pentru o topografie a cărei citire
+  încă așteaptă.
 
 ## Urmărirea uneia
 
