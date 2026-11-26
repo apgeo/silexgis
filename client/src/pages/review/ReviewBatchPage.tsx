@@ -18,6 +18,7 @@ import {
   type HeldLine,
 } from '../../api/hooks.ts';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import ReviewLineRow from './ReviewLineRow.tsx';
 import { SectionTags } from '../../components/review/ReviewParts.tsx';
@@ -340,9 +341,7 @@ export default function ReviewBatchPage() {
       <Link to={isOwn ? '/geodata?tab=batches' : '/review'}>
         <ArrowLeftOutlined /> {t('review.backToQueue')}
       </Link>
-      <Typography.Title level={3} style={{ marginTop: 8 }}>
-        {t('review.batchTitle')}
-      </Typography.Title>
+      <PageHeader title={t('review.batchTitle')} style={{ marginTop: 8, marginBottom: 12 }} />
       <Flex gap={16} wrap style={{ marginBottom: 12 }} data-testid="review-batch-facts">
         <span>
           {t('review.uploader')}: <strong>{batch.uploaderName ?? t('review.unknownUploader')}</strong>
@@ -473,6 +472,9 @@ export default function ReviewBatchPage() {
             size="small"
             style={{ marginTop: 12 }}
             data-testid="review-group"
+            // A card's title is cut at its edge by default, and on a phone a renamed cave's name
+            // was cut mid-character with no sign that anything was missing; it wraps instead.
+            styles={{ title: { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
             title={
               <Flex gap={8} align="center">
                 {canDecide && waiting.length > 0 && (

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, within, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import i18n from '../../i18n';
@@ -247,6 +247,26 @@ describe('CabinetsPage', () => {
     mobile = false;
   });
 
+  it('gives the cabinet name a full-width line on a phone and puts its controls under it', () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      renderPage();
+      fireEvent.click(screen.getByText('Surveys (2)'));
+
+      const line = screen.getByTestId('page-header-title-line');
+      expect(within(line).getByRole('heading', { level: 4 })).toHaveTextContent('Surveys');
+      expect(line.style.flex).toBe('1 1 100%');
+      const actions = screen.getByTestId('page-header-actions');
+      expect(actions.style.flex).toBe('1 1 100%');
+      expect(within(actions).getByRole('button', { name: /Upload/ })).toBeInTheDocument();
+      expect(within(actions).getByRole('switch')).toBeInTheDocument();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('moves a cabinet in the tree without clearing the settings it carries', async () => {
     capabilities = { domains: { documents: 'read, write' } };
     updateMutate.mockClear();
@@ -275,7 +295,20 @@ describe('CabinetsPage', () => {
     });
   });
 
-  it('OK with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
+  it('names the new-cabinet dialog and its button for the act, and marks the name required before a press', async () => {
+    capabilities = { domains: { documents: 'read, write' } };
+    renderPage();
+    fireEvent.click(screen.getByText('New'));
+    const dialog = await screen.findByRole('dialog');
+
+    // "New" and "OK" said neither what was being made nor what the button would do.
+    expect(within(dialog).getByText('New cabinet')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'OK' })).toBeNull();
+    expect(within(dialog).getByText('Name').closest('label')).toHaveClass('ant-form-item-required');
+  });
+
+  it('Create with no name marks the field, sends nothing and leaves no unhandled rejection', async () => {
     capabilities = { domains: { documents: 'read, write' } };
     createMutate.mockClear();
     const unhandled: unknown[] = [];
@@ -285,7 +318,7 @@ describe('CabinetsPage', () => {
       renderPage();
       fireEvent.click(screen.getByText('New'));
       const name = await screen.findByLabelText('Name');
-      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
       await waitFor(() => expect(name.getAttribute('aria-invalid')).toBe('true'));
       await afterRejectionsAreReported();

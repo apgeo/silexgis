@@ -53,6 +53,7 @@ import TripCaveList from '../../components/trips/TripCaveList.tsx';
 import TripCover from '../../components/trips/TripCover.tsx';
 import TripGallerySection from '../../components/trips/TripGallerySection.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
 import { formatDays } from '../../components/trips/tripRestoreWindow.ts';
@@ -250,101 +251,98 @@ export default function TripLogDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      <Flex justify="space-between" align="center" gap={12} wrap style={{ marginBottom: 12 }}>
-        {/* The badge sits with the title rather than down among the details: whether this has
-            gone out yet is the first thing an author needs from the page. */}
-        <Flex align="center" gap={8} wrap>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {trip.title}
-          </Typography.Title>
-          <TripStateTag state={trip.state} />
-        </Flex>
-        {/* Wrapped, because five buttons in a row come to 641px and a phone is 412px across.
-            Unwrapped this row was the largest single reason the whole page scrolled sideways —
-            larger than the tables under it — and a page that scrolls sideways takes every other
-            control off the screen with it. Nothing moves where the row already fits. */}
-        <Flex gap={8} wrap>
-          {/* The write-up as a document rather than a form, for anybody who may read the trip:
-              circulating one is not an act of editing it. */}
-          <Link to={`/trip-logs/${trip.id}/report`}>
-            <Button icon={<FileTextOutlined />} data-testid="trip-open-report">
-              {t('trips.report.open')}
-            </Button>
-          </Link>
-          {/* Who may read this trip, narrowed person by person. Its own right rather than a
-              consequence of being able to edit the write-up: handing somebody the text and
-              handing them the reader list are two different decisions. A trip contains nothing,
-              so the dialog offers reach over this trip alone. */}
-          {canManagePermissions && (
-            <Button
-              icon={<LockOutlined />}
-              onClick={() => setPermissionsOpen(true)}
-              data-testid="trip-permissions"
-            >
-              {t('permissions.button')}
-            </Button>
-          )}
-          {/* A day's recording becomes the sketch here rather than as a registry feature somebody
-              then redraws onto the trip. The picker hands the file over and uploads nothing
-              itself; the route is a trip write, so the act is offered where editing is. */}
-          {canEdit && (
-            <Upload
-              accept=".gpx"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                void importTrackFrom(file);
-                return false;
-              }}
-            >
-              <Button
-                icon={<UploadOutlined />}
-                loading={importTrack.isPending}
-                data-testid="trip-import-track"
-              >
-                {t('trips.track.import')}
+      {/* The badge sits with the title rather than down among the details: whether this has
+          gone out yet is the first thing an author needs from the page. The actions wrap, because
+          five buttons in a row come to 641px and a phone is 412px across; unwrapped, this row was
+          the largest single reason the whole page scrolled sideways. */}
+      <PageHeader
+        title={trip.title}
+        after={<TripStateTag state={trip.state} />}
+        style={{ marginBottom: 12 }}
+        actions={
+          <>
+            {/* The write-up as a document rather than a form, for anybody who may read the trip:
+                circulating one is not an act of editing it. */}
+            <Link to={`/trip-logs/${trip.id}/report`}>
+              <Button icon={<FileTextOutlined />} data-testid="trip-open-report">
+                {t('trips.report.open')}
               </Button>
-            </Upload>
-          )}
-          {(canEdit || canDelete) && (
-            <>
-              <TripStateControl
-                tripId={trip.id}
-                state={trip.state}
-                visibility={trip.visibility}
-                canEdit={canEdit}
-              />
-              {canEdit && (
-                <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-                  {t('trips.edit')}
-                </Button>
-              )}
-              {canDelete && (
-                // Not offered while the answer about restoring is still on its way. A confirmation
-                // opened before it would gain its second sentence a moment later, and gaining it
-                // widens the box and carries its buttons sideways — measured, 271 pixels — so a
-                // press already aimed at OK lands on nothing and the trip is still there. Once the
-                // asking is over the delete is offered whatever came of it: with the sentence, or
-                // without one where the installation could not be asked.
-                <Popconfirm
-                  title={t('trips.deleteConfirm')}
-                  description={restoreHint}
-                  disabled={retentionOutstanding}
-                  onConfirm={() => void onDelete()}
+            </Link>
+            {/* Who may read this trip, narrowed person by person. Its own right rather than a
+                consequence of being able to edit the write-up: handing somebody the text and
+                handing them the reader list are two different decisions. A trip contains nothing,
+                so the dialog offers reach over this trip alone. */}
+            {canManagePermissions && (
+              <Button
+                icon={<LockOutlined />}
+                onClick={() => setPermissionsOpen(true)}
+                data-testid="trip-permissions"
+              >
+                {t('permissions.button')}
+              </Button>
+            )}
+            {/* A day's recording becomes the sketch here rather than as a registry feature somebody
+                then redraws onto the trip. The picker hands the file over and uploads nothing
+                itself; the route is a trip write, so the act is offered where editing is. */}
+            {canEdit && (
+              <Upload
+                accept=".gpx"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void importTrackFrom(file);
+                  return false;
+                }}
+              >
+                <Button
+                  icon={<UploadOutlined />}
+                  loading={importTrack.isPending}
+                  data-testid="trip-import-track"
                 >
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    disabled={retentionOutstanding}
-                    data-testid="trip-delete"
-                  >
-                    {t('features.delete')}
+                  {t('trips.track.import')}
+                </Button>
+              </Upload>
+            )}
+            {(canEdit || canDelete) && (
+              <>
+                <TripStateControl
+                  tripId={trip.id}
+                  state={trip.state}
+                  visibility={trip.visibility}
+                  canEdit={canEdit}
+                />
+                {canEdit && (
+                  <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                    {t('trips.edit')}
                   </Button>
-                </Popconfirm>
-              )}
-            </>
-          )}
-        </Flex>
-      </Flex>
+                )}
+                {canDelete && (
+                  // Not offered while the answer about restoring is still on its way. A confirmation
+                  // opened before it would gain its second sentence a moment later, and gaining it
+                  // widens the box and carries its buttons sideways — measured, 271 pixels — so a
+                  // press already aimed at OK lands on nothing and the trip is still there. Once the
+                  // asking is over the delete is offered whatever came of it: with the sentence, or
+                  // without one where the installation could not be asked.
+                  <Popconfirm
+                    title={t('trips.deleteConfirm')}
+                    description={restoreHint}
+                    disabled={retentionOutstanding}
+                    onConfirm={() => void onDelete()}
+                  >
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled={retentionOutstanding}
+                      data-testid="trip-delete"
+                    >
+                      {t('features.delete')}
+                    </Button>
+                  </Popconfirm>
+                )}
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* The trip on screen is the last one read; a later read did not land. Said, with a way to
           ask again, rather than left to look current. */}

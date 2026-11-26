@@ -324,7 +324,7 @@ test('filing a document in a nested cabinet picks it by its whole path, and says
   await gotoRoute(page, '/cabinets');
   await page.getByRole('button', { name: 'New' }).click();
   await page.getByLabel('Name').fill(cabinetName);
-  await confirmOk(page, { exact: true });
+  await confirmOk(page, { exact: true, name: 'Create' });
   // The name lands in the tree, the breadcrumb and the heading at once, so the tree row is
   // named rather than the text.
   const cabinetRow = page.getByRole('treeitem').filter({ hasText: cabinetName });
@@ -335,7 +335,7 @@ test('filing a document in a nested cabinet picks it by its whole path, and says
   await page.getByRole('button', { name: 'New' }).click();
   await expect(page.getByRole('dialog').getByTitle(cabinetName, { exact: true })).toBeVisible();
   await page.getByLabel('Name').fill(nestedName);
-  await confirmOk(page, { exact: true });
+  await confirmOk(page, { exact: true, name: 'Create' });
   // It lands folded inside its parent, which only grows the control that unfolds it once the
   // list has been read again with the new cabinet in it — so the unfolding is retried until the
   // drawer shows rather than tried once, possibly before there is anything to unfold.

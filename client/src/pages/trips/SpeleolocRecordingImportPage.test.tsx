@@ -96,6 +96,22 @@ describe('SpeleolocRecordingImportPage', () => {
     expect(commitMutate).not.toHaveBeenCalled();
   });
 
+  it('gives its title a full-width line on a phone, with the confirmation under it', () => {
+    preview = { data: PREVIEW, error: null, isError: false };
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      const actions = screen.getByTestId('page-header-actions');
+      expect(actions.style.flex).toBe('1 1 100%');
+      expect(actions).toContainElement(screen.getByTestId('speleoloc-import-commit'));
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('says so, and draws no review, when the recording already has its report', () => {
     preview = {
       data: undefined,

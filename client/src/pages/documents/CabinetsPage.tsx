@@ -33,6 +33,7 @@ import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { cabinetPathOptions, cabinetWriteOf } from '../../components/documents/cabinetChoices.ts';
 import { visibilityOptions } from '../../components/attachments/visibilityChoices.ts';
 import ConfigureLink from '../../components/ConfigureLink.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
 import UploadDrawer from '../../components/uploads/UploadDrawer.tsx';
@@ -154,7 +155,8 @@ function CabinetEditModal({
 
   return (
     <Modal
-      title={editing === 'new' ? t('cabinets.new') : t('cabinets.edit')}
+      title={editing === 'new' ? t('cabinets.newTitle') : t('cabinets.edit')}
+      okText={editing === 'new' ? t('common.create') : t('common.save')}
       open
       onCancel={() => requestDiscard(edits.edited, onCancel)}
       mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
@@ -165,7 +167,6 @@ function CabinetEditModal({
       <Form
         form={form}
         layout="vertical"
-        requiredMark={false}
         onValuesChange={edits.onValuesChange}
         initialValues={
           editing === 'new'
@@ -533,58 +534,60 @@ export default function CabinetsPage() {
                 ),
             }))}
           />
-          <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              {current.name}
-            </Typography.Title>
-            <Space>
-              <Tooltip title={t('cabinets.includeSubtreeHint')}>
-                <Space size={6}>
-                  <Switch
-                    size="small"
-                    checked={includeSubtree}
-                    onChange={(checked) => {
-                      setIncludeSubtree(checked);
-                      setPage(1);
-                    }}
-                  />
-                  <Typography.Text type="secondary">{t('cabinets.includeSubtree')}</Typography.Text>
-                </Space>
-              </Tooltip>
-              {/* What every document of a kind may say is decided by the kind's schema, which is
-                  worth reaching from the shelves the documents sit on. */}
-              <ConfigureLink
-                items={canWriteTaxonomies
-                  ? [{ key: 'admin/document-types', label: t('nav.documentTypes') }]
-                  : []}
-              />
-              {canWrite && (
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => setEditing(current)}
-                >
-                  {t('common.edit')}
-                </Button>
-              )}
-              {canWrite && (
-                <Button
-                  type="primary"
-                  icon={<UploadOutlined />}
-                  onClick={() => setUploading(true)}
-                >
-                  {t('uploads.upload')}
-                </Button>
-              )}
-              {canWrite && (
-                <Popconfirm
-                  title={t('cabinets.deleteConfirm')}
-                  onConfirm={() => void onDelete(current)}
-                >
-                  <Button danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
-                </Popconfirm>
-              )}
-            </Space>
-          </Flex>
+          <PageHeader
+            title={current.name}
+            level={4}
+            style={{ marginBottom: 12 }}
+            actions={
+              <>
+                <Tooltip title={t('cabinets.includeSubtreeHint')}>
+                  <Space size={6}>
+                    <Switch
+                      size="small"
+                      checked={includeSubtree}
+                      onChange={(checked) => {
+                        setIncludeSubtree(checked);
+                        setPage(1);
+                      }}
+                    />
+                    <Typography.Text type="secondary">{t('cabinets.includeSubtree')}</Typography.Text>
+                  </Space>
+                </Tooltip>
+                {/* What every document of a kind may say is decided by the kind's schema, which is
+                    worth reaching from the shelves the documents sit on. */}
+                <ConfigureLink
+                  items={canWriteTaxonomies
+                    ? [{ key: 'admin/document-types', label: t('nav.documentTypes') }]
+                    : []}
+                />
+                {canWrite && (
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => setEditing(current)}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                )}
+                {canWrite && (
+                  <Button
+                    type="primary"
+                    icon={<UploadOutlined />}
+                    onClick={() => setUploading(true)}
+                  >
+                    {t('uploads.upload')}
+                  </Button>
+                )}
+                {canWrite && (
+                  <Popconfirm
+                    title={t('cabinets.deleteConfirm')}
+                    onConfirm={() => void onDelete(current)}
+                  >
+                    <Button danger icon={<DeleteOutlined />} aria-label={t('iconButtons.delete')} />
+                  </Popconfirm>
+                )}
+              </>
+            }
+          />
           {current.description && (
             <Typography.Paragraph type="secondary">{current.description}</Typography.Paragraph>
           )}

@@ -100,6 +100,20 @@ describe('the storage page', () => {
 
   afterEach(cleanup);
 
+  it('heads the page with the shared header, the measure action under the title on a phone', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toHaveTextContent('Storage');
+      expect(within(screen.getByTestId('page-header-actions')).getByRole('button', { name: /Measure now/ })).toBeInTheDocument();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('shows the totals against the cap, the level, the growth and the largest files', () => {
     show();
     expect(screen.getByText('92% of 100.0 GB')).toBeInTheDocument();
