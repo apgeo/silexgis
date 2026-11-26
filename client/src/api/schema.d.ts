@@ -1144,6 +1144,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/survey-leg-dates-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueues a sweep that reads again every Survex survey whose legs carry no survey date, so that surveys read before the dates were kept gain them; requires Execute on the Jobs domain. */
+        post: operations["jobEnqueueSurveyLegDatesBackfill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/caves": {
         parameters: {
             query?: never;
@@ -23451,6 +23468,35 @@ export interface operations {
         };
     };
     jobEnqueueSurveyReadingBackfill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingJobDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    jobEnqueueSurveyLegDatesBackfill: {
         parameters: {
             query?: never;
             header?: never;

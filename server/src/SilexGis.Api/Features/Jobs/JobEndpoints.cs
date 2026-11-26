@@ -60,6 +60,9 @@ public static class JobEndpoints
         api.MapPost("/jobs/survey-reading-backfill", EnqueueSurveyReadingBackfillAsync)
             .WithTags("Jobs")
             .WithSummary("Enqueues a sweep that reads every line-plot survey again, so that surveys read by an earlier version get what the present reader produces; requires Execute on the Jobs domain.");
+        api.MapPost("/jobs/survey-leg-dates-backfill", EnqueueSurveyLegDatesBackfillAsync)
+            .WithTags("Jobs")
+            .WithSummary("Enqueues a sweep that reads again every Survex survey whose legs carry no survey date, so that surveys read before the dates were kept gain them; requires Execute on the Jobs domain.");
         return api;
     }
 
@@ -86,6 +89,12 @@ public static class JobEndpoints
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
         => EnqueueAsync(ProcessingJobKinds.SurveyReadingBackfill, db, accessAccessor, ct);
+
+    private static Task<Results<Ok<ProcessingJobDto>, UnauthorizedHttpResult, ProblemHttpResult>> EnqueueSurveyLegDatesBackfillAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+        => EnqueueAsync(ProcessingJobKinds.SurveyLegDatesBackfill, db, accessAccessor, ct);
 
     /// <summary>
     /// Queues a maintenance sweep. Each takes no input of its own — the work it does is a

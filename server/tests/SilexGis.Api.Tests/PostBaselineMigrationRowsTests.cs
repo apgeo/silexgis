@@ -317,6 +317,67 @@ public sealed class PostBaselineMigrationRowsTests : IAsyncLifetime, IClassFixtu
             .ShouldBe(1);
     }
 
+    // ---- a survey leg carries the day it was surveyed ------------------------------------------
+
+    private const string BeforeLegDates = "20261119090754_TerrainDerivativeToolVersion";
+    private const string LegDates = "20261126074551_SurveyShotSurveyedOn";
+
+    /// <summary>
+    /// The legs already held keep every column and gain an empty day — unknown, until their survey
+    /// is read again — and stepping back takes the day away and keeps the legs.
+    /// </summary>
+    [Fact]
+    public async Task Existing_legs_are_kept_with_no_day_and_stepping_back_keeps_them()
+    {
+        var connectionString = await DatabaseAtAsync(BeforeLegDates);
+        var owner = Guid.CreateVersion7();
+        var cave = Guid.CreateVersion7();
+        var model = Guid.CreateVersion7();
+        var file = Guid.CreateVersion7();
+        var sql = new StringBuilder();
+        sql.AppendLine(User(owner, "leg-dates-owner"));
+        sql.AppendLine($"""
+            INSERT INTO features (id, kind, category, name, owner_user_id, visibility, location_protected,
+                is_protected_effective, created_at, updated_at)
+            VALUES ('{cave}', {(short)FeatureKind.Cave}, 1, 'Pestera 1', '{owner}', 0, false, false, now(), now());
+            INSERT INTO cave_types (code, name, sort_order, created_at, updated_at)
+            VALUES ('invented_leg_dates', 'Invented', 990, now(), now());
+            INSERT INTO caves (id, cave_type_id, exploration_status, is_show_cave, entrance_count)
+            SELECT '{cave}', id, 0, false, 0 FROM cave_types WHERE code = 'invented_leg_dates';
+            """);
+        sql.AppendLine(DocumentWithFile(owner, Guid.CreateVersion7(), Guid.CreateVersion7(), file, "invented", (short)FileKind.Survey, "invented.3d"));
+        sql.AppendLine($"""
+            INSERT INTO survey_models (id, cave_feature_id, name, file_id, format, is_current, created_at, updated_at)
+            VALUES ('{model}', '{cave}', 'Invented', '{file}', {(short)SurveyModelFormat.Survex3d}, true, now(), now());
+            INSERT INTO survey_shots (survey_model_id, from_station_name, to_station_name, geom, length_m, flags, raw_flags)
+            VALUES ('{model}', 'a', 'b', ST_GeomFromText('LINESTRING Z (7.5 41.25 800, 7.5001 41.25 790)', 4326), 12.5, 0, 0),
+                   ('{model}', 'b', 'c', ST_GeomFromText('LINESTRING Z (7.5001 41.25 790, 7.5002 41.25 785)', 4326), 9.25, 2, 2);
+            """);
+        await ExecuteAsync(connectionString, sql.ToString());
+
+        await MigrateToAsync(connectionString, LegDates);
+
+        (await CountAsync(connectionString,
+                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'survey_shots' AND column_name = 'surveyed_on' "
+                + "AND data_type = 'date' AND is_nullable = 'YES'"))
+            .ShouldBe(1);
+        (await CountAsync(connectionString,
+                $"SELECT count(*) FROM survey_shots WHERE survey_model_id = '{model}' AND surveyed_on IS NULL"))
+            .ShouldBe(2);
+        (await CountAsync(connectionString,
+                $"SELECT count(*) FROM survey_shots WHERE survey_model_id = '{model}' AND from_station_name = 'b' AND to_station_name = 'c' "
+                + "AND length_m = 9.25 AND flags = 2 AND ST_NPoints(geom) = 2"))
+            .ShouldBe(1);
+
+        // A day can be held; stepping back takes it away with the column, and keeps the legs.
+        await ExecuteAsync(connectionString, "UPDATE survey_shots SET surveyed_on = DATE '2003-08-14' WHERE from_station_name = 'a'");
+        await MigrateToAsync(connectionString, BeforeLegDates);
+        (await CountAsync(connectionString,
+                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'survey_shots' AND column_name = 'surveyed_on'"))
+            .ShouldBe(0);
+        (await CountAsync(connectionString, $"SELECT count(*) FROM survey_shots WHERE survey_model_id = '{model}'")).ShouldBe(2);
+    }
+
     // ---- rows of the older steps --------------------------------------------------------------
 
     private static string FeatureType(string code, string name) => $$"""

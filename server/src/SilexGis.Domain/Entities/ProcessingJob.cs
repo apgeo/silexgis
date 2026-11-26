@@ -109,6 +109,14 @@ public static class ProcessingJobKinds
     public const string SurveyReadingBackfill = "survey-reading-backfill";
 
     /// <summary>
+    /// Queue another reading of every Survex survey whose stored legs carry no survey date, so
+    /// that a survey read before the dates were kept gains the day each leg was surveyed. Started
+    /// by an operator; it only queues, and each reading is a <see cref="SurveyGraph"/> job of its
+    /// own.
+    /// </summary>
+    public const string SurveyLegDatesBackfill = "survey-leg-dates-backfill";
+
+    /// <summary>
     /// Read an archived compilation log into the quality figures it reports: how the run ended,
     /// what it ran as, and how well each of the survey's loops closed.
     /// </summary>
@@ -351,7 +359,7 @@ public static class ProcessingJobKinds
     /// </remarks>
     public static readonly IReadOnlyList<string> Background =
     [
-        PhotoGeoBackfill, SurveyReadingBackfill, TextExtraction, TextExtractionBackfill,
+        PhotoGeoBackfill, SurveyReadingBackfill, SurveyLegDatesBackfill, TextExtraction, TextExtractionBackfill,
         DocumentConversion, DocumentConversionBackfill, AccessHistoryPrune, FeatureIntegrityVerify,
         UploadSessionSweep, DocumentPurge, TripPurge, TerrainUploadSweep, SurveyUploadSweep,
         StorageCheck, StorageReport,

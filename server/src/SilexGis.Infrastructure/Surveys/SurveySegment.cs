@@ -72,6 +72,9 @@ namespace SilexGis.Infrastructure.Surveys;
 /// −90..90. Null when <see cref="HasZ"/> is false or the segment has no extent at all.</param>
 /// <param name="MidZM">Altitude of the segment's midpoint, metres — what an elevation histogram
 /// bins on. Null when <see cref="HasZ"/> is false.</param>
+/// <param name="SurveyedOn">The day the survey file says the leg was surveyed; null where it does
+/// not say, and always null for a centerline segment. Never a statistic's input: it is what a
+/// movie that shows a cave's exploration in order reads.</param>
 public sealed record SurveySegmentRow(
     SurveySegmentBasis Basis,
     Guid? SurveyModelId,
@@ -92,7 +95,8 @@ public sealed record SurveySegmentRow(
     double? DeltaZM,
     double? SlopeLengthM,
     double? DipDegrees,
-    double? MidZM);
+    double? MidZM,
+    DateOnly? SurveyedOn);
 
 /// <summary>
 /// The set of segments a cave answered with, and which body of line work answered.

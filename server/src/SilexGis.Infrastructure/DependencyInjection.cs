@@ -438,6 +438,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyReadingBackfillHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyLegDatesBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyCompilationHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();

@@ -132,7 +132,8 @@ public static class CenterlineSegmentSql
                 sqrt(plan_m * plan_m + dz * dz) AS "SlopeLengthM",
                 CASE WHEN plan_m = 0 AND dz = 0 THEN NULL
                      ELSE degrees(atan2(dz, plan_m)) END AS "DipDegrees",
-                CASE WHEN @seg_has_z::boolean THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM"
+                CASE WHEN @seg_has_z::boolean THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM",
+                NULL::date AS "SurveyedOn"
             FROM measured
             ORDER BY path_index, segment_index
             """;

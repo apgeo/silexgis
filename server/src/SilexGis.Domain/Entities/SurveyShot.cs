@@ -103,6 +103,24 @@ public class SurveyShot
     /// <summary>The flag bits exactly as the file stored them, in the file's own numbering.</summary>
     public long RawFlags { get; set; }
 
+    /// <summary>
+    /// The day the file says this leg was surveyed, or null where it does not say.
+    ///
+    /// <para>
+    /// A Survex <c>.3d</c> file may carry a date, or a range of dates, on every leg; the first day
+    /// of the range is kept, which is the day the passage was first measured. A Therion
+    /// <c>.lox</c> file carries none, and neither does a leg of a <c>.3d</c> whose survey was
+    /// never given a date. Null means unknown and never "the same day as the model": a model's own
+    /// date is a separate answer, kept on the model.
+    /// </para>
+    ///
+    /// <para>
+    /// A date says when, not where. It travels on the same paths as the leg it belongs to, so a
+    /// caller who may not place the cave exactly sees neither.
+    /// </para>
+    /// </summary>
+    public DateOnly? SurveyedOn { get; set; }
+
     /// <summary>The leg is a wall shot rather than a leg of the traverse.</summary>
     public bool IsSplay => (Flags & SurveyShotFlags.Splay) != 0;
 

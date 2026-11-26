@@ -224,6 +224,9 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
                     shot.ToPosition.Z - shot.FromPosition.Z),
                 Flags = flags,
                 RawFlags = shot.RawFlags,
+
+                // The first day of the leg's range: when the passage was first measured.
+                SurveyedOn = shot.DateFrom,
             };
 
             shots.Add(leg);

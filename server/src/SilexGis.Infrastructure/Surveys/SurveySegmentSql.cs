@@ -150,6 +150,7 @@ public static class SurveySegmentSql
                        s.from_station_name,
                        s.to_station_name,
                        s.length_m,
+                       s.surveyed_on,
                        (s.flags & {(int)SurveyShotFlags.Duplicate}) <> 0 AS is_duplicate,
                        {SpatialSql.HasAltitudes("s.geom")} AS has_z,
                        ST_StartPoint(s.geom) AS a,
@@ -196,6 +197,7 @@ public static class SurveySegmentSql
                        s.from_station_name,
                        s.to_station_name,
                        s.length_m,
+                       s.surveyed_on,
                        (s.flags & {(int)SurveyShotFlags.Duplicate}) <> 0 AS is_duplicate,
                        {SpatialSql.HasAltitudes("s.geom")} AS has_z,
                        ST_StartPoint(s.geom) AS a,
@@ -298,7 +300,8 @@ public static class SurveySegmentSql
                 sqrt(plan_m * plan_m + dz * dz) AS "SlopeLengthM",
                 CASE WHEN plan_m = 0 AND dz = 0 THEN NULL
                      ELSE degrees(atan2(dz, plan_m)) END AS "DipDegrees",
-                CASE WHEN model_has_z THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM"
+                CASE WHEN model_has_z THEN (ST_Z(a) + ST_Z(b)) / 2 END AS "MidZM",
+                surveyed_on AS "SurveyedOn"
             FROM vertical
             ORDER BY id
         """;

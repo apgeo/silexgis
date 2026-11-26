@@ -28,9 +28,13 @@ public static class InventedSurveyFile
     /// </summary>
     public readonly record struct Station(string Name, double X, double Y, double Z, bool Entrance = false);
 
-    /// <summary>A leg of an invented survey, between two positions; <c>Splay</c> marks a shot at the wall.</summary>
+    /// <summary>
+    /// A leg of an invented survey, between two positions; <c>Splay</c> marks a shot at the wall,
+    /// and <c>Date</c> is the day it is said to have been surveyed — a Survex file carries one, a
+    /// Therion file has nowhere to put it.
+    /// </summary>
     public readonly record struct Leg(
-        (double X, double Y, double Z) From, (double X, double Y, double Z) To, bool Splay = false);
+        (double X, double Y, double Z) From, (double X, double Y, double Z) To, bool Splay = false, DateOnly? Date = null);
 
     /// <summary>
     /// One cross-section of a passage, in metres, with a negative number where nothing was measured.
@@ -55,8 +59,26 @@ public static class InventedSurveyFile
         file.WriteByte(0x00); // file-wide flags: a plan-view model
         file.WriteByte(0x00); // the first style item, which sets the ordinary style
 
+        // The date the legs that follow were surveyed on: none until one is said, then each leg's
+        // own, said again only where it changes — as the format carries it from leg to leg.
+        DateOnly? dated = null;
         foreach (var leg in legs)
         {
+            if (leg.Date != dated)
+            {
+                if (leg.Date is { } day)
+                {
+                    file.WriteByte(0x11); // one day
+                    Days(file, day);
+                }
+                else
+                {
+                    file.WriteByte(0x10); // no date
+                }
+
+                dated = leg.Date;
+            }
+
             file.WriteByte(0x0f); // move
             Point(file, leg.From);
 
@@ -168,12 +190,23 @@ public static class InventedSurveyFile
         return bytes.Length;
     }
 
+    /// <summary>The day a Survex file counts its dates from.</summary>
+    private static readonly DateOnly FirstDay = new(1900, 1, 1);
+
     private static void Point(MemoryStream file, (double X, double Y, double Z) point)
     {
         Span<byte> bytes = stackalloc byte[12];
         BinaryPrimitives.WriteInt32LittleEndian(bytes, (int)Math.Round(point.X * 100));
         BinaryPrimitives.WriteInt32LittleEndian(bytes[4..], (int)Math.Round(point.Y * 100));
         BinaryPrimitives.WriteInt32LittleEndian(bytes[8..], (int)Math.Round(point.Z * 100));
+        file.Write(bytes);
+    }
+
+    /// <summary>A day as the format counts it: days since the first of January 1900, in 16 bits.</summary>
+    private static void Days(MemoryStream file, DateOnly day)
+    {
+        Span<byte> bytes = stackalloc byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes, checked((ushort)(day.DayNumber - FirstDay.DayNumber)));
         file.Write(bytes);
     }
 

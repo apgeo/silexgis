@@ -841,6 +841,122 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
         (await CountRowsAsync(read)).ShouldBe((Stations: 3, Shots: 2));
     }
 
+    [Fact]
+    public async Task A_survex_survey_keeps_the_day_each_leg_was_surveyed_and_a_therion_one_has_none()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var survex = await UploadAsync(caveId, "Dated.3d", DatedSurvex(), DeclareOrigin);
+        await RunQueuedReadingAsync(survex);
+        var lox = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        await RunQueuedReadingAsync(lox);
+
+        (await DaysAsync(survex)).ShouldBe([LegDay, LegDay, null], ignoreOrder: true);
+        (await DaysAsync(lox)).ShouldAllBe(day => day == null);
+
+        // And the legs a cave is measured and drawn from carry them.
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var legs = await SilexGis.Infrastructure.Surveys.SurveySegmentSql.ForModelAsync(db, survex, CancellationToken.None);
+        legs.Select(leg => leg.SurveyedOn).ShouldBe([LegDay, LegDay, null], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task The_sweep_over_survey_dates_is_an_operators_to_start()
+    {
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"sld-adm-{suffix}@t.local");
+        using var admin = await AuthHelper.BearerClientAsync(factory, $"sld-adm-{suffix}@t.local");
+        using var anonymous = factory.CreateClient();
+
+        (await anonymous.PostAsync("/api/v1/jobs/survey-leg-dates-backfill", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+        (await reader.PostAsync("/api/v1/jobs/survey-leg-dates-backfill", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Forbidden);
+        (await owner.PostAsync("/api/v1/jobs/survey-leg-dates-backfill", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Forbidden);
+
+        var enqueue = await admin.PostAsync("/api/v1/jobs/survey-leg-dates-backfill", null);
+        var payload = await enqueue.Content.ReadAsStringAsync();
+        enqueue.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        JsonDocument.Parse(payload).RootElement.GetProperty("kind").GetString().ShouldBe("survey-leg-dates-backfill");
+    }
+
+    [Fact]
+    public async Task The_sweep_over_survey_dates_reads_again_only_the_survex_surveys_whose_legs_have_none()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+
+        // Read before the dates were kept: the same file, its legs' days taken off as an older
+        // reading left them.
+        var older = await UploadAsync(caveId, "Older.3d", DatedSurvex(), DeclareOrigin);
+        await RunQueuedReadingAsync(older);
+        await ForgetDaysAsync(older);
+
+        var current = await UploadAsync(caveId, "Current.3d", DatedSurvex(), DeclareOrigin);
+        await RunQueuedReadingAsync(current);
+        var lox = await UploadLocalLoxAsync(caveId, NamedRootCave());
+        await RunQueuedReadingAsync(lox);
+
+        // Still waiting for the reading its upload queued: it holds no legs yet.
+        var waiting = await UploadAsync(caveId, "Waiting.3d", DatedSurvex(), DeclareOrigin);
+
+        await RunSweepAsync(ProcessingJobKinds.SurveyLegDatesBackfill);
+
+        (await QueuedReadingsAsync(older)).ShouldBe(1);
+        (await QueuedReadingsAsync(current)).ShouldBe(0);
+        (await QueuedReadingsAsync(lox)).ShouldBe(0);
+        (await QueuedReadingsAsync(waiting)).ShouldBe(1);
+        (await RequestersOfQueuedReadingsAsync(older)).ShouldBe(new Guid?[] { null });
+
+        // The survey goes on answering from the reading it holds while it waits.
+        (await StatusAsync(older)).ShouldBe(SurveyModelStatus.Ready);
+        (await CountRowsAsync(older)).Shots.ShouldBe(3);
+
+        // Started again before the queue has been worked through, it adds nothing.
+        await RunSweepAsync(ProcessingJobKinds.SurveyLegDatesBackfill);
+        (await QueuedReadingsAsync(older)).ShouldBe(1);
+
+        // The reading it queued puts the days back, and the survey is passed over from then on.
+        await RunQueuedReadingAsync(older);
+        (await DaysAsync(older)).ShouldBe([LegDay, LegDay, null], ignoreOrder: true);
+        await RunSweepAsync(ProcessingJobKinds.SurveyLegDatesBackfill);
+        (await QueuedReadingsAsync(older)).ShouldBe(0);
+    }
+
+    /// <summary>The day the first two legs of <see cref="DatedSurvex"/> are said to have been surveyed.</summary>
+    private static readonly DateOnly LegDay = new(2003, 8, 14);
+
+    /// <summary>
+    /// Three invented legs as a Survex file in plain metres: two surveyed on one day, the third on
+    /// none.
+    /// </summary>
+    private static byte[] DatedSurvex()
+    {
+        SilexGis.Infrastructure.Surveys.InventedSurveyFile.Station[] stations =
+        [
+            new("s0", 0, 0, 0), new("s1", 10, 0, -2), new("s2", 20, 4, -5), new("s3", 25, 12, -9),
+        ];
+        SilexGis.Infrastructure.Surveys.InventedSurveyFile.Leg Leg(int from, int to, DateOnly? day) =>
+            new((stations[from].X, stations[from].Y, stations[from].Z), (stations[to].X, stations[to].Y, stations[to].Z), Date: day);
+        return SilexGis.Infrastructure.Surveys.InventedSurveyFile.Survex3d(
+            stations, [Leg(0, 1, LegDay), Leg(1, 2, LegDay), Leg(2, 3, null)], []);
+    }
+
+    private async Task<List<DateOnly?>> DaysAsync(Guid modelId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.SurveyShots.AsNoTracking().Where(s => s.SurveyModelId == modelId).Select(s => s.SurveyedOn).ToListAsync();
+    }
+
+    /// <summary>Takes the days off a model's legs, as a reading made before they were kept left them.</summary>
+    private async Task ForgetDaysAsync(Guid modelId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.SurveyShots.Where(s => s.SurveyModelId == modelId)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.SurveyedOn, (DateOnly?)null));
+    }
+
     /// <summary>
     /// A survey tree two levels deep with a named root: one station in the root survey and two in
     /// a sub-survey. Invented, and the smallest file whose root survey has a name to record.
@@ -1101,15 +1217,13 @@ public sealed class SurveyModelReadingTests : IAsyncLifetime, IDisposable, IClas
         }
     }
 
-    /// <summary>Runs the sweep directly, standing in for the worker picking up what an operator queued.</summary>
-    private async Task RunSweepAsync()
+    /// <summary>Runs a sweep directly, standing in for the worker picking up what an operator queued.</summary>
+    private async Task RunSweepAsync(string kind = ProcessingJobKinds.SurveyReadingBackfill)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.SurveyReadingBackfill);
-        await handler.ExecuteAsync(
-            new ProcessingJob { Kind = ProcessingJobKinds.SurveyReadingBackfill },
-            CancellationToken.None);
+            .Single(h => h.Kind == kind);
+        await handler.ExecuteAsync(new ProcessingJob { Kind = kind }, CancellationToken.None);
     }
 
     public ValueTask DisposeAsync()

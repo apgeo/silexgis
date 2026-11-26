@@ -6803,6 +6803,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(400)")
                         .HasColumnName("survey_name");
 
+                    b.Property<DateOnly?>("SurveyedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("surveyed_on");
+
                     b.Property<string>("ToStationName")
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)")
