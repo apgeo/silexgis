@@ -319,6 +319,7 @@ export default function CaveAddModal({ mode, lonLat, onClose }: CaveAddModalProp
           caveId={pickedCaveId}
           entrance={null}
           defaultCenter={lonLat}
+          startPosition={lonLat}
           open
           onClose={() => {
             reloadEntrances();

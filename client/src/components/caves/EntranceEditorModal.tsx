@@ -27,7 +27,14 @@ import { entranceWriteProblem } from './entranceWriteProblems.ts';
 interface EntranceEditorModalProps {
   caveId: string;
   entrance: Entrance | null; // null → create
-  defaultCenter: [number, number]; // lon, lat
+  /** Where the mini map opens, [lon, lat]: for orientation only, never written into the form. */
+  defaultCenter: [number, number];
+  /**
+   * The position a new entrance starts at, [lon, lat], when there is a real one to start from (a
+   * click on the map, the cave's own position). Null opens with empty coordinates: a cave with no
+   * position must not get an entrance at the map's centre just because nobody changed the fields.
+   */
+  startPosition: [number, number] | null;
   open: boolean;
   onClose: () => void;
 }
@@ -36,8 +43,8 @@ interface EntranceFormValues {
   name?: string;
   entranceTypeId: number;
   isMain: boolean;
-  lon: number;
-  lat: number;
+  lon?: number;
+  lat?: number;
   altitude?: number;
   positionQuality: string;
   description?: string;
@@ -51,6 +58,7 @@ export default function EntranceEditorModal({
   caveId,
   entrance,
   defaultCenter,
+  startPosition,
   open,
   onClose,
 }: EntranceEditorModalProps) {
@@ -99,7 +107,7 @@ export default function EntranceEditorModal({
   // Built once the dialog's content is mounted and kept through every re-render; when the dialog
   // host moves the content between a modal and a side drawer, the same map moves with it.
   const { targetRef, map: miniMap, ready } = useSmallMap({
-    center: defaultCenter,
+    center: startPosition ?? defaultCenter,
     zoom: 14,
     active: open,
     layers: () => [
@@ -147,8 +155,8 @@ export default function EntranceEditorModal({
       : {
           entranceTypeId: Number(entranceTypes?.[0]?.id ?? 0),
           isMain: false,
-          lon: defaultCenter[0],
-          lat: defaultCenter[1],
+          lon: startPosition?.[0],
+          lat: startPosition?.[1],
           positionQuality: 'gps',
         };
     form.setFieldsValue(initial);
@@ -181,7 +189,8 @@ export default function EntranceEditorModal({
       // The form already marks the field that is missing or wrong; there is nothing to send.
       return;
     }
-    const [lon, lat] = clampLonLat(values.lon, values.lat);
+    // Both carry a required rule, so a form that validated holds both.
+    const [lon, lat] = clampLonLat(values.lon!, values.lat!);
     const body: EntranceWrite = {
       name: values.name ?? null,
       entranceTypeId: values.entranceTypeId,
@@ -261,21 +270,6 @@ export default function EntranceEditorModal({
           {/* Disabled together, and exactly the four the update handler declines to take from a
               caller without exact view. Leaving them editable makes a save look like it moved an
               entrance that the server left where it was. */}
-          <Form.Item name="lon" label={t('entrances.longitude')} rules={[{ required: true }]} style={{ width: 180 }}>
-            <InputNumber
-              min={-180}
-              max={180}
-              step={0.00001}
-              disabled={positionIsBlurred}
-              style={{ width: '100%' }}
-              onChange={(lon) => {
-                const lat = form.getFieldValue('lat') as number | undefined;
-                if (typeof lon === 'number' && typeof lat === 'number') {
-                  placeMarker(lon, lat, true);
-                }
-              }}
-            />
-          </Form.Item>
           <Form.Item name="lat" label={t('entrances.latitude')} rules={[{ required: true }]} style={{ width: 180 }}>
             <InputNumber
               min={-90}
@@ -285,6 +279,21 @@ export default function EntranceEditorModal({
               style={{ width: '100%' }}
               onChange={(lat) => {
                 const lon = form.getFieldValue('lon') as number | undefined;
+                if (typeof lon === 'number' && typeof lat === 'number') {
+                  placeMarker(lon, lat, true);
+                }
+              }}
+            />
+          </Form.Item>
+          <Form.Item name="lon" label={t('entrances.longitude')} rules={[{ required: true }]} style={{ width: 180 }}>
+            <InputNumber
+              min={-180}
+              max={180}
+              step={0.00001}
+              disabled={positionIsBlurred}
+              style={{ width: '100%' }}
+              onChange={(lon) => {
+                const lat = form.getFieldValue('lat') as number | undefined;
                 if (typeof lon === 'number' && typeof lat === 'number') {
                   placeMarker(lon, lat, true);
                 }

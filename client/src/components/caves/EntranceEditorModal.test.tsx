@@ -37,11 +37,23 @@ vi.mock('../../api/hooks.ts', async (original) => ({
 
 const { default: EntranceEditorModal } = await import('./EntranceEditorModal.tsx');
 
-function dialog(open: boolean, onClose: () => void = () => {}, entrance: Entrance | null = null) {
+function dialog(
+  open: boolean,
+  onClose: () => void = () => {},
+  entrance: Entrance | null = null,
+  startPosition: [number, number] | null = [25, 45],
+) {
   return (
     <MemoryRouter>
       <App>
-        <EntranceEditorModal caveId="cave-1" entrance={entrance} defaultCenter={[25, 45]} open={open} onClose={onClose} />
+        <EntranceEditorModal
+          caveId="cave-1"
+          entrance={entrance}
+          defaultCenter={[25, 45]}
+          startPosition={startPosition}
+          open={open}
+          onClose={onClose}
+        />
       </App>
     </MemoryRouter>
   );
@@ -201,6 +213,32 @@ const surveyed: Entrance = {
   surveyedAt: '2025-08-14',
   approximateLocation: false,
 } as Entrance;
+
+describe('EntranceEditorModal for a cave with no position', () => {
+  it('opens with empty coordinates instead of the map centre, so a save without a position is refused', async () => {
+    render(dialog(true, () => {}, null, null));
+    await waitFor(() => expect(attached()).toHaveLength(1));
+    expect((screen.getByLabelText('Latitude') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Longitude') as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(document.querySelectorAll('.ant-form-item-explain-error').length).toBe(2));
+    expect(createEntrance).not.toHaveBeenCalled();
+  });
+
+  it('starts from the position it is given when there is one', async () => {
+    render(dialog(true, () => {}, null, [24.5, 46.25]));
+    await waitFor(() => expect((screen.getByLabelText('Latitude') as HTMLInputElement).value).toBe('46.25000'));
+    expect((screen.getByLabelText('Longitude') as HTMLInputElement).value).toBe('24.50000');
+  });
+
+  it('asks for latitude before longitude, the order every other position is shown in', () => {
+    render(dialog(true));
+    const latitude = screen.getByLabelText('Latitude');
+    const longitude = screen.getByLabelText('Longitude');
+    expect(latitude.compareDocumentPosition(longitude) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
 
 describe('EntranceEditorModal leaving with typed work', () => {
   function showClosable() {
