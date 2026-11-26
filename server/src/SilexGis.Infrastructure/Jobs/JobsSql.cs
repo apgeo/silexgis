@@ -27,10 +27,13 @@ public static class JobsSql
     /// queued and not waiting out a retry delay; next means the oldest, with the kinds nobody is
     /// waiting on (<see cref="ProcessingJobKinds.Background"/>) behind every other kind. The
     /// claimed job is leased to the caller for <paramref name="lease"/>, which it renews with
-    /// <see cref="RenewLeaseAsync"/> for as long as it runs.
+    /// <see cref="RenewLeaseAsync"/> for as long as it runs. A ready job among
+    /// <paramref name="preferred"/> goes before every other: a render node names the jobs whose
+    /// frames it still holds, and one of those taken again goes on from them.
     /// </summary>
     public static async Task<long?> ClaimNextAsync(
-        SilexGisDbContext db, JobLane lane, TimeSpan lease, CancellationToken ct)
+        SilexGisDbContext db, JobLane lane, TimeSpan lease, CancellationToken ct,
+        IReadOnlyCollection<long>? preferred = null)
     {
         await using var command = await CommandAsync(db, ct);
 
@@ -48,12 +51,16 @@ public static class JobsSql
                 SELECT id FROM processing_jobs
                 WHERE status = 0 AND {LanePredicate(lane)}
                   AND (not_before IS NULL OR not_before <= now())
-                ORDER BY (kind = ANY(@background)), id
+                ORDER BY (id = ANY(@preferred)) DESC, (kind = ANY(@background)), id
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED)
             RETURNING id
             """;
         command.Parameters.Add(KindsParameter(lane));
+        command.Parameters.Add(new NpgsqlParameter("preferred", NpgsqlDbType.Array | NpgsqlDbType.Bigint)
+        {
+            Value = (preferred ?? []).ToArray(),
+        });
         command.Parameters.Add(new NpgsqlParameter("background", NpgsqlDbType.Array | NpgsqlDbType.Text)
         {
             Value = ProcessingJobKinds.Background.ToArray(),

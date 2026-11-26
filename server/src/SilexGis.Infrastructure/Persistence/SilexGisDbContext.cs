@@ -198,6 +198,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<ApiAccessKey> ApiAccessKeys => Set<ApiAccessKey>();
 
+    public DbSet<RenderNode> RenderNodes => Set<RenderNode>();
+
+    public DbSet<FlybyRender> FlybyRenders => Set<FlybyRender>();
+
+    public DbSet<FlybyRenderFile> FlybyRenderFiles => Set<FlybyRenderFile>();
+
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
 
     /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>

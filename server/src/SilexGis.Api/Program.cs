@@ -55,6 +55,7 @@ using SilexGis.Api.Features.Notifications;
 using SilexGis.Api.Features.Features;
 using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.Flybys;
+using SilexGis.Api.Features.RenderNodes;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
 using SilexGis.Api.Features.QrLanding;
@@ -231,6 +232,8 @@ try
     // route that reaches one. Scoped rather than long-lived because the answer includes a stored
     // setting an administrator can change while the application is running.
     builder.Services.AddScoped<PhotoLibraryGate>();
+    // What making a flyby's Blender bundle reads with: the download and the render on the server.
+    builder.Services.AddScoped<FlybyBundleServices>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -665,6 +668,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapCaveMeshEndpoints();
     api.MapMapCaveScanEndpoints();
     api.MapFlybyBlenderBundleEndpoints();
+    api.MapFlybyRenderEndpoints();
+    api.MapRenderNodeEndpoints();
+    api.MapRenderNodeAdminEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();

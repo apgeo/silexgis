@@ -3792,6 +3792,173 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("file_access_log", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FlybyRender", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BundlePath")
+                        .HasColumnType("text")
+                        .HasColumnName("bundle_path");
+
+                    b.Property<string>("BundleSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("bundle_sha256");
+
+                    b.Property<long>("BundleSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bundle_size");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancel_requested_at");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Container")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("container");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Device")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("device");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<int?>("FrameCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("frame_count");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("NodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("node_id");
+
+                    b.Property<string>("Notices")
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .HasColumnName("notices");
+
+                    b.Property<string>("Phase")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("phase");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("plan");
+
+                    b.Property<long?>("ProcessingJobId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("processing_job_id");
+
+                    b.Property<double?>("RenderSeconds")
+                        .HasColumnType("double precision")
+                        .HasColumnName("render_seconds");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by");
+
+                    b.Property<double?>("SecondsLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seconds_left");
+
+                    b.Property<double?>("SecondsPerFrame")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seconds_per_frame");
+
+                    b.HasKey("Id")
+                        .HasName("pk_flyby_renders");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_flyby_renders_expires_at");
+
+                    b.HasIndex("NodeId")
+                        .HasDatabaseName("ix_flyby_renders_node_id");
+
+                    b.HasIndex("ProcessingJobId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_flyby_renders_processing_job_id");
+
+                    b.HasIndex("RequestedBy")
+                        .HasDatabaseName("ix_flyby_renders_requested_by");
+
+                    b.ToTable("flyby_renders", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FlybyRenderFile", b =>
+                {
+                    b.Property<Guid>("RenderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("render_id");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt");
+
+                    b.Property<string>("Role")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_path");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("RenderId", "Name")
+                        .HasName("pk_flyby_render_files");
+
+                    b.ToTable("flyby_render_files", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Geofile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5480,6 +5647,82 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_raster_maps_owner_user_id");
 
                     b.ToTable("raster_maps", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RenderNode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BlenderVersions")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("blender_versions");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Device")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("device");
+
+                    b.Property<long?>("FreeDiskBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("free_disk_bytes");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("TokenPrefix")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("token_prefix");
+
+                    b.Property<string>("Worker")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("worker");
+
+                    b.HasKey("Id")
+                        .HasName("pk_render_nodes");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_render_nodes_created_by");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_render_nodes_name_active")
+                        .HasFilter("revoked_at IS NULL");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_render_nodes_token_hash");
+
+                    b.ToTable("render_nodes", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -11012,6 +11255,38 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_feature_shares_features_feature_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FlybyRender", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.RenderNode", null)
+                        .WithMany()
+                        .HasForeignKey("NodeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_flyby_renders_render_nodes_node_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.ProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingJobId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_flyby_renders_processing_jobs_processing_job_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_flyby_renders_users_requested_by");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FlybyRenderFile", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.FlybyRender", null)
+                        .WithMany("Files")
+                        .HasForeignKey("RenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_flyby_render_files_flyby_renders_render_id");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Geofile", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
@@ -11375,6 +11650,15 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_raster_maps_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.RenderNode", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_render_nodes_users_created_by");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.ReportTemplate", b =>
@@ -12333,6 +12617,11 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Centerline");
 
                     b.Navigation("Entrance");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FlybyRender", b =>
+                {
+                    b.Navigation("Files");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyCompilation", b =>

@@ -8,9 +8,10 @@ namespace SilexGis.Infrastructure.Jobs;
 /// The slice of the queue one worker claims from.
 /// </summary>
 /// <remarks>
-/// The two lanes are complements of one another over a single list of kinds: one claims only the
-/// kinds it names, the other claims everything else. Building both from the same list is what
-/// makes them a partition of the table. A lane carrying a list of its own would silently stop
+/// The in-process lanes are complements of one another over a single list of kinds: one claims
+/// only the kinds it names, the other claims everything else but the render nodes' kinds
+/// (<see cref="ProcessingJobKinds.NodeLane"/>), which a third lane claims for the nodes. Building
+/// every lane from the same two lists is what makes them a partition of the table. A lane carrying a list of its own would silently stop
 /// claiming every kind added after it was written, and two lists that drifted apart would leave a
 /// kind claimed by both workers, or by neither — and nothing about the queue would look wrong.
 /// </remarks>
@@ -22,18 +23,29 @@ namespace SilexGis.Infrastructure.Jobs;
 public sealed record JobLane(IReadOnlyList<string> Kinds, bool Excluded)
 {
     /// <summary>Everything except the kinds that have a worker of their own.</summary>
-    public static JobLane General { get; } = new(ProcessingJobKinds.TerrainLane, Excluded: true);
+    public static JobLane General { get; } =
+        new([.. ProcessingJobKinds.TerrainLane, .. ProcessingJobKinds.NodeLane], Excluded: true);
 
     /// <summary>Terrain builds, and nothing else.</summary>
     public static JobLane Terrain { get; } = new(ProcessingJobKinds.TerrainLane, Excluded: false);
 
     /// <summary>
+    /// The render nodes' kinds, and nothing else: claimed only through the render-node routes, by
+    /// a machine outside this process. No in-process worker runs this lane.
+    /// </summary>
+    public static JobLane RenderNode { get; } = new(ProcessingJobKinds.NodeLane, Excluded: false);
+
+    /// <summary>
     /// The general lane as this installation configures it: map-sheet drawing moves to the heavy
     /// lane when <c>GeoreferencedMaps:SheetJobsOnHeavyLane</c> is set.
     /// </summary>
-    public static JobLane GeneralFor(IConfiguration configuration) => new(HeavyKinds(configuration), Excluded: true);
+    public static JobLane GeneralFor(IConfiguration configuration) =>
+        new([.. HeavyKinds(configuration), .. ProcessingJobKinds.NodeLane], Excluded: true);
 
-    /// <summary>The heavy lane as this installation configures it; the complement of <see cref="GeneralFor"/>.</summary>
+    /// <summary>
+    /// The heavy lane as this installation configures it; with <see cref="RenderNode"/>, the
+    /// complement of <see cref="GeneralFor"/>.
+    /// </summary>
     public static JobLane TerrainFor(IConfiguration configuration) => new(HeavyKinds(configuration), Excluded: false);
 
     /// <summary>

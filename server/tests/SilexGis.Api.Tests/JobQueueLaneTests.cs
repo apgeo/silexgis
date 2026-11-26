@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
@@ -92,6 +93,42 @@ public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixtu
         (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, Lease, CancellationToken.None)).ShouldBeNull();
         (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None))
             .ShouldBe(ordinary.Id);
+    }
+
+    [Fact]
+    public async Task Neither_in_process_worker_takes_a_render_nodes_job_and_the_nodes_take_nothing_else()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await AloneInTheQueueAsync(db);
+
+        // The render is the oldest row, so both in-process lanes meet it first and must pass it.
+        var render = Queued(ProcessingJobKinds.BlenderRender);
+        var ordinary = Queued(ProcessingJobKinds.TextExtraction);
+        var terrain = Queued(ProcessingJobKinds.TerrainBuild);
+        db.ProcessingJobs.Add(render);
+        await db.SaveChangesAsync();
+        db.ProcessingJobs.AddRange(ordinary, terrain);
+        await db.SaveChangesAsync();
+
+        // Both predicates are built from the one list of the nodes' kinds, the configured ones too.
+        var configured = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["GeoreferencedMaps:SheetJobsOnHeavyLane"] = "true" })
+            .Build();
+        JobLane.GeneralFor(configured).Kinds.ShouldContain(ProcessingJobKinds.BlenderRender);
+        JobLane.TerrainFor(configured).Kinds.ShouldNotContain(ProcessingJobKinds.BlenderRender);
+
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBe(ordinary.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.General, Lease, CancellationToken.None)).ShouldBeNull();
+        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, Lease, CancellationToken.None)).ShouldBe(terrain.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.Terrain, Lease, CancellationToken.None)).ShouldBeNull();
+        await db.Entry(render).ReloadAsync();
+        render.Status.ShouldBe(ProcessingJobStatus.Queued);
+
+        // The render is claimable — by the nodes' lane, which takes it and nothing else.
+        (await JobsSql.ClaimNextAsync(db, JobLane.RenderNode, Lease, CancellationToken.None)).ShouldBe(render.Id);
+        (await JobsSql.ClaimNextAsync(db, JobLane.RenderNode, Lease, CancellationToken.None)).ShouldBeNull();
     }
 
     [Fact]

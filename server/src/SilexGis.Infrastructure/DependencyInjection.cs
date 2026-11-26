@@ -586,6 +586,15 @@ public static class DependencyInjection
         // the general worker one build would hold up every conversion, reading and sweep behind it
         // for its whole duration.
         services.AddHostedService<TerrainProcessingJobWorker>();
+
+        // Render jobs are claimed by render nodes over HTTP — machines the operator runs a render
+        // worker on — and by no worker of this process. Their lane is looked after by a sweep of
+        // its own: leases that ran out, renders stopped while nobody was there, films past keeping.
+        services.Configure<Rendering.RenderNodeOptions>(configuration.GetSection(Rendering.RenderNodeOptions.SectionName));
+        services.AddScoped<Rendering.RenderNodeQueue>();
+        services.AddScoped<Rendering.FlybyRenders>();
+        services.AddSingleton<Rendering.RenderNodeSweeper>();
+        services.AddHostedService(sp => sp.GetRequiredService<Rendering.RenderNodeSweeper>());
         services.AddHostedService<UploadSessionScheduler>();
         services.AddHostedService<SurveyUploadSweepScheduler>();
         services.AddHostedService<TerrainUploadSweepScheduler>();

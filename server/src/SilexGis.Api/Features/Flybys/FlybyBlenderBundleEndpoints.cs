@@ -143,23 +143,59 @@ public static class FlybyBlenderBundleEndpoints
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> DownloadAsync(
         FlybyBlenderBundleRequest request,
         HttpContext http,
-        SilexGisDbContext db,
-        IAccessContextAccessor accessAccessor,
-        FeatureProtection protection,
-        IFileStore fileStore,
-        IAccessService access,
-        PlacePointDisclosure placePoints,
-        PlaceStationDisclosure placeStations,
-        ThumbnailService thumbnails,
-        ICurrentUser currentUser,
-        IOptions<MapOptions> mapOptions,
-        ILoggerFactory loggers,
+        FlybyBundleServices services,
         CancellationToken ct)
     {
-        var ctx = await accessAccessor.GetAsync(ct);
-        if (ctx is null)
+        var made = await MakeAsync(request, services, "blender", ct);
+        if (made.Unauthorized)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (made.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        var bundle = made.Bundle!;
+        http.Response.Headers[MarkersHeader] = Count(bundle.Markers);
+        http.Response.Headers[MarkersNotDrawnHeader] = Count(bundle.MarkersNotDrawn);
+        http.Response.Headers[PhotosHeader] = Count(bundle.Photos);
+        http.Response.Headers[WallsHeader] = Count(bundle.Walls);
+        http.Response.Headers[LinesHeader] = Count(bundle.Lines);
+        http.Response.Headers[NotDrawnHeader] = Count(bundle.NotDrawn);
+        http.Response.Headers[WallsLeftOutHeader] = Count(bundle.WallsLeftOut);
+        http.Response.Headers[UndatedLegsHeader] = Count(bundle.UndatedLegs);
+        http.Response.Headers[CavesOnSurveyDateHeader] = Count(bundle.CavesOnSurveyDate);
+        http.Response.Headers[UndatedCavesHeader] = Count(bundle.UndatedCaves);
+        return TypedResults.File(bundle.Zip, "application/zip", bundle.FileName);
+    }
+
+    /// <summary>
+    /// Makes the bundle a request asks for, for the account asking, and records that it was made —
+    /// the one place a bundle is made, whether it is handed to the asker or stored for a render
+    /// node. <paramref name="format"/> is what the record says it was made for.
+    /// </summary>
+    internal static async Task<FlybyBundleOutcome> MakeAsync(
+        FlybyBlenderBundleRequest request,
+        FlybyBundleServices services,
+        string format,
+        CancellationToken ct)
+    {
+        var db = services.Db;
+        var protection = services.Protection;
+        var fileStore = services.FileStore;
+        var access = services.Access;
+        var placePoints = services.PlacePoints;
+        var placeStations = services.PlaceStations;
+        var thumbnails = services.Thumbnails;
+        var currentUser = services.CurrentUser;
+        var mapOptions = services.MapOptions;
+        var loggers = services.Loggers;
+        var ctx = await services.AccessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return FlybyBundleOutcome.NotSignedIn;
         }
 
         var asked = request.Caves!;
@@ -335,9 +371,9 @@ public static class FlybyBlenderBundleEndpoints
 
             if (caves.Count == 0)
             {
-                return ApiProblems.UnprocessableContent(
+                return new FlybyBundleOutcome(ApiProblems.UnprocessableContent(
                     NothingToDrawCode,
-                    "Nothing of the caves asked for is available to draw, so there is no scene to make a bundle of.");
+                    "Nothing of the caves asked for is available to draw, so there is no scene to make a bundle of."));
             }
 
             var poses = request.Frames!.Select(f => new FlybyBundlePose(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7])).ToList();
@@ -418,7 +454,7 @@ public static class FlybyBlenderBundleEndpoints
                 EntityId = Guid.CreateVersion7().ToString(),
                 Changes = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
-                    ["format"] = "blender",
+                    ["format"] = format,
                     ["frames"] = scene.Poses.Count,
                     ["wallsCaveIds"] = Sorted(withWalls),
                     ["linesCaveIds"] = Sorted(withLines),
@@ -436,17 +472,20 @@ public static class FlybyBlenderBundleEndpoints
             });
             await db.SaveChangesAsync(ct);
 
-            http.Response.Headers[MarkersHeader] = Count(summary.Markers);
-            http.Response.Headers[MarkersNotDrawnHeader] = Count(markersNotDrawn);
-            http.Response.Headers[PhotosHeader] = Count(summary.Photos);
-            http.Response.Headers[WallsHeader] = Count(withWalls.Count);
-            http.Response.Headers[LinesHeader] = Count(withLines.Count);
-            http.Response.Headers[NotDrawnHeader] = Count(notDrawn);
-            http.Response.Headers[WallsLeftOutHeader] = Count(wallsUnavailable + wallsOverBudget);
-            http.Response.Headers[UndatedLegsHeader] = Count(summary.RevealDates.LegsWithoutDate);
-            http.Response.Headers[CavesOnSurveyDateHeader] = Count(summary.RevealDates.CavesOnTheSurveyDate);
-            http.Response.Headers[UndatedCavesHeader] = Count(summary.RevealDates.CavesWithoutDate);
-            return TypedResults.File(zip.ToArray(), "application/zip", summary.FolderName + ".zip");
+            return new FlybyBundleOutcome(new FlybyBundleMade(
+                zip.ToArray(),
+                summary.FolderName + ".zip",
+                scene.Poses.Count,
+                withWalls.Count,
+                withLines.Count,
+                notDrawn,
+                wallsUnavailable + wallsOverBudget,
+                summary.Markers,
+                markersNotDrawn,
+                summary.Photos,
+                summary.RevealDates.LegsWithoutDate,
+                summary.RevealDates.CavesOnTheSurveyDate,
+                summary.RevealDates.CavesWithoutDate));
         }
         finally
         {

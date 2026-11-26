@@ -301,6 +301,26 @@ public static class ProcessingJobKinds
     public const string TestDataRemove = "testdata-remove";
 
     /// <summary>
+    /// Render a flyby's stored Blender bundle into a film on a render node: a machine the operator
+    /// runs a render worker on, which claims the job over HTTP, downloads the bundle and sends the
+    /// film back. Payload: <c>{ "renderId", "bundle": { "id", "size", "sha256" }, "plan",
+    /// "container", "requestedBy" }</c>. No process of this application ever runs it.
+    /// </summary>
+    public const string BlenderRender = "blender-render";
+
+    /// <summary>
+    /// The kinds only a render node claims, through its own routes. Neither in-process worker
+    /// takes them: the general lane excludes them beside the heavy lane's kinds, and the heavy lane
+    /// names only its own.
+    /// </summary>
+    /// <remarks>
+    /// The general lane claims every kind it is not told about, so a kind with no handler in this
+    /// process has to be named here or the general worker takes it, finds nothing to run it with
+    /// and fails it — a render that never reached a node, reported as one that failed.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> NodeLane = [BlenderRender];
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
