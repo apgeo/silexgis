@@ -23,6 +23,27 @@ export type RenderNodeIssued = components['schemas']['RenderNodeIssuedDto'];
 /** The containers a film can be written in, the first the one a render gets when none is chosen. */
 export const FLYBY_RENDER_CONTAINERS: readonly FlybyRenderContainer[] = ['mp4', 'webm', 'mkv'];
 
+/**
+ * The phases a render node reports that the panel has words of its own for (the worker's phases);
+ * any other reads as `working`.
+ */
+export const FLYBY_RENDER_PHASES = [
+  'claimed', 'downloading', 'checking', 'rendering', 'composing', 'collectingOutputs', 'uploading', 'done',
+] as const;
+
+/** What the panel says of a running render's phase: one of the worker's, or `working`. */
+export type FlybyRenderPhaseWord = (typeof FLYBY_RENDER_PHASES)[number] | 'working';
+
+/** The roles of a result's files, in the order the panel offers them: the film first. */
+export const FLYBY_RENDER_FILE_ROLES = ['movie', 'still', 'subtitles', 'log', 'status'] as const;
+
+export type FlybyRenderFileRole = (typeof FLYBY_RENDER_FILE_ROLES)[number];
+
+/** The phase word a node's phase is shown by. */
+export function flybyRenderPhaseWord(phase: string | null | undefined): FlybyRenderPhaseWord {
+  return (FLYBY_RENDER_PHASES as readonly string[]).includes(phase ?? '') ? (phase as FlybyRenderPhaseWord) : 'working';
+}
+
 /** How often a render that is still going is asked about. */
 export const FLYBY_RENDER_POLL_MS = 3_000;
 

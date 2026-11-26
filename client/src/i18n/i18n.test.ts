@@ -82,6 +82,7 @@ import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelPro
 import { SETTINGS_SECTIONS } from '../pages/settings/sections.ts';
 import { RECORD_GROUPINGS } from '../pages/calendar/recordGrouping.ts';
 import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
+import type { FlybyRenderFileRole, FlybyRenderPhaseWord } from '../api/hooks/flybyRenders.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -251,6 +252,30 @@ const flybyBundleOmissions: Record<components['schemas']['FlybyBundleOmission'],
   wallsNotDownloaded: true,
   moreCavesInView: true,
   moreMarkers: true,
+};
+
+/**
+ * What the server-render panel names a running render's phase by, and a result file by its role:
+ * both keys are built from the value, so one added without words would show as its lookup key.
+ */
+const flybyRenderPhases: Record<FlybyRenderPhaseWord, true> = {
+  claimed: true,
+  downloading: true,
+  checking: true,
+  rendering: true,
+  composing: true,
+  collectingOutputs: true,
+  uploading: true,
+  done: true,
+  working: true,
+};
+
+const flybyRenderFileRoles: Record<FlybyRenderFileRole, true> = {
+  movie: true,
+  still: true,
+  subtitles: true,
+  log: true,
+  status: true,
 };
 
 const accessScopeKinds: Record<AccessScopeKind, true> = {
@@ -837,6 +862,18 @@ describe('i18n locales', () => {
     expect(omissions.filter((name) => !roOmissions[name])).toEqual([]);
     expect(Object.keys(enOmissions).sort()).toEqual(omissions.sort());
     expect(Object.keys(roOmissions).sort()).toEqual(omissions.sort());
+  });
+
+  it('every phase and file role of a render on the server is worded in both locales, and none is left over', () => {
+    for (const [values, enWords, roWords] of [
+      [Object.keys(flybyRenderPhases), en.flyby.render.phase, ro.flyby.render.phase],
+      [Object.keys(flybyRenderFileRoles), en.flyby.render.file, ro.flyby.render.file],
+    ] as [string[], Record<string, string>, Record<string, string>][]) {
+      expect(values.filter((name) => !enWords[name])).toEqual([]);
+      expect(values.filter((name) => !roWords[name])).toEqual([]);
+      expect(Object.keys(enWords).sort()).toEqual([...values].sort());
+      expect(Object.keys(roWords).sort()).toEqual([...values].sort());
+    }
   });
 
   it('every source an upload batch can come from is named in both locales, and none is left over', () => {

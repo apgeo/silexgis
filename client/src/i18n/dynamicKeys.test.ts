@@ -128,6 +128,8 @@ const DYNAMIC_KEY_FAMILIES: readonly string[] = [
   'flyby.movie.levelHelp.',
   'flyby.movie.levels.',
   'flyby.preset.',
+  'flyby.render.file.',
+  'flyby.render.phase.',
   'flyby.section.',
   'gallery.licences.',
   'geodata.mapKinds.',

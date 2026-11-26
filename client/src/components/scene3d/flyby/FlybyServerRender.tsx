@@ -7,6 +7,8 @@ import { downloadFile } from '../../../api/download.ts';
 import Button from '../../Button.tsx';
 import {
   FLYBY_RENDER_CONTAINERS,
+  FLYBY_RENDER_FILE_ROLES,
+  flybyRenderPhaseWord,
   flybyRenderFileUrl,
   flybyRenderIsActive,
   useCancelFlybyRender,
@@ -17,11 +19,7 @@ import {
   type FlybyRenderPlan,
 } from '../../../api/hooks/flybyRenders.ts';
 
-/** The phases a render node reports, each with words of its own; anything else reads as "working". */
-const PHASES = new Set(['claimed', 'downloading', 'checking', 'rendering', 'composing', 'collectingOutputs', 'uploading', 'done']);
-
-/** The roles of a result's files in the order the panel offers them: the film first. */
-const ROLE_ORDER = ['movie', 'still', 'subtitles', 'log', 'status'];
+const ROLE_ORDER: readonly string[] = FLYBY_RENDER_FILE_ROLES;
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds));
@@ -135,7 +133,7 @@ function RenderState({ render, language }: { render: FlybyRender; language: stri
   if (render.status === 'running') {
     const total = render.total ?? 0;
     const done = render.done ?? 0;
-    const phase = render.phase && PHASES.has(render.phase) ? render.phase : 'working';
+    const phase = flybyRenderPhaseWord(render.phase);
     return (
       <div data-testid="flyby-render-state" data-status="running" role="status">
         <Progress percent={total > 0 ? Math.floor((done / total) * 100) : 0} size="small" status="active" />
