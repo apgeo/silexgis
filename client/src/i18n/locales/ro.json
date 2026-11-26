@@ -6111,7 +6111,8 @@
     "language": {
       "name": "Română",
       "short": "RO",
-      "switchTo": "Afișează pagina în română"
+      "switchTo": "Afișează pagina în română",
+      "switchToShort": "RO — afișează pagina în română"
     },
     "embedNoModel": "Nu există nicio topografie de arătat pentru această tură.",
     "past": {
@@ -9547,6 +9548,7 @@
       }
     },
     "anyStatus": "Orice stare",
+    "statusFilter": "Stare",
     "empty": "Pe această instalare nu a fost publicat nimic.",
     "emptyFiltered": "Niciun link nu are această stare.",
     "emptyLongRunning": "Nicio tură publicată nu are urmărirea pornită de atât timp.",
@@ -9691,6 +9693,14 @@
     }
   },
   "a11y": {
+    "noteColumn": "Observație",
+    "acceptColumn": "Acceptă",
+    "unreadColumn": "Necitit",
+    "symbolColumn": "Simbol",
+    "scrollableTable": "Tabel. Derulați lateral cu tastele săgeți pentru a vedea toate coloanele.",
+    "scrollableTableNumbered": "Tabelul {{position}} din {{count}}. Derulați lateral cu tastele săgeți pentru a vedea toate coloanele.",
+    "actionsColumn": "Acțiuni",
+    "expandColumn": "Detalii",
     "skipToMain": "Sari la conținutul principal",
     "skipToMap": "Sari la hartă",
     "mainNav": "Navigația principală",

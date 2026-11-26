@@ -10,7 +10,7 @@ import i18n from '../../i18n';
 import { CHOICE_KEY } from '../../i18n/languageStorage.ts';
 import PublicLanguageButton from './PublicLanguageButton.tsx';
 import { PUBLIC_CHOICE_KEY } from './publicLanguageStorage.ts';
-import { usePublicLanguage } from './usePublicLanguage.ts';
+import { usePublicLanguage, type PublicLanguage } from './usePublicLanguage.ts';
 
 /**
  * A published trip's page, reduced to the two things this rule is about — and to the third: what
@@ -171,6 +171,18 @@ describe('the button that changes a published trip’s language', () => {
     expect(button).toHaveTextContent('English');
     expect(button).toHaveAttribute('lang', 'en');
     expect(container.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it('in its two-letter form, is named by a sentence that opens with the two letters it shows', () => {
+    const control = { offered: true, other: 'en', choose: vi.fn() } as unknown as PublicLanguage;
+    render(<PublicLanguageButton control={control} compact />);
+
+    const button = screen.getByTestId('public-trip-language');
+    expect(button).toHaveTextContent('EN');
+    // A name that leaves out the visible text cannot be reached by saying what is on the button.
+    expect(button.getAttribute('aria-label')).toMatch(/^EN\b/);
+    expect(button.getAttribute('aria-label')).toContain('show this page in English');
+    expect(button).toHaveAttribute('title', 'Show this page in English');
   });
 
   it('changes the page, the document and the address, and is remembered for published pages', () => {

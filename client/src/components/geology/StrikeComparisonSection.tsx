@@ -19,7 +19,7 @@ export default function StrikeComparisonSection({ data }: { data: MeasuredStrike
 
   return (
     <div data-testid="strike-comparison">
-      <Typography.Title level={5}>{t('structural.strikeComparison.title')}</Typography.Title>
+      <Typography.Title level={4}>{t('structural.strikeComparison.title')}</Typography.Title>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
           <Typography.Text strong>

@@ -152,6 +152,21 @@ html[data-reduce-motion='true'] *::after {
   border: 0;
 }
 
+/* The main landmark of a page drawn without the signed-in frame stands in for the document root,
+   so a page that centres itself in the window (a percentage height) still measures the window. */
+.standalone-main {
+  height: 100%;
+}
+
+/* OpenLayers draws its zoom buttons about 22 px square, under the 24 px a pointer target needs
+   (WCAG 2.2 target size). Every map in the application keeps the library's default controls, so
+   the rule is held here once rather than per map. */
+.ol-zoom .ol-zoom-in,
+.ol-zoom .ol-zoom-out {
+  min-width: 24px;
+  min-height: 24px;
+}
+
 /* Keyboard focus on the library parts that draw none, or only a tint of a border: a sortable
    column header, a select, and a tree before any of its rows is active (once one is, the library
    rings that row itself). The theme's focus-ring colour, which is held at 3:1 in both themes. */

@@ -36,6 +36,7 @@ import ConfigureLink from '../../components/ConfigureLink.tsx';
 import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
 import UploadDrawer from '../../components/uploads/UploadDrawer.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The tree's first row is not a cabinet: it is the inbox, and it is a query rather than a
@@ -690,7 +691,7 @@ export default function CabinetsPage() {
               ...(canWrite
                 ? [
                     {
-                      title: '',
+                      title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                       key: 'actions',
                       width: 200,
                       render: (_: unknown, row: CabinetDocument) => (
@@ -799,13 +800,15 @@ export default function CabinetsPage() {
 
   return (
     <Layout style={{ height: '100%', background: 'transparent' }}>
-      <Layout.Sider width={280} theme="light" style={{ padding: 16, overflow: 'auto' }}>
+      <Layout.Sider width={280} theme="light" style={{ padding: 16, overflow: 'auto' }} aria-label={t('cabinets.title')}>
         {shelf}
       </Layout.Sider>
 
-      <Layout.Content style={{ padding: 24, overflow: 'auto', minWidth: 0 }}>
+      {/* Not the library's layout content, which is drawn as a second `main` inside the frame's own:
+          a page has one main landmark, and it is the frame's. */}
+      <div style={{ flex: 'auto', minHeight: 0, padding: 24, overflow: 'auto', minWidth: 0 }}>
         {documentsPane}
-      </Layout.Content>
+      </div>
       {modals}
     </Layout>
   );

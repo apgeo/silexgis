@@ -97,7 +97,7 @@ function shapeLabel(type: string, t: TFunction): string {
 function Part({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="trip-report-section" style={{ marginTop: 24 }}>
-      <Typography.Title level={4} style={{ marginBottom: 8 }}>
+      <Typography.Title level={3} style={{ marginBottom: 8 }}>
         {title}
       </Typography.Title>
       {children}

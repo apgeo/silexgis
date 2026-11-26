@@ -94,7 +94,7 @@ export default function SurveyResultViewer({
   };
 
   return (
-    <main
+    <div
       data-testid="survey-viewer"
       style={{ padding: '16px clamp(8px, 3vw, 24px)', maxWidth: 1200, margin: '0 auto', boxSizing: 'border-box', width: '100%' }}
     >
@@ -145,7 +145,7 @@ export default function SurveyResultViewer({
 
         {!figures.isPending && !figures.isError && <SurveyUploadAnalysesView analyses={analyses} />}
       </Flex>
-    </main>
+    </div>
   );
 }
 
