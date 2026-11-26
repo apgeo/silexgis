@@ -187,6 +187,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('a trip followed by somebody with no account', () => {
+  it('says in words that the trip is being read while its first answer is on its way', () => {
+    render(<PublicTripPage />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the trip…');
+  });
+
   it('reads the trip by the token in the address, and nothing else', () => {
     ready();
     render(<PublicTripPage />);
@@ -247,6 +252,16 @@ describe('a trip followed by somebody with no account', () => {
       'Survey',
       'Not in a team',
     ]);
+  });
+
+  it('heads the party as the people on the trip when the trip has no teams at all', () => {
+    ready({ teams: [], participants: [participant({ ordinal: 1, label: 'Ana', in: true }), participant({ ordinal: 2 })] });
+    render(<PublicTripPage />);
+
+    const party = screen.getByTestId('public-trip-party');
+    const headings = within(party).getAllByRole('heading', { level: 2 });
+    // "Not in a team" over everybody reads as people alone or unaccounted for.
+    expect(headings.map((heading) => heading.textContent)).toEqual(['People on this trip']);
   });
 
   /**
@@ -569,6 +584,24 @@ describe('how old a followed position is', () => {
       'title',
       expect.stringContaining('2026'),
     );
+  });
+
+  /**
+   * When the word that placed her is also the last word heard, the two ages are one moment: two
+   * lines saying "5 minutes ago" each read as two events. One line says both.
+   */
+  it('says the two ages once when the last word is the one that placed her', () => {
+    ready({
+      participants: [{ ...placedAtNine(), lastRecordedAt: '2026-09-14T09:00:00Z' }],
+    });
+    render(<PublicTripPage />);
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent(
+      'Reported and last heard 3 hours ago',
+    );
+    expect(within(card).queryByText('Last heard')).toBeNull();
+    expect(screen.queryByTestId('public-trip-last-heard-1')).toBeNull();
   });
 
   /**
@@ -1395,7 +1428,7 @@ describe('what assistive technology is told on a followed page', () => {
     answer = { data: undefined, isPending: true, error: null };
     const loading = render(<PublicTripPage />);
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Loading…' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading the trip…' })).toBeInTheDocument();
     loading.unmount();
 
     // Unreachable and not found take the place of the page, and are announced when they arrive.

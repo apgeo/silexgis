@@ -230,6 +230,13 @@
   text-align: center;
 }
 
+/* Why the link shows nothing, under the one line saying so: smaller, and kept to a readable measure
+   in a wide frame. */
+.public-trip-embed-failure-reason {
+  max-width: 44ch;
+  font-size: 0.85em;
+}
+
 /* The space where a chosen past trip's drawing will be, while it is being read or after it could
    not be. Empty on purpose: the strip below it is already saying which of those it is, and a second
    sentence in the middle of the box would be the frame talking about a drawing it has not been

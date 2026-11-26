@@ -106,6 +106,14 @@ const TAB_3D = '3d';
  * anything yet — because the person reading this is waiting for the second one, and drawing the
  * third as "not underground" would tell them the party is back before it has set off.
  */
+/** Whether the last word heard about somebody is the very report that placed them. */
+function lastWordPlaced(participant: PublicTripParticipant, placedAt: string | null): boolean {
+  if (placedAt === null || participant.lastRecordedAt === null) {
+    return false;
+  }
+  return Date.parse(participant.lastRecordedAt) === Date.parse(placedAt);
+}
+
 export default function PublicTripPage() {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
@@ -723,9 +731,10 @@ export default function PublicTripPage() {
       // A page that is still being read is announced as such, and has a main landmark from the
       // first frame so that a screen reader's "go to main content" lands somewhere on every state.
       <Flex component="main" align="center" justify="center" style={{ minHeight: '100dvh' }}>
-        <div role="status" aria-label={t('common.loading')}>
+        <Flex vertical align="center" gap="small" role="status" aria-label={t('publicTrip.loading')}>
           <Spin size="large" />
-        </div>
+          <Typography.Text type="secondary">{t('publicTrip.loading')}</Typography.Text>
+        </Flex>
       </Flex>
     );
   }
@@ -983,6 +992,7 @@ export default function PublicTripPage() {
   const positionFact = (participant: PublicTripParticipant): ReactNode => {
     const { shown, placedAt } = positionOf(participant);
     const placed = momentOrAge(placedAt, now, i18n.language, settled);
+    const heardThen = placedAt !== null && lastWordPlaced(participant, placedAt);
     return (
       <>
         {shown}
@@ -994,8 +1004,8 @@ export default function PublicTripPage() {
             data-testid={`public-trip-position-age-${participant.ordinal}`}
           >
             {settled
-              ? t('publicTrip.positionAt', { clock: placed })
-              : t('publicTrip.positionSince', { since: placed })}
+              ? t(heardThen ? 'publicTrip.positionAndHeardAt' : 'publicTrip.positionAt', { clock: placed })
+              : t(heardThen ? 'publicTrip.positionAndHeardSince' : 'publicTrip.positionSince', { since: placed })}
           </Typography.Text>
         )}
       </>
@@ -1487,7 +1497,10 @@ export default function PublicTripPage() {
           {groups.map((group) => (
             <div key={group.teamId ?? 'no-team'}>
               <h2 className="public-trip-team-title">
-                {group.title ?? t('publicTrip.noTeam')}
+                {/* "Not in a team" over the whole party reads as people alone or unaccounted for,
+                    so a trip with no teams at all names its one group for what it is. */}
+                {group.title ??
+                  (view.teams.length === 0 ? t('publicTrip.peopleOnTrip') : t('publicTrip.noTeam'))}
               </h2>
               <div className="public-trip-people">
                 {group.members.map((participant) => (
@@ -1508,7 +1521,10 @@ export default function PublicTripPage() {
                       {/* The other moment, kept as its own fact under its own label: this one
                           moves when anybody says anything at all about somebody, including a note
                           that says nothing about where they are. */}
-                      {fact(
+                      {/* Unless that moment is the one the position was reported at: then
+                          the position's own line says both, and a second line with the same age
+                          would read as a second event. */}
+                      {!lastWordPlaced(participant, positionOf(participant).placedAt) && fact(
                         t('publicTrip.columnLastHeard'),
                         participant.lastRecordedAt === null ? (
                           '—'

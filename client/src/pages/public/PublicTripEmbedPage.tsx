@@ -51,7 +51,7 @@ import {
   type EmbedOutboundMessage,
   type EmbedReadyMessage,
 } from './publicTripEmbed.ts';
-import { ageInWords, clockInWords, instantOf } from './publicTripParty.ts';
+import { ageInWords, clockInWords, instantOf, partyStandings } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
 import PublicLanguageButton from './PublicLanguageButton.tsx';
 import { usePublicLanguage } from './usePublicLanguage.ts';
@@ -1000,11 +1000,16 @@ export default function PublicTripEmbedPage() {
   // The one sentence in a frame with nothing to show is the one its reader most needs to be able
   // to read, and it is all there is: the way into the other language is drawn under it, where the
   // strip that carries it on a working frame does not exist.
-  const failure = (message: string) => (
+  const failure = (message: string, reason?: string) => (
     <div className="public-trip-embed" style={palette} data-testid="public-trip-embed-failure">
       <div className="public-trip-embed-failure">
         <Flex vertical align="center" gap="small">
           <Typography.Text type="secondary">{message}</Typography.Text>
+          {reason !== undefined && (
+            <Typography.Text type="secondary" className="public-trip-embed-failure-reason">
+              {reason}
+            </Typography.Text>
+          )}
           {language.offered && (
             <PublicLanguageButton control={language} compact size={controlSize} />
           )}
@@ -1036,8 +1041,9 @@ export default function PublicTripEmbedPage() {
   if (isPending && !firstReadHeld) {
     return (
       <div className="public-trip-embed" style={palette}>
-        <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Flex vertical align="center" justify="center" gap="small" role="status" aria-label={t('publicTrip.loading')} style={{ height: '100%' }}>
           <Spin size="large" />
+          <Typography.Text type="secondary">{t('publicTrip.loading')}</Typography.Text>
         </Flex>
       </div>
     );
@@ -1068,7 +1074,7 @@ export default function PublicTripEmbedPage() {
     );
   }
   if (data === undefined) {
-    return failure(t('publicTrip.notFoundTitle'));
+    return failure(t('publicTrip.notFoundTitle'), t('publicTrip.notFoundBody'));
   }
 
   /**
@@ -1358,6 +1364,18 @@ export default function PublicTripEmbedPage() {
    * name is the whole of what it has to say — and the way into the list shrinks to its icon to
    * leave it the room.
    */
+  const standing =
+    view === undefined
+      ? null
+      : [
+          t('publicTrip.embedNotLive'),
+          ...(['underground', 'out', 'unheard'] as const).map((key) =>
+            t('publicTrip.live.standingCount', {
+              standing: t(`publicTrip.standing.${key}`),
+              number: partyStandings(view.participants)[key],
+            }),
+          ),
+        ].join(' · ');
   const strip = past.engaged ? (
     <PublicPastBar
       playback={past}
@@ -1408,6 +1426,20 @@ export default function PublicTripEmbedPage() {
           are landing, the hour once its watch is closed or the link has ended and nothing will
           change again. While a read is failing the line above says it, with the same figure. */}
       <span className="public-trip-embed-strip-end">
+        {/* What the full page says first, in the frame that is read inside somebody else's
+            article with no page around it: named people placed in a cave under a fresh "updated"
+            stamp read as live tracking unless something says they are not. Short enough for the
+            narrowest frame, with the whole sentence on the pointer. */}
+        {standing !== null && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-embed-updated"
+            title={t('publicTrip.about.line')}
+            data-testid="public-trip-embed-standing"
+          >
+            {standing}
+          </Typography.Text>
+        )}
         {readAt !== null && stale === null && (
           <Typography.Text
             type="secondary"

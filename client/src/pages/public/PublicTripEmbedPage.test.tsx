@@ -217,12 +217,40 @@ afterEach(() => {
 });
 
 describe('the viewer a website frames', () => {
+  it('says in words that the trip is being read while its first answer is on its way', () => {
+    answer = { data: undefined, isPending: true, error: null };
+    render(<PublicTripEmbedPage />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the trip…');
+  });
+
   it('renders the viewer and nothing else — no title, no party list, no footer', () => {
     render(<PublicTripEmbedPage />);
 
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
     expect(screen.queryByText('Peștera Demo Mare')).toBeNull();
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('says the places are reported rather than live, with how the party stands', () => {
+    answer = {
+      data: envelope({
+        participants: [
+          participant({ ordinal: 1, label: 'Ana', stationName: 'p.g.7', in: true }),
+          participant({ ordinal: 2, in: true }),
+          participant({ ordinal: 3, in: true, out: true }),
+          participant({ ordinal: 4 }),
+        ],
+      }),
+      isPending: false,
+      error: null,
+    };
+    render(<PublicTripEmbedPage />);
+
+    const line = screen.getByTestId('public-trip-embed-standing');
+    expect(line).toHaveTextContent('not live');
+    expect(line).toHaveTextContent('Underground: 2 · Out: 1 · Not reported yet: 1');
+    // The whole caveat the full page opens with, for whoever points at the short one.
+    expect(line).toHaveAttribute('title', expect.stringContaining('It is not a live position.'));
   });
 
   it('keeps the way into the other language to two letters with a name a screen reader can say', () => {
@@ -494,6 +522,10 @@ describe('the viewer a website frames', () => {
     answer = { data: undefined, isPending: false, error: new ApiError(404) };
     const view = render(<PublicTripEmbedPage />);
     expect(screen.getByTestId('public-trip-embed-failure')).toHaveTextContent('Nothing to show for this link');
+    // Why, as the full page says it, so whoever pasted the frame has a reason and a next step.
+    expect(screen.getByTestId('public-trip-embed-failure')).toHaveTextContent(
+      'It may never have existed, it may have been taken back',
+    );
     // The one sentence in the frame, and so the one place the other language has to be offered.
     expect(
       within(screen.getByTestId('public-trip-embed-failure')).getByTestId('public-trip-language'),
