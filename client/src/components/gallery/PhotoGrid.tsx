@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { ReactNode } from 'react';
-import { CheckCircleFilled, LeftOutlined, PictureOutlined, RightOutlined } from '@ant-design/icons';
-import { Empty, Flex, Typography, theme } from 'antd';
+import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { Checkbox, Empty, Flex, Typography, theme } from 'antd';
 import Button from '../Button.tsx';
 import { useTranslation } from 'react-i18next';
 
@@ -158,29 +158,31 @@ export default function PhotoGrid({
               />
             </button>
 
+            {/* A real checkbox, drawn on every tile whenever the page offers a selection, on
+                desktop and touch alike: a mark that only appears on hover never appears on a
+                phone, and an icon nobody recognises as a control is never pressed. It sits on a
+                small plate of the page's own background so it reads over any picture. */}
             {selectable && (
-              <button
-                type="button"
-                onClick={() => onToggle!(photo.documentId)}
-                aria-label={t('gallery.select')}
-                data-testid="photo-select"
+              <span
                 style={{
                   position: 'absolute',
                   top: 6,
                   left: 6,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  padding: 0,
+                  display: 'inline-flex',
+                  padding: 4,
+                  borderRadius: token.borderRadiusSM,
+                  background: token.colorBgContainer,
+                  boxShadow: token.boxShadowTertiary,
                   lineHeight: 0,
                 }}
               >
-                {isSelected ? (
-                  <CheckCircleFilled style={{ color: token.colorPrimary, fontSize: token.fontSizeXL }} />
-                ) : (
-                  <PictureOutlined style={{ color: token.colorTextLightSolid, fontSize: 18 }} />
-                )}
-              </button>
+                <Checkbox
+                  checked={isSelected}
+                  onChange={() => onToggle!(photo.documentId)}
+                  aria-label={t('gallery.select')}
+                  data-testid="photo-select"
+                />
+              </span>
             )}
 
             {renderExtra && (

@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   /** What the album's own read failed with, when a test makes it fail. */
   albumError: null as unknown,
   photosFailed: false,
+  /** The album's pictures; emptied by the test about an empty album. */
+  photoIds: ['p1'] as string[],
+  writes: true,
   refetchAlbum: vi.fn(),
   refetchPhotos: vi.fn(),
 }));
@@ -39,7 +42,7 @@ vi.mock('../../api/hooks.ts', async (importActual) => {
   const actual = await importActual<typeof import('../../api/hooks.ts')>();
   return {
     hasAccessAction: actual.hasAccessAction,
-    useCapabilities: () => ({ data: { domains: { documents: 'read,write' } } }),
+    useCapabilities: () => ({ data: { domains: { documents: state.writes ? 'read,write' : 'read' } } }),
     useAlbum: () =>
       state.albumError
         ? { data: undefined, isPending: false, isError: true, error: state.albumError, refetch: state.refetchAlbum }
@@ -53,7 +56,12 @@ vi.mock('../../api/hooks.ts', async (importActual) => {
       state.photosFailed
         ? { data: undefined, isPending: false, isError: true, refetch: state.refetchPhotos }
         : {
-            data: { items: [photo('p1')], page: 1, pageSize: 500, totalItems: 1 },
+            data: {
+              items: state.photoIds.map(photo),
+              page: 1,
+              pageSize: 500,
+              totalItems: state.photoIds.length,
+            },
             isPending: false,
             isError: false,
             refetch: state.refetchPhotos,
@@ -80,6 +88,8 @@ beforeEach(() => {
   state.setCover.mockReset();
   state.albumError = null;
   state.photosFailed = false;
+  state.photoIds = ['p1'];
+  state.writes = true;
   state.refetchAlbum.mockReset();
   state.refetchPhotos.mockReset();
   unhandled.mockReset();
@@ -103,6 +113,21 @@ function draw() {
 }
 
 describe('AlbumDetailPage', () => {
+  it('offers a way to add pictures from an empty album, to somebody who may add them', () => {
+    state.photoIds = [];
+    draw();
+    const add = screen.getByTestId('album-add-photos');
+    expect(add).toHaveAttribute('href', '/gallery');
+    expect(add).toHaveTextContent('Add photographs');
+  });
+
+  it('offers no such way to a reader who may not add pictures', () => {
+    state.photoIds = [];
+    state.writes = false;
+    draw();
+    expect(screen.queryByTestId('album-add-photos')).toBeNull();
+  });
+
   it('asks the server to make a picture the cover', () => {
     state.setCover.mockResolvedValue(undefined);
     draw();

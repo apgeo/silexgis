@@ -220,7 +220,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
 
   const editor = page.getByRole('dialog').filter({ hasText: 'New album' });
   await editor.getByLabel('Title').fill(albumTitle);
-  await editor.getByRole('button', { name: 'OK' }).click();
+  await editor.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
 
   // ---- the pictures, chosen in the gallery and added in one go
@@ -319,7 +319,7 @@ test('an album link opens the album to a visitor with no account, until it is re
   const created = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/v1/albums' && r.request().method() === 'POST',
   );
-  await editor.getByRole('button', { name: 'OK' }).click();
+  await editor.getByRole('button', { name: 'Create' }).click();
   const createdAnswer = await created;
   expect(createdAnswer.ok()).toBeTruthy();
   const albumId = ((await createdAnswer.json()) as { id: string }).id;
