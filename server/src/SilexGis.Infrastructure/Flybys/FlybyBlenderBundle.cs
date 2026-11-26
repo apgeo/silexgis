@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
 using System.Text;
+using SilexGis.Domain.Export;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Surveys;
 using Therion.Blender;
@@ -17,7 +18,13 @@ namespace SilexGis.Infrastructure.Flybys;
 /// <param name="FolderName">The one folder the zip unpacks into.</param>
 /// <param name="Frames">How many frames the movie has.</param>
 /// <param name="Models">How many meshes the scene is made of.</param>
-public sealed record FlybyBundleSummary(string FolderName, int Frames, int Models);
+/// <param name="Markers">How many markers stand in it.</param>
+/// <param name="Photos">How many photographs it shows.</param>
+/// <param name="PhotosShown">Which of the scene's photographs those are, counted from 0 in the scene's own order.</param>
+public sealed record FlybyBundleSummary(string FolderName, int Frames, int Models, int Markers = 0, int Photos = 0)
+{
+    public IReadOnlyList<int> PhotosShown { get; init; } = [];
+}
 
 /// <summary>
 /// Writes a flyby as a render bundle: a zip somebody unpacks on a machine of their own and renders
@@ -47,8 +54,30 @@ public sealed record FlybyBundleSummary(string FolderName, int Frames, int Model
 /// camera looking straight down keeps its heading and one far from the origin keeps its own
 /// horizon.
 /// </para>
+///
+/// <para>
+/// <b>What changes while the clip runs is written as keys, and the camera reads the same keys.</b>
+/// A relief that grows stretches every model along its own up, about the level of the frame's
+/// zero, and each frame's camera is raised along its own up by the same rule, with the relief
+/// those very keys give at that frame — so a cave and the camera looking at it are never drawn at
+/// two different reliefs, nor by two different rules. A colour over the walls or over one cave's
+/// walls, the colour of the lines, a layer shown, hidden or faded and the colour of the sky are
+/// tracks on the models and on the world. The sun and the sky are as strong as the daylight the
+/// flyby had at each frame: they go out while its camera is under the ground. The lamp on the
+/// camera is always on, and where the daylight goes it is turned up by the square of the distance
+/// from the camera to the nearest wall, so that walls seen from far away in the dark are lit as
+/// walls a few metres away are. Survey lines are drawn in their own colours whatever the light.
+/// </para>
+///
+/// <para>
+/// <b>What the scene points out rides on the caves.</b> An entrance, a feature of the surface and
+/// a photograph taken at a station are each pinned to a point of a cave's model, in that model's
+/// own metres, so they go where the cave goes when the relief stretches it — and, like the caves,
+/// say how they lie to one another and not where. A marker is as large as reads from the nearest
+/// the camera comes to it; a photograph is shown while the camera is near its station.
+/// </para>
 /// </summary>
-public static class FlybyBlenderBundle
+public static partial class FlybyBlenderBundle
 {
     /// <summary>Half the width of the tube a survey leg is drawn as, in metres.</summary>
     public const double LineRadiusM = 0.3;
@@ -65,58 +94,77 @@ public static class FlybyBlenderBundle
     /// <summary>How long a title card takes to go and an end card to come, at most, in seconds.</summary>
     private const double CardFadeSeconds = 0.8;
 
-    private static readonly Lazy<(PlanMaterial Rock, IReadOnlyList<PlanLight> Lights)> Borrowed = new(BorrowLook);
+    /// <summary>
+    /// How many times farther than its nearest limit a camera may draw before each frame is given
+    /// limits of its own: past this a depth buffer runs out of steps, and a flight that starts far
+    /// above a country and ends a metre from a wall has both ends in one clip.
+    /// </summary>
+    private const double DeepestOneRange = 100_000;
+
+    /// <summary>
+    /// How many times a triangle of the walls is set beside the camera of a frame, at most, when
+    /// the lamp's reach is worked out. A scene with more walls and more frames in the dark than
+    /// this has the distance worked out on every few of those frames, evenly; the lamp's energy
+    /// goes straight from one to the next, which a camera that moves a little a frame does not show.
+    /// </summary>
+    private const long MostLampWork = 200_000_000;
 
     /// <summary>
     /// Writes the bundle of <paramref name="scene"/> into <paramref name="destination"/>, which
-    /// stays open.
+    /// stays open. Nothing is written anywhere else: each mesh goes from memory into the zip.
     /// </summary>
-    /// <param name="workDirectory">
-    /// A directory the meshes are written into on their way into the zip. It is made here and
-    /// removed again, whatever happens.
-    /// </param>
     /// <exception cref="ArgumentException">The scene has nothing to draw, or no frame.</exception>
-    public static FlybyBundleSummary Write(FlybyBundleScene scene, string workDirectory, Stream destination)
+    public static FlybyBundleSummary Write(FlybyBundleScene scene, Stream destination)
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(destination);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workDirectory);
 
-        Directory.CreateDirectory(workDirectory);
-        try
-        {
-            var files = new Dictionary<string, string>(StringComparer.Ordinal);
-            var plan = Plan(scene, (path, mesh) =>
-            {
-                var onDisk = Path.Combine(workDirectory, path);
-                PlyWriter.WriteFile(mesh, onDisk);
-                files[path] = onDisk;
-            });
+        // A mesh is made into the bytes of its file when the writer comes to it, one at a time.
+        var meshes = new Dictionary<string, Func<Stream>>(StringComparer.Ordinal);
+        var (plan, photosShown) = Plan(
+            scene,
+            (path, mesh) => meshes[path] = () => new MemoryStream(PlyWriter.Write(mesh()), writable: false),
+            (path, picture) => meshes[path] = () => new MemoryStream(picture, writable: false));
 
-            var content = new RenderBundleContent
-            {
-                Plan = plan,
-                Draft = ScenePlanBuilder.Draft(plan),
-                Files = files,
-                NotCarried = scene.LeftOut,
-                Captions = [.. Subtitles.OneAtATime(Captions(scene.Texts.Captions, ClipSeconds(scene)))],
-            };
-            var folder = FolderName(scene.Name);
-            RenderBundleWriter.WriteZip(content, destination, folder);
-            return new FlybyBundleSummary(folder, plan.Timeline.FrameCount, plan.Models.Count);
-        }
-        finally
+        var romanian = FlybyBundleNotes.IsRomanian(scene.Language);
+        var content = new RenderBundleContent
         {
-            try
-            {
-                Directory.Delete(workDirectory, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // The bundle is written or the failure is already on its way out; a scratch file
-                // that would not go is not worth replacing either with.
-            }
-        }
+            Plan = plan,
+            Draft = ScenePlanBuilder.Draft(plan),
+            Streams = meshes,
+            Language = romanian ? "ro" : "en",
+            ReadmeIntro = FlybyBundleNotes.Intro(romanian),
+            ReadmeSections =
+            [
+                .. FlybyBundleNotes.Sections(
+                        romanian,
+                        daylightGoes: scene.Changes.Daylight.Any(key => key.Value < 1),
+                        markers: (plan.Annotations ?? []).Count(a => a.Kind == PlanAnnotationKind.Marker),
+                        photos: (plan.Annotations ?? []).Count(a => a.Kind == PlanAnnotationKind.Photo),
+                        revealed: (plan.Changes ?? []).Any(change => change.Reveal is not null),
+                        lampReaches: (plan.Changes ?? []).Any(change =>
+                            change is { Energy: not null, Target.Id: { } lit }
+                            && plan.Look.Lights.Any(light => light.Id == lit && light.Kind == PlanLightKind.Headlamp)))
+                    .Select(section => new RenderBundleReadmeSection(section.Title, section.Text)),
+            ],
+            // What only the plan knows is left out is said with the rest: the photographs there
+            // are at the stations of these caves beyond the ones the scene shows.
+            NotCarried = scene.Photos.Found > photosShown.Count
+                ? [.. scene.LeftOut, FlybyBundleOmissions.PhotosNotShown(scene.Photos.Found - photosShown.Count, romanian)]
+                : scene.LeftOut,
+            Captions = [.. Subtitles.OneAtATime(Captions(scene.Texts.Captions, ClipSeconds(scene)))],
+        };
+        var folder = FolderName(scene.Name);
+        RenderBundleWriter.WriteZip(content, destination, folder);
+        return new FlybyBundleSummary(
+            folder,
+            plan.Timeline.FrameCount,
+            plan.Models.Count,
+            (plan.Annotations ?? []).Count(a => a.Kind == PlanAnnotationKind.Marker),
+            photosShown.Count)
+        {
+            PhotosShown = photosShown,
+        };
     }
 
     /// <summary>The name a bundle's one folder, its zip and its movie take from what the flyby is called.</summary>
@@ -124,44 +172,151 @@ public static class FlybyBlenderBundle
 
     /// <summary>The scene plan of <paramref name="scene"/>, as the JSON a bundle holds, with no mesh written.</summary>
     public static string PlanJson(FlybyBundleScene scene) =>
-        ScenePlanSerializer.Write(Plan(scene, (_, _) => { }));
+        ScenePlanSerializer.Write(Plan(scene, (_, _) => { }, (_, _) => { }).Plan);
 
-    private static ScenePlan Plan(FlybyBundleScene scene, Action<string, CaveMesh> writeMesh)
+    /// <param name="writeMesh">Takes each model's file by its path in the bundle, and what makes its mesh.</param>
+    /// <param name="writePhoto">Takes each photograph's file by its path in the bundle.</param>
+    private static (ScenePlan Plan, IReadOnlyList<int> PhotosShown) Plan(
+        FlybyBundleScene scene, Action<string, Func<CaveMesh>> writeMesh, Action<string, byte[]> writePhoto)
     {
         if (scene.Poses.Count == 0)
         {
             throw new ArgumentException("A flyby has at least one frame.", nameof(scene));
         }
 
-        var relief = scene.Relief;
-        var frame = new SceneTangentFrame(scene.OriginLongitude, scene.OriginLatitude, scene.OriginHeightM, relief);
-        var (rock, lights) = Borrowed.Value;
+        var fps = scene.Fps;
+        var changes = scene.Changes;
+        double Seconds(int index) => Rounded(index / (double)fps);
+
+        // The relief at every frame, from the keys the models are stretched by. Where it changes,
+        // the models are laid out in the frame of the middle of its range — what a model placed
+        // once is off by grows with how far the relief is from its frame's — and each is stretched
+        // about a point level with the frame's zero.
+        var reliefs = Reliefs(scene);
+        var flattest = reliefs.Min();
+        var tallest = reliefs.Max();
+        var stretching = tallest > flattest;
+        var frame = new SceneTangentFrame(
+            scene.OriginLongitude, scene.OriginLatitude, scene.OriginHeightM, stretching ? (flattest + tallest) / 2 : reliefs[0]);
+
+        // The rock a cave's walls are drawn in and the lights are the survey library's own: its
+        // rock made of noise, a lamp that rides the camera and its sun. Asked of it rather than
+        // written down here, so they stay the library's when it changes them. Its sky is not
+        // taken: what stands behind everything is the flyby's.
+        var rock = ScenePlanBuilder.Material(new MaterialsSpec { Rock = RockMaterial.Procedural }, BoundingBox.Empty, RockMaterialId);
+        IReadOnlyList<PlanLight> lights =
+        [
+            .. ScenePlanBuilder.Lighting(new LightingSpec { Rig = LightingRig.Headlamp }).Lights,
+            .. ScenePlanBuilder.Lighting(new LightingSpec { Rig = LightingRig.SunSky }).Lights,
+        ];
 
         var models = new List<PlanModel>();
-        var materials = new List<PlanMaterial> { rock with { Id = RockMaterialId } };
+        var timed = new List<PlanChange>();
+        var materials = new List<PlanMaterial> { rock };
         var spheres = new List<(SceneVector Centre, double Radius)>();
-        CaveVector3? stretch = relief == 1 ? null : new CaveVector3(1, 1, Rounded(relief));
+        var layout = new Layout(frame, stretching, tallest, stretching || reliefs[0] != 1 ? new CaveVector3(1, 1, Rounded(reliefs[0])) : null);
+        var stretch = stretching
+            ? changes.Relief.Select(key => new PlanVectorKey(Seconds(key.Frame), new CaveVector3(1, 1, Rounded(key.Value)), Easing(key.Easing))).ToList()
+            : null;
+
+        // Where the caves appear part by part: over which seconds, on frames of the clip.
+        var revealFrom = 0.0;
+        var revealTo = 0.0;
+        if (scene.Reveal is { } asked)
+        {
+            var last = scene.Poses.Count - 1;
+            var from = Math.Clamp((int)Math.Round(asked.StartS * fps), 0, Math.Max(last - 1, 0));
+            var to = Math.Clamp((int)Math.Round(asked.EndS * fps), from + 1, Math.Max(last, from + 1));
+            (revealFrom, revealTo) = (Seconds(from), Seconds(to));
+        }
+
+        var stands = new List<Standing>();
+
+        // The models a light shows: the walls, and the passages drawn at a size nobody measured.
+        // The lamp reaches as far as the nearest of them.
+        var lit = new List<(Standing Stand, IndexedMesh Mesh)>();
+
+        // What changes of one model: the layer it belongs to shown and hidden — coming and going
+        // eased, as a flyby eases everything —, how much of it is there, the colour laid over
+        // it, its stretch, and the threshold it appears by where the scene reveals its cave.
+        void Changing(string id, FlybyBundleLayerChanges layer, IReadOnlyList<FlybyBundleTintKey>? tint, FlybyBundleRevealValues? reveal)
+        {
+            var (threshold, front) = reveal is null ? (null, null) : Revealing(reveal, revealFrom, revealTo);
+            var change = new PlanChange
+            {
+                Target = new PlanChangeTarget { Id = id },
+                Visible = layer.Shown.Count > 0
+                    ? [
+                        .. layer.Shown.Select(key => new PlanVisibleKey(
+                            Seconds(key.Frame), key.Shown, Seconds(key.FadeFrames), key.FadeFrames > 0 ? PlanEasing.Smooth : PlanEasing.Linear)),
+                    ]
+                    : null,
+                Opacity = layer.Opacity.Count > 0 ? Numbers(layer.Opacity, Seconds) : null,
+                Tint = tint is { Count: > 0 }
+                    ? [
+                        .. tint.Select((key, index) =>
+                            new PlanTintKey(Seconds(key.Frame), Linear(key.Colour) ?? default, Rounded(key.Strength), Easing(key.Easing))
+                            {
+                                Mix = Mixed(index > 0 ? tint[index - 1].Colour : null, key.Colour, key.Easing),
+                            }),
+                    ]
+                    : null,
+                Scale = stretch,
+                Reveal = threshold,
+                RevealFront = front,
+            };
+            if (change is not { Visible: null, Opacity: null, Tint: null, Scale: null, Reveal: null })
+            {
+                timed.Add(change);
+            }
+        }
 
         for (var i = 0; i < scene.Caves.Count; i++)
         {
             var cave = scene.Caves[i];
             var number = (i + 1).ToString("00", CultureInfo.InvariantCulture);
+            var reveal = scene.Reveal is null ? null : FlybyBundleRevealValues.Of(cave);
+
+            // A colour over the walls is a track only where it is ever seen.
+            var wallsTint = cave.WallsTint ?? changes.Walls.Tint;
+            var tinted = wallsTint.Any(key => key.Strength > 0) ? wallsTint : null;
 
             if (cave.Walls is { Mesh.TriangleCount: > 0 } walls)
             {
-                models.Add(Place(frame, $"cave-{number}-walls", WallsRole, RockMaterialId, walls, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                var id = $"cave-{number}-walls";
+                models.Add(Place(layout, id, i, WallsRole, RockMaterialId, walls, cave.AltitudeShiftM, spheres, stands, writeMesh, reveal?.On(walls)));
+                lit.Add((stands[^1], walls.Mesh));
+                Changing(id, changes.Walls, tinted, reveal);
             }
 
             if (cave.Estimated is { Mesh.TriangleCount: > 0 } estimated)
             {
+                var id = $"cave-{number}-estimated";
                 var colour = cave.EstimatedColor ?? GlbWriter.WallColor;
                 var material = FlatMaterial("estimated", colour, materials);
-                models.Add(Place(frame, $"cave-{number}-estimated", EstimatedRole, material, estimated, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                models.Add(Place(layout, id, i, EstimatedRole, material, estimated, cave.AltitudeShiftM, spheres, stands, writeMesh, reveal?.On(estimated)));
+                lit.Add((stands[^1], estimated.Mesh));
+                Changing(id, changes.Walls, tinted, reveal);
             }
 
-            if (cave.Legs.Count > 0 && Lines(frame, cave, scene.Look, number, materials) is { } lines)
+            if (cave.Legs.Count > 0)
             {
-                models.Add(Place(frame, $"cave-{number}-lines", LinesRole, lines.Material, lines.Mesh, cave.AltitudeShiftM, stretch, spheres, writeMesh));
+                // The lines' colour over the clip: this cave's own, else every cave's, else the one
+                // the look gives them for the whole of it.
+                var colours = cave.LinesTint ?? (changes.Lines.Tint.Count > 0 ? changes.Lines.Tint : null);
+                var oneColour = colours is null
+                    ? scene.Look.LineColour
+                    : colours.All(key => key.Strength > 0) ? colours[0].Colour : null;
+                if (Lines(layout, cave, scene.Look, oneColour, number, materials, reveal) is { } lines)
+                {
+                    var id = $"cave-{number}-lines";
+                    models.Add(Place(layout, id, i, LinesRole, lines.Material, lines.Mesh, cave.AltitudeShiftM, spheres, stands, writeMesh, lines.Reveal));
+                    Changing(
+                        id,
+                        cave.LinesStandIn ? changes.Walls : changes.Lines,
+                        colours is { Count: > 1 } || (colours is not null && oneColour is null && colours.Any(key => key.Strength > 0)) ? colours : null,
+                        reveal);
+                }
             }
         }
 
@@ -170,15 +325,70 @@ public static class FlybyBlenderBundle
             throw new ArgumentException("The flyby has nothing to draw.", nameof(scene));
         }
 
-        var fps = scene.Fps;
-        var views = scene.Poses
-            .Select(p => frame.ViewAt(p.Longitude, p.Latitude, p.HeightM, p.HeadingDeg, p.PitchDeg, p.RollDeg))
-            .ToList();
+        // The sky: one colour, or a colour that changes — which needs a world that has one.
+        var sky = changes.Sky.Count > 0 ? changes.Sky[0].Colour : scene.Look.SkyColour;
+        if (changes.Sky.Count > 1)
+        {
+            sky ??= "#000000";
+        }
+
+        var world = Linear(sky) is { } behind
+            ? new PlanWorld { Kind = PlanWorldKind.Color, Color = behind, Strength = 1 }
+            : null;
+
+        // The daylight: the sun as strong as there is daylight, and the sky with it — a sky that
+        // lights nothing is not seen either, which is what stands behind a cave from inside it:
+        // the ground hides the sky from a camera under it, and a bundle has no ground to do it.
+        // The lamp on the camera takes over where the daylight goes (below).
+        var daylight = changes.Daylight.Any(key => key.Value < 1) ? changes.Daylight : null;
+        if (daylight is not null)
+        {
+            var sun = lights.Single(light => light.Kind == PlanLightKind.Sun);
+            timed.Add(new PlanChange
+            {
+                Target = new PlanChangeTarget { Id = sun.Id },
+                Energy = Numbers(daylight, Seconds, sun.Energy),
+            });
+        }
+
+        if (world is not null && (changes.Sky.Count > 1 || daylight is not null))
+        {
+            timed.Add(new PlanChange
+            {
+                WorldColor = changes.Sky.Count > 1
+                    ? [
+                        .. changes.Sky.Select((key, index) =>
+                            new PlanColorKey(Seconds(key.Frame), Linear(key.Colour) ?? default, Easing(key.Easing))
+                            {
+                                Mix = Mixed(index > 0 ? changes.Sky[index - 1].Colour : null, key.Colour, key.Easing),
+                            }),
+                    ]
+                    : null,
+                WorldStrength = daylight is null ? null : Numbers(daylight, Seconds, world.Strength),
+            });
+        }
+
+        // Each frame's camera, raised by the rule the models are stretched by, at the relief the
+        // models have at that frame.
+        var views = new List<SceneView>(scene.Poses.Count);
+        for (var i = 0; i < scene.Poses.Count; i++)
+        {
+            var p = scene.Poses[i];
+            views.Add(frame.ViewAbout(p.Longitude, p.Latitude, p.HeightM, p.HeadingDeg, p.PitchDeg, p.RollDeg, reliefs[i]));
+        }
+
         var lenses = scene.Poses
             .Select(p => Rounded(SceneTangentFrame.FocalLength(
                 SceneTangentFrame.HorizontalFieldOfView(p.LensDeg, scene.Width, scene.Height), CameraPlanner.SensorWidthMm)))
             .ToList();
         var lensChanges = lenses.Any(lens => lens != lenses[0]);
+
+        // How near and how far each frame's camera draws; one pair for the clip where one pair
+        // does, and a pair a pose where the flight goes through more depth than one can hold.
+        var ranges = views.Select(view => ClipRange(view, spheres)).ToList();
+        var clipStart = ranges.Min(range => range.Start);
+        var clipEnd = ranges.Max(range => range.End);
+        var ownRanges = clipEnd / clipStart > DeepestOneRange;
 
         var track = new List<PlanCameraKey>(views.Count);
         for (var i = 0; i < views.Count; i++)
@@ -187,30 +397,37 @@ public static class FlybyBlenderBundle
             var focus = Math.Max(scene.Poses[i].FocusM, 0.01);
             var turn = PlanQuaternion.FromView(Vector(view.Forward), Vector(view.Up));
             track.Add(new PlanCameraKey(
-                Rounded(i / (double)fps),
+                Seconds(i),
                 Rounded(view.Eye),
                 Rounded(view.Eye + (view.Forward * focus)),
                 lensChanges ? lenses[i] : null)
             {
                 Orientation = new PlanQuaternion(Turn(turn.W), Turn(turn.X), Turn(turn.Y), Turn(turn.Z)),
+                ClipStart = ownRanges ? ranges[i].Start : null,
+                ClipEnd = ownRanges ? ranges[i].End : null,
             });
         }
 
-        var (clipStart, clipEnd) = ClipRange(views, spheres);
-        var texts = Texts(scene, views.Count);
         var name = string.IsNullOrWhiteSpace(scene.Name) ? "Flyby" : scene.Name.Trim();
+        var timeline = new PlanTimeline { Fps = fps, FrameCount = views.Count };
+
+        // What the scene points out: pinned to the caves' models, sized by the nearest the camera
+        // comes, shown as the flyby shows its layer.
+        var pointed = Annotations(scene, stands, layout, views, reliefs, timeline, writePhoto);
+        timed.AddRange(pointed.Changes);
 
         var plan = new ScenePlan
         {
             Generator = "SilexGIS",
             Name = name,
-            Features = texts is null
-                ? ScenePlan.BasicFeatures
-                : [.. ScenePlan.PlayerFeatures.Where(f => f == ScenePlan.TextsFeature || ScenePlan.BasicFeatures.Contains(f))],
+            // The modules every plan has; the ones its sections need are listed below, by the
+            // library, each at its place in the order they run.
+            Features = ScenePlan.BasicFeatures,
             // Zero, and no coordinate system: the frame is laid out about a point it does not name.
             Frame = new PlanFrame(),
-            Timeline = new PlanTimeline { Fps = fps, FrameCount = views.Count },
+            Timeline = timeline,
             Models = models,
+            Annotations = pointed.Annotations.Count > 0 ? pointed.Annotations : null,
             Camera = new PlanCamera
             {
                 SensorWidth = CameraPlanner.SensorWidthMm,
@@ -232,11 +449,9 @@ public static class FlybyBlenderBundle
                 Height = scene.Height,
                 Materials = materials,
                 Lights = lights,
-                World = Linear(scene.Look.SkyColour) is { } sky
-                    ? new PlanWorld { Kind = PlanWorldKind.Color, Color = sky, Strength = 1 }
-                    : null,
+                World = world,
             },
-            Texts = texts,
+            Changes = timed.Count > 0 ? timed : null,
             Output = new PlanOutput
             {
                 Kind = PlanOutputKind.Video,
@@ -245,6 +460,17 @@ public static class FlybyBlenderBundle
                 BaseName = Slug(scene.Name),
             },
         };
+
+        // The lamp on the camera, turned up where the daylight goes by how far the nearest wall is:
+        // keys of its energy, worked out by the survey library from the distances given it.
+        if (LampDistances(lit, views, reliefs, layout, Played(changes.Daylight, views.Count, 1), Seconds) is { } reach)
+        {
+            plan = LampReach.Apply(plan, distances: reach);
+        }
+
+        // The modules its sections need, and what is written over the picture — laid out for the
+        // plan as it stands, so the north arrow turns by the plan's own poses.
+        plan = ScenePlanBuilder.WithTexts(ScenePlanBuilder.WithNeededFeatures(plan), Texts(scene, plan));
 
         var errors = ScenePlanValidator.Validate(plan);
         if (errors.Count > 0)
@@ -256,58 +482,98 @@ public static class FlybyBlenderBundle
                 + string.Join("; ", errors.Take(5).Select(e => $"{e.Path}: {e.Message}")));
         }
 
-        return plan;
+        return (plan, pointed.PhotosShown);
     }
 
     // ---- models ----
 
+    /// <summary>
+    /// How the models of one scene are laid out: the frame, whether the relief changes while the
+    /// clip runs (each model is then stretched about a point level with the frame's zero), the
+    /// tallest relief of the clip, and the stretch every model starts with.
+    /// </summary>
+    private sealed record Layout(SceneTangentFrame Frame, bool Stretching, double Tallest, CaveVector3? Stretch);
+
+    /// <summary>
+    /// Where a model stands, for whatever is pinned to it: the cave it is of, the place on the
+    /// globe its own zero is — at the true height the scene drew it —, how far its mesh was
+    /// raised along its own up, and how the plan puts it.
+    /// </summary>
+    private sealed record Standing(
+        string Id,
+        int Cave,
+        LocalTangentFrame About,
+        double LiftM,
+        SceneVector Translation,
+        SceneVector Axis,
+        double Degrees);
+
+    /// <param name="reveal">A number for every vertex of the mesh, where the scene reveals its cave.</param>
     private static PlanModel Place(
-        SceneTangentFrame frame,
+        Layout layout,
         string id,
+        int cave,
         string role,
         string material,
         FlybyBundleMesh mesh,
         double altitudeShiftM,
-        CaveVector3? stretch,
         List<(SceneVector Centre, double Radius)> spheres,
-        Action<string, CaveMesh> writeMesh)
+        List<Standing> stands,
+        Action<string, Func<CaveMesh>> writeMesh,
+        IReadOnlyList<double>? reveal)
     {
-        var placement = frame.PlacementAt(mesh.AnchorLongitude, mesh.AnchorLatitude, mesh.AnchorAltitudeM + altitudeShiftM);
-        var path = id + ".ply";
-        writeMesh(path, Mesh(mesh.Mesh));
+        var height = mesh.AnchorAltitudeM + altitudeShiftM;
+        SceneVector translation;
+        SceneVector axis;
+        double degrees;
+        var lift = 0.0;
+        if (layout.Stretching)
+        {
+            (translation, axis, degrees, lift) = layout.Frame.PlacementAbout(mesh.AnchorLongitude, mesh.AnchorLatitude, height);
+        }
+        else
+        {
+            (translation, axis, degrees) = layout.Frame.PlacementAt(mesh.AnchorLongitude, mesh.AnchorLatitude, height);
+        }
 
-        // How far the mesh reaches from its zero point, for the camera's far limit: taller by the
-        // relief, which stretches it along its own up.
+        var path = id + ".ply";
+        writeMesh(path, () => Mesh(mesh.Mesh, lift) with { Reveal = reveal });
+        stands.Add(new Standing(
+            id, cave, new LocalTangentFrame(mesh.AnchorLongitude, mesh.AnchorLatitude, height), lift, translation, axis, degrees));
+
+        // How far the mesh reaches from the point it stands at, for the camera's far limit: taller
+        // by the relief, which stretches it along its own up — by the tallest the clip reaches.
         var reach = 0.0;
         var positions = mesh.Mesh.Positions;
         for (var v = 0; v < positions.Length; v += 3)
         {
-            var up = positions[v + 2] * frame.Relief;
+            var up = (positions[v + 2] + lift) * layout.Tallest;
             reach = Math.Max(reach, (positions[v] * positions[v]) + (positions[v + 1] * positions[v + 1]) + (up * up));
         }
 
-        spheres.Add((placement.Translation, Math.Sqrt(reach)));
+        spheres.Add((translation, Math.Sqrt(reach)));
 
         return new PlanModel
         {
             Id = id,
             Role = role,
             Path = path,
-            Translation = Rounded(placement.Translation),
-            Rotation = placement.Degrees == 0
+            Translation = Rounded(translation),
+            Rotation = degrees == 0
                 ? null
-                : new PlanRotation { Axis = Rounded(placement.Axis), Degrees = Math.Round(placement.Degrees, 9) },
-            Scale = stretch,
+                : new PlanRotation { Axis = Rounded(axis), Degrees = Math.Round(degrees, 9) },
+            Scale = layout.Stretch,
             Material = material,
         };
     }
 
-    private static CaveMesh Mesh(IndexedMesh mesh)
+    /// <param name="lift">Metres every vertex is raised by, along the mesh's own up.</param>
+    private static CaveMesh Mesh(IndexedMesh mesh, double lift)
     {
         var vertices = new CaveVector3[mesh.VertexCount];
         for (var v = 0; v < vertices.Length; v++)
         {
-            vertices[v] = new CaveVector3(mesh.Positions[v * 3], mesh.Positions[(v * 3) + 1], mesh.Positions[(v * 3) + 2]);
+            vertices[v] = new CaveVector3(mesh.Positions[v * 3], mesh.Positions[(v * 3) + 1], mesh.Positions[(v * 3) + 2] + lift);
         }
 
         var triangles = new CaveTriangle[mesh.TriangleCount];
@@ -322,74 +588,91 @@ public static class FlybyBlenderBundle
 
     /// <summary>
     /// A cave's survey legs as thin tubes about the first leg's start, and the material they wear:
-    /// one colour, or the colours by depth below the cave's highest point.
+    /// one colour, or the colours by depth below the cave's highest point. Either is a material
+    /// no light changes: a line is a drawing, not a thing in the cave, and reads the same under
+    /// the sun, by the lamp and in the dark, as it does on the screen.
     /// </summary>
-    private static (FlybyBundleMesh Mesh, string Material)? Lines(
-        SceneTangentFrame frame, FlybyBundleCave cave, FlybyBundleLook look, string number, List<PlanMaterial> materials)
+    /// <param name="oneColour">The one colour the lines have for the whole clip; null for their colours by depth.</param>
+    /// <param name="reveal">The numbers the cave appears by, where the scene reveals it.</param>
+    private static (FlybyBundleMesh Mesh, string Material, IReadOnlyList<double>? Reveal)? Lines(
+        Layout layout,
+        FlybyBundleCave cave,
+        FlybyBundleLook look,
+        string? oneColour,
+        string number,
+        List<PlanMaterial> materials,
+        FlybyBundleRevealValues? reveal)
     {
         var first = cave.Legs[0];
         var about = new LocalTangentFrame(first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
-        var mesh = SurveyLineTubes.Build(
-            cave.Legs.Select(leg => (
-                about.ToLocal(leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM),
-                about.ToLocal(leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM))),
-            LineRadiusM);
-        if (mesh.TriangleCount == 0)
+        var tubes = SurveyLineTubes.Build(
+            cave.Legs.Select(leg =>
+            {
+                var (from, to) = reveal?.Of(leg) ?? (0, 0);
+                return (
+                    about.ToLocal(leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM),
+                    about.ToLocal(leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM),
+                    from,
+                    to);
+            }),
+            LineRadiusM,
+            out var numbers);
+        if (tubes.TriangleCount == 0)
         {
             return null;
         }
 
-        var placed = new FlybyBundleMesh(mesh, first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
-        if (Linear(look.LineColour) is { } one)
-        {
-            return (placed, FlatMaterial(LinesMaterialId, (one.R, one.G, one.B), materials));
-        }
+        var appearing = reveal is null ? null : numbers;
 
+        var placed = new FlybyBundleMesh(tubes, first.FromLongitude, first.FromLatitude, first.FromAltitudeM);
         var bands = look.DepthBands
             .Select(band => (band.FromM, Colour: Linear(band.Colour)))
             .Where(band => band.Colour is not null && double.IsFinite(band.FromM) && band.FromM >= 0)
             .OrderBy(band => band.FromM)
             .Select(band => (band.FromM, Colour: band.Colour!.Value))
             .ToList();
-        if (bands.Count == 0)
+
+        if (Linear(oneColour) is not null || bands.Count == 0)
         {
-            return (placed, FlatMaterial(LinesMaterialId, GlbWriter.WallColor, materials));
+            var colour = Linear(oneColour) is { } given ? (given.R, given.G, given.B) : GlbWriter.WallColor;
+            return (placed, FlatMaterial(LinesMaterialId, colour, materials, unlit: true), appearing);
         }
 
-        // The ramp runs over the heights this cave's lines stand at in the scene, so its top is the
-        // cave's own highest leg and a colour means a depth below that — as the lines were drawn.
-        var low = double.PositiveInfinity;
-        var high = double.NegativeInfinity;
-        foreach (var leg in cave.Legs)
-        {
-            foreach (var z in (ReadOnlySpan<double>)
-                     [
-                         frame.PointAt(leg.FromLongitude, leg.FromLatitude, leg.FromAltitudeM + cave.AltitudeShiftM).Z,
-                         frame.PointAt(leg.ToLongitude, leg.ToLatitude, leg.ToAltitudeM + cave.AltitudeShiftM).Z,
-                     ])
-            {
-                low = Math.Min(low, z);
-                high = Math.Max(high, z);
-            }
-        }
+        // The colours by depth are a ramp over height in the lines' own mesh, in true metres: a
+        // colour is a depth below the cave's highest leg and stays with the leg it is on, however
+        // tall the relief draws the cave and whether or not the relief changes. The mesh's zero is
+        // the first leg's start, raised by what the mesh itself is raised by where it is stretched
+        // about another level.
+        var top = cave.Legs.Max(leg => Math.Max(leg.FromAltitudeM, leg.ToAltitudeM));
+        var bottom = cave.Legs.Min(leg => Math.Min(leg.FromAltitudeM, leg.ToAltitudeM));
+        var lift = layout.Stretching
+            ? layout.Frame.PlacementAbout(first.FromLongitude, first.FromLatitude, first.FromAltitudeM + cave.AltitudeShiftM).LiftM
+            : 0;
+        var high = top - first.FromAltitudeM + lift;
+        var span = Math.Max(top - bottom, 1.0);
 
-        var span = Math.Max(high - low, 1.0);
-        var stops = new List<PlanColorStop>();
-        var deepest = span / frame.Relief;
-        stops.Add(new PlanColorStop(0, bands.Last(band => band.FromM <= deepest || band.FromM == bands[0].FromM).Colour));
+        // A ramp in bands: one stop a band, at the height the band begins at from below — the
+        // depth the next band down starts at —, its colour holding from there up to the next
+        // stop. The colour changes at a stop at once, as the scene cuts a leg where a band begins.
+        var stops = new List<PlanColorStop>
+        {
+            new(0, bands.Last(band => band.FromM <= span || band.FromM == bands[0].FromM).Colour),
+        };
         for (var b = bands.Count - 1; b >= 1; b--)
         {
-            // Where this band begins, as a share of the way from the lowest line to the highest.
-            var at = 1 - (bands[b].FromM * frame.Relief / span);
-            const double edge = 1e-4;
-            if (at - edge > stops[^1].At + 1e-6 && at < 1 - 1e-6)
+            // As a share of the way from the lowest line to the highest.
+            var at = 1 - (bands[b].FromM / span);
+            if (at > stops[^1].At + 1e-6 && at < 1 - 1e-6)
             {
-                stops.Add(new PlanColorStop(Rounded(at - edge), bands[b].Colour));
                 stops.Add(new PlanColorStop(Rounded(at), bands[b - 1].Colour));
             }
         }
 
-        stops.Add(new PlanColorStop(1, bands[0].Colour));
+        if (stops.Count == 1)
+        {
+            // One band from top to bottom: a ramp has two stops at the least.
+            stops.Add(new PlanColorStop(1, stops[0].Color));
+        }
 
         var id = $"{LinesMaterialId}-{number}";
         materials.Add(new PlanMaterial
@@ -399,14 +682,122 @@ public static class FlybyBlenderBundle
             Color = bands[0].Colour,
             Roughness = 0.9,
             Stops = stops,
+            Banded = true,
+            Unlit = true,
+            Space = PlanRampSpace.Model,
             Low = Rounded(high - span),
             High = Rounded(high),
         });
-        return (placed, id);
+        return (placed, id, appearing);
     }
 
+    // ---- what changes ----
+
+    /// <summary>
+    /// The relief at every frame: what the keys give, as a renderer playing them works it out.
+    /// With no key, the scene's one factor.
+    /// </summary>
+    private static double[] Reliefs(FlybyBundleScene scene)
+    {
+        var reliefs = Played(scene.Changes.Relief, scene.Poses.Count, scene.Relief);
+
+        // To what the plan writes a stretch to, so the camera and the models read one number.
+        for (var i = 0; i < reliefs.Length; i++)
+        {
+            reliefs[i] = Rounded(reliefs[i]);
+        }
+
+        return reliefs;
+    }
+
+    /// <summary>
+    /// A track of numbers at every frame of the clip, as a renderer playing its keys works it out:
+    /// held before the first key and after the last, and between two keys moved as the later one
+    /// says. A key before the clip's first frame is one the clip begins on the way from. Of the
+    /// keys on one frame the second is what that frame shows, and the last where the way to the
+    /// next key starts from — the second again, unless a third says otherwise.
+    /// </summary>
+    /// <param name="none">The value at every frame of a track with no key.</param>
+    private static double[] Played(IReadOnlyList<FlybyBundleNumberKey> keys, int frames, double none)
+    {
+        var values = new double[frames];
+        var next = 0;
+        for (var i = 0; i < values.Length; i++)
+        {
+            if (keys.Count == 0)
+            {
+                values[i] = none;
+                continue;
+            }
+
+            while (next < keys.Count && keys[next].Frame <= i)
+            {
+                next++;
+            }
+
+            if (next == 0)
+            {
+                values[i] = keys[0].Value;
+                continue;
+            }
+
+            // The keys on the last frame that has any, at this frame or before it.
+            var last = next - 1;
+            var first = last;
+            while (first > 0 && keys[first - 1].Frame == keys[last].Frame)
+            {
+                first--;
+            }
+
+            if (keys[last].Frame == i)
+            {
+                values[i] = keys[Math.Min(first + 1, last)].Value;
+                continue;
+            }
+
+            if (next == keys.Count)
+            {
+                values[i] = keys[last].Value;
+                continue;
+            }
+
+            var (before, after) = (keys[last], keys[next]);
+            var share = (i - before.Frame) / (double)(after.Frame - before.Frame);
+            values[i] = after.Easing switch
+            {
+                FlybyBundleEasing.Constant => before.Value,
+                FlybyBundleEasing.Smooth => before.Value + ((after.Value - before.Value) * share * share * (3 - (2 * share))),
+                _ => before.Value + ((after.Value - before.Value) * share),
+            };
+        }
+
+        return values;
+    }
+
+    /// <summary>A track of numbers as the plan's keys, each number multiplied by <paramref name="times"/>.</summary>
+    private static List<PlanNumberKey> Numbers(IReadOnlyList<FlybyBundleNumberKey> keys, Func<int, double> seconds, double times = 1) =>
+        [.. keys.Select(key => new PlanNumberKey(seconds(key.Frame), Rounded(key.Value * times), Easing(key.Easing)))];
+
+    /// <summary>
+    /// How a colour is mixed on its way to a key from the key before: as a screen mixes two
+    /// colours, because that is what the flyby showed between them. Said only where there is a way
+    /// to go — another colour before, and a key that does not jump.
+    /// </summary>
+    private static PlanColorMix Mixed(string? before, string colour, FlybyBundleEasing easing) =>
+        before is not null && easing != FlybyBundleEasing.Constant && !string.Equals(before, colour, StringComparison.OrdinalIgnoreCase)
+            ? PlanColorMix.Srgb
+            : PlanColorMix.Linear;
+
+    private static PlanEasing Easing(FlybyBundleEasing easing) => easing switch
+    {
+        FlybyBundleEasing.Smooth => PlanEasing.Smooth,
+        FlybyBundleEasing.Constant => PlanEasing.Constant,
+        _ => PlanEasing.Linear,
+    };
+
     /// <summary>The id of a material of one plain colour, added to the list the first time it is asked for.</summary>
-    private static string FlatMaterial(string prefix, (double R, double G, double B) colour, List<PlanMaterial> materials)
+    /// <param name="unlit">Whether no light changes it: it then shows its colour as a screen shows it.</param>
+    private static string FlatMaterial(string prefix, (double R, double G, double B) colour, List<PlanMaterial> materials, bool unlit = false)
     {
         var rounded = new ColorRgb(Rounded(colour.R), Rounded(colour.G), Rounded(colour.B));
         var known = materials.FirstOrDefault(m => m.Kind == PlanMaterialKind.Flat && m.Color == rounded && m.Id.StartsWith(prefix, StringComparison.Ordinal));
@@ -417,29 +808,25 @@ public static class FlybyBlenderBundle
 
         var taken = materials.Count(m => m.Id.StartsWith(prefix, StringComparison.Ordinal));
         var id = taken == 0 ? prefix : $"{prefix}-{(taken + 1).ToString(CultureInfo.InvariantCulture)}";
-        materials.Add(new PlanMaterial { Id = id, Kind = PlanMaterialKind.Flat, Color = rounded, Roughness = 0.9 });
+        materials.Add(new PlanMaterial { Id = id, Kind = PlanMaterialKind.Flat, Color = rounded, Roughness = 0.9, Unlit = unlit });
         return id;
     }
 
     // ---- camera ----
 
     /// <summary>
-    /// How near and how far the camera draws, one pair for the whole clip: far enough to hold every
-    /// model from every frame, and as near as the closest it ever comes to one allows.
+    /// How near and how far the camera of one frame draws: far enough to hold every model, and as
+    /// near as how close it is to the closest of them allows.
     /// </summary>
-    private static (double Start, double End) ClipRange(
-        IReadOnlyList<SceneView> views, IReadOnlyList<(SceneVector Centre, double Radius)> spheres)
+    private static (double Start, double End) ClipRange(SceneView view, IReadOnlyList<(SceneVector Centre, double Radius)> spheres)
     {
         var farthest = 0.0;
         var clearest = double.PositiveInfinity;
-        foreach (var view in views)
+        foreach (var (centre, radius) in spheres)
         {
-            foreach (var (centre, radius) in spheres)
-            {
-                var distance = (view.Eye - centre).Length;
-                farthest = Math.Max(farthest, distance + radius);
-                clearest = Math.Min(clearest, Math.Max(0, distance - radius));
-            }
+            var distance = (view.Eye - centre).Length;
+            farthest = Math.Max(farthest, distance + radius);
+            clearest = Math.Min(clearest, Math.Max(0, distance - radius));
         }
 
         var start = Math.Clamp(clearest * 0.01, 0.1, 10);
@@ -468,9 +855,10 @@ public static class FlybyBlenderBundle
 
     /// <summary>
     /// What the flyby writes over its picture, laid out the way the survey library lays texts out —
-    /// its places, its sizes — and timed as the flyby times them.
+    /// its places, its sizes, its north arrow turning by the plan's own poses — and timed as the
+    /// flyby times them.
     /// </summary>
-    private static PlanScreenTexts? Texts(FlybyBundleScene scene, int frames)
+    private static PlanScreenTexts? Texts(FlybyBundleScene scene, ScenePlan plan)
     {
         var said = scene.Texts;
         var clip = ClipSeconds(scene);
@@ -481,7 +869,11 @@ public static class FlybyBlenderBundle
         {
             Title = title?.Text.Trim(),
             Subtitle = title is null || string.IsNullOrWhiteSpace(title.Subtitle) ? null : title.Subtitle.Trim(),
-            TitleSeconds = title is null ? null : Rounded(Math.Min(title.Seconds, clip)),
+
+            // The flyby's title has gone by the moment it names, having faded over the time the
+            // flyby fades a card over: the library's card stands for its seconds and then goes.
+            TitleSeconds = title is null ? null : Rounded(Math.Min(title.Seconds, clip) - CardFade(title, clip)),
+            TitleFade = title is null ? null : Rounded(CardFade(title, clip)),
             EndCard = end is null
                 ? null
                 : new EndCardSpec
@@ -489,6 +881,12 @@ public static class FlybyBlenderBundle
                     Text = end.Text.Trim(),
                     Subtitle = string.IsNullOrWhiteSpace(end.Subtitle) ? null : end.Subtitle.Trim(),
                     Seconds = Rounded(Math.Min(end.Seconds, clip)),
+                    Fade = Rounded(CardFade(end, clip)),
+
+                    // Over the last of the flight, which goes on under it, and on no card of
+                    // black: the clip is as long as the flyby.
+                    Backdrop = 0,
+                    OverScene = true,
                 },
             Captions = Captions(said.Captions, clip),
             Corner = string.IsNullOrWhiteSpace(said.Corner) ? null : said.Corner.Trim(),
@@ -497,135 +895,32 @@ public static class FlybyBlenderBundle
             FadeToBlack = Rounded(Math.Clamp(said.FadeOutS, 0, clip)),
             NorthArrow = said.NorthArrow,
         };
-        if (!overlays.Any)
-        {
-            return null;
-        }
 
-        var spec = new SceneSpec
-        {
-            Labels = new LabelsSpec { Overlays = overlays },
-            Animation = new AnimationSpec { Fps = scene.Fps, DurationSeconds = clip },
-            Output = new OutputSpec { Kind = OutputKind.Video, Width = scene.Width, Height = scene.Height },
-        };
-        var laid = ScreenTextPlanner.Plan(spec, new CameraPlan { FrameCount = frames });
+        var laid = ScreenTextPlanner.Plan(overlays, plan);
         if (laid is null)
         {
             return null;
         }
 
-        // The layout is the library's. Three things about time are the flyby's, and are put back:
-        // its title has gone by the moment it names; its end card comes over the last of the flight
-        // rather than on a card of black after it, so the clip is as long as the flyby; and its
-        // north arrow turns by the headings the camera was given, which a camera looking straight
-        // down still has.
-        var items = new List<PlanScreenItem>(laid.Items.Count);
-        foreach (var item in laid.Items)
+        // The layout and the times are the library's, from what was said above. One thing it
+        // cannot be told: a title that fades has to fade in as well, and the flyby's is there
+        // from the first frame — a recording opens on it.
+        return laid with
         {
-            if (item.Role is ScreenTextPlanner.TitleRole or ScreenTextPlanner.SubtitleRole && title is not null)
-            {
-                var until = Math.Min(title.Seconds, clip);
-                items.Add(item with { End = Rounded(until), FadeOut = Rounded(Math.Min(CardFadeSeconds, until / 4)) });
-            }
-            else if (item.Role == ScreenTextPlanner.EndCardRole && end is not null)
-            {
-                if (item.Kind == PlanScreenItemKind.Box)
-                {
-                    continue;
-                }
-
-                var lasting = Math.Min(end.Seconds, clip);
-                items.Add(item with
-                {
-                    Start = Rounded(clip - lasting),
-                    FadeIn = Rounded(Math.Min(CardFadeSeconds, lasting / 4)),
-                    Backing = true,
-                });
-            }
-            else if (item.Role == ScreenTextPlanner.NorthArrowRole && item.Kind == PlanScreenItemKind.Arrow)
-            {
-                items.Add(item with { Turn = Turns(scene.Poses, scene.Fps) });
-            }
-            else
-            {
-                items.Add(item);
-            }
-        }
-
-        return laid with { Hold = 0, Items = items };
-    }
-
-    /// <summary>
-    /// The north arrow's turn over the clip: the camera's heading at each frame, carried on past a
-    /// full circle rather than jumping back, and left out where the frames around it give it.
-    /// </summary>
-    private static List<PlanTurn> Turns(IReadOnlyList<FlybyBundlePose> poses, int fps)
-    {
-        var headings = new double[poses.Count];
-        for (var i = 0; i < poses.Count; i++)
-        {
-            var heading = poses[i].HeadingDeg;
-            headings[i] = i == 0 ? heading : headings[i - 1] + Math.IEEERemainder(heading - headings[i - 1], 360.0);
-        }
-
-        const double tolerance = 0.05;
-        var turns = new List<PlanTurn>();
-        void Keep(int index) => turns.Add(new PlanTurn(Rounded(index / (double)fps), Math.Round(headings[index], 3)));
-
-        Keep(0);
-        var from = 0;
-        for (var to = 2; to < headings.Length; to++)
-        {
-            var straight = true;
-            for (var i = from + 1; i < to && straight; i++)
-            {
-                var onLine = headings[from] + ((headings[to] - headings[from]) * (i - from) / (to - from));
-                straight = Math.Abs(onLine - headings[i]) <= tolerance;
-            }
-
-            if (!straight)
-            {
-                Keep(to - 1);
-                from = to - 1;
-            }
-        }
-
-        if (headings.Length > 1 && headings[^1] != headings[from])
-        {
-            Keep(headings.Length - 1);
-        }
-
-        return turns;
-    }
-
-    // ---- the look that is the library's own ----
-
-    /// <summary>
-    /// The rock a cave's walls are drawn in and the lights of the scene, taken from the survey
-    /// library's own defaults by asking it for the plan of an empty scene: its rock, a lamp that
-    /// rides the camera and its sun. Asked rather than written down here, so they stay the
-    /// library's when it changes them.
-    /// </summary>
-    private static (PlanMaterial Rock, IReadOnlyList<PlanLight> Lights) BorrowLook()
-    {
-        var framing = new CameraFraming
-        {
-            LocalBounds = new BoundingBox(new CaveVector3(-1, -1, -1), new CaveVector3(1, 1, 1)),
+            Items =
+            [
+                .. laid.Items.Select(item =>
+                    item.Role is ScreenTextPlanner.TitleRole or ScreenTextPlanner.SubtitleRole ? item with { FadeIn = null } : item),
+            ],
         };
-        ScenePlan Lit(LightingRig rig) => ScenePlanBuilder.FromSpec(
-            new SceneSpec
-            {
-                Source = new SourceSpec { PlyPath = "model.ply" },
-                Materials = new MaterialsSpec { Rock = RockMaterial.Procedural },
-                Lighting = new LightingSpec { Rig = rig },
-                Output = new OutputSpec { OutputDirectory = OutputDirectory },
-            },
-            framing);
-
-        var lamp = Lit(LightingRig.Headlamp);
-        var sun = Lit(LightingRig.SunSky);
-        return (lamp.Look.Materials[0], [.. lamp.Look.Lights, .. sun.Look.Lights]);
     }
+
+    /// <summary>
+    /// How long a card takes to go, or to come: the time the flyby fades a card over, and no more
+    /// than a quarter of the time the card is there.
+    /// </summary>
+    private static double CardFade(FlybyBundleCard card, double clipSeconds) =>
+        Math.Min(CardFadeSeconds, Math.Min(card.Seconds, clipSeconds) / 4);
 
     // ---- small things ----
 

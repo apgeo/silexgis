@@ -201,6 +201,8 @@ export const groups = {
     'UploadDestinationTests',
     // A crowded package is judged from its directory by the upload sniffer and the readers alike.
     'CrowdedPackageTests',
+    // A photograph goes into a render bundle as a rendering the thumbnail service makes.
+    'FlybyBlenderBundleApiTests',
   ],
   uploads: [
     'EnumBindingTests', 'UploadDestinationTests', 'UploadLimitsAndResumeTests',
@@ -323,6 +325,8 @@ export const groups = {
     'GraphDisclosureTests', 'GraphParityTests',
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
     'ResLinkTargetPictureTests',
+    // The photographs linked to stations are read into a render bundle by the rules a link listing has.
+    'FlybyBlenderBundleApiTests',
     // A link listing decides the documents it shows for the whole set at once.
     'DocumentLinkQueryCostTests',
     // A place a phone pinned on its map is a link shown whole or not at all, and written only by
@@ -401,6 +405,8 @@ export const groups = {
     'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
     // The walls a survey was given, read back out of their file for a render bundle.
     'FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'GlbReaderTests',
+    // The order a cave appears in, measured along its stored legs from the stations flagged as entrances.
+    'FlybyBundlePointedTests',
     // A cave's surveys and the uploads that are versions of them, and the run that reads them.
     'SurveyUploadSchemaTests', 'SurveyUploadRouteTests', 'SurveyUploadPipelineTests', 'SurveyUploadPointCloudTests', 'SurveyUploadPointCloudWorkerTests', 'SurveyUploadSurfaceTests',
     'SurveyUploadMandeyeTests', 'SurveyUploadMandeyeWorkerTests', 'SurveyUploadExternalStepTests',
@@ -531,7 +537,13 @@ export const groups = {
   ],
   // A flyby of the 3D scene handed over as a render bundle for Blender: the route, the writer
   // of the bundle, and the check that its camera is the camera the browser flew.
-  flybys: ['FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'FlybyBundleParityTests'],
+  flybys: [
+    'FlybyBlenderBundleApiTests', 'FlybyBlenderBundleTests', 'FlybyBundleParityTests',
+    // What a bundle points out — markers, names, photographs — and how its caves appear part by part.
+    'FlybyBundlePointedTests',
+    // The lamp on a bundle's camera where its sun does not reach, and lines no light changes.
+    'FlybyBundleLampTests',
+  ],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],
 };

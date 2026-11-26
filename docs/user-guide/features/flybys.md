@@ -319,7 +319,7 @@ Beside MP4, WebM and GIF the **Format** row offers **Blender bundle (.zip)**. It
 it is everything [Blender](https://www.blender.org/) needs to render the flyby itself — the
 camera's path, the caves and a small player — in one zip. **Nothing is rendered here.** You unpack
 the zip on your own computer and render it there with Blender 4.2 or newer; Blender lights the
-cave with a lamp on the camera and draws its walls as rock, which the 3D view cannot do.
+cave with a lamp on the camera and a sun, and draws its walls as rock, which the 3D view cannot do.
 
 What goes into it:
 
@@ -332,30 +332,129 @@ What goes into it:
   set of walls, the panel asks again — *Include the walls of N caves that were not downloaded into
   the view*, with their size. Ticked, they go straight into the bundle; nothing more is downloaded
   into the view.
-- **The texts**: title, captions, end card, the corner line, "Relief ×N", the north arrow and
-  the fades, drawn in Blender's own lettering.
-- The sky colour and the relief of the flyby's first frame.
+- **What the flyby changes while it plays**: a relief that grows or flattens — the caves are
+  stretched and the camera lifted by the same numbers, frame for frame —, the colour over the
+  walls and each cave coloured apart (*Light the cave being visited* included), the survey lines
+  in one colour or by depth, the walls and the lines shown, hidden and faded, and the colour of
+  the sky. A change is written into the bundle as two keys that Blender eases between the way the
+  flyby does, so you can move them in Blender afterwards — a colour crossing into another too,
+  mixed as the screen mixes it; a change the clip stops in the middle of, whose second key then
+  lies after the last frame; and one a stretch begins in the middle of, whose first key lies
+  before the first frame, so the stretch opens part of the way through the change or the fade.
+- **The texts**: title, captions, end card, the corner line, "Relief ×N" as it changes, the north
+  arrow and the fades, drawn in Blender's own lettering.
+- **What the view points out**: the **entrances** and the **features that are points** — of the
+  *Entrances* and *Surface features* layers, of each layer you draw from a saved filter and of
+  each layer of features the flyby draws itself — as glowing markers, each layer in its own
+  colour, where the flyby shows that layer at some moment of the clip. A layer comes, goes and
+  fades in the bundle as it does in the flyby. An entrance of one of the flyby's own caves has
+  its **name** written above it. What is taken is what those layers hold about the caves the
+  view is drawing: within their bounds widened by half their larger side, and by a quarter of a
+  kilometre at least; at most 1,000 markers.
+- **The photographs taken at stations** of the flyby's own caves — the ones the *Station
+  photographs* layer marks for the selected cave, here for every cave of the flyby — where the
+  flyby shows that layer. Each goes in **as the picture itself**, standing above its station
+  with a line down to it, and is shown **while the camera is near**. One photograph a station
+  (the first of the newest link), at most 40 a bundle — the ones the camera passes nearest.
+- **The caves appearing part by part**, if you tick *Let the caves appear part by part, from
+  their entrances inwards* — see below.
 
 What does not: the panel lists it under **Not in the bundle** before you make the file, and the
 bundle's own `README.txt` says the same. Always the ground and the map drawn on it — the caves
-stand in empty space under a plain sky — and, where your flyby has them: changes of the look
-while it plays (the scene keeps the look of its first frame), a relief that changes, colours on
-the walls, the opening cut in the ground, entrance markers, surface features, scans, photographs,
-map overlays, georeferenced maps and the lines of imported files. The bundle is made anyway.
+stand in empty space under a plain sky, and a background that changes goes with the ground — and,
+where your flyby has them: the opening cut in the ground, the outlines of surface features that
+are lines or areas, scans, map overlays, georeferenced maps and the lines of imported files. The
+bundle is made anyway.
+
+A few things are carried a little differently from what the 3D view draws:
+
+- A change **begins and ends on a frame** of the bundle's 25 a second, so it can start up to a
+  fiftieth of a second off the moment the flyby gives it.
+- **Walls fade** in Blender as the flyby asks; the 3D view can only switch them on and off. A
+  cave that is half faded shows its far walls through its near ones.
+- **The sun and the sky go out underground.** The 3D view has neither a sun nor a dark; Blender
+  has both. The lamp on the camera is always on. The sun and the sky fade out over a second from
+  the frame the camera goes **under the ground** — the ground this 3D view has at the place the
+  camera is over, whether or not the flyby cuts it open above a cave — and are back on the frame
+  it comes out, having risen over the second before. A dip under the ground shorter than a second
+  changes nothing; a stay shorter than two is half fading and half coming back. So inside a hill
+  the picture is lit by the lamp alone, and what stands behind the cave is black instead of the
+  sky — under the ground there is no sky to see. **The lamp reaches as far as the nearest wall**:
+  as the daylight goes, its strength is turned up by the square of the distance from the camera
+  to the nearest wall of the bundle, so walls the camera looks at from a hundred metres away
+  under the ground are lit as walls three metres from it are. Walls farther off than the nearest
+  are darker, as by any lamp, and in whole daylight the lamp is the small one it always was. To
+  keep the daylight on, remove three tracks from the bundle's `scene-plan.json`; its `README.txt`
+  names them.
+- **Survey lines need no light.** They are drawn in their own colours — one colour, or the
+  colours by depth in bands that change at once where a band begins — whatever the light: as
+  bright in the dark as under the sun, as the 3D view draws them, and without the shading a sun
+  would give them. A line does not light the walls beside it.
+- **A marker has a size in metres.** The 3D view draws an entrance as an icon of one size on the
+  screen however far the camera is; a render has no such thing. Each marker is a ball as large as
+  an icon of the view would be at **the nearest the camera comes to it** (across, a little under
+  a fiftieth of that distance), so it reads at that moment and is smaller from farther away. A
+  name's letters are two and a half times the ball's radius. A group of entrances the view counts
+  into one circle from far away is its entrances, one by one.
+- **A marker stands where this view's ground has it**, and the bundle has no ground: an entrance
+  floats at the height the terrain has there, beside the cave. Where the terrain and the survey
+  disagree about how high the entrance is, the marker is not at the cave's mouth by that much —
+  as on the screen.
+- **A photograph is a picture, not an icon.** It is as wide as a fifth of the nearest the camera
+  comes to its station, fades in when the camera is within twelve and a half of its widths (two
+  and a half times that nearest distance) and out when it is farther. Where the camera flies
+  past a station it is made larger — for two fifths of how far the camera is a second before and
+  after — so that every photograph is up for **two seconds at least**. So in a flight round a
+  cave from outside every photograph of that cave may be up at once, large and overlapping; in
+  a flight down the passages each comes up as the camera reaches it. The layer itself is switched
+  at once, as in the view. The pictures are in the bundle's `photos` folder as JPEG files no
+  longer than 2,000 pixels on a side, made from the rendering SilexGIS shows — **without the
+  camera's own data, its position included** — and named `photo-001.jpg` and so on: neither a
+  photograph's title nor its file name goes in.
+- The quick draft (`--draft`) draws no materials: it shows a colour over the walls in its own
+  flat colours, a fade as fewer of the walls' faces, a photograph as a mosaic of its colours and
+  a reveal as a cut along the faces. The full render shows them as they are.
+
+#### The caves appearing part by part
+
+Ticked, **every cave of the bundle grows from its entrances inwards** while the clip runs: what
+is nearer to an entrance, measured **along the passages**, appears first, with a soft glowing
+edge. It starts when the title has gone (at the first frame without one) and the caves are whole
+when four fifths of the flight to the end card are over, so the last fifth shows them complete.
+Every cave takes the same time, whatever its length.
+
+- The entrances are the stations **the survey itself marks as entrances**. A cave whose survey
+  marks none starts at the first station of its first leg, and a part of a cave joined to no
+  entrance at its own first station.
+- A cave that has walls but no survey to measure along is there from the first frame.
+- **There is no reveal by survey date, and so no year counter.** Blender's player can show a
+  cave in the order it was explored, with the year counting up over the picture — but SilexGIS
+  keeps where the legs of a survey run and one date for the whole model, not the day each leg
+  was measured. Until it keeps that, distance is what a cave can be revealed by.
+- To see the caves whole after all, remove the `reveal` and `revealFront` members from `changes`
+  in the bundle's `scene-plan.json`; the README says so.
 
 **Download the bundle** gets the flyby ready as for a careful movie, reads the camera and asks
 the server for the zip, which is saved as `<the flyby's name>-blender.zip`. Afterwards the panel
-says how many caves went in with their walls and how many by their lines. A cave you may not
-see, or may not see the exact place of, is not in the bundle, and neither is one with no survey;
-the panel says only how many are missing.
+says how many caves went in with their walls and how many by their lines, and how many markers
+and photographs. A cave you may not see, or may not see the exact place of, is not in the bundle,
+and neither is one with no survey; the panel says only how many are missing. The same holds for
+what is pointed out: an entrance or a feature becomes a marker only if you may see it **and its
+exact place** — one the map shows you moved to the protection grid is left out, because a marker
+stands at a distance from the caves and would say where they lie on that grid — and the panel
+gives one count of those missing, with no reason. A photograph goes in only if you may see it
+and its cave is drawn; one you may not see is not counted and not mentioned.
 
 In the unpacked folder, `README.txt` says how to render: `sh render.sh` on Linux and macOS,
 `render.cmd` on Windows, and `--draft` after either for a quick look first. The movie is written
-into the folder's `out`.
+into the folder's `out`. The README is in Romanian when you have SilexGIS in Romanian and in
+English otherwise, and also says how the scene is laid out, how it is lit and what it leaves out.
 
 - **The bundle holds the shapes of these caves and how they lie to one another — no coordinates,
-  no terrain, no map.** It should still go only to people who may see these caves; the panel
-  says so beside the button, always.
+  no terrain, no map.** Markers and photographs are pinned to points of the caves' own models,
+  so they add how entrances, features and stations lie to the caves, and nothing about where
+  that is. It should still go only to people who may see these caves — and a photograph shows
+  whatever it shows; the panel says so beside the button, always.
 - A flyby about no cave — one round "what the view shows", or along an imported file — cannot be
   made a bundle of, and neither can one whose look hides walls and survey lines alike. A bundle
   holds at most 20,000 frames (a little over thirteen minutes).

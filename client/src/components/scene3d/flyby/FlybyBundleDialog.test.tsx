@@ -35,7 +35,34 @@ vi.mock('../../../api/hooks.ts', () => ({
   useSavedFilters: () => ({ data: [] }),
   useFeatureTypes: () => ({ data: [] }),
   useSearch: () => ({ data: undefined }),
+  // The two routes a layer of entrances or features is drawn from, as the export asks them.
+  fetchEntranceFeatures: async (bbox: string, zoom: number, params: object) => {
+    layersAsked.push({ route: 'entrances', bbox, zoom, params });
+    return {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [25.001, 45.501] }, properties: { id: 'e-own', caveId: 'a', name: 'Mouth' } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [25.011, 45.501] }, properties: { id: 'e-next', caveId: 'n' } },
+        // Shown only approximately, and several in one: neither is a place to stand a marker on.
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [25.05, 45.55] }, properties: { id: 'e-moved', caveId: 'x', approximate: true } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [25.02, 45.52] }, properties: { cluster: true, count: 4 } },
+      ],
+    };
+  },
+  fetchMapFeatures: async (bbox: string, params: object) => {
+    layersAsked.push({ route: 'features', bbox, params });
+    return {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [25.002, 45.502] }, properties: { id: 'f-point' } },
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[25, 45.5], [25.01, 45.51]] }, properties: { id: 'f-line' } },
+        { type: 'Feature', geometry: null, properties: { id: 'f-withheld', approximate: true } },
+      ],
+    };
+  },
 }));
+/** What the export asked the two layer routes. */
+const layersAsked: { route: string; bbox: string; zoom?: number; params: object }[] = [];
 vi.mock('../../../api/hooks/mapLayers.ts', () => ({
   useRasterMapLayers: () => ({ data: [] }),
   useGeofileLayers: () => ({ data: [] }),
@@ -245,11 +272,44 @@ describe('a flyby as a bundle for Blender', () => {
     await openBundle();
 
     // The ground always; then what the viewer has switched on that a bundle has no place for.
-    expect(leftOut()).toEqual(['ground', 'entrances', 'scans', 'mapLayers', 'tracks']);
+    // The entrances the viewer has on are not on the list: they go in as markers.
+    expect(leftOut()).toEqual(['ground', 'scans', 'mapLayers', 'tracks']);
     expect(screen.getByTestId('flyby-bundle-left-out-ground')).toHaveTextContent(
       'The ground and the map drawn on it: the caves stand in empty space, under a plain sky.',
     );
     expect(screen.getByTestId('flyby-bundle-left-out')).toHaveTextContent('The bundle is made anyway, and its README says the same.');
+    expect(screen.getByTestId('flyby-bundle-pointed')).toHaveTextContent(
+      'the entrances and the features that are points go in as markers',
+    );
+    // And what a bundle does that the screen does not: its daylight goes underground.
+    expect(screen.getByTestId('flyby-bundle-daylight')).toHaveTextContent(
+      'In the render the sun and the sky go out while the camera is under the ground, and come back when it comes out. The lamp on the camera then lights the walls from as far as the nearest of them is; survey lines keep their colours in any light.',
+    );
+  });
+
+  it('lists no change of the look as left out: a relief that grows while the flyby plays is sent as keys', async () => {
+    renderFlyby();
+    fireEvent.click(screen.getByText('Ready-made changes'));
+    const factor = screen.getByRole('spinbutton', { name: 'The factor the relief rises to' });
+    fireEvent.change(factor, { target: { value: '3' } });
+    fireEvent.blur(factor);
+    fireEvent.click(screen.getByTestId('flyby-recipe-relief-add'));
+    await openBundle();
+
+    // Only the ground: what changes during the flyby goes into the bundle.
+    expect(leftOut()).toEqual(['ground']);
+
+    await download();
+    const { body } = server.asked[0];
+    expect(body.leftOut).toEqual(['ground']);
+    // Up to three times as tall and back, eased as the flyby eases: four keys after the first.
+    const relief = body.changes?.relief ?? [];
+    expect(relief.map((key) => key.value)).toEqual([1, 1, 3, 3, 1]);
+    expect(relief.map((key) => key.easing)).toEqual([null, null, 'smooth', null, 'smooth']);
+    expect(relief.every((key) => Number.isInteger(key.frame) && key.frame >= 0 && key.frame < body.frames.length)).toBe(true);
+    // The camera's heights stay true; the mark over the picture follows the ramp.
+    expect(body.relief).toBe(1);
+    expect(body.texts?.cornerCaptions?.length).toBeGreaterThan(10);
   });
 
   it('sends the camera of every frame, the flyby\'s cave with its walls and the others in view by their lines', async () => {
@@ -276,6 +336,10 @@ describe('a flyby as a bundle for Blender', () => {
     expect(body.look?.lines).toBe(true);
     expect(body.look?.depthBands?.[0]).toMatchObject({ fromM: 0 });
     expect(body.leftOut).toEqual(['ground']);
+    // The bundle's own notes are asked for in the language the reader has the application in.
+    expect(body.language).toBe('en');
+    // The camera stays above this scene's ground, so nothing is said of the daylight.
+    expect(body.changes?.daylight ?? null).toBeNull();
 
     expect(screen.getByTestId('flyby-bundle-report')).toHaveTextContent('1 cave with its walls.');
     expect(screen.getByTestId('flyby-bundle-report')).toHaveTextContent('1 cave by its survey lines.');
@@ -325,6 +389,86 @@ describe('a flyby as a bundle for Blender', () => {
     await download(2);
     expect(server.asked[1].body.caves[0]).toMatchObject({ caveId: 'a', walls: true });
     expect(server.asked[1].body.leftOut).not.toContain('wallsNotDownloaded');
+  });
+
+  it('names the entrances and features of the layers the flyby shows, asks for the photographs and can reveal the caves', async () => {
+    server.answer = () =>
+      new Headers({
+        'X-SilexGis-Bundle-Walls': '1',
+        'X-SilexGis-Bundle-Lines': '1',
+        'X-SilexGis-Bundle-Not-Drawn': '0',
+        'X-SilexGis-Bundle-Walls-Left-Out': '0',
+        'X-SilexGis-Bundle-Markers': '3',
+        'X-SilexGis-Bundle-Markers-Not-Drawn': '1',
+        'X-SilexGis-Bundle-Photos': '2',
+      });
+    layersAsked.length = 0;
+    const scene = fakeScene({}, { layers: { walls: true, centerlines: true, entrances: true, photos: true }, listed: ['filter:f1'] });
+    scene.look!.markerSources = () => [
+      { layer: 'entrances', kind: 'entrances', params: {}, colour: '#146262' },
+      // Hidden by the viewer, and never shown by the flyby: not asked for at all.
+      { layer: 'surface-features', kind: 'surfaceFeatures', params: {}, colour: '#7a5c1e' },
+      { layer: 'filter:f1', kind: 'features', params: { savedFilterId: 'f1' }, colour: '#722ed1' },
+    ];
+    renderFlyby(scene);
+    await openBundle();
+
+    // Said before the file is made: what is pointed out, and what a reveal is.
+    expect(leftOut()).toEqual(['ground', 'featureOutlines']);
+    const reveal = screen.getByTestId('flyby-bundle-reveal');
+    expect(reveal.closest('label')).toHaveTextContent('Let the caves appear part by part, from their entrances inwards');
+    expect(reveal).not.toBeChecked();
+    fireEvent.click(reveal);
+    await pass(20);
+    await download();
+
+    // The window: the bounds of the caves the view draws, widened — and a zoom past any cluster.
+    expect(layersAsked.map((asked) => [asked.route, asked.params])).toEqual([
+      ['entrances', {}],
+      ['entrances', { savedFilterId: 'f1' }],
+      ['features', { savedFilterId: 'f1' }],
+    ]);
+    const [west, south, east, north] = layersAsked[0].bbox.split(',').map(Number);
+    expect(west).toBeLessThan(25 - 0.003);
+    expect(east).toBeGreaterThan(25.012 + 0.003);
+    expect(south).toBeLessThan(45.5 - 0.002);
+    expect(north).toBeGreaterThan(45.504 + 0.002);
+    expect(layersAsked[0].zoom).toBeGreaterThanOrEqual(16);
+
+    const body = server.asked[0].body;
+    // Ids, the ground under each, and a name for an entrance of the flyby's own cave — first.
+    expect(body.markers).toEqual([
+      {
+        kind: 'entrances',
+        colour: '#146262',
+        markers: [
+          { featureId: 'e-own', groundM: 1000, named: true },
+          { featureId: 'e-next', groundM: 1000, named: false },
+        ],
+        shown: null,
+        opacity: null,
+      },
+      {
+        kind: 'features',
+        colour: '#722ed1',
+        markers: [
+          { featureId: 'e-own', groundM: 1000, named: true },
+          { featureId: 'e-next', groundM: 1000, named: false },
+          { featureId: 'f-point', groundM: 1000, named: false },
+        ],
+        shown: null,
+        opacity: null,
+      },
+    ]);
+    expect(body.photos).toEqual({ caves: ['a'], shown: null });
+    expect(body.reveal).toMatchObject({ by: 'distance', startS: 0 });
+    expect(body.leftOut).toEqual(['ground', 'featureOutlines']);
+
+    expect(screen.getByTestId('flyby-bundle-report-markers')).toHaveTextContent('3 markers.');
+    expect(screen.getByTestId('flyby-bundle-report-photos')).toHaveTextContent('2 photographs.');
+    expect(screen.getByTestId('flyby-bundle-report-markers-not-drawn')).toHaveTextContent(
+      '1 entrance or feature is not in it: nothing of it is available to draw.',
+    );
   });
 
   it('says what the server left out of the bundle it made', async () => {

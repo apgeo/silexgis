@@ -22,12 +22,24 @@ public static class SurveyLineTubes
     /// <param name="radiusM">From a leg to each corner of its tube.</param>
     public static IndexedMesh Build(
         IEnumerable<((double East, double North, double Up) From, (double East, double North, double Up) To)> legs,
-        double radiusM)
+        double radiusM) =>
+        Build(legs.Select(leg => (leg.From, leg.To, 0.0, 0.0)), radiusM, out _);
+
+    /// <summary>
+    /// The tubes of legs that each carry a number at either end, and that number for every vertex:
+    /// the four corners at a leg's start have the start's, the four at its end the end's.
+    /// </summary>
+    /// <param name="values">One number for each vertex of the mesh, in the order of its positions.</param>
+    public static IndexedMesh Build(
+        IEnumerable<((double East, double North, double Up) From, (double East, double North, double Up) To, double FromValue, double ToValue)> legs,
+        double radiusM,
+        out IReadOnlyList<double> values)
     {
         var positions = new List<double>();
         var indices = new List<int>();
+        var numbers = new List<double>();
 
-        foreach (var (a, b) in legs)
+        foreach (var (a, b, fromValue, toValue) in legs)
         {
             var dx = b.East - a.East;
             var dy = b.North - a.North;
@@ -60,13 +72,14 @@ public static class SurveyLineTubes
             var vz = (dx * uy) - (dy * ux);
 
             var first = positions.Count / 3;
-            foreach (var end in (ReadOnlySpan<(double East, double North, double Up)>)[a, b])
+            foreach (var (end, value) in (ReadOnlySpan<((double East, double North, double Up), double)>)[(a, fromValue), (b, toValue)])
             {
                 foreach (var (su, sv) in (ReadOnlySpan<(double, double)>)[(1, 0), (0, 1), (-1, 0), (0, -1)])
                 {
                     positions.Add(end.East + (radiusM * ((su * ux) + (sv * vx))));
                     positions.Add(end.North + (radiusM * ((su * uy) + (sv * vy))));
                     positions.Add(end.Up + (radiusM * ((su * uz) + (sv * vz))));
+                    numbers.Add(value);
                 }
             }
 
@@ -78,6 +91,7 @@ public static class SurveyLineTubes
             }
         }
 
+        values = numbers;
         return new IndexedMesh([.. positions], [.. indices]);
     }
 }

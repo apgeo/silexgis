@@ -68,6 +68,31 @@
       {
         "text": "Relief ×1.5",
         "startS": 0,
+        "endS": 15.4
+      },
+      {
+        "text": "Relief ×1.6",
+        "startS": 15.4,
+        "endS": 15.76
+      },
+      {
+        "text": "Relief ×1.7",
+        "startS": 15.76,
+        "endS": 16
+      },
+      {
+        "text": "Relief ×1.8",
+        "startS": 16,
+        "endS": 16.28
+      },
+      {
+        "text": "Relief ×1.9",
+        "startS": 16.28,
+        "endS": 16.64
+      },
+      {
+        "text": "Relief ×2",
+        "startS": 16.64,
         "endS": 18
       }
     ],
@@ -75,10 +100,127 @@
     "fadeOutS": 0.5,
     "northArrow": true
   },
-  "leftOut": [
-    "ground",
-    "reliefChanges"
+  "leftOut": ["ground", "featureOutlines"],
+  "changes": {
+    "relief": [
+      { "frame": 0, "value": 1.5, "easing": null },
+      { "frame": 375, "value": 1.5, "easing": null },
+      { "frame": 425, "value": 2, "easing": "smooth" }
+    ],
+    "sky": [
+      { "frame": 0, "colour": "#1b2a3a", "easing": null },
+      { "frame": 300, "colour": "#1b2a3a", "easing": null },
+      { "frame": 350, "colour": "#0b1118", "easing": "smooth" }
+    ],
+    "walls": {
+      "shown": [
+        { "frame": 410, "shown": false, "fadeFrames": 40 }
+      ],
+      "opacity": null,
+      "tint": [
+        { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null }
+      ]
+    },
+    "lines": {
+      "shown": null,
+      "opacity": [
+        { "frame": 0, "value": 1, "easing": null },
+        { "frame": 225, "value": 1, "easing": null },
+        { "frame": 250, "value": 0.5, "easing": "smooth" }
+      ],
+      "tint": [
+        { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
+        { "frame": 125, "colour": "#5c6370", "strength": 1, "easing": "constant" }
+      ]
+    },
+    "caves": [
+      {
+        "caveId": "0193a5c0-0000-7000-8000-00000000000a",
+        "walls": [
+          { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
+          { "frame": 75, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
+          { "frame": 75, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" },
+          { "frame": 75, "colour": "#ffcc00", "strength": 0, "easing": "constant" },
+          { "frame": 100, "colour": "#ffcc00", "strength": 0.85, "easing": "smooth" },
+          { "frame": 200, "colour": "#ffcc00", "strength": 0.85, "easing": null },
+          { "frame": 225, "colour": "#ffcc00", "strength": 0, "easing": "smooth" },
+          { "frame": 225, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
+        ],
+        "lines": [
+          { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
+          { "frame": 76, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
+          { "frame": 225, "colour": "#5c6370", "strength": 1, "easing": "constant" }
+        ]
+      },
+      {
+        "caveId": "0193a5c0-0000-7000-8000-00000000000b",
+        "walls": [
+          { "frame": 0, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
+          { "frame": 275, "colour": "#3a3f4a", "strength": 0.6, "easing": null },
+          { "frame": 275, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" },
+          { "frame": 275, "colour": "#ffcc00", "strength": 0, "easing": "constant" },
+          { "frame": 300, "colour": "#ffcc00", "strength": 0.85, "easing": "smooth" },
+          { "frame": 350, "colour": "#ffcc00", "strength": 0.85, "easing": null },
+          { "frame": 375, "colour": "#ffcc00", "strength": 0, "easing": "smooth" },
+          { "frame": 375, "colour": "#3a3f4a", "strength": 0.6, "easing": "constant" }
+        ],
+        "lines": [
+          { "frame": 0, "colour": "#000000", "strength": 0, "easing": null },
+          { "frame": 125, "colour": "#5c6370", "strength": 1, "easing": "constant" },
+          { "frame": 276, "colour": "#ffcc00", "strength": 1, "easing": "constant" },
+          { "frame": 375, "colour": "#5c6370", "strength": 1, "easing": "constant" }
+        ]
+      }
+    ],
+    "daylight": [
+      { "frame": 0, "value": 1, "easing": null },
+      { "frame": 356, "value": 1, "easing": null },
+      { "frame": 372, "value": 0, "easing": "smooth" },
+      { "frame": 388, "value": 1, "easing": "smooth" }
+    ]
+  },
+  "markers": [
+    {
+      "kind": "entrances",
+      "colour": "#146262",
+      "markers": [
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e1", "groundM": 547.385, "named": true },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e2", "groundM": 552.034, "named": true },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000e3", "groundM": 587.729, "named": true }
+      ],
+      "shown": [
+        { "frame": 225, "shown": false, "fadeFrames": 25 },
+        { "frame": 325, "shown": true }
+      ],
+      "opacity": null
+    },
+    {
+      "kind": "features",
+      "colour": "#722ed1",
+      "markers": [
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d1", "groundM": 550.951, "named": false },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d2", "groundM": 580.511, "named": false },
+        { "featureId": "0193a5c0-0000-7000-8000-0000000000d3", "groundM": 611.645, "named": false }
+      ],
+      "shown": null,
+      "opacity": [
+        { "frame": 0, "value": 1, "easing": null },
+        { "frame": 150, "value": 1, "easing": null },
+        { "frame": 200, "value": 0.4, "easing": "smooth" }
+      ]
+    }
   ],
+  "photos": {
+    "caves": ["0193a5c0-0000-7000-8000-00000000000a", "0193a5c0-0000-7000-8000-00000000000b"],
+    "shown": [
+      { "frame": 385, "shown": false }
+    ]
+  },
+  "reveal": {
+    "by": "distance",
+    "startS": 2,
+    "endS": 13.6
+  },
   "frames": [
     [9.7473753631,44.3448434433,350639.4669,20,-89.9,0,350000,60],
     [9.7473836877,44.3448597984,349529.372,20,-89.9,0,348889.903,60],

@@ -146,4 +146,34 @@ public sealed class ThumbnailService(IFileStore fileStore)
 
         return cachePath;
     }
+
+    /// <summary>
+    /// A rendering as the bytes of a JPEG file no longer than <paramref name="longestSide"/>
+    /// pixels on either side, for a picture that leaves this application inside another file — a
+    /// program that reads neither WebP nor HEIC still reads it.
+    /// </summary>
+    /// <remarks>
+    /// Made from the rendering itself (<see cref="GetOrCreateAsync"/>), never from the upload: so
+    /// it is turned as every picture shown is turned, and carries no metadata — a camera's
+    /// position least of all — by the one rule that strips them. A picture with see-through parts
+    /// is laid on white, since a JPEG has none.
+    /// </remarks>
+    /// <param name="size">The rendering to start from: one of <see cref="AllowedSizes"/>.</param>
+    public async Task<(byte[] Bytes, int Width, int Height)> JpegAsync(
+        Guid fileId, string sourceStoragePath, int size, int longestSide, CancellationToken ct, int quarterTurns = 0)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(longestSide, 1);
+        var rendering = await GetOrCreateAsync(fileId, sourceStoragePath, size, ct, quarterTurns);
+        using var image = new MagickImage(rendering);
+        image.BackgroundColor = MagickColors.White;
+        image.Alpha(AlphaOption.Remove);
+        if (image.Width > longestSide || image.Height > longestSide)
+        {
+            image.Thumbnail(new MagickGeometry((uint)longestSide, (uint)longestSide));
+        }
+
+        image.Strip();
+        image.Quality = 88;
+        return (image.ToByteArray(MagickFormat.Jpeg), (int)image.Width, (int)image.Height);
+    }
 }

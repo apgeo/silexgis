@@ -249,7 +249,21 @@ function numberAt(
   });
 }
 
-function layerAt(plan: FlybyLookPlan, base: FlybyLookBase, key: FlybyLayerKey, t: number): FlybyLayerState {
+/** A layer at a moment, in the parts its drawn strength is made of. */
+export interface FlybyLayerParts {
+  /** Whether it is drawn at all: a layer fading out is drawn until it has gone, one fading in from the moment it starts to. */
+  visible: boolean;
+  /** How far it has faded in, 0–1. */
+  fade: number;
+  /** Its own strength, 0–1, whether or not it is drawn. */
+  strength: number;
+}
+
+/**
+ * One layer at moment `t`, taken apart: whoever draws a fade and a strength as two things — a
+ * renderer that keys each on its own — asks here, and the product is what {@link flybyLookAt} gives.
+ */
+export function flybyLayerPartsAt(plan: FlybyLookPlan, base: FlybyLookBase, key: FlybyLayerKey, t: number): FlybyLayerParts {
   // A layer of the flyby's own has no setting of the viewer's: it is shown unless the flyby says not.
   const own = key.startsWith('features:') ? { visible: true, opacity: 1 } : (base.layers[key] ?? { visible: true, opacity: 1 });
   const opening = plan.look.layers?.[key] ?? {};
@@ -265,10 +279,15 @@ function layerAt(plan: FlybyLookPlan, base: FlybyLookBase, key: FlybyLayerKey, t
     const fade = lerp(inForce.fade, change.visible ? 1 : 0, p);
     return { fade, on: change.visible || p < 1 };
   });
-  const opacity = numberAt(changesOf(plan, `layerOpacity:${key}`), t, opening.opacity ?? own.opacity, (change) =>
+  const strength = numberAt(changesOf(plan, `layerOpacity:${key}`), t, opening.opacity ?? own.opacity, (change) =>
     change.kind === 'layerOpacity' ? change.opacity : undefined,
   );
-  return { visible: shown.on, opacity: shown.on ? opacity * shown.fade : 0 };
+  return { visible: shown.on, fade: shown.fade, strength };
+}
+
+function layerAt(plan: FlybyLookPlan, base: FlybyLookBase, key: FlybyLayerKey, t: number): FlybyLayerState {
+  const parts = flybyLayerPartsAt(plan, base, key, t);
+  return { visible: parts.visible, opacity: parts.visible ? parts.strength * parts.fade : 0 };
 }
 
 /**

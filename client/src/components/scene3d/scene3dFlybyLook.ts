@@ -4,8 +4,10 @@ import { flybyFeatureLayerKey, type FlybyFeatureLayer, type FlybyLayerKey } from
 import { featuresOfTypesDocument } from '../../flyby/flybyFilters.ts';
 import { encodeFilter } from '../../filters/url.ts';
 import type { FlybyLayerState, FlybyLookBase } from '../../flyby/flybyLook.ts';
-import type { FlybyBackgroundShown, FlybyLookTarget } from '../../flyby/flybyLookApply.ts';
+import type { FlybyBackgroundShown, FlybyLookTarget, FlybyMarkerSource } from '../../flyby/flybyLookApply.ts';
 import { filterLayerId, type FilterLayerSpec } from '../../map/filterLayerList.ts';
+import { mapFilterParams } from '../../map/mapFilters.ts';
+import { entrancePalette, filterLayerPalette, surfaceFeaturePalette } from '../../map/markerPalette.ts';
 import { baseImageryLayerId, tileOverlayImageryLayerId } from '../../scene3d/baseImagery3d.ts';
 import { CAVE_DATA_3D_LAYERS, type CaveData3DHandle } from '../../scene3d/caveData3d.ts';
 import type { FilterLayer3DSpec, FilterLayers3DHandle } from '../../scene3d/filterLayers3d.ts';
@@ -387,6 +389,24 @@ export function createScene3DLookTarget(handles: Scene3DLookHandles, held: Scene
         ...settings.visibleRasterIds.map((id) => `raster:${id}`),
         ...settings.visibleGeofileIds.map((id) => `file:${id}`),
         ...settings.filterLayers.filter((spec) => spec.visible).map((spec) => filterLayerId(spec.savedFilterId)),
+      ];
+    },
+    markerSources() {
+      const settings = handles.settings();
+      const unreadable = new Set(settings.unreadableFilterLayers.map((id) => id.toLowerCase()));
+      // The two layers every view has are asked with the filter the map is under; a layer drawn
+      // from a saved filter with that filter, in the colour the viewer gave it.
+      return [
+        { layer: 'entrances', kind: 'entrances', params: mapFilterParams(), colour: entrancePalette.point },
+        { layer: 'surface-features', kind: 'surfaceFeatures', params: mapFilterParams(), colour: surfaceFeaturePalette.point },
+        ...settings.filterLayers
+          .filter((spec) => !unreadable.has(spec.savedFilterId.toLowerCase()))
+          .map((spec): FlybyMarkerSource => ({
+            layer: filterLayerId(spec.savedFilterId),
+            kind: 'features',
+            params: { savedFilterId: spec.savedFilterId },
+            colour: filterLayerPalette[spec.color],
+          })),
       ];
     },
     showBackground(shown) {

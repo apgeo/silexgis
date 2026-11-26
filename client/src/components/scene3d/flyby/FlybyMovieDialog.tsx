@@ -176,6 +176,8 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const [asBundle, setAsBundle] = useState(false);
   // Whether walls the view is still waiting for a yes about go into a bundle all the same.
   const [includeWalls, setIncludeWalls] = useState(false);
+  // Whether the caves of a bundle appear part by part while the clip runs.
+  const [reveal, setReveal] = useState(false);
   const schedule = flybyFrameSchedule(
     length,
     asBundle ? FLYBY_BUNDLE_FPS : output.fps,
@@ -505,7 +507,9 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         groundHeight: flyby.stage.groundHeight,
         routeCaves: flyby.preparedCaves(),
         includeWalls,
+        reveal: reveal ? 'distance' : null,
         reliefWords: (factor) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
+        language: i18n.language,
         signal: controller.signal,
       });
       setBundleMade(made);
@@ -872,6 +876,21 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           </Typography.Text>
         </div>
       )}
+      {asBundle && (
+        <div className="scene3d-flyby-group">
+          <Checkbox
+            checked={reveal}
+            disabled={exporting}
+            onChange={(event) => setReveal(event.target.checked)}
+            data-testid="flyby-bundle-reveal"
+          >
+            {t('flyby.bundle.reveal')}
+          </Checkbox>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
+            {t('flyby.bundle.revealHelp')}
+          </Typography.Text>
+        </div>
+      )}
       {asBundle && bundlePreview?.refusal && (
         <Alert type="warning" showIcon title={bundleRefusalText(bundlePreview.refusal)} data-testid="flyby-bundle-refused" />
       )}
@@ -887,6 +906,12 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
           </ul>
           <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
             {t('flyby.bundle.leftOutHelp')}
+          </Typography.Text>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-bundle-pointed">
+            {t('flyby.bundle.pointed')}
+          </Typography.Text>
+          <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-bundle-daylight">
+            {t('flyby.bundle.daylight')}
           </Typography.Text>
         </div>
       )}
@@ -985,7 +1010,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
 
       {asBundle && bundleMade !== null && (
         <Alert
-          type={bundleMade.notDrawn > 0 || bundleMade.wallsLeftOut > 0 ? 'warning' : 'success'}
+          type={bundleMade.notDrawn > 0 || bundleMade.wallsLeftOut > 0 || bundleMade.markersNotDrawn > 0 ? 'warning' : 'success'}
           showIcon
           data-testid="flyby-bundle-report"
           title={t('flyby.bundle.saved')}
@@ -996,6 +1021,17 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
               {bundleMade.wallsLeftOut > 0 && (
                 <li data-testid="flyby-bundle-report-walls-left-out">
                   {t('flyby.bundle.reportWallsLeftOut', { count: bundleMade.wallsLeftOut })}
+                </li>
+              )}
+              {bundleMade.markers > 0 && (
+                <li data-testid="flyby-bundle-report-markers">{t('flyby.bundle.reportMarkers', { count: bundleMade.markers })}</li>
+              )}
+              {bundleMade.photos > 0 && (
+                <li data-testid="flyby-bundle-report-photos">{t('flyby.bundle.reportPhotos', { count: bundleMade.photos })}</li>
+              )}
+              {bundleMade.markersNotDrawn > 0 && (
+                <li data-testid="flyby-bundle-report-markers-not-drawn">
+                  {t('flyby.bundle.reportMarkersNotDrawn', { count: bundleMade.markersNotDrawn })}
                 </li>
               )}
               {bundleMade.notDrawn > 0 && (

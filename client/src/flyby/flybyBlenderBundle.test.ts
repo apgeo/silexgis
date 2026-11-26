@@ -6,9 +6,11 @@ import {
   FLYBY_BUNDLE_MAX_FRAMES,
   flybyBundleFrames,
   flybyBundleOmissions,
-  flybyBundleOpeningLook,
+  flybyBundleReliefMarks,
   flybyBundleRequest,
+  flybyBundleShows,
   flybyBundleTexts,
+  flybyBundleUnderground,
   type FlybyBundleAsk,
 } from './flybyBlenderBundle.ts';
 import { FLYBY_VERSION, type FlybyDocument, type FlybySection } from './flybyDocument.ts';
@@ -18,8 +20,9 @@ import type { FlybyResolvedSubject } from './flybySubjects.ts';
 import { compileFlyby, flybyCameraAt } from './flybyTimeline.ts';
 
 // What a flyby is turned into when it is handed over as a bundle for Blender: the camera at every
-// frame, the look at the first, the texts on the clip's own clock — and the list of what the
-// bundle does not carry. Everything here is invented: two boxes for caves, flat ground.
+// frame, the look at the first and what changes of it afterwards, the texts on the clip's own
+// clock — and the list of what the bundle does not carry. Everything here is invented: two boxes
+// for caves, flat ground.
 
 const cave: FlybyResolvedSubject = { centre: { lon: 25, lat: 45.5, height: 900 }, radius: 200, halfHeight: 100, coarse: false };
 const other: FlybyResolvedSubject = { centre: { lon: 25.05, lat: 45.52, height: 1100 }, radius: 300, halfHeight: 60, coarse: false };
@@ -207,47 +210,329 @@ describe('what a bundle leaves out', () => {
     expect(flybyBundleOmissions(flybyLookPlan(flyby()), viewer(), schedule)).toEqual(['ground']);
   });
 
-  it('is every layer shown that is not walls or lines, the viewer\'s own and the flyby\'s', () => {
+  it('is every layer shown that a bundle has no place for, the viewer\'s own and the flyby\'s', () => {
     const document = flyby({ look: { layers: { photos: { visible: true }, 'raster:old-map': { visible: true } } } });
     const omissions = flybyBundleOmissions(flybyLookPlan(document), viewer(['entrances', 'scans']), schedule, [
       'file:track-1',
       'filter:f1',
     ]);
-    expect(omissions).toEqual(['ground', 'entrances', 'surfaceFeatures', 'scans', 'photos', 'mapLayers', 'tracks']);
+    // Entrances and photographs go in. Of a layer of features the points go in; what is said to be
+    // left out is its lines and areas.
+    expect(omissions).toEqual(['ground', 'featureOutlines', 'scans', 'mapLayers', 'tracks']);
   });
 
   it('is not a layer the flyby hides at its first frame, whatever the viewer has', () => {
-    const document = flyby({ look: { layers: { entrances: { visible: false } } } });
-    expect(flybyBundleOmissions(flybyLookPlan(document), viewer(['entrances']), schedule)).toEqual(['ground']);
+    const document = flyby({ look: { layers: { scans: { visible: false } } } });
+    expect(flybyBundleOmissions(flybyLookPlan(document), viewer(['scans']), schedule)).toEqual(['ground']);
   });
 
-  it('is a change still to come when the clip starts, and not one that had ended by then', () => {
+  it('is not the entrances, the features that are points or the photographs: those are pointed out', () => {
+    const plan = flybyLookPlan(flyby());
+    expect(flybyBundleOmissions(plan, viewer(['entrances', 'photos']), schedule)).toEqual(['ground']);
+    expect(flybyBundleOmissions(plan, viewer(['surface-features']), schedule)).toEqual(['ground', 'featureOutlines']);
+  });
+
+  it('is not a change of the look: the relief, the colours, the layers a bundle draws and the sky are carried', () => {
     const document = flyby({
-      changes: [{ id: 'sky', kind: 'sky', colour: '#223344', section: 'in', at: 1, seconds: 2 }],
+      look: { relief: 1.5, walls: { colour: '#ff0000', strength: 0.5 }, layers: { walls: { opacity: 0.4 } } },
+      changes: [
+        { id: 'grow', kind: 'relief', factor: 3, section: 'round', at: 0, seconds: 3 },
+        { id: 'sky', kind: 'sky', colour: '#223344', section: 'in', at: 1, seconds: 2 },
+        { id: 'lit', kind: 'cave', subject: 0, colour: '#ffcc00', strength: 0.8, section: 'in', at: 2, seconds: 1 },
+        { id: 'one', kind: 'lines', colour: '#00ff88', section: 'round', at: 1, seconds: 0 },
+        { id: 'off', kind: 'layer', layer: 'centerlines', visible: false, section: 'round', at: 4, seconds: 1 },
+        { id: 'half', kind: 'layerOpacity', layer: 'walls', opacity: 1, section: 'round', at: 0, seconds: 2 },
+        { id: 'map', kind: 'background', background: 7, section: 'in', at: 0, seconds: 1 },
+        { id: 'thin', kind: 'backgroundOpacity', opacity: 0.3, section: 'in', at: 0, seconds: 1 },
+      ],
+    });
+    // The background is the ground's, and the ground is said once.
+    expect(flybyBundleOmissions(flybyLookPlan(document), viewer(), schedule)).toEqual(['ground']);
+    const { request, omissions } = flybyBundleRequest(ask(document));
+    expect(omissions).toEqual(['ground']);
+    expect(request.leftOut).toEqual(['ground']);
+    expect(Object.entries(request.changes ?? {}).filter(([, said]) => said !== null).map(([member]) => member)).toEqual([
+      'relief',
+      'sky',
+      'walls',
+      'lines',
+      'caves',
+    ]);
+  });
+
+  it('is the opening in the ground and a layer of another kind, also where either comes only later in the clip', () => {
+    const document = flyby({
+      changes: [
+        { id: 'cut', kind: 'surface', surface: 'cutaway', section: 'round', at: 1, seconds: 0 },
+        { id: 'pins', kind: 'layer', layer: 'scans', visible: true, section: 'round', at: 2, seconds: 1 },
+      ],
     });
     const plan = flybyLookPlan(document);
-    expect(flybyBundleOmissions(plan, viewer(), { from: 0, to: 10 })).toContain('timedChanges');
-    // From the fifth second on, the sky is already the new colour: the first frame's look has it.
-    expect(flybyBundleOmissions(plan, viewer(), { from: 5, to: 10 })).toEqual(['ground']);
-    expect(flybyBundleOpeningLook(plan, viewer(), 5).sky).toBe('#223344');
-    // And a stretch that stops before it starts never sees it.
-    expect(flybyBundleOmissions(plan, viewer(), { from: 0, to: 0.5 })).toEqual(['ground']);
+    expect(flybyBundleOmissions(plan, viewer(), schedule)).toEqual(['ground', 'surfaceOpening', 'scans']);
+    // A stretch that stops before either never sees it.
+    expect(flybyBundleOmissions(plan, viewer(), { from: 0, to: 4 })).toEqual(['ground']);
+    // And one that starts after both has them from its first frame.
+    expect(flybyBundleOmissions(plan, viewer(), { from: 8, to: 10 })).toEqual(['ground', 'surfaceOpening', 'scans']);
+  });
+});
+
+describe('what a bundle points out', () => {
+  const entrance = (n: number, named = false) => ({ featureId: `e${n}`, groundM: 100.12345 + n, ...(named ? { named: true } : {}) });
+
+  it('is nothing for a flyby whose view draws no entrance, feature or photograph', () => {
+    const { request } = flybyBundleRequest(ask(flyby()));
+    expect(request.markers ?? null).toBeNull();
+    expect(request.photos ?? null).toBeNull();
+    expect(request.reveal ?? null).toBeNull();
   });
 
-  it('is a relief that changes, the tint on the walls, the opening in the ground and a faded layer', () => {
+  it('is the markers of each layer the flyby shows, with the layer\'s colour and the ground under each', () => {
+    const { request, omissions } = flybyBundleRequest(
+      ask(flyby(), {
+        base: viewer(['entrances', 'filter:f1']),
+        markers: [
+          { layer: 'entrances', kind: 'entrances', colour: '#146262', markers: [entrance(1, true), entrance(2)] },
+          // A layer the viewer has hidden, and one with nothing in it: neither is in the bundle.
+          { layer: 'surface-features', kind: 'surfaceFeatures', colour: '#7a5c1e', markers: [entrance(3)] },
+          { layer: 'filter:f1', kind: 'features', colour: '#722ed1', markers: [] },
+        ],
+      }),
+    );
+    expect(request.markers).toEqual([
+      {
+        kind: 'entrances',
+        colour: '#146262',
+        markers: [
+          { featureId: 'e1', groundM: 101.123, named: true },
+          { featureId: 'e2', groundM: 102.123, named: false },
+        ],
+        shown: null,
+        opacity: null,
+      },
+    ]);
+    // The layer drawn from a filter is shown, and its lines and areas are what a bundle leaves out.
+    expect(omissions).toEqual(['ground', 'featureOutlines']);
+  });
+
+  it('shows, hides and fades a layer of markers as the flyby does, on frames of the clip', () => {
     const document = flyby({
-      look: { relief: 1.5, walls: { colour: '#ff0000', strength: 0.5 }, surface: 'cutaway', layers: { walls: { opacity: 0.4 } } },
+      changes: [
+        { id: 'pins', kind: 'layer', layer: 'entrances', visible: true, section: 'in', at: 2, seconds: 1 },
+        { id: 'thin', kind: 'layerOpacity', layer: 'entrances', opacity: 0.5, section: 'round', at: 0, seconds: 2 },
+        { id: 'gone', kind: 'layer', layer: 'entrances', visible: false, section: 'round', at: 4, seconds: 0 },
+      ],
+    });
+    const { request } = flybyBundleRequest(
+      ask(document, { markers: [{ layer: 'entrances', kind: 'entrances', colour: '#146262', markers: [entrance(1)] }] }),
+    );
+    // Hidden as the viewer has it until the flyby shows it: in over a second, thinned, cut.
+    expect(request.markers?.[0].shown).toEqual([
+      { frame: 50, shown: true, fadeFrames: 25 },
+      { frame: 200, shown: false },
+    ]);
+    expect(request.markers?.[0].opacity).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: 100, value: 1, easing: null },
+      { frame: 150, value: 0.5, easing: 'smooth' },
+    ]);
+  });
+
+  it('takes only so many markers, and says that some are left out', () => {
+    const many = Array.from({ length: 1001 }, (_, n) => entrance(n));
+    const { request, omissions } = flybyBundleRequest(
+      ask(flyby(), {
+        base: viewer(['entrances', 'surface-features']),
+        markers: [
+          { layer: 'entrances', kind: 'entrances', colour: '#146262', markers: many },
+          { layer: 'surface-features', kind: 'surfaceFeatures', colour: '#7a5c1e', markers: [entrance(5000)] },
+        ],
+      }),
+    );
+    expect(request.markers).toHaveLength(1);
+    expect(request.markers?.[0].markers).toHaveLength(1000);
+    expect(omissions).toEqual(['ground', 'featureOutlines', 'moreMarkers']);
+    expect(request.leftOut).toEqual(['ground', 'featureOutlines', 'moreMarkers']);
+  });
+
+  it('asks for the photographs of the flyby\'s own caves where the flyby shows their layer, switched at once', () => {
+    // Shown by the viewer throughout: the flyby's own caves, and no key.
+    const always = flybyBundleRequest(ask(flyby(), { base: viewer(['photos']) })).request;
+    expect(always.photos).toEqual({ caves: ['a', 'b'], shown: null });
+
+    // Hidden by a fade of a second from the fourth second of the turn: the view switches the
+    // layer off when the fade has run, and so does a bundle. Shown again at once.
+    const document = flyby({
+      changes: [
+        { id: 'off', kind: 'layer', layer: 'photos', visible: false, section: 'round', at: 1, seconds: 1 },
+        { id: 'on', kind: 'layer', layer: 'photos', visible: true, section: 'round', at: 4, seconds: 1 },
+      ],
+    });
+    const switched = flybyBundleRequest(ask(document, { base: viewer(['photos']) })).request;
+    expect(switched.photos).toEqual({
+      caves: ['a', 'b'],
+      shown: [
+        { frame: 150, shown: false },
+        { frame: 200, shown: true },
+      ],
+    });
+
+    // A stretch that begins while the layer is coming back: the view has switched it on already,
+    // so it is shown from the stretch's first frame, and no key says so — least of all one
+    // before that frame.
+    const timeline = compileFlyby(document, [cave, other]);
+    const begun = flybyBundleRequest(
+      ask(document, { base: viewer(['photos']), schedule: flybyFrameSchedule(timeline.length, FLYBY_BUNDLE_FPS, { from: 8.4, to: 10 }) }),
+    ).request;
+    expect(begun.photos).toEqual({ caves: ['a', 'b'], shown: null });
+
+    // Not shown by anybody: not asked for.
+    expect(flybyBundleRequest(ask(flyby())).request.photos ?? null).toBeNull();
+  });
+
+  it('lets the caves appear over four fifths of the flight between the title and the end card', () => {
+    // No cards: from the first frame to eight seconds of ten.
+    expect(flybyBundleRequest(ask(flyby(), { reveal: 'distance' })).request.reveal).toEqual({ by: 'distance', startS: 0, endS: 8 });
+    // A title gone after two seconds and an end card over the last one and a half: 2 + 0.8 × 6.5.
+    const carded = flyby({ texts: { title: { text: 'A cave', seconds: 2 }, end: { text: 'The end', seconds: 1.5 } } });
+    expect(flybyBundleRequest(ask(carded, { reveal: 'distance' })).request.reveal).toEqual({ by: 'distance', startS: 2, endS: 7.2 });
+  });
+});
+
+describe('what of a cave a bundle draws', () => {
+  it('is whatever the flyby shows at some moment of the clip, not only at its first', () => {
+    const base = viewer();
+    base.layers.walls = { visible: false, opacity: 1 };
+    const document = flyby({
+      changes: [{ id: 'on', kind: 'layer', layer: 'walls', visible: true, section: 'round', at: 0, seconds: 2 }],
+    });
+    const plan = flybyLookPlan(document);
+    expect(flybyBundleShows(plan, base, { from: 0, to: 10 })).toEqual({ walls: true, lines: true });
+    expect(flybyBundleShows(plan, base, { from: 0, to: 3 })).toEqual({ walls: false, lines: true });
+
+    // Walls that come later are asked for, and the bundle is told when they come.
+    const { request, refusal } = flybyBundleRequest(ask(document, { base }));
+    expect(refusal).toBeNull();
+    expect(request.caves.slice(0, 2).map((entry) => entry.walls)).toEqual([true, true]);
+    expect(request.changes?.walls?.shown).toEqual([{ frame: 100, shown: true, fadeFrames: 50 }]);
+  });
+
+  it('is nothing where walls and lines are both hidden from the first frame to the last', () => {
+    const base = viewer();
+    base.layers.walls = { visible: false, opacity: 1 };
+    base.layers.centerlines = { visible: false, opacity: 1 };
+    expect(flybyBundleRequest(ask(flyby(), { base })).refusal).toEqual({ kind: 'nothingShown' });
+    const later = flyby({
+      changes: [{ id: 'on', kind: 'layer', layer: 'centerlines', visible: true, section: 'round', at: 5, seconds: 0 }],
+    });
+    expect(flybyBundleRequest(ask(later, { base })).refusal).toBeNull();
+  });
+});
+
+describe('the daylight of a bundle', () => {
+  it('knows the camera is underground where its eye is below the scene\'s ground at its place', () => {
+    const hill = (longitude: number) => (longitude < 25 ? 1000 : 400);
+    expect(
+      flybyBundleUnderground(
+        [
+          [24.9, 45.5, 900, 0, 0, 0, 10, 60],
+          [24.9, 45.5, 1000.5, 0, 0, 0, 10, 60],
+          [25.1, 45.5, 900, 0, 0, 0, 10, 60],
+          [25.1, 45.5, 399.9, 0, 0, 0, 10, 60],
+        ],
+        hill,
+      ),
+    ).toEqual([true, false, false, true]);
+  });
+
+  it('is not spoken of where the camera stays above the ground', () => {
+    expect(flybyBundleRequest(ask(flyby())).request).not.toHaveProperty('changes');
+  });
+
+  it('is told as keys where the camera goes under it, though the flyby changes nothing of the look', () => {
+    // The whole flight under a ground higher than the camera ever is: dark from the first frame.
+    const buried = flybyBundleRequest(ask(flyby(), { groundHeight: () => 9000 })).request;
+    expect(buried.changes).toEqual({
+      relief: null,
+      sky: null,
+      walls: null,
+      lines: null,
+      caves: null,
+      daylight: [{ frame: 0, value: 0, easing: null }],
+    });
+    // The ground is asked where each frame's eye stands, with the heights the frames carry.
+    const frames = buried.frames;
+    const halfway = (frames[0][2] + frames[249][2]) / 2;
+    const sinking = flybyBundleRequest(ask(flyby(), { groundHeight: () => halfway })).request;
+    const under = flybyBundleUnderground(sinking.frames, () => halfway);
+    const first = under.indexOf(true);
+    expect(first).toBeGreaterThan(0);
+    expect(sinking.changes?.daylight?.slice(0, 3)).toEqual([
+      { frame: 0, value: 1, easing: null },
+      { frame: first, value: 1, easing: null },
+      { frame: first + 25, value: 0, easing: 'smooth' },
+    ]);
+  });
+});
+
+describe('the language of a bundle\'s notes', () => {
+  it('is the reader\'s, where the view says it, and is left out where it does not', () => {
+    expect(flybyBundleRequest(ask(flyby(), { language: 'ro' })).request.language).toBe('ro');
+    expect(flybyBundleRequest(ask(flyby())).request).not.toHaveProperty('language');
+  });
+});
+
+describe('the look a clip opens with and what changes of it', () => {
+  it('sends no changes at all for a flyby that changes nothing', () => {
+    expect(flybyBundleRequest(ask(flyby())).request).not.toHaveProperty('changes');
+    // A lens is carried by the frames, and is no change of the scene.
+    const zoomed = flyby({ changes: [{ id: 'zoom', kind: 'lens', degrees: 30, section: 'round', at: 0, seconds: 4 }] });
+    expect(flybyBundleRequest(ask(zoomed)).request).not.toHaveProperty('changes');
+  });
+
+  it('opens at the relief of the first frame and tells the keys the rest is read from', () => {
+    const document = flyby({
+      look: { relief: 1.5 },
       changes: [{ id: 'grow', kind: 'relief', factor: 3, section: 'round', at: 0, seconds: 3 }],
     });
-    expect(flybyBundleOmissions(flybyLookPlan(document), viewer(), schedule)).toEqual([
-      'ground',
-      'reliefChanges',
-      'wallColours',
-      'surfaceOpening',
-      'layerOpacity',
+    const { request } = flybyBundleRequest(ask(document));
+    expect(request.relief).toBe(1.5);
+    expect(request.changes?.relief).toEqual([
+      { frame: 0, value: 1.5, easing: null },
+      { frame: 100, value: 1.5, easing: null },
+      { frame: 175, value: 3, easing: 'smooth' },
     ]);
-    // The bundle is drawn at the relief of its first frame throughout.
-    expect(flybyBundleRequest(ask(document)).request.relief).toBe(1.5);
+    // The camera's heights stay true: the server multiplies them by what the keys give.
+    expect(request.frames).toEqual(flybyBundleRequest(ask(flyby())).request.frames);
+  });
+
+  it('names a cave coloured apart only where the request names the cave', () => {
+    const document = flyby({
+      changes: [{ id: 'lit', kind: 'cave', subject: 1, colour: '#ffcc00', strength: 0.8, section: 'in', at: 2, seconds: 1 }],
+    });
+    const { request } = flybyBundleRequest(ask(document));
+    expect(request.changes?.caves?.map((entry) => entry.caveId)).toEqual(['b']);
+    expect(request.changes?.caves?.[0].walls).toEqual([
+      { frame: 0, colour: '#000000', strength: 0, easing: null },
+      { frame: 50, colour: '#ffcc00', strength: 0, easing: 'constant' },
+      { frame: 75, colour: '#ffcc00', strength: 0.8, easing: 'smooth' },
+    ]);
+  });
+
+  it('opens a stretch with the look the flyby has reached by then', () => {
+    const document = flyby({
+      look: { sky: '#000000' },
+      changes: [{ id: 'sky', kind: 'sky', colour: '#223344', section: 'in', at: 1, seconds: 2 }],
+    });
+    const whole = flybyBundleRequest(ask(document)).request;
+    // Black is no sky, and is said as none.
+    expect(whole.look?.sky).toBeNull();
+    expect(whole.changes?.sky?.[0]).toMatchObject({ frame: 0, colour: '#000000' });
+    expect(whole.changes?.sky?.at(-1)).toMatchObject({ frame: 75, colour: '#223344' });
+    // From the fifth second on, the sky is already the new colour, and nothing changes any more.
+    const timeline = compileFlyby(document, [cave, other]);
+    const late = flybyBundleRequest(ask(document, { schedule: flybyFrameSchedule(timeline.length, 25, { from: 5, to: 10 }) })).request;
+    expect(late.look?.sky).toBe('#223344');
+    expect(late).not.toHaveProperty('changes');
   });
 });
 
@@ -306,6 +591,24 @@ describe('the texts on the clip\'s own clock', () => {
     expect(texts.end).toEqual({ text: 'The end', subtitle: null, seconds: 3 });
     expect(texts.title).toBeNull();
     expect(texts.fadeOutS).toBe(1.5);
+  });
+
+  it('say the relief of each stretch of a ramp to the tenth, and nothing while it is true', () => {
+    // 1 for a second, up to 1.2 over the next, held: frames at 10 a second.
+    const reliefAt = (frame: number) => (frame < 10 ? 1 : frame >= 20 ? 1.2 : 1 + (0.2 * (frame - 10)) / 10);
+    const marks = flybyBundleReliefMarks({ count: 30, fps: 10 }, reliefAt, (factor) => `×${factor}`);
+    // 1.04 is still "1"; from 1.06 it reads 1.1, from 1.16 it reads 1.2.
+    expect(marks).toEqual([
+      { text: '×1.1', startS: 1.3, endS: 1.8 },
+      { text: '×1.2', startS: 1.8, endS: 3 },
+    ]);
+    const document = flyby({ changes: [{ id: 'grow', kind: 'relief', factor: 2, section: 'round', at: 0, seconds: 2 }] });
+    const said = flybyBundleRequest(ask(document)).request.texts?.cornerCaptions ?? [];
+    expect(said[0]).toMatchObject({ text: 'Relief ×1.1' });
+    expect(said.at(-1)).toMatchObject({ text: 'Relief ×2', endS: 10 });
+    expect(said).toHaveLength(10);
+    // One after the other, with no gap and no overlap.
+    said.slice(1).forEach((mark, index) => expect(mark.startS).toBe(said[index].endS));
   });
 
   it('say in a corner that the relief is stretched, in the reader\'s words, while it is', () => {
