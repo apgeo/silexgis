@@ -89,6 +89,18 @@ export default function DocumentDetailPage() {
       }));
   }, [document, cabinets]);
 
+  const filingPath = useMemo(() => {
+    const first = cabinets?.find((cabinet) => document?.cabinetIds.includes(cabinet.id));
+    if (!first || !cabinets) {
+      return [];
+    }
+    const byId = new Map(cabinets.map((cabinet) => [cabinet.id, cabinet]));
+    return first.ancestorIds.flatMap((ancestorId) => {
+      const cabinet = byId.get(ancestorId);
+      return cabinet ? [{ id: cabinet.id, name: cabinet.name }] : [];
+    });
+  }, [document, cabinets]);
+
   if (isError) {
     return (
       <div style={{ padding: 24 }}>
@@ -167,6 +179,15 @@ export default function DocumentDetailPage() {
               </Typography.Link>
             ),
           },
+          // The cabinet it is filed in, by its whole path, so going back is one press rather than
+          // finding it in the tree again. A document filed in several is led back through the first.
+          ...filingPath.map((cabinet) => ({
+            title: (
+              <Typography.Link onClick={() => navigate(`/cabinets?cabinet=${encodeURIComponent(cabinet.id)}`)}>
+                {cabinet.name}
+              </Typography.Link>
+            ),
+          })),
           { title: document.title },
         ]}
       />

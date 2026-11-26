@@ -126,7 +126,7 @@ export default function AttachmentSection({
           throw error;
         }
 
-        if (!(await askAboutDuplicate(true))) {
+        if (!(await askAboutDuplicate({ fileName: file.name, documentId: error.member('duplicateOfDocumentId') }))) {
           return;
         }
 
@@ -234,7 +234,10 @@ export default function AttachmentSection({
       )}
 
       {photos.length === 0 && documents.length === 0 && (
-        <Empty description={t('attachments.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Empty
+          description={t(reports.length > 0 ? 'attachments.emptyBesideReport' : 'attachments.empty')}
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
       )}
 
       {photos.length > 0 && (
@@ -414,7 +417,12 @@ function AttachmentRow({
       <List.Item.Meta
         avatar={<FileOutlined />}
         title={attachment.caption ?? attachment.file.originalName}
-        description={[attachment.file.originalName, formatSize(attachment.file.sizeBytes), attachment.file.documentDate]
+        // The file's name under a title that is already that name would say it twice.
+        description={[
+          attachment.caption ? attachment.file.originalName : null,
+          formatSize(attachment.file.sizeBytes),
+          attachment.file.documentDate,
+        ]
           .filter(Boolean)
           .join(' · ')}
       />

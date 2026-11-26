@@ -546,7 +546,7 @@ describe('whose walls the scene draws', () => {
       meshesInViewState: inView({ shown: 3, inView: 7, leftOut: 4, limitedBy: 'bytes' }),
     });
 
-    expect(status()).toBe('Walls of 3 of 7 caves in view — the rest would exceed 64.0 MB.');
+    expect(status()).toBe('Walls of 3 of 7 caves in view — the rest would exceed 64 MB.');
   });
 
   it('names the count instead when that is what kept the rest out', () => {
