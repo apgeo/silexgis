@@ -12,6 +12,8 @@ import './index.css';
 import App from './App.tsx';
 import { QueryProvider } from './api/QueryProvider.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { useScrollableTablesReachable } from './components/a11y/scrollableTables.ts';
+import { useTabOverflowButtonsWithdrawn } from './components/a11y/tabOverflow.ts';
 import { installErrorReporting } from './diagnostics/reporter.ts';
 import { useUiPrefsStore } from './stores/uiPrefsStore.ts';
 import { buildThemeConfig, resolveDark } from './theme.ts';
@@ -32,6 +34,12 @@ function Root() {
   const { i18n, t } = useTranslation();
   const appearance = useUiPrefsStore((s) => s.appearance);
   const [, setSystemTick] = useState(0);
+  // Every table's sideways scroller, once for the whole application: see the hook for why.
+  useScrollableTablesReachable(t('a11y.scrollableTable'), (position, count) =>
+    t('a11y.scrollableTableNumbered', { position, count }),
+  );
+  // Every tab bar's overflow button, likewise.
+  useTabOverflowButtonsWithdrawn();
 
   // Following the system theme means reacting when the system changes it, not only at load.
   useEffect(() => {
