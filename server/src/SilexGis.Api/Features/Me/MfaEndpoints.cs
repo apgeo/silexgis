@@ -26,8 +26,25 @@ namespace SilexGis.Api.Features.Me;
 /// to explain rather than hide.
 /// </param>
 /// <param name="Destination">Masked address or number the codes would go to.</param>
+/// <param name="DestinationConfirmed">
+/// The account's address (email) or number (texted codes) is confirmed. Always true for the
+/// authenticator app, which needs neither. Reported apart from <paramref name="Ready"/>, which is
+/// also false for every method that is simply not switched on yet, so the page can say which of
+/// the two is missing — and offer to confirm the address only when that is what is missing.
+/// </param>
+/// <param name="ChannelConfigured">
+/// The installation has something set up to carry the code — a mail server for emailed codes, an
+/// SMS provider for texted ones. Always true for the authenticator app. When false, nothing the
+/// member does can make the method work, and a confirmation message would only reach the server log.
+/// </param>
 public sealed record MfaMethodDto(
-    TwoFactorMethod Method, bool Enabled, bool Allowed, bool Ready, string? Destination);
+    TwoFactorMethod Method,
+    bool Enabled,
+    bool Allowed,
+    bool Ready,
+    string? Destination,
+    bool DestinationConfirmed,
+    bool ChannelConfigured);
 
 public sealed record MfaStatusDto(
     bool Enabled,
@@ -451,7 +468,19 @@ public static class MfaEndpoints
                 IsEnabled(user, method),
                 TwoFactorPolicy.IsMethodAllowed(method, policy),
                 ready.Contains(method),
-                Destination(user, method)))
+                Destination(user, method),
+                method switch
+                {
+                    TwoFactorMethod.Email => state.EmailConfirmed,
+                    TwoFactorMethod.Sms => state.PhoneConfirmed,
+                    _ => true,
+                },
+                method switch
+                {
+                    TwoFactorMethod.Email => mailConfigured,
+                    TwoFactorMethod.Sms => smsConfigured,
+                    _ => true,
+                }))
             .ToArray();
 
         return new MfaStatusDto(

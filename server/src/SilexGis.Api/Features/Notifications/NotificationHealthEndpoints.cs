@@ -148,10 +148,11 @@ public static class NotificationHealthEndpoints
                 + "Refused for a delivery that is not dead, and for one that died because nothing knows how "
                 + "to write its message.");
         health.MapGet("/deliveries", ListAsync)
-            .WithSummary("Deliveries that need attention: dead ones, and unsent ones older than the overdue window.")
+            .WithSummary("Deliveries that need attention: dead ones, logged-only ones, and unsent ones older than the overdue window.")
             .WithDescription(
                 "status narrows to one delivery status, spelled as the answers spell it. "
-                + "attentionOnly (default true) keeps only dead deliveries and unsent ones older than overdueHours. "
+                + "attentionOnly (default true) keeps only dead deliveries, logged-only ones (handled while nothing was "
+                + "set up to send them, so they reached nobody), and unsent ones older than overdueHours. "
                 + "overdueHours defaults to 24, which is longer than both the daily summary window and a night of quiet hours.");
 
         return api;
@@ -268,11 +269,15 @@ public static class NotificationHealthEndpoints
 
         if (attentionOnly ?? true)
         {
-            // Dead is always worth looking at; anything else is only worth looking at once it has
-            // been waiting longer than the slowest thing that holds a healthy delivery back. Sent
-            // rows are excluded whatever their age — a message that left is not a backlog.
+            // Dead is always worth looking at, and so is a message that only reached the server
+            // log because nothing was set up to send it on its channel — nobody received it,
+            // whatever its age.
+            // Anything else is only worth looking at once it has been waiting longer than the
+            // slowest thing that holds a healthy delivery back. Sent rows are excluded whatever
+            // their age — a message that left is not a backlog.
             var cutoff = clock.GetUtcNow().AddHours(-hours);
             rows = rows.Where(r => r.Delivery.Status == NotificationDeliveryStatus.Dead
+                || r.Delivery.Status == NotificationDeliveryStatus.LoggedOnly
                 || (r.Delivery.Status != NotificationDeliveryStatus.Sent && r.Delivery.CreatedAt < cutoff));
         }
 

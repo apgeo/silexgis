@@ -141,6 +141,53 @@ public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     [Fact]
+    public async Task The_status_says_apart_whether_the_address_or_the_mail_server_is_missing()
+    {
+        // Ready is false for any method not yet switched on, so on its own it cannot tell the
+        // settings page whether to offer a confirmation email. These two flags can.
+        async Task<JsonElement> MethodAsync(HttpClient client, string name) =>
+            (await client.GetFromJsonAsync<JsonElement>("/api/v1/me/mfa/")).GetProperty("methods")
+                .EnumerateArray().First(m => m.GetProperty("method").GetString() == name);
+
+        var confirmed = await AuthHelper.BearerClientAsync(factory, email);
+        var method = await MethodAsync(confirmed, "email");
+        method.GetProperty("enabled").GetBoolean().ShouldBeFalse();
+        method.GetProperty("ready").GetBoolean().ShouldBeFalse();
+        method.GetProperty("destinationConfirmed").GetBoolean().ShouldBeTrue();
+        method.GetProperty("channelConfigured").GetBoolean().ShouldBeTrue();
+
+        var unconfirmed = $"tfa-unconf-status-{Guid.NewGuid():N}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, unconfirmed);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.Users.Where(u => u.Email == unconfirmed)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.EmailConfirmed, false));
+        }
+
+        method = await MethodAsync(await AuthHelper.BearerClientAsync(factory, unconfirmed), "email");
+        method.GetProperty("destinationConfirmed").GetBoolean().ShouldBeFalse();
+        method.GetProperty("channelConfigured").GetBoolean().ShouldBeTrue();
+
+        factory.Messages.MailConfigured = false;
+        try
+        {
+            method = await MethodAsync(confirmed, "email");
+            method.GetProperty("destinationConfirmed").GetBoolean().ShouldBeTrue();
+            method.GetProperty("channelConfigured").GetBoolean().ShouldBeFalse();
+        }
+        finally
+        {
+            factory.Messages.MailConfigured = true;
+        }
+
+        // The authenticator app needs neither.
+        var authenticator = await MethodAsync(confirmed, "authenticator");
+        authenticator.GetProperty("destinationConfirmed").GetBoolean().ShouldBeTrue();
+        authenticator.GetProperty("channelConfigured").GetBoolean().ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Sms_two_factor_needs_a_confirmed_number_first()
     {
         var client = await AuthHelper.BearerClientAsync(factory, email);
