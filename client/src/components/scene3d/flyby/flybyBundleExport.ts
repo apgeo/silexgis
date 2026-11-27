@@ -42,6 +42,13 @@ export const FLYBY_BUNDLE_ROUTE = '/api/v1/flybys/blender-bundle';
 
 /** What the server says of a bundle it made, beside the file. */
 export interface FlybyBundleMade {
+  /**
+   * For a render on the server: caves under location protection left out, because a render node
+   * is another machine and receives none. Absent for a download.
+   */
+  protectedLeftOut?: number;
+  /** For a render on the server: entrances and features under location protection left out. */
+  protectedMarkersLeftOut?: number;
   /** Caves drawn with their walls. */
   walls: number;
   /** Caves drawn by their survey lines alone. */

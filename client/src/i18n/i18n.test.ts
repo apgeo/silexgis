@@ -82,7 +82,7 @@ import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelPro
 import { SETTINGS_SECTIONS } from '../pages/settings/sections.ts';
 import { RECORD_GROUPINGS } from '../pages/calendar/recordGrouping.ts';
 import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
-import type { FlybyRenderFileRole, FlybyRenderPhaseWord } from '../api/hooks/flybyRenders.ts';
+import type { FlybyRenderFileRole, FlybyRenderPhaseWord, FlybyRenderReason } from '../api/hooks/flybyRenders.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
 
@@ -277,6 +277,27 @@ const flybyRenderFileRoles: Record<FlybyRenderFileRole, true> = {
   subtitles: true,
   log: true,
   status: true,
+};
+
+/** Why a render failed, as the panel says it: the key is built from the reason. */
+const flybyRenderReasons: Record<FlybyRenderReason, true> = {
+  refused: true,
+  badJob: true,
+  checksum: true,
+  download: true,
+  upload: true,
+  cancelled: true,
+  timedOut: true,
+  blenderNotFound: true,
+  blenderTooOld: true,
+  diskSpace: true,
+  scriptError: true,
+  crashed: true,
+  noOutput: true,
+  error: true,
+  interrupted: true,
+  timeLimit: true,
+  notTaken: true,
 };
 
 const accessScopeKinds: Record<AccessScopeKind, true> = {
@@ -869,6 +890,7 @@ describe('i18n locales', () => {
     for (const [values, enWords, roWords] of [
       [Object.keys(flybyRenderPhases), en.flyby.render.phase, ro.flyby.render.phase],
       [Object.keys(flybyRenderFileRoles), en.flyby.render.file, ro.flyby.render.file],
+      [Object.keys(flybyRenderReasons), en.flyby.render.reason, ro.flyby.render.reason],
     ] as [string[], Record<string, string>, Record<string, string>][]) {
       expect(values.filter((name) => !enWords[name])).toEqual([]);
       expect(values.filter((name) => !roWords[name])).toEqual([]);

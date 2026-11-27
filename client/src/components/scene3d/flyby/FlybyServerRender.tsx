@@ -8,8 +8,10 @@ import Button from '../../Button.tsx';
 import {
   FLYBY_RENDER_CONTAINERS,
   FLYBY_RENDER_FILE_ROLES,
+  FLYBY_RENDER_SERVER_REASONS,
   flybyRenderPhaseWord,
   flybyRenderFileUrl,
+  flybyRenderReason,
   flybyRenderIsActive,
   useCancelFlybyRender,
   useFlybyRenderAvailability,
@@ -43,9 +45,12 @@ export interface FlybyServerRenderProps {
  * instead of on the reader's own machine, and the reader's latest render — how far it got, a way to
  * stop it, and its film to download.
  *
- * Shown only while a node has called lately: offered with none, a render would sit in the queue
- * with nothing to say why. A render already going stays shown either way, so it can be followed and
- * stopped.
+ * Offered only while a node has called lately: with none, a render would sit in the queue with
+ * nothing to say why. The reader's latest render stays shown either way — one going, to be followed
+ * and stopped, and one finished, whose film is still to be downloaded until it is deleted, which a
+ * node that has gone quiet changes nothing about.
+ *
+ * Says, before anything is asked for, that nothing under location protection goes to a node.
  */
 export default function FlybyServerRender({ canStart, starting, onStart }: FlybyServerRenderProps) {
   const { t, i18n } = useTranslation();
@@ -55,7 +60,7 @@ export default function FlybyServerRender({ canStart, starting, onStart }: Flyby
   const renders = useFlybyRenders();
   const latest = renders.data?.[0];
   const available = availability.data?.available === true;
-  if (!available && (latest === undefined || !flybyRenderIsActive(latest))) {
+  if (!available && latest === undefined) {
     return null;
   }
   const going = latest !== undefined && flybyRenderIsActive(latest);
@@ -66,6 +71,14 @@ export default function FlybyServerRender({ canStart, starting, onStart }: Flyby
       <Typography.Text type="secondary" className="scene3d-flyby-movie-help">
         {t('flyby.render.help')}
       </Typography.Text>
+      <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-render-protected-notice">
+        {t('flyby.render.protectedNotice')}
+      </Typography.Text>
+      {!available && (
+        <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-render-no-node">
+          {t('flyby.render.noNode')}
+        </Typography.Text>
+      )}
       {available && (
         <Space wrap>
           <Radio.Group
@@ -192,7 +205,35 @@ function RenderState({ render, language }: { render: FlybyRender; language: stri
       data-testid="flyby-render-state"
       data-status="failed"
       title={t('flyby.render.failed')}
-      description={render.error ?? undefined}
+      description={<FailureWords render={render} />}
     />
   );
+}
+
+/**
+ * Why a render failed, in the reader's language: the reason's own sentence, and for a reason a node
+ * gave, what the node said, shortened and marked as the node's — a node is another machine, and its
+ * words are not this application's.
+ */
+function FailureWords({ render }: { render: FlybyRender }) {
+  const { t } = useTranslation();
+  const reason = flybyRenderReason(render.reason);
+  if (reason === null) {
+    return render.error ? <>{t('flyby.render.nodeSaid', { words: shortened(render.error) })}</> : null;
+  }
+  const words = render.error?.slice(reason.length + 2).trim() ?? '';
+  return (
+    <Space orientation="vertical" size={0}>
+      <Typography.Text data-testid="flyby-render-reason">{t(`flyby.render.reason.${reason}`)}</Typography.Text>
+      {!FLYBY_RENDER_SERVER_REASONS.includes(reason) && words.length > 0 && (
+        <Typography.Text type="secondary" className="scene3d-flyby-movie-help" data-testid="flyby-render-node-said">
+          {t('flyby.render.nodeSaid', { words: shortened(words) })}
+        </Typography.Text>
+      )}
+    </Space>
+  );
+}
+
+function shortened(words: string): string {
+  return words.length <= 300 ? words : `${words.slice(0, 300)}…`;
 }

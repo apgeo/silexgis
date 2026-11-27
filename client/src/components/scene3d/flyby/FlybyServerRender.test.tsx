@@ -43,6 +43,7 @@ function aRender(extra: Partial<FlybyRender> = {}): FlybyRender {
     total: null,
     secondsLeft: null,
     error: null,
+    reason: null,
     cancelRequested: false,
     device: null,
     renderSeconds: null,
@@ -141,11 +142,46 @@ describe('rendering a flyby on the server', () => {
     expect(state.downloaded).toEqual(['/api/v1/flybys/blender-renders/r1/files/12.mp4']);
   });
 
-  it('says why a render failed, and that a stopped one was stopped', () => {
-    state.renders = [aRender({ status: 'failed', error: 'scriptError: the player failed' })];
+  it('says before anything is asked for that nothing under location protection goes to a node', () => {
+    show();
+    expect(screen.getByTestId('flyby-render-protected-notice')).toHaveTextContent(
+      'Caves, entrances and features under location protection are never sent to a render node',
+    );
+  });
+
+  it('keeps a finished film and its download while no render node is calling, and offers no new render', () => {
+    state.available = false;
+    state.renders = [
+      aRender({ status: 'succeeded', files: [{ name: '12.mp4', role: 'movie', size: 1000 }], expiresAt: '2026-12-10T10:00:00Z' }),
+    ];
+    show();
+    expect(screen.getByTestId('flyby-render-file-movie')).toBeInTheDocument();
+    expect(screen.getByTestId('flyby-render-state')).toHaveTextContent('The film is kept here until');
+    expect(screen.queryByTestId('flyby-render-start')).not.toBeInTheDocument();
+    expect(screen.getByTestId('flyby-render-no-node')).toBeInTheDocument();
+  });
+
+  it("says why a render failed in its own words, the node's words marked as the node's, and that a stopped one was stopped", () => {
+    state.renders = [aRender({ status: 'failed', error: 'scriptError: the player failed', reason: 'scriptError' })];
     show();
     expect(screen.getByTestId('flyby-render-state')).toHaveTextContent('The render failed.');
-    expect(screen.getByTestId('flyby-render-state')).toHaveTextContent('scriptError: the player failed');
+    expect(screen.getByTestId('flyby-render-reason')).toHaveTextContent('Blender stopped with an error while it rendered.');
+    expect(screen.getByTestId('flyby-render-node-said')).toHaveTextContent('The render node said: the player failed');
+    cleanup();
+
+    // This server's own reason is said whole, with no words of a node's.
+    state.renders = [
+      aRender({ status: 'failed', error: 'timeLimit: the render ran past the 24 hours this server allows one render', reason: 'timeLimit' }),
+    ];
+    show();
+    expect(screen.getByTestId('flyby-render-reason')).toHaveTextContent('The render ran longer than this server allows one render.');
+    expect(screen.queryByTestId('flyby-render-node-said')).not.toBeInTheDocument();
+    cleanup();
+
+    // A node's long words are shortened.
+    state.renders = [aRender({ status: 'failed', error: `error: ${'x'.repeat(1000)}`, reason: 'error' })];
+    show();
+    expect(screen.getByTestId('flyby-render-node-said').textContent!.length).toBeLessThan(400);
     cleanup();
 
     state.renders = [aRender({ status: 'cancelled', error: 'cancelled: stopped by the person who asked for it' })];

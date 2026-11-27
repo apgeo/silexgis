@@ -10973,7 +10973,7 @@
     },
     "render": {
       "title": "Render on the server",
-      "help": "The same bundle, rendered into a film by a render node — a machine of this installation's with Blender — instead of on your own machine. You download the film here when it is ready.",
+      "help": "The same bundle, rendered into a film by a render node — another machine, which this installation's administrators let in and which renders everybody's bundles — instead of on your own machine. You download the film here when it is ready.",
       "plan": "What to render",
       "planDraft": "Draft",
       "planFull": "Full",
@@ -11009,7 +11009,35 @@
       "failed": "The render failed.",
       "failedToStart": "The render could not be queued.",
       "alreadyActive": "A render of yours is waiting or running already. Stop it or wait for it first.",
-      "storageFull": "The space this server keeps for renders is full. Try again when older films have been deleted."
+      "storageFull": "The space this server keeps for renders is full. Try again when older films have been deleted.",
+      "protectedNotice": "Caves, entrances and features under location protection are never sent to a render node: a render on the server leaves them out, even the ones you may see. Download the bundle to render them on a machine of your own.",
+      "noNode": "No render node is calling now, so a render cannot be started. Your latest render stays here until it is deleted.",
+      "onlyProtected": "Every cave in this flyby is under location protection, and a render on the server receives none. Download the bundle and render it on a machine of your own.",
+      "reportTitle": "The render was queued. Its bundle holds:",
+      "reportProtected_one": "1 cave under location protection is left out: it is not sent to a render node",
+      "reportProtected": "{{count}} caves under location protection are left out: they are not sent to a render node",
+      "reportProtectedMarkers_one": "1 entrance or feature under location protection is left out",
+      "reportProtectedMarkers": "{{count}} entrances and features under location protection are left out",
+      "nodeSaid": "The render node said: {{words}}",
+      "reason": {
+        "refused": "The render node refused the bundle.",
+        "badJob": "The render could not be done: its bundle is not one a render node can render, or it is no longer stored.",
+        "checksum": "The bundle arrived damaged on the render node.",
+        "download": "The render node could not download the bundle.",
+        "upload": "The render node could not send the film back.",
+        "cancelled": "The render was stopped.",
+        "timedOut": "The render took longer than a render node allows.",
+        "blenderNotFound": "The render node has no Blender to render with.",
+        "blenderTooOld": "The render node's Blender is too old for this bundle.",
+        "diskSpace": "The render node ran out of disk space.",
+        "scriptError": "Blender stopped with an error while it rendered.",
+        "crashed": "Blender stopped unexpectedly.",
+        "noOutput": "Blender ended without writing a film.",
+        "error": "The render node met an error.",
+        "interrupted": "The render node stopped answering, and the render was tried as often as it may be.",
+        "timeLimit": "The render ran longer than this server allows one render.",
+        "notTaken": "No render node took the render in time, so it was ended."
+      }
     }
   },
   "mapSymbols": {
@@ -11444,6 +11472,13 @@
       "online": "Waiting for work",
       "quiet": "Not calling",
       "revoked": "Withdrawn"
+    },
+    "protectedWarning": "A render node receives the bundles of every account that renders on the server. Caves, entrances and features under location protection are left out of them, whoever asks; the names and texts of a flyby still go with it. Give a token only to a machine whose owner you would show the club's other caves to.",
+    "skipped": {
+      "container_one": "Left 1 waiting render to other nodes: its film format is one this node does not write.",
+      "container": "Left {{count}} waiting renders to other nodes: their film format is one this node does not write.",
+      "disk_one": "Left 1 waiting render to other nodes: it needs about {{needs}} of disk, and this node said it has {{free}} free.",
+      "disk": "Left {{count}} waiting renders to other nodes: one needs about {{needs}} of disk, and this node said it has {{free}} free."
     }
   }
 }

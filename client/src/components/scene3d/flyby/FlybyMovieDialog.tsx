@@ -127,6 +127,7 @@ interface ExportRun {
 /** The words for a bundle the server refused, by the code it refused with. */
 const BUNDLE_FAILURES: Record<string, string> = {
   'flyby_bundle.nothing_to_draw': 'flyby.bundle.failed.nothingToDraw',
+  'flyby_bundle.only_protected': 'flyby.render.onlyProtected',
   'flyby_bundle.too_long': 'flyby.bundle.failed.tooLong',
   'flyby_bundle.frame_rate_unsupported': 'flyby.bundle.failed.frameRate',
   'flyby_render.already_active': 'flyby.render.alreadyActive',
@@ -294,7 +295,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
   const [run, setRun] = useState<ExportRun | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [report, setReport] = useState<MadeReport | null>(null);
-  const [bundleMade, setBundleMade] = useState<FlybyBundleMade | null>(null);
+  const [bundleMade, setBundleMade] = useState<{ made: FlybyBundleMade; server: boolean } | null>(null);
 
   // ---- a bundle: what it would leave out, said while the reader is still choosing ----
   const flown = flyby.document;
@@ -526,11 +527,15 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         signal: controller.signal,
       };
       if (server) {
-        await renderFlybyOnServer(asked, server.plan, server.container);
+        const started = await renderFlybyOnServer(asked, server.plan, server.container);
         void queryClient.invalidateQueries({ queryKey: queryKeys.flybyRendersAll });
+        // What went into the bundle, as the download says it: the bundle itself, and its notes,
+        // never come back from a render node, so this is the reader's one sight of what the film
+        // will lack.
+        setBundleMade({ made: started.made, server: true });
         void message.success(t('flyby.render.started'));
       } else {
-        setBundleMade(await downloadFlybyBundle(asked));
+        setBundleMade({ made: await downloadFlybyBundle(asked), server: false });
         void message.success(t('flyby.bundle.saved'));
       }
     } catch (error) {
@@ -1045,55 +1050,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         />
       )}
 
-      {asBundle && bundleMade !== null && (
-        <Alert
-          type={bundleMade.notDrawn > 0 || bundleMade.wallsLeftOut > 0 || bundleMade.markersNotDrawn > 0 ? 'warning' : 'success'}
-          showIcon
-          data-testid="flyby-bundle-report"
-          title={t('flyby.bundle.saved')}
-          description={
-            <ul className="scene3d-flyby-bundle-list">
-              {bundleMade.walls > 0 && <li>{t('flyby.bundle.reportWalls', { count: bundleMade.walls })}</li>}
-              {bundleMade.lines > 0 && <li>{t('flyby.bundle.reportLines', { count: bundleMade.lines })}</li>}
-              {bundleMade.wallsLeftOut > 0 && (
-                <li data-testid="flyby-bundle-report-walls-left-out">
-                  {t('flyby.bundle.reportWallsLeftOut', { count: bundleMade.wallsLeftOut })}
-                </li>
-              )}
-              {bundleMade.markers > 0 && (
-                <li data-testid="flyby-bundle-report-markers">{t('flyby.bundle.reportMarkers', { count: bundleMade.markers })}</li>
-              )}
-              {bundleMade.photos > 0 && (
-                <li data-testid="flyby-bundle-report-photos">{t('flyby.bundle.reportPhotos', { count: bundleMade.photos })}</li>
-              )}
-              {bundleMade.markersNotDrawn > 0 && (
-                <li data-testid="flyby-bundle-report-markers-not-drawn">
-                  {t('flyby.bundle.reportMarkersNotDrawn', { count: bundleMade.markersNotDrawn })}
-                </li>
-              )}
-              {bundleMade.notDrawn > 0 && (
-                <li data-testid="flyby-bundle-report-not-drawn">{t('flyby.bundle.reportNotDrawn', { count: bundleMade.notDrawn })}</li>
-              )}
-              {bundleMade.undatedLegs > 0 && (
-                <li data-testid="flyby-bundle-report-undated-legs">
-                  {t('flyby.bundle.reportUndatedLegs', { count: bundleMade.undatedLegs })}
-                </li>
-              )}
-              {bundleMade.cavesOnSurveyDate > 0 && (
-                <li data-testid="flyby-bundle-report-caves-on-survey-date">
-                  {t('flyby.bundle.reportCavesOnSurveyDate', { count: bundleMade.cavesOnSurveyDate })}
-                </li>
-              )}
-              {bundleMade.undatedCaves > 0 && (
-                <li data-testid="flyby-bundle-report-undated-caves">
-                  {t('flyby.bundle.reportUndatedCaves', { count: bundleMade.undatedCaves })}
-                </li>
-              )}
-              <li>{t('flyby.bundle.reportReadme')}</li>
-            </ul>
-          }
-        />
-      )}
+      {asBundle && bundleMade !== null && <BundleReport made={bundleMade.made} server={bundleMade.server} />}
 
       {asBundle && (
         <FlybyServerRender
@@ -1131,5 +1088,62 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         )}
       </Space>
     </div>
+  );
+}
+
+/**
+ * What went into a bundle, as the server counted it: for a download, beside the file and its notes;
+ * for a render on the server, once it is queued — with what a render node is never given.
+ */
+function BundleReport({ made, server }: { made: FlybyBundleMade; server: boolean }) {
+  const { t } = useTranslation();
+  const protectedLeftOut = made.protectedLeftOut ?? 0;
+  const protectedMarkersLeftOut = made.protectedMarkersLeftOut ?? 0;
+  const lacking =
+    made.notDrawn > 0 || made.wallsLeftOut > 0 || made.markersNotDrawn > 0 || protectedLeftOut > 0 || protectedMarkersLeftOut > 0;
+  return (
+    <Alert
+      type={lacking ? 'warning' : 'success'}
+      showIcon
+      data-testid={server ? 'flyby-render-report' : 'flyby-bundle-report'}
+      title={server ? t('flyby.render.reportTitle') : t('flyby.bundle.saved')}
+      description={
+        <ul className="scene3d-flyby-bundle-list">
+          {made.walls > 0 && <li>{t('flyby.bundle.reportWalls', { count: made.walls })}</li>}
+          {made.lines > 0 && <li>{t('flyby.bundle.reportLines', { count: made.lines })}</li>}
+          {made.wallsLeftOut > 0 && (
+            <li data-testid="flyby-bundle-report-walls-left-out">{t('flyby.bundle.reportWallsLeftOut', { count: made.wallsLeftOut })}</li>
+          )}
+          {made.markers > 0 && <li data-testid="flyby-bundle-report-markers">{t('flyby.bundle.reportMarkers', { count: made.markers })}</li>}
+          {made.photos > 0 && <li data-testid="flyby-bundle-report-photos">{t('flyby.bundle.reportPhotos', { count: made.photos })}</li>}
+          {made.markersNotDrawn > 0 && (
+            <li data-testid="flyby-bundle-report-markers-not-drawn">
+              {t('flyby.bundle.reportMarkersNotDrawn', { count: made.markersNotDrawn })}
+            </li>
+          )}
+          {made.notDrawn > 0 && <li data-testid="flyby-bundle-report-not-drawn">{t('flyby.bundle.reportNotDrawn', { count: made.notDrawn })}</li>}
+          {protectedLeftOut > 0 && (
+            <li data-testid="flyby-render-report-protected">{t('flyby.render.reportProtected', { count: protectedLeftOut })}</li>
+          )}
+          {protectedMarkersLeftOut > 0 && (
+            <li data-testid="flyby-render-report-protected-markers">
+              {t('flyby.render.reportProtectedMarkers', { count: protectedMarkersLeftOut })}
+            </li>
+          )}
+          {made.undatedLegs > 0 && (
+            <li data-testid="flyby-bundle-report-undated-legs">{t('flyby.bundle.reportUndatedLegs', { count: made.undatedLegs })}</li>
+          )}
+          {made.cavesOnSurveyDate > 0 && (
+            <li data-testid="flyby-bundle-report-caves-on-survey-date">
+              {t('flyby.bundle.reportCavesOnSurveyDate', { count: made.cavesOnSurveyDate })}
+            </li>
+          )}
+          {made.undatedCaves > 0 && (
+            <li data-testid="flyby-bundle-report-undated-caves">{t('flyby.bundle.reportUndatedCaves', { count: made.undatedCaves })}</li>
+          )}
+          {!server && <li>{t('flyby.bundle.reportReadme')}</li>}
+        </ul>
+      }
+    />
   );
 }

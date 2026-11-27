@@ -27,6 +27,9 @@ const ISSUED: RenderNodeIssued = {
     device: null,
     blenderVersions: null,
     freeDiskBytes: null,
+    skipReason: null,
+    skippedRenders: null,
+    skipNeedsBytes: null,
   },
   token: 'sgn_ABCDEFGH-an-invented-token-for-the-test-only',
 };
@@ -63,6 +66,9 @@ beforeEach(() => {
       device: 'GPU (OPTIX)',
       blenderVersions: '4.5.16',
       freeDiskBytes: 1_000_000,
+      skipReason: null,
+      skippedRenders: null,
+      skipNeedsBytes: null,
     },
   ];
   state.issued = [];
@@ -108,6 +114,28 @@ describe('the render nodes page', () => {
     const asked = (await screen.findByText(/Withdraw “club-workstation”\?/)).closest('.ant-popconfirm') as HTMLElement;
     fireEvent.click(within(asked).getByRole('button', { name: 'Withdraw' }));
     await waitFor(() => expect(state.revoked).toEqual(['n1']));
+  });
+
+  it("warns that a node receives every account's bundles, without the protected caves", () => {
+    show();
+    expect(screen.getByTestId('render-node-protected-warning')).toHaveTextContent(
+      'A render node receives the bundles of every account that renders on the server',
+    );
+  });
+
+  it('says why a node left waiting renders to other nodes', () => {
+    state.nodes = [{ ...state.nodes[0]!, skipReason: 'disk', skippedRenders: 2, skipNeedsBytes: 12 * 1024 ** 3, freeDiskBytes: 5 * 1024 ** 3 }];
+    show();
+    expect(screen.getByTestId('render-node-skipped-club-workstation')).toHaveTextContent(
+      'Left 2 waiting renders to other nodes: one needs about 12.0 GB of disk, and this node said it has 5.0 GB free.',
+    );
+    cleanup();
+
+    state.nodes = [{ ...state.nodes[0]!, skipReason: 'container', skippedRenders: 1, skipNeedsBytes: null }];
+    show();
+    expect(screen.getByTestId('render-node-skipped-club-workstation')).toHaveTextContent(
+      'Left 1 waiting render to other nodes: its film format is one this node does not write.',
+    );
   });
 
   it('gives the worker the render-node routes of this server as a folder', () => {

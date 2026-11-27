@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
+import { formatBytes } from '../../components/storage/storageFigures.ts';
 import { ApiError } from '../../api/client.ts';
 import {
   renderNodeServerUrl,
@@ -85,10 +86,26 @@ export default function RenderNodesPage() {
     {
       title: t('renderNodes.columns.machine'),
       key: 'machine',
-      render: (_, node) =>
-        [node.device, node.blenderVersions ? `Blender ${node.blenderVersions}` : null, node.worker ? `therion-cli ${node.worker}` : null]
-          .filter(Boolean)
-          .join(' · '),
+      render: (_, node) => (
+        <Flex vertical gap={2}>
+          <span>
+            {[node.device, node.blenderVersions ? `Blender ${node.blenderVersions}` : null, node.worker ? `therion-cli ${node.worker}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+          {!node.revokedAt && node.skipReason && (
+            <Typography.Text type="warning" data-testid={`render-node-skipped-${node.name}`}>
+              {node.skipReason === 'disk'
+                ? t('renderNodes.skipped.disk', {
+                    count: node.skippedRenders ?? 0,
+                    needs: formatBytes(node.skipNeedsBytes ?? 0),
+                    free: formatBytes(node.freeDiskBytes ?? 0),
+                  })
+                : t('renderNodes.skipped.container', { count: node.skippedRenders ?? 0 })}
+            </Typography.Text>
+          )}
+        </Flex>
+      ),
     },
     {
       title: '',
@@ -124,6 +141,7 @@ export default function RenderNodesPage() {
           <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
             {t('renderNodes.intro')}
           </Typography.Paragraph>
+          <Alert type="info" showIcon title={t('renderNodes.protectedWarning')} data-testid="render-node-protected-warning" />
 
           {issued && (
             <Alert

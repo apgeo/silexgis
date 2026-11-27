@@ -34,6 +34,26 @@ export const FLYBY_RENDER_PHASES = [
 /** What the panel says of a running render's phase: one of the worker's, or `working`. */
 export type FlybyRenderPhaseWord = (typeof FLYBY_RENDER_PHASES)[number] | 'working';
 
+/**
+ * The words a failed render's error may start with, which the panel says in the reader's language:
+ * the render node protocol's failure reasons, then this server's own — a node that stopped answering
+ * on its last try, a render past the hours a render may take, and one no node took in time.
+ */
+export const FLYBY_RENDER_REASONS = [
+  'refused', 'badJob', 'checksum', 'download', 'upload', 'cancelled', 'timedOut', 'blenderNotFound', 'blenderTooOld',
+  'diskSpace', 'scriptError', 'crashed', 'noOutput', 'error', 'interrupted', 'timeLimit', 'notTaken',
+] as const;
+
+export type FlybyRenderReason = (typeof FLYBY_RENDER_REASONS)[number];
+
+/** The server's own reasons: said whole, with no words of a node's after them. */
+export const FLYBY_RENDER_SERVER_REASONS: readonly FlybyRenderReason[] = ['interrupted', 'timeLimit', 'notTaken'];
+
+/** The reason a render's answer names, when it is one the panel has words for. */
+export function flybyRenderReason(reason: string | null | undefined): FlybyRenderReason | null {
+  return (FLYBY_RENDER_REASONS as readonly string[]).includes(reason ?? '') ? (reason as FlybyRenderReason) : null;
+}
+
 /** The roles of a result's files, in the order the panel offers them: the film first. */
 export const FLYBY_RENDER_FILE_ROLES = ['movie', 'still', 'subtitles', 'log', 'status'] as const;
 

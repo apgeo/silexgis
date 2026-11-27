@@ -108,7 +108,10 @@ vi.mock('../../../api/client.ts', async (original) => {
         renders.asked.push({ url, body: init.body });
         const render = { id: 'r1', name: 'An invented flyby', status: 'queued', files: [] };
         return {
-          data: { render, walls: 1, lines: 0, notDrawn: 0, wallsLeftOut: 0, markers: 0, markersNotDrawn: 0, photos: 0, undatedLegs: 0, cavesOnSurveyDate: 0, undatedCaves: 0 },
+          data: {
+            render, walls: 1, lines: 0, notDrawn: 0, wallsLeftOut: 0, markers: 0, markersNotDrawn: 0, photos: 0, undatedLegs: 0,
+            cavesOnSurveyDate: 0, undatedCaves: 0, protectedLeftOut: 2, protectedMarkersLeftOut: 1,
+          },
           response: new Response(null, { status: 201 }),
         };
       },
@@ -609,5 +612,19 @@ describe('a flyby as a bundle for Blender', () => {
     expect(renders.asked[0].body.plan).toBe('full');
     expect(renders.asked[0].body.container).toBe('mp4');
     expect(renders.asked[0].body.bundle).toEqual(downloaded);
+
+    // What the render's bundle holds, and what a node is never given: the bundle and its notes do
+    // not come back from a node, so this is said here.
+    for (let tries = 0; tries < 100 && !screen.queryByTestId('flyby-render-report'); tries += 1) {
+      await pass(50);
+    }
+    const report = screen.getByTestId('flyby-render-report');
+    expect(report).toHaveTextContent('The render was queued. Its bundle holds:');
+    expect(within(report).getByTestId('flyby-render-report-protected')).toHaveTextContent(
+      '2 caves under location protection are left out: they are not sent to a render node',
+    );
+    expect(within(report).getByTestId('flyby-render-report-protected-markers')).toHaveTextContent(
+      '1 entrance or feature under location protection is left out',
+    );
   });
 });

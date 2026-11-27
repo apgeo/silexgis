@@ -10973,7 +10973,7 @@
     },
     "render": {
       "title": "Randare pe server",
-      "help": "Același pachet, randat într-un film de un nod de randare — un calculator al acestei instalări, cu Blender — în loc de calculatorul tău. Descarci filmul de aici când e gata.",
+      "help": "Același pachet, randat într-un film de un nod de randare — o altă mașină, pe care administratorii acestei instalări o admit și care randează pachetele tuturor — în loc de calculatorul tău. Descarci filmul de aici când e gata.",
       "plan": "Ce se randează",
       "planDraft": "Ciornă",
       "planFull": "Complet",
@@ -11009,7 +11009,35 @@
       "failed": "Randarea a eșuat.",
       "failedToStart": "Randarea nu a putut fi pusă în coadă.",
       "alreadyActive": "Ai deja o randare care așteaptă sau rulează. Oprește-o sau așteaps-o mai întâi.",
-      "storageFull": "Spațiul păstrat pe server pentru randări este plin. Încearcă din nou după ce filmele mai vechi au fost șterse."
+      "storageFull": "Spațiul păstrat pe server pentru randări este plin. Încearcă din nou după ce filmele mai vechi au fost șterse.",
+      "protectedNotice": "Peșterile, intrările și obiectele cu locație protejată nu sunt trimise niciodată unui nod de randare: o randare pe server le lasă deoparte, chiar și pe cele pe care le poți vedea. Descarcă pachetul pentru a le randa pe un calculator al tău.",
+      "noNode": "Niciun nod de randare nu se anunță acum, așa că nu se poate porni o randare. Ultima ta randare rămâne aici până când este ștearsă.",
+      "onlyProtected": "Toate peșterile din acest survol au locația protejată, iar o randare pe server nu primește niciuna. Descarcă pachetul și randează-l pe un calculator al tău.",
+      "reportTitle": "Randarea a fost pusă în coadă. Pachetul ei conține:",
+      "reportProtected_one": "1 peșteră cu locație protejată este lăsată deoparte: nu este trimisă unui nod de randare",
+      "reportProtected": "{{count}} peșteri cu locație protejată sunt lăsate deoparte: nu sunt trimise unui nod de randare",
+      "reportProtectedMarkers_one": "1 intrare sau obiect cu locație protejată este lăsat deoparte",
+      "reportProtectedMarkers": "{{count}} intrări și obiecte cu locație protejată sunt lăsate deoparte",
+      "nodeSaid": "Nodul de randare a spus: {{words}}",
+      "reason": {
+        "refused": "Nodul de randare a refuzat pachetul.",
+        "badJob": "Randarea nu a putut fi făcută: pachetul ei nu poate fi randat de un nod de randare sau nu mai este păstrat.",
+        "checksum": "Pachetul a ajuns deteriorat la nodul de randare.",
+        "download": "Nodul de randare nu a putut descărca pachetul.",
+        "upload": "Nodul de randare nu a putut trimite filmul înapoi.",
+        "cancelled": "Randarea a fost oprită.",
+        "timedOut": "Randarea a durat mai mult decât permite un nod de randare.",
+        "blenderNotFound": "Nodul de randare nu are Blender cu care să randeze.",
+        "blenderTooOld": "Blender-ul nodului de randare este prea vechi pentru acest pachet.",
+        "diskSpace": "Nodul de randare a rămas fără spațiu pe disc.",
+        "scriptError": "Blender s-a oprit cu o eroare în timp ce randa.",
+        "crashed": "Blender s-a oprit pe neașteptate.",
+        "noOutput": "Blender s-a încheiat fără să scrie un film.",
+        "error": "Nodul de randare a întâmpinat o eroare.",
+        "interrupted": "Nodul de randare a încetat să răspundă, iar randarea a fost încercată de câte ori se poate.",
+        "timeLimit": "Randarea a durat mai mult decât permite acest server pentru o randare.",
+        "notTaken": "Niciun nod de randare nu a preluat randarea la timp, așa că a fost încheiată."
+      }
     }
   },
   "mapSymbols": {
@@ -11444,6 +11472,13 @@
       "online": "Așteaptă lucru",
       "quiet": "Nu se anunță",
       "revoked": "Retras"
+    },
+    "protectedWarning": "Un nod de randare primește pachetele tuturor conturilor care randează pe server. Peșterile, intrările și obiectele cu locație protejată sunt lăsate deoparte din ele, oricine le-ar cere; numele și textele unui survol merg totuși cu el. Dă un token doar unei mașini al cărei proprietar ar putea vedea și celelalte peșteri ale clubului.",
+    "skipped": {
+      "container_one": "A lăsat 1 randare în așteptare altor noduri: formatul filmului ei este unul pe care acest nod nu îl scrie.",
+      "container": "A lăsat {{count}} randări în așteptare altor noduri: formatul filmului lor este unul pe care acest nod nu îl scrie.",
+      "disk_one": "A lăsat 1 randare în așteptare altor noduri: are nevoie de circa {{needs}} pe disc, iar acest nod a spus că are {{free}} liberi.",
+      "disk": "A lăsat {{count}} randări în așteptare altor noduri: una are nevoie de circa {{needs}} pe disc, iar acest nod a spus că are {{free}} liberi."
     }
   }
 }
