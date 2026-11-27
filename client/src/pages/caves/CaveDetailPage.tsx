@@ -225,6 +225,10 @@ export default function CaveDetailPage() {
     navigate('/map3d');
   };
 
+  // The scene frames a cave by its entrances and draws its survey models; with neither there is
+  // nothing for it to show. Unknown counts withhold nothing.
+  const nothingIn3d = entrances?.length === 0 && summary?.surveyModelCount === 0;
+
   const parentCrumbs = [...cave.parents].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 
   const onDeleteCave = async () => {
@@ -255,21 +259,23 @@ export default function CaveDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1100 }}>
-      {parentCrumbs.length > 0 && (
-        <Breadcrumb
-          style={{ marginBottom: 4 }}
-          items={[
-            ...parentCrumbs.map((parent) => ({
-              title: (
-                <Typography.Link onClick={() => navigate(`/features/${parent.id}`)}>
-                  {parent.name ?? t('features.unnamed')}
-                </Typography.Link>
-              ),
-            })),
-            { title: cave.name },
-          ]}
-        />
-      )}
+      {/* Always from the register, so the way back to the list is one press from every cave. */}
+      <Breadcrumb
+        style={{ marginBottom: 4 }}
+        items={[
+          {
+            title: <Typography.Link onClick={() => navigate('/caves')}>{t('nav.caves')}</Typography.Link>,
+          },
+          ...parentCrumbs.map((parent) => ({
+            title: (
+              <Typography.Link onClick={() => navigate(`/features/${parent.id}`)}>
+                {parent.name ?? t('features.unnamed')}
+              </Typography.Link>
+            ),
+          })),
+          { title: cave.name },
+        ]}
+      />
 
       <PageHeader
         style={{ marginBottom: 12 }}
@@ -291,9 +297,11 @@ export default function CaveDetailPage() {
         }
         actions={
           <>
-            <Button icon={<CodeSandboxOutlined />} onClick={openIn3d}>
-              {t('caves.openIn3d')}
-            </Button>
+            <Tooltip title={nothingIn3d ? t('caves.nothingIn3d') : undefined}>
+              <Button icon={<CodeSandboxOutlined />} onClick={openIn3d} disabled={nothingIn3d}>
+                {t('caves.openIn3d')}
+              </Button>
+            </Tooltip>
             {canShare && (
               <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
                 {t('shares.button')}
@@ -416,7 +424,14 @@ export default function CaveDetailPage() {
           pagination={false}
           // A failed read is named above and is not an empty list, so the table's own "no data"
           // picture is not drawn under it.
-          locale={entrancesFailed && entrances === undefined ? { emptyText: <span /> } : undefined}
+          locale={{
+            emptyText:
+              entrancesFailed && entrances === undefined ? (
+                <span />
+              ) : (
+                <Typography.Text type="secondary">{t('entrances.emptyNoPosition')}</Typography.Text>
+              ),
+          }}
           columns={[
             { title: t('caves.name'), dataIndex: 'name' },
             { title: t('caves.type'), dataIndex: 'entranceTypeId', render: entranceTypeName, width: 160 },
@@ -534,7 +549,7 @@ export default function CaveDetailPage() {
           lists below are the cave's whole set of models and sources and are left whole. */}
       {id && <CaveSurveysSection caveId={id} />}
 
-      {id && <SurveyModelSection caveId={id} canEdit={canEdit} />}
+      {id && <SurveyModelSection caveId={id} caveName={cave.name} canEdit={canEdit} />}
 
       {/* Beside the compiled models rather than inside them: what was compiled and what it was
           compiled from are two different things, and only one of them can be re-compiled. */}

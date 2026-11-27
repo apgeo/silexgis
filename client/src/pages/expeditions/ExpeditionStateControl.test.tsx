@@ -22,8 +22,8 @@ function show(state: ActivityState, canEdit = true) {
 }
 
 const publishButton = () => screen.queryByRole('button', { name: 'Publish' });
-const floatButton = () => screen.queryByRole('button', { name: 'Float it' });
-const callOffButton = () => screen.queryByRole('button', { name: 'Call it off' });
+const floatButton = () => screen.queryByRole('button', { name: 'Propose' });
+const callOffButton = () => screen.queryByRole('button', { name: 'Cancel camp' });
 const draftButton = () => screen.queryByRole('button', { name: 'Back to draft' });
 
 beforeEach(() => {

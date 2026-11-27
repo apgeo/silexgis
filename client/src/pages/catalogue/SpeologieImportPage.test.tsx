@@ -121,6 +121,16 @@ function show() {
 afterEach(cleanup);
 
 describe('SpeologieImportPage', () => {
+  it('keeps the page title and frame when nothing was chosen to import', () => {
+    ids = '';
+    show();
+    expect(screen.getByRole('heading', { level: 3, name: 'Import from the catalogue' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Nothing was chosen. Go back to the search and pick the caves to import.'),
+    ).toBeInTheDocument();
+    ids = '63,64';
+  });
+
   beforeEach(() => {
     ids = '63,64';
     statusAnswer = 'configured';

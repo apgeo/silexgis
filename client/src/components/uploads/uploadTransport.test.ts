@@ -303,6 +303,8 @@ describe('content that is already stored', () => {
 
     expect(result.documentId).toBe('doc-2');
     expect(onDuplicate).toHaveBeenCalledTimes(1);
+    // The question names the file it is about: several may have been dropped together.
+    expect(onDuplicate).toHaveBeenCalledWith(DocumentId, fileOf(5).name);
     expect(api.POST.mock.calls[1]![1].params.query.allowDuplicate).toBe(true);
   });
 
@@ -317,9 +319,11 @@ describe('content that is already stored', () => {
       return original(path, init);
     });
 
-    const result = await uploadOne(fileOf(30), {}, limits, { onDuplicate: async () => true });
+    const onDuplicate = vi.fn().mockResolvedValue(true);
+    const result = await uploadOne(fileOf(30), {}, limits, { onDuplicate });
 
     expect(result.documentId).toBe(DocumentId);
+    expect(onDuplicate).toHaveBeenCalledWith(DocumentId, fileOf(30).name);
     expect(server.offsets).toEqual([0, 10, 20]);
     expect(api.POST.mock.calls.at(-1)![1].params.query.allowDuplicate).toBe(true);
   });

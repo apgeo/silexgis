@@ -31,7 +31,7 @@
 		"shading": {
 			"header": "Umbrire",
 			"caption": "Vize subterane",
-			"height": "după adâncime",
+			"height": "după înălțime",
 			"length": "după lungimea vizei",
 			"inclination": "după înclinarea vizei",
 			"height_cursor": "cotă cursor",
@@ -112,7 +112,7 @@
 			"shading": {
 				"caption": "Umbrire",
 				"relief": "umbrire relief",
-				"height": "după înalțime/alt.",
+				"height": "după înălțime/alt.",
 				"overlay": "suprapunere hartă",
 				"contours": "curbe de nivel"
 			},
@@ -261,7 +261,7 @@
 		"version": "CaveView %{version}"
 	},
 	"hud": {
-		"height": "înalțime",
+		"height": "înălțime",
 		"leg_length": "lungime viză",
 		"depth": "adâncime",
 		"inclination": "înclinare"

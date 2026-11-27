@@ -28,7 +28,7 @@ export default function Scene3DPage() {
         <Typography.Text strong className="scene3d-page-dock-title">
           {t('map.detailsTitle')}
         </Typography.Text>
-        <SelectionPanel />
+        <SelectionPanel inScene />
       </aside>
     </div>
   );

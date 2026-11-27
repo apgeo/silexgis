@@ -140,9 +140,9 @@ afterEach(() => {
   documentsFailure = undefined;
 });
 
-function renderPage() {
+function renderPage(address = '/cabinets') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[address]}>
       <App>
         <CabinetsPage />
       </App>
@@ -151,6 +151,12 @@ function renderPage() {
 }
 
 describe('CabinetsPage', () => {
+  it('opens on the cabinet its address names, as a document page leads back to it', () => {
+    renderPage('/cabinets?cabinet=c2');
+    expect(screen.getByRole('heading', { level: 4, name: 'Surveys' })).toBeInTheDocument();
+    expect(screen.queryByText('Choose a cabinet to see what is filed in it.')).toBeNull();
+  });
+
   it('points an editor, and nobody who can only read, to the deleted documents', () => {
     capabilities = { domains: { documents: 'read, write' } };
     renderPage();

@@ -95,6 +95,10 @@ export default function GalleryPage() {
 
   // Read from the address rather than from state, so a gallery is a link somebody can send —
   // and so the map can open one for an extent by navigating.
+  // Whether anything in the address narrows the gallery: a condition, or a cave, trip, person,
+  // album, camera, area or the unplaced switch a link opened it on.
+  const narrowed = [...params.keys()].length > 0;
+
   const query = useMemo<PhotoQueryParams>(
     () => ({
       filter: galleryToken(galleryFilter.where),
@@ -398,9 +402,28 @@ export default function GalleryPage() {
       {isError && !data ? null : isFetching && !data ? (
         <Spin style={{ display: 'block', marginTop: '15vh' }} />
       ) : photos.length === 0 ? (
-        <Empty description={t('gallery.empty')} style={{ marginTop: '15vh' }} />
+        // A narrowed question that found nothing says so and offers the way back; the plain
+        // "nothing here" read as an empty archive to somebody who had a filter on.
+        narrowed ? (
+          <Empty description={t('gallery.noMatch')} style={{ marginTop: '15vh' }}>
+            <Button
+              onClick={() => {
+                setParams(new URLSearchParams());
+                setPage(1);
+                setSelected([]);
+              }}
+            >
+              {t('gallery.clearFilters')}
+            </Button>
+          </Empty>
+        ) : (
+          <Empty description={t('gallery.empty')} style={{ marginTop: '15vh' }} />
+        )
       ) : (
         <>
+          <Typography.Text type="secondary" data-testid="gallery-count" style={{ display: 'block', marginBottom: 8 }}>
+            {t('gallery.count', { count: data?.totalItems ?? photos.length })}
+          </Typography.Text>
           <PhotoGrid
             photos={photos}
             onOpen={(documentId) =>

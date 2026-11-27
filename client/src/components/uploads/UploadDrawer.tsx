@@ -9,6 +9,7 @@ import {
   Upload, theme,
 } from 'antd';
 import Button from '../Button.tsx';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFileConfig, useOpenUploadBatch, useCloseUploadBatch } from '../../api/hooks.ts';
@@ -60,7 +61,15 @@ export default function UploadDrawer({
   onUploaded,
 }: UploadDrawerProps) {
   const { t } = useTranslation();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
+  const isMobile = useIsMobile();
+  // A notice left over from what was done before — "Saved", "Filed" — sits over the drawer's own
+  // title while the drawer is the thing being looked at; it is taken down as the drawer opens.
+  useEffect(() => {
+    if (open) {
+      message.destroy();
+    }
+  }, [open, message]);
   const queryClient = useQueryClient();
   const { data: config } = useFileConfig();
   const openBatch = useOpenUploadBatch();
@@ -97,7 +106,7 @@ export default function UploadDrawer({
       expandArchive: expandArchives && item.file.name.toLowerCase().endsWith('.zip'),
     }),
     {
-      onDuplicate: (documentId) => askAboutDuplicate(Boolean(documentId)),
+      onDuplicate: (documentId, fileName) => askAboutDuplicate({ fileName, documentId }),
     },
   );
 
@@ -292,7 +301,8 @@ export default function UploadDrawer({
         {t('uploads.expandArchives')}
       </Checkbox>
 
-      <Flex gap={8} style={{ marginBottom: 12 }}>
+      {/* On a phone the two stack: side by side, the drop zone's words wrap a letter at a time. */}
+      <Flex vertical={isMobile} gap={8} style={{ marginBottom: 12 }}>
         {/* Two zones rather than one with a switch: a browser cannot offer files and folders
             from the same control, and hiding that behind a toggle makes the folder case
             undiscoverable — which is the case a club handing over its archive needs. */}
@@ -309,7 +319,7 @@ export default function UploadDrawer({
         </div>
         <div data-testid="upload-folder">
           <Upload directory multiple showUploadList={false} beforeUpload={accept}>
-            <Button icon={<FolderOpenOutlined />} style={{ height: '100%' }}>
+            <Button icon={<FolderOpenOutlined />} block={isMobile} style={{ height: '100%' }}>
               {t('uploads.chooseFolder')}
             </Button>
           </Upload>

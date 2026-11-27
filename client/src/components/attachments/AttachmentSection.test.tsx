@@ -71,6 +71,8 @@ function useFakeMutation<V>(spy: (variables: V) => Promise<void>) {
 let attachmentsFailure: unknown;
 
 vi.mock('../../api/hooks.ts', () => ({
+  // Where an existing copy is filed is read only when a duplicate is asked about; not here.
+  useReadDocumentFiling: () => () => Promise.reject(new Error('not read in this test')),
   useAttachments: () =>
     attachmentsFailure === undefined
       ? { data: attachments, isError: false, error: null, refetch: vi.fn() }
@@ -156,6 +158,15 @@ describe('AttachmentSection', () => {
 
     await waitFor(() => expect(uploadSpy).toHaveBeenCalled());
     expect(await screen.findByText('This file type is not accepted')).toBeInTheDocument();
+  });
+
+  it('names a filed report once, and words the empty list for what is still missing beside it', () => {
+    attachments = [attachment({ id: 'att-r', kind: 'document', name: 'report.pdf', role: 'report' })];
+    draw(true, true);
+    const report = screen.getByText('report.pdf').closest('li')!;
+    expect(within(report).getAllByText(/report\.pdf/)).toHaveLength(1);
+    expect(screen.getByText('No photos or other documents yet.')).toBeInTheDocument();
+    expect(screen.queryByText('No photos or documents yet.')).toBeNull();
   });
 
   it('draws a report and a document with the same controls, in their own lists', () => {

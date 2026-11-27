@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { api, ApiError } from '../client.ts';
 import type { components } from '../schema';
 import { sharesKeepingVersion } from '../readingVersion.ts';
@@ -278,13 +285,25 @@ export function useFileConfig() {
   });
 }
 
+/** One document, read the way every surface reads it — one cache entry whoever asks. */
+const readDocument = (id: string) =>
+  unwrapVersioned(api.GET('/api/v1/documents/{id}', { params: { path: { id } } }));
+
+/**
+ * How the one cache entry of a document is read and kept, for every writer of that entry. The
+ * details form is filled from this reading and saves under the version it was answered at, so
+ * every read into the entry has to share structurally in the way that keeps that version.
+ */
+const documentQuery = (id: string) => ({
+  queryKey: queryKeys.document(id),
+  queryFn: () => readDocument(id),
+  structuralSharing: sharesKeepingVersion,
+});
+
 /** A document: the identity behind a file, with the title and typed metadata that outlive its versions. */
 export function useDocument(id: string | undefined, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.document(id ?? ''),
-    // The details form is filled from this reading and saves under the version it was answered at.
-    queryFn: () => unwrapVersioned(api.GET('/api/v1/documents/{id}', { params: { path: { id: id! } } })),
-    structuralSharing: sharesKeepingVersion,
+    ...documentQuery(id ?? ''),
     enabled: !!id && enabled,
     // Reading a document's text runs in a background job, so "being read" is a state that
     // resolves on its own while the panel is open. Poll only through that one state: every
@@ -405,6 +424,35 @@ export function useDeleteDocumentComment() {
       })),
     onSuccess: (_result, variables) => invalidate(variables.documentId),
   });
+}
+
+/**
+ * Where a document already stored is filed — its title and the names of its cabinets — asked once,
+ * outside a component, by a question that has to be put before it can be answered: an upload the
+ * store refused as a copy of this document. Read through the same cache entries the pages use. A
+ * cabinet this person cannot list is left out rather than named by its identifier.
+ */
+async function fetchDocumentFiling(
+  queryClient: QueryClient,
+  id: string,
+): Promise<{ title: string; cabinets: string[] }> {
+  const [document, cabinets] = await Promise.all([
+    queryClient.fetchQuery(documentQuery(id)),
+    queryClient
+      .fetchQuery({ queryKey: queryKeys.cabinets, queryFn: () => unwrap(api.GET('/api/v1/cabinets')) })
+      .catch(() => []),
+  ]);
+  const names = new Map(cabinets.map((cabinet) => [cabinet.id, cabinet.name]));
+  return {
+    title: document.title,
+    cabinets: document.cabinetIds.flatMap((cabinetId) => names.get(cabinetId) ?? []),
+  };
+}
+
+/** Reads where a document is filed, for a question asked from a callback rather than a render. */
+export function useReadDocumentFiling(): (id: string) => Promise<{ title: string; cabinets: string[] }> {
+  const queryClient = useQueryClient();
+  return useCallback((id: string) => fetchDocumentFiling(queryClient, id), [queryClient]);
 }
 
 /** The whole filing tree: small by construction, so one fetch draws the sider and every breadcrumb. */

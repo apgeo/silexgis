@@ -161,6 +161,13 @@ describe('the batch view', () => {
     }
   });
 
+  it('says no line has been decided yet when asked to show decided lines and none is', () => {
+    show([cave, entrance, edit]);
+    expect(screen.queryByTestId('review-none-decided')).toBeNull();
+    fireEvent.click(screen.getByTestId('review-show-decided'));
+    expect(screen.getByTestId('review-none-decided')).toHaveTextContent('No line decided yet.');
+  });
+
   it('names who sent it and lists the lines under the cave they belong to', () => {
     show([cave, entrance, edit]);
     expect(screen.getByTestId('review-batch-facts').textContent).toContain('Invented Uploader');

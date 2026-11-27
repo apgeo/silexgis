@@ -134,3 +134,18 @@ html[data-theme='dark'] .scene3d-notice {
   gap: 4px;
   pointer-events: auto;
 }
+
+/* Over the scene's box while it is built, centred, on a backing that keeps the words readable over
+   a dark canvas. Takes no pointer: nothing under it can be used yet anyway. */
+.scene3d-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.scene3d-loading-slow {
+  max-width: 44ch;
+}

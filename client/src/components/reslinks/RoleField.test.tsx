@@ -88,7 +88,7 @@ function link(overrides: Partial<ResLink> = {}): ResLink {
   };
 }
 
-function show(items: ResLink[], props: { canAdd?: boolean; showNotes?: boolean; showPath?: boolean } = {}, total?: number) {
+function show(items: ResLink[], props: { canAdd?: boolean; showNotes?: boolean; showPath?: boolean; readOnly?: boolean } = {}, total?: number) {
   panel = { items, page: 1, pageSize: 200, totalItems: total ?? items.length };
   return render(
     <MemoryRouter>
@@ -221,6 +221,19 @@ describe('RoleField', () => {
     // One control, for the one link whose own answer admits it — not one per chip, and not
     // none because the caller happens not to have created either.
     expect(screen.getAllByLabelText('Remove from link')).toHaveLength(1);
+  });
+
+  it('on a read-out offers no removal and no pen, even to the curator of the link', () => {
+    const curated = link({ id: 'l2', mayEdit: true, members: [member({ id: 'b', note: 'Continues north' })] });
+    show([curated], { showNotes: true });
+    expect(screen.getAllByLabelText('Remove from link')).toHaveLength(1);
+    cleanup();
+
+    // A printable report is not where a cave is taken off a trip: the chip is plain there.
+    show([curated], { showNotes: true, readOnly: true });
+    expect(screen.queryByLabelText('Remove from link')).not.toBeInTheDocument();
+    expect(screen.getByText('Continues north')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Describe what was left')).not.toBeInTheDocument();
   });
 
   it('removes a chip from its own link, which need not be its neighbour’s', async () => {

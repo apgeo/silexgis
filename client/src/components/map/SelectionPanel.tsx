@@ -59,7 +59,14 @@ import { typedFieldLabel, typedValueText } from '../geology/lithology.ts';
  * every pop-out window — because a window somebody opened to watch one thing should not be
  * rearranged by the window they work in.
  */
-export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope } = {}) {
+export default function SelectionPanel({
+  scope = 'main',
+  inScene = false,
+}: {
+  scope?: PanelScope;
+  /** Mounted beside the 3D scene rather than the map: the empty panel then points at the scene. */
+  inScene?: boolean;
+} = {}) {
   const { t } = useTranslation();
   const selection = useWorkspaceStore((s) => s.selection);
   const selectionSet = useWorkspaceStore((s) => s.selectionSet);
@@ -76,7 +83,10 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
     if (!selection) {
       return (
         <Flex align="center" justify="center" style={{ height: '100%', padding: 16 }}>
-          <Empty description={t('map.noSelection')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty
+            description={t(inScene ? 'map.noSelectionInScene' : 'map.noSelection')}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
         </Flex>
       );
     }
@@ -301,7 +311,10 @@ function CaveCard({
   selection: EntranceSelection | CaveSelection;
   scope: PanelScope;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // Lengths and depths in the page's language, as the map's scale beside them is written: a Romanian
+  // page that groups thousands with a dot cannot also use the dot as the decimal point.
+  const measure = (value: number) => value.toLocaleString(i18n.language, { maximumFractionDigits: 2 });
   const formatPosition = useCoordinateFormatter();
   const navigate = useNavigate();
   const { data: cave, isPending, isError, error, refetch } = useCave(selection.caveId);
@@ -359,9 +372,9 @@ function CaveCard({
         {typeName && <Descriptions.Item label={t('caves.type')}>{typeName}</Descriptions.Item>}
         {cave.region && <Descriptions.Item label={t('caves.region')}>{cave.region}</Descriptions.Item>}
         {cave.surveyedLength != null && (
-          <Descriptions.Item label={t('caves.surveyedLength')}>{cave.surveyedLength}</Descriptions.Item>
+          <Descriptions.Item label={t('caves.surveyedLength')}>{measure(cave.surveyedLength)}</Descriptions.Item>
         )}
-        {cave.depth != null && <Descriptions.Item label={t('caves.depth')}>{cave.depth}</Descriptions.Item>}
+        {cave.depth != null && <Descriptions.Item label={t('caves.depth')}>{measure(cave.depth)}</Descriptions.Item>}
         <Descriptions.Item label={t('caves.entrances')}>{cave.entranceCount}</Descriptions.Item>
         {entrance && (
           <Descriptions.Item label={t('entrances.coordinates')}>

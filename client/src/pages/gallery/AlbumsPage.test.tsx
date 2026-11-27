@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { App } from 'antd';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import en from '../../i18n/locales/en.json';
@@ -54,11 +54,18 @@ function album(id: string, title: string, hasActiveShare = false, canShare = tru
   };
 }
 
+function OpenedAlbum() {
+  return <div data-testid="opened-album">{useParams().id}</div>;
+}
+
 function renderPage() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/albums']}>
       <App>
-        <AlbumsPage />
+        <Routes>
+          <Route path="/albums" element={<AlbumsPage />} />
+          <Route path="/albums/:id" element={<OpenedAlbum />} />
+        </Routes>
       </App>
     </MemoryRouter>,
   );
@@ -86,6 +93,31 @@ afterEach(() => {
 });
 
 describe('AlbumsPage', () => {
+  it('says an album with no photographs is empty, where its cover would be', () => {
+    state.albums = {
+      data: { items: [{ ...album('a1', 'Nothing yet'), photoCount: 0 }, { ...album('a2', 'Some'), photoCount: 4 }] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    renderPage();
+    const empty = screen.getByText('Nothing yet').closest('.ant-card') as HTMLElement;
+    expect(within(empty).getByTestId('album-cover-placeholder')).toHaveTextContent('No photographs yet');
+    const some = screen.getByText('Some').closest('.ant-card') as HTMLElement;
+    expect(within(some).getByTestId('album-cover-placeholder')).not.toHaveTextContent('No photographs yet');
+  });
+
+  it('opens the album it has just made, and says it was made', async () => {
+    state.create.mockResolvedValue({ ...album('a9', 'New one'), id: 'a9' });
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /New album/ }));
+    fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'New one' } });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByTestId('opened-album')).toHaveTextContent('a9');
+    expect(await screen.findByText('Album created.')).toBeInTheDocument();
+  });
+
   it('offers each card action as a named, focusable button', () => {
     renderPage();
     const card = screen.getByText('Pestera 1 survey').closest('.ant-card') as HTMLElement;
@@ -98,7 +130,7 @@ describe('AlbumsPage', () => {
     }
 
     const shared = screen.getByText('Camp week').closest('.ant-card') as HTMLElement;
-    expect(within(shared).getByRole('button', { name: 'Revoke the share link' })).toBeTruthy();
+    expect(within(shared).getByRole('button', { name: 'Stop sharing' })).toBeTruthy();
   });
 
   it('says when deleting an album failed, instead of doing nothing', async () => {
@@ -115,7 +147,7 @@ describe('AlbumsPage', () => {
   });
 
   it.each([
-    ['confirms a revoked link', true, 'Share link revoked.'],
+    ['confirms a revoked link', true, en.gallery.shareRevoked],
     ['says when revoking a link failed', false, 'The operation failed. Please try again.'],
   ])('%s', async (_name, succeeds, said) => {
     if (succeeds) {
@@ -126,7 +158,7 @@ describe('AlbumsPage', () => {
     renderPage();
     const shared = screen.getByText('Camp week').closest('.ant-card') as HTMLElement;
 
-    fireEvent.click(within(shared).getByRole('button', { name: 'Revoke the share link' }));
+    fireEvent.click(within(shared).getByRole('button', { name: 'Stop sharing' }));
     fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     expect(await screen.findByText(said)).toBeTruthy();
@@ -156,21 +188,21 @@ describe('AlbumsPage', () => {
     // absences below would prove nothing about the rule they are meant to test.
     const writer = cardActions('read,write,share', true);
     expect(writer.card).toEqual(expect.arrayContaining(['Edit album', 'Make a share link', 'Delete album']));
-    expect(writer.shared).toContain('Revoke the share link');
+    expect(writer.shared).toContain('Stop sharing');
 
     // A writer of documents the server says may not share this album gets neither link action:
     // minting and revoking both take the Share right on the album itself.
     const writerWithoutShare = cardActions('read,write,share', false);
     expect(writerWithoutShare.card).toEqual(expect.arrayContaining(['Edit album', 'Delete album']));
     expect(writerWithoutShare.card).not.toContain('Make a share link');
-    expect(writerWithoutShare.shared).not.toContain('Revoke the share link');
+    expect(writerWithoutShare.shared).not.toContain('Stop sharing');
     expect(writerWithoutShare.shared).not.toContain('Make a share link');
   });
 
   it('lets whoever holds the album\'s share right mint and revoke its link, and nothing else', () => {
     const sharer = cardActions('read', true);
     expect(sharer.card).toEqual(['Make a share link']);
-    expect(sharer.shared).toEqual(['Revoke the share link']);
+    expect(sharer.shared).toEqual(['Stop sharing']);
 
     const reader = cardActions('read', false);
     expect(reader.card).toEqual([]);
@@ -191,6 +223,37 @@ describe('AlbumsPage', () => {
     expect(ro.gallery.shareForbidden).not.toBe(en.gallery.shareForbidden);
     await afterRejectionsAreReported();
     expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it('says in words that an album is shared, and stops sharing with a control that does not look like sharing', () => {
+    renderPage();
+    const shared = screen.getByText('Camp week').closest('.ant-card') as HTMLElement;
+    const unshared = screen.getByText('Pestera 1 survey').closest('.ant-card') as HTMLElement;
+    expect(within(shared).getByText(en.gallery.sharedByLink)).toBeTruthy();
+    expect(within(unshared).queryByText(en.gallery.sharedByLink)).toBeNull();
+    expect(ro.gallery.sharedByLink).not.toBe(en.gallery.sharedByLink);
+
+    // The same glyph used to mean both "make a link" and "take it back"; the two must differ.
+    const stop = within(shared).getByRole('button', { name: en.gallery.revokeShare });
+    const make = within(unshared).getByRole('button', { name: en.gallery.shareAlbum });
+    expect(stop.querySelector('.anticon-share-alt')).toBeNull();
+    expect(make.querySelector('.anticon-share-alt')).not.toBeNull();
+  });
+
+  it('offers a Copy button beside the one-time link and says the link was copied', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    state.share.mockResolvedValueOnce({ token: 'tok' });
+    renderPage();
+    const card = screen.getByText('Pestera 1 survey').closest('.ant-card') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: en.gallery.shareAlbum }));
+    fireEvent.click(await screen.findByRole('button', { name: en.gallery.copyLink }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/shared\/albums\/tok$/)));
+    expect(await screen.findByText(en.gallery.linkCopied)).toBeTruthy();
+  });
+
+  it('explains a lost link without the word "mint"', () => {
+    expect(en.gallery.shareOnce).not.toMatch(/\bmint/i);
   });
 
   it('says the albums could not be loaded, not that there are none, and loads them again', () => {

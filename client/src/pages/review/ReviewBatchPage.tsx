@@ -462,6 +462,12 @@ export default function ReviewBatchPage() {
         </Checkbox>
       </Flex>
 
+      {/* Ticking the box when nothing has been decided changes nothing to look at, so it says so. */}
+      {showDecided && pendingLines.length === lines.length && lines.length > 0 && (
+        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }} data-testid="review-none-decided">
+          {t('review.noneDecided')}
+        </Typography.Text>
+      )}
       {groups.length === 0 && <Empty description={t('review.noLines')} style={{ marginTop: 24 }} />}
       {groups.map((group) => {
         const waiting = group.lines.filter((l) => l.decision === 'pending').map((l) => l.reviewId);

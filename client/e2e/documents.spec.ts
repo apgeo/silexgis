@@ -72,7 +72,7 @@ async function uploadFixture(page: Page, path: string, fileName: string): Promis
  * working; this flow is about the document surfaces, so it says yes and carries on.
  */
 async function acceptDuplicate(page: Page) {
-  const warning = page.getByRole('dialog').filter({ hasText: 'This file is already here' });
+  const warning = page.getByRole('dialog').filter({ hasText: 'Already in the archive' });
   const saved = page.getByText('Saved.');
 
   // Whichever arrives first. Probing for the warning on a fixed timer decides the answer by
@@ -115,7 +115,7 @@ test('an upload becomes a readable document, and its text is read and discussed'
   // What the document says about itself, including the one line that is not metadata but a
   // sentence to a reader: what came of trying to read the words in it.
   await expect(page.getByText('application/pdf')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('The text has been read.')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Searchable text extracted.')).toBeVisible({ timeout: 60_000 });
 
   // The document is rendered here rather than handed over: the page strip knows how many
   // pages there are, which it can only have got from the file.
@@ -206,7 +206,7 @@ test('a content search finds the document by a word inside it and opens it there
   await uploadReport(page);
 
   // Nothing can be found until the words have been read, and the page says when that is.
-  await expect(page.getByText('The text has been read.')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Searchable text extracted.')).toBeVisible({ timeout: 60_000 });
 
   // The search box lives on the workspace; the hit is a document, not a place or a cave.
   await page.goto('/');

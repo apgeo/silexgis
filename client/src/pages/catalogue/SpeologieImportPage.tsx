@@ -162,8 +162,13 @@ export default function SpeologieImportPage() {
   };
 
   if (ids.length === 0) {
+    // The page's own frame and title around it, so the empty case reads as this page saying
+    // something rather than a bare notice against the menu.
     return (
-      <Flex vertical gap={16}>
+      <Flex vertical gap={16} style={{ padding: 24 }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>
+          {t('speologie.wizard.title')}
+        </Typography.Title>
         <Alert type="info" showIcon title={t('speologie.wizard.nothingSelected')} />
         <div>
           <Button icon={<ArrowLeftOutlined />} onClick={() => void navigate('/catalogue/speologie')}>
@@ -271,7 +276,7 @@ export default function SpeologieImportPage() {
   ];
 
   return (
-    <Flex vertical gap={16}>
+    <Flex vertical gap={16} style={{ padding: 24 }}>
       <Flex align="baseline" justify="space-between" wrap gap={8}>
         <Space orientation="vertical" size={0}>
           <Typography.Title level={3} style={{ margin: 0 }}>

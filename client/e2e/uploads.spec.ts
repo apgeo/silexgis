@@ -215,7 +215,7 @@ test('uploading the same bytes again is warned about and can be accepted', async
     } else {
       // The second attempt is refused until somebody answers, which is what "a warning
       // first" means when it is written down as a flow rather than a sentence.
-      const warning = page.getByRole('dialog').filter({ hasText: 'This file is already here' });
+      const warning = page.getByRole('dialog').filter({ hasText: 'Already in the archive' });
       await expect(warning).toBeVisible({ timeout: 60_000 });
       await warning.getByRole('button', { name: 'Store anyway' }).click();
       await expect(drawer.getByText('1 of 1 stored', { exact: false })).toBeVisible({ timeout: 60_000 });

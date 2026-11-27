@@ -251,6 +251,30 @@ export default function CaveListPage() {
     bbox: address.bbox,
   };
   const { data, isFetching, error, refetch } = useCaves(listParams);
+
+  // An empty answer to a narrowed question names what narrowed it and offers the way back; the
+  // generic "No data" read as an empty register to somebody who had typed a name wrong.
+  const narrowed =
+    Object.values(controls).some((value) => value !== undefined)
+    || extra.length > 0
+    || address.bbox !== undefined;
+  const emptyRegister = narrowed ? (
+    <Flex vertical align="center" gap={8} style={{ padding: 16 }} data-testid="cave-registry-no-match">
+      <Typography.Text>
+        {controls.search
+          ? t('caveRegistry.noMatchSearch', { search: controls.search })
+          : t('caveRegistry.noMatch')}
+      </Typography.Text>
+      <Button
+        onClick={() =>
+          go(() => ({ controls: {}, extra: [], savedFilterId: undefined, bbox: undefined, page: 1 }))}
+      >
+        {t('caveRegistry.clearAll')}
+      </Button>
+    </Flex>
+  ) : (
+    <Typography.Text type="secondary">{t('caveRegistry.empty')}</Typography.Text>
+  );
   const tableMap = useTableMapLink<CaveListItem>();
 
   const canCreate = useCan('features', 'create');
@@ -618,6 +642,7 @@ export default function CaveListPage() {
         dataSource={data?.items}
         onChange={onTableChange}
         rowClassName={tableMap.rowClassName}
+        locale={{ emptyText: error ? ' ' : emptyRegister }}
         onRow={(record) => ({
           onClick: () => navigate(`/caves/${record.id}`),
           style: { cursor: 'pointer' },

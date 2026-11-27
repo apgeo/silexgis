@@ -11,6 +11,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the control for the size of station names', () => {
+  it('says in words what it changes, not only "Aa"', () => {
+    render(<CaveViewLabelScale />);
+    expect(screen.getByTestId('caveview-label-scale')).toHaveTextContent('Aa Labels');
+  });
+
   it('offers the sizes as percentages, the viewer\'s own marked until another is chosen', async () => {
     render(<CaveViewLabelScale />);
     fireEvent.click(screen.getByTestId('caveview-label-scale'));

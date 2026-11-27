@@ -39,10 +39,13 @@ export default function TripRoleFields({
   tripId,
   tripTitle,
   canEdit,
+  readOnly,
 }: {
   tripId: string;
   tripTitle?: string | null;
   canEdit: boolean;
+  /** The report's read-out: plain chips, nothing to remove or write in place. */
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const [revealed, setRevealed] = useState<readonly string[]>([]);
@@ -102,6 +105,7 @@ export default function TripRoleFields({
             // the whole of what the field says — a cave's name alone would not tell the
             // next party where to go. The other roles name a thing and mean it.
             showNotes={code === 'trip-lead'}
+            readOnly={readOnly}
           />
         ))}
         {canEdit && hidden.length > 0 && (

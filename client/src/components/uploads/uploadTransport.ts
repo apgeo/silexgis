@@ -43,7 +43,7 @@ export interface UploadOptions {
    * The question lives here rather than in the queue because only the transport knows the
    * refusal happened — and only the person at the screen can answer it.
    */
-  onDuplicate?: (documentId: string | undefined) => Promise<boolean>;
+  onDuplicate?: (documentId: string | undefined, fileName: string) => Promise<boolean>;
   signal?: AbortSignal;
   /**
    * A resumable session an earlier attempt at this file left open. The transport asks the server
@@ -103,7 +103,7 @@ async function uploadSingle(
     // The one refusal a person can answer. Asked once: a "yes" re-sends with the duplicate
     // accepted, and that second attempt is not asked again whatever it says.
     if (response.status === 409 && codeOf(error) === 'file.duplicate' && !allowDuplicate) {
-      const proceed = await options.onDuplicate?.(duplicateIdOf(error));
+      const proceed = await options.onDuplicate?.(duplicateIdOf(error), file.name);
       if (proceed) {
         return uploadSingle(file, target, options, true);
       }
@@ -156,7 +156,7 @@ async function uploadResumable(
   const session = kept ?? (await openSession(file, target, options));
   const chunkBytes = session.chunkBytes || limits.chunkBytes;
   await sendPieces(file, session.id, chunkBytes, session.receivedBytes, options);
-  return completeResumable(session.id, options);
+  return completeResumable(session.id, file.name, options);
 }
 
 interface SessionState {
@@ -283,6 +283,7 @@ async function sendPieces(
 
 async function completeResumable(
   session: string,
+  fileName: string,
   options: UploadOptions,
   allowDuplicate = false,
 ): Promise<UploadResult> {
@@ -295,9 +296,9 @@ async function completeResumable(
     if (response.status === 409 && codeOf(error) === 'file.duplicate' && !allowDuplicate) {
       // The session survives this refusal precisely so the answer can be "store it anyway"
       // without the bytes having to travel again.
-      const proceed = await options.onDuplicate?.(duplicateIdOf(error));
+      const proceed = await options.onDuplicate?.(duplicateIdOf(error), fileName);
       if (proceed) {
-        return completeResumable(session, options, true);
+        return completeResumable(session, fileName, options, true);
       }
 
       await api.DELETE('/api/v1/files/uploads/{id}', { params: { path: { id: session } } });

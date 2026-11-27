@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -151,13 +151,17 @@ const { default: DocumentDetailPage } = await import('./DocumentDetailPage.tsx')
 
 afterEach(cleanup);
 
+function CabinetsStandIn() {
+  return <div data-testid="cabinets-page">{useLocation().search}</div>;
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/documents/doc-1']}>
       <App>
         <Routes>
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
-          <Route path="/cabinets" element={<div data-testid="cabinets-page" />} />
+          <Route path="/cabinets" element={<CabinetsStandIn />} />
           <Route path="/documents/deleted" element={<div data-testid="deleted-page" />} />
         </Routes>
       </App>
@@ -169,7 +173,7 @@ function renderPage() {
 const textSentences = [
   'This document has no text layer: it is pictures of pages, so there are no words in it to read.',
   'Reading the text…',
-  'The text has been read.',
+  'Searchable text extracted.',
   'The text could not be read.',
   "Nothing here can read this format's text yet.",
   'This kind of file holds no text to read.',
@@ -221,6 +225,14 @@ afterEach(() => {
 });
 
 describe('DocumentDetailPage', () => {
+  it('leads back through the cabinet it is filed in, not only to the top of the tree', async () => {
+    renderPage();
+    const crumbs = (await screen.findByRole('navigation')).closest('.ant-breadcrumb') as HTMLElement;
+    expect(crumbs).toHaveTextContent(/Cabinets.*Club archive.*1987.*Ridicare topografică/);
+    fireEvent.click(within(crumbs).getByText('1987'));
+    expect(await screen.findByTestId('cabinets-page')).toHaveTextContent('?cabinet=cab-2');
+  });
+
   it('offers a delete to a writer, says what it does, and leaves for the cabinets once it is done', async () => {
     rights = 'read, write';
     renderPage();
@@ -319,14 +331,14 @@ describe('DocumentDetailPage', () => {
     expect(
       screen.getByText('application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     ).toBeInTheDocument();
-    expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+    expect(screen.getByText('3 MB')).toBeInTheDocument();
 
     // The whole path, because a shelf named "1987" sits under many archives.
     expect(screen.getByText('Club archive / 1987')).toBeInTheDocument();
 
     // Exactly one of the six sentences, and it is the true one.
-    expect(screen.getByText('The text has been read.')).toBeInTheDocument();
-    for (const sentence of textSentences.filter((s) => s !== 'The text has been read.')) {
+    expect(screen.getByText('Searchable text extracted.')).toBeInTheDocument();
+    for (const sentence of textSentences.filter((s) => s !== 'Searchable text extracted.')) {
       expect(screen.queryByText(sentence)).not.toBeInTheDocument();
     }
 

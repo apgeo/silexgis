@@ -51,7 +51,11 @@ not to take up a feature:
   application builds is given the language by one function (`caveViewerOptions` in
   `src/caveview/loadCaveView.ts`), because the catalogue is one object shared by all the viewers on
   a page: a single viewer built without the option chooses the browser's language and changes it
-  under every other.
+  under every other. Both vendored copies carry a corrected catalogue: the height colouring reads
+  "după înălțime" (it read "după adâncime", the depth colouring's name) and "înălțime" is spelt with
+  its "ă" in the terrain chooser and the read-out. The fork's own `lib/lang-ro.json` needs the same
+  three lines before the next vendoring, or the correction is lost; `src/caveview/vendoredLangRo.test.ts`
+  fails if it is.
 
 **What slx.12 adds over slx.11**, for rendering the viewer into a movie and for labelling people
 by their own names:

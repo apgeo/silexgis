@@ -139,7 +139,7 @@ test('an event is written with its day, its hours and its place, changed, taken 
   await expect(page.getByTestId('trip-state')).toHaveText('Planned', { timeout: 15_000 });
   await move(page, 'It is going ahead');
   await expect(page.getByTestId('trip-state')).toHaveText('Confirmed', { timeout: 15_000 });
-  await move(page, 'Call it off', true);
+  await move(page, 'Cancel event', true);
   await expect(page.getByTestId('trip-state')).toHaveText('Cancelled', { timeout: 15_000 });
   // A called-off date offers only the way back to the workshop.
   await expect(page.getByRole('button', { name: /It is going ahead$/ })).toHaveCount(0);

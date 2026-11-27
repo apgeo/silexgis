@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -67,7 +67,16 @@ function log(overrides: Partial<ExpeditionSurfaceLog> = {}): ExpeditionSurfaceLo
   return { trips: [trip()], truncated: false, ...overrides };
 }
 
-const answered = (data: ExpeditionSurfaceLog) => ({ data, isPending: false, error: null });
+/** When the answer in hand arrived: forty seconds before the moment every age is measured from. */
+const READ_AT = NOW - 40_000;
+
+const answered = (data: ExpeditionSurfaceLog) => ({
+  data,
+  isPending: false,
+  error: null,
+  dataUpdatedAt: READ_AT,
+  refetch: vi.fn(),
+});
 
 function show(active = true) {
   return render(
@@ -313,6 +322,58 @@ describe("a camp's head count with nothing to count", () => {
     expect(screen.getByTestId('expedition-watch-refresh-failed').textContent).toContain(
       i18n.t('common.refreshFailed'),
     );
+  });
+});
+
+describe("how fresh a camp's head count is", () => {
+  it('says how long ago the page was last read, as the followed page does', () => {
+    show();
+
+    expect(screen.getByTestId('expedition-watch-updated')).toHaveTextContent('Page updated 40 seconds ago');
+    expect(screen.queryByTestId('expedition-watch-refresh-failed')).toBeNull();
+  });
+
+  it('says a failed refresh with the age of what is shown, and offers to read again', () => {
+    const refetch = vi.fn();
+    logSpy.mockReturnValue({
+      data: log(),
+      isPending: false,
+      error: new Error('poll lost'),
+      dataUpdatedAt: NOW - 20 * 60_000,
+      refetch,
+    });
+    show();
+
+    const failed = screen.getByTestId('expedition-watch-refresh-failed');
+    // A phone that lost its signal twenty minutes ago is told so, not shown a page that looks current.
+    expect(failed).toHaveTextContent('20 minutes ago');
+    fireEvent.click(within(failed).getByRole('button', { name: 'Retry' }));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it('offers to read again when the count was never read', () => {
+    const refetch = vi.fn();
+    logSpy.mockReturnValue({ data: undefined, isPending: false, error: new Error('boom'), dataUpdatedAt: 0, refetch });
+    show();
+
+    fireEvent.click(
+      within(screen.getByTestId('expedition-watch-unavailable')).getByRole('button', { name: 'Retry' }),
+    );
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it('lays every person out the same way: the name on its own line, the standing and the age under it', () => {
+    show();
+
+    const card = screen.getByTestId(`expedition-watch-trip-${RUNNING}`);
+    for (const name of ['Ana Invented', 'Bujor Invented', 'Dan Invented']) {
+      const row = within(card).getByTestId(`expedition-watch-person-caver-${name}`);
+      const [first, second] = Array.from(row.children);
+      expect(first).toHaveClass('expedition-watch-person-name');
+      expect(first).toHaveTextContent(name);
+      expect(second).toHaveClass('expedition-watch-person-state');
+      expect(row.children).toHaveLength(2);
+    }
   });
 });
 

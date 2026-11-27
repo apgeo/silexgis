@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TrackingParticipant, TripTrackingState } from '../../api/hooks.ts';
 import {
+  ageInWords,
   partyStandings,
   positionAgeInWords,
   sinceInWords,
@@ -262,4 +263,15 @@ export function planHourInWords(dueAt: string, now: number, language: string): s
         hour: '2-digit',
         minute: '2-digit',
       });
+}
+
+/**
+ * How long ago a page last read its answer, for a surface that is not the followed page.
+ *
+ * The followed page says "Page updated 40 seconds ago" over its party; the camp watch reads the same
+ * party and owes its reader the same line in the same rounding, and a page slice may not reach into
+ * another, so this is the door.
+ */
+export function readAgeInWords(readAt: number, now: number, language: string): string {
+  return ageInWords(readAt, now, language);
 }

@@ -123,6 +123,7 @@ export default function ResetPasswordPage() {
               name="newPassword"
               label={t('auth.newPassword')}
               rules={[{ required: true }, { min: 10, message: t('auth.passwordTooShort') }]}
+              extra={t('auth.passwordRule')}
             >
               <Input.Password autoComplete="new-password" autoFocus />
             </Form.Item>

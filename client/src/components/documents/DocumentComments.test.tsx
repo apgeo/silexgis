@@ -106,6 +106,17 @@ describe('DocumentComments', () => {
     expect(screen.getByText('Reply')).toBeTruthy();
   });
 
+  it('counts the characters on the Post button\'s own row, not over the button', () => {
+    // A count drawn under the box by the text area itself sits on top of the button below it.
+    draw();
+    const box = screen.getByLabelText('Write a remark about this document');
+    fireEvent.change(box, { target: { value: 'Hello' } });
+    const post = screen.getAllByText('Post').at(-1)!.closest('button')!;
+    const row = post.parentElement!;
+    expect(row).toHaveTextContent('5 / 4000');
+    expect(document.querySelector('.ant-input-data-count')).toBeNull();
+  });
+
   it('offers the composer to a reader the server allowed nothing else on', () => {
     // Posting asks for nothing beyond a signed-in account, so the box is there for a caller
     // the server refused every per-comment right to — the same caller who gets no Edit and

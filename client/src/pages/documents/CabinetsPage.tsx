@@ -13,7 +13,7 @@ import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../../components/useDiscardGuard.ts';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
 import {
   hasAccessAction,
@@ -38,27 +38,13 @@ import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
 import UploadDrawer from '../../components/uploads/UploadDrawer.tsx';
 import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
+import { formatSize } from '../../components/attachments/fileFormat.ts';
 
 /**
  * The tree's first row is not a cabinet: it is the inbox, and it is a query rather than a
  * shelf. Giving it a reserved key keeps the selection one piece of state instead of two.
  */
 const UnfiledKey = '__unfiled__';
-
-/** Bytes as the shortest unit that keeps the number readable. */
-function formatSize(bytes: number | null): string {
-  if (bytes === null) {
-    return '';
-  }
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
-}
 
 /**
  * Turns the flat cabinet list into the tree antd draws. The server orders siblings by
@@ -281,7 +267,9 @@ export default function CabinetsPage() {
     isError: cabinetsFailed,
     refetch: refetchCabinets,
   } = useCabinets(canRead);
-  const [selected, setSelected] = useState<string>();
+  // A page that leads back to a cabinet names it in the address; the tree opens on it.
+  const [searchParams] = useSearchParams();
+  const [selected, setSelected] = useState<string | undefined>(() => searchParams.get('cabinet') ?? undefined);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const showingUnfiled = selected === UnfiledKey;
@@ -689,7 +677,7 @@ export default function CabinetsPage() {
                 dataIndex: 'sizeBytes',
                 width: 110,
                 align: 'right',
-                render: (value: number | null) => formatSize(value),
+                render: (value: number | null) => (value === null ? '' : formatSize(value)),
               },
               ...(canWrite
                 ? [

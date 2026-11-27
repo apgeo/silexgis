@@ -1204,7 +1204,7 @@ describe('walls on the route that wait for a yes', () => {
     fireEvent.click(screen.getByTestId('flyby-play'));
     await pass(50);
     expect(screen.getByText('Walls on this flyby\'s route')).toBeInTheDocument();
-    expect(screen.getByText(/The walls of 1 cave on the route are 60.0 MB to download/)).toBeInTheDocument();
+    expect(screen.getByText(/The walls of 1 cave on the route are 60 MB to download/)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('flyby-walls-download'));
     await pass(50);
     expect(agreed).toEqual([['a']]);

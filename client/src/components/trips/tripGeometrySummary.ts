@@ -109,5 +109,7 @@ export function formatPosition(
   }
   const ns = lat >= 0 ? cardinals.north : cardinals.south;
   const ew = lon >= 0 ? cardinals.east : cardinals.west;
-  return `${Math.abs(lat).toFixed(5)}° ${ns}, ${Math.abs(lon).toFixed(5)}° ${ew}`;
+  // A non-breaking space between a figure and its direction, so a narrow column never sets the
+  // letter alone on the next line where it reads as a value of its own.
+  return `${Math.abs(lat).toFixed(5)}°\u00a0${ns}, ${Math.abs(lon).toFixed(5)}°\u00a0${ew}`;
 }

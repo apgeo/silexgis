@@ -348,9 +348,9 @@ test('an album link opens the album to a visitor with no account, until it is re
 
     // Revoked on the album list, the same address now opens nothing.
     await openAlbums(page);
-    await card.getByRole('button', { name: 'Revoke the share link' }).click();
+    await card.getByRole('button', { name: 'Stop sharing' }).click();
     await confirmOk(page, { scope: page.locator('.ant-popconfirm') });
-    await expect(page.getByText('Share link revoked.')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('The album is no longer shared.')).toBeVisible({ timeout: 15_000 });
     await expect(card.getByRole('button', { name: 'Make a share link' })).toBeVisible();
 
     const reread = outsider.waitForResponse((r) => r.url().includes('/api/v1/public/albums/'));

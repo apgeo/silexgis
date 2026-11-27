@@ -62,12 +62,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the audit page', () => {
+  it('names the kind of record in words, and an automatic change as the system\'s', async () => {
+    get.mockResolvedValue(
+      answered({
+        ...entries,
+        items: [{ ...entries.items[0], userName: null, userId: null, entityType: 'Feature:CaveEntrance' }],
+      }),
+    );
+    show();
+
+    expect(await screen.findByText('Entrance')).toBeInTheDocument();
+    expect(screen.getByText('System')).toBeInTheDocument();
+  });
+
   it('lists who changed what', async () => {
     get.mockResolvedValue(answered(entries));
     show();
 
     expect(await screen.findByText('ana.invented')).toBeInTheDocument();
-    expect(screen.getByText('InventedThing')).toBeInTheDocument();
+    // A kind nobody has worded is still spelt as words rather than as the type's own name.
+    expect(screen.getByText('Invented thing')).toBeInTheDocument();
     expect(screen.queryByTestId('audit-load-failed')).toBeNull();
   });
 

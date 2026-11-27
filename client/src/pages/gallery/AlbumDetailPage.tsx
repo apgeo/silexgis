@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
+import { EditOutlined, MinusCircleOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { Alert, App, Breadcrumb, Flex, Spin, Tooltip, Typography, theme } from 'antd';
 import Button from '../../components/Button.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
@@ -14,6 +14,7 @@ import {
   useCapabilities,
   usePhotos,
   useRemoveAlbumItem,
+  useAddAlbumItems,
   useReorderAlbum,
   useSetAlbumCover,
 } from '../../api/hooks.ts';
@@ -72,6 +73,7 @@ export default function AlbumDetailPage() {
   const reorderAlbum = useReorderAlbum();
   const setCover = useSetAlbumCover();
   const removeItem = useRemoveAlbumItem();
+  const addItems = useAddAlbumItems();
 
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -148,7 +150,36 @@ export default function AlbumDetailPage() {
 
     try {
       await removeItem.mutateAsync({ id, documentId });
-      message.success(t('gallery.removedFromAlbum'));
+    } catch {
+      message.error(t('common.saveFailed'));
+      return;
+    }
+
+    const notice = `album-remove-${documentId}`;
+    message.success({
+      key: notice,
+      duration: 8,
+      content: (
+        <>
+          {t('gallery.removedFromAlbum')}{' '}
+          <Button size="small" type="link" onClick={() => void putBack(documentId, notice)}>
+            {t('gallery.undoRemove')}
+          </Button>
+        </>
+      ),
+    });
+  };
+
+  // Puts a picture taken out by mistake back. It returns at the end of the album: the server
+  // appends what is added, and the order it had is not kept anywhere once it is out.
+  const putBack = async (documentId: string, notice: string) => {
+    if (!id) {
+      return;
+    }
+    message.destroy(notice);
+    try {
+      await addItems.mutateAsync({ id, documentIds: [documentId] });
+      message.success(t('gallery.putBackInAlbum'));
     } catch {
       message.error(t('common.saveFailed'));
     }
@@ -274,7 +305,7 @@ export default function AlbumDetailPage() {
                         size="small"
                         type="text"
                         aria-label={t('gallery.removeFromAlbum')}
-                        icon={<DeleteOutlined />}
+                        icon={<MinusCircleOutlined />}
                         onClick={() => void remove(photo.documentId)}
                       />
                     </Tooltip>

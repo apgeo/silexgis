@@ -287,8 +287,8 @@ describe('TripReportPage', () => {
     show(trip({ geom: { type: 'Point', coordinates: [22.76314, 46.81953] } as never }));
 
     const sketch = screen.getByTestId('trip-report-sketch');
-    expect(sketch.textContent).toContain('46.81953° N');
-    expect(sketch.textContent).toContain('22.76314° E');
+    expect(sketch.textContent).toContain('46.81953°\u00a0N');
+    expect(sketch.textContent).toContain('22.76314°\u00a0E');
   });
 
   it('draws no sketch at all for a trip that has none', () => {
@@ -307,8 +307,8 @@ describe('TripReportPage', () => {
     show(trip({ meetingGeom: { type: 'Point', coordinates: [25.44127, 45.53802] } as never }));
 
     const meeting = screen.getByTestId('trip-report-meeting');
-    expect(meeting.textContent).toContain('45.53802° N');
-    expect(meeting.textContent).toContain('25.44127° E');
+    expect(meeting.textContent).toContain('45.53802°\u00a0N');
+    expect(meeting.textContent).toContain('25.44127°\u00a0E');
     cleanup();
 
     show(trip());
