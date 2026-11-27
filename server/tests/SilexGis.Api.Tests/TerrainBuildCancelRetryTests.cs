@@ -263,9 +263,11 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
         await using (new FakeBakeWorker(spoolRoot, (directory, request) =>
         {
             // Half a pyramid, then nothing until somebody withdraws the request — a bake that has
-            // stopped making progress looks exactly like this from outside.
+            // stopped making progress looks exactly like this from outside. Its own deadline is
+            // longer than the test waits, so a limit that is never reached fails on the wait below
+            // and says so, rather than being answered by this deadline and read as a withdrawal.
             Pyramid(request["output"]);
-            var deadline = DateTime.UtcNow.AddSeconds(60);
+            var deadline = DateTime.UtcNow.AddSeconds(180);
             while (!File.Exists(Path.Combine(directory, "cancel")) && DateTime.UtcNow < deadline)
             {
                 Thread.Sleep(50);
@@ -277,6 +279,13 @@ public sealed class TerrainBuildCancelRetryTests : IAsyncLifetime, IDisposable, 
             var run = Task.Run(() => RunAsync(id));
             await UntilAsync(
                 () => Task.FromResult(File.Exists(Path.Combine(spool, "started"))), "the bake to be taken");
+
+            // The phase writes its log line just before it starts to watch the bake: the clock is
+            // moved only once it is there, so the move cannot land while the phase is still on its
+            // way to the watch, wherever it reads the time.
+            await UntilAsync(
+                async () => (await ReadAsync(id)).LogTail?.Contains("Asked for a mesh", StringComparison.Ordinal) == true,
+                "the bake phase to start watching the bake");
 
             clock.Offset = TimeSpan.FromHours(13);
             try

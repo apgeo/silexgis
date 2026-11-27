@@ -183,6 +183,12 @@ public sealed class TerrainBakePhase(
         var spool = workspace.SpoolFor(context.Build.Id);
         var alreadyRunning = InFlight(spool);
 
+        // The waiting counts from the moment the request is there for the other side to see, not
+        // from when this side gets round to watching it: the writes in between can take longer
+        // than the other side takes to claim it, and a limit counted from after them is later than
+        // the one the bake was given. A bake already under way is waited for from now.
+        var began = clock.GetUtcNow();
+
         if (!alreadyRunning)
         {
             // In this order and no other. The spool directory is made first, empty, so that a
@@ -199,6 +205,7 @@ public sealed class TerrainBakePhase(
                 await SeedFromBaseAsync(context, extended, ct);
             }
 
+            began = clock.GetUtcNow();
             Issue(spool, request);
         }
 
@@ -227,7 +234,7 @@ public sealed class TerrainBakePhase(
         TerrainBakeResult result;
         try
         {
-            result = await WaitAsync(context, spool, ct);
+            result = await WaitAsync(context, spool, began, ct);
         }
         catch (TerrainBuildException)
         {
@@ -409,13 +416,12 @@ public sealed class TerrainBakePhase(
     /// own, so without a limit here one build holds its worker for ever.
     /// </remarks>
     private async Task<TerrainBakeResult> WaitAsync(
-        TerrainBuildContext context, string spool, CancellationToken ct)
+        TerrainBuildContext context, string spool, DateTimeOffset began, CancellationToken ct)
     {
         var resultPath = Path.Combine(spool, TerrainBakeHandover.ResultFileName);
         var startedPath = Path.Combine(spool, TerrainBakeHandover.StartedFileName);
         var logPath = Path.Combine(spool, TerrainBakeHandover.LogFileName);
 
-        var began = clock.GetUtcNow();
         var pickupBy = began + TimeSpan.FromSeconds(Math.Clamp(settings.BakePickupSeconds, 5, 3600));
         var limit = TerrainBakeTimeLimit.Limit(settings.BakeTimeoutSeconds);
         var giveUpAt = began + limit;
