@@ -29,11 +29,15 @@ namespace SilexGis.Api.Tests;
 public sealed class SyncLateCommitTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
+    private readonly string connectionString;
     private HttpClient phone = null!;
     private string marker = null!;
 
-    public SyncLateCommitTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+    public SyncLateCommitTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString);
+    }
 
     public async ValueTask InitializeAsync()
     {
@@ -109,14 +113,65 @@ public sealed class SyncLateCommitTests : IAsyncLifetime, IDisposable, IClassFix
         Features(await DownloadAsync(set, cursor)).ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task An_installation_settle_interval_holds_back_a_change_made_within_it()
+    {
+        // An installation whose clocks may disagree by up to a minute: nothing stamped within the
+        // last minute is handed over yet, and anything older is.
+        using var settled = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?> { ["Sync:DownloadSettleMilliseconds"] = "60000" });
+        using var settledPhone = await AuthHelper.BearerClientAsync(settled, $"late-{marker}@t.local");
+
+        var editedId = Guid.CreateVersion7();
+        var otherId = Guid.CreateVersion7();
+        var creator = await CreateSetAsync([]);
+        (await UploadAsync(creator, Cave(editedId, $"Edited {marker}"), Cave(otherId, $"Other {marker}")))
+            .GetProperty("written").GetInt32().ShouldBe(2);
+        await StampAsync([editedId, otherId], DateTimeOffset.UtcNow.AddMinutes(-5));
+        var set = await CreateSetAsync([editedId, otherId]);
+
+        // Settled long ago: handed over.
+        var level = await DownloadAsync(settledPhone, set, null);
+        Features(level).ShouldBe([editedId, otherId], ignoreOrder: true);
+        var cursor = level.GetProperty("nextCursor").GetString();
+        cursor.ShouldNotBeNull();
+
+        // Edited just now and committed: inside the interval, so not handed over yet.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.Features.SingleAsync(f => f.Id == editedId);
+            row.Name = $"Edited again {marker}";
+            await db.SaveChangesAsync();
+        }
+
+        Features(await DownloadAsync(settledPhone, set, cursor))
+            .ShouldNotContain(editedId, "a change made within the settle interval was handed over");
+
+        // The same edit once it is older than the interval: handed over from the same position.
+        await StampAsync([editedId], DateTimeOffset.UtcNow.AddMinutes(-2));
+        Features(await DownloadAsync(settledPhone, set, cursor)).ShouldBe([editedId]);
+    }
+
+    private async Task StampAsync(Guid[] ids, DateTimeOffset at)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.Features.Where(f => ids.Contains(f.Id))
+            .ExecuteUpdateAsync(u => u.SetProperty(f => f.UpdatedAt, at));
+    }
+
     private static IEnumerable<Guid> Features(JsonElement page) =>
         page.GetProperty("features").EnumerateArray().Select(f => f.GetProperty("id").GetGuid());
 
-    private async Task<JsonElement> DownloadAsync(Guid set, string? cursor)
+    private Task<JsonElement> DownloadAsync(Guid set, string? cursor) => DownloadAsync(phone, set, cursor);
+
+    private static async Task<JsonElement> DownloadAsync(HttpClient client, Guid set, string? cursor)
     {
         var url = $"/api/v1/sync/sets/{set}/download"
             + (cursor is null ? string.Empty : $"?cursor={Uri.EscapeDataString(cursor)}");
-        using var response = await phone.GetAsync(url);
+        using var response = await client.GetAsync(url);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

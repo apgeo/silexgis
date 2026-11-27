@@ -1104,6 +1104,25 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         var one = await narrowEditor.PostAsync(
             $"/api/v1/trip-imports/{fileId}/commit", Body(new { options = Options(), lines = new[] { 2 } }));
         one.StatusCode.ShouldBe(HttpStatusCode.OK, await BodyAsync(one));
+
+        // An account under review is held to the same ceiling when its confirmation is kept for a
+        // reviewer: one row past it is refused now, and exactly that many is held.
+        var (reviewer, _) = await ReviewerAsync();
+        using var reviewerClient = reviewer;
+        await MarkAsync(reviewer, true);
+        var heldFile = await UploadAsync("two-held.csv", sheet);
+
+        var heldTooMany = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{heldFile}/commit", Body(new { options = Options(), lines = new[] { 2, 3 } }));
+        var heldTooManyBody = await BodyAsync(heldTooMany);
+        heldTooMany.StatusCode.ShouldBe(HttpStatusCode.BadRequest, heldTooManyBody);
+        CodeOf(heldTooManyBody).ShouldBe("trip_import.selection_too_large");
+
+        var heldOne = await narrowEditor.PostAsync(
+            $"/api/v1/trip-imports/{heldFile}/commit", Body(new { options = Options(), lines = new[] { 2 } }));
+        var heldOneBody = await BodyAsync(heldOne);
+        heldOne.StatusCode.ShouldBe(HttpStatusCode.OK, heldOneBody);
+        JsonDocument.Parse(heldOneBody).RootElement.GetProperty("held").GetBoolean().ShouldBeTrue();
     }
 
     /// <summary>

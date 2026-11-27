@@ -1303,10 +1303,11 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// <summary>
     /// The two ceilings of a reviewed import, each answered for what it is: a file with more rows
     /// than a review reads says so and how far it read, and a confirmation of more rows than one
-    /// creates is refused with its code before anything is queued.
+    /// creates is refused with its code before anything is queued, while one of exactly that many
+    /// is queued.
     /// </summary>
     [Fact]
-    public async Task A_review_says_where_it_stopped_and_a_confirmation_past_its_ceiling_is_refused()
+    public async Task A_review_says_where_it_stopped_and_a_confirmation_past_its_ceiling_is_refused_but_one_at_it_is_queued()
     {
         var geofileId = await UploadGpxAsync($"""
             <?xml version="1.0" encoding="UTF-8"?>
@@ -1346,6 +1347,23 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         (await db.ProcessingJobs.CountAsync(j => j.Kind == ProcessingJobKinds.ImportCommit && j.RequestedBy == editorId))
             .ShouldBe(0);
+
+        // The ceiling is the largest confirmation allowed, not the first one refused: exactly
+        // that many rows are queued. The narrow host runs no workers, so the job stays queued.
+        var atCeiling = await narrowEditor.PostAsJsonAsync($"/api/v1/geofiles/{geofileId}/import/commit", new
+        {
+            options = DefaultOptions(),
+            selection = new[] { sourceIds[0] },
+            decisions = new Dictionary<string, object>(),
+            withoutReview = false,
+        });
+        var acceptedBody = await atCeiling.Content.ReadAsStringAsync();
+        atCeiling.StatusCode.ShouldBe(HttpStatusCode.Accepted, acceptedBody);
+        var accepted = JsonDocument.Parse(acceptedBody).RootElement;
+        accepted.GetProperty("queued").GetInt32().ShouldBe(1);
+        var jobId = accepted.GetProperty("jobId").GetInt64();
+        (await db.ProcessingJobs.AsNoTracking().SingleAsync(j => j.Id == jobId)).Kind
+            .ShouldBe(ProcessingJobKinds.ImportCommit);
     }
 
     // ---------- helpers ----------

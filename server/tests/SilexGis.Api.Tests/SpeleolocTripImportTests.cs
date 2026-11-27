@@ -47,6 +47,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
 
     private HttpClient editor = null!;
     private HttpClient stranger = null!;
@@ -94,20 +95,22 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     public SpeleolocTripImportTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
+        connectionString = postgres.ConnectionString;
         factory = new SilexGisApiFactory(
-            postgres.ConnectionString,
-            new Dictionary<string, string?>
-            {
-                ["Files:Root"] = filesRoot,
-                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-                ["Import:MaxArchiveDatabaseBytes"] =
-                    ArchiveCeiling.ToString(CultureInfo.InvariantCulture),
-                ["Import:MaxScanRows"] = ScanCeiling.ToString(CultureInfo.InvariantCulture),
-            },
+            connectionString,
+            Settings(),
             // Workers off: the graph-extraction job would otherwise pick up the placeholder survey
             // file below, fail to parse it, and rewrite the very station rows these tests seed.
             JobWorkers.RemoveFrom);
     }
+
+    private Dictionary<string, string?> Settings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+        ["Import:MaxArchiveDatabaseBytes"] = ArchiveCeiling.ToString(CultureInfo.InvariantCulture),
+        ["Import:MaxScanRows"] = ScanCeiling.ToString(CultureInfo.InvariantCulture),
+    };
 
     public async ValueTask InitializeAsync()
     {
@@ -298,6 +301,55 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         (await db.ImportBatches.AsNoTracking().CountAsync(b => b.ConfirmedByUserId == editorId && b.ReviewState != ImportReviewState.NotHeld))
             .ShouldBe(0);
         (await EventsOfRecordingAsync()).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The confirmation ceiling is the largest number of scans one confirmation records, held or
+    /// not: one scan past it is refused with its code on both paths, and exactly that many is
+    /// held for an account under review and recorded for one that is not. Proved through a host
+    /// whose ceiling is pinned to one scan, on the same data.
+    /// </summary>
+    [Fact]
+    public async Task A_confirmation_past_its_ceiling_is_refused_and_one_at_it_is_taken_held_or_not()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (_, people) = await CreateTripAsync(editor, "Ceiling", guests: 1);
+        var options = Options(model, caver: people[0], createTrip: true);
+        var points = ProposedPointsOf(await PreviewAsync(editor, fileId, options));
+        points.Count.ShouldBe(2);
+
+        var settings = Settings();
+        settings["Import:MaxCommitItems"] = "1";
+        using var narrow = new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+        using var narrowEditor = await AuthHelper.BearerClientAsync(narrow, $"spl-ed-{tag}@t.local");
+
+        // Held: refused before anything is kept, and one scan is kept for a reviewer.
+        var (reviewer, _) = await ReviewerAsync();
+        using var reviewerClient = reviewer;
+        await MarkAsync(reviewer, true);
+        var heldTooMany = await CommitAsync(narrowEditor, fileId, options, points);
+        var heldTooManyBody = await heldTooMany.Content.ReadAsStringAsync();
+        heldTooMany.StatusCode.ShouldBe(HttpStatusCode.BadRequest, heldTooManyBody);
+        CodeOf(heldTooManyBody).ShouldBe("speleoloc_import.selection_too_large");
+        var heldBatch = await HeldBatchOfAsync(await CommitAsync(narrowEditor, fileId, options, [points[0]]));
+        var turnedDown = await reviewer.PostAsJsonAsync($"/api/v1/review/batches/{heldBatch}/reject", new { });
+        turnedDown.StatusCode.ShouldBe(HttpStatusCode.OK, await turnedDown.Content.ReadAsStringAsync());
+        await MarkAsync(reviewer, false);
+
+        // Unheld: refused with nothing recorded, and one scan is recorded.
+        var tooMany = await CommitAsync(narrowEditor, fileId, options, points);
+        var tooManyBody = await tooMany.Content.ReadAsStringAsync();
+        tooMany.StatusCode.ShouldBe(HttpStatusCode.BadRequest, tooManyBody);
+        CodeOf(tooManyBody).ShouldBe("speleoloc_import.selection_too_large");
+        (await EventsOfRecordingAsync()).ShouldBeEmpty();
+
+        var one = await CommitAsync(narrowEditor, fileId, options, [points[0]]);
+        one.StatusCode.ShouldBe(HttpStatusCode.OK, await one.Content.ReadAsStringAsync());
+        (await BodyAsync(one)).GetProperty("held").GetBoolean().ShouldBeFalse();
+        (await EventsOfRecordingAsync()).Count.ShouldBe(1);
     }
 
     private async Task<(HttpClient Client, Guid Id)> ReviewerAsync()
