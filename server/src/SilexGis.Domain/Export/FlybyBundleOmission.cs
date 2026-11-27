@@ -139,6 +139,29 @@ public static class FlybyBundleOmissions
     };
 
     /// <summary>
+    /// Caves under location protection that the asker may see and that a bundle made to be
+    /// rendered on the server leaves out: a render node is another machine, and receives no
+    /// protected cave. Counted apart from the caves not drawn because the asker may place every
+    /// one of them exactly, so the count says nothing they cannot see for themselves.
+    /// </summary>
+    public static string ProtectedCavesLeftOut(int count, bool romanian = false) => (romanian, count == 1) switch
+    {
+        (false, true) => "1 cave under location protection (a render on the server goes to another machine, which receives no protected cave)",
+        (false, false) => $"{count} caves under location protection (a render on the server goes to another machine, which receives no protected cave)",
+        (true, true) => "1 peșteră cu locație protejată (o randare pe server merge la o altă mașină, care nu primește nicio peșteră protejată)",
+        (true, false) => $"{Counted(count)} peșteri cu locație protejată (o randare pe server merge la o altă mașină, care nu primește nicio peșteră protejată)",
+    };
+
+    /// <summary>Entrances and features under location protection that a bundle made to be rendered on the server leaves out.</summary>
+    public static string ProtectedMarkersLeftOut(int count, bool romanian = false) => (romanian, count == 1) switch
+    {
+        (false, true) => "1 entrance or feature under location protection (a render on the server receives no protected place)",
+        (false, false) => $"{count} entrances and features under location protection (a render on the server receives no protected place)",
+        (true, true) => "1 intrare sau obiect cu locație protejată (o randare pe server nu primește niciun loc protejat)",
+        (true, false) => $"{Counted(count)} intrări și obiecte cu locație protejată (o randare pe server nu primește niciun loc protejat)",
+    };
+
+    /// <summary>
     /// Photographs taken at stations of the caves drawn that the bundle does not show: a station
     /// shows one photograph, a bundle only so many, and one the camera never comes near none.
     /// </summary>
@@ -167,6 +190,9 @@ public static class FlybyBundleOmissions
 
 /// <summary>A section of a bundle's notes: its heading and its lines.</summary>
 public sealed record FlybyBundleNotesSection(string Title, string Text);
+
+/// <summary>What a bundle made to be rendered on the server left out for that: protected caves, and protected entrances and features.</summary>
+public sealed record FlybyBundleNotesServer(int ProtectedCaves, int ProtectedMarkers);
 
 /// <summary>How a bundle's caves appear part by part, as its notes say it.</summary>
 /// <param name="ByDate">By the day each leg was surveyed, rather than by the distance from the entrances.</param>
@@ -207,13 +233,43 @@ public static class FlybyBundleNotes
     /// <param name="markers">How many markers stand in the scene.</param>
     /// <param name="photos">How many photographs it shows.</param>
     /// <param name="reveal">How the caves appear part by part; null where they are there from the start.</param>
+    /// <param name="server">For a bundle made to be rendered on the server: what it left out for that; null for a download.</param>
     public static IReadOnlyList<FlybyBundleNotesSection> Sections(
-        bool romanian, bool daylightGoes, int markers = 0, int photos = 0, FlybyBundleNotesReveal? reveal = null, bool lampReaches = false) =>
+        bool romanian,
+        bool daylightGoes,
+        int markers = 0,
+        int photos = 0,
+        FlybyBundleNotesReveal? reveal = null,
+        bool lampReaches = false,
+        FlybyBundleNotesServer? server = null) =>
     [
+        .. server is null ? Array.Empty<FlybyBundleNotesSection>() : [OnTheServer(romanian, server)],
         .. LaidOutAndLit(romanian, daylightGoes, lampReaches),
         .. markers > 0 || photos > 0 ? [PointedOut(romanian, markers, photos)] : Array.Empty<FlybyBundleNotesSection>(),
         .. reveal is null ? Array.Empty<FlybyBundleNotesSection>() : [reveal.ByDate ? RevealByDate(romanian, reveal) : Reveal(romanian)],
     ];
+
+    private static FlybyBundleNotesSection OnTheServer(bool romanian, FlybyBundleNotesServer server)
+    {
+        var left = server.ProtectedCaves + server.ProtectedMarkers;
+        return romanian
+            ? new(
+                "RANDAT PE SERVER",
+                "Acest pachet a fost făcut pentru a fi randat pe server, de un nod de randare: o altă mașină,\n"
+                + "pe care o administrează operatorul acestei instalări. Un astfel de pachet nu conține nicio\n"
+                + "peșteră, intrare sau obiect cu locație protejată, chiar dacă cel care l-a cerut le poate vedea.\n"
+                + (left == 0
+                    ? "Nimic nu a fost lăsat deoparte din acest motiv."
+                    : $"Lăsate deoparte din acest motiv: {Both(Of(server.ProtectedCaves, "peșteră", "peșteri", true), Of(server.ProtectedMarkers, "intrare sau obiect", "intrări și obiecte", true), "și")}."))
+            : new(
+                "RENDERED ON THE SERVER",
+                "This bundle was made to be rendered on the server, by a render node: another machine, run\n"
+                + "by this installation's operator. Such a bundle holds no cave, entrance or feature under\n"
+                + "location protection, even when the person who asked for it may see them.\n"
+                + (left == 0
+                    ? "Nothing was left out for that."
+                    : $"Left out for that: {Both(Of(server.ProtectedCaves, "cave", "caves", false), Of(server.ProtectedMarkers, "entrance or feature", "entrances and features", false), "and")}."));
+    }
 
     private static FlybyBundleNotesSection PointedOut(bool romanian, int markers, int photos) => romanian
         ? new(

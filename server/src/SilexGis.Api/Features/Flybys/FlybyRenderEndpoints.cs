@@ -60,6 +60,11 @@ public sealed record FlybyRenderFileDto(string Name, string Role, long Size);
 /// <param name="Message">The node's last message, "Rendering frame 37/240".</param>
 /// <param name="Done">Frames rendered of <paramref name="Total"/>, over the whole film.</param>
 /// <param name="Error">Why it failed or stopped, as "reason: message".</param>
+/// <param name="Reason">
+/// The word <paramref name="Error"/> starts with when it is one of the render node protocol's
+/// failure reasons or this server's own (<c>interrupted</c>, <c>timeLimit</c>, <c>notTaken</c>),
+/// for the panel to say in the reader's language; what follows it is the node's own words.
+/// </param>
 /// <param name="CancelRequested">Whether its requester asked it to stop and the node has yet to hear.</param>
 /// <param name="Files">The result: the film, and its subtitles and log; empty until it succeeded.</param>
 /// <param name="ExpiresAt">When the film is deleted.</param>
@@ -76,6 +81,7 @@ public sealed record FlybyRenderDto(
     int? Total,
     double? SecondsLeft,
     string? Error,
+    string? Reason,
     bool CancelRequested,
     string? Device,
     double? RenderSeconds,
@@ -84,7 +90,11 @@ public sealed record FlybyRenderDto(
     DateTimeOffset? CompletedAt,
     DateTimeOffset? ExpiresAt);
 
-/// <summary>A render queued, with what went into its bundle as the download counts it.</summary>
+/// <summary>
+/// A render queued, with what went into its bundle as the download counts it, and what a render on
+/// the server leaves out besides: caves (<paramref name="ProtectedLeftOut"/>) and entrances and
+/// features (<paramref name="ProtectedMarkersLeftOut"/>) under location protection.
+/// </summary>
 public sealed record FlybyRenderStartedDto(
     FlybyRenderDto Render,
     int Walls,
@@ -96,7 +106,9 @@ public sealed record FlybyRenderStartedDto(
     int Photos,
     int UndatedLegs,
     int CavesOnSurveyDate,
-    int UndatedCaves);
+    int UndatedCaves,
+    int ProtectedLeftOut,
+    int ProtectedMarkersLeftOut);
 
 /// <summary>
 /// A flyby rendered on the server: its Blender bundle is made exactly as for the download, stored,
@@ -106,9 +118,12 @@ public sealed record FlybyRenderStartedDto(
 /// <remarks>
 /// <para>
 /// <b>The bundle is decided as the download's is, for the account asking</b> — the same code
-/// makes it, and records it (<c>format: blender-render</c>), so what a node renders is what that
-/// account could have downloaded and rendered itself. The node is the operator's machine, admitted
-/// by an administrator's token.
+/// makes it, and records it (<c>format: blender-render</c>), so what a node renders is no more
+/// than that account could have downloaded and rendered itself. <b>And it holds nothing under
+/// location protection</b>: the node is another machine, admitted by an administrator's token,
+/// that renders every account's bundles, and whoever runs it holds no grant to place a protected
+/// cave. What is left out for that is counted in the answer and said in the bundle's notes. Each
+/// download of a bundle by a node is recorded too, with the node and the bundle's SHA-256.
 /// </para>
 /// <para>
 /// <b>A render and its film are its requester's alone</b>: every route here answers about the
@@ -162,7 +177,17 @@ public static class FlybyRenderEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var made = await FlybyBlenderBundleEndpoints.MakeAsync(request.Bundle!, services, "blender-render", ct);
+        // Refused before the bundle is made where it can be: making one takes the one-at-a-time
+        // turn every bundle waits for, and leaves a record of a bundle that would go nowhere.
+        // Asked again, atomically, when the render is stored.
+        var early = await renders.RefusalAsync(requester, 0, ct);
+        if (early != FlybyRenderRefusal.None)
+        {
+            return Refused(early);
+        }
+
+        var made = await FlybyBlenderBundleEndpoints.MakeAsync(
+            request.Bundle!, services, "blender-render", ct, FlybyBundleRecipient.RenderNode);
         if (made.Unauthorized)
         {
             return TypedResults.Unauthorized();
@@ -174,20 +199,18 @@ public static class FlybyRenderEndpoints
         }
 
         var bundle = made.Bundle!;
+        var draft = request.Plan != FlybyRenderPlan.Full;
         var (render, refusal) = await renders.EnqueueAsync(
             requester,
             request.Bundle!.Name is { Length: > 0 } name ? name : bundle.FileName,
             bundle.Zip,
-            request.Plan == FlybyRenderPlan.Full ? "full" : "draft",
+            draft ? "draft" : "full",
             (request.Container ?? FlybyRenderContainer.Mp4).ToString().ToLowerInvariant(),
-            ct);
+            ct,
+            RenderScratch.Bytes(bundle.Zip, bundle.Frames, request.Bundle.Output!.Width, request.Bundle.Output.Height, draft));
         return refusal switch
         {
-            FlybyRenderRefusal.AlreadyActive => ApiProblems.Conflict(
-                AlreadyActiveCode, "A render of yours is queued or running already; stop it or wait for it first."),
-            FlybyRenderRefusal.StorageFull => ApiProblems.Conflict(
-                StorageFullCode, "The space this server keeps for renders is full."),
-            _ => TypedResults.Created(
+            FlybyRenderRefusal.None => TypedResults.Created(
                 $"/api/v1/flybys/blender-renders/{render!.Render.Id}",
                 new FlybyRenderStartedDto(
                     Dto(render),
@@ -200,9 +223,16 @@ public static class FlybyRenderEndpoints
                     bundle.Photos,
                     bundle.UndatedLegs,
                     bundle.CavesOnSurveyDate,
-                    bundle.UndatedCaves)),
+                    bundle.UndatedCaves,
+                    bundle.ProtectedLeftOut,
+                    bundle.ProtectedMarkersLeftOut)),
+            _ => Refused(refusal),
         };
     }
+
+    private static ProblemHttpResult Refused(FlybyRenderRefusal refusal) => refusal == FlybyRenderRefusal.AlreadyActive
+        ? ApiProblems.Conflict(AlreadyActiveCode, "A render of yours is queued or running already; stop it or wait for it first.")
+        : ApiProblems.Conflict(StorageFullCode, "The space this server keeps for renders is full.");
 
     private static async Task<Results<Ok<IReadOnlyList<FlybyRenderDto>>, UnauthorizedHttpResult>> MineAsync(
         FlybyRenders renders, ICurrentUser currentUser, CancellationToken ct)
@@ -259,6 +289,11 @@ public static class FlybyRenderEndpoints
         return TypedResults.File(stream, ContentType(file.Name), file.Name);
     }
 
+    private static string? ReasonOf(string? error) =>
+        error?.IndexOf(": ", StringComparison.Ordinal) is > 0 and var colon && RenderNodeQueue.ErrorReasons.Contains(error[..colon])
+            ? error[..colon]
+            : null;
+
     private static string ContentType(string name) => Path.GetExtension(name).ToLowerInvariant() switch
     {
         ".mp4" => "video/mp4",
@@ -294,6 +329,9 @@ public static class FlybyRenderEndpoints
             view.State == FlybyRenderState.Running ? render.SecondsLeft : null,
             view.State is FlybyRenderState.Failed or FlybyRenderState.Cancelled || view.State == FlybyRenderState.Queued
                 ? job?.Error
+                : null,
+            view.State is FlybyRenderState.Failed or FlybyRenderState.Cancelled || view.State == FlybyRenderState.Queued
+                ? ReasonOf(job?.Error)
                 : null,
             render.CancelRequestedAt is not null && view.State is FlybyRenderState.Queued or FlybyRenderState.Running,
             render.Device,

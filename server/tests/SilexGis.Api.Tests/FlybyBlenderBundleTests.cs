@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
+using SilexGis.Domain.Export;
 using SilexGis.Infrastructure.Flybys;
 using SilexGis.Infrastructure.Surveys;
 
@@ -70,6 +71,25 @@ public class FlybyBlenderBundleTests
         var (entries, plan) = Bundle(Scene() with { Name = name });
         plan.GetProperty("output").GetProperty("baseName").GetString().ShouldBe(slug);
         entries.Keys.ShouldAllBe(entry => entry.StartsWith(slug + "-blender/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_bundle_made_to_be_rendered_on_the_server_says_so_and_what_it_left_out_in_both_languages()
+    {
+        string Readme(FlybyBundleScene scene) => Encoding.UTF8.GetString(
+            Bundle(scene).Entries.Single(e => e.Key.EndsWith("/README.txt", StringComparison.Ordinal)).Value);
+
+        Readme(Scene()).ShouldNotContain("RENDERED ON THE SERVER");
+
+        var english = Readme(Scene() with { Server = new FlybyBundleNotesServer(2, 1) });
+        english.ShouldContain("RENDERED ON THE SERVER");
+        english.ShouldContain("Left out for that: 2 caves and 1 entrance or feature.");
+
+        Readme(Scene() with { Server = new FlybyBundleNotesServer(0, 0) }).ShouldContain("Nothing was left out for that.");
+
+        var romanian = Readme(Scene() with { Server = new FlybyBundleNotesServer(1, 0), Language = "ro" });
+        romanian.ShouldContain("RANDAT PE SERVER");
+        romanian.ShouldContain("Lăsate deoparte din acest motiv: 1 peșteră.");
     }
 
     [Fact]

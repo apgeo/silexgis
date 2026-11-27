@@ -70,6 +70,12 @@ public static class FlybyBlenderBundleEndpoints
     /// <summary>Nothing of any cave asked for could be drawn.</summary>
     public const string NothingToDrawCode = "flyby_bundle.nothing_to_draw";
 
+    /// <summary>
+    /// For a render on the server: every cave that could have been drawn is under location
+    /// protection, and a render node receives none.
+    /// </summary>
+    public const string OnlyProtectedCode = "flyby_bundle.only_protected";
+
     /// <summary>What a record of a bundle is filed under.</summary>
     public const string AuditEntityType = "FlybyBundle";
 
@@ -176,11 +182,19 @@ public static class FlybyBlenderBundleEndpoints
     /// the one place a bundle is made, whether it is handed to the asker or stored for a render
     /// node. <paramref name="format"/> is what the record says it was made for.
     /// </summary>
+    /// <param name="recipient">
+    /// Who the bundle goes to. A bundle for a render node is decided for the asker as a download
+    /// is, and then holds nothing under location protection: no cave, entrance or feature with a
+    /// protection root anywhere above it, whatever the asker may see. The node is another machine,
+    /// and whoever runs it holds no grant to place those caves — it renders every account's
+    /// bundles. What is left out for that is counted apart and said in the bundle's notes.
+    /// </param>
     internal static async Task<FlybyBundleOutcome> MakeAsync(
         FlybyBlenderBundleRequest request,
         FlybyBundleServices services,
         string format,
-        CancellationToken ct)
+        CancellationToken ct,
+        FlybyBundleRecipient recipient = FlybyBundleRecipient.Asker)
     {
         var db = services.Db;
         var protection = services.Protection;
@@ -214,6 +228,17 @@ public static class FlybyBlenderBundleEndpoints
         var placeable = await protection.ExactViewIdsAsync(ctx, readable, ct);
         var open = readable.Where(placeable.Contains).ToHashSet();
 
+        // For a render node, then, what nobody but the public may place: asked of the rows' own
+        // protection flags and ancestry, not of the derived column, so a stale column cannot let
+        // a protected cave through to another machine.
+        var withheld = new HashSet<Guid>();
+        if (recipient == FlybyBundleRecipient.RenderNode && open.Count > 0)
+        {
+            var unprotected = await protection.UnprotectedByAncestryIdsAsync(open, ct);
+            withheld = [.. open.Where(id => !unprotected.Contains(id))];
+            open.ExceptWith(withheld);
+        }
+
         await OneAtATime.WaitAsync(ct);
         try
         {
@@ -228,6 +253,7 @@ public static class FlybyBlenderBundleEndpoints
             var withWalls = new List<Guid>();
             var withLines = new List<Guid>();
             var notDrawn = 0;
+            var protectedLeftOut = 0;
             var wallsUnavailable = 0;
             var wallsOverBudget = 0;
 
@@ -235,7 +261,15 @@ public static class FlybyBlenderBundleEndpoints
             {
                 if (!open.Contains(cave.CaveId))
                 {
-                    notDrawn++;
+                    if (withheld.Contains(cave.CaveId))
+                    {
+                        protectedLeftOut++;
+                    }
+                    else
+                    {
+                        notDrawn++;
+                    }
+
                     continue;
                 }
 
@@ -369,6 +403,14 @@ public static class FlybyBlenderBundleEndpoints
                 (walls is not null || estimated is not null ? withWalls : withLines).Add(cave.CaveId);
             }
 
+            if (caves.Count == 0 && protectedLeftOut > 0)
+            {
+                return new FlybyBundleOutcome(ApiProblems.UnprocessableContent(
+                    OnlyProtectedCode,
+                    "Every cave that could be drawn is under location protection, and a render on the server "
+                    + "receives none; download the bundle and render it on a machine of your own."));
+            }
+
             if (caves.Count == 0)
             {
                 return new FlybyBundleOutcome(ApiProblems.UnprocessableContent(
@@ -379,7 +421,8 @@ public static class FlybyBlenderBundleEndpoints
             var poses = request.Frames!.Select(f => new FlybyBundlePose(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7])).ToList();
 
             // ---- what the scene points out ----
-            var (markerLayers, markerIds, markersNotDrawn) = await MarkersAsync(request.Markers ?? [], db, ctx, protection, ct);
+            var (markerLayers, markerIds, markersNotDrawn, protectedMarkersLeftOut) = await MarkersAsync(
+                request.Markers ?? [], db, ctx, protection, recipient, ct);
             var (photos, photoDocumentIds) = await PhotosAsync(
                 request.Photos, drawnAt, caves, poses, db, access, placePoints, placeStations, thumbnails, ctx, loggers, ct);
 
@@ -410,6 +453,16 @@ public static class FlybyBlenderBundleEndpoints
                 leftOut.Add(FlybyBundleOmissions.MarkersNotDrawn(markersNotDrawn, romanian));
             }
 
+            if (protectedLeftOut > 0)
+            {
+                leftOut.Add(FlybyBundleOmissions.ProtectedCavesLeftOut(protectedLeftOut, romanian));
+            }
+
+            if (protectedMarkersLeftOut > 0)
+            {
+                leftOut.Add(FlybyBundleOmissions.ProtectedMarkersLeftOut(protectedMarkersLeftOut, romanian));
+            }
+
             var scene = new FlybyBundleScene(
                 request.Name?.Trim() ?? string.Empty,
                 request.Output!.Width,
@@ -436,12 +489,16 @@ public static class FlybyBlenderBundleEndpoints
                 Reveal = request.Reveal is { } reveal
                     ? new FlybyBundleReveal(reveal.StartS, reveal.EndS, reveal.By ?? FlybyBundleRevealBy.Distance)
                     : null,
+                Server = recipient == FlybyBundleRecipient.RenderNode
+                    ? new FlybyBundleNotesServer(protectedLeftOut, protectedMarkersLeftOut)
+                    : null,
             };
 
             // Written into memory first: which photographs the scene shows is known once its plan
             // is made, and the record below names them.
             using var zip = new MemoryStream();
             var summary = FlybyBlenderBundle.Write(scene, zip);
+            var bytes = zip.ToArray();
 
             // Recorded before the bytes are handed over, in the same request, so there is no window
             // in which somebody holds a file and the record of who took it does not exist. No
@@ -461,6 +518,9 @@ public static class FlybyBlenderBundleEndpoints
                     ["notDrawnCount"] = notDrawn,
                     ["markerFeatureIds"] = Sorted(markerIds),
                     ["markersNotDrawnCount"] = markersNotDrawn,
+                    ["protectedLeftOutCount"] = protectedLeftOut,
+                    ["protectedMarkersLeftOutCount"] = protectedMarkersLeftOut,
+                    ["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes)),
                     ["photoDocumentIds"] = Sorted(summary.PhotosShown.Select(index => photoDocumentIds[index]).Distinct()),
                     ["reveal"] = request.Reveal?.By switch
                     {
@@ -473,7 +533,7 @@ public static class FlybyBlenderBundleEndpoints
             await db.SaveChangesAsync(ct);
 
             return new FlybyBundleOutcome(new FlybyBundleMade(
-                zip.ToArray(),
+                bytes,
                 summary.FolderName + ".zip",
                 scene.Poses.Count,
                 withWalls.Count,
@@ -485,7 +545,11 @@ public static class FlybyBlenderBundleEndpoints
                 summary.Photos,
                 summary.RevealDates.LegsWithoutDate,
                 summary.RevealDates.CavesOnTheSurveyDate,
-                summary.RevealDates.CavesWithoutDate));
+                summary.RevealDates.CavesWithoutDate)
+            {
+                ProtectedLeftOut = protectedLeftOut,
+                ProtectedMarkersLeftOut = protectedMarkersLeftOut,
+            });
         }
         finally
         {
@@ -503,17 +567,18 @@ public static class FlybyBlenderBundleEndpoints
     /// The layers with what is drawn of each, the ids drawn, and how many of the ids asked for are
     /// not — one number for every reason, as for caves.
     /// </returns>
-    private static async Task<(IReadOnlyList<FlybyBundleMarkerLayer> Layers, IReadOnlyList<Guid> Drawn, int NotDrawn)> MarkersAsync(
+    private static async Task<(IReadOnlyList<FlybyBundleMarkerLayer> Layers, IReadOnlyList<Guid> Drawn, int NotDrawn, int ProtectedLeftOut)> MarkersAsync(
         IReadOnlyList<FlybyBundleMarkerLayerRequest> asked,
         SilexGisDbContext db,
         AccessContext ctx,
         FeatureProtection protection,
+        FlybyBundleRecipient recipient,
         CancellationToken ct)
     {
         var ids = asked.SelectMany(layer => layer.Markers ?? []).Select(marker => marker.FeatureId).Distinct().ToList();
         if (ids.Count == 0)
         {
-            return ([], [], 0);
+            return ([], [], 0, 0);
         }
 
         // Readable first, then the exact-location rule over exactly those ids — the order caves
@@ -534,6 +599,18 @@ public static class FlybyBlenderBundleEndpoints
             .Where(row => placeable.Contains(row.Id) && row.Geom is Point { IsEmpty: false })
             .ToDictionary(row => row.Id);
 
+        // For a render node, nothing under location protection either: the rule caves are held to above.
+        var withheld = new HashSet<Guid>();
+        if (recipient == FlybyBundleRecipient.RenderNode && open.Count > 0)
+        {
+            var unprotected = await protection.UnprotectedByAncestryIdsAsync([.. open.Keys], ct);
+            withheld = [.. open.Keys.Where(id => !unprotected.Contains(id))];
+            foreach (var id in withheld)
+            {
+                open.Remove(id);
+            }
+        }
+
         // An entrance with no name of its own goes by its cave's, where the caller may read the
         // cave: the same fall-back, behind the same filter, as the map's own entrance layer.
         var caveIds = open.Values.Where(row => row.Name is null && row.CaveId is not null).Select(row => row.CaveId!.Value).Distinct().ToList();
@@ -548,6 +625,7 @@ public static class FlybyBlenderBundleEndpoints
         var layers = new List<FlybyBundleMarkerLayer>();
         var drawn = new HashSet<Guid>();
         var notDrawn = 0;
+        var protectedLeftOut = 0;
         var chosen = 0;
         foreach (var layer in asked)
         {
@@ -564,7 +642,15 @@ public static class FlybyBlenderBundleEndpoints
             {
                 if (!open.TryGetValue(marker.FeatureId, out var row))
                 {
-                    notDrawn++;
+                    if (withheld.Contains(marker.FeatureId))
+                    {
+                        protectedLeftOut++;
+                    }
+                    else
+                    {
+                        notDrawn++;
+                    }
+
                     continue;
                 }
 
@@ -585,7 +671,7 @@ public static class FlybyBlenderBundleEndpoints
             }
         }
 
-        return (layers, [.. drawn], notDrawn);
+        return (layers, [.. drawn], notDrawn, protectedLeftOut);
     }
 
     /// <summary>

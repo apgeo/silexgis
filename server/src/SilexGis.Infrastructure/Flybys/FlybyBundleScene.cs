@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Export;
 using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Infrastructure.Flybys;
@@ -387,4 +388,10 @@ public sealed record FlybyBundleScene(
 
     /// <summary>How the caves appear part by part; null for caves that are there from the first frame.</summary>
     public FlybyBundleReveal? Reveal { get; init; }
+
+    /// <summary>
+    /// For a bundle made to be rendered on the server: what it left out for that, said in its
+    /// notes; null for a download.
+    /// </summary>
+    public FlybyBundleNotesServer? Server { get; init; }
 }

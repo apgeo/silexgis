@@ -153,7 +153,8 @@ public static partial class FlybyBlenderBundle
                             : revealed ? new FlybyBundleNotesReveal(ByDate: false) : null,
                         lampReaches: (plan.Changes ?? []).Any(change =>
                             change is { Energy: not null, Target.Id: { } lit }
-                            && plan.Look.Lights.Any(light => light.Id == lit && light.Kind == PlanLightKind.Headlamp)))
+                            && plan.Look.Lights.Any(light => light.Id == lit && light.Kind == PlanLightKind.Headlamp)),
+                        server: scene.Server)
                     .Select(section => new RenderBundleReadmeSection(section.Title, section.Text)),
             ],
             // What only the plan knows is left out is said with the rest: the photographs there

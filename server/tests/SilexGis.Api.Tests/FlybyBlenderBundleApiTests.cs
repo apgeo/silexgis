@@ -32,7 +32,7 @@ namespace SilexGis.Api.Tests;
 /// written in the compiled survey format by its own writer and read by the application's own
 /// reading, so the walls and the legs in a bundle are the ones the application built.
 /// </remarks>
-public sealed class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
+public sealed partial class FlybyBlenderBundleApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string Route = "/api/v1/flybys/blender-bundle";
 

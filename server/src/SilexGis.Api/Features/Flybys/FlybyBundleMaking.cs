@@ -24,6 +24,24 @@ public sealed record FlybyBundleServices(
     IOptions<MapOptions> MapOptions,
     ILoggerFactory Loggers);
 
+/// <summary>Who a bundle is made for.</summary>
+public enum FlybyBundleRecipient
+{
+    /// <summary>The account asking, who downloads it and renders it on a machine of their own.</summary>
+    Asker,
+
+    /// <summary>
+    /// A render node: another machine, which renders every account's bundles and holds no grant to
+    /// place a protected cave. Such a bundle holds nothing under location protection.
+    /// </summary>
+    /// <remarks>
+    /// A node an administrator lets receive protected caves would be a third recipient, decided by
+    /// the node and not the asker: such a bundle would be made as <see cref="Asker"/>'s, its render
+    /// marked as holding protected caves, and claimed only by such a node. No node is that today.
+    /// </remarks>
+    RenderNode,
+}
+
 /// <summary>A bundle made, with what went into it, counted as the download's headers count it.</summary>
 public sealed record FlybyBundleMade(
     byte[] Zip,
@@ -38,7 +56,14 @@ public sealed record FlybyBundleMade(
     int Photos,
     int UndatedLegs,
     int CavesOnSurveyDate,
-    int UndatedCaves);
+    int UndatedCaves)
+{
+    /// <summary>For a render node: the caves under location protection left out.</summary>
+    public int ProtectedLeftOut { get; init; }
+
+    /// <summary>For a render node: the entrances and features under location protection left out.</summary>
+    public int ProtectedMarkersLeftOut { get; init; }
+}
 
 /// <summary>A bundle, a refusal, or a caller who is not signed in.</summary>
 public sealed record FlybyBundleOutcome(FlybyBundleMade? Bundle, ProblemHttpResult? Problem = null, bool Unauthorized = false)
