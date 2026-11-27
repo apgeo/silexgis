@@ -454,7 +454,7 @@ public sealed class RenderNodeApiTests : IAsyncLifetime, IDisposable, IClassFixt
         var (_, passing) = await QueueRenderAsync();
         (await node.PostAsync("claim", Json(Claim()))).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var crash = new { attempt = 1, reason = "crashed", message = "Blender stopped", retryable = true };
+        var crash = new { attempt = 1, reason = RenderNodeFailure.Crashed, message = "Blender stopped", retryable = true };
         (await node.PostAsync($"jobs/{passing}/fail", Json(crash))).StatusCode.ShouldBe(HttpStatusCode.OK);
         var back = await JobAsync(passing);
         back.Status.ShouldBe(ProcessingJobStatus.Queued);
@@ -465,7 +465,7 @@ public sealed class RenderNodeApiTests : IAsyncLifetime, IDisposable, IClassFixt
 
         var (renderId, broken) = await QueueRenderAsync();
         (await node.PostAsync("claim", Json(Claim()))).StatusCode.ShouldBe(HttpStatusCode.OK);
-        var script = new { attempt = 1, reason = "scriptError", message = "the player failed", retryable = false };
+        var script = new { attempt = 1, reason = RenderNodeFailure.ScriptError, message = "the player failed", retryable = false };
         (await node.PostAsync($"jobs/{broken}/fail", Json(script))).StatusCode.ShouldBe(HttpStatusCode.OK);
         var ended = await JobAsync(broken);
         ended.Status.ShouldBe(ProcessingJobStatus.Failed);
@@ -510,7 +510,7 @@ public sealed class RenderNodeApiTests : IAsyncLifetime, IDisposable, IClassFixt
         stopped.Error.ShouldBe(RenderNodeQueue.CancelledError);
 
         // The node's own word that it stopped is taken and changes nothing.
-        (await node.PostAsync($"jobs/{runningJob}/fail", Json(new { attempt = 1, reason = "cancelled", message = "the server cancelled the job", retryable = false })))
+        (await node.PostAsync($"jobs/{runningJob}/fail", Json(new { attempt = 1, reason = RenderNodeFailure.Cancelled, message = "the server cancelled the job", retryable = false })))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await JobAsync(runningJob)).Error.ShouldBe(RenderNodeQueue.CancelledError);
         (await requester.GetFromJsonAsync<JsonElement>($"/api/v1/flybys/blender-renders/{runningId}"))
@@ -569,7 +569,9 @@ public sealed class RenderNodeApiTests : IAsyncLifetime, IDisposable, IClassFixt
             $"UPDATE processing_jobs SET lease_expires_at = now() - interval '1 minute' WHERE id = {id}");
     }
 
-    private Task SweepAsync() => factory.Services.GetRequiredService<RenderNodeSweeper>().SweepAsync(CancellationToken.None);
+    private Task SweepAsync() =>
+        factory.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<RenderNodeSweeper>().Single()
+            .SweepAsync(CancellationToken.None);
 
     private HttpClient Node(string? token)
     {

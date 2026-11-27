@@ -32,8 +32,9 @@ namespace SilexGis.Api.Features.RenderNodes;
 /// schema and written by its own serializer.
 /// </para>
 /// <para>
-/// Left out of the served API description: they are a protocol of their own, with its own schema,
-/// and no page of this application calls them.
+/// Described in the served API description, as every deliberately open route is, so the
+/// description says they need no sign-in; their bodies are the protocol's own, given by the
+/// library's schema rather than here, and no page of this application calls them.
 /// </para>
 /// </remarks>
 public static class RenderNodeEndpoints
@@ -46,14 +47,20 @@ public static class RenderNodeEndpoints
 
     public static RouteGroupBuilder MapRenderNodeEndpoints(this RouteGroupBuilder api)
     {
-        var nodes = api.MapGroup("/render-nodes").WithTags("RenderNodes").AllowAnonymous().ExcludeFromDescription();
+        var nodes = api.MapGroup("/render-nodes").WithTags("RenderNodes").AllowAnonymous();
 
-        nodes.MapPost("/claim", ClaimAsync);
-        nodes.MapGet("/jobs/{jobId}/bundle", BundleAsync);
-        nodes.MapPost("/jobs/{jobId}/heartbeat", HeartbeatAsync);
-        nodes.MapPut("/jobs/{jobId}/files/{name}", PutFileAsync);
-        nodes.MapPost("/jobs/{jobId}/complete", CompleteAsync);
-        nodes.MapPost("/jobs/{jobId}/fail", FailAsync);
+        nodes.MapPost("/claim", ClaimAsync)
+            .WithSummary("A render node asks for a render job (render worker protocol 1); 200 with the job, 204 with none. Node token only.");
+        nodes.MapGet("/jobs/{jobId}/bundle", BundleAsync)
+            .WithSummary("The stored bundle of a render job the calling node holds; 409 when it does not. Node token only.");
+        nodes.MapPost("/jobs/{jobId}/heartbeat", HeartbeatAsync)
+            .WithSummary("A render node's progress; renews its lease and answers continue or cancel. Node token only.");
+        nodes.MapPut("/jobs/{jobId}/files/{name}", PutFileAsync)
+            .WithSummary("One result file of a render job the calling node holds, checked against X-Content-SHA256. Node token only.");
+        nodes.MapPost("/jobs/{jobId}/complete", CompleteAsync)
+            .WithSummary("A render job succeeded with the files the node uploaded. Node token only.");
+        nodes.MapPost("/jobs/{jobId}/fail", FailAsync)
+            .WithSummary("A render job failed on the node; it is ended or queued again. Node token only.");
         return api;
     }
 

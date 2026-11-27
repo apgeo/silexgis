@@ -15,6 +15,8 @@ namespace SilexGis.Api.Tests.Support;
 /// jobs and wants nothing else touching them takes the drains out here. There is one worker per
 /// lane and a class that wants no drain wants all of them gone — removing the general one alone
 /// would leave the terrain lane draining, which is the same hazard wearing a different name.
+/// The render nodes' lane has no worker in the process, but it has a sweep that takes its lapsed
+/// leases back; that is a drain of the same table on its own schedule, and goes with the workers.
 /// A class that must keep a worker (because something it does depends on the queue carrying a job)
 /// drives its own jobs through the claiming helper instead.
 /// </remarks>
@@ -24,7 +26,8 @@ internal static class JobWorkers
     {
         var workers = services
             .Where(s => s.ImplementationType is { } type
-                && typeof(ProcessingJobWorkerBase).IsAssignableFrom(type))
+                && (typeof(ProcessingJobWorkerBase).IsAssignableFrom(type)
+                    || type == typeof(SilexGis.Infrastructure.Rendering.RenderNodeSweeper)))
             .ToList();
 
         foreach (var worker in workers)

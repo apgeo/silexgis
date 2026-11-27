@@ -211,7 +211,7 @@ public sealed class RenderNodeQueue(
             {
                 var error = render?.CancelRequestedAt is not null
                     ? CancelledError
-                    : "badJob: the render this job was queued for, or its bundle, is no longer stored";
+                    : RenderNodeFailure.BadJob + ": the render this job was queued for, or its bundle, is no longer stored";
                 End(job, error);
                 if (render is not null)
                 {

@@ -593,8 +593,7 @@ public static class DependencyInjection
         services.Configure<Rendering.RenderNodeOptions>(configuration.GetSection(Rendering.RenderNodeOptions.SectionName));
         services.AddScoped<Rendering.RenderNodeQueue>();
         services.AddScoped<Rendering.FlybyRenders>();
-        services.AddSingleton<Rendering.RenderNodeSweeper>();
-        services.AddHostedService(sp => sp.GetRequiredService<Rendering.RenderNodeSweeper>());
+        services.AddHostedService<Rendering.RenderNodeSweeper>();
         services.AddHostedService<UploadSessionScheduler>();
         services.AddHostedService<SurveyUploadSweepScheduler>();
         services.AddHostedService<TerrainUploadSweepScheduler>();
