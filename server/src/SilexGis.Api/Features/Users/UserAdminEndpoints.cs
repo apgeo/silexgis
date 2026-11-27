@@ -16,6 +16,7 @@ using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Rendering;
 
 namespace SilexGis.Api.Features.Users;
 
@@ -659,6 +660,7 @@ public static class UserAdminEndpoints
         SilexGisDbContext db,
         FullAdminGuard fullAdminGuard,
         IAccessContextAccessor accessAccessor,
+        FlybyRenders renders,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -709,6 +711,11 @@ public static class UserAdminEndpoints
         // the directory entry stays.
         var caver = await db.Cavers.FirstOrDefaultAsync(c => c.UserId == id, ct);
 
+        // The account's renders on the server go with it, and their rows with them; their stored
+        // bundles and films are files the rows alone name, so they are found now and deleted once
+        // the account is gone — or nothing would ever find them again.
+        var renderFiles = await renders.StoredPathsOfAsync(user.Id, ct);
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         if (caver is not null)
@@ -744,6 +751,7 @@ public static class UserAdminEndpoints
         }
 
         await transaction.CommitAsync(ct);
+        await renders.DeleteStoredPathsAsync(renderFiles);
         return TypedResults.NoContent();
     }
 

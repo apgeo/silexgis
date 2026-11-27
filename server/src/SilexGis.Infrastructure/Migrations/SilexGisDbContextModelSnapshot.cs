@@ -3886,6 +3886,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requested_by");
 
+                    b.Property<long>("ScratchBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("scratch_bytes");
+
                     b.Property<double?>("SecondsLeft")
                         .HasColumnType("double precision")
                         .HasColumnName("seconds_left");
@@ -5690,6 +5694,19 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
+
+                    b.Property<long?>("SkipNeedsBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("skip_needs_bytes");
+
+                    b.Property<string>("SkipReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("skip_reason");
+
+                    b.Property<int?>("SkippedRenders")
+                        .HasColumnType("integer")
+                        .HasColumnName("skipped_renders");
 
                     b.Property<byte[]>("TokenHash")
                         .IsRequired()

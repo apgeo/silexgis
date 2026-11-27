@@ -1741,7 +1741,8 @@ The settings (all optional; also in `deploy/.env.example`):
 | `SILEXGIS__RenderNodes__LeaseSeconds` | 120 | how long a node keeps a render without a heartbeat; a render whose node goes quiet goes back to the queue |
 | `SILEXGIS__RenderNodes__HeartbeatSeconds` | 40 | how often the node is asked to report |
 | `SILEXGIS__RenderNodes__MaxAttempts` | 5 | tries a render gets in all |
-| `SILEXGIS__RenderNodes__MaxHours` | 24 | the longest one render may run on the node |
+| `SILEXGIS__RenderNodes__MaxHours` | 24 | the longest one render may run on the node; the node stops it then, and the server ends a render that has run an hour past it |
+| `SILEXGIS__RenderNodes__QueuedDays` | 7 | how long a render may wait for a node; one no node has taken by then is ended and its bundle deleted |
 | `SILEXGIS__RenderNodes__MaxResultBytes` | 1000000000 | the largest file a node may upload. A film is sent in one request, so keep it under the proxy's `SILEXGIS_MAX_BODY_SIZE` (1 GB by default) |
 | `SILEXGIS__RenderNodes__MaxFilesPerRender` | 2000 | the most files one render may upload (a plan that writes frames writes many) |
 | `SILEXGIS__RenderNodes__StorageCapBytes` | 50000000000 | stored bundles and films together; a render or an upload past it is refused |

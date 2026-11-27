@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Flybys;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 using Therion.Blender;
@@ -47,8 +48,8 @@ public sealed record RenderNodeAnswer(RenderNodeStatus Status, string? Json = nu
     public static RenderNodeAnswer Problem(RenderNodeStatus status, string code, string detail) => new(status, null, code, detail);
 }
 
-/// <summary>The stored bundle of a job, for the node that holds it.</summary>
-public sealed record RenderNodeBundleFile(string StoragePath, long Size, string FileName);
+/// <summary>The stored bundle of a job, opened for the node that holds it.</summary>
+public sealed record RenderNodeBundleFile(Stream Content, long Size, string FileName);
 
 /// <summary>
 /// The render nodes' side of the job queue: a node claims a <see cref="ProcessingJobKinds.BlenderRender"/>
@@ -113,6 +114,27 @@ public sealed class RenderNodeQueue(
     /// <summary>The error of a render whose node stopped answering on its last allowed attempt.</summary>
     public const string InterruptedError =
         "interrupted: the render node stopped answering on the last allowed attempt, so the render is not tried again";
+
+    /// <summary>What the error of a render that ran past the time this server allows starts with.</summary>
+    public const string TimeLimitPrefix = "timeLimit: ";
+
+    /// <summary>What the error of a render no node took in time starts with.</summary>
+    public const string NotTakenPrefix = "notTaken: ";
+
+    /// <summary>What a record of a bundle is filed under, as the bundle's own record is.</summary>
+    public const string BundleAuditEntityType = "FlybyBundle";
+
+    /// <summary>What the record of a node's download of a bundle says it was.</summary>
+    public const string NodeDownloadFormat = "render-node-download";
+
+    /// <summary>
+    /// The words a render's error may start with, before <c>": "</c>: the protocol's failure
+    /// reasons and this server's own. The panel says each in the reader's language and shows the
+    /// rest as the node's own words.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ErrorReasons = new HashSet<string>(
+        [.. RenderNodeFailure.All, "interrupted", TimeLimitPrefix[..^2], NotTakenPrefix[..^2]],
+        StringComparer.Ordinal);
 
     /// <summary>The extensions a result file may have, by the role the protocol gives it.</summary>
     public static readonly IReadOnlyDictionary<string, string> RoleOfExtension = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -179,26 +201,58 @@ public sealed class RenderNodeQueue(
         // for while the node waits starts within a second or two instead of at its next claim.
         var hold = TimeSpan.FromSeconds(Math.Clamp(claim.WaitSeconds, 0, Math.Max(0, Options.ClaimHoldSeconds)));
         var deadline = clock.GetUtcNow() + hold;
+        var containers = claim.Containers.Distinct(StringComparer.Ordinal).ToList();
         while (true)
         {
-            var answer = await TryClaimAsync(node, preferred, ct);
+            var answer = await TryClaimAsync(node, preferred, containers, claim.FreeDiskBytes, ct);
             if (answer.Status != RenderNodeStatus.NoContent || clock.GetUtcNow() >= deadline)
             {
+                await RecordSkipsAsync(node, preferred, containers, claim.FreeDiskBytes, ct);
                 return answer;
+            }
+
+            // The connection goes back to the pool while the claim waits: a waiting node must not
+            // hold one of the database's connections for the whole of its long poll.
+            if (db.Database.CurrentTransaction is null)
+            {
+                await db.Database.GetDbConnection().CloseAsync();
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), clock, ct);
         }
     }
 
-    private async Task<RenderNodeAnswer> TryClaimAsync(RenderNode node, List<long> preferred, CancellationToken ct)
+    /// <summary>
+    /// Records on the node's row which queued renders its claim left for other nodes, and why, so
+    /// the administrator's page can say why a render waits while a node calls.
+    /// </summary>
+    private async Task RecordSkipsAsync(
+        RenderNode node, List<long> preferred, List<string> containers, long? freeDiskBytes, CancellationToken ct)
+    {
+        var (forContainer, forDisk, mostNeeded) = await RenderNodeSql.SkippedAsync(db, preferred, containers, freeDiskBytes, ct);
+        (node.SkipReason, node.SkippedRenders, node.SkipNeedsBytes) = forContainer > 0
+            ? ("container", forContainer, (long?)null)
+            : forDisk > 0
+                ? ("disk", forDisk, mostNeeded)
+                : ((string?)null, (int?)null, (long?)null);
+        if (node.SkipReason is not null)
+        {
+            logger.LogInformation(
+                "Render node {Node} left {Count} queued render(s) to other nodes ({Reason})", node.Name, node.SkippedRenders, node.SkipReason);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task<RenderNodeAnswer> TryClaimAsync(
+        RenderNode node, List<long> preferred, List<string> containers, long? freeDiskBytes, CancellationToken ct)
     {
         // A job claimed and found unusable (its render stopped meanwhile, or its bundle gone) is
         // ended and the next one taken, a few at most: the node then simply claims again.
         for (var tries = 0; tries < 5; tries++)
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            var jobId = await JobsSql.ClaimNextAsync(db, JobLane.RenderNode, Lease, ct, preferred);
+            var jobId = await RenderNodeSql.ClaimNextAsync(db, Lease, preferred, containers, freeDiskBytes, ct);
             if (jobId is not { } id)
             {
                 await transaction.CommitAsync(ct);
@@ -247,7 +301,10 @@ public sealed class RenderNodeQueue(
         Attempt = job.Attempts,
         LeaseSeconds = (int)Lease.TotalSeconds,
         HeartbeatSeconds = Options.HeartbeatSeconds > 0 ? Options.HeartbeatSeconds : null,
-        Name = render.Name,
+
+        // The bundle's own base name, not the reader's words: a label for the node's log and
+        // folders, made of letters, digits and hyphens that every file system takes.
+        Name = FlybyBlenderBundle.Slug(render.Name),
         Bundle = new RenderNodeBundle
         {
             // Relative to the server URL the node was given (a folder): wherever this application
@@ -294,7 +351,17 @@ public sealed class RenderNodeQueue(
 
     // ---- the bundle --------------------------------------------------------------------------
 
-    /// <summary>The stored bundle of a job the node holds, or why not.</summary>
+    /// <summary>
+    /// The stored bundle of a job the node holds, opened, or why not. Each download is recorded:
+    /// the bundle is the one copy of a render's caves that leaves this installation, and the record
+    /// says which node took which bundle (by its SHA-256, which the bundle's own record of when it
+    /// was made also names) on which attempt.
+    /// </summary>
+    /// <remarks>
+    /// A bundle whose stored file has gone (a disk restored without it) ends the render as a bad
+    /// job and is answered 404: the node cannot render it on any attempt, and a 500 would have it
+    /// try again until its attempts ran out.
+    /// </remarks>
     public async Task<(RenderNodeAnswer Answer, RenderNodeBundleFile? Bundle)> BundleAsync(
         RenderNode node, string jobId, CancellationToken ct)
     {
@@ -309,7 +376,64 @@ public sealed class RenderNodeQueue(
             return (NotHeld(), null);
         }
 
-        return (RenderNodeAnswer.Ok(), new RenderNodeBundleFile(render.BundlePath, render.BundleSize, $"{job.Id}.zip"));
+        Stream content;
+        try
+        {
+            content = await fileStore.OpenReadAsync(render.BundlePath, ct);
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            await EndMissingBundleAsync(node, job.Id, job.Attempts, ct);
+            return (NotFound(), null);
+        }
+
+        db.Set<AuditEntry>().Add(new AuditEntry
+        {
+            UserId = null,
+            Action = AuditActions.Exported,
+            EntityType = BundleAuditEntityType,
+            EntityId = render.Id.ToString(),
+            Changes = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["format"] = NodeDownloadFormat,
+                ["renderId"] = render.Id.ToString(),
+                ["jobId"] = job.Id,
+                ["attempt"] = job.Attempts,
+                ["nodeId"] = node.Id.ToString(),
+                ["nodeName"] = node.Name,
+                ["requestedBy"] = render.RequestedBy.ToString(),
+                ["sha256"] = render.BundleSha256,
+                ["size"] = render.BundleSize,
+            }),
+        });
+        await db.SaveChangesAsync(ct);
+        return (RenderNodeAnswer.Ok(), new RenderNodeBundleFile(content, render.BundleSize, $"{job.Id}.zip"));
+    }
+
+    private async Task EndMissingBundleAsync(RenderNode node, long jobId, int attempt, CancellationToken ct)
+    {
+        FlybyRender? render;
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            if (!await JobsSql.HoldIfStillOursAsync(db, jobId, attempt, ct))
+            {
+                return;
+            }
+
+            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId, ct);
+            render = await db.FlybyRenders.SingleOrDefaultAsync(r => r.ProcessingJobId == jobId, ct);
+            End(job, RenderNodeFailure.BadJob + ": the bundle of this render is no longer stored");
+            if (render is not null)
+            {
+                Finish(render, job, notify: true);
+            }
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
+        await DeleteStoredAsync(render, keepResults: false, ct);
+        logger.LogWarning("The stored bundle of render job {JobId} is missing; the render is ended (node {Node})", jobId, node.Name);
     }
 
     // ---- heartbeat ---------------------------------------------------------------------------
@@ -420,17 +544,22 @@ public sealed class RenderNodeQueue(
                 $"One render keeps at most {Options.MaxFilesPerRender} files.");
         }
 
-        if (await StoredBytesAsync(ct) + (contentLength ?? 0) > Options.StorageCapBytes)
+        // The room left is the cap less what is stored, the file this one replaces given back: a
+        // body is held to it as it streams, so one sent without a length (or with a wrong one) is
+        // held to the cap too, not only to the largest file. It is checked again, with every other
+        // render's storage held, before the file is kept.
+        var replacing = held.SingleOrDefault(f => f.Name == name)?.Size ?? 0;
+        var room = Options.StorageCapBytes - await StoredBytesAsync(ct) + replacing;
+        if ((contentLength ?? 0) > room || room <= 0)
         {
-            return RenderNodeAnswer.Problem(
-                RenderNodeStatus.TooLarge, StorageFullCode,
-                "The space this server keeps for renders is full; the file is not taken.");
+            return StorageFull();
         }
 
         string path;
         string actual;
         long length;
-        await using (var counted = new HashingReadStream(body, Options.MaxResultBytes))
+        var ceiling = Math.Min(Options.MaxResultBytes, room);
+        await using (var counted = new HashingReadStream(body, ceiling))
         {
             try
             {
@@ -438,7 +567,7 @@ public sealed class RenderNodeQueue(
             }
             catch (ResultTooLargeException)
             {
-                return TooLarge(Options.MaxResultBytes + 1);
+                return ceiling < Options.MaxResultBytes ? StorageFull() : TooLarge(Options.MaxResultBytes + 1);
             }
 
             actual = counted.Sha256Hex();
@@ -470,6 +599,16 @@ public sealed class RenderNodeQueue(
             }
 
             var row = await db.FlybyRenderFiles.SingleOrDefaultAsync(f => f.RenderId == render.Id && f.Name == name, ct);
+
+            // Two uploads streamed side by side each saw the room before the other was kept.
+            await RenderNodeSql.TakeStorageLockAsync(db, ct);
+            if (await StoredBytesAsync(ct) - (row?.Size ?? 0) + length > Options.StorageCapBytes)
+            {
+                await transaction.RollbackAsync(ct);
+                await fileStore.DeleteAsync(path, CancellationToken.None);
+                return StorageFull();
+            }
+
             if (row is null)
             {
                 db.FlybyRenderFiles.Add(new FlybyRenderFile
@@ -506,6 +645,10 @@ public sealed class RenderNodeQueue(
 
         return RenderNodeAnswer.Ok();
     }
+
+    private static RenderNodeAnswer StorageFull() => RenderNodeAnswer.Problem(
+        RenderNodeStatus.TooLarge, StorageFullCode,
+        "The space this server keeps for renders is full; the file is not taken.");
 
     private RenderNodeAnswer TooLarge(long size) => RenderNodeAnswer.Problem(
         RenderNodeStatus.TooLarge, TooLargeCode,

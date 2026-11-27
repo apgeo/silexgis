@@ -57,6 +57,19 @@ public class RenderNode : IAuditable
     /// <summary>Free bytes on its scratch disk, as its last claim said.</summary>
     public long? FreeDiskBytes { get; set; }
 
+    /// <summary>
+    /// Why its last claim left queued renders to other nodes: <c>container</c> (a film in a
+    /// container it does not write) or <c>disk</c> (more scratch space than it said it has); null
+    /// when its last claim left none. The renders it cannot take stay queued for another node.
+    /// </summary>
+    public string? SkipReason { get; set; }
+
+    /// <summary>How many queued renders its last claim left for <see cref="SkipReason"/>.</summary>
+    public int? SkippedRenders { get; set; }
+
+    /// <summary>For <c>disk</c>: the most scratch space one of those renders is estimated to need, in bytes.</summary>
+    public long? SkipNeedsBytes { get; set; }
+
     public string AuditId => Id.ToString();
 }
 
@@ -95,6 +108,13 @@ public class FlybyRender
 
     /// <summary>The bundle's SHA-256, 64 lower-case hex digits.</summary>
     public required string BundleSha256 { get; set; }
+
+    /// <summary>
+    /// The scratch space the render is estimated to need on its node, in bytes: the bundle
+    /// unpacked, every frame as a picture (a film is rendered in two stages, frames first) and the
+    /// film, with a margin. A node that says it has less free is not given the render.
+    /// </summary>
+    public long ScratchBytes { get; set; }
 
     /// <summary>The node that claimed the job last; kept after the attempt ended, so a repeated
     /// complete or fail from it is recognised.</summary>

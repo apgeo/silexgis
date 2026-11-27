@@ -20,6 +20,7 @@ public sealed class RenderNodeConfiguration : IEntityTypeConfiguration<RenderNod
         builder.Property(x => x.Worker).HasMaxLength(100);
         builder.Property(x => x.Device).HasMaxLength(200);
         builder.Property(x => x.BlenderVersions).HasMaxLength(500);
+        builder.Property(x => x.SkipReason).HasMaxLength(20);
 
         // Who issued it is kept while the account exists; the node does not go with the account.
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.CreatedBy)

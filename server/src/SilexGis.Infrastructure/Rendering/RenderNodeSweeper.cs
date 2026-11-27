@@ -10,8 +10,9 @@ namespace SilexGis.Infrastructure.Rendering;
 /// <summary>
 /// Looks after the render nodes' lane, which no in-process worker runs: a render whose node
 /// stopped answering goes back to the queue when its lease runs out (or fails, after its last
-/// try), one its requester stopped while nobody was there to hear it ends, and a film whose keeping
-/// time is over is deleted.
+/// try), one its requester stopped while nobody was there to hear it ends, one that ran past the
+/// time a render may take or waited too long for a node ends, and a film whose keeping time is over
+/// is deleted.
 /// </summary>
 /// <remarks>
 /// The same statement the in-process workers take back their own lanes with, over the nodes'
@@ -61,13 +62,14 @@ public sealed class RenderNodeSweeper(
         using var scope = scopeFactory.CreateScope();
         var renders = scope.ServiceProvider.GetRequiredService<FlybyRenders>();
         var cancelled = await renders.EndCancelledAsync(ct);
+        var overdue = await renders.EndOverdueAsync(ct);
         var failed = await renders.ReturnStaleAsync(ct);
         var purged = await renders.PurgeExpiredAsync(ct);
-        if (cancelled + failed + purged > 0)
+        if (cancelled + overdue + failed + purged > 0)
         {
             logger.LogInformation(
-                "Render nodes' sweep: {Cancelled} stopped, {Failed} failed after their last try, {Purged} deleted",
-                cancelled, failed, purged);
+                "Render nodes' sweep: {Cancelled} stopped, {Overdue} past their time, {Failed} failed after their last try, {Purged} deleted",
+                cancelled, overdue, failed, purged);
         }
     }
 }

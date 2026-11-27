@@ -118,25 +118,29 @@ public sealed class FlybyRenders(
 
     // ---- renders -----------------------------------------------------------------------------
 
-    /// <summary>Stores a bundle and queues its render for a node.</summary>
-    public async Task<(FlybyRenderView? Render, FlybyRenderRefusal Refusal)> EnqueueAsync(
-        Guid requester, string name, byte[] bundle, string plan, string container, CancellationToken ct)
-    {
-        var active = await (
-                from r in db.FlybyRenders
-                join j in db.ProcessingJobs on r.ProcessingJobId equals j.Id
-                where r.RequestedBy == requester
-                      && (j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running)
-                select r.Id)
-            .CountAsync(ct);
-        if (active >= Math.Max(1, Options.MaxActivePerAccount))
-        {
-            return (null, FlybyRenderRefusal.AlreadyActive);
-        }
+    /// <summary>
+    /// Why a render of <paramref name="bytes"/> more would be refused now, or
+    /// <see cref="FlybyRenderRefusal.None"/>: asked before a bundle is made, so a refused render
+    /// costs nobody the time of making one. <see cref="EnqueueAsync"/> asks again, atomically.
+    /// </summary>
+    public async Task<FlybyRenderRefusal> RefusalAsync(Guid requester, long bytes, CancellationToken ct) =>
+        await ActiveOfAsync(requester, ct) >= Math.Max(1, Options.MaxActivePerAccount)
+            ? FlybyRenderRefusal.AlreadyActive
+            : await queue.StoredBytesAsync(ct) + bytes > Options.StorageCapBytes
+                ? FlybyRenderRefusal.StorageFull
+                : FlybyRenderRefusal.None;
 
-        if (await queue.StoredBytesAsync(ct) + bundle.LongLength > Options.StorageCapBytes)
+    /// <summary>Stores a bundle and queues its render for a node.</summary>
+    /// <param name="scratchBytes">
+    /// The scratch space the render is estimated to need on its node (<see cref="RenderScratch"/>);
+    /// a node that says it has less is not given it.
+    /// </param>
+    public async Task<(FlybyRenderView? Render, FlybyRenderRefusal Refusal)> EnqueueAsync(
+        Guid requester, string name, byte[] bundle, string plan, string container, CancellationToken ct, long scratchBytes = 0)
+    {
+        if (await RefusalAsync(requester, bundle.LongLength, ct) is not FlybyRenderRefusal.None and var early)
         {
-            return (null, FlybyRenderRefusal.StorageFull);
+            return (null, early);
         }
 
         string path;
@@ -154,6 +158,7 @@ public sealed class FlybyRenders(
             BundlePath = path,
             BundleSize = bundle.LongLength,
             BundleSha256 = Convert.ToHexStringLower(SHA256.HashData(bundle)),
+            ScratchBytes = scratchBytes,
             CreatedAt = clock.GetUtcNow(),
         };
         var job = new ProcessingJob
@@ -173,6 +178,17 @@ public sealed class FlybyRenders(
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            // Asked again with every other render's storage and turn held: two starts a moment
+            // apart (a double click, two tabs) each passed the first asking.
+            await RenderNodeSql.TakeStorageLockAsync(db, ct);
+            if (await RefusalAsync(requester, bundle.LongLength, ct) is not FlybyRenderRefusal.None and var refusal)
+            {
+                await transaction.RollbackAsync(ct);
+                await fileStore.DeleteAsync(path, CancellationToken.None);
+                return (null, refusal);
+            }
+
             db.ProcessingJobs.Add(job);
             await db.SaveChangesAsync(ct);
             render.ProcessingJobId = job.Id;
@@ -188,6 +204,14 @@ public sealed class FlybyRenders(
 
         return (new FlybyRenderView(render, job), FlybyRenderRefusal.None);
     }
+
+    private Task<int> ActiveOfAsync(Guid requester, CancellationToken ct) => (
+            from r in db.FlybyRenders
+            join j in db.ProcessingJobs on r.ProcessingJobId equals j.Id
+            where r.RequestedBy == requester
+                  && (j.Status == ProcessingJobStatus.Queued || j.Status == ProcessingJobStatus.Running)
+            select r.Id)
+        .CountAsync(ct);
 
     /// <summary>The account's renders still kept, newest first.</summary>
     public async Task<IReadOnlyList<FlybyRenderView>> MineAsync(Guid requester, CancellationToken ct)
@@ -297,6 +321,68 @@ public sealed class FlybyRenders(
 
         await DeleteEndedAsync(failed, ct);
         return failed.Count;
+    }
+
+    /// <summary>
+    /// Ends the renders no node will finish: one whose attempt has run an hour past
+    /// <see cref="RenderNodeOptions.MaxHours"/>, and one that has waited for a node longer than
+    /// <see cref="RenderNodeOptions.QueuedDays"/>; tells their requesters, and deletes what they
+    /// stored. Answers how many it ended.
+    /// </summary>
+    public async Task<int> EndOverdueAsync(CancellationToken ct)
+    {
+        var hours = Options.MaxHours > 0 ? Options.MaxHours : 24;
+        var days = Math.Max(1, Options.QueuedDays);
+        IReadOnlyList<long> ended;
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            ended = await RenderNodeSql.EndOverdueAsync(
+                db,
+                TimeSpan.FromHours(hours + 1),
+                RenderNodeQueue.TimeLimitPrefix
+                    + $"the render ran past the {hours.ToString(System.Globalization.CultureInfo.InvariantCulture)} hours this server allows one render",
+                TimeSpan.FromDays(days),
+                RenderNodeQueue.NotTakenPrefix
+                    + $"no render node took the render within {days.ToString(System.Globalization.CultureInfo.InvariantCulture)} days",
+                ct);
+            await FinishEndedAsync(ended, notify: true, ct);
+            await transaction.CommitAsync(ct);
+        }
+
+        await DeleteEndedAsync(ended, ct);
+        return ended.Count;
+    }
+
+    /// <summary>
+    /// The stored files of every render an account asked for — bundles and films — for the
+    /// deletion of the account, whose rows go with it: read before, deleted after.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> StoredPathsOfAsync(Guid requester, CancellationToken ct)
+    {
+        var bundles = await db.FlybyRenders.AsNoTracking()
+            .Where(r => r.RequestedBy == requester && r.BundlePath != null)
+            .Select(r => r.BundlePath!)
+            .ToListAsync(ct);
+        var files = await db.FlybyRenderFiles.AsNoTracking()
+            .Where(f => db.FlybyRenders.Any(r => r.Id == f.RenderId && r.RequestedBy == requester))
+            .Select(f => f.StoragePath)
+            .ToListAsync(ct);
+        return [.. bundles, .. files];
+    }
+
+    /// <summary>Deletes stored files whose rows are gone; one that cannot be deleted is left, not thrown.</summary>
+    public async Task DeleteStoredPathsAsync(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            try
+            {
+                await fileStore.DeleteAsync(path, CancellationToken.None);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     /// <summary>Deletes the renders whose keeping time is over, with their films. Answers how many.</summary>

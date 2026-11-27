@@ -82,17 +82,11 @@ public static class RenderNodeEndpoints
 
     /// <summary>The bundle, streamed as stored; never a redirect.</summary>
     private static async Task<IResult> BundleAsync(
-        string jobId, HttpContext http, RenderNodeQueue queue, IFileStore fileStore, CancellationToken ct) =>
+        string jobId, HttpContext http, RenderNodeQueue queue, CancellationToken ct) =>
         await WithNodeAsync(http, queue, ct, async node =>
         {
             var (answer, bundle) = await queue.BundleAsync(node, jobId, ct);
-            if (bundle is null)
-            {
-                return Answer(answer);
-            }
-
-            var stream = await fileStore.OpenReadAsync(bundle.StoragePath, ct);
-            return TypedResults.File(stream, "application/zip", bundle.FileName);
+            return bundle is null ? Answer(answer) : TypedResults.File(bundle.Content, "application/zip", bundle.FileName);
         });
 
     /// <summary>

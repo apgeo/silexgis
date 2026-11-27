@@ -23,8 +23,20 @@ public sealed class RenderNodeOptions
     /// </summary>
     public int MaxAttempts { get; set; } = 5;
 
-    /// <summary>The longest one render may run on the node, in hours; the node stops it after that.</summary>
+    /// <summary>
+    /// The longest one attempt of a render may run, in hours. The node is told and stops it then;
+    /// the sweep also ends an attempt that has run an hour past it, so a node that keeps sending
+    /// heartbeats while it renders nothing cannot hold the job, the account's turn and the stored
+    /// bundle for ever.
+    /// </summary>
     public double MaxHours { get; set; } = 24;
+
+    /// <summary>
+    /// How many days a render may wait in the queue for a node before it is ended: while no node
+    /// calls, a queued bundle would otherwise stay stored, and count against
+    /// <see cref="StorageCapBytes"/>, for ever.
+    /// </summary>
+    public int QueuedDays { get; set; } = 7;
 
     /// <summary>
     /// The largest file a node may upload, in bytes. Below the bundled proxy's request limit

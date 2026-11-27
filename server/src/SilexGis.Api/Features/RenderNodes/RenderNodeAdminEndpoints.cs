@@ -31,6 +31,12 @@ public sealed class RenderNodeIssueRequestValidator : AbstractValidator<RenderNo
 /// <param name="Device">The device its last render used.</param>
 /// <param name="BlenderVersions">The Blender versions it has, newest first.</param>
 /// <param name="FreeDiskBytes">Free bytes on its scratch disk.</param>
+/// <param name="SkipReason">
+/// Why its last claim left queued renders to other nodes: <c>container</c> (a film in a container
+/// it does not write) or <c>disk</c> (more scratch space than it has); null when it left none.
+/// </param>
+/// <param name="SkippedRenders">How many queued renders it left for that.</param>
+/// <param name="SkipNeedsBytes">For <c>disk</c>: the most scratch space one of them needs, in bytes.</param>
 public sealed record RenderNodeDto(
     Guid Id,
     string Name,
@@ -42,7 +48,10 @@ public sealed record RenderNodeDto(
     string? Worker,
     string? Device,
     string? BlenderVersions,
-    long? FreeDiskBytes);
+    long? FreeDiskBytes,
+    string? SkipReason,
+    int? SkippedRenders,
+    long? SkipNeedsBytes);
 
 /// <summary>A node just issued, and its token: the only time the token is shown anywhere.</summary>
 public sealed record RenderNodeIssuedDto(RenderNodeDto Node, string Token);
@@ -159,5 +168,8 @@ public static class RenderNodeAdminEndpoints
         node.Worker,
         node.Device,
         node.BlenderVersions,
-        node.FreeDiskBytes);
+        node.FreeDiskBytes,
+        node.SkipReason,
+        node.SkippedRenders,
+        node.SkipNeedsBytes);
 }
