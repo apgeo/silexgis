@@ -123,8 +123,35 @@ public sealed class LocalFileStore(IOptions<FilesOptions> options) : IFileStore
 
         var absolute = GetAbsolutePath(relative);
         Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
-        await using var target = File.Create(absolute);
-        await content.CopyToAsync(target, ct);
+
+        // Written under a temporary name beside the final one and renamed once whole, so a copy
+        // that fails part way — a refused or dropped upload, a cancelled request, a full disk —
+        // leaves no file behind. A partial file under the final name would be tracked by no row:
+        // nothing that counts or purges the store by its rows would ever find it again.
+        var partial = absolute + ".part";
+        try
+        {
+            await using (var target = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous))
+            {
+                await content.CopyToAsync(target, ct);
+            }
+
+            File.Move(partial, absolute);
+        }
+        catch
+        {
+            // Not cancellable: it runs because the copy failed or was cancelled.
+            try
+            {
+                File.Delete(partial);
+            }
+            catch (IOException)
+            {
+            }
+
+            throw;
+        }
+
         return relative;
     }
 
