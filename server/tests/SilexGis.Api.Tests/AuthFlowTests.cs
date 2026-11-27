@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Persistence;
 
@@ -249,6 +250,198 @@ public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
     }
 
     public void Dispose() => factory.Dispose();
+
+    [Fact]
+    public async Task A_self_registered_account_lists_only_the_caves_open_to_every_signed_in_account()
+    {
+        // Invented caves, one per visibility, in a region of this test's own so the class's
+        // shared database answers for these rows only. The owner is a full administrator, who
+        // may bind a cave to any caving group.
+        var tag = Guid.NewGuid().ToString("N")[..10];
+        var region = $"SelfReg {tag}";
+        var ownerEmail = $"selfreg-owner-{tag}@test.local";
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, ownerEmail);
+        var owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
+
+        long caveTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            caveTypeId = await db.CaveTypes.OrderBy(t => t.Id).Select(t => t.Id).FirstAsync();
+        }
+
+        var clubResponse = await owner.PostAsJsonAsync(
+            "/api/v1/caving-groups", new { name = $"SelfReg club {tag}", description = (string?)null, website = (string?)null });
+        var clubPayload = await clubResponse.Content.ReadAsStringAsync();
+        clubResponse.StatusCode.ShouldBe(HttpStatusCode.Created, clubPayload);
+        var clubId = JsonDocument.Parse(clubPayload).RootElement.GetProperty("id").GetGuid();
+
+        async Task<Guid> CaveAsync(string visibility, Guid? cavingGroupId)
+        {
+            var response = await owner.PostAsJsonAsync("/api/v1/caves", new
+            {
+                name = $"SelfReg {visibility} {tag}",
+                caveTypeId,
+                region,
+                visibility,
+                cavingGroupId,
+                locationProtected = false,
+                explorationStatus = "Unknown",
+                isShowCave = false,
+            });
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+            return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+        }
+
+        var publicCave = await CaveAsync("public", null);
+        var signedInCave = await CaveAsync("authenticated", null);
+        var clubCave = await CaveAsync("cavingGroup", clubId);
+        // Caving-group visibility with no group named and no parent. The seeded demonstration
+        // cave of that visibility sits under a public karst area, which is a different case —
+        // see the test after this one.
+        var unboundClubCave = await CaveAsync("cavingGroup", null);
+        var privateCave = await CaveAsync("private", null);
+
+        // The self-service way, with this host's default settings: no default permission
+        // groups and no caving group joined.
+        var email = $"selfreg-{tag}@test.local";
+        const string password = "a-long-password-1";
+        (await CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register", new { email, password, displayName = "Self Registered" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var registered = await AuthHelper.BearerClientAsync(factory, email, password);
+
+        Guid userId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+
+            // The unreadable state, stated rather than assumed: the account is in no caving group,
+            // holds no administration and no grant over caves at all.
+            var ctx = await RosterHelper.AccessContextOfAsync(db, userId);
+            ctx.IsFullAdmin.ShouldBeFalse();
+            ctx.CavingGroupIds.ShouldBeEmpty();
+            ctx.Entries.ShouldNotContain(e => e.Domain == AccessDomain.Features);
+        }
+
+        async Task<List<Guid>> ListedAsync()
+        {
+            var listed = await registered.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/caves?region={Uri.EscapeDataString(region)}&pageSize=100");
+            return listed.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToList();
+        }
+
+        // Public and signed-in caves only — never a caving group's cave, bound or unbound, and
+        // never a private one.
+        (await ListedAsync()).ShouldBe([publicCave, signedInCave], ignoreOrder: true);
+
+        // The positive case in the same test: once the account is on the club's roster, the
+        // club's cave is listed, and only that one is added.
+        (await owner.PostAsJsonAsync($"/api/v1/caving-groups/{clubId}/members", new
+        {
+            caverId = await RosterHelper.CaverIdForAsync(factory, userId),
+            role = "member",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ListedAsync()).ShouldBe([publicCave, signedInCave, clubCave], ignoreOrder: true);
+        (await ListedAsync()).ShouldNotContain(unboundClubCave);
+        (await ListedAsync()).ShouldNotContain(privateCave);
+    }
+
+    [Fact]
+    public async Task A_self_registered_account_does_not_list_a_caving_group_cave_through_a_public_parent()
+    {
+        // The shape the demonstration data ships: a karst area anyone may read, and inside it a
+        // cave whose visibility is "caving group" with no group named. Nobody who is not in a
+        // caving group should list that cave.
+        var tag = Guid.NewGuid().ToString("N")[..10];
+        var region = $"SelfRegNested {tag}";
+        var ownerEmail = $"selfreg-nested-owner-{tag}@test.local";
+        await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, ownerEmail);
+        var owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
+
+        long caveTypeId;
+        long karstAreaTypeId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            caveTypeId = await db.CaveTypes.OrderBy(t => t.Id).Select(t => t.Id).FirstAsync();
+            karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
+        }
+
+        var areaResponse = await owner.PostAsJsonAsync("/api/v1/features", new
+        {
+            kind = "generic",
+            name = $"SelfRegNested area {tag}",
+            featureTypeId = karstAreaTypeId,
+            geometry = new
+            {
+                type = "Polygon",
+                coordinates = new[]
+                {
+                    new[]
+                    {
+                        new[] { 25.42, 45.51 }, new[] { 25.46, 45.51 },
+                        new[] { 25.46, 45.54 }, new[] { 25.42, 45.54 },
+                        new[] { 25.42, 45.51 },
+                    },
+                },
+            },
+            visibility = "public",
+        });
+        var areaPayload = await areaResponse.Content.ReadAsStringAsync();
+        areaResponse.StatusCode.ShouldBe(HttpStatusCode.Created, areaPayload);
+        var areaId = JsonDocument.Parse(areaPayload).RootElement.GetProperty("id").GetGuid();
+
+        async Task<Guid> CaveAsync(string visibility)
+        {
+            var response = await owner.PostAsJsonAsync("/api/v1/caves", new
+            {
+                name = $"SelfRegNested {visibility} {tag}",
+                caveTypeId,
+                region,
+                visibility,
+                cavingGroupId = (Guid?)null,
+                parentId = areaId,
+                locationProtected = false,
+                explorationStatus = "Unknown",
+                isShowCave = false,
+            });
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+            return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+        }
+
+        var publicChild = await CaveAsync("public");
+        var clubChild = await CaveAsync("cavingGroup");
+
+        var email = $"selfreg-nested-{tag}@test.local";
+        const string password = "a-long-password-1";
+        (await CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/register", new { email, password, displayName = "Self Registered" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var registered = await AuthHelper.BearerClientAsync(factory, email, password);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var userId = await db.Users.Where(u => u.Email == email).Select(u => u.Id).SingleAsync();
+            var ctx = await RosterHelper.AccessContextOfAsync(db, userId);
+            ctx.IsFullAdmin.ShouldBeFalse();
+            ctx.CavingGroupIds.ShouldBeEmpty();
+            ctx.Entries.ShouldNotContain(e => e.Domain == AccessDomain.Features);
+        }
+
+        var listed = (await registered.GetFromJsonAsync<JsonElement>(
+                $"/api/v1/caves?region={Uri.EscapeDataString(region)}&pageSize=100"))
+            .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToList();
+
+        // The positive case: the public cave under the same area is listed, so the account reads
+        // this region at all. The caving-group cave beside it must not be.
+        listed.ShouldContain(publicChild);
+        listed.ShouldNotContain(clubChild);
+    }
 
     private static string BuildAuthorizeUrl(string challenge) =>
         "/connect/authorize" +
