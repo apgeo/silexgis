@@ -62,6 +62,12 @@ public class TestDataRun
 
     public Guid? RequestedBy { get; set; }
 
+    /// <summary>
+    /// The password the run's generated accounts share, hashed as an account's own is; never the
+    /// password itself, and never sent back by the API. Cleared when the run is removed.
+    /// </summary>
+    public string? AccountPasswordHash { get; set; }
+
     public long? ProcessingJobId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

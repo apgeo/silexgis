@@ -9,6 +9,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Auth;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Identity;

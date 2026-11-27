@@ -27,7 +27,16 @@ public static class TestDataPlanner
             })
             .ToList();
 
-        return new TestDataWorldPlan(profile, plannedRegions, Caves(profile, regions));
+        var caves = Caves(profile, regions);
+        var people = TestDataPeoplePlanner.Plan(profile, regions, caves);
+        if (people.Clubs.Count > 0)
+        {
+            caves = [.. caves.Select(c => c.Visibility == Visibility.CavingGroup
+                ? c with { ClubIndex = TestDataPeoplePlanner.ClubFor(c, people.Clubs, TestDataRng.For(seed, "cave:club", c.Index)) }
+                : c)];
+        }
+
+        return new TestDataWorldPlan(profile, plannedRegions, caves, people);
     }
 
     /// <summary>The regions a profile places things in, in a fixed order.</summary>

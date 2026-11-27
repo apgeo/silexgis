@@ -2,11 +2,13 @@
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.TestData;
@@ -65,10 +67,15 @@ public sealed record TestDataTableCoverageDto(string Table, long Rows, IReadOnly
 /// Generate even though the database holds caves, trips or documents no run created. Without it
 /// such a request is refused with testdata.existing_data_confirm_required and the counts.
 /// </param>
+/// <param name="AccountPassword">
+/// The password every generated account shares, checked by the installation's password rules and
+/// kept only as a hash. Without it the generated accounts exist but cannot be signed in to.
+/// </param>
 public sealed record TestDataStartRequest(
     TestDataProfile? Profile,
     string? ProfileName,
-    bool ConfirmAlongsideExistingData);
+    bool ConfirmAlongsideExistingData,
+    string? AccountPassword = null);
 
 public sealed class TestDataStartRequestValidator : AbstractValidator<TestDataStartRequest>
 {
@@ -77,6 +84,7 @@ public sealed class TestDataStartRequestValidator : AbstractValidator<TestDataSt
         RuleFor(x => x.ProfileName)
             .Must(name => name is null || TestDataProfiles.All.ContainsKey(name))
             .WithMessage($"profileName must be one of: {string.Join(", ", TestDataProfiles.All.Keys)}.");
+        RuleFor(x => x.AccountPassword).MaximumLength(200);
     }
 }
 
@@ -152,6 +160,7 @@ public static class TestDataEndpoints
         IAccessContextAccessor accessAccessor,
         TestDataAvailability availability,
         TestDataService service,
+        UserManager<SilexGisUser> userManager,
         CancellationToken ct)
     {
         var (ctx, refusal) = await GateAsync(accessAccessor, availability, ct);
@@ -173,7 +182,30 @@ public static class TestDataEndpoints
                 "testdata.profile_invalid", string.Join(" ", problems), "problems", problems);
         }
 
-        var result = await service.StartAsync(profile, ctx.UserId, request.ConfirmAlongsideExistingData, queueJob: true, ct);
+        string? passwordHash = null;
+        if (!string.IsNullOrEmpty(request.AccountPassword))
+        {
+            // Held to the rules every account's password is held to, so a generated account is
+            // never easier to get into than one somebody made.
+            var probe = new SilexGisUser { UserName = "testdata@" + TestDataPeoplePlanner.EmailDomain };
+            var refusals = new List<string>();
+            foreach (var validator in userManager.PasswordValidators)
+            {
+                var checkedPassword = await validator.ValidateAsync(userManager, probe, request.AccountPassword);
+                refusals.AddRange(checkedPassword.Errors.Select(e => e.Description));
+            }
+
+            if (refusals.Count > 0)
+            {
+                return ApiProblems.BadRequest(
+                    "testdata.password_invalid", string.Join(" ", refusals), "problems", refusals);
+            }
+
+            passwordHash = userManager.PasswordHasher.HashPassword(probe, request.AccountPassword);
+        }
+
+        var result = await service.StartAsync(
+            profile, ctx.UserId, request.ConfirmAlongsideExistingData, queueJob: true, ct, passwordHash);
         return result.Outcome switch
         {
             TestDataStartOutcome.RunInProgress => ApiProblems.Conflict(

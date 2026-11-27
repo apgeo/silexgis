@@ -164,6 +164,7 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             await db.TestDataRows.Where(r => r.RunId == runId).ExecuteDeleteAsync(ct);
             run.Status = TestDataRunStatus.Removed;
             run.RemovedAt = clock.GetUtcNow();
+            run.AccountPasswordHash = null;
             run.Phase = null;
             if (run.Error?.StartsWith(RemovalFailedPrefix, StringComparison.Ordinal) == true)
             {

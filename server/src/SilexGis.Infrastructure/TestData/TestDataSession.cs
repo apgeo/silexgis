@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
 using SilexGis.Infrastructure.Persistence;
@@ -36,6 +37,18 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
     /// <summary>The generated caves, by their plan index.</summary>
     public Dictionary<int, Guid> Caves { get; } = [];
 
+    /// <summary>The generated clubs and organisations, by their plan index.</summary>
+    public Dictionary<int, Guid> Clubs { get; } = [];
+
+    /// <summary>The generated roster entries, by their plan index.</summary>
+    public Dictionary<int, Guid> Cavers { get; } = [];
+
+    /// <summary>The generated accounts, by the plan index of the caver who holds them.</summary>
+    public Dictionary<int, Guid> Users { get; } = [];
+
+    /// <summary>The password every generated account shares, hashed; null when the accounts cannot be signed in to.</summary>
+    public string? AccountPasswordHash { get; init; }
+
     public long? MarkingTagId { get; set; }
 
     public TestDataVocabularyIds Vocabulary { get; set; } = null!;
@@ -50,6 +63,53 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
             RowId = Convert.ToString(rowId, System.Globalization.CultureInfo.InvariantCulture)!,
             Sequence = ++sequence,
         });
+    }
+
+    /// <summary>
+    /// The tables whose new rows <see cref="SaveAndRegisterAsync"/> lists by itself. Features are
+    /// listed as they are written (with their marking) and accounts as the user manager saves them,
+    /// so neither is here; rows that go with their parent — an account's roles, a feature's
+    /// tagging — are not listed at all.
+    /// </summary>
+    public static IReadOnlySet<string> SelfListedTables { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "caving_groups", "cavers", "caving_group_memberships", "permission_groups", "permission_group_members",
+        "access_entries", "user_addresses", "user_notification_preferences", "calendar_feed_tokens", "api_access_keys",
+        "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "hierarchies",
+        "hierarchy_memberships", "link_kinds", "cave_types", "entrance_types", "rock_types", "feature_types",
+    };
+
+    /// <summary>
+    /// Saves what is staged on <paramref name="db"/> and lists every new row of a
+    /// <see cref="SelfListedTables"/> table against the run, counting them by table. Rows staged
+    /// by a shared helper — the permission groups a new club is given, say — are listed exactly as
+    /// rows the generator staged itself, because the helper's rows are found in the change
+    /// tracker rather than by knowing what the helper does.
+    /// </summary>
+    public async Task SaveAndRegisterAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        var added = db.ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => (Table: e.Metadata.GetTableName(), Entry: e))
+            .Where(x => x.Table is not null && SelfListedTables.Contains(x.Table))
+            .ToList();
+        await db.SaveChangesAsync(ct);
+        foreach (var (table, entry) in added)
+        {
+            Register(db, table!, entry.Property("Id").CurrentValue!);
+            Count(CountKind(table!));
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The tally's name for rows of a table: the table's name in camel case (<c>caving_groups</c> → <c>cavingGroups</c>).</summary>
+    public static string CountKind(string table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var parts = table.Split('_');
+        return parts[0] + string.Concat(parts.Skip(1).Select(p => p.Length == 0 ? p : char.ToUpperInvariant(p[0]) + p[1..]));
     }
 
     public void Count(string kind, int by = 1) =>
