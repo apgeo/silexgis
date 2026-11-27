@@ -1042,9 +1042,11 @@ public static partial class FlybyBlenderBundle
 
     /// <summary>
     /// A name as a plain file name every file system takes: lower-case letters and digits in words
-    /// joined by hyphens; "flyby" when nothing of it is left.
+    /// joined by hyphens; "flyby" when nothing of it is left. A name Windows gives to a device
+    /// (<c>con</c>, <c>nul</c>, <c>com1</c>…), which would open the device rather than a file on a
+    /// Windows machine and which the survey library refuses as a base name, has <c>-flyby</c> added.
     /// </summary>
-    private static string Slug(string? name)
+    public static string Slug(string? name)
     {
         var slug = new StringBuilder();
         foreach (var c in (name ?? string.Empty).Normalize(NormalizationForm.FormD))
@@ -1070,6 +1072,6 @@ public static partial class FlybyBlenderBundle
         }
 
         var text = slug.ToString().Trim('-');
-        return text.Length == 0 ? "flyby" : text;
+        return text.Length == 0 ? "flyby" : PortableNames.IsPortable(text) ? text : text + "-flyby";
     }
 }

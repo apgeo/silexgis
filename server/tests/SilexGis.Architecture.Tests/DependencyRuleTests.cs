@@ -597,6 +597,12 @@ public class DependencyRuleTests
         "Therion.Blender.RenderNodeLimits",
         "Therion.Blender.RenderNodeProtocol",
 
+        // Whether a name is the same file on every system — not a device name of Windows, no
+        // character Windows refuses, no trailing dot or space — asked of a bundle's base name made
+        // here; and text from elsewhere made fit to print. Read to its last line for this entry:
+        // comparisons over the characters of a string, and a string builder. It opens nothing.
+        "Therion.Blender.PortableNames",
+
         // Reading a survey file, and the refusal when it is not one.
         "Therion.Cave3D.Parsing.CaveFileFormatException",
         "Therion.Cave3D.Parsing.CaveModelReader",

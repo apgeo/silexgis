@@ -52,6 +52,26 @@ public class FlybyBlenderBundleTests
         names.Where(n => !n.Contains("/thide_player/", StringComparison.Ordinal)).Count().ShouldBe(12);
     }
 
+    [Theory]
+    [InlineData("Con", "con-flyby")]
+    [InlineData("NUL", "nul-flyby")]
+    [InlineData("com1", "com1-flyby")]
+    [InlineData("LPT9", "lpt9-flyby")]
+    [InlineData("Aux.", "aux-flyby")]
+    [InlineData("Peștera Con", "pestera-con")]
+    [InlineData("Lpt9.txt", "lpt9-txt")]
+    public void A_name_that_is_a_device_of_Windows_is_a_base_name_with_flyby_added(string name, string slug)
+    {
+        FlybyBlenderBundle.Slug(name).ShouldBe(slug);
+        FlybyBlenderBundle.FolderName(name).ShouldBe(slug + "-blender");
+
+        // And the survey library's checks, which refuse a device name as a base name on every
+        // system, take the bundle's plans: it is written, not refused.
+        var (entries, plan) = Bundle(Scene() with { Name = name });
+        plan.GetProperty("output").GetProperty("baseName").GetString().ShouldBe(slug);
+        entries.Keys.ShouldAllBe(entry => entry.StartsWith(slug + "-blender/", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_plan_is_laid_out_about_a_point_it_does_not_name()
     {
@@ -963,7 +983,7 @@ public class FlybyBlenderBundleTests
     [InlineData("Peștera Mare — tur", "pestera-mare-tur-blender")]
     [InlineData("  ", "flyby-blender")]
     [InlineData("../../etc/passwd", "etc-passwd-blender")]
-    [InlineData("CON", "con-blender")]
+    [InlineData("CON", "con-flyby-blender")]
     public void The_folder_is_named_after_the_flyby_in_letters_every_file_system_takes(string name, string expected)
     {
         FlybyBlenderBundle.FolderName(name).ShouldBe(expected);
