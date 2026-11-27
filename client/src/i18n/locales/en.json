@@ -1162,6 +1162,7 @@
     "linkNote": "Note",
     "noLinks": "No links",
     "incoming": "Incoming link",
+    "linkDirection": "Direction",
     "outgoing": "Outgoing link",
     "inaccessible": "Not accessible"
   },

@@ -165,6 +165,7 @@ export default function LinksCard({ featureId, canEdit }: LinksCardProps) {
         columns={[
           {
             key: 'direction',
+            title: <HiddenTitle>{t('features.linkDirection')}</HiddenTitle>,
             width: 50,
             render: (_, l) =>
               l.fromId === featureId ? (

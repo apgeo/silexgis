@@ -1162,6 +1162,7 @@
     "linkNote": "Notă",
     "noLinks": "Nicio legătură",
     "incoming": "Legătură de intrare",
+    "linkDirection": "Sens",
     "outgoing": "Legătură de ieșire",
     "inaccessible": "Inaccesibil"
   },
