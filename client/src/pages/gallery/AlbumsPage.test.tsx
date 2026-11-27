@@ -112,7 +112,7 @@ describe('AlbumsPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /New album/ }));
     fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'New one' } });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(await screen.findByTestId('opened-album')).toHaveTextContent('a9');
     expect(await screen.findByText('Album created.')).toBeInTheDocument();

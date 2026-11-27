@@ -219,9 +219,9 @@ describe('TripStateControl', () => {
     fireEvent.click(callOffButton()!);
     expect(move).not.toHaveBeenCalled();
 
-    const question = (await screen.findByText(/Call this trip off\?/)).closest('.ant-popover') as HTMLElement;
+    const question = (await screen.findByText(/Cancel this trip\?/)).closest('.ant-popover') as HTMLElement;
     expect(within(question).queryByRole('button', { name: 'OK' })).toBeNull();
-    fireEvent.click(within(question).getByRole('button', { name: 'Call it off' }));
+    fireEvent.click(within(question).getByRole('button', { name: 'Cancel trip' }));
     await vi.waitFor(() => expect(move).toHaveBeenCalledWith({ id: 'trip-1', state: 'cancelled' }));
   });
 

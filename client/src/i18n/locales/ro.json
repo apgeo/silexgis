@@ -1783,8 +1783,7 @@
     "noMatch": "Nicio fotografie nu se potrivește cu aceste filtre.",
     "clearFilters": "Șterge filtrele",
     "count_one": "{{count}} fotografie",
-    "count_few": "{{count}} fotografii",
-    "count_other": "{{count}} de fotografii",
+    "count": "{{count}} fotografii",
     "albumCreated": "Albumul a fost creat."
   },
   "geodata": {

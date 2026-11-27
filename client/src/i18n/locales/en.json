@@ -1783,7 +1783,7 @@
     "noMatch": "No photographs match these filters.",
     "clearFilters": "Clear filters",
     "count_one": "{{count}} photograph",
-    "count_other": "{{count}} photographs",
+    "count": "{{count}} photographs",
     "albumCreated": "Album created."
   },
   "geodata": {
