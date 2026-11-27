@@ -11,6 +11,7 @@ import {
   type TripRecordingStanding,
 } from '../../api/hooks.ts';
 import { RowLink } from '../../components/RowOpeners.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** A cave page shows a page of recordings at a time. */
 const PAGE_SIZE = 10;
@@ -110,6 +111,7 @@ export default function CaveRecordingsSection({ caveId }: { caveId: string }) {
             ),
           },
           {
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'action',
             width: 190,
             render: (_, recording) =>

@@ -28,6 +28,7 @@ import {
 import { useIsFullAdmin } from '../../components/reslinks/permissions.ts';
 import { resLinkProblemMessage } from '../../components/reslinks/problems.ts';
 import { relationPhrase } from '../../components/reslinks/relations.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** The blank relation an "add" click starts from. */
 const emptyDraft: ResLinkRelationTypeWrite = {
@@ -211,7 +212,7 @@ export default function RelationTypesPage() {
           ...(canManage
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, row: ResLinkRelationType) =>
                     row.seeded ? (

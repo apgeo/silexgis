@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { formatMetres, type PointPair } from '../../../geodata/placement/placement.ts';
 import Button from '../../Button.tsx';
 import CoordinateInput from './CoordinateInput.tsx';
+import HiddenTitle from '../../a11y/HiddenTitle.tsx';
 
 interface Props {
   points: readonly PointPair[];
@@ -145,7 +146,7 @@ export default function ControlPointTable({
             ]
           : []),
         {
-          title: '',
+          title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
           key: 'remove',
           width: 48,
           render: (_, { index }) => (

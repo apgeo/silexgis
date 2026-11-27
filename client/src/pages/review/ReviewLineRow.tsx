@@ -25,6 +25,7 @@ import {
   type FeatureNames,
   type FieldDiff,
 } from '../../components/review/reviewModel.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const DECISION_COLOR: Record<string, string> = {
   pending: 'gold',
@@ -158,7 +159,7 @@ function FieldTable({
       dataSource={diffs}
       columns={[
         {
-          title: '',
+          title: <HiddenTitle>{t('a11y.acceptColumn')}</HiddenTitle>,
           width: 40,
           render: (_: unknown, d) => (
             <Checkbox

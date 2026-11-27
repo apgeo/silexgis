@@ -17,6 +17,7 @@ import {
   type ExpeditionRosterRoleWrite,
 } from '../../api/hooks.ts';
 import { expeditionRosterRoleLabel } from '../../components/expeditions/rosterRoles.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const emptyDraft: ExpeditionRosterRoleWrite = {
   code: '',
@@ -186,7 +187,7 @@ export default function ExpeditionRosterRolesPage() {
           ...(canWrite
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, role: ExpeditionRosterRole) => (
                     <Flex gap={8}>

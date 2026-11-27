@@ -240,7 +240,7 @@ describe('TerrainPage', () => {
     expect(screen.getByTestId('terrain-depth-meaning')).toHaveTextContent('Level 13');
     expect(screen.queryByTestId('terrain-depth-capped')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Depth'), { target: { value: '14' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Depth' }), { target: { value: '14' } });
 
     expect(screen.getByTestId('terrain-depth-meaning')).toHaveTextContent('Level 14');
     // Nothing but the thirty-metre coverage is on this build, so the deeper levels would be

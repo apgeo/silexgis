@@ -41,6 +41,7 @@ import { useTableMapLink } from '../../workspace/tableMapLink.ts';
 import { mapAddressForList } from '../../filters/tableMapHandoff.ts';
 import { isFilterRefusal } from '../../filters/refusal.ts';
 import { RowLink } from '../../components/RowOpeners.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
 const featureKinds: FeatureKind[] = ['generic', 'cave', 'caveEntrance', 'centerline'];
@@ -408,7 +409,7 @@ export default function FeatureListPage() {
             render: (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 130,
             render: (_, record) => (

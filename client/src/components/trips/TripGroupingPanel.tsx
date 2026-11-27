@@ -6,6 +6,7 @@ import type { TripGroup, TripListGrouping, TripType } from '../../api/hooks.ts';
 import GroupBySelect from '../GroupBySelect.tsx';
 import { formatTripDates } from './tripDates.ts';
 import { tripTypeLabelOf } from './tripTypes.ts';
+import HiddenTitle from '../a11y/HiddenTitle.tsx';
 
 /**
  * The trip listing broken into slices, one or two levels deep.
@@ -154,6 +155,7 @@ export default function TripGroupingPanel({
             thenBy === 'none'
               ? undefined
               : {
+                  columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
                   rowExpandable: (group) => group.groups.length > 0,
                   expandedRowRender: (group) => (
                     <Space wrap data-testid="trip-grouping-second-level">

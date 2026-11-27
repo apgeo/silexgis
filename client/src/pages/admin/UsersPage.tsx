@@ -44,6 +44,7 @@ import {
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import UserPermissionGroups from './UserPermissionGroups.tsx';
 import { userAdminProblem } from './userAdminProblems.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 interface InviteValues {
   email: string;
@@ -276,6 +277,7 @@ export default function UsersPage() {
         loading={users.isFetching && !users.data}
         dataSource={users.data?.items ?? []}
         expandable={{
+          columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
           expandedRowRender: (user: AdminUser) => (
             <UserPermissionGroups userId={user.id} linkable={canReadPermissionGroups} />
           ),

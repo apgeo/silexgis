@@ -10,6 +10,7 @@ import {
 } from '../../api/hooks.ts';
 import { momentInSheetZone, ownSheetZone, sheetZoneNames } from './trackingCsvZones.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
+import HiddenTitle from '../a11y/HiddenTitle.tsx';
 
 /**
  * The sentence for each reason a person's times cannot be taken. Written out key by key, so that
@@ -287,7 +288,7 @@ export default function TrackingRosterTimesDialog({
               key: 'onRoster',
               render: (_value, person) => onRosterNow(person),
             },
-            { title: '', key: 'remark', render: (_value, person) => remark(person) },
+            { title: <HiddenTitle>{t('a11y.noteColumn')}</HiddenTitle>, key: 'remark', render: (_value, person) => remark(person) },
           ]}
         />
       )}

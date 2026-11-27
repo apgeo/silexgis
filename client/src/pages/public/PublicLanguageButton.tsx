@@ -30,13 +30,16 @@ export default function PublicLanguageButton({ control, compact = false, size }:
   // Asked for in the target language whatever the page is in: each language's catalogue holds its
   // own invitation, so the two can never be swapped by a mistranslation in the other's file.
   const invitation = t('publicTrip.language.switchTo', { lng: other });
+  // The two letters shown in the compact form open its spoken name too, so somebody who names the
+  // button by what they see (a voice-control user saying "click EN") reaches it.
+  const name = compact ? t('publicTrip.language.switchToShort', { lng: other }) : invitation;
 
   return (
     <Button
       type={compact ? 'default' : 'text'}
       size={size}
       lang={other}
-      aria-label={invitation}
+      aria-label={name}
       title={compact ? invitation : undefined}
       className="public-trip-language"
       onClick={() => choose(other)}

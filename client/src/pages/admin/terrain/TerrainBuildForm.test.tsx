@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../i18n';
 import type { TerrainBuild } from '../../../api/hooks.ts';
 import type { TerrainBbox } from './terrainArea.ts';
+import { expectEveryFieldNamed } from '../../../testFieldNames.ts';
 
 const submitMutate = vi.fn();
 const uploadMutate = vi.fn();
@@ -209,5 +210,13 @@ describe('extending a finished build', () => {
     const sent = submitMutate.mock.calls[0][0] as Record<string, unknown>;
     expect('baseBuildId' in sent).toBe(false);
     expect(screen.getByTestId('terrain-depth')).toBeEnabled();
+  });
+});
+
+describe('the form for a screen reader', () => {
+  it('names every field, the depth slider among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
   });
 });

@@ -24,7 +24,7 @@ export default function Scene3DPage() {
       <div className="scene3d-page-scene">
         <Scene3DView syncUrlHash />
       </div>
-      <aside className="scene3d-page-dock">
+      <aside className="scene3d-page-dock" aria-label={t('map.detailsTitle')}>
         <Typography.Text strong className="scene3d-page-dock-title">
           {t('map.detailsTitle')}
         </Typography.Text>

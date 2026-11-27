@@ -236,39 +236,42 @@ export default function ChecklistsPage() {
         <List
           dataSource={data}
           renderItem={(list) => (
-            <Card size="small" style={{ marginBottom: 12 }}>
-              <Flex justify="space-between" align="flex-start" gap="middle" wrap>
-                <Space orientation="vertical" size={2}>
-                  <Typography.Text strong>{list.title}</Typography.Text>
-                  {list.description ? (
-                    <Typography.Text type="secondary">{list.description}</Typography.Text>
-                  ) : null}
-                  <Space size={4} wrap>
-                    <Tag>{t(`checklists.visibilityValues.${list.visibility}`)}</Tag>
-                    <Tag>{t('checklists.lineCount', { count: list.items.length })}</Tag>
+            // Each card is a row of the list, so it sits in a list item: a list may hold nothing else.
+            <li>
+              <Card size="small" style={{ marginBottom: 12 }}>
+                <Flex justify="space-between" align="flex-start" gap="middle" wrap>
+                  <Space orientation="vertical" size={2}>
+                    <Typography.Text strong>{list.title}</Typography.Text>
+                    {list.description ? (
+                      <Typography.Text type="secondary">{list.description}</Typography.Text>
+                    ) : null}
+                    <Space size={4} wrap>
+                      <Tag>{t(`checklists.visibilityValues.${list.visibility}`)}</Tag>
+                      <Tag>{t('checklists.lineCount', { count: list.items.length })}</Tag>
+                    </Space>
                   </Space>
-                </Space>
-                <Space>
-                  {(managesAnyList || list.ownerUserId === me?.id) && (
-                    <Button
-                      icon={<LockOutlined />}
-                      onClick={() => setSharing(list)}
-                      aria-label={t('permissions.button')}
-                      data-testid={`checklist-permissions-${list.id}`}
+                  <Space>
+                    {(managesAnyList || list.ownerUserId === me?.id) && (
+                      <Button
+                        icon={<LockOutlined />}
+                        onClick={() => setSharing(list)}
+                        aria-label={t('permissions.button')}
+                        data-testid={`checklist-permissions-${list.id}`}
+                      />
+                    )}
+                    <ChangeActions
+                      list={list}
+                      owned={list.ownerUserId === me?.id}
+                      writesAnyList={writesAnyList}
+                      deletesAnyList={deletesAnyList}
+                      reading={reading === list.id}
+                      onEdit={() => void openForEdit(list)}
+                      onDelete={() => void deleteShown(list)}
                     />
-                  )}
-                  <ChangeActions
-                    list={list}
-                    owned={list.ownerUserId === me?.id}
-                    writesAnyList={writesAnyList}
-                    deletesAnyList={deletesAnyList}
-                    reading={reading === list.id}
-                    onEdit={() => void openForEdit(list)}
-                    onDelete={() => void deleteShown(list)}
-                  />
-                </Space>
-              </Flex>
-            </Card>
+                  </Space>
+                </Flex>
+              </Card>
+            </li>
           )}
         />
       )}

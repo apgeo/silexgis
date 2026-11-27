@@ -35,6 +35,7 @@ import { KEEP_OPEN_ON_OUTSIDE_CLICK, useDiscardGuard, useFormEdits } from '../..
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
 import { surfaceFeaturePalette } from '../../map/markerPalette.ts';
 import SymbolPicker, { SymbolPreview, SymbolSourcesNote } from '../../components/map/SymbolPicker.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const categories: FeatureTypeWrite['category'][] = ['surface', 'underground', 'area', 'structure'];
 const shapes: FeatureTypeWrite['acceptedGeometryClasses'] = [
@@ -218,7 +219,7 @@ export default function FeatureTypesPage() {
         scroll={{ x: true }}
         columns={[
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.symbolColumn')}</HiddenTitle>,
             key: 'symbol',
             width: 40,
             render: (_: unknown, type: FeatureType) =>
@@ -265,7 +266,7 @@ export default function FeatureTypesPage() {
           ...(canWrite || canDelete
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, type: FeatureType) => (
                     <Flex gap={8}>

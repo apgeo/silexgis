@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
+import { expectEveryColumnHeaderNamed, expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 /** The operator's page of notification health and deliveries. Every row below is invented. */
 
@@ -172,5 +173,42 @@ describe('messages that reached only the server log', () => {
     show();
 
     expect(await screen.findByText(i18n.t('notificationHealth.nothingNeedsAttention'))).toBeTruthy();
+  });
+});
+
+describe('the filter row', () => {
+  it('names the status filter and the attention switch for a screen reader', async () => {
+    get.mockReset().mockImplementation((path: string) =>
+      Promise.resolve(
+        path.endsWith('/health')
+          ? {
+              data: { counts: [], oldestPendingAgeSeconds: null, paidMessagesToday: 0, dailyPaidMessageCap: 0 },
+              response: { status: 200 },
+            }
+          : { data: { items: [], page: 1, pageSize: 25, totalItems: 0 }, response: { status: 200 } },
+      ),
+    );
+    const { container } = show();
+    await screen.findByText('Nothing waiting');
+
+    expectEveryFieldNamed(container);
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Only what needs attention');
+  });
+
+  it('gives the expand and action columns a heading a screen reader says', async () => {
+    get.mockReset().mockImplementation((path: string) =>
+      Promise.resolve(
+        path.endsWith('/health')
+          ? {
+              data: { counts: [], oldestPendingAgeSeconds: null, paidMessagesToday: 0, dailyPaidMessageCap: 0 },
+              response: { status: 200 },
+            }
+          : { data: { items: [], page: 1, pageSize: 25, totalItems: 0 }, response: { status: 200 } },
+      ),
+    );
+    const { container } = show();
+    await screen.findByText('Nothing waiting');
+
+    expectEveryColumnHeaderNamed(container);
   });
 });

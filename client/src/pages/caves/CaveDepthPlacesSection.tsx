@@ -27,6 +27,7 @@ import {
   type CaveDepthPlace,
 } from '../../api/hooks.ts';
 import SurveyStationInput from '../../components/caves/SurveyStationInput.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 interface DeclarationForm {
   depthM: number | null;
@@ -333,7 +334,7 @@ export default function CaveDepthPlacesSection({
             ...(canEdit
               ? [
                   {
-                    title: '',
+                    title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                     key: 'actions',
                     width: 120,
                     render: (_: unknown, place: CaveDepthPlace) => (

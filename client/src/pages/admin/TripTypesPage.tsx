@@ -19,6 +19,7 @@ import {
   type TripTypeWrite,
 } from '../../api/hooks.ts';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const emptyDraft: TripTypeWrite = {
   code: '',
@@ -200,7 +201,7 @@ export default function TripTypesPage() {
           ...(canWrite
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, type: TripType) => (
                     <Flex gap={8}>

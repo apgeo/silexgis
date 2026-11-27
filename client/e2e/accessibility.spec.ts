@@ -721,3 +721,215 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+/**
+ * The rules a machine sweep of every screen found broken, each held clear on the screens it was
+ * found on. Named one by one rather than by tag: several are best-practice rules (a main landmark,
+ * heading order, a heading for every column) that the WCAG scan above does not run, and a rule
+ * kept here keeps the screens it was fixed on from sliding back.
+ */
+const SWEPT_RULES = [
+  'label',
+  'button-name',
+  'aria-input-field-name',
+  'scrollable-region-focusable',
+  'empty-table-header',
+  'region',
+  'landmark-one-main',
+  'landmark-no-duplicate-main',
+  'landmark-main-is-top-level',
+  'landmark-unique',
+  'aria-required-children',
+  'target-size',
+  'list',
+  'label-content-name-mismatch',
+];
+
+/** An invented token: no link, album, code or upload carries it, so every read of it is refused. */
+const INVENTED = 'invented-a11y-token';
+
+/** Waits until nothing on the page is still loading, so the scan reads the screen, not its spinner. */
+async function settled(page: Page) {
+  await expect(page.locator('.ant-spin-spinning')).toHaveCount(0, { timeout: 45_000 });
+  await expect(page.locator('#root')).not.toBeEmpty();
+}
+
+/** Every finding of the swept rules on the page now: rule id and selector only, never markup. */
+async function sweptFindings(page: Page, where: string, rules: string[] = SWEPT_RULES): Promise<string[]> {
+  const results = await new AxeBuilder({ page }).withRules(rules).analyze();
+  return results.violations.flatMap((violation) =>
+    violation.nodes.map((node) => `${where}: ${violation.id} at ${node.target.map(String).join(' ')}${shapeOf(node)}`),
+  );
+}
+
+/**
+ * The first id a signed-in list route answers, asked over the API with the page's own session, so a
+ * detail screen out of the seeded data is opened without depending on a list's ordering or paging.
+ */
+async function firstSeededId(page: Page, path: string, what: string): Promise<string> {
+  const body = (await apiJson(page, await bearerToken(page), 'GET', path)) as { items: { id: string }[] };
+  expect(body.items.length, `the seeded data holds no ${what} to open`).toBeGreaterThan(0);
+  return body.items[0].id;
+}
+
+test.describe('the screens the accessibility sweep found broken', () => {
+  test('signed-in screens, at desktop width', async ({ page }) => {
+    test.setTimeout(420_000);
+    await login(page);
+    const findings: string[] = [];
+    for (const route of [
+      '/gallery',
+      '/trip-logs/mine',
+      '/expeditions',
+      '/events',
+      '/calendar',
+      '/admin/test-data',
+      '/admin/notification-health',
+      '/admin/published-trips',
+      '/admin/messaging',
+      '/admin/terrain',
+      '/geodata/photo-import',
+      '/checklists',
+      '/cabinets',
+      // Lists whose action, expand or icon columns had no heading.
+      '/admin/audit',
+      '/admin/users',
+      '/admin/document-types',
+      '/admin/feature-sets',
+      '/admin/feature-types',
+      '/admin/term-rules',
+      '/admin/trip-types',
+      '/admin/report-templates',
+      '/admin/camp-roster-roles',
+      '/admin/participant-roles',
+      '/admin/permission-groups',
+      '/cavers',
+      '/saved-filters',
+      '/features',
+    ]) {
+      await gotoRoute(page, route);
+      await settled(page);
+      findings.push(...(await sweptFindings(page, route)));
+    }
+
+    // The detail pages whose cards carry such columns, opened out of the seeded data.
+    await openCaveFromRegistry(page, 'Peștera Demo Mare');
+    await page.waitForURL(/\/caves\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' }).first()).toBeVisible({ timeout: 30_000 });
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/caves/:id')));
+
+    await registryRow(page, 'Dolina Demo');
+    await page.locator('.ant-table-row').getByRole('link', { name: 'Dolina Demo' }).click();
+    await page.waitForURL(/\/features\/[0-9a-f-]{36}$/);
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/features/:id')));
+    expect(findings).toEqual([]);
+  });
+
+  test('signed-in screens with wide tables and tab bars, at phone width', async ({ page }) => {
+    test.setTimeout(420_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+    const findings: string[] = [];
+    for (const route of [
+      '/admin/relation-types',
+      '/admin/notification-health',
+      '/admin/messaging',
+      '/documents/deleted',
+      '/features/deleted',
+      '/trip-logs/deleted',
+      '/trip-logs/mine',
+      '/notifications',
+      '/uploads',
+      '/caving-groups',
+      '/cavers/phone-users',
+      '/settings/access-keys',
+      '/geodata',
+      '/review',
+      // Tables that fit at desktop width and scroll sideways only on a phone.
+      '/admin/terrain',
+      '/cave-potential',
+      '/catalogue/speologie',
+    ]) {
+      await gotoRoute(page, route);
+      await settled(page);
+      findings.push(...(await sweptFindings(page, `${route} at 390 px`)));
+    }
+
+    // A camp's and a trip's own pages, whose tab bars overflow on a phone.
+    const camp = await firstSeededId(page, '/api/v1/expeditions?pageSize=1', 'camp');
+    await gotoRoute(page, `/expeditions/${camp}`);
+    await expect(page.getByRole('tablist').first()).toBeVisible({ timeout: 30_000 });
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/expeditions/:id at 390 px')));
+
+    const trip = await firstSeededId(page, '/api/v1/trip-logs?pageSize=1', 'trip');
+    await gotoRoute(page, `/trip-logs/${trip}`);
+    await expect(page.getByRole('tablist').first()).toBeVisible({ timeout: 30_000 });
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/trip-logs/:id at 390 px')));
+    expect(findings).toEqual([]);
+  });
+
+  test('a trip’s and a camp’s report pages keep their heading levels in order', async ({ page }) => {
+    // Held apart from the other rules: heading order was found broken on these pages only, and the
+    // report pages draw their sections under the page's own title.
+    test.setTimeout(180_000);
+    await login(page);
+    const findings: string[] = [];
+    const trip = await firstSeededId(page, '/api/v1/trip-logs?pageSize=1', 'trip');
+    await gotoRoute(page, `/trip-logs/${trip}/report`);
+    // The sections themselves, not a heading of the level they should have: a wrong level has to
+    // be read by the scan, not time out the wait.
+    await expect(page.getByTestId('trip-report').locator('section').first()).toBeVisible({ timeout: 30_000 });
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/trip-logs/:id/report', ['heading-order'])));
+
+    const camp = await firstSeededId(page, '/api/v1/expeditions?pageSize=1', 'camp');
+    await gotoRoute(page, `/expeditions/${camp}/report`);
+    await expect(page.getByTestId('expedition-report').locator('section').first()).toBeVisible({ timeout: 30_000 });
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/expeditions/:id/report', ['heading-order'])));
+    expect(findings).toEqual([]);
+  });
+
+  test('the 3D page has one landmark of each name', async ({ page }) => {
+    // The 3D viewer draws through software GL here: run this file with one worker.
+    test.setTimeout(180_000);
+    await login(page);
+    await gotoRoute(page, '/map3d');
+    await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', { timeout: 60_000 });
+    await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
+    expect(await sweptFindings(page, '/map3d')).toEqual([]);
+  });
+
+  test('screens drawn without the signed-in frame, and a pop-out panel', async ({ page, consoleErrors }) => {
+    test.setTimeout(420_000);
+    consoleErrors.allow(new RegExp(INVENTED), 'an invented token is refused, and each page turns that into its own sentence');
+    const findings: string[] = [];
+    for (const route of [
+      '/confirm-email',
+      '/unsubscribe',
+      '/reset-password',
+      `/shared/view/${INVENTED}`,
+      `/shared/features/${INVENTED}`,
+      `/shared/albums/${INVENTED}`,
+      `/shared/trips/${INVENTED}/embed`,
+      `/q/${INVENTED}`,
+      `/p/survey/${INVENTED}`,
+      `/p/survey/${INVENTED}/view`,
+      '/gallery/public',
+    ]) {
+      await page.goto(route);
+      await settled(page);
+      findings.push(...(await sweptFindings(page, route)));
+    }
+
+    await login(page);
+    await page.goto('/panel/registry');
+    await settled(page);
+    findings.push(...(await sweptFindings(page, '/panel/registry')));
+    expect(findings).toEqual([]);
+  });
+});

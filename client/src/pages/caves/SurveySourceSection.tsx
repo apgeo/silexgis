@@ -13,6 +13,7 @@ import {
 } from '../../api/hooks.ts';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { surveySourceProblemMessage } from './surveySourceProblems.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * What the archive accepts, kept in step with the server's own list. The server is the authority
@@ -142,6 +143,7 @@ export default function SurveySourceSection({ caveId, canEdit }: { caveId: strin
             align: 'right',
           },
           {
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 140,
             render: (_, source) => (

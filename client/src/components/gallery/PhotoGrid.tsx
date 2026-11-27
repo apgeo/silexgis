@@ -174,6 +174,12 @@ export default function PhotoGrid({
                   background: token.colorBgContainer,
                   boxShadow: token.boxShadowTertiary,
                   lineHeight: 0,
+                  // A pointer target of at least 24 px each way, whichever icon is drawn.
+                  minWidth: 24,
+                  minHeight: 24,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <Checkbox

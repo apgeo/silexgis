@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MyTripLogListParams, TripLogInfo } from '../../api/hooks.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const { listSpy, doorSpy } = vi.hoisted(() => ({ listSpy: vi.fn(), doorSpy: vi.fn() }));
 
@@ -257,5 +258,13 @@ describe('planning a trip from my trips', () => {
 
     expect(screen.queryByTestId('my-trips-plan')).toBeNull();
     expect(screen.queryByTestId('trip-form')).toBeNull();
+  });
+});
+
+describe('the filter row for a screen reader', () => {
+  it('names every field, the state filter among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
   });
 });

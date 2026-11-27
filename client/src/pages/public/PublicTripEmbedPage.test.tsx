@@ -228,7 +228,8 @@ describe('the viewer a website frames', () => {
   it('keeps the way into the other language to two letters with a name a screen reader can say', () => {
     const { container } = render(<PublicTripEmbedPage />);
 
-    const button = screen.getByRole('button', { name: 'Afișează pagina în română' });
+    // The name opens with the two letters on the button, so saying what is seen reaches it.
+    const button = screen.getByRole('button', { name: 'RO — afișează pagina în română' });
     expect(button).toHaveTextContent('RO');
     expect(button).toHaveAttribute('lang', 'ro');
     // Reachable by keyboard like any button: nothing takes it out of the tab order.

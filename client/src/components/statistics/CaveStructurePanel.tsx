@@ -92,7 +92,7 @@ export default function CaveStructurePanel({ caveId }: { caveId: string }) {
       )}
       {stereonet.data && (
         <div style={{ marginTop: 12 }} data-testid="cave-stereonet">
-          <Typography.Title level={5}>{t('structural.stereonet.title')}</Typography.Title>
+          <Typography.Title level={4}>{t('structural.stereonet.title')}</Typography.Title>
           {stereonet.data.readingCount === 0 ? (
             <Typography.Paragraph type="secondary">{t('structural.stereonet.noReadings')}</Typography.Paragraph>
           ) : (

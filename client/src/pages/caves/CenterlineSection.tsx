@@ -13,6 +13,7 @@ import {
   type CenterlineInfo,
 } from '../../api/hooks.ts';
 import { centerlineProblemMessage } from './centerlineProblems.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * Cave centerlines: uploaded GeoJSON/GPX line work shown as a map overlay. The server
@@ -151,6 +152,7 @@ export default function CenterlineSection({ caveId, canEdit }: { caveId: string;
           ...(canEdit
             ? [
                 {
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   width: 60,
                   render: (_: unknown, centerline: CenterlineInfo) => (

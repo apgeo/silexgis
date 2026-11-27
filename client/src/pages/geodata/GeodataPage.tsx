@@ -51,6 +51,7 @@ import { readWorldFilter, worldToken, writeWorldFilter, type WorldFilter } from 
 import GeofileEncodingDialog from './GeofileEncodingDialog.tsx';
 import ImportBatchesTab from './ImportBatchesTab.tsx';
 import RasterMapsTab from './RasterMapsTab.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** The filter world the vector list is about. */
 const GEOFILE_WORLD = 'geofile';
@@ -318,7 +319,7 @@ export default function GeodataPage() {
             render: (value: string) => new Date(value).toLocaleString(i18n.resolvedLanguage),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 200,
             render: (_, record) => (

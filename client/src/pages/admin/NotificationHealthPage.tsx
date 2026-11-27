@@ -29,6 +29,7 @@ import {
   type NotificationRetryOutcome,
 } from '../../api/hooks.ts';
 import { FONT_SIZE } from '../../theme.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const statusColor: Record<NotificationDeliveryStatus, string> = {
   pending: 'blue',
@@ -283,6 +284,7 @@ export default function NotificationHealthPage() {
           allowClear
           style={{ minWidth: 200 }}
           placeholder={t('notificationHealth.anyStatus')}
+          aria-label={t('notificationHealth.status')}
           value={status}
           onChange={(value) => {
             setStatus(value);
@@ -295,6 +297,7 @@ export default function NotificationHealthPage() {
         />
         <Space>
           <Switch
+            aria-label={t('notificationHealth.attentionOnly')}
             checked={attentionOnly}
             onChange={(checked) => {
               setAttentionOnly(checked);
@@ -337,6 +340,7 @@ export default function NotificationHealthPage() {
           showSizeChanger: true,
         }}
         expandable={{
+          columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
           rowExpandable: (record) => record.error != null,
           expandedRowRender: (record) => (
             <pre style={{ margin: 0, fontSize: FONT_SIZE.sm, whiteSpace: 'pre-wrap' }}>{record.error}</pre>
@@ -386,8 +390,8 @@ export default function NotificationHealthPage() {
             ellipsis: true,
           },
           {
-            // No heading: the only thing in this column is a button that names itself.
-            title: '',
+            // No visible heading: the only thing in this column is a button that names itself.
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'action',
             width: 120,
             render: (_: unknown, record) =>

@@ -28,6 +28,7 @@ import { featureProblemMessage } from '../../components/features/featureProblems
 import ObjectSelector from '../../components/selector/ObjectSelector.tsx';
 import type { SelectorScope } from '../../filters/selection.ts';
 import type { FilterHit } from '../../filters/types.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /** A set may hold any kind of feature, so the picker offers the whole feature world. */
 const MEMBER_SCOPES: readonly SelectorScope[] = [
@@ -303,7 +304,7 @@ export default function FeatureSetsPage() {
             align: 'right',
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 220,
             render: (_, set) => (

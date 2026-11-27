@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/auth.tsx';
 import RequireAuth from './auth/RequireAuth.tsx';
 import AppLayout from './components/AppLayout.tsx';
 import PanelShell from './pages/panel/PanelShell.tsx';
+import StandaloneMain from './components/a11y/StandaloneMain.tsx';
 import RouteErrorPage from './components/RouteErrorPage.tsx';
 import { lazyRetrying } from './codeLoading.ts';
 import CallbackPage from './pages/CallbackPage.tsx';
@@ -156,44 +157,47 @@ function guarded(table: RouteObject[]): RouteObject[] {
  * So the sidebar is checked against this table, and this table against the addresses the
  * application *hands out* — a chip's route, the link in a notification about a grant — and
  * those checks must not count the catch-all as an answer.
+ *
+ * A page drawn without the signed-in frame is wrapped in `StandaloneMain` for its main landmark,
+ * unless it draws its own (sign-in, registration, the reset request and the published trip do).
  */
 export const routes: RouteObject[] = guarded([
   { path: '/login', element: <LoginPage /> },
-  { path: '/auth/callback', element: <CallbackPage /> },
-  { path: '/confirm-email', element: <ConfirmEmailPage /> },
-  { path: '/reset-password', element: <ResetPasswordPage /> },
+  { path: '/auth/callback', element: <StandaloneMain><CallbackPage /></StandaloneMain> },
+  { path: '/confirm-email', element: <StandaloneMain><ConfirmEmailPage /></StandaloneMain> },
+  { path: '/reset-password', element: <StandaloneMain><ResetPasswordPage /></StandaloneMain> },
   // Asking for a reset mail, and opening an account where the installation allows it: the two ways
   // in that need no administrator. Both answer alike whether or not an address has an account.
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/register', element: <RegisterPage /> },
   // The opt-out link in a notification; anonymous, because it is opened from a mail client.
-  { path: '/unsubscribe', element: <UnsubscribePage /> },
-  { path: '/shared/view/:token', element: <Loadable><SharedViewPage /></Loadable> },
-  { path: '/shared/features/:token', element: <Loadable><SharedFeaturePage /></Loadable> },
+  { path: '/unsubscribe', element: <StandaloneMain><UnsubscribePage /></StandaloneMain> },
+  { path: '/shared/view/:token', element: <StandaloneMain><Loadable><SharedViewPage /></Loadable></StandaloneMain> },
+  { path: '/shared/features/:token', element: <StandaloneMain><Loadable><SharedFeaturePage /></Loadable></StandaloneMain> },
   // The two surfaces a visitor reaches without an account: one album by its link, and the
   // installation's curated gallery. Both show renderings and nothing else.
-  { path: '/shared/albums/:token', element: <Loadable><SharedAlbumPage /></Loadable> },
-  { path: '/gallery/public', element: <Loadable><PublicGalleryPage /></Loadable> },
+  { path: '/shared/albums/:token', element: <StandaloneMain><Loadable><SharedAlbumPage /></Loadable></StandaloneMain> },
+  { path: '/gallery/public', element: <StandaloneMain><Loadable><PublicGalleryPage /></Loadable></StandaloneMain> },
   // A party underground, followed by somebody who was handed the link and holds no account — a
   // family, a callout contact, a club's own website. The second address is the same trip as a
   // viewer with no chrome around it, for an iframe; it is the only address in this application
   // meant to be framed, and the web server's `frame-ancestors` rule is what says by whom.
   { path: '/shared/trips/:token', element: <Loadable><PublicTripPage /></Loadable> },
-  { path: '/shared/trips/:token/embed', element: <Loadable><PublicTripEmbedPage /></Loadable> },
+  { path: '/shared/trips/:token/embed', element: <StandaloneMain><Loadable><PublicTripEmbedPage /></Loadable></StandaloneMain> },
   // The address in a QR square bolted to a cave wall. Anonymous, because the person reading it
   // is standing in a field with a camera app and no account. A path route rather than a hash
   // one on purpose: the scanner that produces these addresses searches the path and query for
   // the last separator and never looks past a '#', so a code carried in a fragment would be
   // discarded before anything could resolve it.
-  { path: '/q/:code', element: <Loadable><QrLandingPage /></Loadable> },
+  { path: '/q/:code', element: <StandaloneMain><Loadable><QrLandingPage /></Loadable></StandaloneMain> },
   // The result of one survey upload, opened from a link its owner handed out. Anonymous: the
   // answer behind it is a closed envelope (title, cave name, progress, files), and a wrong,
   // withdrawn or no-longer-permitted token is answered exactly like an invented one.
-  { path: '/p/survey/:token', element: <Loadable><PublicSurveyResultPage /></Loadable> },
+  { path: '/p/survey/:token', element: <StandaloneMain><Loadable><PublicSurveyResultPage /></Loadable></StandaloneMain> },
   // The same link's results in one place: the model in both viewers and the compiler's figures.
   // Decided by the same answers as the page above; it carries no map, as that page carries no
   // position of the cave's own.
-  { path: '/p/survey/:token/view', element: <Loadable><PublicSurveyViewerPage /></Loadable> },
+  { path: '/p/survey/:token/view', element: <StandaloneMain><Loadable><PublicSurveyViewerPage /></Loadable></StandaloneMain> },
   {
     element: <RequireAuth />,
     children: [

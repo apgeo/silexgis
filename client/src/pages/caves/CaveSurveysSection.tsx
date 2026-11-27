@@ -14,6 +14,7 @@ import { formatSize } from '../../components/attachments/fileFormat.ts';
 import SurveyUploadArtefacts from '../../components/surveyUploads/SurveyUploadArtefacts.tsx';
 import OlderVersionsWarning from '../../components/surveyUploads/OlderVersionsWarning.tsx';
 import PointCloudCard from '../../components/surveyUploads/PointCloudCard.tsx';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The surveys a cave holds as they arrived from a device, each with every version that was handed
@@ -63,6 +64,7 @@ export default function CaveSurveysSection({ caveId }: { caveId: string }) {
         dataSource={surveys}
         pagination={false}
         expandable={{
+          columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
           expandedRowRender: (survey) => <VersionList survey={survey} />,
         }}
         columns={[
@@ -115,7 +117,10 @@ function VersionList({ survey }: { survey: CaveSurveyGroup }) {
       showHeader={false}
       pagination={false}
       dataSource={survey.versions}
-      expandable={{ expandedRowRender: (version) => <VersionContents version={version} /> }}
+      expandable={{
+        columnTitle: <HiddenTitle>{t('a11y.expandColumn')}</HiddenTitle>,
+        expandedRowRender: (version) => <VersionContents version={version} />,
+      }}
       data-testid={`cave-survey-versions-${survey.id}`}
       columns={[
         { render: (_, version) => new Date(version.version).toLocaleString(i18n.language) },

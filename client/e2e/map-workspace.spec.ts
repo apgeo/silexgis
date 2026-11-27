@@ -447,3 +447,39 @@ test("a new account starts on the installation's starting arrangement, once, and
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   }
 });
+
+/**
+ * A layer catalogue that cannot be read is said in the layer panel, with a way to ask again — not
+ * left as a panel that simply lists fewer layers than there are, which reads as "there are none".
+ */
+test("a layer catalogue that cannot be read is said in the layer panel, and asking again recovers it", async ({
+  page,
+  consoleErrors,
+}) => {
+  consoleErrors.allow(/\/api\/v1\/map-layers(\?|:|$)/, 'this test answers the layer catalogue with a failure on purpose');
+  let failing = true;
+  await page.route(
+    (url) => url.pathname === '/api/v1/map-layers',
+    async (route) => {
+      if (failing) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({ status: 500, title: 'Invented failure' }),
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  await login(page);
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
+
+  const notice = page.getByTestId('map-layer-reads-failed');
+  await expect(notice).toBeVisible({ timeout: 45_000 });
+  await expect(notice).toContainText("Some of the map's layers could not be read");
+
+  failing = false;
+  await notice.getByRole('button', { name: 'Retry' }).click();
+  await expect(notice).toBeHidden({ timeout: 30_000 });
+});

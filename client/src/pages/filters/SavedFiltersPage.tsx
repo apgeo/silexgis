@@ -23,6 +23,7 @@ import { describeComparison } from '../../filters/typedComparison.ts';
 import SavedFilterAudienceField from '../../components/filters/SavedFilterAudienceField.tsx';
 import { savedFilterSaveFailedKey, useSavedFilterAudienceChoice } from '../../components/filters/useSavedFilterAudienceChoice.ts';
 import { audienceFields, type SavedFilterAudience } from '../../filters/savedFilterAudience.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 interface EditValues {
   name: string;
@@ -270,7 +271,7 @@ export default function SavedFiltersPage() {
             ),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 200,
             render: (_: unknown, filter) => {

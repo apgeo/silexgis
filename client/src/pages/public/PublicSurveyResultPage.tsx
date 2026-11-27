@@ -95,7 +95,7 @@ export default function PublicSurveyResultPage() {
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 900, margin: '0 auto' }} data-testid="public-survey-result">
+    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }} data-testid="public-survey-result">
       <Flex vertical gap={16}>
         <Flex vertical>
           <Typography.Title level={3} style={{ margin: 0 }}>
@@ -122,7 +122,7 @@ export default function PublicSurveyResultPage() {
         </Card>
         {hasLog(view) && <LogCard view={view} />}
       </Flex>
-    </main>
+    </div>
   );
 }
 

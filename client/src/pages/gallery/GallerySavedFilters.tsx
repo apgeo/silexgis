@@ -102,6 +102,7 @@ export default function GallerySavedFilters({ where, savedFilterId, onApply, onS
       <Select
         style={{ width: 240 }}
         placeholder={t('gallery.filter.applySaved')}
+        aria-label={t('gallery.filter.applySaved')}
         value={null}
         data-testid="gallery-apply-saved"
         showSearch

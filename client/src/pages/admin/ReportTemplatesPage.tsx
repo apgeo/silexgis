@@ -35,6 +35,7 @@ import {
   type ReportTemplateWrite,
 } from '../../api/hooks.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * Which kind of thing a layout writes up. Named on every save rather than defaulted: the kind
@@ -262,7 +263,7 @@ export default function ReportTemplatesPage() {
           ...(canWrite
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   render: (_: unknown, template: ReportTemplate) => (
                     <Flex gap={8}>

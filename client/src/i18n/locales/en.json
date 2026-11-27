@@ -6128,7 +6128,8 @@
     "language": {
       "name": "English",
       "short": "EN",
-      "switchTo": "Show this page in English"
+      "switchTo": "Show this page in English",
+      "switchToShort": "EN — show this page in English"
     },
     "embedNoModel": "There is no survey drawing to show for this trip.",
     "past": {
@@ -9572,6 +9573,7 @@
       }
     },
     "anyStatus": "Any status",
+    "statusFilter": "Status",
     "empty": "Nothing has been published on this installation.",
     "emptyFiltered": "No link has this status.",
     "emptyLongRunning": "No published trip's tracking has been running that long.",
@@ -9716,6 +9718,14 @@
     }
   },
   "a11y": {
+    "noteColumn": "Note",
+    "acceptColumn": "Accept",
+    "unreadColumn": "Unread",
+    "symbolColumn": "Symbol",
+    "scrollableTable": "Table. Scroll sideways with the arrow keys to see every column.",
+    "scrollableTableNumbered": "Table {{position}} of {{count}}. Scroll sideways with the arrow keys to see every column.",
+    "actionsColumn": "Actions",
+    "expandColumn": "Details",
     "skipToMain": "Skip to main content",
     "skipToMap": "Skip to map",
     "mainNav": "Main navigation",

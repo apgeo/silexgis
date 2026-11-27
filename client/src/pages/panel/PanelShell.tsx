@@ -2,6 +2,7 @@
 import { Outlet } from 'react-router-dom';
 import { useAuth } from '../../auth/auth.tsx';
 import AccountPrefsGate from '../../components/AccountPrefsGate.tsx';
+import StandaloneMain from '../../components/a11y/StandaloneMain.tsx';
 
 /**
  * A pop-out window's account preferences, kept in step with the account as the main window's are.
@@ -12,12 +13,16 @@ import AccountPrefsGate from '../../components/AccountPrefsGate.tsx';
  * browser's cache for the account and runs the one writer itself: what is changed there is
  * written to the account from there, measured from what that window last read, rather than waiting
  * in its own copy of the cache for a write from the main window that never carries it.
+ *
+ * The window has no signed-in frame around it, so the panel is its main landmark.
  */
 export default function PanelShell() {
   const { user } = useAuth();
   return (
     <AccountPrefsGate accountId={user?.profile.sub ?? null} accessToken={user?.access_token}>
-      <Outlet />
+      <StandaloneMain>
+        <Outlet />
+      </StandaloneMain>
     </AccountPrefsGate>
   );
 }

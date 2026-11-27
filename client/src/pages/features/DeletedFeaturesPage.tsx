@@ -16,6 +16,7 @@ import {
   type FeatureEnvelope,
 } from '../../api/hooks.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The deletions of caves, entrances and surface features this reader may undo, most recent first.
@@ -143,7 +144,7 @@ export default function DeletedFeaturesPage() {
             ),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 130,
             render: (_, feature) => (

@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CalendarEntry, CalendarParams } from '../../api/hooks.ts';
+import { expectEveryFieldNamed } from '../../testFieldNames.ts';
 
 const { calendarSpy, navigateSpy } = vi.hoisted(() => ({
   calendarSpy: vi.fn(),
@@ -1212,5 +1213,13 @@ describe('the calendar as an agenda', () => {
 
     fireEvent.click(screen.getByText('Ponorul camp'));
     expect(navigateSpy).toHaveBeenCalledWith('/expeditions/a');
+  });
+});
+
+describe('the filter row for a screen reader', () => {
+  it('names every field, the kind and group filters among them', () => {
+    const { container } = show();
+
+    expectEveryFieldNamed(container);
   });
 });

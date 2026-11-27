@@ -47,6 +47,7 @@ import {
 } from '../../components/cavers/caverHeldByTrips.ts';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 interface CaverForm {
   fullName: string;
@@ -290,7 +291,7 @@ export default function CaversPage() {
           {
             // Open to anyone who may read the roster: what comes back is already cut to the
             // trips this reader may see, so there is nothing further to gate here.
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'statistics',
             width: 140,
             render: (_: unknown, caver: CaverInfo) => (
@@ -302,7 +303,7 @@ export default function CaversPage() {
           ...(canKeepRoster
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   width: 180,
                   render: (_: unknown, caver: CaverInfo) => (

@@ -15,6 +15,7 @@ import {
 } from '../../api/hooks.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { daysLeft, formatDays } from '../../components/trips/tripRestoreWindow.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 /**
  * The deleted trips this reader may put back, most recently deleted first.
@@ -137,7 +138,7 @@ export default function DeletedTripsPage() {
             render: (_, trip) => removedText(trip),
           },
           {
-            title: '',
+            title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
             key: 'actions',
             width: 130,
             render: (_, trip) => (

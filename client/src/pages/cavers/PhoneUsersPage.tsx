@@ -16,6 +16,7 @@ import { ApiError } from '../../api/client.ts';
 import Button from '../../components/Button.tsx';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import HiddenTitle from '../../components/a11y/HiddenTitle.tsx';
 
 const PAGE_SIZE = 25;
 
@@ -323,7 +324,7 @@ export default function PhoneUsersPage() {
           ...(canMap
             ? [
                 {
-                  title: '',
+                  title: <HiddenTitle>{t('a11y.actionsColumn')}</HiddenTitle>,
                   key: 'actions',
                   width: 120,
                   render: (_: unknown, user: PhoneUser) =>
