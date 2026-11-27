@@ -50,7 +50,12 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
     /// generating beside it.
     /// </summary>
     public async Task<TestDataStartResult> StartAsync(
-        TestDataProfile profile, Guid requestedBy, bool confirmAlongsideExistingData, bool queueJob, CancellationToken ct)
+        TestDataProfile profile,
+        Guid requestedBy,
+        bool confirmAlongsideExistingData,
+        bool queueJob,
+        CancellationToken ct,
+        string? accountPasswordHash = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -71,6 +76,7 @@ public sealed class TestDataService(SilexGisDbContext db, TimeProvider clock)
             Profile = profile.ToJson(),
             Seed = profile.Seed,
             RequestedBy = requestedBy,
+            AccountPasswordHash = accountPasswordHash,
             AlongsideExistingData = existing.Any,
             CreatedAt = clock.GetUtcNow(),
         };

@@ -7,6 +7,14 @@ public static class TestDataProfileRules
     /// <summary>A profile asking for more caves than this is refused whatever the deployment allows.</summary>
     public const int AbsoluteMaxCaves = 50_000;
 
+    public const int MaxClubs = 500;
+
+    public const int MaxOrganisations = 50;
+
+    public const int MaxCavers = 100_000;
+
+    public const int MaxAccounts = 10_000;
+
     /// <summary>The problems with <paramref name="profile"/>, each as a short sentence; empty when it can run.</summary>
     public static IReadOnlyList<string> Problems(TestDataProfile profile, int maxCaves)
     {
@@ -56,6 +64,25 @@ public static class TestDataProfileRules
         }
 
         Percent(problems, "caves.multiEntrancePercent", caves.MultiEntrancePercent);
+
+        var people = profile.People;
+        if (people.Clubs is < 0 or > MaxClubs || people.Organisations is < 0 or > MaxOrganisations)
+        {
+            problems.Add($"people.clubs must be between 0 and {MaxClubs}, and people.organisations between 0 and {MaxOrganisations}.");
+        }
+
+        if (people.Cavers is < 0 or > MaxCavers)
+        {
+            problems.Add($"people.cavers must be between 0 and {MaxCavers}.");
+        }
+
+        if (people.Accounts < 0 || people.Accounts > people.Cavers || people.Accounts > MaxAccounts)
+        {
+            problems.Add($"people.accounts must be between 0 and the number of cavers (at most {MaxAccounts}): every account is a caver on the roster.");
+        }
+
+        Percent(problems, "people.foreignGuestPercent", people.ForeignGuestPercent);
+        Percent(problems, "people.twoClubsPercent", people.TwoClubsPercent);
 
         var access = profile.Access;
         var v = access.VisibilityPercent;

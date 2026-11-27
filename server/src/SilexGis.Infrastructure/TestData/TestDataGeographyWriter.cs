@@ -162,12 +162,20 @@ public static class TestDataGeographyWriter
                 : session.Massifs[planned.RegionCode];
 
             var visibility = planned.Visibility;
+            Guid? club = null;
             if (visibility == Visibility.CavingGroup)
             {
-                // There is no caving group to bind a cave to until the generator makes clubs, so
-                // the share asked for as club-only is written as signed-in-only meanwhile.
-                visibility = Visibility.Authenticated;
-                session.Note(TestDataNotes.ClubOnlyAsSignedIn);
+                if (planned.ClubIndex is { } index && session.Clubs.TryGetValue(index, out var group))
+                {
+                    club = group;
+                }
+                else
+                {
+                    // A run that makes no club has no caving group to bind a cave to, so the
+                    // share asked for as club-only is written as signed-in-only.
+                    visibility = Visibility.Authenticated;
+                    session.Note(TestDataNotes.ClubOnlyAsSignedIn);
+                }
             }
 
             if (taken.Contains(planned.IdentificationCode))
@@ -182,6 +190,7 @@ public static class TestDataGeographyWriter
                     Description = planned.Description,
                     OwnerUserId = session.OwnerUserId,
                     Visibility = visibility,
+                    CavingGroupId = club,
                 },
                 new Cave
                 {

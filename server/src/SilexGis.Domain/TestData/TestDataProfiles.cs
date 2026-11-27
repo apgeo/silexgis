@@ -11,13 +11,21 @@ public static class TestDataProfiles
     public const string LargeName = "large";
 
     /// <summary>A few dozen caves: for development, a quick look, and the tests.</summary>
-    public static TestDataProfile Small { get; } = new() { Caves = new TestDataCaveProfile { Count = 25 } };
+    public static TestDataProfile Small { get; } = new()
+    {
+        Caves = new TestDataCaveProfile { Count = 25 },
+        People = new TestDataPeopleProfile { Clubs = 3, Organisations = 1, Cavers = 30, Accounts = 12 },
+    };
 
     /// <summary>The 500 caves the generator is sized for.</summary>
     public static TestDataProfile Default { get; } = new();
 
     /// <summary>Ten times the default, for measuring how the application copes with volume.</summary>
-    public static TestDataProfile Large { get; } = new() { Caves = new TestDataCaveProfile { Count = 5000 } };
+    public static TestDataProfile Large { get; } = new()
+    {
+        Caves = new TestDataCaveProfile { Count = 5000 },
+        People = new TestDataPeopleProfile { Clubs = 40, Organisations = 4, Cavers = 2500, Accounts = 400 },
+    };
 
     public static IReadOnlyDictionary<string, TestDataProfile> All { get; } = new Dictionary<string, TestDataProfile>
     {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -7,6 +8,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.TestData;
@@ -28,8 +30,12 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
     {
         public const string Plan = "plan";
         public const string Vocabulary = "vocabulary";
+        public const string Accounts = "accounts";
+        public const string Clubs = "clubs";
+        public const string Cavers = "cavers";
         public const string Regions = "regions";
         public const string Caves = "caves";
+        public const string Grants = "grants";
         public const string Verify = "verify";
     }
 
@@ -48,9 +54,15 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
             var owner = run.RequestedBy
                 ?? throw new InvalidOperationException("A test-data run needs the account it is generated for.");
             var plan = TestDataPlanner.Plan(profile);
-            session = new TestDataSession(run.Id, owner, plan);
+            session = new TestDataSession(run.Id, owner, plan) { AccountPasswordHash = run.AccountPasswordHash };
             session.Note(TestDataNotes.InventedElevations);
-            var total = 2 + plan.Regions.Count + plan.Caves.Count;
+            var holders = plan.People.AccountHolders.ToList();
+            if (holders.Count > 0)
+            {
+                session.Note(run.AccountPasswordHash is null ? TestDataNotes.AccountsWithoutPassword : TestDataNotes.AccountsSharePassword);
+            }
+
+            var total = 4 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count;
             var done = 0;
             await ProgressAsync(session, Phases.Plan, done, total, ct);
 
@@ -60,6 +72,28 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 await TestDataGeographyWriter.EnsureMarkingTagAsync(db, session, ct);
             }, ct);
             await ProgressAsync(session, Phases.Vocabulary, ++done, total, ct);
+
+            // People before places: a club-only cave is bound to its club as it is written, and a
+            // club is made for its owner's account.
+            foreach (var chunk in holders.Chunk(TestDataPeopleWriter.AccountChunk))
+            {
+                await ThrowIfCancelRequestedAsync(run.Id, ct);
+                await InScopeAsync(session, (services, db) => TestDataPeopleWriter.WriteAccountsAsync(
+                    db, services.GetRequiredService<UserManager<SilexGisUser>>(), session, chunk, clock, ct), ct);
+                done += chunk.Length;
+                await ProgressAsync(session, Phases.Accounts, done, total, ct);
+            }
+
+            await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteClubsAsync(db, session, ct), ct);
+            await ProgressAsync(session, Phases.Clubs, ++done, total, ct);
+
+            foreach (var chunk in plan.People.Cavers.Chunk(TestDataPeopleWriter.CaverChunk))
+            {
+                await ThrowIfCancelRequestedAsync(run.Id, ct);
+                await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteCaversAsync(db, session, chunk, ct), ct);
+                done += chunk.Length;
+                await ProgressAsync(session, Phases.Cavers, done, total, ct);
+            }
 
             await InScopeAsync(session, (db, writer) => TestDataGeographyWriter.WriteRegionsAsync(db, writer, session, ct), ct);
             done += plan.Regions.Count;
@@ -72,6 +106,9 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 done += chunk.Length;
                 await ProgressAsync(session, Phases.Caves, done, total, ct);
             }
+
+            await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteGrantsAsync(db, session, ct), ct);
+            await ProgressAsync(session, Phases.Grants, ++done, total, ct);
 
             await FinishAsync(session, TestDataRunStatus.Succeeded, error: null, total, ct);
             logger.LogInformation("Test-data run {RunId} wrote {Counts}", run.Id, JsonSerializer.Serialize(session.Counts));
@@ -126,17 +163,20 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
     /// Runs one unit of writing in a fresh scope, marked as generated data done for the run's
     /// owner, so the history names the generator and the account behind it.
     /// </summary>
+    private Task InScopeAsync(
+        TestDataSession session, Func<SilexGisDbContext, FeatureWriteService, Task> work, CancellationToken ct) =>
+        InScopeAsync(session, (services, db) => work(db, services.GetRequiredService<FeatureWriteService>()), ct);
+
     private async Task InScopeAsync(
-        TestDataSession session, Func<SilexGisDbContext, FeatureWriteService, Task> work, CancellationToken ct)
+        TestDataSession session, Func<IServiceProvider, SilexGisDbContext, Task> work, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
         changes.Begin(ChangeSource.Generated);
         changes.ActFor(session.OwnerUserId);
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await work(db, writer);
+        await work(scope.ServiceProvider, db);
         await transaction.CommitAsync(ct);
     }
 

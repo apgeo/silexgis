@@ -5,7 +5,8 @@ namespace SilexGis.Domain.TestData;
 public sealed record TestDataWorldPlan(
     TestDataProfile Profile,
     IReadOnlyList<PlannedRegion> Regions,
-    IReadOnlyList<PlannedCave> Caves);
+    IReadOnlyList<PlannedCave> Caves,
+    TestDataPeoplePlan People);
 
 public sealed record PlannedRegion(
     TestDataRegion Region,
@@ -43,6 +44,9 @@ public sealed record PlannedCave
     public required string RockTypeCode { get; init; }
 
     public required Visibility Visibility { get; init; }
+
+    /// <summary>For a club-only cave, the club (by its index in the plan) it is bound to; null when the run makes no club.</summary>
+    public int? ClubIndex { get; init; }
 
     public required bool LocationProtected { get; init; }
 

@@ -22,6 +22,8 @@ public sealed record TestDataProfile
 
     public TestDataCaveProfile Caves { get; init; } = new();
 
+    public TestDataPeopleProfile People { get; init; } = new();
+
     public TestDataAccessProfile Access { get; init; } = new();
 
     public TestDataMarkingProfile Marking { get; init; } = new();
@@ -65,6 +67,31 @@ public sealed record TestDataCaveProfile
 
     /// <summary>Share of caves with two or more entrances, in percent.</summary>
     public double MultiEntrancePercent { get; init; } = 15;
+}
+
+/// <summary>
+/// The people a run invents: clubs and organisations, the cavers on their rosters, and the
+/// accounts some of those cavers sign in with. Every generated address and number is a reserved
+/// one, so nothing the installation sends ever reaches a real person.
+/// </summary>
+public sealed record TestDataPeopleProfile
+{
+    /// <summary>Caving clubs, each based in a real town near the massifs, with an invented name.</summary>
+    public int Clubs { get; init; } = 14;
+
+    /// <summary>Organisations (associations, leagues) beside the clubs; their members come from the clubs.</summary>
+    public int Organisations { get; init; } = 2;
+
+    public int Cavers { get; init; } = 320;
+
+    /// <summary>How many of the cavers have an account; never more than there are cavers.</summary>
+    public int Accounts { get; init; } = 60;
+
+    /// <summary>Share of cavers who are foreign guests, on no club's roster.</summary>
+    public double ForeignGuestPercent { get; init; } = 8;
+
+    /// <summary>Share of club members on a second club's roster as well.</summary>
+    public double TwoClubsPercent { get; init; } = 10;
 }
 
 /// <summary>
