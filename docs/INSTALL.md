@@ -1734,19 +1734,21 @@ the node's owner can read, and the node is started with
 `therion-cli render-worker --server https://<this site>/api/v1/render-nodes/ --token-file <file>`.
 The address must be HTTPS; the worker refuses plain HTTP to anything but its own machine.
 
-The settings (`SILEXGIS__RenderNodes__…`, all optional; see `deploy/.env.example`):
+The settings (all optional; also in `deploy/.env.example`):
 
 | Setting | Default | |
 |---|---|---|
-| `LeaseSeconds` | 120 | how long a node keeps a render without a heartbeat; a render whose node goes quiet goes back to the queue |
-| `HeartbeatSeconds` | 40 | how often the node is asked to report |
-| `MaxAttempts` | 5 | tries a render gets in all |
-| `MaxHours` | 24 | the longest one render may run on the node |
-| `MaxResultBytes` | 1000000000 | the largest file a node may upload. A film is sent in one request, so keep it under the proxy's `SILEXGIS_MAX_BODY_SIZE` (1 GB by default) |
-| `StorageCapBytes` | 50000000000 | stored bundles and films together; a render or an upload past it is refused |
-| `RetentionDays` | 14 | how long a finished film is kept |
-| `OnlineSeconds` | 180 | how recently a node must have called for rendering on the server to be offered |
-| `MaxActivePerAccount` | 1 | renders one member may have waiting or running at once |
+| `SILEXGIS__RenderNodes__LeaseSeconds` | 120 | how long a node keeps a render without a heartbeat; a render whose node goes quiet goes back to the queue |
+| `SILEXGIS__RenderNodes__HeartbeatSeconds` | 40 | how often the node is asked to report |
+| `SILEXGIS__RenderNodes__MaxAttempts` | 5 | tries a render gets in all |
+| `SILEXGIS__RenderNodes__MaxHours` | 24 | the longest one render may run on the node |
+| `SILEXGIS__RenderNodes__MaxResultBytes` | 1000000000 | the largest file a node may upload. A film is sent in one request, so keep it under the proxy's `SILEXGIS_MAX_BODY_SIZE` (1 GB by default) |
+| `SILEXGIS__RenderNodes__MaxFilesPerRender` | 2000 | the most files one render may upload (a plan that writes frames writes many) |
+| `SILEXGIS__RenderNodes__StorageCapBytes` | 50000000000 | stored bundles and films together; a render or an upload past it is refused |
+| `SILEXGIS__RenderNodes__RetentionDays` | 14 | how long a finished film is kept |
+| `SILEXGIS__RenderNodes__OnlineSeconds` | 180 | how recently a node must have called for rendering on the server to be offered |
+| `SILEXGIS__RenderNodes__ClaimHoldSeconds` | 20 | the longest a waiting node's claim is held open for a render to arrive |
+| `SILEXGIS__RenderNodes__MaxActivePerAccount` | 1 | renders one member may have waiting or running at once |
 
 Bundles and films are kept in the file store beside the other stored files, so they count in
 [Storage](user-guide/admin/storage.md) and are in the backups while they exist.
