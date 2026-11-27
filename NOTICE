@@ -43,7 +43,7 @@ into the bundle by ThIDE's own writer. This application does not run the player
 and does not start Blender.
 
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    3fc522ee5556e510fede92312a00256d11b55b2c
+  Commit:    a9bdeae303843d41cb01997c61834f91fa1b586c
   License:   MPL-2.0 — see the LICENSE file beside each module under
              server/external/ThIDE/src/
 

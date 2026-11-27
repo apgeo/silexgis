@@ -579,7 +579,8 @@ public class DependencyRuleTests
 
         // The render node protocol: the messages a render worker on the operator's own machine and
         // this server exchange, as records, with the library's JSON for them, its schema (text
-        // embedded in the assembly) and the rules both ends keep — which names a job and a result
+        // embedded in the assembly), its receiver check of a message against that schema (a JSON
+        // document walked in memory) and the rules both ends keep — which names a job and a result
         // file may have, what a SHA-256 looks like, which failures are passing. Read to its last
         // line for this entry: records, a serializer, regular expressions and arithmetic on
         // numbers. Nothing in it opens a connection, a file or a process; the worker that does all
