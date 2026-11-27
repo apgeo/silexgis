@@ -13402,6 +13402,7 @@ export interface components {
             /** Format: double */
             secondsLeft: null | number;
             error: null | string;
+            reason: null | string;
             cancelRequested: boolean;
             device: null | string;
             /** Format: double */
@@ -13444,6 +13445,10 @@ export interface components {
             cavesOnSurveyDate: number;
             /** Format: int32 */
             undatedCaves: number;
+            /** Format: int32 */
+            protectedLeftOut: number;
+            /** Format: int32 */
+            protectedMarkersLeftOut: number;
         };
         /** @enum {unknown} */
         FlybyRenderStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -16472,6 +16477,11 @@ export interface components {
             blenderVersions: null | string;
             /** Format: int64 */
             freeDiskBytes: null | number;
+            skipReason: null | string;
+            /** Format: int32 */
+            skippedRenders: null | number;
+            /** Format: int64 */
+            skipNeedsBytes: null | number;
         };
         RenderNodeIssuedDto: {
             node: components["schemas"]["RenderNodeDto"];
