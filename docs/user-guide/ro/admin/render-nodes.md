@@ -45,9 +45,17 @@ revine în coadă după două minute fără vești de la nod, iar alt nod o prei
 
 ## Ce poate și ce nu poate face un nod
 
-- Descarcă pachetul unei randări pe care a preluat-o — același zip pe care l-ar putea descărca un
-  membru, făcut pentru acel membru după aceleași reguli despre cine ce peșteri are voie să vadă — și
-  nimic altceva.
+- Descarcă pachetul unei randări pe care a preluat-o — făcut pentru acel membru după aceleași reguli
+  despre cine ce peșteri are voie să vadă ca la descărcare — și nimic altceva. Fiecare descărcare
+  este înregistrată în istoricul modificărilor cu numele nodului.
+- **Primește pachetele tuturor membrilor care randează pe server, și niciodată o peșteră, o intrare
+  sau un obiect cu locație protejată**: acestea sunt lăsate deoparte din orice pachet făcut pentru
+  un nod, chiar și pentru un membru care le poate vedea. Numele și textele survolului merg totuși cu
+  el, așa că dă un token doar unei mașini al cărei proprietar ar putea vedea și celelalte peșteri ale
+  clubului.
+- Primește doar randări pe care le poate face: un film într-un format pe care programul lui îl
+  scrie și — când spune cât spațiu liber are pe disc — unul care încape. Rândul lui spune când a
+  lăsat randări altor noduri, și de ce.
 - Nu este un cont: tokenul lui deschide rutele nodurilor de randare și nicio altă pagină sau rută.
 - Trimite filmele înapoi; un film se păstrează pentru membrul lui două săptămâni, apoi se șterge.
 

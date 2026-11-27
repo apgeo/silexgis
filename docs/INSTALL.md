@@ -1734,6 +1734,13 @@ the node's owner can read, and the node is started with
 `therion-cli render-worker --server https://<this site>/api/v1/render-nodes/ --token-file <file>`.
 The address must be HTTPS; the worker refuses plain HTTP to anything but its own machine.
 
+**What a node receives.** A node renders the bundles of every member who renders on the server, so
+it is given **no cave, entrance or feature under location protection** — they are left out of every
+bundle made for a node, whoever asks, and the member is told how many. The flyby's own name and
+texts still go with it. Give a token only to a machine whose owner may see the club's other caves.
+The address the node is given must be the one the browser uses: the worker downloads a bundle only
+from the server's own origin, and refuses a redirect from `http://` to `https://` as another origin.
+
 The settings (all optional; also in `deploy/.env.example`):
 
 | Setting | Default | |

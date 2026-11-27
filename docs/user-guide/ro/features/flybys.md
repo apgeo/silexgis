@@ -516,18 +516,26 @@ pachetului doar cât timp un nod s-a anunțat în ultimele minute; fără niciun
 
 - Alege **Ciornă** (jumătate din mărimea cadrului și mai puține eșantioane — o privire rapidă) sau
   **Complet**, și formatul filmului (MP4, WebM sau MKV), apoi **Randează pe server**. Pachetul
-  este făcut exact ca pentru descărcare — aceleași peșteri, după aceleași reguli despre cine ce
-  are voie să vadă — și dat nodului; nimic altceva din SilexGIS nu ajunge la el.
+  este făcut ca pentru descărcare — aceleași peșteri, după aceleași reguli despre cine ce are voie
+  să vadă — și dat nodului; nimic altceva din SilexGIS nu ajunge la el.
+- **Nimic cu locație protejată nu ajunge la un nod.** Nodul este o altă mașină, care randează
+  pachetele tuturor membrilor, așa că un pachet pentru el lasă deoparte orice peșteră, intrare sau
+  obiect cu locație protejată — chiar și pe cele pe care le poți vedea. După ce randarea este pusă
+  în coadă, panoul arată ce conține pachetul și câte peșteri și locuri protejate a lăsat deoparte.
+  Pentru a le randa, descarcă pachetul și randează-l pe un calculator al tău. Numele și textele
+  survolului merg totuși cu el.
 - Panoul o urmărește: *așteaptă un nod de randare*, apoi ce face nodul — descarcă pachetul,
   randează cadru cu cadru cu timpul rămas, trimite filmul înapoi. **Oprește** încheie pe loc o
   randare care așteaptă, iar una care rulează în cel mult un minut, când nodul spune din nou cât a
   ajuns.
 - Când e gata, **Descarcă filmul** — și jurnalul Blender alături. Filmul este doar al tău și se
-  păstrează pe server două săptămâni (panoul spune până când), apoi se șterge. Primești și o
-  notificare când o randare se încheie sau eșuează.
+  păstrează pe server două săptămâni (panoul spune până când), apoi se șterge, și rămâne în panou
+  și când niciun nod nu se anunță. Primești și o notificare când o randare se încheie sau eșuează.
 - O singură randare a ta rulează odată. O randare care eșuează din cauza nodului (nu mai răspunde,
   i s-a umplut discul, Blender s-a oprit) este reîncercată de câteva ori, pe acel nod sau pe altul;
-  una care eșuează din cauza scenei nu, iar panoul spune de ce.
+  una care eșuează din cauza scenei nu, iar panoul spune de ce — și ce a spus nodul, arătat ca
+  vorbele nodului. O randare pe care niciun nod nu o preia într-o săptămână, sau una care rulează o
+  zi fără să se încheie, este încheiată.
 
 ## Păstrarea unui survol
 

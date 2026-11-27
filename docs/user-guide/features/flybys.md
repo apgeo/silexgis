@@ -492,18 +492,25 @@ the bundle's choices only while a node has called in the last few minutes; with 
 offered.
 
 - Choose **Draft** (half the frame size and fewer samples — a quick look) or **Full**, and the
-  film's format (MP4, WebM or MKV), then **Render on the server**. The bundle is made exactly as
-  for the download — the same caves, under the same rules about who may see what — and handed to
-  the node; nothing else of SilexGIS goes to it.
+  film's format (MP4, WebM or MKV), then **Render on the server**. The bundle is made as for the
+  download — the same caves, under the same rules about who may see what — and handed to the node;
+  nothing else of SilexGIS goes to it.
+- **Nothing under location protection goes to a node.** The node is another machine, which renders
+  every member's bundles, so a bundle for it leaves out every cave, entrance and feature whose place
+  is protected — even the ones you may see. Once the render is queued, the panel lists what the
+  bundle holds and how many protected caves and places it left out. To render them, download the
+  bundle and render it on a machine of your own. The flyby's name and texts still go with it.
 - The panel follows it: *waiting for a render node*, then what the node is doing — downloading the
   bundle, rendering frame by frame with the time left, sending the film back. **Stop** ends a
   waiting render at once and a running one within a minute, when the node next says how far it got.
 - When it is done, **Download the film** — and Blender's log beside it. The film is yours alone
-  and is kept on the server for two weeks (the panel says until when), then deleted. You also get a
-  notification when a render finishes or fails.
+  and is kept on the server for two weeks (the panel says until when), then deleted, and it stays in
+  the panel when no node is calling. You also get a notification when a render finishes or fails.
 - One render of yours runs at a time. A render that fails because of the node (it stopped
   answering, its disk was full, Blender crashed) is tried again, on that node or another, a few
-  times; one that fails because of the scene is not, and the panel says why.
+  times; one that fails because of the scene is not, and the panel says why — and what the node
+  said, marked as the node's. A render no node takes within a week, or one that runs a day without
+  finishing, is ended.
 
 ## Keeping a flyby
 

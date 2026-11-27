@@ -43,8 +43,15 @@ else, and issue a new one.
 
 ## What a node can and cannot do
 
-- It downloads the bundle of a render it has taken — the same zip a member could download, made for
-  that member under the same rules about who may see which caves — and nothing else.
+- It downloads the bundle of a render it has taken — made for that member under the same rules
+  about who may see which caves as a download — and nothing else. Each download is recorded in the
+  change history with the node's name.
+- **It receives the bundles of every member who renders on the server, and never a cave, entrance
+  or feature under location protection**: those are left out of every bundle made for a node, even
+  for a member who may see them. The flyby's name and texts still go with it, so give a token only
+  to a machine whose owner you would show the club's other caves to.
+- It is given only renders it can make: a film in a format its worker writes, and — when it says how
+  much disk it has free — one that fits. Its row says when it left renders to other nodes, and why.
 - It is not an account: its token opens the render-node routes and no other page or route.
 - It sends films back; a film is kept for its member for two weeks and then deleted.
 
