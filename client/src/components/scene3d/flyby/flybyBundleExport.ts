@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { api } from '../../../api/client.ts';
 import { downloadFilePostWithHeaders } from '../../../api/download.ts';
+import type { FlybyBundleRequest } from '../../../api/hooks/flybyBundle.ts';
+import type { FlybyRender, FlybyRenderContainer, FlybyRenderPlan } from '../../../api/hooks/flybyRenders.ts';
+import { unwrap } from '../../../api/hooks/shared.ts';
 import { fetchEntranceFeatures, fetchMapFeatures } from '../../../api/hooks.ts';
 import { encodeFilter } from '../../../filters/url.ts';
 import {
@@ -289,12 +293,11 @@ function count(headers: Headers, name: string): number {
 }
 
 /**
- * Asks the server for the bundle and saves it; answers what the server said went into it.
- *
- * Throws {@link FlybyBundleRefused} when the flyby as prepared cannot be made a bundle of, and
- * whatever the download throws when the server refuses or cannot be reached.
+ * The request a bundle of the prepared flyby is asked with — for the download and for a render on
+ * the server alike. Throws {@link FlybyBundleRefused} when the flyby as prepared cannot be made a
+ * bundle of.
  */
-export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<FlybyBundleMade> {
+async function bundleRequest(asked: FlybyBundleAsked): Promise<FlybyBundleRequest> {
   const { scene, timeline, routeCaves } = asked;
   const shown = layersShown(scene);
   const base = viewerLook(scene, timeline.look.layers, shown);
@@ -335,6 +338,17 @@ export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<Flyb
   if (refusal !== null) {
     throw new FlybyBundleRefused(refusal);
   }
+  return request;
+}
+
+/**
+ * Asks the server for the bundle and saves it; answers what the server said went into it.
+ *
+ * Throws {@link FlybyBundleRefused} when the flyby as prepared cannot be made a bundle of, and
+ * whatever the download throws when the server refuses or cannot be reached.
+ */
+export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<FlybyBundleMade> {
+  const request = await bundleRequest(asked);
   const headers = await downloadFilePostWithHeaders(FLYBY_BUNDLE_ROUTE, request, asked.signal);
   return {
     walls: count(headers, 'X-SilexGis-Bundle-Walls'),
@@ -348,4 +362,26 @@ export async function downloadFlybyBundle(asked: FlybyBundleAsked): Promise<Flyb
     cavesOnSurveyDate: count(headers, 'X-SilexGis-Bundle-Caves-On-Survey-Date'),
     undatedCaves: count(headers, 'X-SilexGis-Bundle-Undated-Caves'),
   };
+}
+
+/**
+ * Asks the server to render the bundle on a render node: the same bundle the download makes, stored
+ * there and queued. Answers the render, and what went into the bundle as the download counts it.
+ *
+ * Throws {@link FlybyBundleRefused} when the flyby as prepared cannot be made a bundle of, and an
+ * `ApiError` carrying the server's code when it refuses (one render of the reader's is going
+ * already, the space for renders is full, nothing could be drawn).
+ */
+export async function renderFlybyOnServer(
+  asked: FlybyBundleAsked,
+  plan: FlybyRenderPlan,
+  container: FlybyRenderContainer,
+): Promise<{ render: FlybyRender; made: FlybyBundleMade }> {
+  const bundle = await bundleRequest(asked);
+  asked.signal?.throwIfAborted();
+  const started = await unwrap(
+    api.POST('/api/v1/flybys/blender-renders', { body: { bundle, plan, container }, signal: asked.signal }),
+  );
+  const { render, ...made } = started;
+  return { render, made };
 }

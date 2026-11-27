@@ -21,6 +21,7 @@ Pentru instalare, actualizare, copii de siguranță și TLS, vezi
 | [Mesagerie și trimitere](messaging.md) | E-mail, SMS, texte de mesaje, politica de autentificare, urmărirea plecării mesajelor |
 | [Generarea reliefului](terrain-builds.md) | Transformarea datelor de elevație în terenul pe care îl desenează scena 3D |
 | [Spațiu de stocare](storage.md) | Limitele a ce stochează instalarea, avertizările pe măsură ce se umple, ce o umple și ștergerea a ce nu mai trebuie |
+| [Noduri de randare](render-nodes.md) | Calculatoare cu Blender care randează survoluri pentru server: emiterea și retragerea tokenurilor lor |
 | [Operațiuni de întreținere](maintenance.md) | Recuperarea textului, a paginilor de document și a pozițiilor fotografiilor pentru fișiere sosite înainte ca acestea să funcționeze; unde se înregistrează erorile văzute în browserele membrilor |
 | [Ture publicate](../features/live-tracking.md#tot-ce-este-publicat-pentru-administratorii-deplini) | Toate linkurile de urmărire date de instalare și ce deschide fiecare; înlocuirea unui link, retragerea publicării unei ture sau a tot ce este publicat și avertismentul „peșteră protejată în apropiere?" |
 

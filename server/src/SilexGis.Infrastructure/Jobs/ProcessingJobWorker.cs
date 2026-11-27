@@ -400,7 +400,7 @@ public abstract class ProcessingJobWorkerBase(
     /// against giving every handler a second responsibility, and against a per-kind noun that
     /// would arrive in one language and be untranslatable.
     /// </remarks>
-    private static void NotifyRequester(SilexGisDbContext db, ProcessingJob job)
+    internal static void NotifyRequester(SilexGisDbContext db, ProcessingJob job)
     {
         // Nothing enforces a requester (the column is nullable), so a job queued by the system
         // itself simply notifies nobody.

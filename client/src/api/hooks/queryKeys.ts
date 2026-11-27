@@ -375,6 +375,12 @@ export const queryKeys = {
   eventDefaults: ['events', 'defaults'] as const,
   eventInvitations: (id: string) => ['events', 'invitations', id] as const,
   accessKeys: ['access-keys'] as const,
+  // Every key of rendering on the server starts with this one: a render started or stopped reaches
+  // the list and whether a node is there together.
+  flybyRendersAll: ['flyby-renders'] as const,
+  flybyRenders: ['flyby-renders', 'mine'] as const,
+  flybyRenderAvailability: ['flyby-renders', 'availability'] as const,
+  renderNodes: ['render-nodes'] as const,
   // Every processing-profile key starts with this one, so a change reaches every step's list.
   processingProfilesAll: ['scan-profiles'] as const,
   processingProfiles: (stepId: string) => ['scan-profiles', 'list', stepId] as const,

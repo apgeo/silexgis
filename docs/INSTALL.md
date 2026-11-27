@@ -1718,6 +1718,41 @@ twenty times the recording), not a memory-backed temporary directory. It needs t
 (`--build` builds it) and a recording of your own, takes about 1.5 times the recording's length,
 and is not part of the hosted build.
 
+## Render nodes
+
+A member can ask for a flyby to be **rendered on the server**: its Blender bundle is stored here and
+rendered by a **render node** — a machine you run ThIDE's render worker on, usually one with a
+graphics card. The node pulls: it calls `https://<this site>/api/v1/render-nodes/` with its token,
+takes a render, downloads the bundle, reports its progress, uploads the film and says it is done.
+**SilexGIS starts no process for a render, contains no Blender in any image, and never connects to
+the node**, so a node behind a home router needs nothing opened. The worker is ThIDE's
+(`therion-cli render-worker`, MPL-2.0) and runs on your machine under its own licence.
+
+Issue a node under **Administration → Render nodes** (see
+[Render nodes](user-guide/admin/render-nodes.md)): the token is shown once, goes into a file only
+the node's owner can read, and the node is started with
+`therion-cli render-worker --server https://<this site>/api/v1/render-nodes/ --token-file <file>`.
+The address must be HTTPS; the worker refuses plain HTTP to anything but its own machine.
+
+The settings (all optional; also in `deploy/.env.example`):
+
+| Setting | Default | |
+|---|---|---|
+| `SILEXGIS__RenderNodes__LeaseSeconds` | 120 | how long a node keeps a render without a heartbeat; a render whose node goes quiet goes back to the queue |
+| `SILEXGIS__RenderNodes__HeartbeatSeconds` | 40 | how often the node is asked to report |
+| `SILEXGIS__RenderNodes__MaxAttempts` | 5 | tries a render gets in all |
+| `SILEXGIS__RenderNodes__MaxHours` | 24 | the longest one render may run on the node |
+| `SILEXGIS__RenderNodes__MaxResultBytes` | 1000000000 | the largest file a node may upload. A film is sent in one request, so keep it under the proxy's `SILEXGIS_MAX_BODY_SIZE` (1 GB by default) |
+| `SILEXGIS__RenderNodes__MaxFilesPerRender` | 2000 | the most files one render may upload (a plan that writes frames writes many) |
+| `SILEXGIS__RenderNodes__StorageCapBytes` | 50000000000 | stored bundles and films together; a render or an upload past it is refused |
+| `SILEXGIS__RenderNodes__RetentionDays` | 14 | how long a finished film is kept |
+| `SILEXGIS__RenderNodes__OnlineSeconds` | 180 | how recently a node must have called for rendering on the server to be offered |
+| `SILEXGIS__RenderNodes__ClaimHoldSeconds` | 20 | the longest a waiting node's claim is held open for a render to arrive |
+| `SILEXGIS__RenderNodes__MaxActivePerAccount` | 1 | renders one member may have waiting or running at once |
+
+Bundles and films are kept in the file store beside the other stored files, so they count in
+[Storage](user-guide/admin/storage.md) and are in the backups while they exist.
+
 ## Photo libraries (optional): who keeps them up to date
 
 SilexGIS can read photographs from an **Immich** or a **PhotoPrism** library running beside it
@@ -2248,6 +2283,12 @@ the update (`POST /api/v1/jobs/survey-leg-dates-backfill`, which needs the job-e
 surveys whose legs have no date — not the `.lox` files, which carry none — and each survey goes on
 answering from its earlier reading until the new one has replaced it. Nothing has to be uploaded
 again. The update does not start the sweep by itself.
+
+### Upgrading across the release that renders flybys on render nodes
+
+The update adds three empty tables (the render nodes, the renders and their films) and changes no
+stored row. Nothing renders until an administrator issues a render node and somebody starts its
+worker; see [Render nodes](#render-nodes).
 
 ### Upgrading across the release that replaces the migration history with one baseline
 

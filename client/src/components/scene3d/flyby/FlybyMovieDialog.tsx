@@ -3,7 +3,11 @@ import { CloseOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { Alert, App, Checkbox, InputNumber, Progress, Radio, Select, Space, Typography } from 'antd';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { ApiError } from '../../../api/client.ts';
 import { DownloadError, saveBlob } from '../../../api/download.ts';
+import type { FlybyRenderContainer, FlybyRenderPlan } from '../../../api/hooks/flybyRenders.ts';
+import { queryKeys } from '../../../api/hooks/queryKeys.ts';
 import { localIsoDate, MOVIE_GIF_SIZE_BUDGET, movieFileName, movieFileSizeEstimate, movieSlug } from '../../../caveview/movie/movieOutput.ts';
 import { MOVIE_SOCIAL_OUTPUT, moviePresetOutput, type MoviePresetId } from '../../../caveview/movie/moviePresets.ts';
 import { MOVIE_GIF_MAX_WIDTH, MOVIE_SIZES, MOVIE_VIDEO_FRAME_RATES } from '../../../caveview/movie/movieSettings.ts';
@@ -55,10 +59,13 @@ import { MOVIE_ASPECTS } from '../../caveview/movie/movieChoices.ts';
 import {
   downloadFlybyBundle,
   FlybyBundleRefused,
+  renderFlybyOnServer,
+  type FlybyBundleAsked,
   flybyBundlePreview,
   flybyBundleRouteCaves,
   type FlybyBundleMade,
 } from './flybyBundleExport.ts';
+import FlybyServerRender from './FlybyServerRender.tsx';
 import { flybyClock } from './flybyClock.ts';
 import type { FlybyController, FlybyScene } from './useFlyby.ts';
 
@@ -113,6 +120,8 @@ interface ExportRun {
   live: FlybyLiveProgress | null;
   /** How far a bundle has got: the flyby being got ready, then the server putting the bundle together. */
   bundle?: 'preparing' | 'asking';
+  /** Whether the bundle is asked for to be rendered on the server rather than downloaded. */
+  server?: boolean;
 }
 
 /** The words for a bundle the server refused, by the code it refused with. */
@@ -120,6 +129,8 @@ const BUNDLE_FAILURES: Record<string, string> = {
   'flyby_bundle.nothing_to_draw': 'flyby.bundle.failed.nothingToDraw',
   'flyby_bundle.too_long': 'flyby.bundle.failed.tooLong',
   'flyby_bundle.frame_rate_unsupported': 'flyby.bundle.failed.frameRate',
+  'flyby_render.already_active': 'flyby.render.alreadyActive',
+  'flyby_render.storage_full': 'flyby.render.storageFull',
 };
 
 /** What the panel says once a movie is made. */
@@ -162,6 +173,7 @@ const LIVE_SMOOTH_SHARE = 0.8;
 export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onClose, ref }: FlybyMovieDialogProps) {
   const { t, i18n } = useTranslation();
   const { message, modal } = App.useApp();
+  const queryClient = useQueryClient();
   const titleId = useId();
   const settings = useFlybyStore((state) => state.movie);
   const setSettings = useFlybyStore((state) => state.setMovie);
@@ -468,7 +480,7 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
    * a careful movie — its route loaded, so the ground under the camera is the ground a movie finds —
    * and the camera is read at every frame.
    */
-  const exportBundle = async () => {
+  const exportBundle = async (server?: { plan: FlybyRenderPlan; container: FlybyRenderContainer }) => {
     if (exporting || !flyby.document || bundlePreview?.refusal) {
       return;
     }
@@ -492,8 +504,8 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         }
         return;
       }
-      setRun({ progress: null, live: null, bundle: 'asking' });
-      const made = await downloadFlybyBundle({
+      setRun({ progress: null, live: null, bundle: 'asking', server: server !== undefined });
+      const asked: FlybyBundleAsked = {
         name: flyby.name,
         timeline,
         schedule: flybyFrameSchedule(
@@ -512,15 +524,23 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
         reliefWords: (factor) => t('flyby.relief.mark', { factor: formatExaggeration(factor, i18n.language) }),
         language: i18n.language,
         signal: controller.signal,
-      });
-      setBundleMade(made);
-      void message.success(t('flyby.bundle.saved'));
+      };
+      if (server) {
+        await renderFlybyOnServer(asked, server.plan, server.container);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.flybyRendersAll });
+        void message.success(t('flyby.render.started'));
+      } else {
+        setBundleMade(await downloadFlybyBundle(asked));
+        void message.success(t('flyby.bundle.saved'));
+      }
     } catch (error) {
       if (controller.signal.aborted || isFlybyRecordingAbort(error)) {
         return;
       }
       if (error instanceof FlybyBundleRefused) {
         setFailure(bundleRefusalText(error.refusal));
+      } else if (error instanceof ApiError) {
+        setFailure(t(BUNDLE_FAILURES[error.code ?? ''] ?? 'flyby.render.failedToStart'));
       } else if (error instanceof DownloadError) {
         setFailure(t(BUNDLE_FAILURES[error.code ?? ''] ?? 'flyby.bundle.failed.other'));
       } else {
@@ -1072,6 +1092,14 @@ export default function FlybyMovieDialog({ flyby, scene, onExportingChange, onCl
               <li>{t('flyby.bundle.reportReadme')}</li>
             </ul>
           }
+        />
+      )}
+
+      {asBundle && (
+        <FlybyServerRender
+          canStart={run === null && !!flyby.document && bundlePreview !== null && bundlePreview.refusal === null}
+          starting={run?.server === true}
+          onStart={(plan, container) => void exportBundle({ plan, container })}
         />
       )}
 

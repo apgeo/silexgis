@@ -21,6 +21,7 @@ For installing, upgrading, backing up and TLS, see [INSTALL.md](../../INSTALL.md
 | [Messaging and delivery](messaging.md) | Email, SMS, message texts, sign-in policy, watching the mail go out |
 | [Building terrain](terrain-builds.md) | Turning elevation data into the ground the 3D scene draws |
 | [Storage](storage.md) | The caps on what the installation stores, the warnings as it fills, what fills it, and deleting what is no longer needed |
+| [Render nodes](render-nodes.md) | Machines with Blender that render flybys for the server: issuing and withdrawing their tokens |
 | [Maintenance sweeps](maintenance.md) | Backfilling text, document pages and photo positions for files that arrived before those worked; where errors seen in members' browsers are recorded |
 | [Published trips](../features/live-tracking.md#everything-published-for-full-administrators) | Every follow link the installation has handed out and what each opens; replacing a link, unpublishing a trip or everything, and the "protected cave nearby?" warning |
 

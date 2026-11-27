@@ -577,6 +577,26 @@ public class DependencyRuleTests
         "Therion.Blender.Player.RenderBundleReadmeSection",
         "Therion.Blender.Player.RenderBundleWriter",
 
+        // The render node protocol: the messages a render worker on the operator's own machine and
+        // this server exchange, as records, with the library's JSON for them, its schema (text
+        // embedded in the assembly), its receiver check of a message against that schema (a JSON
+        // document walked in memory) and the rules both ends keep — which names a job and a result
+        // file may have, what a SHA-256 looks like, which failures are passing. Read to its last
+        // line for this entry: records, a serializer, regular expressions and arithmetic on
+        // numbers. Nothing in it opens a connection, a file or a process; the worker that does all
+        // three is in the module the rule after this one keeps out of the build.
+        "Therion.Blender.RenderNodeBundle",
+        "Therion.Blender.RenderNodeClaim",
+        "Therion.Blender.RenderNodeComplete",
+        "Therion.Blender.RenderNodeFail",
+        "Therion.Blender.RenderNodeFailure",
+        "Therion.Blender.RenderNodeFile",
+        "Therion.Blender.RenderNodeHeartbeat",
+        "Therion.Blender.RenderNodeHeartbeatReply",
+        "Therion.Blender.RenderNodeJob",
+        "Therion.Blender.RenderNodeLimits",
+        "Therion.Blender.RenderNodeProtocol",
+
         // Reading a survey file, and the refusal when it is not one.
         "Therion.Cave3D.Parsing.CaveFileFormatException",
         "Therion.Cave3D.Parsing.CaveModelReader",

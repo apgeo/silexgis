@@ -68,7 +68,8 @@
     "registryCategories": "Categories",
     "cavePotential": "Cave potential",
     "publishedTrips": "Published trips",
-    "testData": "Test data"
+    "testData": "Test data",
+    "renderNodes": "Render nodes"
   },
   "terrain": {
     "title": "Terrain",
@@ -10968,6 +10969,46 @@
       },
       "mark": "Relief ×{{factor}}",
       "markOn": "Say “Relief ×2” in a corner while the relief is stretched"
+    },
+    "render": {
+      "title": "Render on the server",
+      "help": "The same bundle, rendered into a film by a render node — a machine of this installation's with Blender — instead of on your own machine. You download the film here when it is ready.",
+      "plan": "What to render",
+      "planDraft": "Draft",
+      "planFull": "Full",
+      "container": "Film format",
+      "start": "Render on the server",
+      "started": "The render was queued.",
+      "stop": "Stop",
+      "stopping": "Stopping…",
+      "queued": "“{{name}}” is waiting for a render node.",
+      "phase": {
+        "claimed": "A render node took it",
+        "downloading": "The render node is downloading the bundle",
+        "checking": "The render node is checking the bundle",
+        "rendering": "Rendering",
+        "composing": "Putting the film together",
+        "collectingOutputs": "Collecting the film",
+        "uploading": "Sending the film back",
+        "done": "Finishing",
+        "working": "Working"
+      },
+      "frames": "frame {{done}} of {{total}}",
+      "timeLeft": "about {{time}} left",
+      "succeeded": "“{{name}}” is rendered.",
+      "file": {
+        "movie": "Download the film",
+        "still": "Download the picture",
+        "subtitles": "Subtitles",
+        "log": "Blender's log",
+        "status": "Render record"
+      },
+      "kept": "The film is kept here until {{date}}.",
+      "cancelled": "The render was stopped.",
+      "failed": "The render failed.",
+      "failedToStart": "The render could not be queued.",
+      "alreadyActive": "A render of yours is waiting or running already. Stop it or wait for it first.",
+      "storageFull": "The space this server keeps for renders is full. Try again when older films have been deleted."
     }
   },
   "mapSymbols": {
@@ -11371,6 +11412,37 @@
       "no_layer": "not computed for the current elevation",
       "slope_unit": "slope computed only as a percentage",
       "too_many_features": "too many recorded features in reach"
+    }
+  },
+  "renderNodes": {
+    "title": "Render nodes",
+    "intro": "A render node is a machine — usually one with a graphics card — on which you run ThIDE's render worker. It takes flybys that readers ask to be rendered on the server, renders them with Blender and sends the films back. This server starts nothing on the node and never reaches it: the node calls in with its token. Issue one token for each machine.",
+    "form": {
+      "name": "Machine",
+      "namePlaceholder": "e.g. the club's workstation"
+    },
+    "issue": "Issue a token",
+    "issuedTitle": "The token for “{{name}}”",
+    "issuedWarning": "Put it in a file on that machine, readable by its owner only. After you close this message nobody can read it again, not even you; if it is lost, withdraw the node and issue another.",
+    "howToRun": "Then start the worker on that machine:",
+    "nameTaken": "A node of that name is already issued.",
+    "revoke": "Withdraw",
+    "revokeConfirm": "Withdraw “{{name}}”? Its next call is refused, and a render it holds goes back to the queue.",
+    "revoked": "The node was withdrawn.",
+    "loadFailed": "The render nodes could not be loaded.",
+    "empty": "No render node is issued.",
+    "never": "Never",
+    "columns": {
+      "name": "Machine",
+      "token": "Token",
+      "state": "State",
+      "lastSeen": "Last called",
+      "machine": "Device and Blender"
+    },
+    "states": {
+      "online": "Waiting for work",
+      "quiet": "Not calling",
+      "revoked": "Withdrawn"
     }
   }
 }

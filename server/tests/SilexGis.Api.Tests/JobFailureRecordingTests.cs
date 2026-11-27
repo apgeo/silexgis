@@ -174,7 +174,8 @@ public sealed class JobFailureRecordingTests : IAsyncLifetime, IDisposable, ICla
     // The worker takes the first handler of a kind it finds, so a second one would be silently
     // ignored, and a kind with none fails only when somebody's job reaches it. The lists the
     // lanes and the claim order are built from must name real kinds, or a kind meant for the
-    // terrain lane would run in the general one.
+    // terrain lane would run in the general one. The render nodes' kinds are the one deliberate
+    // exception to "a handler for every kind": nothing in this process runs them.
     [Fact]
     public void Every_job_kind_has_exactly_one_handler_and_the_lane_lists_name_only_real_kinds()
     {
@@ -189,7 +190,11 @@ public sealed class JobFailureRecordingTests : IAsyncLifetime, IDisposable, ICla
             .GroupBy(h => h.Kind, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-        kinds.Where(k => !handled.ContainsKey(k)).ShouldBeEmpty("kinds with no handler");
+        // The render nodes' kinds run on machines outside this process and must have no handler
+        // here: one would mean an in-process worker could run them. Every other kind has one.
+        ProcessingJobKinds.NodeLane.Where(k => !kinds.Contains(k)).ShouldBeEmpty();
+        ProcessingJobKinds.NodeLane.Where(handled.ContainsKey).ShouldBeEmpty("node-lane kinds with an in-process handler");
+        kinds.Except(ProcessingJobKinds.NodeLane).Where(k => !handled.ContainsKey(k)).ShouldBeEmpty("kinds with no handler");
         handled.Where(h => h.Value > 1).Select(h => h.Key).ShouldBeEmpty("kinds with more than one handler");
         handled.Keys.Where(k => !kinds.Contains(k)).ShouldBeEmpty("handlers for a kind ProcessingJobKinds does not name");
         ProcessingJobKinds.TerrainLane.Where(k => !kinds.Contains(k)).ShouldBeEmpty();

@@ -3806,6 +3806,229 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/flybys/blender-renders/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a flyby can be rendered on the server now: a render node called lately. */
+        get: operations["flybyRenderAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/flybys/blender-renders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's renders still kept, newest first. */
+        get: operations["flybyRenderMine"];
+        put?: never;
+        /** Makes the flyby's Blender bundle as the download does, stores it and queues its render for a render node. One render of the caller's may be queued or running at a time. */
+        post: operations["flybyRenderStart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/flybys/blender-renders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the caller's renders: where it stands, how far it got, and its result. */
+        get: operations["flybyRenderOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/flybys/blender-renders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stops one of the caller's renders: a queued one at once, a running one at its node's next heartbeat. */
+        post: operations["flybyRenderCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/flybys/blender-renders/{id}/files/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A file of the result of one of the caller's renders: the film, its subtitles, its log. */
+        get: operations["flybyRenderFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A render node asks for a render job (render worker protocol 1); 200 with the job, 204 with none. Node token only. */
+        post: operations["renderNodeClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/jobs/{jobId}/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The stored bundle of a render job the calling node holds; 409 when it does not. Node token only. */
+        get: operations["renderNodeBundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/jobs/{jobId}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A render node's progress; renews its lease and answers continue or cancel. Node token only. */
+        post: operations["renderNodeHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/jobs/{jobId}/files/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** One result file of a render job the calling node holds, checked against X-Content-SHA256. Node token only. */
+        put: operations["renderNodePutFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/jobs/{jobId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A render job succeeded with the files the node uploaded. Node token only. */
+        post: operations["renderNodeComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/render-nodes/jobs/{jobId}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A render job failed on the node; it is ended or queued again. Node token only. */
+        post: operations["renderNodeFail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/render-nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The render nodes issued, the withdrawn ones last, with when each last called. */
+        get: operations["renderNodeAdminList"];
+        put?: never;
+        /** Issues a render node and its token; the token is returned once and never stored. */
+        post: operations["renderNodeAdminIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/render-nodes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraws a render node. Its next call is refused, and a render it held goes back to the queue. */
+        delete: operations["renderNodeAdminRevoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geofiles": {
         parameters: {
             query?: never;
@@ -13001,6 +13224,11 @@ export interface components {
             photos?: null | components["schemas"]["FlybyBundlePhotosRequest"];
             reveal?: null | components["schemas"]["FlybyBundleRevealRequest"];
         };
+        FlybyBlenderRenderRequest: {
+            bundle: null | components["schemas"]["FlybyBlenderBundleRequest"];
+            plan: null | components["schemas"]["FlybyRenderPlan"];
+            container?: null | components["schemas"]["FlybyRenderContainer"];
+        };
         FlybyBundleCaptionRequest: {
             text: string;
             /** Format: double */
@@ -13151,6 +13379,74 @@ export interface components {
             strength: number;
             easing: null | components["schemas"]["FlybyBundleEasing"];
         };
+        FlybyRenderAvailabilityDto: {
+            available: boolean;
+        };
+        /** @enum {unknown} */
+        FlybyRenderContainer: "mp4" | "webm" | "mkv";
+        FlybyRenderDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            plan: components["schemas"]["FlybyRenderPlan"];
+            container: components["schemas"]["FlybyRenderContainer"];
+            status: components["schemas"]["FlybyRenderStatus"];
+            /** Format: int32 */
+            attempts: number;
+            phase: null | string;
+            message: null | string;
+            /** Format: int32 */
+            done: null | number;
+            /** Format: int32 */
+            total: null | number;
+            /** Format: double */
+            secondsLeft: null | number;
+            error: null | string;
+            cancelRequested: boolean;
+            device: null | string;
+            /** Format: double */
+            renderSeconds: null | number;
+            files: components["schemas"]["FlybyRenderFileDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: null | string;
+            /** Format: date-time */
+            expiresAt: null | string;
+        };
+        FlybyRenderFileDto: {
+            name: string;
+            role: string;
+            /** Format: int64 */
+            size: number;
+        };
+        /** @enum {unknown} */
+        FlybyRenderPlan: "draft" | "full";
+        FlybyRenderStartedDto: {
+            render: components["schemas"]["FlybyRenderDto"];
+            /** Format: int32 */
+            walls: number;
+            /** Format: int32 */
+            lines: number;
+            /** Format: int32 */
+            notDrawn: number;
+            /** Format: int32 */
+            wallsLeftOut: number;
+            /** Format: int32 */
+            markers: number;
+            /** Format: int32 */
+            markersNotDrawn: number;
+            /** Format: int32 */
+            photos: number;
+            /** Format: int32 */
+            undatedLegs: number;
+            /** Format: int32 */
+            cavesOnSurveyDate: number;
+            /** Format: int32 */
+            undatedCaves: number;
+        };
+        /** @enum {unknown} */
+        FlybyRenderStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         ForgotPasswordRequest: {
             email: string;
         };
@@ -16158,6 +16454,31 @@ export interface components {
             region: null | string;
             /** Format: int32 */
             caveCount: number;
+        };
+        RenderNodeDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            tokenPrefix: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
+            /** Format: date-time */
+            lastSeenAt: null | string;
+            online: boolean;
+            worker: null | string;
+            device: null | string;
+            blenderVersions: null | string;
+            /** Format: int64 */
+            freeDiskBytes: null | number;
+        };
+        RenderNodeIssuedDto: {
+            node: components["schemas"]["RenderNodeDto"];
+            token: string;
+        };
+        RenderNodeIssueRequest: {
+            name: string;
         };
         ReportTemplateDto: {
             /** Format: uuid */
@@ -30530,6 +30851,473 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlybyRenderAvailabilityDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderMine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlybyRenderDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderStart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FlybyBlenderRenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlybyRenderStartedDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlybyRenderDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlybyRenderDto"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    flybyRenderFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    renderNodeClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodeBundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodeHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodePutFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodeComplete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodeFail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renderNodeAdminList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderNodeDto"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    renderNodeAdminIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderNodeIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderNodeIssuedDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["HttpValidationProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    renderNodeAdminRevoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
