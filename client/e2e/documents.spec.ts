@@ -378,7 +378,7 @@ test('filing a document in a nested cabinet picks it by its whole path, and says
   await expect(page.getByRole('heading', { level: 3, name: 'e2e-report.pdf' })).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.getByText(nestedName)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(nestedName, { exact: true })).toBeVisible({ timeout: 30_000 });
 
   // …and the cabinet names what is filed in it, which is the half an access rule scoped to a
   // cabinet actually reaches.

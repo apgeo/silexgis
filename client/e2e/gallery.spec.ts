@@ -221,7 +221,7 @@ test('photographs are gathered into an album and arranged in it', async ({ page 
   const editor = page.getByRole('dialog').filter({ hasText: 'New album' });
   await editor.getByLabel('Title').fill(albumTitle);
   await editor.getByRole('button', { name: 'Create' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Album created.')).toBeVisible({ timeout: 15_000 });
 
   // ---- the pictures, chosen in the gallery and added in one go
   await openGallery(page, run);

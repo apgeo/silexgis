@@ -900,7 +900,7 @@ test.describe('the screens the accessibility sweep found broken', () => {
     await login(page);
     await gotoRoute(page, '/map3d');
     await expect(page.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false', { timeout: 60_000 });
-    await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
+    await expect(page.getByText('Click a feature in the scene to see details.')).toBeVisible();
     expect(await sweptFindings(page, '/map3d')).toEqual([]);
   });
 

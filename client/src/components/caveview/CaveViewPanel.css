@@ -241,6 +241,15 @@
   margin-inline-start: auto;
 }
 
+/* The station-name size control sits in the panel's top right corner on a wide screen, over the
+   end of this bar, and its name in words makes it wider than the bar's last button can afford to
+   lose: the bar keeps that corner clear. On a narrow screen the control moves further down. */
+@media (min-width: 768px) {
+  .caveview-panel-compare .caveview-compare-bar {
+    padding-inline-end: 150px;
+  }
+}
+
 .caveview-compare-switch {
   display: inline-flex;
   align-items: center;

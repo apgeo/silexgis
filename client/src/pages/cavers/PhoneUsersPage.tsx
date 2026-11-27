@@ -86,6 +86,7 @@ function CaverPicker({
       loading={candidates.isFetching || busy}
       disabled={busy}
       placeholder={t('phoneUsers.chooseCaver')}
+      aria-label={t('phoneUsers.chooseCaver')}
       value={user.caverId ?? undefined}
       onSearch={setSearch}
       onChange={(caverId: string) =>

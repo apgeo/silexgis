@@ -81,7 +81,7 @@ test('the 3D view loads the caves in front of it, asking for surveyed depths', a
   await expect(page.getByText('The 3D view could not be started')).toHaveCount(0);
 
   // The detail panel is the flat map's own, waiting for something to be picked.
-  await expect(page.getByText('Click a feature on the map to see details.')).toBeVisible();
+  await expect(page.getByText('Click a feature in the scene to see details.')).toBeVisible();
 });
 
 /** The camera the address bar names, as `[lat, lon, height, heading, pitch]`. */
@@ -288,7 +288,7 @@ test('picking an entrance in the scene names it over the scene, and lets go of i
   await expect(page.getByTestId('scene3d-callout')).toHaveCount(0);
 
   // Dismissing the label is not deselecting: the detail panel is still showing what was picked.
-  await expect(page.getByText('Click a feature on the map to see details.')).toHaveCount(0);
+  await expect(page.getByText('Click a feature in the scene to see details.')).toHaveCount(0);
 });
 
 test('a browser without WebGL 2 is told why, rather than shown a dead canvas', async ({
