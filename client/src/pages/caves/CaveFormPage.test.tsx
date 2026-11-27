@@ -350,3 +350,36 @@ describe('CaveFormPage left with typed work', () => {
     expect(unloadAsks()).toBe(true);
   });
 });
+
+describe('a refused save on the long cave form', () => {
+  it('says beside Save how many fields need attention, and stops saying it once they are fixed', async () => {
+    const { container } = render(page());
+    await vi.waitFor(() => expect(nameInput(container)).toHaveValue(caveOnScreen!.name as string));
+
+    fireEvent.change(nameInput(container), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // The failed field sits sections above the button; this line is what the reader sees.
+    expect(await screen.findByTestId('form-attention')).toHaveTextContent('1 field needs attention');
+    expect(updateCave).not.toHaveBeenCalled();
+
+    fireEvent.change(nameInput(container), { target: { value: 'Peștera Nouă' } });
+    await vi.waitFor(() => expect(screen.queryByTestId('form-attention')).toBeNull());
+  });
+
+  it('opens a folded section to show the field that refused the save, and puts the cursor in it', async () => {
+    const { container } = render(page());
+    await vi.waitFor(() => expect(nameInput(container)).toHaveValue(caveOnScreen!.name as string));
+
+    fireEvent.change(nameInput(container), { target: { value: '' } });
+    const identification = screen.getByRole('button', { name: /Identification/ });
+    fireEvent.click(identification);
+    await vi.waitFor(() => expect(identification).toHaveAttribute('aria-expanded', 'false'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() => expect(identification).toHaveAttribute('aria-expanded', 'true'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(nameInput(container)));
+    expect(updateCave).not.toHaveBeenCalled();
+  });
+});

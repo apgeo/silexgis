@@ -146,6 +146,14 @@ const ONE_RECORDING = [
   },
 ];
 let archiveRecordings: typeof ONE_RECORDING = ONE_RECORDING;
+/** Files whose archive the server answers as unreadable when asked for its recordings. */
+const unreadableFiles = new Set<string>();
+/** Files whose recordings the server has not answered for yet. */
+const pendingFiles = new Set<string>();
+const unreadable = () =>
+  new ApiError(422, 'speleoloc_import.archive_unreadable', 'Not a SpeleoLoc archive.', {
+    code: 'speleoloc_import.archive_unreadable',
+  });
 
 const READY_OPTIONS: SpeleolocImportSession['options'] = {
   tripUuid: RECORDING,
@@ -172,12 +180,19 @@ vi.mock('../../api/hooks.ts', () => ({
   useSaveSpeleolocImportSession: () => ({ mutate: saveSessionMutate, ...saveSessionState }),
   useSpeleolocImportPreview: () => ({ data: preview, isFetching: false, error: previewState.error }),
   useCommitSpeleolocImport: () => ({ mutateAsync: commitMutate, isPending: false }),
-  useSpeleolocRecordings: () => ({
-    data: { fileId: 'file-1', fileName: 'export.zip', recordings: archiveRecordings },
-    isFetching: false,
-    isError: false,
-    error: null,
-  }),
+  useSpeleolocRecordings: (fileId: string | undefined) =>
+    fileId && pendingFiles.has(fileId)
+      ? { data: undefined, isFetching: true, isPending: true, isSuccess: false, isError: false, error: null }
+      : fileId && unreadableFiles.has(fileId)
+      ? { data: undefined, isFetching: false, isPending: false, isSuccess: false, isError: true, error: unreadable() }
+      : {
+          data: fileId ? { fileId, fileName: 'export.zip', recordings: archiveRecordings } : undefined,
+          isFetching: false,
+          isPending: !fileId,
+          isSuccess: Boolean(fileId),
+          isError: false,
+          error: null,
+        },
   useUploadFile: () => ({ mutateAsync: uploadMutate, isPending: false }),
   useDocument: () => ({ data: document_ }),
   useCavers: () => ({ data: cavers, isFetching: false }),
@@ -248,6 +263,7 @@ beforeEach(() => {
   document_ = undefined;
   preview = BASE_PREVIEW;
   archiveRecordings = ONE_RECORDING;
+  unreadableFiles.clear();
   session = {
     fileId: 'file-1',
     fileName: 'export.zip',
@@ -620,6 +636,88 @@ describe('SpeleolocImportPage', () => {
     fireEvent.click(screen.getByTestId('speleoloc-import-duplicate-resume'));
     // Not a dead end: the reader lands on the review of the file the store already holds.
     expect(navigate).toHaveBeenCalledWith('/trip-logs/speleoloc-import/file-9');
+  });
+
+  it('replaces the review with an error state when the archive cannot be read, and takes another', async () => {
+    unreadableFiles.add('file-1');
+    previewState.error = unreadable();
+    uploadMutate.mockResolvedValue({ id: 'file-2' });
+    show();
+
+    const state = await screen.findByTestId('speleoloc-import-unreadable');
+    expect(state).toHaveTextContent('could not be read as a SpeleoLoc archive');
+    // What a SpeleoLoc export is, so the reader knows what to drop instead.
+    expect(state).toHaveTextContent(/Export the trip from SpeleoLoc/);
+    // No live review to fill in over a file that holds nothing to review.
+    expect(screen.queryByTestId('speleoloc-import-commit')).toBeNull();
+    expect(screen.queryByTestId('speleoloc-import-blockers')).toBeNull();
+
+    fireEvent.change(document.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['another made-up archive'], 'other.zip', { type: 'application/zip' })] },
+    });
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/trip-logs/speleoloc-import/file-2'));
+  });
+
+  it('does not offer to resume the review of the same archive when it could not be read', async () => {
+    params = {};
+    document_ = { id: 'doc-7', title: 'export.zip', currentFileId: 'file-9' };
+    unreadableFiles.add('file-9');
+    uploadMutate.mockRejectedValue(
+      new ApiError(409, 'file.duplicate', 'Fișierul este deja stocat.', {
+        code: 'file.duplicate',
+        duplicateOfDocumentId: 'doc-7',
+      }),
+    );
+    show();
+
+    fireEvent.change(document.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['not a real archive'], 'export.zip', { type: 'application/zip' })] },
+    });
+
+    const notice = await screen.findByTestId('speleoloc-import-duplicate-unreadable');
+    expect(notice).toHaveTextContent(/could not be read/);
+    expect(screen.queryByTestId('speleoloc-import-duplicate-resume')).toBeNull();
+    expect(screen.queryByTestId('speleoloc-import-duplicate-again')).toBeNull();
+  });
+
+  it('offers no Resume while it is still finding out whether the earlier copy can be read', async () => {
+    params = {};
+    document_ = { id: 'doc-7', title: 'export.zip', currentFileId: 'file-9' };
+    pendingFiles.add('file-9');
+    try {
+      uploadMutate.mockRejectedValue(
+        new ApiError(409, 'file.duplicate', 'Fișierul este deja stocat.', {
+          code: 'file.duplicate',
+          duplicateOfDocumentId: 'doc-7',
+        }),
+      );
+      show();
+
+      fireEvent.change(document.querySelector('input[type="file"]')!, {
+        target: { files: [new File(['not a real archive'], 'export.zip', { type: 'application/zip' })] },
+      });
+
+      const resume = await screen.findByTestId('speleoloc-import-duplicate-resume');
+      expect(resume).toBeDisabled();
+      fireEvent.click(resume);
+      expect(navigate).not.toHaveBeenCalled();
+    } finally {
+      pendingFiles.clear();
+    }
+  });
+
+  it('gives the review its own title line on a phone, with the confirmation under it', async () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = await screen.findByTestId('page-header-title-line');
+      expect(line).toHaveTextContent('Import a trip recorded on a phone');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(screen.getByTestId('page-header-actions')).getByTestId('speleoloc-import-commit')).toBeTruthy();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
   });
 
   it('names the people whose scans the chosen trip has no place for', async () => {

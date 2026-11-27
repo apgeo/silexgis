@@ -6,6 +6,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
@@ -261,16 +262,20 @@ export default function FeatureSetsPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          <GroupOutlined /> {t('featureSets.title')}
-        </Typography.Title>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            {t('featureSets.new')}
-          </Button>
-        )}
-      </Flex>
+      <PageHeader
+        title={
+          <>
+            <GroupOutlined /> {t('featureSets.title')}
+          </>
+        }
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              {t('featureSets.new')}
+            </Button>
+          )
+        }
+      />
       <Typography.Paragraph type="secondary">{t('featureSets.intro')}</Typography.Paragraph>
 
       <ReadFailedAlert

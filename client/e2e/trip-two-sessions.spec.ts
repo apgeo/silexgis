@@ -40,7 +40,7 @@ test('of two people editing the same trip, the second to save is told it changed
 
     // The first save is accepted: the positive half, on the same trip and the same server.
     await first.title.fill(`${original} first`);
-    await first.form.getByRole('button', { name: 'OK' }).click();
+    await first.form.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved.')).toBeVisible();
     await expect(first.form).toBeHidden();
 
@@ -52,7 +52,7 @@ test('of two people editing the same trip, the second to save is told it changed
       'the second save is refused on purpose: it carries the version its form was opened at',
     );
     await second.title.fill(`${original} second`);
-    await second.form.getByRole('button', { name: 'OK' }).click();
+    await second.form.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(
       other.page.getByText('Someone else changed this since you loaded it. Reload and reapply your changes.'),
     ).toBeVisible();

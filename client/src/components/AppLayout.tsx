@@ -2,6 +2,8 @@
 import {
   FilterOutlined,
   LogoutOutlined,
+  MenuFoldOutlined,
+  MenuOutlined,
   SettingOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -68,6 +70,7 @@ function AppShell() {
   // is the right thing to hand a third party and the wrong thing to show somebody about
   // themselves: on a shared machine it leaves no way to tell which account is signed in.
   const { data: me } = useMe();
+  const accountName = me?.displayName ?? me?.email ?? user?.profile.email;
   // Nav visibility follows the caller's domain-level capabilities. There is no
   // route-level guard on purpose: the server refuses, the nav simply doesn't offer.
   const { data: capabilities } = useCapabilities();
@@ -187,7 +190,24 @@ function AppShell() {
         {onMap ? t('a11y.skipToMap') : t('a11y.skipToMain')}
       </a>
       <Layout.Header style={{ display: 'flex', alignItems: 'center' }}>
-        <Flex align="center" gap={10} style={{ flex: 1 }}>
+        {/* minWidth 0 lets this side give way when the controls on the right need the room, rather
+            than the header growing wider than a phone's screen and taking the page with it. */}
+        <Flex align="center" gap={10} style={{ flex: 1, minWidth: 0 }}>
+          {/* On a phone the rail is off-canvas and this is the way back to it. antd's own answer,
+              a tab hung off the rail's edge, floats over the page just under the header and hid
+              the first letters of titles, buttons and help text on every phone page. */}
+          {isMobile && (
+            <Button
+              type="text"
+              data-testid="nav-toggle"
+              icon={navCollapsed ? <MenuOutlined /> : <MenuFoldOutlined />}
+              aria-label={navCollapsed ? t('a11y.openNav') : t('a11y.closeNav')}
+              aria-expanded={!navCollapsed}
+              aria-controls="app-nav"
+              onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+              style={{ color: token.colorTextLightSolid, flex: 'none' }}
+            />
+          )}
           {/* On a light chip because the mark is mostly black line work: the passage drawn in it
               is all but invisible against the dark header, and inverting the image would take the
               red and blue of the survey marker with it. Width is left to follow the height so the
@@ -205,7 +225,22 @@ function AppShell() {
               padding: '2px 5px',
             }}
           />
-          <Typography.Title level={5} style={{ color: token.colorTextLightSolid, margin: 0 }}>
+          {/* Never wrapped: squeezed by the controls on the right, a wrapping name broke into one
+              letter per line and spilled out of the bar. Below about 400px the stylesheet hides it
+              and the mark alone stands for the application. */}
+          <Typography.Title
+            level={5}
+            className="app-wordmark"
+            data-testid="app-wordmark"
+            style={{
+              color: token.colorTextLightSolid,
+              margin: 0,
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             {t('app.name')}
           </Typography.Title>
         </Flex>
@@ -237,6 +272,11 @@ function AppShell() {
             trigger={['click']}
             menu={{
               items: [
+                // On a phone the button shows only the avatar, so the menu is where the account
+                // is named — which account is signed in is worth seeing on a shared device.
+                ...(isMobile
+                  ? [{ key: 'account', icon: <UserOutlined />, label: accountName, disabled: true }]
+                  : []),
                 {
                   key: 'settings',
                   icon: <SettingOutlined />,
@@ -270,14 +310,17 @@ function AppShell() {
               // and the two pixels of a button's transparent border are enough to wrap the
               // application's name onto a second line.
               style={{ color: token.colorTextLightSolid, paddingInline: 0, border: 'none' }}
+              // On a phone the name is not drawn — a long one ran past the screen's right edge and
+              // made every signed-in page wider than the phone — but the button still carries it.
+              aria-label={isMobile ? accountName : undefined}
             >
               <Avatar
                 size="small"
                 src={me?.avatarUrl ?? undefined}
                 icon={<UserOutlined />}
-                style={{ marginInlineEnd: 8 }}
+                style={isMobile ? undefined : { marginInlineEnd: 8 }}
               />
-              {me?.displayName ?? me?.email ?? user?.profile.email}
+              {!isMobile && accountName}
             </Button>
           </Dropdown>
         </Flex>
@@ -287,13 +330,14 @@ function AppShell() {
           collapsible
           collapsed={navCollapsed}
           onCollapse={setNavCollapsed}
-          // Below md there is no room for the icon rail: zero width takes it off-canvas
-          // and antd renders its own edge trigger to bring it back.
+          // Below md there is no room for the icon rail: zero width takes it off-canvas, and the
+          // header's menu button brings it back instead of antd's edge tab.
           collapsedWidth={isMobile ? 0 : undefined}
+          trigger={isMobile ? null : undefined}
           theme="light"
           data-testid="app-sider"
         >
-          <nav aria-label={t('a11y.mainNav')}>
+          <nav id="app-nav" aria-label={t('a11y.mainNav')}>
             <Menu
               mode="inline"
               selectedKeys={[selectedKey]}

@@ -247,7 +247,7 @@ test('a camp is made from the list, renamed, announced, opened for its permissio
   // Announced. Confirmed first, as a trip's is, in the camp's own words — nobody is notified —
   // and the move shows twice over: the draft notice goes, and the state tag reads the new state.
   await page.getByRole('button', { name: /Publish/ }).click();
-  await confirmOk(page);
+  await confirmOk(page, { name: 'Announce', exact: true });
   await expect(page.getByText('Announced.')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('expedition-draft-notice')).toBeHidden({ timeout: 15_000 });
   await expect(page.locator('.ant-tag', { hasText: 'Published' }).first()).toBeVisible();

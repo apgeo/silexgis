@@ -7,6 +7,7 @@ import {
   DatePicker,
   Flex,
   Form,
+  Grid,
   Input,
   InputNumber,
   Modal,
@@ -39,6 +40,8 @@ import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { tripTypeLabel } from '../../components/trips/tripTypes.ts';
 import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
+import FieldsNeedAttention from '../../components/FieldsNeedAttention.tsx';
+import { useFieldsNeedingAttention } from '../../components/useFieldsNeedingAttention.ts';
 
 const { RangePicker } = DatePicker;
 
@@ -270,6 +273,12 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  // Below antd's `sm` (576px) two fields side by side leave each too narrow to read its own value,
+  // so every paired row becomes one column there. Only an explicit false counts: on the first
+  // render the breakpoint is not known yet, and guessing "phone" would flash the column on desktop.
+  const oneColumn = Grid.useBreakpoint().sm === false;
+  const pairedRow = { vertical: oneColumn, gap: oneColumn ? 0 : 12 } as const;
+  const attention = useFieldsNeedingAttention(form);
   const requestDiscard = useDiscardGuard();
   const edits = useFormEdits(open);
   const createTrip = useCreateTripLog();
@@ -379,11 +388,13 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
     let values: FormValues;
     try {
       values = await form.validateFields();
-    } catch {
-      // The refusal is taken rather than left to travel. Every failure is already drawn against
-      // the field it belongs to — a missing title, a caving group not yet chosen — so there is
-      // nothing further to say; but a rejection nobody answered is reported as a fault by the
-      // observers watching for them, and pressing OK a moment too early is not a defect.
+    } catch (refusal) {
+      // The refusal is taken rather than left to travel: a rejection nobody answered is reported
+      // as a fault by the observers watching for them, and pressing OK a moment too early is not
+      // a defect. Every failure is drawn against its own field — a missing title, a caving group
+      // not yet chosen — but in this long dialog that field can be screens above the button, so
+      // the reader is taken to it and told beside the button how many need attention.
+      attention.onValidateRefused(refusal);
       return;
     }
     // Validation answers with the fields it validated, and a roster row carries more than the
@@ -518,17 +529,29 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
       open={open}
       onCancel={() => requestDiscard(edits.edited, () => onClose())}
       onOk={() => void onOk()}
+      okText={trip ? t('common.save') : planning ? t('trips.plan.save') : t('common.create')}
       confirmLoading={createTrip.isPending || createPlan.isPending || updateTrip.isPending}
       width={720}
       mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       destroyOnHidden
       afterOpenChange={setShown}
+      footer={(buttons) => (
+        <Flex gap={8} justify="end" align="center" wrap>
+          <FieldsNeedAttention count={attention.count} />
+          {buttons}
+        </Flex>
+      )}
     >
-      <Form<FormValues> form={form} layout="vertical" onValuesChange={edits.onValuesChange}>
+      <Form<FormValues>
+        form={form}
+        layout="vertical"
+        onValuesChange={edits.onValuesChange}
+        onFieldsChange={attention.onFieldsChange}
+      >
         <Form.Item name="title" label={t('trips.titleField')} rules={[{ required: true }]}>
           <Input maxLength={255} />
         </Form.Item>
-        <Flex gap={12}>
+        <Flex {...pairedRow}>
           <Form.Item name="tripTypeId" label={t('trips.type')} style={{ flex: 1 }}>
             <Select
               allowClear
@@ -591,7 +614,7 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
             />
           </Form.Item>
         )}
-        <Flex gap={12}>
+        <Flex {...pairedRow}>
           <Form.Item name="entryTime" label={t('trips.entryTime')} style={{ flex: 1 }}>
             <TimePicker style={{ width: '100%' }} format="HH:mm" minuteStep={5} />
           </Form.Item>
@@ -610,7 +633,7 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
             <InputNumber min={1} precision={0} style={{ width: '100%' }} data-testid="trip-max-participants" />
           </Form.Item>
         </Flex>
-        <Flex gap={12}>
+        <Flex {...pairedRow}>
           <Form.Item name="locationText" label={t('trips.location')} style={{ flex: 1 }}>
             <Input maxLength={300} />
           </Form.Item>
@@ -627,7 +650,7 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
             way to say the same thing, saying less, and the two would have to be kept in step by
             whoever happened to remember. This form leaves the caves alone entirely — it sends no
             list at all, which is what tells the server not to touch them. */}
-        <Flex gap={12} align="start">
+        <Flex {...pairedRow} align={oneColumn ? undefined : 'start'}>
           <Form.Item label={t('trips.participants')} style={{ flex: 1 }}>
             <RosterField
               name="participants"

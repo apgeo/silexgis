@@ -203,6 +203,16 @@ describe('AlbumsPage', () => {
     expect(state.albums.refetch).toHaveBeenCalled();
   });
 
+  it('confirms a new album with a button named for the act, and marks the title required before a press', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /New album/ }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'OK' })).toBeNull();
+    expect(dialog.querySelector('.ant-form-item-required')).not.toBeNull();
+  });
+
   it('offers exactly the audiences the API knows, each named in both languages', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /New album/ }));

@@ -100,6 +100,19 @@ describe('TestDataPage', () => {
   });
   afterEach(cleanup);
 
+  it('heads the page with the shared header like the other admin pages', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toHaveTextContent('Test data');
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('starts the chosen profile as edited, and asks before generating beside existing data', async () => {
     start
       .mockRejectedValueOnce(new ApiError(409, 'testdata.existing_data_confirm_required', undefined, { existing: { caves: 3, trips: 1, documents: 0 } }))

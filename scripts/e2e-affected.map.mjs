@@ -279,6 +279,10 @@ export const specs = {
   users: [
     'settings.spec.ts', 'permission-groups.spec.ts', 'users-admin.spec.ts', 'account-identity.spec.ts',
     'two-factor-sign-in.spec.ts',
+    // The application's frame on a phone: the header's account button and navigation button.
+    'phone-header.spec.ts',
+    // The shared heading row of the detail pages, measured at a phone's width and a desktop's.
+    'page-header.spec.ts',
   ],
   // Which protected rows a window holds, decided on the position each reader is shown — the
   // workspace map's entrance and feature layers, and a shared view's link.

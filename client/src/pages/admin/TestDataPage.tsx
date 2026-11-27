@@ -22,6 +22,7 @@ import { DeleteOutlined, ExperimentOutlined, PlayCircleOutlined, StopOutlined } 
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { ApiError } from '../../api/client.ts';
 import {
   testDataRunIsBusy,
@@ -227,12 +228,17 @@ export default function TestDataPage() {
   };
 
   const header = (
-    <Flex vertical style={{ marginBottom: 12 }}>
-      <Typography.Title level={3} style={{ margin: 0 }}>
-        <ExperimentOutlined /> {t('testData.title')}
-      </Typography.Title>
-      <Typography.Text type="secondary">{t('testData.intro')}</Typography.Text>
-    </Flex>
+    <>
+      <PageHeader
+        title={
+          <>
+            <ExperimentOutlined /> {t('testData.title')}
+          </>
+        }
+        style={{ marginBottom: 4 }}
+      />
+      <Typography.Paragraph type="secondary">{t('testData.intro')}</Typography.Paragraph>
+    </>
   );
 
   if (overview.isLoading) {

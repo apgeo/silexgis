@@ -236,6 +236,22 @@ describe('TripImportPage', () => {
     expect(within(summary).getByText('2')).toBeTruthy();
   });
 
+  it('gives its title a full-width line on a phone, with the confirmation under it', async () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = await screen.findByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toHaveTextContent('Import trips from a spreadsheet');
+      const actions = screen.getByTestId('page-header-actions');
+      expect(actions.style.flex).toBe('1 1 100%');
+      expect(actions).toContainElement(screen.getByTestId('trip-import-commit'));
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('shows a count that is nothing rather than hiding it', () => {
     show();
     const summary = screen.getByTestId('trip-import-summary');

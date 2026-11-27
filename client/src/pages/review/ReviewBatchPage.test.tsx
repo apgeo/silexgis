@@ -141,6 +141,26 @@ beforeEach(() => {
 });
 
 describe('the batch view', () => {
+  it('wraps a long cave name in a group header rather than cutting it at the card edge', () => {
+    show([cave, entrance, edit]);
+    const head = screen.getAllByTestId('review-group')[0].querySelector('.ant-card-head-title') as HTMLElement;
+    expect(head.style.whiteSpace).toBe('normal');
+    expect(head).toHaveTextContent('Invented Cave');
+  });
+
+  it('heads the page with the shared header, its title on a line of its own on a phone', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show([cave, entrance, edit]);
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toBeInTheDocument();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('names who sent it and lists the lines under the cave they belong to', () => {
     show([cave, entrance, edit]);
     expect(screen.getByTestId('review-batch-facts').textContent).toContain('Invented Uploader');

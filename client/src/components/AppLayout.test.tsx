@@ -128,13 +128,59 @@ describe('AppLayout sider', () => {
     expect(screen.getByText('map page')).toBeInTheDocument();
   });
 
-  it('takes the rail off-canvas with a trigger on mobile', () => {
+  it('takes the rail off-canvas on mobile and brings it back from a button in the header', () => {
     mobile = true;
     renderShell();
 
     expect(sider()).toHaveStyle({ width: '0px' });
-    // antd's own edge trigger is what brings it back; without it the nav is unreachable.
-    expect(zeroWidthTrigger()).not.toBeNull();
+    // antd's own edge tab floats over the page's content at the left edge and hid the first
+    // letters of titles and help text on every phone page; the header button replaces it.
+    expect(zeroWidthTrigger()).toBeNull();
+    const toggle = screen.getByTestId('nav-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(toggle);
+
+    expect(sider()).toHaveStyle({ width: '200px' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(toggle);
+    expect(sider()).toHaveStyle({ width: '0px' });
+  });
+
+  it('puts no menu button in the header on desktop, where the rail has its own trigger', () => {
+    renderShell();
+
+    expect(screen.queryByTestId('nav-toggle')).toBeNull();
+  });
+});
+
+describe('AppLayout phone header', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('keeps the product name on one line', () => {
+    renderShell();
+
+    expect(screen.getByTestId('app-wordmark')).toHaveStyle({ whiteSpace: 'nowrap' });
+  });
+
+  it('shows only the avatar on a phone and names the account inside its menu', async () => {
+    mobile = true;
+    me = { avatarUrl: null, displayName: 'Bartholomew Longname-Alexandrescu', email: 'caver@example.org' };
+    renderShell();
+
+    const account = screen.getByTestId('account-menu');
+    // A long name beside the avatar pushed the page wider than the phone's screen.
+    expect(account).not.toHaveTextContent('Bartholomew');
+    // Still named for whoever cannot see the picture.
+    expect(screen.getByRole('button', { name: /Bartholomew Longname-Alexandrescu/ })).toBe(account);
+
+    fireEvent.click(account);
+
+    expect(await screen.findByText('Bartholomew Longname-Alexandrescu')).toBeInTheDocument();
+    expect(screen.getByText('Sign out')).toBeInTheDocument();
   });
 });
 

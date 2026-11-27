@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -110,6 +110,20 @@ beforeEach(() => {
 });
 
 describe('the camp page', () => {
+  it('gives the camp name a full-width line on a phone, with its buttons under it', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      renderPage();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(within(line).getByTestId('expedition-name').textContent).toBe('Bihor summer camp');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(screen.getByTestId('page-header-actions')).getByTestId('expedition-open-report')).toBeTruthy();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('names the camp and the days it ran', () => {
     renderPage();
 

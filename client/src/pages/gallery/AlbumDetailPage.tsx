@@ -177,6 +177,14 @@ export default function AlbumDetailPage() {
         </Link>
       </Flex>
 
+      {/* Pictures are added from the gallery, where they can be chosen; an empty album that only
+          said so left the reader to find the way there on their own. */}
+      {canWrite && photos.length === 0 && !photosQuery.isPending && !photosQuery.isError && (
+        <Link to="/gallery" data-testid="album-add-photos" style={{ display: 'inline-block', marginBottom: 12 }}>
+          <Button type="primary">{t('gallery.albumAddPhotos')}</Button>
+        </Link>
+      )}
+
       {canWrite && photos.length > 1 && (
         <Alert
           type="info"

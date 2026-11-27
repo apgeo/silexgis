@@ -20,6 +20,7 @@ import {
   Typography,
 } from 'antd';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { isConcurrencyConflict } from '../../api/client.ts';
 import { versionReadWith } from '../../api/readingVersion.ts';
 import { expeditionProblemKey } from './expeditionProblems.ts';
@@ -139,73 +140,73 @@ export default function ExpeditionDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
-      <Flex justify="space-between" align="center" gap={12} style={{ marginBottom: 12 }}>
-        <Flex align="center" gap={8} wrap>
-          <Typography.Title level={3} style={{ margin: 0 }} data-testid="expedition-name">
-            {camp.name}
-          </Typography.Title>
-          <TripStateTag state={camp.state} />
-        </Flex>
-        <Flex gap={8} wrap>
-          {/* The write-up as a document rather than a page of tabs, for anybody who may read
-              the camp: circulating one is not an act of editing it. */}
-          <Link to={`/expeditions/${camp.id}/report`}>
-            <Button icon={<FileTextOutlined />} data-testid="expedition-open-report">
-              {t('expeditions.report.open')}
-            </Button>
-          </Link>
-          {/* Who may read this camp, narrowed person by person — and, through the camp's own
-              sharing, the trips it gathers. A camp contains no features, so the dialog offers
-              reach over this camp alone. */}
-          {canManagePermissions && (
-            <Button
-              icon={<LockOutlined />}
-              onClick={() => setPermissionsOpen(true)}
-              data-testid="expedition-permissions"
-            >
-              {t('permissions.button')}
-            </Button>
-          )}
-          {/* Sharing reaches the trips the camp gathers, one marked rule each, and takes the
-              same right as the camp's own permissions: the camp is where a person asks, each
-              trip is what answers. */}
-          {canManagePermissions && (
-            <Button
-              icon={<ShareAltOutlined />}
-              onClick={() => setSharingOpen(true)}
-              data-testid="expedition-share"
-            >
-              {t('expeditions.sharing.button')}
-            </Button>
-          )}
-          {(canEdit || canDelete) && (
-            <>
-              <ExpeditionStateControl
-                expeditionId={camp.id}
-                state={camp.state}
-                visibility={camp.visibility}
-                canEdit={canEdit}
-              />
-              {canEdit && (
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => setEditing(true)}
-                  data-testid="expedition-edit"
-                >
-                  {t('expeditions.edit')}
-                </Button>
-              )}
-              {canDelete && (
-                <Popconfirm title={t('expeditions.deleteConfirm')} onConfirm={() => void onDelete()}>
-                  <Button danger icon={<DeleteOutlined />} data-testid="expedition-delete">
-                    {t('features.delete')}
+      <PageHeader
+        style={{ marginBottom: 12 }}
+        title={camp.name}
+        titleTestId="expedition-name"
+        after={<TripStateTag state={camp.state} />}
+        actions={
+          <>
+            {/* The write-up as a document rather than a page of tabs, for anybody who may read
+                the camp: circulating one is not an act of editing it. */}
+            <Link to={`/expeditions/${camp.id}/report`}>
+              <Button icon={<FileTextOutlined />} data-testid="expedition-open-report">
+                {t('expeditions.report.open')}
+              </Button>
+            </Link>
+            {/* Who may read this camp, narrowed person by person — and, through the camp's own
+                sharing, the trips it gathers. A camp contains no features, so the dialog offers
+                reach over this camp alone. */}
+            {canManagePermissions && (
+              <Button
+                icon={<LockOutlined />}
+                onClick={() => setPermissionsOpen(true)}
+                data-testid="expedition-permissions"
+              >
+                {t('permissions.button')}
+              </Button>
+            )}
+            {/* Sharing reaches the trips the camp gathers, one marked rule each, and takes the
+                same right as the camp's own permissions: the camp is where a person asks, each
+                trip is what answers. */}
+            {canManagePermissions && (
+              <Button
+                icon={<ShareAltOutlined />}
+                onClick={() => setSharingOpen(true)}
+                data-testid="expedition-share"
+              >
+                {t('expeditions.sharing.button')}
+              </Button>
+            )}
+            {(canEdit || canDelete) && (
+              <>
+                <ExpeditionStateControl
+                  expeditionId={camp.id}
+                  state={camp.state}
+                  visibility={camp.visibility}
+                  canEdit={canEdit}
+                />
+                {canEdit && (
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => setEditing(true)}
+                    data-testid="expedition-edit"
+                  >
+                    {t('expeditions.edit')}
                   </Button>
-                </Popconfirm>
-              )}
-            </>
-          )}
-        </Flex>
-      </Flex>
+                )}
+                {canDelete && (
+                  <Popconfirm title={t('expeditions.deleteConfirm')} onConfirm={() => void onDelete()}>
+                    <Button danger icon={<DeleteOutlined />} data-testid="expedition-delete">
+                      {t('features.delete')}
+                    </Button>
+                  </Popconfirm>
+                )}
+              </>
+            )}
+          </>
+        }
+      />
 
       {isError && (
         <Alert

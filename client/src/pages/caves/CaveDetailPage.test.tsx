@@ -25,6 +25,8 @@ const fitGeoJsonGeometry = vi.fn();
 const setSelection = vi.fn();
 // What the permissions dialog was last handed; the dialog itself is somebody else's to test.
 const permissionsModal = vi.fn();
+// What the entrance editor was last handed: where its map opens and what position it starts from.
+const entranceEditor = vi.fn();
 
 let entrances: Entrance[] = [];
 /** A read of the entrances that did not land, switched on by the test that needs it. */
@@ -108,7 +110,12 @@ vi.mock('../../components/statistics/TripStatisticsPanel.tsx', () => ({ default:
 vi.mock('../../components/shares/ShareLinksModal.tsx', () => ({ default: () => null }));
 vi.mock('../../components/qr/QrPublicationModal.tsx', () => ({ default: () => null }));
 vi.mock('../../components/tags/TagChips.tsx', () => ({ default: () => null }));
-vi.mock('../../components/caves/EntranceEditorModal.tsx', () => ({ default: () => null }));
+vi.mock('../../components/caves/EntranceEditorModal.tsx', () => ({
+  default: (props: object) => {
+    entranceEditor(props);
+    return null;
+  },
+}));
 vi.mock('./CaveClosestApproachSection.tsx', () => ({ default: () => null }));
 vi.mock('./CaveTripsSection.tsx', () => ({ default: () => null }));
 vi.mock('./CaveRecordingsSection.tsx', () => ({ default: () => null }));
@@ -219,6 +226,49 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe('CaveDetailPage header on a phone', () => {
+  const desktopWidth = window.innerWidth;
+  afterEach(() => {
+    window.innerWidth = desktopWidth;
+  });
+
+  it('gives the cave name a full-width line and puts the buttons under it', () => {
+    window.innerWidth = 390;
+    entrances = [];
+    show();
+    const line = screen.getByTestId('page-header-title-line');
+    expect(line).toHaveTextContent('Test cave');
+    expect(line.style.flex).toBe('1 1 100%');
+    expect(within(screen.getByTestId('page-header-actions')).getByRole('button', { name: /Open in 3D/ })).toBeTruthy();
+  });
+});
+
+describe('a new entrance starts from a position somebody gave', () => {
+  const snapped = { type: 'Point', coordinates: [25.25, 45.75] };
+
+  function editorProps() {
+    return entranceEditor.mock.lastCall![0] as {
+      defaultCenter: [number, number];
+      startPosition: [number, number] | null;
+    };
+  }
+
+  it('starts empty over a cave whose position is the grid stand-in, but still centres the map there', () => {
+    entrances = [];
+    caveQuery = { data: { ...cave(), approximateLocation: true, geom: snapped }, isPending: false };
+    show();
+    expect(editorProps().startPosition).toBeNull();
+    expect(editorProps().defaultCenter).toEqual([25.25, 45.75]);
+  });
+
+  it('starts from the position of a cave the caller sees exactly', () => {
+    entrances = [];
+    caveQuery = { data: { ...cave(), approximateLocation: false, geom: snapped }, isPending: false };
+    show();
+    expect(editorProps().startPosition).toEqual([25.25, 45.75]);
+  });
+});
 
 describe('CaveDetailPage open in 3D', () => {
   it('selects the cave, leaves the scene a place to fly to, and goes there', () => {

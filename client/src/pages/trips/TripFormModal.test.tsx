@@ -85,8 +85,13 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
 }
 
 /** The write body the modal handed its mutation, once the save has been awaited. */
+/** The dialog's confirming button, whichever act it names: Create, Save or Save plan. */
+function confirmButton() {
+  return screen.getByRole('button', { name: /^(Create|Save|Save plan)$/ });
+}
+
 async function savedBody(mutation: typeof createTrip): Promise<TripLogWrite> {
-  fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+  fireEvent.click(confirmButton());
   await vi.waitFor(() => expect(mutation).toHaveBeenCalled());
   const call = mutation.mock.calls[0][0] as TripLogWrite | { body: TripLogWrite };
   return 'body' in call ? call.body : call;
@@ -432,6 +437,22 @@ describe('TripFormModal as the plan door', () => {
   });
   afterEach(cleanup);
 
+  it('names its confirm button for the act in each of its three forms, never a bare OK', () => {
+    show(null, 'plan');
+    expect(screen.getByRole('button', { name: 'Save plan' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
+    cleanup();
+
+    show(null);
+    expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
+    cleanup();
+
+    show(trip());
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'OK' })).toBeNull();
+  });
+
   it('says it is planning a trip, and names the group that will read it', () => {
     show(null, 'plan');
 
@@ -586,7 +607,7 @@ describe('TripFormModal for somebody who may record trips only for a caving grou
     expect(screen.queryByTestId('trip-owning-group')).toBeNull();
 
     // Pressing OK without choosing is refused on the field, and nothing is sent.
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
     expect(await screen.findByText('Choose the caving group this trip belongs to.')).toBeInTheDocument();
     expect(createTrip).not.toHaveBeenCalled();
 
@@ -681,7 +702,7 @@ describe('TripFormModal when a save is refused', () => {
     updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.participant_tracked'));
     show(trip());
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
 
     expect(await screen.findByText(/has reports on this trip's tracking/)).toBeInTheDocument();
     expect(screen.queryByText('The operation failed. Please try again.')).toBeNull();
@@ -693,7 +714,7 @@ describe('TripFormModal when a save is refused', () => {
     updateTrip.mockRejectedValue(new ApiError(409, 'trip_log.concurrent_roster_write'));
     show(trip());
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
 
     expect(
       await screen.findByText(
@@ -708,7 +729,7 @@ describe('TripFormModal when a save is refused', () => {
     updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.type_unknown'));
     show(trip());
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
 
     expect(await screen.findByText('The operation failed. Please try again.')).toBeInTheDocument();
     expect(screen.queryByText(/has reports on this trip's tracking/)).toBeNull();
@@ -737,7 +758,7 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
       </App>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
     const sent = updateTrip.mock.calls[0][0] as { ifMatch?: string; body: TripLogWrite };
     expect(sent.ifMatch).toBe('"1"');
@@ -757,13 +778,13 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
     );
     updateTrip.mockReset().mockRejectedValue(new ApiError(412, 'concurrency.version_mismatch'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
     // Messages are drawn in the order they were asked for, so a second refusal in words of its own
     // is the witness: once its sentence is on screen, one the stale refusal had asked for would be
     // too — whatever words it would have used. No waiting on the clock.
     updateTrip.mockRejectedValue(new ApiError(400, 'trip_log.participant_tracked'));
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
     await screen.findByText(/has reports on this trip's tracking/);
 
     expect(document.querySelectorAll('.ant-message-notice')).toHaveLength(1);
@@ -788,7 +809,7 @@ describe('TripFormModal and a trip that changed while the form was open', () => 
       </App>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    fireEvent.click(confirmButton());
     await vi.waitFor(() => expect(updateTrip).toHaveBeenCalled());
     expect((updateTrip.mock.calls[0][0] as { ifMatch?: string }).ifMatch).toBe('"2"');
   });
@@ -840,5 +861,51 @@ describe('TripFormModal leaving with typed work', () => {
     fireEvent.mouseUp(wrap);
     fireEvent.click(wrap);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('TripFormModal refused save', () => {
+  afterEach(cleanup);
+
+  it('says beside the buttons how many fields need attention and takes the cursor to the first', async () => {
+    createPlan.mockReset();
+    show(null, 'plan');
+
+    fireEvent.click(confirmButton());
+
+    expect(await screen.findByTestId('form-attention')).toHaveTextContent('1 field needs attention');
+    await vi.waitFor(() => expect(screen.getByLabelText('Title')).toHaveFocus());
+    expect(createPlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('TripFormModal on a narrow phone', () => {
+  const desktopWidth = window.innerWidth;
+  beforeEach(() => {
+    planDefault.mockReset().mockReturnValue({ data: undefined });
+  });
+  afterEach(() => {
+    cleanup();
+    window.innerWidth = desktopWidth;
+  });
+
+  /** The flex rows that put fields side by side, read from the fields they hold. */
+  const rowOf = (label: string) =>
+    screen.getByText(label, { selector: 'label' }).closest('.ant-form-item')!.parentElement!;
+  const rows = () => ['Trip type', 'Entry time', 'Location', 'Participants'].map(rowOf);
+
+  it('stacks the plan form into one column below 576 px', () => {
+    window.innerWidth = 390;
+    show(null, 'plan');
+    for (const row of rows()) {
+      expect(row).toHaveClass('ant-flex-vertical');
+    }
+  });
+
+  it('keeps the fields side by side on a wider screen', () => {
+    show(null, 'plan');
+    for (const row of rows()) {
+      expect(row).not.toHaveClass('ant-flex-vertical');
+    }
   });
 });

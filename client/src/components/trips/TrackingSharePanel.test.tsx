@@ -73,6 +73,23 @@ afterEach(() => {
 });
 
 describe('publishing a tracked trip', () => {
+  it('names the card for what it makes and who can open it, not as publishing the trip', () => {
+    view();
+    const card = screen.getByTestId('trip-tracking-publish');
+    expect(card).not.toHaveTextContent(/Publish this trip/);
+    expect(card).toHaveTextContent(/anyone with the link/i);
+    expect(card).toHaveTextContent(/no account/i);
+  });
+
+  it('gives the end of a minted link as a day and a time of day, without seconds', async () => {
+    view();
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+    const expires = await screen.findByTestId('trip-tracking-publish-minted-expires');
+    // The mint answered 10:00:00Z; the sentence names the minute, never a ":00" of seconds.
+    expect(expires.textContent).toMatch(/\d{1,2}:\d{2}(?!:\d)/);
+    expect(expires.textContent).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
+  });
+
   it('is offered to nobody who cannot write the trip', () => {
     view(false);
 

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { Alert, App, Flex, Space, Spin, Typography } from 'antd';
+import { Alert, App, Flex, Spin } from 'antd';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
@@ -217,25 +218,25 @@ export default function SpeleolocRecordingImportPage() {
 
   return (
     <div style={{ padding: isMobile ? 12 : 24 }} data-testid="speleoloc-recording-import">
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
-        <Space wrap>
+      <PageHeader
+        title={t('speleolocImport.recordingTitle')}
+        before={
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
             {t('common.back')}
           </Button>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {t('speleolocImport.recordingTitle')}
-          </Typography.Title>
-        </Space>
-        <Button
-          type="primary"
-          disabled={refused || blockers.length > 0 || result !== null}
-          loading={commit.isPending}
-          onClick={() => void onCommit()}
-          data-testid="speleoloc-import-commit"
-        >
-          {t('speleolocImport.recordSelected', { count: takenIds.length })}
-        </Button>
-      </Flex>
+        }
+        actions={
+          <Button
+            type="primary"
+            disabled={refused || blockers.length > 0 || result !== null}
+            loading={commit.isPending}
+            onClick={() => void onCommit()}
+            data-testid="speleoloc-import-commit"
+          >
+            {t('speleolocImport.recordSelected', { count: takenIds.length })}
+          </Button>
+        }
+      />
 
       {preview.isError && (
         <Alert

@@ -75,6 +75,7 @@ import CaveRecordingsSection from './CaveRecordingsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { entranceWriteProblem } from '../../components/caves/entranceWriteProblems.ts';
 import { featureProblemMessage } from '../../components/features/featureProblems.ts';
 import ReadFailedResult from '../../components/ReadFailedResult.tsx';
@@ -269,60 +270,63 @@ export default function CaveDetailPage() {
         />
       )}
 
-      <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-        <Flex align="center" gap={12}>
-          {/* The headline picture somebody chose, when there is one this reader may see. It sits
-              beside the name rather than down among the attachments because that is what it is
-              for: recognising the place at a glance. */}
-          {summary?.headlinePicture && (
-            <img
-              src={summary.headlinePicture.thumbnailUrl}
-              alt={summary.headlinePicture.caption ?? cave.name ?? ''}
-              loading="lazy"
-              style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 6 }}
-            />
-          )}
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {cave.name}
-          </Typography.Title>
-        </Flex>
-        <Flex gap={8} wrap justify="end">
-          <Button icon={<CodeSandboxOutlined />} onClick={openIn3d}>
-            {t('caves.openIn3d')}
-          </Button>
-          {canShare && (
-            <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
-              {t('shares.button')}
+      <PageHeader
+        style={{ marginBottom: 12 }}
+        title={cave.name}
+        before={
+          <>
+            {/* The headline picture somebody chose, when there is one this reader may see. It sits
+                beside the name rather than down among the attachments because that is what it is
+                for: recognising the place at a glance. */}
+            {summary?.headlinePicture && (
+              <img
+                src={summary.headlinePicture.thumbnailUrl}
+                alt={summary.headlinePicture.caption ?? cave.name ?? ''}
+                loading="lazy"
+                style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 6 }}
+              />
+            )}
+          </>
+        }
+        actions={
+          <>
+            <Button icon={<CodeSandboxOutlined />} onClick={openIn3d}>
+              {t('caves.openIn3d')}
             </Button>
-          )}
-          {canShare && (
-            <Button icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>
-              {t('qr.button')}
-            </Button>
-          )}
-          {canManagePermissions && (
-            <Button icon={<LockOutlined />} onClick={() => setPermissionsClicked(true)}>
-              {t('permissions.button')}
-            </Button>
-          )}
-          {canEdit && (
-            <Button icon={<EditOutlined />} onClick={() => navigate(`/caves/${cave.id}/edit`)}>
-              {t('caves.edit')}
-            </Button>
-          )}
-          {canDelete && (
-            <Popconfirm
-              title={t('caves.deleteConfirm')}
-              description={t('caves.deleteRestorable')}
-              onConfirm={() => void onDeleteCave()}
-            >
-              <Button danger icon={<DeleteOutlined />} data-testid="cave-delete">
-                {t('caves.delete')}
+            {canShare && (
+              <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
+                {t('shares.button')}
               </Button>
-            </Popconfirm>
-          )}
-        </Flex>
-      </Flex>
+            )}
+            {canShare && (
+              <Button icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>
+                {t('qr.button')}
+              </Button>
+            )}
+            {canManagePermissions && (
+              <Button icon={<LockOutlined />} onClick={() => setPermissionsClicked(true)}>
+                {t('permissions.button')}
+              </Button>
+            )}
+            {canEdit && (
+              <Button icon={<EditOutlined />} onClick={() => navigate(`/caves/${cave.id}/edit`)}>
+                {t('caves.edit')}
+              </Button>
+            )}
+            {canDelete && (
+              <Popconfirm
+                title={t('caves.deleteConfirm')}
+                description={t('caves.deleteRestorable')}
+                onConfirm={() => void onDeleteCave()}
+              >
+                <Button danger icon={<DeleteOutlined />} data-testid="cave-delete">
+                  {t('caves.delete')}
+                </Button>
+              </Popconfirm>
+            )}
+          </>
+        }
+      />
 
       {summary && (
         <Flex gap={16} wrap style={{ marginBottom: 12 }}>
@@ -651,8 +655,18 @@ export default function CaveDetailPage() {
         <EntranceEditorModal
           caveId={id}
           entrance={editingEntrance}
+          // With no cave position the map still opens over the region, but the coordinates
+          // start empty: a new entrance's position is only ever one somebody gave. A caller who
+          // may not see the cave exactly is sent a grid stand-in, which may centre the map but
+          // must never be offered as a position: saved untouched it would become a real entrance
+          // row at an invented point, labelled with the default quality.
           defaultCenter={
             cave.geom ? [cave.geom.coordinates[0], cave.geom.coordinates[1]] : [25.3, 45.7]
+          }
+          startPosition={
+            cave.geom && !cave.approximateLocation
+              ? [cave.geom.coordinates[0], cave.geom.coordinates[1]]
+              : null
           }
           open={editorOpen}
           onClose={() => setEditorOpen(false)}

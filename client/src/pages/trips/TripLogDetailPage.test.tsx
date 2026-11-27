@@ -433,6 +433,23 @@ describe('the trip page', () => {
     });
   });
 
+  it('gives the trip title a full-width line on a phone and puts the actions under it', () => {
+    canSpy.mockReturnValue(true);
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      renderPage();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(line).toContainElement(screen.getByRole('heading', { level: 3, name: trip().title }));
+      const actions = screen.getByTestId('page-header-actions');
+      expect(actions.style.flex).toBe('1 1 100%');
+      expect(actions).toContainElement(screen.getByTestId('trip-open-report'));
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('lets the row of page actions wrap rather than pushing the whole page sideways', () => {
     // Five buttons in a row come to 641px and a phone is 412px across. Unwrapped, this row was the
     // largest single reason the trip page scrolled sideways — larger than the tables under it —

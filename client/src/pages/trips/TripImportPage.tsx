@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftOutlined, InboxOutlined } from '@ant-design/icons';
 import { Alert, App, Flex, Input, Space, Spin, Tag, Typography, Upload } from 'antd';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client.ts';
@@ -274,31 +275,31 @@ export default function TripImportPage() {
 
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
-        <Space>
+      {/* The confirmation is dead once it has succeeded, until the reviewer closes the result.
+          The selection is recomputed from the preview the moment the modal appears, so a button
+          left live reads "Create 2 trips" again over rows that have just been created — and a
+          reviewer who dismisses the modal and clicks once more gets a second batch of the same
+          trips, undoable only as a separate act. */}
+      <PageHeader
+        title={t('tripImport.title')}
+        before={
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trip-logs')}>
             {t('common.back')}
           </Button>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {t('tripImport.title')}
-          </Typography.Title>
-          {session.data && <Tag>{session.data.fileName}</Tag>}
-        </Space>
-        {/* Dead once a confirmation has succeeded, until the reviewer closes the result. The
-            selection is recomputed from the preview the moment the modal appears, so a button
-            left live reads "Create 2 trips" again over rows that have just been created —
-            and a reviewer who dismisses the modal and clicks once more gets a second batch of
-            the same trips, undoable only as a separate act. */}
-        <Button
-          type="primary"
-          disabled={takenLines.length === 0 || result !== null || saveSession.isError}
-          loading={commit.isPending}
-          onClick={() => void onCommit()}
-          data-testid="trip-import-commit"
-        >
-          {t('tripImport.createSelected', { count: takenLines.length })}
-        </Button>
-      </Flex>
+        }
+        after={session.data && <Tag>{session.data.fileName}</Tag>}
+        actions={
+          <Button
+            type="primary"
+            disabled={takenLines.length === 0 || result !== null || saveSession.isError}
+            loading={commit.isPending}
+            onClick={() => void onCommit()}
+            data-testid="trip-import-commit"
+          >
+            {t('tripImport.createSelected', { count: takenLines.length })}
+          </Button>
+        }
+      />
 
       <ReviewSaveFailed
         failed={saveSession.isError}

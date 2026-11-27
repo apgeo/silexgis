@@ -34,6 +34,7 @@ export default function ExpeditionStateControl({ expeditionId, state, visibility
       wording={{
         publishConfirm: 'expeditions.publishConfirm',
         publishSuccess: 'expeditions.publishSuccess',
+        publishConfirmOk: 'expeditions.publishConfirmOk',
         callOff: 'expeditions.callOff',
         callOffConfirm: 'expeditions.callOffConfirm',
       }}

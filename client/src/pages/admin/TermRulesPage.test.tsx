@@ -86,6 +86,20 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe('TermRulesPage', () => {
+  it('heads the page with the shared header, its actions under the title on a phone', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      show();
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toHaveTextContent('Detection rules');
+      expect(within(screen.getByTestId('page-header-actions')).getByRole('button', { name: /New set/ })).toBeInTheDocument();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
   it('lists every set with its scope and how many rules it holds', () => {
     show();
     expect(within(rowOf('Invented club habits')).getByText('4')).toBeInTheDocument();

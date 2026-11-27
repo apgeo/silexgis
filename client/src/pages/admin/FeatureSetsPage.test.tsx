@@ -110,6 +110,23 @@ beforeEach(() => {
   failedRead.refetch.mockReset();
 });
 
+describe('the feature sets page header', () => {
+  it('puts the new-set action under the title on a phone', () => {
+    const desktopWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      render(<App><FeatureSetsPage /></App>);
+      const line = screen.getByTestId('page-header-title-line');
+      expect(line.style.flex).toBe('1 1 100%');
+      expect(within(line).getByRole('heading', { level: 3 })).toHaveTextContent('Feature sets');
+      expect(within(screen.getByTestId('page-header-actions')).getByRole('button', { name: /New feature set/ })).toBeInTheDocument();
+    } finally {
+      window.innerWidth = desktopWidth;
+    }
+  });
+
+});
+
 describe('failed reads of feature sets', () => {
   it('says the list of sets could not be read instead of showing none, and offers Retry', () => {
     failedRead.sets = true;

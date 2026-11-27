@@ -3,6 +3,7 @@ import { Alert, App, Card, Col, Descriptions, Empty, Flex, Row, Spin, Statistic,
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import {
   hasAccessAction,
   useCapabilities,
@@ -78,24 +79,25 @@ export default function StoragePage() {
   };
 
   const header = (
-    <Flex justify="space-between" align="center" wrap gap={8} style={{ marginBottom: 12 }}>
-      <Flex vertical>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          {t('fileStorage.title')}
-        </Typography.Title>
-        <Typography.Text type="secondary">{t('fileStorage.intro')}</Typography.Text>
-      </Flex>
-      {canAct && (
-        <Button
-          icon={<ReloadOutlined />}
-          loading={measure.isPending}
-          onClick={() => void measureNow()}
-          data-testid="storage-measure"
-        >
-          {t('fileStorage.measure')}
-        </Button>
-      )}
-    </Flex>
+    <>
+      <PageHeader
+        title={t('fileStorage.title')}
+        style={{ marginBottom: 4 }}
+        actions={
+          canAct && (
+            <Button
+              icon={<ReloadOutlined />}
+              loading={measure.isPending}
+              onClick={() => void measureNow()}
+              data-testid="storage-measure"
+            >
+              {t('fileStorage.measure')}
+            </Button>
+          )
+        }
+      />
+      <Typography.Paragraph type="secondary">{t('fileStorage.intro')}</Typography.Paragraph>
+    </>
   );
 
   if (report.isLoading) {

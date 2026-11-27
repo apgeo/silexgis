@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { App, Flex, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import Button from '../../components/Button.tsx';
+import PageHeader from '../../components/PageHeader.tsx';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import { useTranslation } from 'react-i18next';
 import {
@@ -98,19 +99,19 @@ export default function TermRulesPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12} wrap>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          {t('termRules.title')}
-        </Typography.Title>
-        <Space>
-          <Button icon={<UploadOutlined />} onClick={() => fileInput.current?.click()}>
-            {t('termRules.importFile')}
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            {t('termRules.newSet')}
-          </Button>
-        </Space>
-      </Flex>
+      <PageHeader
+        title={t('termRules.title')}
+        actions={
+          <>
+            <Button icon={<UploadOutlined />} onClick={() => fileInput.current?.click()}>
+              {t('termRules.importFile')}
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              {t('termRules.newSet')}
+            </Button>
+          </>
+        }
+      />
 
       <Typography.Paragraph type="secondary">{t('termRules.intro')}</Typography.Paragraph>
 

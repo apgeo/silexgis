@@ -151,7 +151,9 @@ export default function TrackingSharePanel({
     cancelButtonProps: { size: controlSize },
   };
 
-  const when = (value: string) => new Date(value).toLocaleString(i18n.language);
+  // A day and a time of day: the seconds of an expiry are noise somebody has to read past.
+  const when = (value: string) =>
+    new Date(value).toLocaleString(i18n.language, { dateStyle: 'medium', timeStyle: 'short' });
   const followUrl =
     minted === null
       ? ''

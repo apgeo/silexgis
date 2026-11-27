@@ -301,6 +301,7 @@ function AlbumEditModal({
     <Modal
       open
       title={editing === 'new' ? t('gallery.newAlbum') : t('gallery.editAlbum')}
+      okText={editing === 'new' ? t('common.create') : t('common.save')}
       onCancel={() => requestDiscard(edits.edited, onCancel)}
       mask={KEEP_OPEN_ON_OUTSIDE_CLICK}
       onOk={() => void save()}
@@ -310,7 +311,6 @@ function AlbumEditModal({
       <Form
         form={form}
         layout="vertical"
-        requiredMark={false}
         onValuesChange={edits.onValuesChange}
         initialValues={
           editing === 'new'
