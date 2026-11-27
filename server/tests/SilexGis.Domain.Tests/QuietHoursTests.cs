@@ -91,6 +91,20 @@ public class QuietHoursTests
     }
 
     [Fact]
+    public void The_minute_a_window_that_does_not_wrap_opens_is_inside_it_and_the_minute_it_closes_is_not()
+    {
+        // The same boundaries as the wrapping window, on the other arm of the comparison: 13:00
+        // local is held until 14:00, and 14:00 itself goes out at once.
+        var opensAt = new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero);
+        var closesAt = new DateTimeOffset(2026, 7, 1, 11, 0, 0, TimeSpan.Zero);
+
+        QuietHours.NextAllowed(opensAt, new TimeOnly(13, 0), new TimeOnly(14, 0), Bucharest)
+            .ShouldBe(closesAt);
+        QuietHours.NextAllowed(closesAt, new TimeOnly(13, 0), new TimeOnly(14, 0), Bucharest)
+            .ShouldBe(closesAt);
+    }
+
+    [Fact]
     public void The_night_the_clocks_go_forward_ends_an_hour_earlier_in_utc()
     {
         // Romania moves to summer time on 29 March 2026: 03:00 EET becomes 04:00 EEST. A message

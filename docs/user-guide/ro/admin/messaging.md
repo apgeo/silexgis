@@ -283,7 +283,16 @@ Numerele de sus:
 - câte mesaje **așteaptă**,
 - câte sunt **reținute pentru un rezumat**,
 - câte au fost **abandonate**,
+- câte au fost **doar în jurnal — nimic configurat pentru trimitere**,
 - și cel care contează: **de cât timp așteaptă cel mai vechi care nu a plecat.**
+
+**Doar în jurnal** devine un mesaj procesat cât timp nu este configurat nimic care să-i ducă
+canalul: un e-mail cât timp nu există un server de e-mail, un SMS cât timp nu există un furnizor de
+SMS. A fost scris în jurnalul serverului — vezi [E-mail](#e-mail) — și **nu a ajuns la nimeni**. Nu
+este numărat niciodată ca trimis și **nu se mai trimite ulterior**: după ce canalul este configurat,
+mesajele de atunci încolo pleacă normal. Cât timp există astfel de mesaje, un avertisment în
+partea de sus a paginii o spune și trimite la setările de mesagerie, iar ele apar mereu la **Doar
+ce are nevoie de atenție** până când perioada de păstrare le șterge.
 
 Dedesubt, cele care merită privite: despre ce era fiecare, **pentru cine era — sub numele sub care
 poate fi arătat și niciodată adresa lui** — și ce a spus capătul celălalt, cu tot ce arată a adresă

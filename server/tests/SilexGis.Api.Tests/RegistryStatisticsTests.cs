@@ -753,6 +753,45 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_group_of_exactly_the_publishable_size_publishes_its_measurements()
+    {
+        // Three tight groups of four, four and three caves, far apart. The group of three sits on
+        // the floor itself: it is large enough to describe, so its centre, scaled centre and
+        // spread are published like the larger groups'.
+        var lengths = new List<decimal>();
+        for (var i = 0; i < 4; i++)
+        {
+            lengths.Add(1000m + (i * 10m));
+            lengths.Add(5000m + (i * 10m));
+        }
+
+        for (var i = 0; i < 3; i++)
+        {
+            lengths.Add(20_000m + (i * 10m));
+        }
+
+        var region = await SeedAsync("CLFLOOR", lengths);
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=3&region={region}");
+
+        var floor = body.GetProperty("minimumPublishableClusterSize").GetInt32();
+        floor.ShouldBe(3, "the seeded groups are sized against a floor of three");
+
+        var clusters = body.GetProperty("clusters").EnumerateArray().ToList();
+        clusters.Select(c => c.GetProperty("count").GetInt32()).Order().ShouldBe([3, 4, 4]);
+
+        foreach (var cluster in clusters)
+        {
+            var count = cluster.GetProperty("count").GetInt32();
+            cluster.GetProperty("centre").ValueKind.ShouldNotBe(
+                JsonValueKind.Null, $"a group of {count} caves withheld its centre against a floor of {floor}.");
+            cluster.GetProperty("scaledCentre").ValueKind.ShouldNotBe(JsonValueKind.Null);
+            cluster.GetProperty("meanDistanceToCentre").ValueKind.ShouldNotBe(JsonValueKind.Null);
+        }
+    }
+
+    [Fact]
     public async Task A_cave_the_caller_may_not_read_is_not_in_the_grouping_at_all()
     {
         // Twelve caves; the viewer is denied Read on three of them. The grouping the viewer gets

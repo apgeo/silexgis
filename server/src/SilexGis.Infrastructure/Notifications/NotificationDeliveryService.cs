@@ -284,7 +284,7 @@ public sealed class NotificationDeliveryService(
 
         if (result.Sent)
         {
-            MarkAllSent(wanted);
+            MarkAllSettled(wanted, result.ChannelConfigured);
         }
         else
         {
@@ -592,10 +592,9 @@ public sealed class NotificationDeliveryService(
         if (result.Sent)
         {
             // Terminates the row even when nothing is configured: the message went to the log,
-            // which is what a mail-less installation does. Retrying it would never succeed.
-            delivery.Status = NotificationDeliveryStatus.Sent;
-            delivery.SentAt = clock.GetUtcNow();
-            delivery.Error = null;
+            // which is what a mail-less installation does, and retrying it would never succeed.
+            // But it is recorded as logged only, never as sent — nobody received it.
+            Settle(delivery, result.ChannelConfigured, clock.GetUtcNow());
             return;
         }
 
@@ -835,15 +834,25 @@ public sealed class NotificationDeliveryService(
     /// </summary>
     private string Absolute(string url) => NotificationLinks.Absolute(configuration, url);
 
-    private void MarkAllSent(List<NotificationDelivery> deliveries)
+    private void MarkAllSettled(List<NotificationDelivery> deliveries, bool channelConfigured)
     {
         var now = clock.GetUtcNow();
         foreach (var delivery in deliveries)
         {
-            delivery.Status = NotificationDeliveryStatus.Sent;
-            delivery.SentAt = now;
-            delivery.Error = null;
+            Settle(delivery, channelConfigured, now);
         }
+    }
+
+    /// <summary>
+    /// Ends a row whose message the channel accepted. A channel with no transport behind it only
+    /// wrote the message to the log, so the row says that instead of claiming it was sent, and
+    /// keeps no sent time.
+    /// </summary>
+    private static void Settle(NotificationDelivery delivery, bool channelConfigured, DateTimeOffset now)
+    {
+        delivery.Status = channelConfigured ? NotificationDeliveryStatus.Sent : NotificationDeliveryStatus.LoggedOnly;
+        delivery.SentAt = channelConfigured ? now : null;
+        delivery.Error = null;
     }
 
     /// <summary>

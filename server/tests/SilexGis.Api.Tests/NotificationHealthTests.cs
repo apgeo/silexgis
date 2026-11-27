@@ -177,6 +177,24 @@ public sealed class NotificationHealthTests : IAsyncLifetime, IDisposable, IClas
     }
 
     [Fact]
+    public async Task A_message_that_only_reached_the_log_is_counted_apart_from_sent_and_needs_attention()
+    {
+        var loggedOnly = await SeedAsync(NotificationDeliveryStatus.LoggedOnly, clock.Now.AddMinutes(-2));
+        var sent = await SeedAsync(NotificationDeliveryStatus.Sent, clock.Now.AddMinutes(-2));
+
+        var counts = (await GetJsonAsync(operatorClient, HealthUrl)).GetProperty("counts").EnumerateArray().ToList();
+        CountOf(counts, "email", "loggedOnly").ShouldBe(1);
+        CountOf(counts, "email", "sent").ShouldBe(1);
+
+        // Nobody received it, however recent — unlike a message that left.
+        var attention = await ListedIdsAsync(DeliveriesUrl);
+        attention.ShouldContain(loggedOnly);
+        attention.ShouldNotContain(sent);
+
+        (await ListedIdsAsync($"{DeliveriesUrl}?attentionOnly=false&status=loggedOnly")).ShouldBe([loggedOnly]);
+    }
+
+    [Fact]
     public async Task An_unrecognised_status_is_a_refusal_a_caller_can_read()
     {
         var response = await operatorClient.GetAsync($"{DeliveriesUrl}?status=exploded");

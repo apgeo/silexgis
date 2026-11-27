@@ -4035,6 +4035,8 @@
     "methodNotAllowed": "Not enabled on this installation.",
     "methodEmailNotReady": "Confirm your email address first.",
     "methodSmsNotReady": "Confirm a phone number first.",
+    "methodEmailNoChannel": "No mail server is set up on this installation, so emailed codes cannot be sent. Ask an administrator.",
+    "methodSmsNoChannel": "No SMS provider is set up on this installation, so texted codes cannot be sent. Ask an administrator.",
     "methodUnusable": "Cannot be used now",
     "methodDisabled": "That method is off.",
     "turnOn": "Turn on",
@@ -7372,7 +7374,8 @@
       "pending": "Waiting",
       "deferred": "Held for the daily summary",
       "sent": "Sent",
-      "dead": "Given up"
+      "dead": "Given up",
+      "loggedOnly": "Logged only — nothing set up to send it"
     },
     "outcomes": {
       "notFound": "There is no such message any more.",
@@ -7381,7 +7384,12 @@
       "unreachable": "There is nowhere to send it: the account is gone, or no longer has an address.",
       "suppressed": "The person it was for has since asked not to be told about this, so it was not sent. They can still read it in their own list.",
       "queued": "Back in the queue."
-    }
+    },
+    "loggedOnly": "Some messages reached nobody: when they were handled, nothing was set up to send them.",
+    "loggedOnlyHint": "They were written to the server log instead — emails while no mail server was configured, texts while no SMS provider was — and are not sent later. Once the channel is set up, messages from then on go out normally; these stay listed until the retention period removes them.",
+    "mailSettings": "Open the messaging settings",
+    "nothingNeedsAttention": "Nothing needs attention.",
+    "nothingListed": "No message matches."
   },
   "calendar": {
     "title": "Calendar",

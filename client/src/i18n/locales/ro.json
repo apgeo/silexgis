@@ -4035,6 +4035,8 @@
     "methodNotAllowed": "Nu este activată pe această instalare.",
     "methodEmailNotReady": "Confirmă mai întâi adresa de e-mail.",
     "methodSmsNotReady": "Confirmă mai întâi un număr de telefon.",
+    "methodEmailNoChannel": "Pe această instalare nu este configurat niciun server de e-mail, deci codurile prin e-mail nu pot fi trimise. Cere ajutorul unui administrator.",
+    "methodSmsNoChannel": "Pe această instalare nu este configurat niciun furnizor de SMS, deci codurile prin SMS nu pot fi trimise. Cere ajutorul unui administrator.",
     "methodUnusable": "Indisponibilă acum",
     "methodDisabled": "Metoda este dezactivată.",
     "turnOn": "Activează",
@@ -7385,7 +7387,8 @@
       "pending": "În așteptare",
       "deferred": "Reținut pentru rezumatul zilnic",
       "sent": "Trimis",
-      "dead": "Renunțat"
+      "dead": "Renunțat",
+      "loggedOnly": "Doar în jurnal — nimic configurat pentru trimitere"
     },
     "outcomes": {
       "notFound": "Nu mai există un astfel de mesaj.",
@@ -7394,7 +7397,12 @@
       "unreachable": "Nu există unde să fie trimis: contul a dispărut sau nu mai are o adresă.",
       "suppressed": "Persoana căreia îi era destinat a cerut între timp să nu mai fie anunțată despre asta, deci nu s-a trimis. Îl poate citi în continuare în lista ei.",
       "queued": "Înapoi la coadă."
-    }
+    },
+    "loggedOnly": "Unele mesaje nu au ajuns la nimeni: când au fost procesate, nu era configurat nimic care să le trimită.",
+    "loggedOnlyHint": "Au fost scrise în jurnalul serverului în loc să fie trimise — e-mailurile cât timp nu era configurat un server de e-mail, SMS-urile cât timp nu era configurat un furnizor de SMS — și nu se mai trimit ulterior. După ce configurezi canalul, mesajele de atunci încolo pleacă normal; acestea rămân în listă până când perioada de păstrare le șterge.",
+    "mailSettings": "Deschide setările de mesagerie",
+    "nothingNeedsAttention": "Nimic nu necesită atenție.",
+    "nothingListed": "Niciun mesaj nu se potrivește."
   },
   "calendar": {
     "title": "Calendar",

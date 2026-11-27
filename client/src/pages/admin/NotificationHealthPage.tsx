@@ -17,6 +17,7 @@ import Button from '../../components/Button.tsx';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { api, ApiError } from '../../api/client.ts';
 import ReadFailedAlert from '../../components/ReadFailedAlert.tsx';
 import {
@@ -34,6 +35,8 @@ const statusColor: Record<NotificationDeliveryStatus, string> = {
   deferred: 'gold',
   sent: 'green',
   dead: 'red',
+  // A warning colour, not the green of "sent": nobody received these messages.
+  loggedOnly: 'orange',
 };
 
 /**
@@ -156,6 +159,7 @@ export default function NotificationHealthPage() {
     counts.filter((c) => c.status === wanted).reduce((sum, c) => sum + c.count, 0);
   const oldestSeconds = health.data?.oldestPendingAgeSeconds ?? null;
   const stalled = oldestSeconds !== null && oldestSeconds > STALLED_AFTER_SECONDS;
+  const loggedOnly = known && totalIn('loggedOnly') > 0;
 
   return (
     <div style={{ padding: 24 }}>
@@ -187,10 +191,30 @@ export default function NotificationHealthPage() {
         />
       )}
 
+      {loggedOnly && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="notification-health-logged-only"
+          title={t('notificationHealth.loggedOnly')}
+          description={
+            <>
+              {t('notificationHealth.loggedOnlyHint')}{' '}
+              <Link to="/admin/messaging">{t('notificationHealth.mailSettings')}</Link>
+            </>
+          }
+        />
+      )}
+
       <Flex gap={32} wrap style={{ marginBottom: 24 }}>
         <Statistic title={t('notificationHealth.statuses.pending')} value={known ? totalIn('pending') : unknown} />
         <Statistic title={t('notificationHealth.statuses.deferred')} value={known ? totalIn('deferred') : unknown} />
         <Statistic title={t('notificationHealth.statuses.dead')} value={known ? totalIn('dead') : unknown} />
+        <Statistic
+          title={t('notificationHealth.statuses.loggedOnly')}
+          value={known ? totalIn('loggedOnly') : unknown}
+        />
         <Statistic
           title={t('notificationHealth.oldestPending')}
           value={
@@ -264,7 +288,7 @@ export default function NotificationHealthPage() {
             setStatus(value);
             setPage(1);
           }}
-          options={(['pending', 'deferred', 'sent', 'dead'] as const).map((value) => ({
+          options={(['pending', 'deferred', 'sent', 'loggedOnly', 'dead'] as const).map((value) => ({
             value,
             label: t(`notificationHealth.statuses.${value}`),
           }))}
@@ -296,6 +320,12 @@ export default function NotificationHealthPage() {
         size="small"
         loading={deliveries.isFetching && !deliveries.data}
         dataSource={deliveries.data?.items}
+        locale={{
+          emptyText:
+            attentionOnly && status === undefined
+              ? t('notificationHealth.nothingNeedsAttention')
+              : t('notificationHealth.nothingListed'),
+        }}
         onChange={(pagination) => {
           setPage(pagination.current ?? 1);
           setPageSize(pagination.pageSize ?? 25);

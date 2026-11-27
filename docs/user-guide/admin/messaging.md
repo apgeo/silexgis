@@ -276,7 +276,16 @@ The numbers at the top:
 - how many messages are **waiting**,
 - how many are **held for a summary**,
 - how many have been **given up on**,
+- how many were **logged only — nothing set up to send them**,
 - and the one that matters: **how long the oldest one that has not left has been waiting.**
+
+**Logged only** is what a message becomes when it is handled while nothing is set up to carry its
+channel: an email while no mail server is configured, a text while no SMS provider is. It was
+written to the server log — see [Email](#email) — and **reached nobody**. It is never counted as
+sent, and it is **not sent later**: once the channel is set up, messages from then on go out
+normally. While there are any, a warning at the top of the page says so and links to the messaging
+settings, and they are always among **Only what needs attention** until the retention period
+removes them.
 
 Below, the ones worth looking at: what each was about, **who it was for — under the name they
 may be shown under and never their address** — and what the far end said, with anything

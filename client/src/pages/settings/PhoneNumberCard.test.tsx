@@ -40,6 +40,8 @@ vi.mock('../../api/hooks.ts', async () => {
           allowed: true,
           ready: true,
           destination: null,
+          destinationConfirmed: true,
+          channelConfigured: true,
         })),
       },
     }),

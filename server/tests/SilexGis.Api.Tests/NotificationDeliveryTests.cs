@@ -633,8 +633,38 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         }
 
         // The message went to the log, which is what a mail-less installation does. Retrying it
-        // would never succeed and the table would grow without bound.
-        (await DeliveriesAsync()).ShouldHaveSingleItem().Status.ShouldBe(NotificationDeliveryStatus.Sent);
+        // would never succeed and the table would grow without bound — but nobody received it,
+        // so the row says so rather than claiming it was sent.
+        var settled = (await DeliveriesAsync()).ShouldHaveSingleItem();
+        settled.Status.ShouldBe(NotificationDeliveryStatus.LoggedOnly);
+        settled.SentAt.ShouldBeNull();
+        settled.Error.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_daily_summary_with_no_mail_server_is_recorded_as_logged_only_for_every_event_in_it()
+    {
+        await SetMailAsync("daily");
+        await AddToCavingGroupAsync();
+        await AddToCavingGroupAsync("second");
+        factory.Messages.Clear();
+        await DrainAsync();
+        (await DeliveriesAsync()).ShouldAllBe(d => d.Status == NotificationDeliveryStatus.Deferred);
+
+        try
+        {
+            factory.Messages.MailConfigured = false;
+            await MakeDigestDueAsync();
+            await RunDigestAsync();
+        }
+        finally
+        {
+            factory.Messages.MailConfigured = true;
+        }
+
+        var settled = await DeliveriesAsync();
+        settled.Count.ShouldBe(2);
+        settled.ShouldAllBe(d => d.Status == NotificationDeliveryStatus.LoggedOnly && d.SentAt == null);
     }
 
     [Fact]

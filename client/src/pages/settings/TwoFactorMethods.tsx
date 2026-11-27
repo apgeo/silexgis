@@ -8,6 +8,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../api/client.ts';
 import { queryKeys, type MfaMethod, type MfaStatus, type TwoFactorMethod } from '../../api/hooks.ts';
+import { useVerifyEmail } from '../../api/hooks/me.ts';
+import { meProblemMessage } from './meProblems.ts';
 
 interface Props {
   status: MfaStatus;
@@ -35,6 +37,7 @@ export default function TwoFactorMethods({ status }: Props) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const verify = useVerifyEmail();
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.mfa });
 
@@ -143,13 +146,32 @@ export default function TwoFactorMethods({ status }: Props) {
     }
   };
 
-  /** Why a method cannot be switched on yet, or null when it can. */
+  /**
+   * Why a method cannot be switched on yet, or null when it can. Read from the two flags rather
+   * than from `ready`, which is false for every method that is not switched on yet. A missing
+   * channel comes first: no confirmation helps while nothing is set up to carry the code.
+   */
   const blockedReason = (method: MfaMethod): string | null => {
     if (!method.allowed) return t('security.methodNotAllowed');
-    if (method.method === 'email' && !method.ready && !method.enabled) return t('security.methodEmailNotReady');
-    if (method.method === 'sms' && !method.ready && !method.enabled) return t('security.methodSmsNotReady');
+    if (method.enabled) return null;
+    if (method.method === 'email' && !method.channelConfigured) return t('security.methodEmailNoChannel');
+    if (method.method === 'sms' && !method.channelConfigured) return t('security.methodSmsNoChannel');
+    if (method.method === 'email' && !method.destinationConfirmed) return t('security.methodEmailNotReady');
+    if (method.method === 'sms' && !method.destinationConfirmed) return t('security.methodSmsNotReady');
     return null;
   };
+
+  /**
+   * The confirmation email is offered only where it is the missing step: the address is not
+   * confirmed, and a mail server is there to carry the link. Without one it would only reach the
+   * server log, and "check your inbox" would be untrue.
+   */
+  const offersConfirmation = (method: MfaMethod) =>
+    method.method === 'email' &&
+    method.allowed &&
+    !method.enabled &&
+    method.channelConfigured &&
+    !method.destinationConfirmed;
 
   return (
     <Flex vertical gap={12}>
@@ -182,6 +204,25 @@ export default function TwoFactorMethods({ status }: Props) {
                   >
                     {t('security.turnOn')}
                   </Button>
+                ),
+                // The row says to confirm the address first, so the way to do that sits beside it
+                // rather than on another page.
+                offersConfirmation(item) ? (
+                  <Button
+                    key="confirm"
+                    size="small"
+                    loading={verify.isPending}
+                    onClick={() =>
+                      verify.mutate(undefined, {
+                        onSuccess: () => message.success(t('settings.emails.verifySent')),
+                        onError: (error) => message.error(meProblemMessage(error, t)),
+                      })
+                    }
+                  >
+                    {t('settings.emails.verify')}
+                  </Button>
+                ) : (
+                  <span key="confirm" />
                 ),
                 item.enabled && !isPreferred ? (
                   <Button key="prefer" size="small" onClick={() => void setPreferred(item.method)}>

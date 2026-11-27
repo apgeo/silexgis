@@ -53,6 +53,15 @@ public enum NotificationDeliveryStatus : short
 
     /// <summary>Permanently failed — retries exhausted, or the message cannot be composed.</summary>
     Dead = 3,
+
+    /// <summary>
+    /// Settled without reaching anyone: nothing is set up to carry its channel (no mail server for
+    /// email, no SMS provider for texts), so the message was written to the server log instead.
+    /// Kept apart from <see cref="Sent"/> because an operator reading "sent" believes the
+    /// recipient has it. It is terminal — the row is not sent later; once the channel is set up,
+    /// messages from then on go out normally.
+    /// </summary>
+    LoggedOnly = 4,
 }
 
 /// <summary>

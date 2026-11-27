@@ -355,6 +355,45 @@ public sealed class UploadReviewDecisionTests : IAsyncLifetime, IDisposable, ICl
     }
 
     [Fact]
+    public async Task An_uploader_who_may_decide_reviews_is_still_refused_their_own_upload_on_either_route()
+    {
+        await MarkAsync(true);
+        var held = await UploadAsync(Held: true, Cave(Guid.CreateVersion7(), "Own upload"));
+        var batchId = held.GetProperty("importBatchId").GetGuid();
+        var reviewId = held.GetProperty("rows")[0].GetProperty("reviewId").GetGuid();
+
+        // The uploader is given both review rights, so the only thing left to refuse them is that
+        // the upload is their own; without these grants the decide right alone would answer 403.
+        await GrantAsync(uploaderId, AccessEffect.Allow, AccessDomain.UploadReview, AccessAction.Read | AccessAction.Write);
+
+        foreach (var route in new[]
+                 {
+                     $"/api/v1/review/items/{reviewId}/accept",
+                     $"/api/v1/review/items/{reviewId}/reject",
+                     $"/api/v1/review/batches/{batchId}/accept",
+                     $"/api/v1/review/batches/{batchId}/reject",
+                 })
+        {
+            var refused = await uploader.PostAsJsonAsync(route, new { });
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, route);
+            (await CodeAsync(refused)).ShouldBe("review.own_batch", route);
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ImportBatchItems.AsNoTracking().SingleAsync(i => i.ReviewId == reviewId)).ReviewDecision
+                .ShouldBe(ImportReviewDecision.Pending);
+        }
+
+        // Somebody else holding the same rights decides the same line.
+        var accepted = await reviewer.PostAsJsonAsync($"/api/v1/review/items/{reviewId}/accept", new { });
+        accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+        (await accepted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("decided")[0]
+            .GetProperty("decision").GetString().ShouldBe("accepted");
+    }
+
+    [Fact]
     public async Task A_reviewer_sees_a_held_edit_of_a_protected_row_at_its_exact_position_and_outside_review_still_does_not()
     {
         // A protected entrance the uploader edits with its true point. A reviewer who may read the

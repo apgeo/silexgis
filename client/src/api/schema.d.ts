@@ -2707,8 +2707,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Deliveries that need attention: dead ones, and unsent ones older than the overdue window.
-         * @description status narrows to one delivery status, spelled as the answers spell it. attentionOnly (default true) keeps only dead deliveries and unsent ones older than overdueHours. overdueHours defaults to 24, which is longer than both the daily summary window and a night of quiet hours.
+         * Deliveries that need attention: dead ones, logged-only ones, and unsent ones older than the overdue window.
+         * @description status narrows to one delivery status, spelled as the answers spell it. attentionOnly (default true) keeps only dead deliveries, logged-only ones (handled while nothing was set up to send them, so they reached nobody), and unsent ones older than overdueHours. overdueHours defaults to 24, which is longer than both the daily summary window and a night of quiet hours.
          */
         get: operations["notificationHealthList"];
         put?: never;
@@ -14352,6 +14352,8 @@ export interface components {
             allowed: boolean;
             ready: boolean;
             destination: null | string;
+            destinationConfirmed: boolean;
+            channelConfigured: boolean;
         };
         MfaPreferredRequest: {
             method: null | components["schemas"]["TwoFactorMethod"];
@@ -14446,7 +14448,7 @@ export interface components {
             error: null | string;
         };
         /** @enum {unknown} */
-        NotificationDeliveryStatus: "pending" | "deferred" | "sent" | "dead";
+        NotificationDeliveryStatus: "pending" | "deferred" | "sent" | "dead" | "loggedOnly";
         NotificationDto: {
             /** Format: int64 */
             id: number;

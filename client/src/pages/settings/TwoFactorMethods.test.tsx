@@ -43,17 +43,20 @@ function status(enabled: Method[] = []): MfaStatus {
       method,
       enabled: enabled.includes(method),
       allowed: true,
-      ready: true,
+      // As the server sends it: ready only for a method that is switched on, whatever else holds.
+      ready: enabled.includes(method),
       destination: null,
+      destinationConfirmed: true,
+      channelConfigured: true,
     })),
   } as unknown as MfaStatus;
 }
 
-function show(enabled: Method[] = []) {
+function show(enabled: Method[] = [], value: MfaStatus = status(enabled)) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <App>
-        <TwoFactorMethods status={status(enabled)} />
+        <TwoFactorMethods status={value} />
       </App>
     </QueryClientProvider>,
   );
@@ -222,5 +225,50 @@ describe('a later method', () => {
       expect.objectContaining({ body: { code: '654321' } }),
     );
     expect(screen.getByText(/aaaa-1111/)).toBeInTheDocument();
+  });
+});
+
+describe('an email method waiting for a confirmed address', () => {
+  function emailMethod(change: { destinationConfirmed?: boolean; channelConfigured?: boolean }): MfaStatus {
+    const value = status();
+    return {
+      ...value,
+      methods: value.methods.map((m) => (m.method === 'email' ? { ...m, ...change } : m)),
+    } as MfaStatus;
+  }
+
+  it('offers to send the confirmation email again beside the reason it cannot be turned on', async () => {
+    post.mockResolvedValue({ data: undefined, error: undefined, response: { status: 202 } });
+    show([], emailMethod({ destinationConfirmed: false }));
+
+    expect(screen.getByText(t('security.methodEmailNotReady'))).toBeTruthy();
+    expect(turnOn(1)).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: t('settings.emails.verify') }));
+
+    await act(async () => {});
+    expect(post).toHaveBeenCalledWith('/api/v1/me/email/verify');
+    expect(await screen.findByText(t('settings.emails.verifySent'))).toBeTruthy();
+  });
+
+  it('offers nothing of the kind once the address is confirmed, and lets the method be turned on', () => {
+    // Not switched on, so not ready — the state every confirmed member starts in.
+    show();
+    expect(screen.queryByRole('button', { name: t('settings.emails.verify') })).toBeNull();
+    expect(screen.queryByText(t('security.methodEmailNotReady'))).toBeNull();
+    expect(turnOn(1)).toBeEnabled();
+  });
+
+  it('says no mail server is set up, rather than "check your inbox", when nothing could carry the link', () => {
+    show([], emailMethod({ destinationConfirmed: false, channelConfigured: false }));
+    expect(screen.getByText(t('security.methodEmailNoChannel'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: t('settings.emails.verify') })).toBeNull();
+    expect(turnOn(1)).toBeDisabled();
+  });
+
+  it('says no mail server is set up for a confirmed address too, and offers no confirmation', () => {
+    show([], emailMethod({ channelConfigured: false }));
+    expect(screen.getByText(t('security.methodEmailNoChannel'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: t('settings.emails.verify') })).toBeNull();
+    expect(turnOn(1)).toBeDisabled();
   });
 });
