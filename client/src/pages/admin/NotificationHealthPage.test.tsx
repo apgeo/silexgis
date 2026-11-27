@@ -2,6 +2,7 @@
 import { App } from 'antd';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 
@@ -43,9 +44,11 @@ const deadRow = {
 function show() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <App>
-        <NotificationHealthPage />
-      </App>
+      <MemoryRouter>
+        <App>
+          <NotificationHealthPage />
+        </App>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -123,5 +126,51 @@ describe('the health figures', () => {
 
     expect(await screen.findByText('Nothing waiting')).toBeTruthy();
     expect(screen.queryByTestId('notification-health-load-failed')).toBeNull();
+  });
+});
+
+describe('messages that reached only the server log', () => {
+  function answer(counts: { channel: string; status: string; count: number }[], items: unknown[]) {
+    get.mockReset().mockImplementation((path: string) =>
+      Promise.resolve(
+        path.endsWith('/health')
+          ? {
+              data: { counts, oldestPendingAgeSeconds: null, paidMessagesToday: 0, dailyPaidMessageCap: 0 },
+              response: { status: 200 },
+            }
+          : { data: { items, page: 1, pageSize: 25, totalItems: items.length }, response: { status: 200 } },
+      ),
+    );
+  }
+
+  it('says in words that nobody received them and points to the messaging settings', async () => {
+    answer(
+      [{ channel: 'email', status: 'loggedOnly', count: 2 }],
+      [{ ...deadRow, id: 42, status: 'loggedOnly', attempts: 1, error: null }],
+    );
+    show();
+
+    const warning = await screen.findByTestId('notification-health-logged-only');
+    expect(warning.textContent).toContain(i18n.t('notificationHealth.loggedOnly'));
+    const link = screen.getByRole('link', { name: i18n.t('notificationHealth.mailSettings') });
+    expect(link.getAttribute('href')).toBe('/admin/messaging');
+    // The row's own status is the logged-only outcome, never "Sent".
+    expect((await screen.findAllByText(i18n.t('notificationHealth.statuses.loggedOnly'))).length).toBeGreaterThan(0);
+    expect(screen.queryByText(i18n.t('notificationHealth.statuses.sent'))).toBeNull();
+  });
+
+  it('raises no warning when every message went out', async () => {
+    answer([{ channel: 'email', status: 'sent', count: 3 }], []);
+    show();
+
+    expect(await screen.findByText('Nothing waiting')).toBeTruthy();
+    expect(screen.queryByTestId('notification-health-logged-only')).toBeNull();
+  });
+
+  it('says nothing needs attention instead of an empty table', async () => {
+    answer([], []);
+    show();
+
+    expect(await screen.findByText(i18n.t('notificationHealth.nothingNeedsAttention'))).toBeTruthy();
   });
 });

@@ -214,6 +214,7 @@ const deliveryStatuses: Record<NotificationDeliveryStatus, true> = {
   deferred: true,
   sent: true,
   dead: true,
+  loggedOnly: true,
 };
 
 const retryOutcomes: Record<NotificationRetryOutcome, true> = {
