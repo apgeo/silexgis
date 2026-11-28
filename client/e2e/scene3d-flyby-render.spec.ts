@@ -115,11 +115,14 @@ test('a flyby is rendered on the server by a render node, followed in the panel,
     const claimed = await node.claim();
     expect(claimed.status(), await claimed.text()).toBe(200);
     const offered = (await claimed.json()) as Job;
-    if (offered.name === 'Demo render') {
+    // A job is named by its bundle's base name, not by the flyby's own words.
+    if (offered.name === 'demo-render') {
       job = offered;
     } else {
       // Somebody else's render left in the shared queue: not this test's to render.
-      await json(await node.post(`jobs/${offered.jobId}/fail`, { attempt: offered.attempt, reason: 'refused', message: 'not this test’s', retryable: false }));
+      // A fail is answered 200 with no body.
+      const refused = await node.post(`jobs/${offered.jobId}/fail`, { attempt: offered.attempt, reason: 'refused', message: 'not this test’s', retryable: false });
+      expect(refused.status(), await refused.text()).toBe(200);
     }
   }
   expect(job, 'the render the panel queued was handed to the node').not.toBeNull();
