@@ -21,7 +21,8 @@ public sealed record TestDataColumnCoverage(string Column, long NonNull);
 public static class TestDataCoverageSql
 {
     /// <summary>A table the report measures: which listed rows it covers, and through which column.</summary>
-    public sealed record Scope(string Table, string RegistryTable, string KeyColumn);
+    /// <param name="KeyType">The SQL type of the registry table's key, which the registry stores as text: <c>uuid</c> or <c>bigint</c>.</param>
+    public sealed record Scope(string Table, string RegistryTable, string KeyColumn, string KeyType = "uuid");
 
     /// <summary>
     /// The tables measured, each tied to the registry table its rows hang from. Grows with the
@@ -35,6 +36,27 @@ public static class TestDataCoverageSql
         new("feature_hierarchy_edges", "features", "child_id"),
         new("feature_ancestors", "features", "feature_id"),
         new("taggings", "features", "feature_id"),
+        new("users", "users", "id"),
+        new("user_roles", "users", "user_id"),
+        new("user_addresses", "user_addresses", "id"),
+        new("user_notification_preferences", "user_notification_preferences", "id", "bigint"),
+        new("calendar_feed_tokens", "calendar_feed_tokens", "id"),
+        new("api_access_keys", "api_access_keys", "id"),
+        new("cavers", "cavers", "id"),
+        new("caving_groups", "caving_groups", "id"),
+        new("caving_group_memberships", "caving_group_memberships", "id", "bigint"),
+        new("permission_groups", "permission_groups", "id"),
+        new("permission_group_members", "permission_group_members", "id", "bigint"),
+        new("access_entries", "access_entries", "id", "bigint"),
+        new("feature_links", "feature_links", "id", "bigint"),
+        new("feature_external_ids", "feature_external_ids", "id"),
+        new("feature_shares", "feature_shares", "id"),
+        new("cave_qr_publications", "cave_qr_publications", "id"),
+        new("link_kinds", "link_kinds", "id", "bigint"),
+        new("cave_types", "cave_types", "id", "bigint"),
+        new("entrance_types", "entrance_types", "id", "bigint"),
+        new("rock_types", "rock_types", "id", "bigint"),
+        new("feature_types", "feature_types", "id", "bigint"),
     ];
 
     public static async Task<IReadOnlyList<TestDataTableCoverage>> MeasureAsync(
@@ -70,7 +92,8 @@ public static class TestDataCoverageSql
             // The registry's text id is cast, never the table's uuid key: a cast key cannot use the
             // key's index, and every scope would read its whole table to count one run's rows.
             .Append(" WHERE ").Append(Quote(scope.KeyColumn)).Append(" IN (")
-            .Append("SELECT row_id::uuid FROM test_data_rows WHERE run_id = @run AND table_name = @registry)");
+            .Append("SELECT row_id::").Append(scope.KeyType is "bigint" ? "bigint" : "uuid")
+            .Append(" FROM test_data_rows WHERE run_id = @run AND table_name = @registry)");
 
         await using var command = await CommandAsync(db, ct);
         command.CommandText = select.ToString();

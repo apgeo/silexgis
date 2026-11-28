@@ -2,13 +2,11 @@
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
-using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.TestData;
@@ -160,7 +158,7 @@ public static class TestDataEndpoints
         IAccessContextAccessor accessAccessor,
         TestDataAvailability availability,
         TestDataService service,
-        UserManager<SilexGisUser> userManager,
+        TestDataAccountPassword passwords,
         CancellationToken ct)
     {
         var (ctx, refusal) = await GateAsync(accessAccessor, availability, ct);
@@ -185,23 +183,14 @@ public static class TestDataEndpoints
         string? passwordHash = null;
         if (!string.IsNullOrEmpty(request.AccountPassword))
         {
-            // Held to the rules every account's password is held to, so a generated account is
-            // never easier to get into than one somebody made.
-            var probe = new SilexGisUser { UserName = "testdata@" + TestDataPeoplePlanner.EmailDomain };
-            var refusals = new List<string>();
-            foreach (var validator in userManager.PasswordValidators)
-            {
-                var checkedPassword = await validator.ValidateAsync(userManager, probe, request.AccountPassword);
-                refusals.AddRange(checkedPassword.Errors.Select(e => e.Description));
-            }
-
-            if (refusals.Count > 0)
+            var password = await passwords.HashAsync(request.AccountPassword);
+            if (password.Problems.Count > 0)
             {
                 return ApiProblems.BadRequest(
-                    "testdata.password_invalid", string.Join(" ", refusals), "problems", refusals);
+                    "testdata.password_invalid", string.Join(" ", password.Problems), "problems", password.Problems);
             }
 
-            passwordHash = userManager.PasswordHasher.HashPassword(probe, request.AccountPassword);
+            passwordHash = password.Hash;
         }
 
         var result = await service.StartAsync(

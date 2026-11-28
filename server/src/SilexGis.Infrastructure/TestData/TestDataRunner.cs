@@ -36,6 +36,7 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
         public const string Regions = "regions";
         public const string Caves = "caves";
         public const string Grants = "grants";
+        public const string Links = "links";
         public const string Verify = "verify";
     }
 
@@ -54,7 +55,11 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
             var owner = run.RequestedBy
                 ?? throw new InvalidOperationException("A test-data run needs the account it is generated for.");
             var plan = TestDataPlanner.Plan(profile);
-            session = new TestDataSession(run.Id, owner, plan) { AccountPasswordHash = run.AccountPasswordHash };
+            session = new TestDataSession(run.Id, owner, plan)
+            {
+                AccountPasswordHash = run.AccountPasswordHash,
+                AlongsideExistingData = run.AlongsideExistingData,
+            };
             session.Note(TestDataNotes.InventedElevations);
             var holders = plan.People.AccountHolders.ToList();
             if (holders.Count > 0)
@@ -62,14 +67,16 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 session.Note(run.AccountPasswordHash is null ? TestDataNotes.AccountsWithoutPassword : TestDataNotes.AccountsSharePassword);
             }
 
-            var total = 4 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count;
+            var total = 5 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count;
             var done = 0;
             await ProgressAsync(session, Phases.Plan, done, total, ct);
 
-            await InScopeAsync(session, async (db, _) =>
+            await InScopeAsync(session, async (services, db) =>
             {
                 session.Vocabulary = await TestDataGeographyWriter.ResolveVocabularyAsync(db, ct);
                 await TestDataGeographyWriter.EnsureMarkingTagAsync(db, session, ct);
+                session.Extra = await TestDataExtrasWriter.EnsureVocabularyAsync(
+                    db, services.GetRequiredService<FeatureTypeWriteService>(), session, ct);
             }, ct);
             await ProgressAsync(session, Phases.Vocabulary, ++done, total, ct);
 
@@ -109,6 +116,15 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
 
             await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteGrantsAsync(db, session, ct), ct);
             await ProgressAsync(session, Phases.Grants, ++done, total, ct);
+
+            await InScopeAsync(session, async (db, writer) =>
+            {
+                await TestDataExtrasWriter.WriteSpringsAsync(db, writer, session, ct);
+                await TestDataExtrasWriter.WriteLinksAsync(db, session, ct);
+                await TestDataExtrasWriter.WriteExternalIdsAsync(db, session, ct);
+                await TestDataExtrasWriter.WritePublicationsAsync(db, session, ct);
+            }, ct);
+            await ProgressAsync(session, Phases.Links, ++done, total, ct);
 
             await FinishAsync(session, TestDataRunStatus.Succeeded, error: null, total, ct);
             logger.LogInformation("Test-data run {RunId} wrote {Counts}", run.Id, JsonSerializer.Serialize(session.Counts));

@@ -629,6 +629,7 @@ public static class DependencyInjection
         services.AddScoped<TestData.TestDataService>();
         services.AddSingleton<TestData.TestDataRunner>();
         services.AddSingleton<TestData.TestDataRemoval>();
+        services.AddScoped<TestData.TestDataAccountPassword>();
         services.AddScoped<IProcessingJobHandler, TestDataGenerateHandler>();
         services.AddScoped<IProcessingJobHandler, TestDataRemoveHandler>();
         services.AddHostedService<TripPurgeScheduler>();

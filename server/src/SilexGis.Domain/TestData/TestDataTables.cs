@@ -34,7 +34,7 @@ public static class TestDataParts
     public static IReadOnlyList<string> All { get; } = [Geography, People, Underground, Activity, Documents, Geodata, Accounts];
 
     /// <summary>The parts built so far; a table planned for one of them must be generated.</summary>
-    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography };
+    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography, People };
 }
 
 /// <summary>
@@ -74,7 +74,9 @@ public static class TestDataTables
         ["permission_groups"] = P(TestDataParts.People), ["permission_group_members"] = P(TestDataParts.People), ["access_entries"] = P(TestDataParts.People),
         ["api_access_keys"] = P(TestDataParts.People), ["calendar_feed_tokens"] = P(TestDataParts.People), ["user_notification_preferences"] = P(TestDataParts.People),
         ["feature_links"] = P(TestDataParts.People), ["feature_external_ids"] = P(TestDataParts.People), ["feature_shares"] = P(TestDataParts.People),
-        ["cave_qr_publications"] = P(TestDataParts.People), ["hierarchies"] = P(TestDataParts.People), ["hierarchy_memberships"] = P(TestDataParts.People),
+        ["cave_qr_publications"] = P(TestDataParts.People),
+        ["hierarchies"] = X("parallel hierarchies are in the schema only: nothing in the application writes or reads them, so a generated row would show nothing"),
+        ["hierarchy_memberships"] = X("parallel hierarchies are in the schema only: nothing in the application writes or reads them"),
         ["link_kinds"] = P(TestDataParts.People, "extra kinds beside the shipped ones"),
         ["cave_types"] = P(TestDataParts.People, "extra types beside the shipped ones"),
         ["entrance_types"] = P(TestDataParts.People, "extra types beside the shipped ones"),

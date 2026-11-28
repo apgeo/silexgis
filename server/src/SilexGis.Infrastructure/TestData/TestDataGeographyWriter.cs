@@ -178,6 +178,15 @@ public static class TestDataGeographyWriter
                 }
             }
 
+            // A cave is readable by whoever its own row or any area above it admits, so a private or
+            // club-only cave filed under a public massif would be readable by every account. Those
+            // caves lie inside their massif's outline but are not filed under it, so the restriction
+            // they were planned with is the one the application applies.
+            if (visibility is Visibility.Private or Visibility.CavingGroup)
+            {
+                session.Note(TestDataNotes.RestrictedCavesUnfiled);
+            }
+
             if (taken.Contains(planned.IdentificationCode))
             {
                 session.NoteCount(TestDataNotes.CodesTaken);
@@ -196,8 +205,12 @@ public static class TestDataGeographyWriter
                 {
                     OtherToponyms = planned.OtherToponyms,
                     IdentificationCode = taken.Contains(planned.IdentificationCode) ? null : planned.IdentificationCode,
-                    CaveTypeId = vocabulary.CaveTypes[planned.CaveTypeCode],
-                    RockTypeId = vocabulary.RockTypes.TryGetValue(planned.RockTypeCode, out var rock) ? rock : null,
+                    CaveTypeId = session.Extra is { } extraCave && TestDataExtrasWriter.TakesExtraCaveType(planned)
+                        ? extraCave.CaveTypeId
+                        : vocabulary.CaveTypes[planned.CaveTypeCode],
+                    RockTypeId = session.Extra is { } extraRock && TestDataExtrasWriter.TakesExtraRock(planned)
+                        ? extraRock.RockTypeId
+                        : vocabulary.RockTypes.TryGetValue(planned.RockTypeCode, out var rock) ? rock : null,
                     Website = planned.Website,
                     Region = planned.Region,
                     HydrographicBasin = planned.HydrographicBasin,
@@ -227,13 +240,14 @@ public static class TestDataGeographyWriter
                     DiscoveryDate = planned.DiscoveryDate,
                     Discoverer = planned.Discoverer,
                 },
-                parents: [new ParentSpec(parent, IsPrimary: true)], ct);
+                parents: visibility is Visibility.Private or Visibility.CavingGroup ? [] : [new ParentSpec(parent, IsPrimary: true)], ct);
             Mark(db, session, cave.Id);
             session.Caves[planned.Index] = cave.Id;
             session.Count("caves");
 
-            foreach (var e in planned.Entrances)
+            for (var at = 0; at < planned.Entrances.Count; at++)
             {
+                var e = planned.Entrances[at];
                 var entrance = await writer.CreateEntranceAsync(
                     new Feature
                     {
@@ -244,7 +258,9 @@ public static class TestDataGeographyWriter
                     new CaveEntrance
                     {
                         CaveFeatureId = cave.Id,
-                        EntranceTypeId = vocabulary.EntranceTypes[e.EntranceTypeCode],
+                        EntranceTypeId = session.Extra is { } extraEntrance && TestDataExtrasWriter.TakesExtraEntranceType(session.Plan, planned, at)
+                            ? extraEntrance.EntranceTypeId
+                            : vocabulary.EntranceTypes[e.EntranceTypeCode],
                         IsMain = e.IsMain,
                         Altitude = (decimal)e.AltitudeM,
                         PositionQuality = e.PositionQuality,
@@ -275,7 +291,7 @@ public static class TestDataGeographyWriter
     }
 
     /// <summary>Lists a generated feature against the run and gives it the marking tag.</summary>
-    private static void Mark(SilexGisDbContext db, TestDataSession session, Guid featureId)
+    internal static void Mark(SilexGisDbContext db, TestDataSession session, Guid featureId)
     {
         session.Register(db, "features", featureId);
         if (session.MarkingTagId is { } tagId)

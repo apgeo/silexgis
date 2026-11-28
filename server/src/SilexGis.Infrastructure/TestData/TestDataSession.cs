@@ -49,6 +49,12 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
     /// <summary>The password every generated account shares, hashed; null when the accounts cannot be signed in to.</summary>
     public string? AccountPasswordHash { get; init; }
 
+    /// <summary>Whether the database held data no run created when the run started; some things are then not generated.</summary>
+    public bool AlongsideExistingData { get; init; }
+
+    /// <summary>The vocabulary the run adds beside the shipped one; null until the vocabulary step has run.</summary>
+    public TestDataExtraVocabulary? Extra { get; set; }
+
     public long? MarkingTagId { get; set; }
 
     public TestDataVocabularyIds Vocabulary { get; set; } = null!;
@@ -75,8 +81,7 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
     {
         "caving_groups", "cavers", "caving_group_memberships", "permission_groups", "permission_group_members",
         "access_entries", "user_addresses", "user_notification_preferences", "calendar_feed_tokens", "api_access_keys",
-        "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "hierarchies",
-        "hierarchy_memberships", "link_kinds", "cave_types", "entrance_types", "rock_types", "feature_types",
+        "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "link_kinds", "cave_types", "entrance_types", "rock_types", "feature_types",
     };
 
     /// <summary>

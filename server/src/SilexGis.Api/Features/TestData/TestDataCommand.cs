@@ -58,8 +58,31 @@ public static class TestDataCommand
             return 2;
         }
 
+        // Read from a file rather than taken on the command line, where every process listing shows it.
+        string? passwordHash = null;
+        if (Value(args, "--account-password-file") is { } passwordFile)
+        {
+            if (!File.Exists(passwordFile))
+            {
+                logger.LogError("--account-password-file names no file");
+                return 2;
+            }
+
+            var password = File.ReadAllText(passwordFile).TrimEnd('\r', '\n');
+            var hashed = string.IsNullOrEmpty(password)
+                ? new TestDataPasswordResult(null, ["the password file is empty"])
+                : await provider.GetRequiredService<TestDataAccountPassword>().HashAsync(password);
+            if (hashed.Problems.Count > 0)
+            {
+                logger.LogError("The accounts' password is refused: {Problems}", string.Join(" ", hashed.Problems));
+                return 2;
+            }
+
+            passwordHash = hashed.Hash;
+        }
+
         var result = await service.StartAsync(
-            profile, adminId, args.Contains("--alongside-existing-data"), queueJob: false, CancellationToken.None);
+            profile, adminId, args.Contains("--alongside-existing-data"), queueJob: false, CancellationToken.None, passwordHash);
         switch (result.Outcome)
         {
             case TestDataStartOutcome.RunInProgress:

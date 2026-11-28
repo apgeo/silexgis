@@ -38,6 +38,12 @@ public static class TestDataNotes
     /// <summary>Generated people kept on removal because data no run made refers to them.</summary>
     public const string PeopleKeptInUse = "peopleKeptInUse";
 
+    /// <summary>No share links or QR publications were made: the run was beside data no run created.</summary>
+    public const string NoPublicationsBesideData = "noPublicationsBesideData";
+
+    /// <summary>Private and club-only caves are not filed under their (public) massif, whose audience would otherwise reach them.</summary>
+    public const string RestrictedCavesUnfiled = "restrictedCavesUnfiled";
+
     public static string WithCount(string code, int count) =>
         $"{code}:{count.ToString(CultureInfo.InvariantCulture)}";
 }

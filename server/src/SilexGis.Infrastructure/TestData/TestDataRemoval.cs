@@ -22,7 +22,7 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
 {
     /// <summary>Registry tables this removal knows how to remove; a run that lists another one is refused.</summary>
     public static IReadOnlySet<string> RemovableTables { get; } =
-        new HashSet<string>(StringComparer.Ordinal) { "features", "tags" };
+        new HashSet<string>(TestDataSession.SelfListedTables.Concat(["features", "tags", "users"]), StringComparer.Ordinal);
 
     private const int Chunk = 50;
 
@@ -84,6 +84,19 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
         }
 
         var notes = new List<string>();
+        var listed = rows.ToLookup(r => r.TableName, r => r.RowId, StringComparer.Ordinal);
+        TestDataPeopleRemoval.Kept people;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
+            changes.Begin(ChangeSource.Generated);
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            people = await TestDataPeopleRemoval.DecideAsync(db, runId, listed, ct);
+            await TestDataPeopleRemoval.RemoveHangOnsAsync(db, listed, people, ct);
+            await transaction.CommitAsync(ct);
+        }
+
         var kept = 0;
         var keptInUse = 0;
         var removed = 0;
@@ -136,6 +149,23 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             }
 
             await transaction.CommitAsync(ct);
+        }
+
+        int keptVocabulary;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
+            changes.Begin(ChangeSource.Generated);
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            keptVocabulary = await TestDataPeopleRemoval.RemoveVocabularyAsync(db, runId, listed, ct);
+            await TestDataPeopleRemoval.RemovePeopleAsync(db, listed, people, ct);
+            await transaction.CommitAsync(ct);
+        }
+
+        if (people.Count + keptVocabulary > 0)
+        {
+            notes.Add(TestDataNotes.WithCount(TestDataNotes.PeopleKeptInUse, people.Count + keptVocabulary));
         }
 
         if (keptInUse > 0)
@@ -207,10 +237,12 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
     }
 
     /// <summary>
-    /// Which of <paramref name="ids"/> people have used. The generator writes features and tags
-    /// only, so every row found here was made by somebody; a later part of the generator that
-    /// writes attachments, surveys or links of its own has to leave its own rows out of this
-    /// question, or nothing it touched would ever be removed.
+    /// Which of <paramref name="ids"/> people have used. The rows a run hangs on its features —
+    /// links, external ids, shares, QR publications, grants — are removed before this is asked,
+    /// so every row found here was made by somebody (or belongs to a generated account kept
+    /// because somebody used it). A later part of the generator that writes attachments, surveys
+    /// or links of its own has to remove its own rows first in the same way, or nothing it
+    /// touched would ever be removed.
     /// </summary>
     private static async Task<HashSet<Guid>> InUseAsync(SilexGisDbContext db, Guid[] ids, CancellationToken ct)
     {

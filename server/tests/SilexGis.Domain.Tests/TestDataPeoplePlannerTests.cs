@@ -86,6 +86,7 @@ public class TestDataPeoplePlannerTests
         var phones = people.Cavers.Select(c => c.Phone).OfType<string>().ToList();
         phones.ShouldNotBeEmpty();
         phones.ShouldAllBe(p => p.StartsWith(TestDataPeoplePlanner.PhonePrefix, StringComparison.Ordinal) && p.Length == TestDataPeoplePlanner.PhonePrefix.Length + 3);
+        phones.Distinct().Count().ShouldBe(phones.Count, "a number is one person's");
         people.Clubs.Select(c => c.Website).OfType<string>().ShouldAllBe(w => w.EndsWith(".example.org", StringComparison.Ordinal));
     }
 
@@ -159,7 +160,7 @@ public class TestDataPeoplePlannerTests
             .ShouldAllBe(g => plan.Caves[g.ScopeCaveIndex!.Value].Visibility == Visibility.Public);
 
         // The share of accounts given exact positions beyond their own club's, as the profile asks.
-        var holders = plan.People.Cavers.Count(c => c.Account is { Kind: TestDataAccountKind.Member or TestDataAccountKind.Editor or TestDataAccountKind.Reviewer or TestDataAccountKind.TwoFactor });
+        var holders = plan.People.Cavers.Count(c => c.Account is { Kind: TestDataAccountKind.Member or TestDataAccountKind.Editor or TestDataAccountKind.Reviewer });
         var exactGrants = grants.Count(g => g.Subject == PlannedGrantSubject.Account && (g.Actions & AccessAction.ViewExactLocation) != 0);
         Math.Abs(exactGrants - (holders * 0.15)).ShouldBeLessThanOrEqualTo(1.0);
     }

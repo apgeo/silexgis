@@ -8551,6 +8551,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccountPasswordHash")
+                        .HasColumnType("text")
+                        .HasColumnName("account_password_hash");
+
                     b.Property<bool>("AlongsideExistingData")
                         .HasColumnType("boolean")
                         .HasColumnName("alongside_existing_data");

@@ -217,8 +217,8 @@ public static class TestDataPeoplePlanner
         {
             var rng = TestDataRng.For(profile.Seed, "caver:details", draft.Index);
             var email = Email(draft.Name, draft.Index);
-            var account = holders.TryGetValue(draft.Index, out var kind)
-                ? Account(profile, draft, kind, email, clubs)
+            var account = holders.TryGetValue(draft.Index, out var holder)
+                ? Account(profile, draft, holder.Kind, holder.Order, email, clubs)
                 : null;
             planned.Add(new PlannedCaver
             {
@@ -226,7 +226,8 @@ public static class TestDataPeoplePlanner
                 FullName = draft.Name.Full,
                 ShortName = draft.Guest is null && rng.Chance(0.25) ? TestDataPeopleRo.Nickname(rng) : null,
                 Email = account is not null || rng.Chance(0.6) ? email : null,
-                Phone = rng.Chance(0.45) ? PhonePrefix + rng.Between(0, 999).ToString("D3", CultureInfo.InvariantCulture) : null,
+                // One number per person, by their place on the roster, while the fictional range lasts.
+                Phone = draft.Index < 1000 && rng.Chance(0.45) ? PhonePrefix + draft.Index.ToString("D3", CultureInfo.InvariantCulture) : null,
                 Notes = rng.Chance(0.15) ? TestDataPeopleRo.CaverNote(rng) : null,
                 ForeignGuest = draft.Guest is not null,
                 Memberships = [.. draft.Memberships.Select(m => new PlannedMembership(m.Club, m.Role))],
@@ -250,10 +251,10 @@ public static class TestDataPeoplePlanner
     /// Which cavers sign in, and as what. Those who lead a club come first — a club's owner is the
     /// person most likely to have an account — then the rest in an order drawn from the run.
     /// </summary>
-    private static Dictionary<int, TestDataAccountKind> AccountHolders(TestDataProfile profile, List<Draft> drafts)
+    private static Dictionary<int, (TestDataAccountKind Kind, int Order)> AccountHolders(TestDataProfile profile, List<Draft> drafts)
     {
         var count = Math.Min(profile.People.Accounts, drafts.Count);
-        var result = new Dictionary<int, TestDataAccountKind>();
+        var result = new Dictionary<int, (TestDataAccountKind Kind, int Order)>();
         if (count <= 0)
         {
             return result;
@@ -274,19 +275,20 @@ public static class TestDataPeoplePlanner
             var kind = i < KindsFirst.Count
                 ? KindsFirst[i]
                 : Enum.Parse<TestDataAccountKind>(rng.Weighted(LaterKinds));
-            result[order[i]] = kind;
+            result[order[i]] = (kind, i);
         }
 
         return result;
     }
 
+    /// <param name="order">The account's place among the run's accounts; the first few are given each optional thing for certain, so a small run still has one of each.</param>
     private static PlannedAccount Account(
-        TestDataProfile profile, Draft draft, TestDataAccountKind kind, string email, IReadOnlyList<PlannedClub> clubs)
+        TestDataProfile profile, Draft draft, TestDataAccountKind kind, int order, string email, IReadOnlyList<PlannedClub> clubs)
     {
         var rng = TestDataRng.For(profile.Seed, "account", draft.Index);
         var guest = draft.Guest;
         var addresses = new List<PlannedAddress>();
-        if (rng.Chance(0.6))
+        if (order < 3 || rng.Chance(0.6))
         {
             // A point only at home in Romania, near the town's centre; a guest's address abroad is text alone.
             var (country, city) = guest is not null
@@ -303,7 +305,7 @@ public static class TestDataPeoplePlanner
                 lat));
         }
 
-        if (guest is null && rng.Chance(0.15))
+        if (guest is null && (order == 1 || rng.Chance(0.15)))
         {
             var club = draft.Memberships.Count > 0 ? clubs[draft.Memberships[0].Club] : null;
             addresses.Add(new PlannedAddress(
@@ -315,11 +317,12 @@ public static class TestDataPeoplePlanner
                 null));
         }
 
-        PlannedAccessKey? key = rng.Next(10) switch
+        var roll = order switch { 0 => 0, 1 => 1, 2 => 2, _ => rng.Next(20) };
+        PlannedAccessKey? key = roll switch
         {
-            0 => new PlannedAccessKey("Telefonul de teren", 365, Revoked: false),
-            1 when rng.Chance(0.5) => new PlannedAccessKey("Tableta veche", -10, Revoked: false),
-            1 => new PlannedAccessKey("Cheie retrasă", 200, Revoked: true),
+            0 or 3 => new PlannedAccessKey("Telefonul de teren", 365, Revoked: false),
+            1 => new PlannedAccessKey("Tableta veche", -10, Revoked: false),
+            2 => new PlannedAccessKey("Cheie retrasă", 200, Revoked: true),
             _ => null,
         };
 
@@ -344,7 +347,7 @@ public static class TestDataPeoplePlanner
             AddressVisibility = Visibility(rng),
             AddressPointVisibility = Visibility(rng),
             Addresses = addresses,
-            CalendarFeedLabel = rng.Chance(0.2) ? "Calendarul de pe telefon" : null,
+            CalendarFeedLabel = order == 3 || rng.Chance(0.2) ? "Calendarul de pe telefon" : null,
             AccessKey = key,
         };
     }
@@ -380,22 +383,32 @@ public static class TestDataPeoplePlanner
 
         var rng = TestDataRng.For(profile.Seed, "grants");
         var access = profile.Access;
-        var protectedCaves = caves.Where(c => c.LocationProtected).Select(c => c.Index).ToList();
+        // A protected cave every signed-in account may read, where there is one, so the grant
+        // decides only how exactly it is shown, not whether it is seen at all.
+        var protectedCaves = caves.Where(c => c.LocationProtected && c.Visibility is Domain.Visibility.Public or Domain.Visibility.Authenticated)
+            .Select(c => c.Index).ToList();
+        if (protectedCaves.Count == 0)
+        {
+            protectedCaves = [.. caves.Where(c => c.LocationProtected).Select(c => c.Index)];
+        }
         var regions = caves.Select(c => c.RegionCode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         const AccessAction exact = AccessAction.Read | AccessAction.ViewExactLocation;
 
         // Exact positions beyond what an account's own club gives, over the scopes such a grant
         // takes: one protected cave and what lies in it, a whole massif, a club's caves, everything.
-        var exactFlags = TestDataQuota.Flags(holders.Count, access.ExactLocationGrantAccountsPercent, TestDataRng.For(profile.Seed, "grants:exact"));
+        // Given to accounts that sign in with a password alone, so each grant can be seen at work
+        // by signing in as its holder.
+        var exactHolders = holders.Where(h => cavers[h].Account!.Kind != TestDataAccountKind.TwoFactor).ToList();
+        var exactFlags = TestDataQuota.Flags(exactHolders.Count, access.ExactLocationGrantAccountsPercent, TestDataRng.For(profile.Seed, "grants:exact"));
         var turn = 0;
-        for (var i = 0; i < holders.Count; i++)
+        for (var i = 0; i < exactHolders.Count; i++)
         {
             if (!exactFlags[i])
             {
                 continue;
             }
 
-            var caver = cavers[holders[i]];
+            var caver = cavers[exactHolders[i]];
             var club = caver.Memberships.Count > 0 ? caver.Memberships[0].ClubIndex : (int?)null;
             var shape = (turn++ % 6) switch
             {

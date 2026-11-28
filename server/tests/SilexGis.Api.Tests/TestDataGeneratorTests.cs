@@ -11,6 +11,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.TestData;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.TestData;
 
 namespace SilexGis.Api.Tests;
 
@@ -177,10 +178,20 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             history.ShouldAllBe(a => a.Source == ChangeSource.Generated);
         }
 
-        // The coverage report measures every table generated so far, and finds rows in each.
+        // The coverage report measures every table generated so far, and finds rows in each — but
+        // for the shares and QR publications a run beside other data never makes.
+        run.GetProperty("alongsideExistingData").GetBoolean().ShouldBeTrue();
+        run.GetProperty("notes").EnumerateArray().Select(n => n.GetString()).ShouldContain("noPublicationsBesideData");
         var coverage = await admin.GetFromJsonAsync<JsonElement>($"{Base}/runs/{runId}/coverage");
         var measured = coverage.EnumerateArray().ToDictionary(t => t.GetProperty("table").GetString()!, t => t.GetProperty("rows").GetInt64());
-        foreach (var table in TestDataTables.GeneratedNow())
+        measured["feature_shares"].ShouldBe(0);
+        measured["cave_qr_publications"].ShouldBe(0);
+
+        // The added vocabulary is made by the first run that needs it and shared while it stays, so
+        // in this class's database an earlier test's run may own it; the class of the empty
+        // installation holds a run to every table.
+        string[] notOwned = ["feature_shares", "cave_qr_publications", "link_kinds", "cave_types", "entrance_types", "rock_types", "feature_types"];
+        foreach (var table in TestDataTables.GeneratedNow().Except(notOwned))
         {
             measured.ShouldContainKey(table);
             measured[table].ShouldBeGreaterThan(0, $"the run wrote no {table}");
@@ -205,6 +216,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             (await db.Features.IgnoreQueryFilters().CountAsync(f => listed.Contains(f.Id))).ShouldBe(0);
             (await db.TestDataRows.CountAsync(r => r.RunId == runId)).ShouldBe(0);
+            (await TestDataCoverageSql.MeasureAsync(db, runId, CancellationToken.None)).ShouldAllBe(t => t.Rows == 0);
         }
 
         // Gone is gone: a removed run cannot be removed again.
@@ -268,11 +280,15 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
             var listed = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "features")
                     .Select(r => r.RowId).ToListAsync(TestContext.Current.CancellationToken))
                 .Select(Guid.Parse).ToList();
-            var underground = await db.Features.IgnoreQueryFilters().AsNoTracking()
-                .Where(f => listed.Contains(f.Id) && (f.Kind == FeatureKind.Cave || f.Kind == FeatureKind.CaveEntrance))
-                .Select(f => new { f.Kind, f.IsProtectedEffective })
-                .ToListAsync(TestContext.Current.CancellationToken);
-            underground.Count(f => f.Kind == FeatureKind.Cave).ShouldBe(4);
+            // Private and club-only caves are not filed under their region (its audience would reach
+            // them), so it is the caves filed under a region, and their entrances, that it protects.
+            var underground = (await db.Features.IgnoreQueryFilters().AsNoTracking()
+                    .Where(f => listed.Contains(f.Id) && (f.Kind == FeatureKind.Cave || f.Kind == FeatureKind.CaveEntrance))
+                    .Select(f => new { f.Kind, f.IsProtectedEffective, f.AncestorIds })
+                    .ToListAsync(TestContext.Current.CancellationToken))
+                .Where(f => f.AncestorIds.Any(regions.Contains))
+                .ToList();
+            underground.Count(f => f.Kind == FeatureKind.Cave).ShouldBeGreaterThan(0);
             underground.ShouldAllBe(f => f.IsProtectedEffective,
                 "every cave and entrance written under a region protected meanwhile must be stored protected");
         }
@@ -410,6 +426,79 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
         }
     }
 
+    /// <summary>
+    /// A generated account somebody has signed in to and made something with is not a row the
+    /// generator can take back: the cave it made would lose its owner. The account stays, with
+    /// what it needs to stay what it was — its roster entry, its memberships, its clubs — and
+    /// every other generated person goes.
+    /// </summary>
+    [Fact]
+    public async Task Removal_keeps_a_generated_account_somebody_has_used_and_everything_it_needs()
+    {
+        var start = await admin.PostAsJsonAsync($"{Base}/runs", new
+        {
+            profile = Profile(seed: 606, count: 4),
+            confirmAlongsideExistingData = true,
+            accountPassword = "generated-people-pass-7",
+        });
+        start.StatusCode.ShouldBe(HttpStatusCode.Accepted, await start.Content.ReadAsStringAsync());
+        var runId = (await start.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await RunJobAsync(ProcessingJobKinds.TestDataGenerate, runId)).GetProperty("status").GetString().ShouldBe("succeeded");
+
+        Guid editorId;
+        string editorEmail;
+        List<Guid> users;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            users = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "users").Select(r => r.RowId).ToListAsync())
+                .Select(Guid.Parse).ToList();
+            var editorRole = await db.Roles.Where(r => r.Name == GlobalRoles.Editor).Select(r => r.Id).SingleAsync();
+            editorId = await db.UserRoles.Where(r => users.Contains(r.UserId) && r.RoleId == editorRole).Select(r => r.UserId).FirstAsync();
+            editorEmail = (await db.Users.SingleAsync(u => u.Id == editorId)).Email!;
+        }
+
+        // The generated editor signs in with the run's password and records a cave of their own.
+        using var generated = await AuthHelper.BearerClientAsync(factory, editorEmail, "generated-people-pass-7");
+        long caveTypeId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            caveTypeId = await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>()
+                .CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
+        }
+
+        var made = await generated.PostAsJsonAsync("/api/v1/caves", new
+        {
+            name = $"Peștera făcută de un cont generat {suffix}",
+            caveTypeId,
+            visibility = "authenticated",
+            explorationStatus = "Unknown",
+            isShowCave = false,
+        });
+        made.StatusCode.ShouldBe(HttpStatusCode.Created, await made.Content.ReadAsStringAsync());
+        var ownCave = (await made.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await RemoveAsync(runId);
+        var removed = await admin.GetFromJsonAsync<JsonElement>($"{Base}/runs/{runId}");
+        removed.GetProperty("notes").EnumerateArray()
+            .ShouldContain(n => n.GetString()!.StartsWith(TestDataNotes.PeopleKeptInUse + ":", StringComparison.Ordinal), removed.ToString());
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.AnyAsync(f => f.Id == ownCave && f.OwnerUserId == editorId)).ShouldBeTrue("the cave lost its owner");
+            (await db.Users.AnyAsync(u => u.Id == editorId)).ShouldBeTrue("an account somebody used was removed");
+            var caver = await db.Cavers.SingleAsync(c => c.UserId == editorId);
+            var clubs = await db.CavingGroupMemberships.Where(m => m.CaverId == caver.Id).Select(m => m.CavingGroupId).ToListAsync();
+            (await db.CavingGroups.CountAsync(g => clubs.Contains(g.Id))).ShouldBe(clubs.Count, "a kept account's club was removed");
+            (await db.PermissionGroupMembers.AnyAsync(m => m.MemberKind == Domain.Access.AccessSubjectKind.User && m.MemberId == editorId))
+                .ShouldBeTrue("the kept account lost its permission groups");
+
+            // The positive half: every other generated account went.
+            (await db.Users.CountAsync(u => users.Contains(u.Id))).ShouldBe(1);
+        }
+    }
+
     [Fact]
     public async Task A_planned_code_a_cave_here_already_carries_is_left_off_the_generated_cave()
     {
@@ -535,6 +624,7 @@ public sealed class TestDataGeneratorTests : IAsyncLifetime, IDisposable, IClass
         seed,
         regions = new[] { "bucegi", "praid" },
         caves = new { count },
+        people = new { clubs = 2, organisations = 1, cavers = 14, accounts = 10 },
     };
 
     private async Task<Guid> StartAsync(object profile)

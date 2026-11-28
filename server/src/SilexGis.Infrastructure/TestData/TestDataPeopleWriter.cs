@@ -51,6 +51,9 @@ public static class TestDataPeopleWriter
         {
             var account = caver.Account!;
             var email = await FreeEmailAsync(users, account.Email, session);
+
+            // A sign-in number is one account's alone; one another account already has is left off.
+            var phone = caver.Phone is { } number && !await db.Users.AnyAsync(u => u.PhoneNumber == number, ct) ? number : null;
             var user = new SilexGisUser
             {
                 UserName = email,
@@ -72,7 +75,7 @@ public static class TestDataPeopleWriter
                 CavingClubVisibility = account.CavingClubVisibility,
                 AddressVisibility = account.AddressVisibility,
                 AddressPointVisibility = account.AddressPointVisibility,
-                PhoneNumber = caver.Phone,
+                PhoneNumber = phone,
                 PasswordHash = session.AccountPasswordHash,
                 LockoutEnabled = true,
             };
