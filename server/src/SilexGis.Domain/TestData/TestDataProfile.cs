@@ -24,6 +24,8 @@ public sealed record TestDataProfile
 
     public TestDataPeopleProfile People { get; init; } = new();
 
+    public TestDataTimelineProfile Timeline { get; init; } = new();
+
     public TestDataAccessProfile Access { get; init; } = new();
 
     public TestDataMarkingProfile Marking { get; init; } = new();
@@ -95,6 +97,19 @@ public sealed record TestDataPeopleProfile
 
     /// <summary>Share of club members on a second club's roster as well.</summary>
     public double TwoClubsPercent { get; init; } = 10;
+}
+
+/// <summary>What the run's people did over the years: trips, camps and the clubs' events.</summary>
+public sealed record TestDataTimelineProfile
+{
+    /// <summary>The first year trips are written for; earlier surveys are in the caves' files only.</summary>
+    public int TripsFromYear { get; init; } = 1995;
+
+    /// <summary>How many trips; up to two fifths of them are the trips that drew the caves' surveys.</summary>
+    public int Trips { get; init; } = 4000;
+
+    /// <summary>How many summers, up to the run's last day, have one or two camps; the next summer has one planned.</summary>
+    public int ExpeditionYears { get; init; } = 12;
 }
 
 /// <summary>

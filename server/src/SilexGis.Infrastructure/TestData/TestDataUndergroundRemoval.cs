@@ -56,6 +56,12 @@ public static class TestDataUndergroundRemoval
         var surveys = Guids(listed["cave_surveys"]);
         await db.CaveSurveys.Where(x => surveys.Contains(x.Id)).ExecuteDeleteAsync(ct);
 
+        // Work still waiting on what goes — a reading that has not run yet, a text extraction —
+        // goes with it, or the worker would later fail each one on a row that no longer exists.
+        var goneIds = new HashSet<Guid>(models.Concat(Guids(listed["files"])).Concat(Guids(listed["documents"])).Concat(Guids(listed["document_versions"])));
+        var waiting = await db.ProcessingJobs.Where(j => j.Status == ProcessingJobStatus.Queued).ToListAsync(ct);
+        db.ProcessingJobs.RemoveRange(waiting.Where(j => NamesAny(j.Payload, goneIds)));
+
         // Documents go through the document writer, which takes their versions and files with them
         // and the rules naming them through the change tracker.
         var gone = new List<StoredFile>();
@@ -66,6 +72,33 @@ public static class TestDataUndergroundRemoval
 
         await db.SaveChangesAsync(ct);
         return gone;
+    }
+
+    /// <summary>Whether a job's payload names one of <paramref name="ids"/> anywhere in it.</summary>
+    private static bool NamesAny(string payload, HashSet<Guid> ids)
+    {
+        if (ids.Count == 0 || string.IsNullOrEmpty(payload))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(payload);
+            return Walk(document.RootElement);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+
+        bool Walk(System.Text.Json.JsonElement element) => element.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.Object => element.EnumerateObject().Any(p => Walk(p.Value)),
+            System.Text.Json.JsonValueKind.Array => element.EnumerateArray().Any(Walk),
+            System.Text.Json.JsonValueKind.String => Guid.TryParse(element.GetString(), out var id) && ids.Contains(id),
+            _ => false,
+        };
     }
 
     private static List<Guid> Guids(IEnumerable<string> ids) => [.. ids.Select(id => Guid.Parse(id, CultureInfo.InvariantCulture))];

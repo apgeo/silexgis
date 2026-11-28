@@ -22,7 +22,7 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
 {
     /// <summary>Registry tables this removal knows how to remove; a run that lists another one is refused.</summary>
     public static IReadOnlySet<string> RemovableTables { get; } =
-        new HashSet<string>(TestDataSession.SelfListedTables.Concat(["features", "tags", "users"]), StringComparer.Ordinal);
+        new HashSet<string>(TestDataSession.SelfListedTables.Concat(["features", "tags", "users", "trip_types"]), StringComparer.Ordinal);
 
     private const int Chunk = 50;
 
@@ -93,14 +93,18 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             changes.Begin(ChangeSource.Generated);
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            people = await TestDataPeopleRemoval.DecideAsync(db, runId, listed, ct);
-            await TestDataPeopleRemoval.RemoveHangOnsAsync(db, listed, people, ct);
+            await TestDataActivityRemoval.RemoveAsync(db, listed, ct);
+
+            // The underground before the people are decided on: the centrelines the reading drew are
+            // features no run listed, bound to the cave's club, and would otherwise keep the club.
             storedGone = await TestDataUndergroundRemoval.RemoveAsync(
                 db,
                 scope.ServiceProvider.GetRequiredService<FeatureWriteService>(),
                 scope.ServiceProvider.GetRequiredService<Documents.DocumentWriteService>(),
                 listed,
                 ct);
+            people = await TestDataPeopleRemoval.DecideAsync(db, runId, listed, ct);
+            await TestDataPeopleRemoval.RemoveHangOnsAsync(db, listed, people, ct);
             await transaction.CommitAsync(ct);
 
             // The bytes go once nothing names them any more; a file that cannot be deleted now is

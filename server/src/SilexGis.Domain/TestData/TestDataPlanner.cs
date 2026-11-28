@@ -36,7 +36,7 @@ public static class TestDataPlanner
                 : c)];
         }
 
-        return new TestDataWorldPlan(profile, plannedRegions, caves, people);
+        return new TestDataWorldPlan(profile, plannedRegions, caves, people, TestDataActivityPlanner.Plan(profile, regions, caves, people));
     }
 
     /// <summary>The regions a profile places things in, in a fixed order.</summary>
@@ -126,7 +126,7 @@ public static class TestDataPlanner
             var village = rng.Pick(region.Villages);
 
             var facts = new PlannedCaveFacts(type, region.MassifName, valley, altitude, measures.Length, measures.Depth, status == ExplorationStatus.Ongoing);
-            caves.Add(Surveyed(region, seed, surveyed[i], new PlannedCave
+            caves.Add(Surveyed(region, seed, surveyed[i], profile.Marking, new PlannedCave
             {
                 Index = i,
                 RegionCode = region.Code,
@@ -184,7 +184,7 @@ public static class TestDataPlanner
     /// and puts the survey's own measures in their place — so a cave's length, depth, extension,
     /// area and volume are its survey's, whether or not the survey itself is written.
     /// </summary>
-    private static PlannedCave Surveyed(TestDataRegion region, long seed, bool withSurvey, PlannedCave cave)
+    private static PlannedCave Surveyed(TestDataRegion region, long seed, bool withSurvey, TestDataMarkingProfile marking, PlannedCave cave)
     {
         var rng = TestDataRng.For(seed, "network", cave.Index);
         var main = cave.Entrances[0];
@@ -208,8 +208,16 @@ public static class TestDataPlanner
 
         var length = Round((decimal)network.LengthM);
         var extension = Round((decimal)network.ExtensionM);
+
+        // The description tells the survey's numbers, so it is written again from them, from a
+        // stream of its own so that nothing else about the cave moves.
+        var facts = new PlannedCaveFacts(
+            cave.CaveTypeCode, region.MassifName, cave.Valley, (double)(cave.Altitude ?? 0), length, Round((decimal)network.DepthM),
+            cave.ExplorationStatus == ExplorationStatus.Ongoing);
+        var description = TestDataTextRo.CaveDescription(TestDataRng.For(seed, "description", cave.Index), facts);
         return cave with
         {
+            Description = Mark(description, marking),
             Network = network,
             WithSurvey = withSurvey,
             SurveyedLength = length,

@@ -37,6 +37,9 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
         public const string Caves = "caves";
         public const string Underground = "underground";
         public const string Grants = "grants";
+        public const string Expeditions = "expeditions";
+        public const string Trips = "trips";
+        public const string Events = "events";
         public const string Links = "links";
         public const string Verify = "verify";
     }
@@ -68,7 +71,7 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 session.Note(run.AccountPasswordHash is null ? TestDataNotes.AccountsWithoutPassword : TestDataNotes.AccountsSharePassword);
             }
 
-            var total = 5 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count
+            var total = 8 + plan.Activity.Trips.Count + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count
                 + plan.Caves.Count(c => c.WithSurvey);
             var done = 0;
             await ProgressAsync(session, Phases.Plan, done, total, ct);
@@ -132,6 +135,32 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
 
             await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteGrantsAsync(db, session, ct), ct);
             await ProgressAsync(session, Phases.Grants, ++done, total, ct);
+
+            // The trip type writer keeps a transaction of its own, so its step runs without the run's.
+            await InScopeAsync(session, async (services, db) => session.Activity = await TestDataActivityWriter.EnsureVocabularyAsync(
+                db, services.GetRequiredService<Trips.TripTypeWriteService>(), session, ct), ct, transactional: false);
+            await InScopeAsync(session, (_, db) => TestDataActivityWriter.WriteExpeditionsAsync(db, session, ct), ct);
+            await ProgressAsync(session, Phases.Expeditions, ++done, total, ct);
+            foreach (var chunk in plan.Activity.Trips.Chunk(TestDataActivityWriter.TripChunk))
+            {
+                await ThrowIfCancelRequestedAsync(run.Id, ct);
+                await InScopeAsync(session, (services, db) => TestDataActivityWriter.WriteTripsAsync(
+                    db, services.GetRequiredService<Trips.TripLogWriteService>(), session, chunk, ct), ct);
+                done += chunk.Length;
+                await ProgressAsync(session, Phases.Trips, done, total, ct);
+            }
+
+            await InScopeAsync(session, (_, db) => TestDataActivityWriter.WriteEventsAsync(db, session, ct), ct);
+            await ProgressAsync(session, Phases.Events, ++done, total, ct);
+
+            await InScopeAsync(session, async (_, db) =>
+            {
+                await TestDataActivityExtrasWriter.WriteTrackingAsync(db, session, ct);
+                await TestDataActivityExtrasWriter.WriteLinksAsync(db, session, ct);
+                await TestDataActivityExtrasWriter.WriteSavedViewsAsync(db, session, ct);
+                await TestDataActivityExtrasWriter.WriteClubWordingAsync(db, session, ct);
+            }, ct);
+            await ProgressAsync(session, Phases.Events, ++done, total, ct);
 
             await InScopeAsync(session, async (db, writer) =>
             {
@@ -200,13 +229,19 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
         InScopeAsync(session, (services, db) => work(db, services.GetRequiredService<FeatureWriteService>()), ct);
 
     private async Task InScopeAsync(
-        TestDataSession session, Func<IServiceProvider, SilexGisDbContext, Task> work, CancellationToken ct)
+        TestDataSession session, Func<IServiceProvider, SilexGisDbContext, Task> work, CancellationToken ct, bool transactional = true)
     {
         await using var scope = scopes.CreateAsyncScope();
         var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
         changes.Begin(ChangeSource.Generated);
         changes.ActFor(session.OwnerUserId);
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        if (!transactional)
+        {
+            await work(scope.ServiceProvider, db);
+            return;
+        }
+
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await work(scope.ServiceProvider, db);
         await transaction.CommitAsync(ct);

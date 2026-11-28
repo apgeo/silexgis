@@ -55,7 +55,8 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
         {
             seed = 5151,
             regions = new[] { "padurea-craiului" },
-            caves = new { count = 12, withSurveyPercent = 50 },
+            caves = new { count = 12, withSurveyPercent = 100 },
+            access = new { visibilityPercent = new { @public = 30, authenticated = 30, cavingGroup = 30, @private = 10 } },
             people = new { clubs = 1, organisations = 0, cavers = 4, accounts = 2 },
         };
         var plan = TestDataPlanner.Plan(TestDataProfile.FromJson(JsonSerializer.Serialize(profile, TestDataProfile.JsonOptions)));
@@ -64,7 +65,7 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
         var runId = (await start.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         var run = await RunJobAsync(ProcessingJobKinds.TestDataGenerate, runId);
         run.GetProperty("status").GetString().ShouldBe("succeeded", run.ToString());
-        run.GetProperty("counts").GetProperty("surveyModels").GetInt32().ShouldBe(6);
+        run.GetProperty("counts").GetProperty("surveyModels").GetInt32().ShouldBe(12);
 
         // The readings the run queued, run as the worker would.
         List<Guid> models;
@@ -75,7 +76,7 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
                 .Select(Guid.Parse).ToList();
         }
 
-        models.Count.ShouldBe(6);
+        models.Count.ShouldBe(12);
         foreach (var job in await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.SurveyGraph))
         {
             if (models.Any(m => job.Payload.Contains(m.ToString(), StringComparison.Ordinal)))
@@ -105,11 +106,24 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
                 (await db.Centerlines.AnyAsync(c => c.SurveyModelId == model.Id)).ShouldBeTrue(cave.Name);
             }
 
-            (await db.SurveySources.CountAsync(s => read.Select(m => m.CaveFeatureId).Contains(s.CaveFeatureId))).ShouldBe(6);
+            (await db.SurveySources.CountAsync(s => read.Select(m => m.CaveFeatureId).Contains(s.CaveFeatureId))).ShouldBe(12);
             (await db.CaveDepthPlaces.CountAsync(p => read.Select(m => m.CaveFeatureId).Contains(p.CaveFeatureId))).ShouldBeGreaterThan(0);
         }
 
-        // Removal takes it all back: models, the readings' centrelines and stations, documents and bytes.
+        // Removal takes it all back: models, the readings' centrelines and stations, documents and bytes —
+        // and the club a club-only cave was bound to, which the readings' centrelines are bound to as well.
+        List<Guid> clubs;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            clubs = (await db.TestDataRows.Where(r => r.RunId == runId && r.TableName == "caving_groups").Select(r => r.RowId).ToListAsync())
+                .Select(Guid.Parse).ToList();
+            var bound = await db.Centerlines.Where(c => c.SurveyModelId != null && models.Contains(c.SurveyModelId.Value))
+                .Join(db.Features, c => c.Id, f => f.Id, (c, f) => f.CavingGroupId)
+                .CountAsync(g => g != null);
+            bound.ShouldBeGreaterThan(0, "no read survey is of a club-only cave; the test would not test the club's removal");
+        }
+
         (await admin.PostAsJsonAsync($"{Base}/runs/{runId}/remove", new { confirm = true })).StatusCode.ShouldBe(HttpStatusCode.Accepted);
         (await RunJobAsync(ProcessingJobKinds.TestDataRemove, runId)).GetProperty("status").GetString().ShouldBe("removed");
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -118,6 +132,7 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
             (await db.SurveyModels.CountAsync(m => models.Contains(m.Id))).ShouldBe(0);
             (await db.SurveyStations.CountAsync(s => models.Contains(s.SurveyModelId))).ShouldBe(0);
             (await db.Centerlines.IgnoreQueryFilters().CountAsync(c => c.SurveyModelId != null && models.Contains(c.SurveyModelId.Value))).ShouldBe(0);
+            (await db.CavingGroups.CountAsync(g => clubs.Contains(g.Id))).ShouldBe(0, "a generated club stayed behind");
             (await TestDataCoverageSql.MeasureAsync(db, runId, CancellationToken.None)).ShouldAllBe(t => t.Rows == 0);
         }
     }

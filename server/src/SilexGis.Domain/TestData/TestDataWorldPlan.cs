@@ -6,7 +6,8 @@ public sealed record TestDataWorldPlan(
     TestDataProfile Profile,
     IReadOnlyList<PlannedRegion> Regions,
     IReadOnlyList<PlannedCave> Caves,
-    TestDataPeoplePlan People);
+    TestDataPeoplePlan People,
+    TestDataActivityPlan Activity);
 
 public sealed record PlannedRegion(
     TestDataRegion Region,

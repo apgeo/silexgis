@@ -15,6 +15,7 @@ public static class TestDataProfiles
     {
         Caves = new TestDataCaveProfile { Count = 25 },
         People = new TestDataPeopleProfile { Clubs = 3, Organisations = 1, Cavers = 30, Accounts = 12 },
+        Timeline = new TestDataTimelineProfile { Trips = 60, ExpeditionYears = 2 },
     };
 
     /// <summary>The 500 caves the generator is sized for.</summary>
@@ -25,6 +26,7 @@ public static class TestDataProfiles
     {
         Caves = new TestDataCaveProfile { Count = 5000 },
         People = new TestDataPeopleProfile { Clubs = 40, Organisations = 4, Cavers = 2500, Accounts = 400 },
+        Timeline = new TestDataTimelineProfile { Trips = 20000, ExpeditionYears = 20 },
     };
 
     public static IReadOnlyDictionary<string, TestDataProfile> All { get; } = new Dictionary<string, TestDataProfile>

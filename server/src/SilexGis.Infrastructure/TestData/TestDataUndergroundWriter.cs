@@ -109,10 +109,12 @@ public static class TestDataUndergroundWriter
                 AnchorHeightM = main.AltitudeM,
             };
             db.SurveyModels.Add(model);
+            session.SurveyModels[cave.Index] = model.Id;
 
             // Its reading is queued for the worker, as an upload's is: what a survey is read into
-            // comes from the one reader, on the one path.
-            SurveyModelReading.QueueFirst(db, model, requestedBy: owner);
+            // comes from the one reader, on the one path. Asked for by nobody, so nobody is told
+            // when each of a run's hundreds of readings finishes.
+            SurveyModelReading.QueueFirst(db, model, requestedBy: null);
             await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
 
             var source = Svx(cave, network);

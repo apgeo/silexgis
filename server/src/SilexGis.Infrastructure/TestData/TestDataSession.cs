@@ -43,6 +43,16 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
     /// <summary>The generated roster entries, by their plan index.</summary>
     public Dictionary<int, Guid> Cavers { get; } = [];
 
+    public Dictionary<int, Guid> Trips { get; } = [];
+
+    public Dictionary<int, Guid> Expeditions { get; } = [];
+
+    /// <summary>The survey model written for a cave, by the cave's plan index.</summary>
+    public Dictionary<int, Guid> SurveyModels { get; } = [];
+
+    /// <summary>The trip vocabulary the run writes against; null until the vocabulary step has run.</summary>
+    public TestDataActivityVocabulary? Activity { get; set; }
+
     /// <summary>The generated accounts, by the plan index of the caver who holds them.</summary>
     public Dictionary<int, Guid> Users { get; } = [];
 
@@ -83,7 +93,9 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
         "access_entries", "user_addresses", "user_notification_preferences", "calendar_feed_tokens", "api_access_keys",
         "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "link_kinds",
         "cave_surveys", "survey_models", "survey_sources", "cave_depth_places", "cave_level_bands",
-        "documents", "document_versions", "files", "cave_types", "entrance_types", "rock_types", "feature_types",
+        "documents", "document_versions", "files",
+        "trip_logs", "res_links", "expeditions", "events", "checklists", "trip_participant_roles", "expedition_roster_roles",
+        "res_link_relation_types", "map_views", "saved_filters", "report_templates", "cave_potential_models", "caving_group_announcements", "cave_types", "entrance_types", "rock_types", "feature_types",
     };
 
     /// <summary>
@@ -104,7 +116,7 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
         await db.SaveChangesAsync(ct);
         foreach (var (table, entry) in added)
         {
-            Register(db, table!, entry.Property("Id").CurrentValue!);
+            Register(db, table!, entry.Property(entry.Metadata.FindPrimaryKey()!.Properties[0].Name).CurrentValue!);
             Count(CountKind(table!));
         }
 

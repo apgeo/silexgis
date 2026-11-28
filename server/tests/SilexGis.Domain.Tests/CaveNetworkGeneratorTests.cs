@@ -116,6 +116,11 @@ public class CaveNetworkGeneratorTests
             cave.Depth.ShouldBe(Math.Round((decimal)network.DepthM, 1), cave.Name);
             cave.NegativeDepth.ShouldBe(Math.Round((decimal)network.NegativeDepthM, 1), cave.Name);
             network.Stations.Count(s => s.Entrance).ShouldBe(cave.Entrances.Count, cave.Name);
+            if (cave.SurveyedLength is { } length && cave.CaveTypeCode != "rock_shelter")
+            {
+                // The description tells the same length as the register, in the register's words.
+                cave.Description.ShouldContain(length.ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("ro-RO")), Case.Sensitive, cave.Name);
+            }
         }
 
         plan.Caves.Count(c => c.WithSurvey).ShouldBe(325); // 65 % of 500

@@ -216,6 +216,8 @@ public class TripSoftDeleteGuardTests
             ["server/src/SilexGis.Infrastructure/TestData/TestDataService.cs"] =
                 (1, "counting the trips no test-data run created, before a run beside them is confirmed: a "
                     + "deleted trip is still somebody's data the database holds"),
+            ["server/src/SilexGis.Infrastructure/TestData/TestDataActivityRemoval.cs"] =
+                (1, "removing a test-data run's trips: a generated trip somebody has since deleted is still the run's to take back"),
             ["server/src/SilexGis.Infrastructure/Jobs/TripPurgeHandler.cs"] =
                 (3, "the pass that removes deleted trips: selecting them, claiming one, loading it"),
             ["server/src/SilexGis.Infrastructure/Import/ImportCommitService.cs"] =

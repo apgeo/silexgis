@@ -34,7 +34,7 @@ public static class TestDataParts
     public static IReadOnlyList<string> All { get; } = [Geography, People, Underground, Activity, Documents, Geodata, Accounts];
 
     /// <summary>The parts built so far; a table planned for one of them must be generated.</summary>
-    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography, People, Underground };
+    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography, People, Underground, Activity };
 }
 
 /// <summary>
@@ -98,7 +98,7 @@ public static class TestDataTables
         ["res_links"] = P(TestDataParts.Activity), ["res_link_members"] = P(TestDataParts.Activity), ["res_link_relation_types"] = P(TestDataParts.Activity, "custom relation types"),
         ["trip_types"] = P(TestDataParts.Activity, "a custom type with section schemas"), ["trip_type_schemas"] = P(TestDataParts.Activity),
         ["trip_participant_roles"] = P(TestDataParts.Activity, "extra roles"), ["expedition_roster_roles"] = P(TestDataParts.Activity, "extra roles"),
-        ["message_templates"] = P(TestDataParts.Activity, "a club's own wording of a message"),
+        ["message_templates"] = X("the installation's own wording of a message: generating data must not change what real people are sent"),
         ["caving_group_announcements"] = P(TestDataParts.Activity),
         ["trip_party_numbers"] = D("the trip write path"), ["trip_attentions"] = D("trip conversion"),
         ["notifications"] = D("the notification queue, from generated activity"),

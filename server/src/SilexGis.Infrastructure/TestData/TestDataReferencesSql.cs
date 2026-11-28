@@ -25,6 +25,7 @@ public static class TestDataReferencesSql
     public static IReadOnlySet<string> BelongingTables { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "user_roles", "user_claims", "user_logins", "user_tokens", "feature_ancestors", "taggings",
+        "trip_type_schemas", "checklist_items",
     };
 
     /// <summary>

@@ -15,6 +15,8 @@ public static class TestDataProfileRules
 
     public const int MaxAccounts = 10_000;
 
+    public const int MaxTrips = 200_000;
+
     /// <summary>The problems with <paramref name="profile"/>, each as a short sentence; empty when it can run.</summary>
     public static IReadOnlyList<string> Problems(TestDataProfile profile, int maxCaves)
     {
@@ -84,6 +86,22 @@ public static class TestDataProfileRules
 
         Percent(problems, "people.foreignGuestPercent", people.ForeignGuestPercent);
         Percent(problems, "people.twoClubsPercent", people.TwoClubsPercent);
+
+        var timeline = profile.Timeline;
+        if (timeline.Trips is < 0 or > MaxTrips)
+        {
+            problems.Add($"timeline.trips must be between 0 and {MaxTrips}.");
+        }
+
+        if (timeline.TripsFromYear < 1950 || timeline.TripsFromYear > TestDataPlanner.LastDay.Year)
+        {
+            problems.Add($"timeline.tripsFromYear must be between 1950 and {TestDataPlanner.LastDay.Year}.");
+        }
+
+        if (timeline.ExpeditionYears is < 0 or > 60)
+        {
+            problems.Add("timeline.expeditionYears must be between 0 and 60.");
+        }
 
         var access = profile.Access;
         var v = access.VisibilityPercent;

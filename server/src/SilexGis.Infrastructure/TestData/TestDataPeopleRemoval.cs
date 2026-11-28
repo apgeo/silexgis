@@ -190,6 +190,20 @@ public static class TestDataPeopleRemoval
         await db.RockTypes.Where(x => rockTypes.Contains(x.Id)).ExecuteDeleteAsync(ct);
         var featureTypes = await Free("feature_types", Long);
         await db.FeatureTypes.Where(x => featureTypes.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        var participantRoles = await Free("trip_participant_roles", Long);
+        await db.TripParticipantRoles.Where(x => participantRoles.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        var relationTypes = await Free("res_link_relation_types", Long);
+        await db.ResLinkRelationTypes.Where(x => relationTypes.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        var rosterRoles = await Free("expedition_roster_roles", Long);
+        await db.ExpeditionRosterRoles.Where(x => rosterRoles.Contains(x.Id)).ExecuteDeleteAsync(ct);
+
+        // A trip type and the checklist it names are rows a rule can name: through the change tracker.
+        var tripTypes = await Free("trip_types", Long);
+        db.TripTypes.RemoveRange(await db.TripTypes.Where(x => tripTypes.Contains(x.Id)).ToListAsync(ct));
+        await db.SaveChangesAsync(ct);
+        var checklists = await Free("checklists", Guid.Parse);
+        db.Checklists.RemoveRange(await db.Checklists.Where(x => checklists.Contains(x.Id)).ToListAsync(ct));
+        await db.SaveChangesAsync(ct);
         return kept;
     }
 
