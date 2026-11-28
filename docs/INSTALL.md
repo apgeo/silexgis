@@ -173,6 +173,17 @@ docker compose exec api dotnet SilexGis.Api.dll remove-test-data <run id>
 file (JSON, as shown on the page). The generator is on by default; `SILEXGIS__TestData__Allowed=false`
 removes it from a deployment altogether.
 
+A run also invents people: caving clubs based in real towns (with invented names), the cavers on
+their rosters and accounts for some of them — one of every kind, from full administrator to an
+account in no group at all, a shut one and one with a second sign-in step — and a few access rules
+that let some accounts see protected caves exactly. Every generated e-mail address is under the
+reserved `.invalid` domain and every telephone number in a range kept for fiction, and the accounts'
+e-mail and text messages are switched off, so nothing the installation sends can reach a real person.
+To sign in as generated accounts, give the run a password: on the page, or from the command line with
+`--account-password-file <file>` (the file holds the password alone). It is kept only as a hash and
+forgotten when the run is removed. Removal keeps a generated account that somebody has since used —
+signed in to and created something with, say — together with its roster entry and clubs.
+
 ## Running a test installation (public demo logins)
 
 An installation meant for strangers to try — a public demo, a place to show the application
