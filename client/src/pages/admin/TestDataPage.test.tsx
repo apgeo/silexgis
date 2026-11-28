@@ -26,6 +26,7 @@ const profile: TestDataProfile = {
     exactLocationGrantAccountsPercent: 15,
     denyOrObjectGrantPercent: 2,
   },
+  people: { clubs: 3, organisations: 1, cavers: 30, accounts: 12, foreignGuestPercent: 8, twoClubsPercent: 10 },
   marking: { tag: 'testgenerated', descriptionFooter: true },
 };
 
@@ -157,6 +158,25 @@ describe('TestDataPage', () => {
     fireEvent.click(screen.getAllByRole('button').find((b) => b.className.includes('ant-table-row-expand-icon'))!);
     const romanian = await screen.findByTestId('test-data-run-details');
     expect(within(romanian).getByText(/^3 peșteri sau locuri generate au fost păstrate/)).toBeTruthy();
+  });
+
+  it('sends the accounts\' password only when one is typed, changes the people counts, and says why a password is refused', async () => {
+    start
+      .mockResolvedValueOnce(run({ id: 'r3', status: 'queued' }))
+      .mockRejectedValueOnce(new ApiError(400, 'testdata.password_invalid', 'Passwords must be at least 12 characters.'));
+    show();
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Cavers' }), { target: { value: '40' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Accounts' }), { target: { value: '9' } });
+    fireEvent.click(screen.getByTestId('test-data-start'));
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(start.mock.calls[0][0]).toMatchObject({ profile: { people: { cavers: 40, accounts: 9 } }, accountPassword: null });
+
+    fireEvent.change(screen.getByLabelText('Password for the generated accounts'), { target: { value: 'short' } });
+    fireEvent.click(screen.getByTestId('test-data-start'));
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    expect(start.mock.calls[1][0]).toMatchObject({ accountPassword: 'short' });
+    expect(await screen.findByText('The password is refused: Passwords must be at least 12 characters.')).toBeTruthy();
   });
 
   it('refuses to start from a profile that is not JSON', () => {

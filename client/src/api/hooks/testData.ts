@@ -48,10 +48,15 @@ function useAfterTestData() {
 export function useStartTestDataRun() {
   const after = useAfterTestData();
   return useMutation({
-    mutationFn: (request: { profile: TestDataProfile; confirmAlongsideExistingData: boolean }) =>
+    mutationFn: (request: { profile: TestDataProfile; confirmAlongsideExistingData: boolean; accountPassword?: string | null }) =>
       unwrap(
         api.POST('/api/v1/admin/test-data/runs', {
-          body: { profile: request.profile, profileName: null, confirmAlongsideExistingData: request.confirmAlongsideExistingData },
+          body: {
+            profile: request.profile,
+            profileName: null,
+            confirmAlongsideExistingData: request.confirmAlongsideExistingData,
+            accountPassword: request.accountPassword ?? null,
+          },
         }),
       ),
     onSuccess: after,

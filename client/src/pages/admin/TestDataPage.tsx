@@ -75,6 +75,27 @@ const COUNT_KEYS: Record<string, string> = {
   entrances: 'testData.counts.entrances',
   protectedCaves: 'testData.counts.protectedCaves',
   tags: 'testData.counts.tags',
+  users: 'testData.counts.users',
+  cavers: 'testData.counts.cavers',
+  cavingGroups: 'testData.counts.cavingGroups',
+  cavingGroupMemberships: 'testData.counts.cavingGroupMemberships',
+  permissionGroups: 'testData.counts.permissionGroups',
+  permissionGroupMembers: 'testData.counts.permissionGroupMembers',
+  accessEntries: 'testData.counts.accessEntries',
+  userAddresses: 'testData.counts.userAddresses',
+  userNotificationPreferences: 'testData.counts.userNotificationPreferences',
+  calendarFeedTokens: 'testData.counts.calendarFeedTokens',
+  apiAccessKeys: 'testData.counts.apiAccessKeys',
+  featureLinks: 'testData.counts.featureLinks',
+  featureExternalIds: 'testData.counts.featureExternalIds',
+  featureShares: 'testData.counts.featureShares',
+  caveQrPublications: 'testData.counts.caveQrPublications',
+  linkKinds: 'testData.counts.linkKinds',
+  caveTypes: 'testData.counts.caveTypes',
+  entranceTypes: 'testData.counts.entranceTypes',
+  rockTypes: 'testData.counts.rockTypes',
+  featureTypes: 'testData.counts.featureTypes',
+  springs: 'testData.counts.springs',
 };
 
 /** The parts of the generator a planned table waits for; a part this client has no wording for is shown by its code. */
@@ -116,6 +137,7 @@ export default function TestDataPage() {
   const [profileName, setProfileName] = useState<ProfileName>('small');
   const [profileText, setProfileText] = useState('');
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [accountPassword, setAccountPassword] = useState('');
 
   const profiles = overview.data?.profiles;
   useEffect(() => {
@@ -154,7 +176,7 @@ export default function TestDataPage() {
       return;
     }
     try {
-      await start.mutateAsync({ profile: parsed, confirmAlongsideExistingData });
+      await start.mutateAsync({ profile: parsed, confirmAlongsideExistingData, accountPassword: accountPassword || null });
       message.success(t('testData.started'));
     } catch (error) {
       if (error instanceof ApiError && error.code === 'testdata.existing_data_confirm_required') {
@@ -178,6 +200,10 @@ export default function TestDataPage() {
       }
       if (error instanceof ApiError && error.code === 'testdata.profile_invalid') {
         message.error(t('testData.profileInvalid', { problems: error.detail ?? '' }));
+        return;
+      }
+      if (error instanceof ApiError && error.code === 'testdata.password_invalid') {
+        message.error(t('testData.passwordInvalid', { problems: error.detail ?? '' }));
         return;
       }
       message.error(t('testData.startFailed'));
@@ -313,7 +339,37 @@ export default function TestDataPage() {
                 data-testid="test-data-seed"
               />
             </Form.Item>
+            <Form.Item label={t('testData.caverCount')}>
+              <InputNumber
+                aria-label={t('testData.caverCount')}
+                min={0}
+                value={parsed?.people?.cavers}
+                disabled={!parsed}
+                onChange={(value) => value !== null && patch((p) => ({ ...p, people: { ...p.people, cavers: value } }))}
+                data-testid="test-data-cavers"
+              />
+            </Form.Item>
+            <Form.Item label={t('testData.accountCount')}>
+              <InputNumber
+                aria-label={t('testData.accountCount')}
+                min={0}
+                max={parsed?.people?.cavers}
+                value={parsed?.people?.accounts}
+                disabled={!parsed}
+                onChange={(value) => value !== null && patch((p) => ({ ...p, people: { ...p.people, accounts: value } }))}
+                data-testid="test-data-accounts"
+              />
+            </Form.Item>
           </Space>
+          <Form.Item label={t('testData.accountPassword')} extra={t('testData.accountPasswordHelp')} style={{ maxWidth: 520 }}>
+            <Input.Password
+              aria-label={t('testData.accountPassword')}
+              value={accountPassword}
+              onChange={(event) => setAccountPassword(event.target.value)}
+              autoComplete="new-password"
+              data-testid="test-data-password"
+            />
+          </Form.Item>
           <Form.Item
             label={t('testData.json')}
             extra={t('testData.jsonHelp')}
@@ -461,6 +517,12 @@ const NOTE_KEYS: Record<string, string> = {
   inventedElevations: 'testData.noteCodes.inventedElevations',
   clubOnlyAsSignedIn: 'testData.noteCodes.clubOnlyAsSignedIn',
   codesTaken: 'testData.noteCodes.codesTaken',
+  emailsTaken: 'testData.noteCodes.emailsTaken',
+  accountsSharePassword: 'testData.noteCodes.accountsSharePassword',
+  accountsWithoutPassword: 'testData.noteCodes.accountsWithoutPassword',
+  peopleKeptInUse: 'testData.noteCodes.peopleKeptInUse',
+  noPublicationsBesideData: 'testData.noteCodes.noPublicationsBesideData',
+  restrictedCavesUnfiled: 'testData.noteCodes.restrictedCavesUnfiled',
 };
 
 /** A run's note in the reader's language; one this page does not know is shown as stored. */

@@ -19476,12 +19476,27 @@ export interface components {
             runs: components["schemas"]["TestDataRunDto"][];
             tables: components["schemas"]["TestDataTableDto"][];
         };
+        TestDataPeopleProfile: {
+            /** Format: int32 */
+            clubs?: number;
+            /** Format: int32 */
+            organisations?: number;
+            /** Format: int32 */
+            cavers?: number;
+            /** Format: int32 */
+            accounts?: number;
+            /** Format: double */
+            foreignGuestPercent?: number;
+            /** Format: double */
+            twoClubsPercent?: number;
+        };
         TestDataProfile: {
             /** Format: int64 */
             seed?: number;
             locale?: string;
             regions?: null | string[];
             caves?: components["schemas"]["TestDataCaveProfile"];
+            people?: components["schemas"]["TestDataPeopleProfile"];
             access?: components["schemas"]["TestDataAccessProfile"];
             marking?: components["schemas"]["TestDataMarkingProfile"];
         };
@@ -19532,6 +19547,7 @@ export interface components {
             profile: null | components["schemas"]["TestDataProfile"];
             profileName: null | string;
             confirmAlongsideExistingData: boolean;
+            accountPassword?: null | string;
         };
         TestDataTableCoverageDto: {
             table: string;
