@@ -19499,6 +19499,7 @@ export interface components {
             regions?: null | string[];
             caves?: components["schemas"]["TestDataCaveProfile"];
             people?: components["schemas"]["TestDataPeopleProfile"];
+            timeline?: components["schemas"]["TestDataTimelineProfile"];
             access?: components["schemas"]["TestDataAccessProfile"];
             marking?: components["schemas"]["TestDataMarkingProfile"];
         };
@@ -19565,6 +19566,14 @@ export interface components {
         };
         /** @enum {unknown} */
         TestDataTableRole: "generated" | "derived" | "planned" | "exempt";
+        TestDataTimelineProfile: {
+            /** Format: int32 */
+            tripsFromYear?: number;
+            /** Format: int32 */
+            trips?: number;
+            /** Format: int32 */
+            expeditionYears?: number;
+        };
         TestDataVisibilityPercent: {
             /** Format: double */
             public?: number;

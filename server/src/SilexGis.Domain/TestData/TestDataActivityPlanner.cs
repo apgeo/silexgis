@@ -135,6 +135,32 @@ public static class TestDataActivityPlanner
             }
         }
 
+        // Each camp's own trips: most days of a camp, a team goes underground in its massif, its
+        // people taken from the camp's roster.
+        var campBudget = trips.Count + (int)(timeline.Trips * 0.25);
+        foreach (var camp in expeditions)
+        {
+            var inMassif = caves.Where(c => c.RegionCode == camp.RegionCode).ToList();
+            var roster = camp.Roster.Select(r => r.CaverIndex).ToList();
+            var campLocals = new Dictionary<string, List<int>>(locals, StringComparer.Ordinal) { [camp.RegionCode] = roster };
+            for (var day = camp.Start; day <= camp.End && trips.Count < campBudget && inMassif.Count > 0; day = day.AddDays(1))
+            {
+                var rng = TestDataRng.For(profile.Seed, "trip:camp:" + camp.Index.ToString(CultureInfo.InvariantCulture), day.DayNumber);
+                if (rng.Chance(0.25) || day.Year < timeline.TripsFromYear)
+                {
+                    continue;
+                }
+
+                var type = rng.Weighted(new Dictionary<string, int> { ["exploration"] = 50, [AddedTripTypeCode] = 30, ["maintenance"] = 20 });
+                trips.Add(Trip(rng, trips.Count, type, day, day > TestDataPlanner.LastDay, [rng.Pick(inMassif).Index], caves, people, campLocals, profile) with
+                {
+                    ExpeditionIndex = camp.Index,
+                    LengthSurveyedM = type == AddedTripTypeCode ? Math.Round((decimal)rng.Between(15.0, 180.0), 1) : null,
+                    SurveyStations = type == AddedTripTypeCode ? rng.Between(4, 30) : null,
+                });
+            }
+        }
+
         var first = new DateOnly(timeline.TripsFromYear, 1, 1).DayNumber;
         var last = TestDataPlanner.LastDay.AddDays(150).DayNumber;
         for (var i = trips.Count; i < timeline.Trips; i++)
@@ -151,6 +177,11 @@ public static class TestDataActivityPlanner
         // A trip on a camp's days, in its massif, is a trip of that camp.
         trips = [.. trips.Select(t =>
         {
+            if (t.ExpeditionIndex is not null)
+            {
+                return t;
+            }
+
             var region = caves[t.CaveIndices[0]].RegionCode;
             var camp = expeditions.FirstOrDefault(e => e.RegionCode == region && t.Date >= e.Start && t.Date <= e.End);
             return camp is null ? t : t with { ExpeditionIndex = camp.Index };
@@ -190,6 +221,9 @@ public static class TestDataActivityPlanner
         var pool = locals[cave.RegionCode];
         var size = Math.Min(pool.Count, type == "tourism" ? rng.Between(4, 10) : rng.Between(2, 7));
         var picked = Shuffle(rng, pool).Take(size).ToList();
+        var entry = new TimeOnly(rng.Between(8, 11), rng.Pick([0, 15, 30, 45]));
+        var hours = cave.CaveTypeCode == "pit" ? rng.Between(6, 14) : rng.Between(2, 9);
+        var exit = entry.AddHours(Math.Min(hours, 23 - entry.Hour));
         var members = picked.Select((caver, n) => new PlannedTripMember(
             caver,
             n == 0 ? "leader"
@@ -199,11 +233,9 @@ public static class TestDataActivityPlanner
             : rng.Chance(0.1) ? "photographer"
             : rng.Chance(0.05) ? "driver"
             : null,
-            rng.Chance(0.4) ? new TimeOnly(rng.Between(8, 11), rng.Pick([0, 15, 30, 45])) : null,
+            // Somebody who went in after the rest — on the trip's own day, never before it started.
+            rng.Chance(0.3) ? entry.AddMinutes(rng.Between(1, 6) * 15) : null,
             null)).ToList();
-        var entry = new TimeOnly(rng.Between(8, 11), rng.Pick([0, 15, 30, 45]));
-        var hours = cave.CaveTypeCode == "pit" ? rng.Between(6, 14) : rng.Between(2, 9);
-        var exit = entry.AddHours(Math.Min(hours, 23 - entry.Hour));
 
         var club = people.Clubs.Count == 0 ? (int?)null
             : people.Cavers[picked[0]].Memberships.FirstOrDefault()?.ClubIndex ?? rng.Next(people.Clubs.Count);

@@ -28,7 +28,7 @@ public class TestDataActivityPlannerTests
     {
         var activity = Default.Activity;
         activity.Trips.Count.ShouldBe(4000);
-        var surveyTrips = activity.Trips.Where(t => t.SurveyStations is not null).ToList();
+        var surveyTrips = activity.Trips.Where(t => t.TypeCode == "survey" && t.SurveyStations is not null).ToList();
         surveyTrips.ShouldNotBeEmpty();
         surveyTrips.Count.ShouldBeLessThanOrEqualTo(1600);
         foreach (var trip in surveyTrips.Take(100))
@@ -51,6 +51,8 @@ public class TestDataActivityPlannerTests
         }
 
         trips.ShouldAllBe(t => t.Members.Count > 0 && t.Members.Select(m => m.CaverIndex).Distinct().Count() == t.Members.Count);
+        trips.Where(t => t.Entry != null).SelectMany(t => t.Members.Where(m => m.Entry != null).Select(m => (t, m)))
+            .ShouldAllBe(x => x.m.Entry >= x.t.Entry, "somebody went in before their trip started");
         trips.SelectMany(t => t.Members).ShouldAllBe(m => m.CaverIndex >= 0 && m.CaverIndex < Default.People.Cavers.Count);
         trips.Where(t => t.Future).ShouldAllBe(t => t.Proposers.Count == 1);
         trips.Where(t => t.Future).ShouldContain(t => t.Invitations.Count > 0);
@@ -79,6 +81,14 @@ public class TestDataActivityPlannerTests
         }
 
         activity.Trips.ShouldContain(t => t.ExpeditionIndex != null);
+        foreach (var camp in activity.Expeditions.Where(e => e.Start.Year >= TestDataProfiles.Default.Timeline.TripsFromYear))
+        {
+            // A camp goes underground on most of its days, with people from its roster.
+            var own = activity.Trips.Where(t => t.ExpeditionIndex == camp.Index).ToList();
+            own.Count.ShouldBeGreaterThan((camp.End.DayNumber - camp.Start.DayNumber) / 3, camp.Name);
+            own.SelectMany(t => t.Members).ShouldContain(m => camp.Roster.Any(r => r.CaverIndex == m.CaverIndex));
+        }
+
         foreach (var trip in activity.Trips.Where(t => t.ExpeditionIndex != null))
         {
             var camp = activity.Expeditions[trip.ExpeditionIndex!.Value];

@@ -194,6 +194,15 @@ point and the largest chamber become depth places. For the default profile (325 
 reading takes a minute or two after the run. Removal takes the surveys, what the reading made of
 them and their stored files back with the caves.
 
+And it invents what those people did: trips over the years since 1995 (4,000 in the default
+profile), weekends and summers more than weekdays and winters, written by the same trip writer a
+person's trip goes through, with rosters, links to the caves visited, invitations and teams on the
+planned ones; the trips that drew each survey, on the survey's own days and with its lengths; summer
+camps with their rosters and trips; each club's weekly meetings, trainings and gear checks; a few
+survey trips watched from the surface; the links, map views and filters people keep. Nothing of it
+is announced — no message goes to anybody because a generated trip or camp was written. The
+default profile takes about four minutes.
+
 ## Running a test installation (public demo logins)
 
 An installation meant for strangers to try — a public demo, a place to show the application

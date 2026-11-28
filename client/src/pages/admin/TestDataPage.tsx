@@ -104,6 +104,20 @@ const COUNT_KEYS: Record<string, string> = {
   documents: 'testData.counts.documents',
   documentVersions: 'testData.counts.documentVersions',
   files: 'testData.counts.files',
+  tripLogs: 'testData.counts.tripLogs',
+  resLinks: 'testData.counts.resLinks',
+  expeditions: 'testData.counts.expeditions',
+  events: 'testData.counts.events',
+  checklists: 'testData.counts.checklists',
+  tripTypes: 'testData.counts.tripTypes',
+  tripParticipantRoles: 'testData.counts.tripParticipantRoles',
+  expeditionRosterRoles: 'testData.counts.expeditionRosterRoles',
+  resLinkRelationTypes: 'testData.counts.resLinkRelationTypes',
+  mapViews: 'testData.counts.mapViews',
+  savedFilters: 'testData.counts.savedFilters',
+  reportTemplates: 'testData.counts.reportTemplates',
+  cavePotentialModels: 'testData.counts.cavePotentialModels',
+  cavingGroupAnnouncements: 'testData.counts.cavingGroupAnnouncements',
 };
 
 /** The parts of the generator a planned table waits for; a part this client has no wording for is shown by its code. */
