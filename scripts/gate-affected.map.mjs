@@ -548,8 +548,8 @@ export const groups = {
     // A bundle's caves appearing by survey date, on one clock of years, with the year counted.
     'FlybyBundleRevealDateTests',
     // A bundle rendered on the server by a render node: the node's routes, tokens, leases and films,
-    // and the lane only the nodes claim.
-    'RenderNodeApiTests', 'JobQueueLaneTests',
+    // the space, time and jobs a node is held to, and the lane only the nodes claim.
+    'RenderNodeApiTests', 'RenderNodeLimitsTests', 'JobQueueLaneTests',
   ],
   // Cave-potential models: kept recipes of evidence layers, their scoring and their weights.
   cavePotential: ['CavePotentialModelTests', 'CavePotentialEvidenceTests', 'CavePotentialResultTests'],
