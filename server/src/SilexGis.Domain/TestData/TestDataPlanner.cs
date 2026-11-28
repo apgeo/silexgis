@@ -87,6 +87,7 @@ public static class TestDataPlanner
         var types = TestDataQuota.Allocate(count,
             [.. profile.Caves.TypeWeights.OrderBy(w => w.Key, StringComparer.Ordinal).Select(w => (w.Key, (double)w.Value))],
             quotaRng);
+        var surveyed = TestDataQuota.Flags(count, profile.Caves.WithSurveyPercent, quotaRng);
 
         // A show cave or two in any run large enough to have a long cave worth showing.
         var showCaves = Math.Max(count >= 50 ? 1 : 0, count / 250);
@@ -125,7 +126,7 @@ public static class TestDataPlanner
             var village = rng.Pick(region.Villages);
 
             var facts = new PlannedCaveFacts(type, region.MassifName, valley, altitude, measures.Length, measures.Depth, status == ExplorationStatus.Ongoing);
-            caves.Add(new PlannedCave
+            caves.Add(Surveyed(region, seed, surveyed[i], new PlannedCave
             {
                 Index = i,
                 RegionCode = region.Code,
@@ -169,10 +170,71 @@ public static class TestDataPlanner
                 ShowCaveLength = isShowCave && measures.Length is { } shown ? Round(shown * 0.4m) : null,
                 DiscoveryDate = rng.Chance(0.85) ? DiscoveryDate(rng) : null,
                 Discoverer = rng.Chance(0.75) ? Discoverer(rng, village) : null,
-            });
+            }));
         }
 
         return caves;
+    }
+
+    /// <summary>The last day a generated survey can carry, fixed so that a run is the same whenever it is made.</summary>
+    public static DateOnly LastDay { get; } = new(2026, 10, 31);
+
+    /// <summary>
+    /// Grows the cave's survey from its main entrance, towards the length and depth drawn for it,
+    /// and puts the survey's own measures in their place — so a cave's length, depth, extension,
+    /// area and volume are its survey's, whether or not the survey itself is written.
+    /// </summary>
+    private static PlannedCave Surveyed(TestDataRegion region, long seed, bool withSurvey, PlannedCave cave)
+    {
+        var rng = TestDataRng.For(seed, "network", cave.Index);
+        var main = cave.Entrances[0];
+        var metresPerLon = 111_320 * Math.Cos(main.Lat * Math.PI / 180);
+        const double metresPerLat = 110_570;
+        var others = cave.Entrances.Skip(1)
+            .Select(e => ((e.Lon - main.Lon) * metresPerLon, (e.Lat - main.Lat) * metresPerLat, e.AltitudeM - main.AltitudeM))
+            .ToList();
+        var first = FirstSurveyDay(cave.DiscoveryDate, rng);
+        var network = CaveNetworkGenerator.Grow(
+            new CaveNetworkRequest(
+                CaveNetworkGenerator.ArchetypeFor(cave.CaveTypeCode, cave.RockTypeCode, rng),
+                (double)(cave.SurveyedLength ?? 20),
+                (double)(cave.Depth ?? 10),
+                region.FractureAzimuthsDeg,
+                others,
+                (x, y) => SurfaceHeight(region, seed, main.Lon + (x / metresPerLon), main.Lat + (y / metresPerLat)) - main.AltitudeM,
+                first,
+                LastDay),
+            rng);
+
+        var length = Round((decimal)network.LengthM);
+        var extension = Round((decimal)network.ExtensionM);
+        return cave with
+        {
+            Network = network,
+            WithSurvey = withSurvey,
+            SurveyedLength = length,
+            Depth = Round((decimal)network.DepthM),
+            PositiveDepth = Round((decimal)network.PositiveDepthM),
+            NegativeDepth = Round((decimal)network.NegativeDepthM),
+            RealExtension = cave.RealExtension is null ? null : extension,
+            ProjectedExtension = cave.ProjectedExtension is null ? null : Round(extension * 0.92m),
+            Area = cave.Area is null ? null : Round((decimal)network.PlanAreaM2),
+            Volume = cave.Volume is null ? null : Round((decimal)network.VolumeM3),
+            RamificationIndex = cave.RamificationIndex is null ? null : Math.Round((decimal)network.JunctionsPerHundredM, 2),
+            EstimatedLength = cave.EstimatedLength is null ? null : Round(Math.Max(cave.EstimatedLength.Value, length * 1.2m)),
+            PotentialDepth = cave.PotentialDepth is null ? null : Round(Math.Max(cave.PotentialDepth.Value, (decimal)network.DepthM * 1.2m)),
+            ShowCaveLength = cave.ShowCaveLength is null ? null : Round(length * 0.4m),
+        };
+    }
+
+    /// <summary>The first survey of a cave: in its year of discovery when the register has one, else some time after 1960.</summary>
+    private static DateOnly FirstSurveyDay(string? discovery, TestDataRng rng)
+    {
+        var year = discovery is { Length: >= 4 } d && int.TryParse(d[..4], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var y)
+            ? y
+            : rng.Between(1960, 2020);
+        year = Math.Clamp(year, 1955, LastDay.Year);
+        return new DateOnly(year, rng.Between(5, 9), rng.Between(1, 28));
     }
 
     private static TestDataRegion PickRegion(TestDataRng rng, IReadOnlyList<TestDataRegion> regions)

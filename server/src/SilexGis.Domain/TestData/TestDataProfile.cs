@@ -67,6 +67,9 @@ public sealed record TestDataCaveProfile
 
     /// <summary>Share of caves with two or more entrances, in percent.</summary>
     public double MultiEntrancePercent { get; init; } = 15;
+
+    /// <summary>Share of caves whose survey is written as a survey model, in percent; the others only take their measures from it.</summary>
+    public double WithSurveyPercent { get; init; } = 65;
 }
 
 /// <summary>

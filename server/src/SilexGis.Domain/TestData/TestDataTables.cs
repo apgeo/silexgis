@@ -34,7 +34,7 @@ public static class TestDataParts
     public static IReadOnlyList<string> All { get; } = [Geography, People, Underground, Activity, Documents, Geodata, Accounts];
 
     /// <summary>The parts built so far; a table planned for one of them must be generated.</summary>
-    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography, People };
+    public static IReadOnlySet<string> Built { get; } = new HashSet<string>(StringComparer.Ordinal) { Geography, People, Underground };
 }
 
 /// <summary>
@@ -84,7 +84,7 @@ public static class TestDataTables
         ["feature_types"] = P(TestDataParts.People, "a custom type with its own properties schema"),
 
         // Underground.
-        ["centerlines"] = P(TestDataParts.Underground), ["survey_models"] = P(TestDataParts.Underground), ["survey_sources"] = P(TestDataParts.Underground), ["cave_surveys"] = P(TestDataParts.Underground),
+        ["centerlines"] = D("the survey reading job, from each generated survey model"), ["survey_models"] = P(TestDataParts.Underground), ["survey_sources"] = P(TestDataParts.Underground), ["cave_surveys"] = P(TestDataParts.Underground),
         ["cave_depth_places"] = P(TestDataParts.Underground), ["cave_level_bands"] = P(TestDataParts.Underground),
         ["survey_stations"] = D("the survey-graph job"), ["survey_shots"] = D("the survey-graph job"),
         ["survey_lrud"] = D("the survey-graph job"), ["survey_topology"] = D("the survey-graph job"),

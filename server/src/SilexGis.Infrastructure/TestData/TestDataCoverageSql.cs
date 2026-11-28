@@ -57,6 +57,14 @@ public static class TestDataCoverageSql
         new("entrance_types", "entrance_types", "id", "bigint"),
         new("rock_types", "rock_types", "id", "bigint"),
         new("feature_types", "feature_types", "id", "bigint"),
+        new("cave_surveys", "cave_surveys", "id"),
+        new("survey_models", "survey_models", "id"),
+        new("survey_sources", "survey_sources", "id"),
+        new("cave_depth_places", "cave_depth_places", "id"),
+        new("cave_level_bands", "cave_level_bands", "id"),
+        new("documents", "documents", "id"),
+        new("document_versions", "document_versions", "id"),
+        new("files", "files", "id"),
     ];
 
     public static async Task<IReadOnlyList<TestDataTableCoverage>> MeasureAsync(

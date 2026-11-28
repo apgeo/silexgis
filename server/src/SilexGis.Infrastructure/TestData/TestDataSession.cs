@@ -81,7 +81,9 @@ public sealed class TestDataSession(Guid runId, Guid ownerUserId, TestDataWorldP
     {
         "caving_groups", "cavers", "caving_group_memberships", "permission_groups", "permission_group_members",
         "access_entries", "user_addresses", "user_notification_preferences", "calendar_feed_tokens", "api_access_keys",
-        "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "link_kinds", "cave_types", "entrance_types", "rock_types", "feature_types",
+        "feature_links", "feature_external_ids", "feature_shares", "cave_qr_publications", "link_kinds",
+        "cave_surveys", "survey_models", "survey_sources", "cave_depth_places", "cave_level_bands",
+        "documents", "document_versions", "files", "cave_types", "entrance_types", "rock_types", "feature_types",
     };
 
     /// <summary>

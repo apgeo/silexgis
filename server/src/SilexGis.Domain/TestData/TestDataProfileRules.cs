@@ -64,6 +64,7 @@ public static class TestDataProfileRules
         }
 
         Percent(problems, "caves.multiEntrancePercent", caves.MultiEntrancePercent);
+        Percent(problems, "caves.withSurveyPercent", caves.WithSurveyPercent);
 
         var people = profile.People;
         if (people.Clubs is < 0 or > MaxClubs || people.Organisations is < 0 or > MaxOrganisations)

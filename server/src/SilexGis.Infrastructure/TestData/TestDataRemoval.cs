@@ -86,6 +86,7 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
         var notes = new List<string>();
         var listed = rows.ToLookup(r => r.TableName, r => r.RowId, StringComparer.Ordinal);
         TestDataPeopleRemoval.Kept people;
+        IReadOnlyList<StoredFile> storedGone;
         await using (var scope = scopes.CreateAsyncScope())
         {
             var changes = scope.ServiceProvider.GetRequiredService<IChangeContext>();
@@ -94,7 +95,28 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             people = await TestDataPeopleRemoval.DecideAsync(db, runId, listed, ct);
             await TestDataPeopleRemoval.RemoveHangOnsAsync(db, listed, people, ct);
+            storedGone = await TestDataUndergroundRemoval.RemoveAsync(
+                db,
+                scope.ServiceProvider.GetRequiredService<FeatureWriteService>(),
+                scope.ServiceProvider.GetRequiredService<Documents.DocumentWriteService>(),
+                listed,
+                ct);
             await transaction.CommitAsync(ct);
+
+            // The bytes go once nothing names them any more; a file that cannot be deleted now is
+            // left for the store's orphan sweep rather than failing a removal that has committed.
+            var store = scope.ServiceProvider.GetRequiredService<IFileStore>();
+            foreach (var file in storedGone)
+            {
+                try
+                {
+                    await store.DeleteAsync(file.StoragePath, ct);
+                }
+                catch (IOException e)
+                {
+                    logger.LogWarning(e, "A removed test-data file could not be deleted from the store");
+                }
+            }
         }
 
         var kept = 0;

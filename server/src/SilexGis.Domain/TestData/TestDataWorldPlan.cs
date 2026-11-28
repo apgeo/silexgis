@@ -111,4 +111,10 @@ public sealed record PlannedCave
     public string? DiscoveryDate { get; init; }
 
     public string? Discoverer { get; init; }
+
+    /// <summary>The cave's survey, grown from its main entrance; its measures are the cave's.</summary>
+    public CaveNetwork? Network { get; init; }
+
+    /// <summary>Whether the survey is written as a survey model of the cave, or only lends the cave its measures.</summary>
+    public bool WithSurvey { get; init; }
 }

@@ -35,6 +35,7 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
         public const string Cavers = "cavers";
         public const string Regions = "regions";
         public const string Caves = "caves";
+        public const string Underground = "underground";
         public const string Grants = "grants";
         public const string Links = "links";
         public const string Verify = "verify";
@@ -67,7 +68,8 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 session.Note(run.AccountPasswordHash is null ? TestDataNotes.AccountsWithoutPassword : TestDataNotes.AccountsSharePassword);
             }
 
-            var total = 5 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count;
+            var total = 5 + holders.Count + plan.People.Cavers.Count + plan.Regions.Count + plan.Caves.Count
+                + plan.Caves.Count(c => c.WithSurvey);
             var done = 0;
             await ProgressAsync(session, Phases.Plan, done, total, ct);
 
@@ -112,6 +114,20 @@ public sealed class TestDataRunner(IServiceScopeFactory scopes, TimeProvider clo
                 await InScopeAsync(session, (db, writer) => TestDataGeographyWriter.WriteCavesAsync(db, writer, session, chunk, ct), ct);
                 done += chunk.Length;
                 await ProgressAsync(session, Phases.Caves, done, total, ct);
+            }
+
+            foreach (var chunk in plan.Caves.Where(c => c.WithSurvey).Chunk(TestDataUndergroundWriter.CaveChunk))
+            {
+                await ThrowIfCancelRequestedAsync(run.Id, ct);
+                await InScopeAsync(session, (services, db) => TestDataUndergroundWriter.WriteAsync(
+                    db,
+                    services.GetRequiredService<Documents.DocumentWriteService>(),
+                    services.GetRequiredService<IFileStore>(),
+                    session,
+                    chunk,
+                    ct), ct);
+                done += chunk.Length;
+                await ProgressAsync(session, Phases.Underground, done, total, ct);
             }
 
             await InScopeAsync(session, (_, db) => TestDataPeopleWriter.WriteGrantsAsync(db, session, ct), ct);
