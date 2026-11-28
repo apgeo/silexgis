@@ -90,6 +90,10 @@ public sealed class TestDataUndergroundTests : IAsyncLifetime, IDisposable, ICla
             var read = await db.SurveyModels.Where(m => models.Contains(m.Id)).ToListAsync();
             read.ShouldAllBe(m => m.Status == SurveyModelStatus.Ready, string.Join("; ", read.Select(m => m.ProcessingError)));
             read.ShouldAllBe(m => m.IsCurrent);
+            read.Count(m => m.Format == SurveyModelFormat.Lox)
+                .ShouldBe(plan.Caves.Count(c => c.WithSurvey && TestDataUndergroundWriter.TakesTherionFile(c)));
+            read.ShouldContain(m => m.Format == SurveyModelFormat.Lox, "the plan has no survey written as a Therion file; pick another seed");
+            read.ShouldContain(m => m.Format == SurveyModelFormat.Survex3d, "no survey written as a Survex file");
 
             // Each model holds the stations its cave was grown with, and the reader drew its centreline.
             foreach (var model in read)

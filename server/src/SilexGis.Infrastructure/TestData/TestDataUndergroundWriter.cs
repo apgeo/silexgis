@@ -39,6 +39,40 @@ public static class TestDataUndergroundWriter
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(caves);
         var owner = session.OwnerUserId;
+        var written = new List<string>();
+        try
+        {
+            await WriteCavesAsync(db, documents, new RecordingStore(files, written), session, caves, owner, ct);
+        }
+        catch
+        {
+            // The rows of this chunk roll back with its transaction; the bytes it already put in
+            // the store would stay there with nothing naming them, so they go too.
+            foreach (var path in written)
+            {
+                try
+                {
+                    await files.DeleteAsync(path, CancellationToken.None);
+                }
+                catch (IOException)
+                {
+                    // Nothing more can be done for a file the store will not delete; the run fails anyway.
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task WriteCavesAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore files,
+        TestDataSession session,
+        IReadOnlyList<PlannedCave> caves,
+        Guid owner,
+        CancellationToken ct)
+    {
         foreach (var cave in caves)
         {
             if (cave is not { WithSurvey: true, Network: { } network } || !session.Caves.TryGetValue(cave.Index, out var caveId))
@@ -57,13 +91,15 @@ public static class TestDataUndergroundWriter
             };
             db.CaveSurveys.Add(survey);
 
-            var image = Survex3d(network);
+            // Most surveys as Survex image files, every fourth as a Therion one, so both readers run.
+            var therion = TakesTherionFile(cave);
+            var image = therion ? Lox(network) : Survex3d(network);
             var model = new SurveyModel
             {
                 CaveFeatureId = caveId,
                 Name = $"{cave.Name} ({last.Year})",
-                FileId = (await StoreAsync(documents, files, owner, image, Slug(cave.Name) + ".3d", "application/octet-stream", FileKind.Survey, ct)).File.Id,
-                Format = SurveyModelFormat.Survex3d,
+                FileId = (await StoreAsync(documents, files, owner, image, Slug(cave.Name) + (therion ? ".lox" : ".3d"), "application/octet-stream", FileKind.Survey, ct)).File.Id,
+                Format = therion ? SurveyModelFormat.Lox : SurveyModelFormat.Survex3d,
                 Description = Footer(session, "Topografie inventată de generatorul de date de test."),
                 SurveyedAt = last,
                 CaveSurveyId = survey.Id,
@@ -106,9 +142,10 @@ public static class TestDataUndergroundWriter
                 });
             }
 
-            if (named.Count > 40)
+            // A cave keeps one place per depth, so the landmark is the widest station at a depth of its own.
+            var landmark = named.Where(s => !s.Entrance && Math.Round(s.Z, 1) != Math.Round(deepest.Z, 1)).MaxBy(s => s.Left + s.Right);
+            if (named.Count > 40 && landmark is not null)
             {
-                var landmark = named.Where(s => !s.Entrance).MaxBy(s => s.Left + s.Right)!;
                 db.CaveDepthPlaces.Add(new CaveDepthPlace
                 {
                     CaveFeatureId = caveId,
@@ -141,6 +178,29 @@ public static class TestDataUndergroundWriter
         }
 
         await session.SaveAndRegisterAsync(db, ct);
+    }
+
+    /// <summary>Whether a surveyed cave's survey is written as a Therion file rather than a Survex one: every fourth.</summary>
+    public static bool TakesTherionFile(PlannedCave cave) => cave is not null && cave.Index % 4 == 1;
+
+    /// <summary>
+    /// The survey as a Therion file: its stations and the legs between them. The format joins legs
+    /// to named stations only and carries no dates, so the wall shots and the days stay out.
+    /// </summary>
+    public static byte[] Lox(CaveNetwork network)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        var stations = network.Stations
+            .Where(s => s.Name.Length > 0)
+            .Select(s => new InventedSurveyFile.Station(s.Name, s.X, s.Y, s.Z, s.Entrance))
+            .ToList();
+        var legs = network.Legs.Where(l => !l.Splay).Select(l =>
+        {
+            var a = network.Stations[l.From];
+            var b = network.Stations[l.To];
+            return new InventedSurveyFile.Leg((a.X, a.Y, a.Z), (b.X, b.Y, b.Z));
+        }).ToList();
+        return InventedSurveyFile.Lox(stations, legs);
     }
 
     /// <summary>The survey as a Survex image file: its stations, its legs with the day each was drawn, and its passages.</summary>
@@ -238,8 +298,8 @@ public static class TestDataUndergroundWriter
 
     /// <summary>
     /// Puts the bytes in the file store and records them as a document, as an upload is recorded.
-    /// The bytes are written before the rows: a run that fails afterwards leaves a file nothing
-    /// names, which the store's orphan sweep takes; the reverse would leave rows naming nothing.
+    /// The bytes are written before the rows, which name them; a chunk that fails takes its bytes
+    /// back (see <see cref="WriteAsync"/>).
     /// </summary>
     private static async Task<DocumentFile> StoreAsync(
         DocumentWriteService documents,
@@ -258,6 +318,26 @@ public static class TestDataUndergroundWriter
             Path.GetFileNameWithoutExtension(fileName),
             owner,
             owner);
+    }
+
+    /// <summary>The file store, noting the path of everything saved through it.</summary>
+    private sealed class RecordingStore(IFileStore inner, List<string> saved) : IFileStore
+    {
+        public async Task<string> SaveAsync(Stream content, string extension, CancellationToken ct = default)
+        {
+            var path = await inner.SaveAsync(content, extension, ct);
+            saved.Add(path);
+            return path;
+        }
+
+        public Task<IExclusiveContentWriter> OpenExclusiveAsync(string storagePath, CancellationToken ct = default) =>
+            inner.OpenExclusiveAsync(storagePath, ct);
+
+        public Task<Stream> OpenReadAsync(string storagePath, CancellationToken ct = default) => inner.OpenReadAsync(storagePath, ct);
+
+        public Task DeleteAsync(string storagePath, CancellationToken ct = default) => inner.DeleteAsync(storagePath, ct);
+
+        public string GetAbsolutePath(string storagePath) => inner.GetAbsolutePath(storagePath);
     }
 
     private static string Footer(TestDataSession session, string text) =>

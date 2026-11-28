@@ -104,7 +104,7 @@ public sealed class TestDataRemoval(IServiceScopeFactory scopes, TimeProvider cl
             await transaction.CommitAsync(ct);
 
             // The bytes go once nothing names them any more; a file that cannot be deleted now is
-            // left for the store's orphan sweep rather than failing a removal that has committed.
+            // logged and left on disk rather than failing a removal whose rows have gone.
             var store = scope.ServiceProvider.GetRequiredService<IFileStore>();
             foreach (var file in storedGone)
             {

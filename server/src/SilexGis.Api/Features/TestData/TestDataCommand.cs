@@ -97,7 +97,16 @@ public static class TestDataCommand
         }
 
         var run = result.Run!;
-        await provider.GetRequiredService<TestDataRunner>().RunAsync(run.Id, CancellationToken.None);
+        try
+        {
+            await provider.GetRequiredService<TestDataRunner>().RunAsync(run.Id, CancellationToken.None);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The runner has closed the run as failed and logged why; the operator is told by the
+            // exit code below rather than by a crash of the whole command.
+            logger.LogError("Test-data run {RunId} failed: {Message}", run.Id, e.GetBaseException().Message);
+        }
         var db = provider.GetRequiredService<SilexGisDbContext>();
         var finished = await db.TestDataRuns.AsNoTracking().FirstAsync(r => r.Id == run.Id);
         logger.LogInformation("Test-data run {RunId}: {Status}, {Counts}", run.Id, finished.Status, finished.Counts);

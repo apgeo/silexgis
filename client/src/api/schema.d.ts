@@ -19446,6 +19446,8 @@ export interface components {
             maxLengthM?: number;
             /** Format: double */
             multiEntrancePercent?: number;
+            /** Format: double */
+            withSurveyPercent?: number;
         };
         TestDataColumnCoverageDto: {
             column: string;

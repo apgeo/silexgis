@@ -184,6 +184,16 @@ To sign in as generated accounts, give the run a password: on the page, or from 
 forgotten when the run is removed. Removal keeps a generated account that somebody has since used —
 signed in to and created something with, say — together with its roster entry and clubs.
 
+Every generated cave is also given a survey, grown from its main entrance in the shape its kind
+suggests (level tubes, a descending canyon, a series of pitches, chambers, a maze, a mine) and kept
+under the ground; its length, depth, extension, area and volume in the register are that survey's
+own. Most caves' surveys are written as survey models — a Survex `.3d` file, or a Therion `.lox`
+for every fourth — with the Survex source beside them, and are read by the background worker
+exactly as an uploaded survey is, into stations, passages, walls and a centreline; the deepest
+point and the largest chamber become depth places. For the default profile (325 surveys) the
+reading takes a minute or two after the run. Removal takes the surveys, what the reading made of
+them and their stored files back with the caves.
+
 ## Running a test installation (public demo logins)
 
 An installation meant for strangers to try — a public demo, a place to show the application

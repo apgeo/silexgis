@@ -96,6 +96,14 @@ const COUNT_KEYS: Record<string, string> = {
   rockTypes: 'testData.counts.rockTypes',
   featureTypes: 'testData.counts.featureTypes',
   springs: 'testData.counts.springs',
+  caveSurveys: 'testData.counts.caveSurveys',
+  surveyModels: 'testData.counts.surveyModels',
+  surveySources: 'testData.counts.surveySources',
+  caveDepthPlaces: 'testData.counts.caveDepthPlaces',
+  caveLevelBands: 'testData.counts.caveLevelBands',
+  documents: 'testData.counts.documents',
+  documentVersions: 'testData.counts.documentVersions',
+  files: 'testData.counts.files',
 };
 
 /** The parts of the generator a planned table waits for; a part this client has no wording for is shown by its code. */

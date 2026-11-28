@@ -10441,7 +10441,15 @@
       "entranceTypes": "tipuri de intrări",
       "rockTypes": "tipuri de rocă",
       "featureTypes": "tipuri de obiecte",
-      "springs": "izvoare captate"
+      "springs": "izvoare captate",
+      "caveSurveys": "topografii de peșteri",
+      "surveyModels": "modele topografice",
+      "surveySources": "fișiere sursă ale topografiilor",
+      "caveDepthPlaces": "locuri de adâncime",
+      "caveLevelBands": "citiri ale nivelurilor",
+      "documents": "documente",
+      "documentVersions": "versiuni de documente",
+      "files": "fișiere stocate"
     },
     "cancel": "Anulează",
     "cancelFailed": "Rularea nu a putut fi anulată.",

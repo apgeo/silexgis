@@ -10441,7 +10441,15 @@
       "entranceTypes": "entrance types",
       "rockTypes": "rock types",
       "featureTypes": "feature types",
-      "springs": "captured springs"
+      "springs": "captured springs",
+      "caveSurveys": "cave surveys",
+      "surveyModels": "survey models",
+      "surveySources": "survey source files",
+      "caveDepthPlaces": "depth places",
+      "caveLevelBands": "level readings",
+      "documents": "documents",
+      "documentVersions": "document versions",
+      "files": "stored files"
     },
     "cancel": "Cancel",
     "cancelFailed": "The run could not be cancelled.",
